@@ -60,6 +60,10 @@ export type GovernedNativeComponentValidationReport =
       execution: AflTradeModelRunManifestV3;
       validationReport: AflTradePlayerValidationReport;
       validationReportArtifact: AflTradeArtifactRef;
+      materializationEvidence: Readonly<{
+        modelArtifact: AflTradeArtifactRef;
+        modelDocument: Readonly<Record<string, unknown>>;
+      }> | null;
     }>
   | Readonly<{
       kind: 'draft_pick_and_future_pick_distribution';
@@ -107,10 +111,42 @@ export async function loadGovernedNativeComponentValidationReport(input: {
     });
     const validationReport = aflTradePlayerValidationReportSchema.safeParse(validationDocument);
     const reportArtifact = parsed.data.content.outcome.validationReportArtifact;
+    let observationLineageMatches =
+      validationReport.success &&
+      validationReport.data.content.observationSetId === parsed.data.content.observationSetId;
+    let materializationEvidence: Extract<
+      GovernedNativeComponentValidationReport,
+      { kind: 'player_contribution_and_availability' }
+    >['materializationEvidence'] = null;
+    if (validationReport.success && !observationLineageMatches) {
+      const modelDocument = await loadExactJsonDocument({
+        reference: parsed.data.content.outcome.modelArtifact,
+        artifactRepository: input.artifactRepository,
+        maximumArtifactBytes: input.maximumArtifactBytes,
+      });
+      observationLineageMatches =
+        typeof modelDocument === 'object' &&
+        modelDocument !== null &&
+        'schemaVersion' in modelDocument &&
+        modelDocument.schemaVersion === 'afl-trade-admitted-player-candidate/v1' &&
+        'modelId' in modelDocument &&
+        modelDocument.modelId === parsed.data.content.modelId &&
+        'sourceObservationSetId' in modelDocument &&
+        modelDocument.sourceObservationSetId === parsed.data.content.observationSetId &&
+        'materializedObservationSetId' in modelDocument &&
+        modelDocument.materializedObservationSetId ===
+          validationReport.data.content.observationSetId;
+      if (observationLineageMatches) {
+        materializationEvidence = {
+          modelArtifact: parsed.data.content.outcome.modelArtifact,
+          modelDocument: modelDocument as Readonly<Record<string, unknown>>,
+        };
+      }
+    }
     if (
       !validationReport.success ||
       validationReport.data.content.evaluatedPartition !== 'final_test' ||
-      validationReport.data.content.observationSetId !== parsed.data.content.observationSetId ||
+      !observationLineageMatches ||
       validationReport.data.content.candidateModelId !== parsed.data.content.modelId ||
       parsed.data.content.finalTestEvaluatedAt === null ||
       Date.parse(reportArtifact.createdAt) < Date.parse(parsed.data.content.finalTestEvaluatedAt) ||
@@ -125,6 +161,7 @@ export async function loadGovernedNativeComponentValidationReport(input: {
       execution: parsed.data,
       validationReport: validationReport.data,
       validationReportArtifact: reportArtifact,
+      materializationEvidence,
     };
   }
   if (content.nativeExecution.kind !== 'governed_pick_pav_model_execution') {

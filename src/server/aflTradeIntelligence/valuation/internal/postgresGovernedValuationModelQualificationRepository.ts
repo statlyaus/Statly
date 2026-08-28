@@ -193,6 +193,8 @@ interface NativeEvidenceRow extends Record<string, unknown> {
   native_execution_artifact_id: string;
   validation_report_id: string;
   validation_report_artifact_id: string | null;
+  player_model_artifact_id: string | null;
+  player_model_json: unknown;
   native_execution_json: unknown;
   validation_report_json: unknown;
   recorded_at: Date | string;
@@ -209,6 +211,9 @@ async function retainNativeValidationEvidence(
       role: evidence.player.kind,
       validationReportId: evidence.player.validationReport.validationReportId,
       validationReportArtifactId: evidence.player.validationReportArtifact.artifactId,
+      playerModelArtifactId:
+        evidence.player.materializationEvidence?.modelArtifact.artifactId ?? null,
+      playerModel: evidence.player.materializationEvidence?.modelDocument ?? null,
       nativeExecution: evidence.player.execution,
       validationReport: evidence.player.validationReport,
     },
@@ -217,6 +222,8 @@ async function retainNativeValidationEvidence(
       role: evidence.pick.kind,
       validationReportId: evidence.pick.validationReport.validationReportId,
       validationReportArtifactId: null,
+      playerModelArtifactId: null,
+      playerModel: null,
       nativeExecution: evidence.pick.execution,
       validationReport: evidence.pick.validationReport,
     },
@@ -225,8 +232,9 @@ async function retainNativeValidationEvidence(
     await transaction.query(
       `INSERT INTO outcome_governed_component_validation_evidence
         (run_id,role,native_execution_artifact_id,validation_report_id,
-         validation_report_artifact_id,native_execution_json,validation_report_json,recorded_at)
-       SELECT run_id,$2,native_execution_artifact_id,$3,$4,$5::jsonb,$6::jsonb,$7
+         validation_report_artifact_id,player_model_artifact_id,player_model_json,
+         native_execution_json,validation_report_json,recorded_at)
+       SELECT run_id,$2,native_execution_artifact_id,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9
          FROM outcome_governed_valuation_component_run WHERE run_id=$1
        ON CONFLICT (run_id) DO NOTHING`,
       [
@@ -234,6 +242,8 @@ async function retainNativeValidationEvidence(
         entry.role,
         entry.validationReportId,
         entry.validationReportArtifactId,
+        entry.playerModelArtifactId,
+        entry.playerModel === null ? null : canonicalizeAflTradeJson(entry.playerModel),
         canonicalizeAflTradeJson(entry.nativeExecution),
         canonicalizeAflTradeJson(entry.validationReport),
         qualification.content.evaluatedAt,
@@ -241,7 +251,8 @@ async function retainNativeValidationEvidence(
     );
     const retained = await transaction.query<NativeEvidenceRow>(
       `SELECT run_id,role,native_execution_artifact_id,validation_report_id,
-          validation_report_artifact_id,native_execution_json,validation_report_json,recorded_at
+          validation_report_artifact_id,player_model_artifact_id,player_model_json,
+          native_execution_json,validation_report_json,recorded_at
          FROM outcome_governed_component_validation_evidence WHERE run_id=$1`,
       [entry.runId]
     );
@@ -252,6 +263,9 @@ async function retainNativeValidationEvidence(
       row.role !== entry.role ||
       row.validation_report_id !== entry.validationReportId ||
       row.validation_report_artifact_id !== entry.validationReportArtifactId ||
+      row.player_model_artifact_id !== entry.playerModelArtifactId ||
+      canonicalizeAflTradeJson(row.player_model_json) !==
+        canonicalizeAflTradeJson(entry.playerModel) ||
       canonicalizeAflTradeJson(row.native_execution_json) !==
         canonicalizeAflTradeJson(entry.nativeExecution) ||
       canonicalizeAflTradeJson(row.validation_report_json) !==
@@ -695,7 +709,6 @@ export class PostgresGovernedValuationModelQualificationRepository {
              )
            FROM outcome_private_valuation_model_request_binding binding
            WHERE binding.request_id=$1
-             AND binding.claim_id=$2
              AND binding.operation_id=operation.operation_id
              AND operation.scope_key=$5
              AND operation.player_run_id=$6

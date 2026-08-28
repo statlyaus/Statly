@@ -531,14 +531,16 @@ async function retainArtifacts(input: {
   for (const [name, document] of Object.entries(input.documents)) {
     const reference = createAflTradeCanonicalJsonArtifactRef(document, input.createdAt);
     const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(document));
-    await input.repository.putIfAbsent(reference, bytes);
+    const retained = await input.repository.putIfAbsent(reference, bytes);
     await verifyAflTradeArtifactReadback(
       input.repository,
-      reference,
-      input.createdAt,
+      retained.reference,
+      Date.parse(input.createdAt) > Date.parse(retained.reference.createdAt)
+        ? input.createdAt
+        : retained.reference.createdAt,
       input.maximumArtifactBytes
     );
-    references[name] = reference;
+    references[name] = retained.reference;
   }
   return references;
 }

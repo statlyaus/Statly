@@ -1109,6 +1109,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0080_private_prepared_v3_cohort',
       '0081_corrected_local_review_lineage',
       '0082_complete_local_reviewed_evidence',
+      '0083_local_admitted_player_qualification',
     ]);
 
     const tables = await query<{ table_name: string }>(

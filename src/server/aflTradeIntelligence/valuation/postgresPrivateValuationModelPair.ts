@@ -439,13 +439,16 @@ export function createPostgresAflTradePrivateValuationModelPairDispatchRunner(
   };
 }
 
-type PlayerExecutorInput = Parameters<
+export type AflTradeDispatchBoundPlayerExecutorInput = Parameters<
   typeof createAflTradePrivateValuationModelPairCoordinator
 >[0]['executePlayer'] extends (input: infer Input) => unknown
   ? Input
   : never;
 
-type PlayerPreparation = Omit<AflTradeModelRunPreparation, 'operationalAuthorization'> &
+export type AflTradeDispatchBoundPlayerPreparation = Omit<
+  AflTradeModelRunPreparation,
+  'operationalAuthorization'
+> &
   Readonly<{ validThrough: string }>;
 
 const STALE_PLAYER_AUTHORITY_CODES = new Set([
@@ -496,14 +499,16 @@ export function createAflTradeDispatchBoundAdmittedPlayerExecutor(input: {
   readonly authorityPreparation: Readonly<{
     prepare(value: AflTradeModelRunPreparation): Promise<void>;
   }>;
-  readonly prepareRun: (value: PlayerExecutorInput) => Promise<PlayerPreparation>;
+  readonly prepareRun: (
+    value: AflTradeDispatchBoundPlayerExecutorInput
+  ) => Promise<AflTradeDispatchBoundPlayerPreparation>;
   readonly registerComponent: (value: {
     readonly run: AflTradeModelRunManifestV3;
-    readonly execution: PlayerExecutorInput;
+    readonly execution: AflTradeDispatchBoundPlayerExecutorInput;
   }) => Promise<{ readonly runId: string }>;
 }) {
   return {
-    async execute(execution: PlayerExecutorInput) {
+    async execute(execution: AflTradeDispatchBoundPlayerExecutorInput) {
       try {
         const prepared = await input.prepareRun(execution);
         const intent = prepared.intent;
@@ -662,7 +667,7 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
   };
 }
 
-type QualificationExecutorInput = Parameters<
+export type AflTradeDispatchBoundQualificationExecutorInput = Parameters<
   typeof createAflTradePrivateValuationModelPairCoordinator
 >[0]['qualify'] extends (input: infer Input) => unknown
   ? Input
@@ -674,18 +679,18 @@ type QualificationRegistration = Parameters<
 
 export function createAflTradeDispatchBoundQualificationRegistrar(input: {
   readonly prepareQualification: (
-    execution: QualificationExecutorInput
+    execution: AflTradeDispatchBoundQualificationExecutorInput
   ) => Promise<QualificationInput>;
   readonly retainArtifact: RetainCanonicalArtifact;
   readonly prepareRegistration: (input: {
-    readonly execution: QualificationExecutorInput;
+    readonly execution: AflTradeDispatchBoundQualificationExecutorInput;
     readonly qualification: GovernedValuationModelQualification;
     readonly qualificationArtifact: AflTradeArtifactRef;
   }) => Promise<Omit<QualificationRegistration, 'qualification' | 'qualificationArtifact'>>;
   readonly repository: Pick<PostgresGovernedValuationModelQualificationRepository, 'register'>;
 }) {
   return {
-    async register(execution: QualificationExecutorInput) {
+    async register(execution: AflTradeDispatchBoundQualificationExecutorInput) {
       try {
         const prepared = await input.prepareQualification(execution);
         if (

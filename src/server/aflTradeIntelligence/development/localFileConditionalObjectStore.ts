@@ -559,14 +559,50 @@ function createLocalAflTradeFilesystemArtifactRepository(options: {
         ) {
           throw error;
         }
-        const existing = await loadExact(parsed.data, options.maximumObjectBytes);
-        if (existing === null) {
+        const key = objectKey(parsed.data.contentSha256);
+        const head = await store.headExact({ objectKey: key });
+        if (head === null) {
           throw new AflTradeArtifactCustodyError(
             'STORAGE_UNAVAILABLE',
             `The ${boundaryLabel.toLowerCase()} object disappeared after a conditional-create conflict.`
           );
         }
-        return { status: 'already_present', reference: existing.reference };
+        const storedReference = localReferenceFromIdentity(head);
+        if (
+          storedReference.artifactId !== parsed.data.artifactId ||
+          storedReference.contentSha256 !== parsed.data.contentSha256 ||
+          storedReference.storageUri !== parsed.data.storageUri ||
+          storedReference.mediaType !== parsed.data.mediaType ||
+          storedReference.byteLength !== parsed.data.byteLength
+        ) {
+          throw new AflTradeArtifactCustodyError(
+            'IMMUTABLE_CONFLICT',
+            `The ${boundaryLabel.toLowerCase()} object key already names different immutable evidence.`
+          );
+        }
+        const existing = await store.readExactBounded({
+          objectKey: key,
+          versionId: head.versionId,
+          eTag: head.eTag,
+          expectedByteLength: head.byteLength,
+          expectedMediaType: head.mediaType,
+          expectedChecksumSha256: head.checksumSha256,
+          expectedMetadata: head.metadata,
+          maximumBytes: options.maximumObjectBytes,
+        });
+        if (
+          !doesAflTradeArtifactRefMatchBytes(
+            storedReference,
+            existing.bytes,
+            storedReference.mediaType
+          )
+        ) {
+          throw new AflTradeArtifactCustodyError(
+            'READBACK_MISMATCH',
+            `The ${boundaryLabel.toLowerCase()} replay bytes failed exact SHA-256 read-back.`
+          );
+        }
+        return { status: 'already_present', reference: storedReference };
       }
     },
     loadExact,

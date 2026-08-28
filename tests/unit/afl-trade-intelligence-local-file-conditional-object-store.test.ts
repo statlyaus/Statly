@@ -153,6 +153,38 @@ describe('local AFL trade conditional object store', () => {
     });
   });
 
+  it('replays identical private bytes with their first immutable reference', async () => {
+    const root = await temporaryRoot();
+    const repository = createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: root,
+      repositoryId: 'local-private-replay',
+      maximumObjectBytes: 1_024,
+    });
+    const bytes = new TextEncoder().encode('{"kind":"deterministic-private-result"}');
+    const first = createAflTradeByteArtifactRef(
+      bytes,
+      'application/json',
+      '2026-08-16T05:00:00.000Z'
+    );
+    const later = createAflTradeByteArtifactRef(
+      bytes,
+      'application/json',
+      '2026-08-16T05:01:00.000Z'
+    );
+
+    await expect(repository.putIfAbsent(first, bytes)).resolves.toEqual({
+      status: 'stored',
+      reference: first,
+    });
+    await expect(repository.putIfAbsent(later, bytes)).resolves.toEqual({
+      status: 'already_present',
+      reference: first,
+    });
+    await expect(
+      verifyAflTradeArtifactReadback(repository, first, later.createdAt, 1_024)
+    ).resolves.toMatchObject({ content: { artifact: first, status: 'passed' } });
+  });
+
   it('fails closed for replacement writes, traversal, and reads above the caller bound', async () => {
     const root = await temporaryRoot();
     const store = createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root });

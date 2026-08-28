@@ -291,6 +291,7 @@ model OutcomeArtifactCustody {
   governedComponentRunAdmissions               OutcomeGovernedValuationComponentRun[]               @relation("GovernedValuationComponentRunAdmissionArtifact")
   governedComponentValidationNativeExecutions  OutcomeGovernedComponentValidationEvidence[]         @relation("GovernedComponentValidationNativeArtifact")
   governedComponentValidationReports           OutcomeGovernedComponentValidationEvidence[]         @relation("GovernedComponentValidationReportArtifact")
+  governedComponentValidationPlayerModels      OutcomeGovernedComponentValidationEvidence[]         @relation("GovernedComponentValidationPlayerModelArtifact")
   governedPickExecutionArtifacts               OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickExecutionArtifact")
   governedPickDatasetArtifacts                 OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickDatasetArtifact")
   governedPickAdmissionArtifacts               OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickAdmissionArtifact")
@@ -4977,12 +4978,15 @@ model OutcomeGovernedComponentValidationEvidence {
   nativeExecutionArtifactId  String                               @map("native_execution_artifact_id") @outcomes.Text
   validationReportId         String                               @map("validation_report_id") @outcomes.Text
   validationReportArtifactId String?                              @map("validation_report_artifact_id") @outcomes.Text
+  playerModelArtifactId      String?                              @map("player_model_artifact_id") @outcomes.Text
+  playerModelJson            Json?                                @map("player_model_json")
   nativeExecutionJson        Json                                 @map("native_execution_json")
   validationReportJson       Json                                 @map("validation_report_json")
   recordedAt                 DateTime                             @map("recorded_at") @outcomes.Timestamptz(3)
   componentRun               OutcomeGovernedValuationComponentRun @relation(fields: [runId], references: [runId], onDelete: Restrict)
   nativeExecutionArtifact    OutcomeArtifactCustody               @relation("GovernedComponentValidationNativeArtifact", fields: [nativeExecutionArtifactId], references: [artifactId], onDelete: Restrict)
   validationReportArtifact   OutcomeArtifactCustody?              @relation("GovernedComponentValidationReportArtifact", fields: [validationReportArtifactId], references: [artifactId], onDelete: Restrict)
+  playerModelArtifact        OutcomeArtifactCustody?              @relation("GovernedComponentValidationPlayerModelArtifact", fields: [playerModelArtifactId], references: [artifactId], onDelete: Restrict)
 
   @@map("outcome_governed_component_validation_evidence")
 }
