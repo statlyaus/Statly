@@ -904,7 +904,7 @@ Inspect a completed or exhausted dispatch through its append-only evidence resul
 ```sql
 SELECT stable_operation_key,state,stage,cause,result_json
   FROM outcome_current_valuation_evidence_orchestration_operation
- WHERE scope_key='<valuation-scope>'
+ WHERE scope_key = $1
  ORDER BY completed_at DESC
  LIMIT 1;
 ```
