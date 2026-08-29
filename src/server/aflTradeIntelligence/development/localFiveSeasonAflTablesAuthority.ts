@@ -153,7 +153,7 @@ export const LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA = [
   integer('Away.Points'),
   character('Venue'),
   integer('Margin'),
-  integer('Season'),
+  number('Season'),
   character('Round.Type'),
   integer('Round.Number'),
 ] satisfies readonly LocalAflTablesFieldDescriptor[];
@@ -460,7 +460,7 @@ export function createLocalAflTradeAflTablesResultsAuthority(season: number) {
   };
   const fieldMap = parseAflTradeFitzRoyFieldMap({
     schemaVersion: AFL_TRADE_FITZROY_FIELD_MAP_SCHEMA_VERSION,
-    mapId: `afl-tables-results-local-${season}-v1`,
+    mapId: `afl-tables-results-local-${season}-v2`,
     capabilityId: 'afl-tables-results',
     fitzRoyVersion: '1.7.0',
     sourceSchemaSha256: createDecodedFieldSchemaSha256(LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA),
@@ -474,8 +474,8 @@ export function createLocalAflTradeAflTablesResultsAuthority(season: number) {
     roundLabelField: { sourceField: 'Round', required: true },
     observedDateField: { sourceField: 'Date', required: true },
     naturalKeyFields: ['Season', 'Round', 'Date', 'Home.Team', 'Away.Team'],
-    approvedAt: '2026-08-14T00:00:03.000Z',
-    approvalDecisionId: `local-afl-tables-results-field-map-review-${season}`,
+    approvedAt: '2026-08-26T00:00:03.000Z',
+    approvalDecisionId: `local-afl-tables-results-field-map-review-${season}-v2`,
     identity: null,
     match: {
       nativeMatchId: { sourceField: 'Game', required: true },

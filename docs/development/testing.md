@@ -82,6 +82,18 @@ legacy fixture receipts and must not be rewritten in place. Preserve or remove o
 restart the stack to create honest fixture-filesystem evidence. Never apply this reset to a shared or
 hosted database.
 
+Migration `0081_corrected_local_review_lineage` has the same no-rewrite rule for the separately
+reviewed local provider lane. A disposable database that already contains decisions under the
+superseded historical evidence digest cannot migrate in place. Preserve that database and its private
+artifact roots read-only. Retained artifact bytes cannot authenticate corrected pre-capture Gate
+lineage and must not be relabeled as a new capture. This stage consumes an already current reviewed
+head. In a new empty loopback `statly_outcomes_test` database, deploy the complete migration history;
+the separately tracked #569 must then create the replacement governed capture, normalization, and
+reconciliation chain before review can continue. The exact hard stop, preservation,
+seven-capture/three-rights preflight, and retirement conditions are
+in [AFL trade intelligence operations](../runbooks/afl-trade-intelligence-operations.md#inspecting-the-governed-five-season-workbook-evaluation).
+Never use this replacement procedure for shared or hosted state.
+
 The local AFL fixture is generated code rather than workbook-backed. It contains 783 deterministic
 archive trades across 1988–2025: one source-shaped 2025 GWS–Western Bulldogs pick exchange and 782
 records whose titles, clubs, players and source references explicitly identify them as synthetic local

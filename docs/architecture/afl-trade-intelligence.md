@@ -331,14 +331,19 @@ closed immediately while the immutable history remains.
 The five-season provider rehearsal has reviewed player-match evidence that is not a member of the
 transaction-shaped factual release contract. Migration
 `0051_private_reviewed_evidence_evaluation` therefore adds a separate
-`retained_private_review` lane instead of inventing factual-release ancestry. Its content-addressed
-bundle authenticates the two exact current review sets, every deterministic current review receipt,
-the six retained 2021–2026 source captures and their immutable source artifacts, and the two exact
-source-rights artifacts. The current rehearsal bundle contains 48,781 reviewed candidates and
-146,343 current decisions. PostgreSQL rechecks the complete review-set health and exact artifact
-custody when the bundle is registered, whenever the append-only authorization head changes, and
-whenever calculation admission is assessed. One missing, superseded, or altered receipt invalidates
-the whole lane; partial counts and zero-valued fallback are not admitted.
+`retained_private_review` lane instead of inventing factual-release ancestry. Migrations
+`0081_corrected_local_review_lineage` and `0082_complete_local_reviewed_evidence` correct its local
+capture lineage and define the completed-bundle contract that includes AFL Tables 2026 results. A
+current content-addressed bundle must authenticate the two exact current review sets, every
+deterministic current review receipt, seven retained source captures and immutable source
+artifacts—five AFL Tables player-stat
+captures for 2021–2025, one official-AFL player-stat capture for 2026, and one AFL Tables results
+capture for 2026—and three exact source-rights artifacts. The current rehearsal bundle contains
+48,781 reviewed candidates and 146,343 current decisions. PostgreSQL rechecks the complete review-set
+health and exact artifact custody when the bundle is registered, whenever the append-only
+authorization head changes, and whenever calculation admission is assessed. One missing,
+superseded, altered, or normalization-incomplete capture invalidates the whole lane; partial counts
+and zero-valued fallback are not admitted.
 
 This lane is permanently private and non-production. It is not a factual release, dataset admission,
 model-training input, public fact set, publication candidate, production activation, or live-capture
@@ -429,13 +434,17 @@ projection, service, API, archive response, and authenticated JSON, CSV and OOXM
 byte. This is disposable local recovery evidence only; it is not evidence for hosted retention,
 point-in-time recovery, cross-host recovery, disaster recovery, or production restore authority.
 
-A separate development-only evidence rehearsal retains six one-off governed captures in a
-caller-owned disposable `statly_outcomes_test` PostgreSQL database: completed AFL Tables seasons
-2021–2025 and official AFL current-season evidence for 2026. The retained captures contain 57,621
-staged player-match rows. Capture rights, field maps, receipts, decoder provenance, raw-object
-digests, and staging outcomes remain independently attributable to their source decisions. Local raw
-custody uses the explicit `local_non_production_filesystem` profile and confers no hosted durability,
-redistribution, production, or recurring-capture authority.
+The existing executable development-only evidence rehearsal retains six one-off governed
+player-stat captures in a caller-owned disposable `statly_outcomes_test` PostgreSQL database: five
+completed AFL Tables seasons for 2021–2025 and official-AFL current-season evidence for 2026. Those
+captures contain 57,621 staged player-match rows. The corrected reviewed-evidence contract also
+requires one separately governed, finalized AFL Tables completed-results capture for 2026 and a third
+source-rights artifact. #569 owns producing that additional custody; until then the executable
+rehearsal cannot create the replacement current reviewed head consumed by factual activation. Capture
+rights, field maps, receipts, decoder provenance, raw-object digests, and staging outcomes remain
+independently attributable to their source decisions. Local raw custody uses the explicit
+`local_non_production_filesystem` profile and confers no hosted durability, redistribution,
+production, or recurring-capture authority.
 
 Those local capture-rights artifacts permit bounded capture, raw/hash retention and internal quality
 evaluation only. Model training, derived-feature creation, public derived output, public fact display
@@ -2014,9 +2023,26 @@ stable key for another scope or trigger fails, and missing or incoherent authori
 result explicitly remains local, private, non-production, publication-ineligible, and
 publication-prohibited.
 
-This trace closes only the durable no-change branch. Automated factual observation refresh, factual
-release advancement, prepared-v3 rebuild and activation, and the calculation branch remain separate
-work that must be composed before raw data can flow to recalculation automatically.
+The factual stage first retains an authenticated snapshot of the exact current private
+reviewed-evidence head. It then independently composes a content-addressed private factual candidate
+whose custody digest binds the admitted source captures, verified artifacts, finalized normalization
+runs, exact reconciliation review sets, and current source-rights records represented by that bundle.
+The candidate retains the canonical normalization-run snapshots behind the digest, including each
+run ID, field map, decoder and normalizer versions, content digests, receipt digests, row counts, and
+trusted finalization time. Its composition receipt also binds the exact predecessor private-factual
+head; a delayed candidate cannot overwrite a newer head from the same reviewed source.
+Source authentication and candidate composition are separate durable stage receipts under the same
+stable operation key. A restart resumes those receipts before the private factual compare-and-swap;
+it does not duplicate a candidate or head transition. The operation either advances the candidate,
+reports it already current, or retains one exact unavailable cause: missing, stale, mismatched, or
+unauthenticated source authority.
+
+This is deliberately a private factual candidate and authority, not a factual release. The retained
+reviewed bundle is evidence for composition rather than activation authority in its own right, and it
+does not authorize public display or redistribution, so the factual refresh cannot write a release
+manifest, registry event, registry head, or `outcome_active_release`. The original `no_change` result
+keeps its narrow four-head meaning. Prepared-v3 rebuild and activation and the calculation branch
+remain separate work that must be composed before newly admitted facts flow to recalculation.
 
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream

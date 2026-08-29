@@ -6,7 +6,9 @@ import {
   type AflTradeGateDecisionRecord,
 } from '../governance/gateDecisionTypes';
 import {
+  AFL_TRADE_SOURCE_OPERATIONS,
   aflTradeSourceRightsProposalSchema,
+  type AflTradeSourceOperation,
   type AflTradeSourceRightsProposal,
 } from './sourceContracts';
 
@@ -33,21 +35,20 @@ export interface ApprovedAflTradeFitzRoyGateRecords {
   decision: AflTradeGateDecisionRecord;
 }
 
-const approvedOperations = [
-  'bounded_evaluation_capture',
-  'raw_evidence_retention',
-  'metadata_hash_retention',
-  'internal_quality_evaluation',
-  'model_training',
-  'derived_feature_creation',
-  'public_derived_output',
-  'public_fact_display',
-] as const;
-
 function seasons(sourceRights: AflTradeSourceRightsProposal): string[] {
   return sourceRights.content.scope.seasonRanges.flatMap(({ from, to }) =>
     Array.from({ length: to - from + 1 }, (_, index) => String(from + index))
   );
+}
+
+function allowedOperations(sourceRights: AflTradeSourceRightsProposal): AflTradeSourceOperation[] {
+  return AFL_TRADE_SOURCE_OPERATIONS.filter(
+    (operation) => sourceRights.content.operations[operation] === 'allowed'
+  );
+}
+
+function permittedValues(values: readonly string[], unrestrictedValue: string): string[] {
+  return values.length === 0 ? [unrestrictedValue] : [...values];
 }
 
 export function createApprovedAflTradeFitzRoyGateRecords(
@@ -74,22 +75,32 @@ export function createApprovedAflTradeFitzRoyGateRecords(
   }
   const decisionKey = `${capability.capabilityId}-${input.environment}`;
   const environmentLabel = input.environment === 'production' ? 'Production' : 'Non-production';
+  const operations = allowedOperations(sourceRights);
   const scope = {
     scopeKey:
       input.environment === 'production'
         ? `afl-trade-${capability.capabilityId}`
         : `afl-trade-${capability.capabilityId}-${input.environment}`,
-    description: `${environmentLabel} authority for ${capability.capabilityId} in the public AFL trade-intelligence boundary.`,
+    description: `${environmentLabel} authority for ${capability.capabilityId} within its exact source-rights scope.`,
     dimensions: [
       { name: 'source_rights_artifact', values: [sourceRights.rightsArtifactId] },
       { name: 'competition', values: [...sourceRights.content.scope.competitions] },
       { name: 'season', values: seasons(sourceRights) },
       { name: 'access_mechanism', values: [sourceRights.content.scope.accessMechanism] },
       { name: 'fitzroy_capability', values: [capability.capabilityId] },
-      { name: 'geography', values: ['global'] },
-      { name: 'commercial_context', values: ['public-research'] },
-      { name: 'audience', values: ['public'] },
-      { name: 'operation', values: [...approvedOperations] },
+      {
+        name: 'geography',
+        values: permittedValues(sourceRights.content.restrictions.geographic, 'global'),
+      },
+      {
+        name: 'commercial_context',
+        values: permittedValues(sourceRights.content.restrictions.commercial, 'public-research'),
+      },
+      {
+        name: 'audience',
+        values: permittedValues(sourceRights.content.restrictions.audience, 'public'),
+      },
+      { name: 'operation', values: operations },
     ],
     exclusions: ['Raw upstream field redistribution', 'Fantasy user or league ownership'],
   };
@@ -157,8 +168,10 @@ export function createApprovedAflTradeFitzRoyGateRecords(
         'The exact source-specific control is implemented and retained in its dedicated reviewed evidence.',
     })),
     rationale:
-      'The named source is approved for bounded capture, retained evidence, internal evaluation, model training, derived features, public derived output, and factual display.',
-    limitations: ['Raw upstream field redistribution remains blocked.'],
+      'The named source is approved only within the operations and contextual dimensions authenticated by its exact source-rights artifact.',
+    limitations: [
+      'Every operation, audience, commercial context, geography, field use, retention, or cache behavior outside the pinned source-rights artifact remains blocked.',
+    ],
     decidedAt: input.decidedAt,
     effectiveAt: input.effectiveAt,
     revalidateAt: input.revalidateAt,

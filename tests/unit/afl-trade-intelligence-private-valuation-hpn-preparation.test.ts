@@ -132,7 +132,7 @@ describe('private valuation HPN preparation', () => {
         provider: 'afl_tables',
         dataset: 'AFL Tables completed match results through fitzRoy',
         capabilityId: 'afl-tables-results',
-        fieldMapId: 'afl-tables-results-local-2026-v1',
+        fieldMapId: createLocalAflTradeAflTablesResultsAuthority(2026).fieldMap.mapId,
         rightsArtifactId:
           createLocalAflTradeAflTablesResultsAuthority(2026).capture.sourceRights.rightsArtifactId,
       },
@@ -140,7 +140,7 @@ describe('private valuation HPN preparation', () => {
         provider: 'afl_tables',
         dataset: 'AFL Tables historical player match statistics',
         capabilityId: 'afl-tables-player-stats',
-        fieldMapId: 'afl-tables-player-stats-local-2026-v1',
+        fieldMapId: createLocalAflTradeFiveSeasonAflTablesAuthority(2026).fieldMap.mapId,
         rightsArtifactId:
           createLocalAflTradeFiveSeasonAflTablesAuthority(2026).capture.sourceRights.rightsArtifactId,
       },
@@ -148,7 +148,7 @@ describe('private valuation HPN preparation', () => {
         provider: 'official_afl',
         dataset: 'Official AFL 2026 player match statistics',
         capabilityId: 'official-afl-player-stats',
-        fieldMapId: 'official-afl-player-stats-local-2026-v1',
+        fieldMapId: createLocalAflTradeOfficialAfl2026Authority().fieldMap.mapId,
         rightsArtifactId:
           createLocalAflTradeOfficialAfl2026Authority().capture.sourceRights.rightsArtifactId,
       },

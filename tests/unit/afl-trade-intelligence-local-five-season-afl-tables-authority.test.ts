@@ -8,6 +8,7 @@ import {
   createLocalAflTradeFiveSeasonAflTablesAuthority,
 } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createAflTradeFitzRoyInvocation } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
+import { evaluateAflTradeGate0A } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
 
 describe('local five-season AFL Tables authority', () => {
   it('binds one exact reviewed 81-field source contract to each season capture', () => {
@@ -116,6 +117,17 @@ describe('local five-season AFL Tables authority', () => {
     expect(authority.fieldMap.validThroughSeason).toBe(2021);
   });
 
+  it('admits the exact internal-evaluation capture through Gate 0A', () => {
+    const authority = createLocalAflTradeFiveSeasonAflTablesAuthority(2021);
+
+    expect(
+      evaluateAflTradeGate0A(authority.capture.ledger, authority.capture.sourceRights, {
+        ...authority.capture.gateRequest,
+        evaluatedAt: '2026-08-26T00:00:00.000Z',
+      })
+    ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+  });
+
   it('binds current-season completed results to their exact offline-inspected fitzRoy schema', () => {
     const authority = createLocalAflTradeAflTablesResultsAuthority(2026);
     const invocation = createAflTradeFitzRoyInvocation(authority.capture.captureRequest);
@@ -138,6 +150,13 @@ describe('local five-season AFL Tables authority', () => {
       'Round.Type',
       'Round.Number',
     ]);
+    expect(LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA.find(({ name }) => name === 'Season')).toEqual({
+      name: 'Season',
+      storageType: 'double',
+      classes: ['numeric'],
+      levels: null,
+      timezone: null,
+    });
     expect(authority.capture.captureRequest).toMatchObject({
       capabilityId: 'afl-tables-results',
       authorizationSeason: 2026,
@@ -155,8 +174,10 @@ describe('local five-season AFL Tables authority', () => {
       authorityKind: 'external_human_record',
     });
     expect(authority.fieldMap).toMatchObject({
+      mapId: 'afl-tables-results-local-2026-v2',
       capabilityId: 'afl-tables-results',
       observationKind: 'match_universe',
+      approvalDecisionId: 'local-afl-tables-results-field-map-review-2026-v2',
       invocationArgumentsSha256: sha256AflTradeCanonicalJson(invocation.arguments),
       match: {
         nativeMatchId: { sourceField: 'Game', required: true },

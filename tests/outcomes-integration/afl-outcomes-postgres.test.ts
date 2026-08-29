@@ -1107,7 +1107,20 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0078_private_valuation_hpn_source_admission',
       '0079_dispatch_bound_private_model_pair',
       '0080_current_valuation_refresh_tracer',
+      '0081_corrected_local_review_lineage',
+      '0082_complete_local_reviewed_evidence',
+      '0083_current_valuation_factual_refresh',
     ]);
+
+    const factualRefreshReads = await query<{ permitted: boolean }>(
+      `SELECT bool_and(has_table_privilege(
+         'afl_trade_current_valuation_refresh_owner',table_name,'SELECT')) AS permitted
+       FROM unnest(ARRAY[
+         'outcome_review_decision','outcome_source_capture','outcome_artifact_custody',
+         'outcome_source_rights_proposal','outcome_provider_normalization_run'
+       ]) AS required(table_name)`
+    );
+    expect(factualRefreshReads.rows).toEqual([{ permitted: true }]);
 
     const tables = await query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -1187,6 +1200,10 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_reviewed_evidence_bundle',
       'outcome_private_reviewed_evaluation_decision',
       'outcome_private_reviewed_evaluation_head',
+      'outcome_private_factual_candidate',
+      'outcome_current_private_factual_authority',
+      'outcome_current_valuation_factual_refresh_stage_receipt',
+      'outcome_current_valuation_factual_refresh_operation',
       'outcome_hpn_field_map_candidate',
       'outcome_hpn_field_map_review_decision',
       'outcome_hpn_projected_field_map',
@@ -1268,6 +1285,9 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_reviewed_evidence_bundle_mutation_guard',
       'outcome_private_reviewed_evaluation_decision_mutation_guard',
       'outcome_private_reviewed_evaluation_head_delete_guard',
+      'outcome_private_factual_candidate_no_update_delete',
+      'outcome_factual_refresh_stage_no_update_delete',
+      'outcome_current_valuation_factual_refresh_no_update_delete',
     ]) {
       expect(triggerNames).toContain(expected);
     }
