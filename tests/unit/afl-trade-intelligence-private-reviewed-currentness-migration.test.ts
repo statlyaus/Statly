@@ -74,6 +74,11 @@ describe('private reviewed evidence currentness migration', () => {
     expect(migration).toContain('outcome_private_reviewed_evidence_bundle_is_current_v1(text)');
     expect(migration).toContain('outcome_provider_normalization_run');
     expect(migration).toContain('run."finalized_at" IS NOT NULL');
+    expect(
+      migration.match(
+        /AND 1 = \(\s+SELECT count\(\*\)\s+FROM "?outcome_provider_normalization_run"? run/gu
+      )
+    ).toHaveLength(2);
     expect(migration).toContain('NEW."source_capture_count"=7');
     expect(migration).toContain('NEW."source_rights_count"=3');
     expect(migration).toContain('Private reviewed-evidence health has unexpected capture counts');
@@ -88,6 +93,9 @@ describe('private reviewed evidence currentness migration', () => {
     );
     expect(loader).toContain('FROM outcome_provider_normalization_run run');
     expect(loader).toContain('run.finalized_at IS NOT NULL');
+    expect(loader).toMatch(
+      /AND 1 = \(\s+SELECT count\(\*\)\s+FROM outcome_provider_normalization_run run/u
+    );
   });
 
   it('uses the exact bundle selected by the current reviewed-evaluation head', () => {

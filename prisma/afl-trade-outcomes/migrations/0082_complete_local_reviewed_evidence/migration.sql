@@ -1,8 +1,8 @@
 -- The current local reviewed-evidence authority is one complete seven-capture bundle: five
 -- historical player-stat captures, one official current-season player-stat capture, and one
 -- current-season results capture. Preserve failed raw captures, but admit only captures with a
--- successfully finalized normalization run. Reuse the installed validation bodies rather than
--- copying the large currentness functions into another migration.
+-- exactly one successfully finalized normalization run. Reuse the installed validation bodies
+-- rather than copying the large currentness functions into another migration.
 DO $migration$
 DECLARE
   function_signature TEXT;
@@ -57,8 +57,8 @@ BEGIN
        OR (capture."provider"='afl_tables'
            AND capture."capability_id"='afl-tables-results'
            AND capture."anchor_season_year"=2026))
-     AND EXISTS (
-       SELECT 1
+     AND 1 = (
+       SELECT count(*)
          FROM "outcome_provider_normalization_run" run
         WHERE run."capture_id"=capture."capture_id"
           AND run."status" IN ('staged','needs_review')
@@ -83,8 +83,8 @@ BEGIN
        OR (capture.provider='afl_tables'
            AND capture.capability_id='afl-tables-results'
            AND capture.anchor_season_year=2026))
-     AND EXISTS (
-       SELECT 1
+     AND 1 = (
+       SELECT count(*)
          FROM outcome_provider_normalization_run run
         WHERE run.capture_id=capture.capture_id
           AND run.status IN ('staged','needs_review')
@@ -118,6 +118,7 @@ BEGIN
        OR position('afl-tables-results' IN function_definition)=0
        OR position('outcome_provider_normalization_run' IN function_definition)=0
        OR position('finalized_at' IN function_definition)=0
+       OR position('SELECT count(*)' IN function_definition)=0
        OR (function_signature='outcome_private_reviewed_evidence_is_current()'
            AND (position('AND capture_count=7;' IN function_definition)=0
                 OR position('AND capture_count=6;' IN function_definition)>0))
