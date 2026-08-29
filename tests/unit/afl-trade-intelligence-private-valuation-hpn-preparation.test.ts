@@ -132,7 +132,7 @@ describe('private valuation HPN preparation', () => {
         provider: 'afl_tables',
         dataset: 'AFL Tables completed match results through fitzRoy',
         capabilityId: 'afl-tables-results',
-        fieldMapId: 'afl-tables-results-local-2026-v1',
+        fieldMapId: createLocalAflTradeAflTablesResultsAuthority(2026).fieldMap.mapId,
         rightsArtifactId:
           createLocalAflTradeAflTablesResultsAuthority(2026).capture.sourceRights.rightsArtifactId,
       },

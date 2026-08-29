@@ -327,7 +327,7 @@ export function createPostgresAflTradePrivateCurrentValuationCohortAuthorityCapt
     readonly claim: { readonly claimId: string; readonly leaseToken: string };
   }): Promise<PrivateCurrentValuationCohortConstructionContext> {
     return dependencies.client.transaction(async (transaction) => {
-      await transaction.query(`SET TRANSACTION ISOLATION LEVEL READ COMMITTED`);
+      await transaction.query(`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
       const leaseTokenSha256 = createHash('sha256')
         .update(input.claim.leaseToken, 'utf8')
         .digest('hex');

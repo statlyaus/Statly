@@ -24,6 +24,10 @@ import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outco
 import { createLocalAflTradePrivateValuationRuntime } from '@/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
+import {
+  createGovernedPrivateEvaluationBatch,
+  createGovernedPrivateEvaluationBatchOperationId,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
 import { PostgresGovernedValuationModelQualificationRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationModelQualificationRepository';
 import {
   loadAflTradePrivateValuationModelPairExactInput,
@@ -68,6 +72,69 @@ function scopedDatabaseUrl(): string {
 
 const digest = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex');
 const addressed = (prefix: string, value: string): string => `${prefix}:${digest(value)}`;
+
+type ComposedRestartFault =
+  'after_prepared_activation' | 'after_generation_registration' | 'after_batch_registration';
+
+function createComposedRestartFaultController(pool: Pool) {
+  let armed: ComposedRestartFault | null = null;
+  const fired = new Set<ComposedRestartFault>();
+  const consume = (fault: ComposedRestartFault) => {
+    armed = null;
+    fired.add(fault);
+  };
+  const faultingPool = {
+    query: pool.query.bind(pool),
+    async connect() {
+      const client = await pool.connect();
+      let committedFault: Exclude<ComposedRestartFault, 'after_prepared_activation'> | null = null;
+      return {
+        async query(sql: string, parameters?: readonly unknown[]) {
+          if (
+            armed === 'after_prepared_activation' &&
+            sql.includes('INSERT INTO outcome_private_evaluation_cohort_capture')
+          ) {
+            consume(armed);
+            throw new Error('simulated restart after prepared activation');
+          }
+          if (
+            armed === 'after_generation_registration' &&
+            sql.includes('INSERT INTO outcome_local_private_trade_evaluation_generation')
+          ) {
+            committedFault = armed;
+          }
+          if (
+            armed === 'after_batch_registration' &&
+            /INSERT INTO outcome_private_evaluation_batch\s*\(/u.test(sql)
+          ) {
+            committedFault = armed;
+          }
+          const result = await client.query(sql, parameters as unknown[] | undefined);
+          if (sql === 'COMMIT' && committedFault !== null) {
+            const fault = committedFault;
+            committedFault = null;
+            consume(fault);
+            throw Object.assign(new Error(`simulated lost acknowledgement ${fault}`), {
+              code: 'ECONNRESET',
+            });
+          }
+          return result;
+        },
+        release: () => client.release(),
+      };
+    },
+  } as unknown as Pool;
+  return {
+    pool: faultingPool,
+    arm(fault: ComposedRestartFault) {
+      if (armed !== null) throw new Error(`Restart fault ${armed} is still armed.`);
+      armed = fault;
+    },
+    fired(fault: ComposedRestartFault) {
+      return fired.has(fault);
+    },
+  };
+}
 
 const loaderPlayerStats = {
   totalPoints: 10,
@@ -838,8 +905,9 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       string,
       Readonly<{ factualOutputId: string; inputSetId: string; calculationId: string }>
     >();
+    const restartFaults = createComposedRestartFaultController(outcomesPool);
     const composedRuntime = createLocalAflTradePrivateValuationRuntime({
-      pool: outcomesPool,
+      pool: restartFaults.pool,
       artifactRoot: privateArtifactRoot,
       upstream: {
         maximumConcurrency: 1,
@@ -1063,6 +1131,151 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         canonicalizeAflTradeJson(composedFactual),
       ]
     );
+    restartFaults.arm('after_prepared_activation');
+    await expect(composedRuntime.dispatchRequest(composedRequestId)).rejects.toThrow(
+      'simulated restart after prepared activation'
+    );
+    expect(restartFaults.fired('after_prepared_activation')).toBe(true);
+
+    const preparedAfterRestart = await outcomesPool.query<{
+      readonly prepared_input_set_id: string;
+      readonly revision: number;
+    }>(
+      `SELECT prepared.prepared_input_set_id,head.revision
+         FROM outcome_current_prepared_valuation_input_set head
+         JOIN outcome_prepared_valuation_input_set prepared
+           ON prepared.prepared_input_set_id=head.prepared_input_set_id
+        WHERE head.scope_key=$1
+          AND prepared.prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$2`,
+      [operation.content.scopeKey, composedRequestId]
+    );
+    expect(preparedAfterRestart.rows).toHaveLength(1);
+    const preparedInputSetId = preparedAfterRestart.rows[0]!.prepared_input_set_id;
+    const preparedInputSetRevision = preparedAfterRestart.rows[0]!.revision;
+    await expect(
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_current_valuation_cohort_operation
+             WHERE dispatch_request_id=$1) AS operation_count,
+           (SELECT count(*)::int FROM outcome_prepared_valuation_input_set
+             WHERE prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$1)
+             AS prepared_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_cohort_capture)
+             AS cohort_capture_count`,
+        [composedRequestId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ operation_count: 1, prepared_count: 1, cohort_capture_count: 0 }],
+    });
+
+    const batchRepository = new PostgresGovernedPrivateEvaluationBatchRepository(
+      client,
+      async () => false
+    );
+    const previousBatch = createGovernedPrivateEvaluationBatch({
+      scopeKey: operation.content.scopeKey,
+      preparedInputSetId,
+      preparedInputSetRevision,
+      factualReleaseId: composedFactualReleaseId,
+      modelQualificationId: qualificationId,
+      modelQualificationWorkId,
+      entries: [readyTradeId, unavailableTradeId].map((tradeId) => ({
+        tradeId,
+        state: 'unavailable' as const,
+        blockers: [
+          {
+            code: 'engineering_unavailable' as const,
+            message: 'Previously complete batch retained while replacement work is pending.',
+          },
+        ],
+      })),
+      createdAt: new Date().toISOString(),
+    });
+    await batchRepository.register(previousBatch);
+    await expect(
+      batchRepository.advance({
+        scopeKey: operation.content.scopeKey,
+        batchId: previousBatch.batchId,
+        expectedRevision: 0,
+        operationId: createGovernedPrivateEvaluationBatchOperationId({
+          scopeKey: operation.content.scopeKey,
+          batchId: previousBatch.batchId,
+          expectedRevision: 0,
+          action: 'activate',
+        }),
+        action: 'activate',
+      })
+    ).resolves.toMatchObject({ revision: 1, batchId: previousBatch.batchId });
+
+    const expireComposedClaim = async (requestId: string) => {
+      await mutateFixture(
+        `UPDATE outcome_private_valuation_dispatch_attempt
+            SET lease_expires_at=claimed_at+interval '1 millisecond'
+          WHERE claim_id=(SELECT claim_id FROM outcome_private_valuation_dispatch_request
+                           WHERE request_id=$1)`,
+        [requestId]
+      );
+      await mutateFixture(
+        `UPDATE outcome_private_valuation_dispatch_request
+            SET lease_expires_at=(
+                  SELECT lease_expires_at FROM outcome_private_valuation_dispatch_attempt
+                   WHERE claim_id=outcome_private_valuation_dispatch_request.claim_id
+                ),
+                available_at=date_trunc('milliseconds',clock_timestamp())-interval '1 second'
+          WHERE request_id=$1`,
+        [requestId]
+      );
+    };
+    await expireComposedClaim(composedRequestId);
+
+    restartFaults.arm('after_generation_registration');
+    await expect(composedRuntime.dispatchRequest(composedRequestId)).resolves.toMatchObject({
+      state: 'rescheduled',
+      result: { state: 'retry_pending', pendingTradeIds: [readyTradeId] },
+    });
+    expect(restartFaults.fired('after_generation_registration')).toBe(true);
+    await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
+      head: { revision: 1, batchId: previousBatch.batchId },
+    });
+    await expect(
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_local_private_trade_evaluation_generation
+             WHERE valuation_scope_key=$1 AND trade_id=$2) AS generation_count,
+           (SELECT status FROM outcome_private_evaluation_execution_work
+             WHERE trade_id=$2) AS work_status,
+           (SELECT count(*)::int FROM outcome_private_evaluation_batch) AS batch_count`,
+        [operation.content.scopeKey, readyTradeId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ generation_count: 1, work_status: 'retry_wait', batch_count: 1 }],
+    });
+    await mutateFixture(
+      `UPDATE outcome_private_valuation_dispatch_request SET available_at=$2
+        WHERE request_id=$1`,
+      [composedRequestId, new Date(Date.now() - 1_000)]
+    );
+    await mutateFixture(
+      `UPDATE outcome_private_evaluation_execution_work SET available_at=$2
+        WHERE trade_id=$1 AND status='retry_wait'`,
+      [readyTradeId, new Date(Date.now() - 1_000)]
+    );
+
+    restartFaults.arm('after_batch_registration');
+    await expect(composedRuntime.dispatchRequest(composedRequestId)).rejects.toThrow(
+      'simulated lost acknowledgement after_batch_registration'
+    );
+    expect(restartFaults.fired('after_batch_registration')).toBe(true);
+    await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
+      head: { revision: 1, batchId: previousBatch.batchId },
+    });
+    await expect(
+      outcomesPool.query(
+        `SELECT count(*)::int AS batch_count FROM outcome_private_evaluation_batch`
+      )
+    ).resolves.toMatchObject({ rows: [{ batch_count: 2 }] });
+
+    await expireComposedClaim(composedRequestId);
     const composedDispatchResult = await composedRuntime.dispatchRequest(composedRequestId);
     expect(composedDispatchResult).toMatchObject({
       state: 'completed',
@@ -1082,13 +1295,96 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         },
       },
     });
+    await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
+      head: { revision: 2 },
+      batch: { content: { tradeCount: 2, readyCount: 1, unavailableCount: 1 } },
+    });
     await expect(
-      new PostgresGovernedPrivateEvaluationBatchRepository(client, async () => false).loadCurrent(
-        operation.content.scopeKey
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_prepared_valuation_input_set
+             WHERE prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$1)
+             AS prepared_count,
+           (SELECT count(*)::int FROM outcome_local_private_trade_evaluation_generation
+             WHERE valuation_scope_key=$2 AND trade_id=$3) AS generation_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_batch) AS batch_count`,
+        [composedRequestId, operation.content.scopeKey, readyTradeId]
       )
     ).resolves.toMatchObject({
-      head: { revision: 1 },
-      batch: { content: { tradeCount: 2, readyCount: 1, unavailableCount: 1 } },
+      rows: [{ prepared_count: 1, generation_count: 1, batch_count: 2 }],
+    });
+
+    const staleRequestId = await composedRuntime.enqueueAdHoc({
+      scopeKey: operation.content.scopeKey,
+      operationKey: 'composed-stale-current-model',
+    });
+    const staleFactualReleaseId = addressed('outcome-release', 'composed-stale-release');
+    const staleFactual = loaderFactualOutput(
+      staleRequestId,
+      'composed-stale-factual',
+      factualRunId,
+      staleFactualReleaseId
+    );
+    composedPreparedInputs.set(staleRequestId, {
+      factualOutputId: staleFactual.outputId,
+      inputSetId: hpnCalculation.content.inputSetId,
+      calculationId: hpnCalculationId,
+    });
+    await mutateFixture(
+      `INSERT INTO outcome_release_manifest
+        (release_id,scope_key,environment,created_at,effective_through,manifest_json)
+       VALUES ($1,'private-afl-draft-trade-outcomes','non_production',$2,$2,$3::jsonb)`,
+      [
+        staleFactualReleaseId,
+        new Date(now.getTime() + 1_000),
+        canonicalizeAflTradeJson(composedReleaseManifest),
+      ]
+    );
+    await mutateFixture(
+      `INSERT INTO outcome_private_valuation_factual_output
+        (output_id,request_id,capture_binding_id,source_admission_id,normalization_run_id,fact_batch_id,
+         factual_run_id,candidate_id,factual_release_id,prepared_at,output_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+      [
+        staleFactual.outputId,
+        staleRequestId,
+        staleFactual.content.captureBindingId,
+        staleFactual.content.sourceAdmissionId,
+        staleFactual.content.normalizationRunId,
+        staleFactual.content.factBatch.batchId,
+        staleFactual.content.reconciliation.factualRunId,
+        staleFactual.content.candidate.candidateId,
+        staleFactual.content.factualRelease.releaseId,
+        staleFactual.content.preparedAt,
+        canonicalizeAflTradeJson(staleFactual),
+      ]
+    );
+    const currentModel = await outcomesPool.query<{ readonly revision: number }>(
+      `SELECT revision FROM outcome_current_governed_valuation_model_pair WHERE scope_key=$1`,
+      [operation.content.scopeKey]
+    );
+    const currentModelRevision = currentModel.rows[0]!.revision;
+    await mutateFixture(
+      `UPDATE outcome_current_governed_valuation_model_pair SET revision=$2
+        WHERE scope_key=$1`,
+      [operation.content.scopeKey, currentModelRevision + 1]
+    );
+    await expect(composedRuntime.dispatchRequest(staleRequestId)).rejects.toThrow(
+      'Current trade construction does not match the captured release, model, or bundle authority.'
+    );
+    await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
+      head: { revision: 2 },
+      batch: { content: { readyCount: 1, unavailableCount: 1 } },
+    });
+    await mutateFixture(
+      `UPDATE outcome_current_governed_valuation_model_pair SET revision=$2
+        WHERE scope_key=$1`,
+      [operation.content.scopeKey, currentModelRevision]
+    );
+    await expireComposedClaim(staleRequestId);
+    await expect(composedRuntime.dispatchRequest(staleRequestId)).resolves.toMatchObject({
+      state: 'completed',
+      result: { state: 'already_current', head: { revision: 2 } },
     });
 
     const replayRequestId = await composedRuntime.enqueueAdHoc({
@@ -1141,7 +1437,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       requestId: replayRequestId,
       result: {
         state: 'already_current',
-        head: { revision: 1 },
+        head: { revision: 2 },
       },
     });
   });

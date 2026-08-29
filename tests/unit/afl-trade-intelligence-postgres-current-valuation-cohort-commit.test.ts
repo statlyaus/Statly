@@ -124,6 +124,7 @@ class CommitTransaction implements AflOutcomeSqlTransaction {
 class PrivateCaptureTransaction implements AflOutcomeSqlTransaction {
   capturedAt = '2026-08-21T09:00:00.000Z';
   claimValidated = false;
+  isolationLevel: string | null = null;
   retainedContext: unknown | null = null;
   retainedResult: { prepared_input_set_id: string; head_revision: number } | null = null;
   activatedPreparedInputSetId: string | null = null;
@@ -133,7 +134,10 @@ class PrivateCaptureTransaction implements AflOutcomeSqlTransaction {
     sql: string,
     parameters: readonly unknown[] = []
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
-    if (sql.includes('SET TRANSACTION ISOLATION LEVEL')) return { rows: [], rowCount: 0 };
+    if (sql.includes('SET TRANSACTION ISOLATION LEVEL')) {
+      this.isolationLevel = sql;
+      return { rows: [], rowCount: 0 };
+    }
     if (sql.includes('pg_advisory_xact_lock')) {
       return { rows: [{}], rowCount: 1 } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
@@ -282,6 +286,7 @@ describe('PostgreSQL current valuation cohort commit', () => {
       },
     });
 
+    expect(transaction.isolationLevel).toContain('REPEATABLE READ');
     expect(context).toMatchObject({
       operationId: createAflTradePrivateCurrentValuationCohortPreparationOperationId({
         scopeKey: 'afl-men:2026-trades',
