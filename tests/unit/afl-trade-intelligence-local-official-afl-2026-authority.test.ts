@@ -6,13 +6,14 @@ import {
   createLocalAflTradeOfficialAfl2026Authority,
 } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 import { createAflTradeFitzRoyInvocation } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
+import { evaluateAflTradeGate0A } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
 
 describe('local official AFL 2026 authority', () => {
   it('binds the exact reviewed official schema and request-scoped season', () => {
     const authority = createLocalAflTradeOfficialAfl2026Authority();
     const invocation = createAflTradeFitzRoyInvocation(authority.capture.captureRequest);
 
-    expect(LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA).toHaveLength(96);
+    expect(LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA).toHaveLength(95);
     expect(LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA.map(({ name }) => name)).toEqual(
       expect.arrayContaining([
         'providerId',
@@ -25,6 +26,9 @@ describe('local official AFL 2026 authority', () => {
         'team.name',
         'goals',
       ])
+    );
+    expect(LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA.map(({ name }) => name)).not.toContain(
+      'extendedStats'
     );
     expect(authority.capture.captureRequest).toMatchObject({
       capabilityId: 'official-afl-player-stats',
@@ -67,7 +71,7 @@ describe('local official AFL 2026 authority', () => {
     expect(authority.capture.gateRequest.fieldUses).toEqual(
       expect.arrayContaining([{ sourceField: 'goals', use: 'archive_fact' }])
     );
-    expect(authority.capture.gateRequest.fieldUses).toHaveLength(96);
+    expect(authority.capture.gateRequest.fieldUses).toHaveLength(95);
     expect(authority.fieldMap).toMatchObject({
       capabilityId: 'official-afl-player-stats',
       validFromSeason: 2026,
@@ -99,5 +103,16 @@ describe('local official AFL 2026 authority', () => {
         },
       ],
     });
+  });
+
+  it('admits the exact internal-evaluation capture through Gate 0A', () => {
+    const authority = createLocalAflTradeOfficialAfl2026Authority();
+
+    expect(
+      evaluateAflTradeGate0A(authority.capture.ledger, authority.capture.sourceRights, {
+        ...authority.capture.gateRequest,
+        evaluatedAt: '2026-08-26T00:00:00.000Z',
+      })
+    ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
   });
 });

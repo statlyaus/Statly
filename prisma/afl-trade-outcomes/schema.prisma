@@ -4521,6 +4521,7 @@ model OutcomePrivateReviewedEvidenceBundle {
   decisions                  OutcomePrivateReviewedEvaluationDecision[]
   currentHeads               OutcomePrivateReviewedEvaluationHead[]
   localPlayerIdentityReviews OutcomeLocalWorkbookPlayerIdentityReview[]
+  privateFactualCandidates  OutcomePrivateFactualCandidate[]
 
   @@index([evidenceScopeKey, createdAt], map: "outcome_private_reviewed_evidence_bundle_scope_idx")
   @@map("outcome_private_reviewed_evidence_bundle")
@@ -4565,6 +4566,7 @@ model OutcomePrivateReviewedEvaluationDecision {
   supersedesDecision           OutcomePrivateReviewedEvaluationDecision? @relation("OutcomePrivateReviewedEvaluationDecisionChain", fields: [supersedesDecisionId], references: [decisionId], onDelete: Restrict, map: "outcome_private_reviewed_evaluation_decision_supersedes_fkey")
   successorDecision            OutcomePrivateReviewedEvaluationDecision? @relation("OutcomePrivateReviewedEvaluationDecisionChain")
   currentHead                  OutcomePrivateReviewedEvaluationHead?
+  privateFactualCandidates    OutcomePrivateFactualCandidate[]
 
   @@unique([valuationScopeKey, evidenceBundleId, revision], map: "outcome_private_reviewed_evaluation_decision_revision_key")
   @@map("outcome_private_reviewed_evaluation_decision")
@@ -5439,6 +5441,63 @@ model OutcomeCurrentValuationRefreshOperation {
   resultJson               Json     @map("result_json")
 
   @@map("outcome_current_valuation_refresh_operation")
+}
+
+model OutcomePrivateFactualCandidate {
+  candidateId                         String                                   @id @map("candidate_id") @outcomes.Text
+  valuationScopeKey                   String                                   @map("valuation_scope_key") @outcomes.Text
+  evidenceScopeKey                    String                                   @map("evidence_scope_key") @outcomes.Text
+  evidenceBundleId                    String                                   @map("evidence_bundle_id") @outcomes.Text
+  reviewDecisionId                    String                                   @map("review_decision_id") @outcomes.Text
+  normalizedReconciledCustodySha256   String                                   @map("normalized_reconciled_custody_sha256") @outcomes.Char(64)
+  candidateJson                       Json                                     @map("candidate_json")
+  composedAt                          DateTime                                 @map("composed_at") @outcomes.Timestamptz(3)
+  evidenceBundle                      OutcomePrivateReviewedEvidenceBundle     @relation(fields: [evidenceBundleId], references: [evidenceBundleId], onDelete: Restrict)
+  reviewDecision                      OutcomePrivateReviewedEvaluationDecision @relation(fields: [reviewDecisionId], references: [decisionId], onDelete: Restrict)
+  currentHead                         OutcomeCurrentPrivateFactualAuthority?
+
+  @@map("outcome_private_factual_candidate")
+}
+
+model OutcomeCurrentPrivateFactualAuthority {
+  valuationScopeKey String                         @id @map("valuation_scope_key") @outcomes.Text
+  candidateId      String                         @unique @map("candidate_id") @outcomes.Text
+  revision         Int
+  advancedAt       DateTime                       @map("advanced_at") @outcomes.Timestamptz(3)
+  candidate        OutcomePrivateFactualCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
+
+  @@map("outcome_current_private_factual_authority")
+}
+
+model OutcomeCurrentValuationFactualRefreshStageReceipt {
+  receiptId          String   @id @map("receipt_id") @outcomes.Text
+  scopeKey           String   @map("scope_key") @outcomes.Text
+  triggerKind        String   @map("trigger_kind") @outcomes.Text
+  stableOperationKey String   @map("stable_operation_key") @outcomes.Text
+  stage              String   @outcomes.Text
+  receiptJson        Json     @map("receipt_json")
+  retainedAt         DateTime @map("retained_at") @outcomes.Timestamptz(3)
+
+  @@unique([stableOperationKey, stage])
+  @@map("outcome_current_valuation_factual_refresh_stage_receipt")
+}
+
+model OutcomeCurrentValuationFactualRefreshOperation {
+  operationId            String    @id @map("operation_id") @outcomes.Text
+  scopeKey               String    @map("scope_key") @outcomes.Text
+  triggerKind            String    @map("trigger_kind") @outcomes.Text
+  stableOperationKey     String    @unique @map("stable_operation_key") @outcomes.Text
+  state                  String    @outcomes.Text
+  factualStage           String?   @map("factual_stage") @outcomes.Text
+  unavailableCause       String?   @map("unavailable_cause") @outcomes.Text
+  candidateId            String?   @map("candidate_id") @outcomes.Text
+  privateFactualRevision Int?      @map("private_factual_revision")
+  capturedAt             DateTime  @map("captured_at") @outcomes.Timestamptz(3)
+  completedAt            DateTime  @map("completed_at") @outcomes.Timestamptz(3)
+  operationJson          Json      @map("operation_json")
+  resultJson             Json      @map("result_json")
+
+  @@map("outcome_current_valuation_factual_refresh_operation")
 }
 
 model OutcomePrivateValuationDispatchAttempt {

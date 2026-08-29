@@ -636,17 +636,49 @@ alerting, scheduling, deployment, or production-activation requirements.
 
 ### Inspecting the governed five-season workbook evaluation
 
-Use this development-only path only after a separately authorized one-off capture has completed. It
-does not perform capture, grant source rights, or turn the workbook into factual authority. The
-retained disposable database must contain exactly one governed AFL Tables capture for each completed
-season from 2021 through 2025 and one separately governed official AFL current-season capture for 2026. Preserve the capture receipts and local artifact roots; do not substitute workbook values for
-missing or review-blocked observations.
+Migration `0081_corrected_local_review_lineage` is an intentional one-time boundary for this
+development-only lane. If the database already contains review decisions under the superseded
+historical evidence digest, migration deployment stops with
+`Corrected local review lineage requires a fresh disposable database before review`. Do not edit,
+delete, or relabel those append-only decisions in place, and never apply this procedure to a shared or
+hosted database.
 
-Before launch, verify the six captures are finalized in the caller-owned loopback PostgreSQL database
-named exactly `statly_outcomes_test`. Expected staged coverage for the current rehearsal is 57,621
-player-match rows: 9,522 each for 2021 and 2022, 9,936 each for 2023–2025, and 8,769 for official 2026. A count mismatch, duplicate season capture, changed field map, unresolved custody object, or
-non-loopback database is a stop condition. Do not repeat provider requests merely to start the UI;
-the interactive path reads retained PostgreSQL staging and fails closed when it is absent.
+Keep the old disposable database and its local artifact roots offline and read-only. The corrected
+Gate lineage cannot be reconstructed from retained artifact bytes: its capture execution receipt must
+bind the corrected decision that existed before retrieval. There is therefore no authenticated
+retained-artifact import and no supported in-place upgrade. This factual-activation stage consumes an
+already current reviewed-evidence head and intentionally does not orchestrate raw capture,
+normalization, or reconciliation. Creating a replacement seven-capture chain is tracked separately in
+`statlyaus/Statly#569`; until that work is delivered and a new retrieval is separately authorized, do
+not deploy migration `0081` over the superseded database or attempt the review commands below. Copying,
+relabeling, or replaying old database rows or artifact bytes as a new capture is prohibited.
+
+After #569 is delivered and a new retrieval is separately authorized, start a separate empty
+loopback database named exactly `statly_outcomes_test`, authenticate its runtime nonce, and deploy the
+complete migration history. Then use #569's owning boundary to create the corrected governed chain.
+Retire the old database only after the new reviewed bundle is current and its capture IDs, artifact
+digests, normalization-run IDs, counts, and three rights artifacts have been privately compared with
+the preserved evidence record.
+
+The remaining development-only inspection path assumes the replacement provider retrieval was
+separately authorized and has completed through its owning boundary. The review commands do not
+perform capture or grant factual authority. The replacement disposable database must contain exactly
+one governed AFL Tables capture for each completed
+season from 2021 through 2025, one separately governed official-AFL current-season player-stat capture
+for 2026, and one governed AFL Tables completed-results capture for 2026. Preserve the capture
+receipts and local artifact roots; do not substitute workbook values for missing or review-blocked
+observations.
+
+Before launch, verify all seven captures have exactly one admitted finalized normalization in the
+caller-owned loopback PostgreSQL database named exactly `statly_outcomes_test`, and verify that their
+manifests resolve to exactly three source-rights artifacts. Expected staged player-stat coverage for
+the six player-stat captures remains 57,621 player-match rows: 9,522 each for 2021 and 2022, 9,936
+each for 2023–2025, and 8,769 for official 2026. The seventh capture is the separate AFL Tables 2026
+results normalization and is not included in that player-match-row total. A count mismatch, duplicate
+season or capability capture, extra or missing finalized normalization, changed field map, unresolved
+custody object, rights-count mismatch, or non-loopback database is a stop condition. Do not repeat
+provider requests merely to start the UI; the interactive path reads retained PostgreSQL staging and
+fails closed when it is absent.
 
 Set the private workbook path and its independently computed SHA-256 only in the invoking shell. Do
 not write either value to Git, logs, documentation, or a shared environment file. Then run:
@@ -858,6 +890,33 @@ swap, activates and exactly replays a seeded ready fixture, inspects and withdra
 workspace, verifies the exact withdrawn generation without reactivation, rejects unavailable recovery
 and rollback, rejects mutation of append-only receipts, and proves the composite scope key prevents
 cross-scope reads. Remove only the container/schema and artifact directory created for that run.
+
+### Refreshing private factual authority
+
+Current Valuation Refresh accepts a valuation scope, trigger, and stable operation key. Reuse the same
+stable key after a timeout or lost response; exact replay returns the committed receipt. Never invent a
+new key merely because the caller did not receive the first response.
+
+The factual stage may return `factual_refresh_complete` with `advanced` or `already_current`. It may
+instead retain `unavailable` with `source_authority_missing`, `source_authority_stale`,
+`source_authority_mismatched`, or `source_authority_unauthenticated`. Treat these as source-governance
+failures: inspect and repair the admitted capture, finalized normalization, reconciliation review,
+custody, or rights authority. Do not retry them as transient worker failures; retry and lease policy is
+owned by the dispatch recovery boundary.
+
+The coordinator durably retains `source_authenticated` and `candidate_composed` receipts before its
+terminal compare-and-swap. Reusing the stable operation key after loss at either boundary resumes the
+retained receipt. The composed candidate retains and binds a canonical normalized/reconciled custody
+snapshot separately from the reviewed bundle identity. That snapshot includes one exact finalized
+normalization run per admitted capture and the reviewed reconciliation sets. The composition receipt
+also binds the predecessor private-factual head; if a later candidate advances first, the older
+receipt fails its compare-and-swap instead of reactivating stale custody.
+
+An advancement changes only `outcome_current_private_factual_authority`. Verify that
+`outcome_active_release` and the publication registry are unchanged. The reviewed sources prohibit
+public display and redistribution, so this operation is not authority to register, activate, export,
+or serve a factual release. Prepared-v3 and private batch heads remain unchanged until their separate
+coordinators complete.
 
 ### Operating automatic local private valuation
 

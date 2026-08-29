@@ -164,7 +164,6 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   character('player.givenName'),
   character('player.surname'),
   character('teamStatus'),
-  logical('extendedStats'),
   character('team.name'),
 ] satisfies readonly LocalOfficialAflFieldDescriptor[];
 

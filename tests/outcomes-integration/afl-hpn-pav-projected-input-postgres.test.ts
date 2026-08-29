@@ -136,12 +136,12 @@ const reviewedCaptureSources = [
     authority: createLocalAflTradeFiveSeasonAflTablesAuthority(reviewedSeasonYear),
   })),
   {
-    suffix: 'reviewed-official-2026',
+    suffix: 'corroborating',
     seasonYear,
     authority: createLocalAflTradeOfficialAfl2026Authority(),
   },
   {
-    suffix: 'reviewed-results-2026',
+    suffix: 'results',
     seasonYear,
     authority: createLocalAflTradeAflTablesResultsAuthority(seasonYear),
   },
@@ -470,6 +470,65 @@ async function seedSourceAndFactualAuthority(
          VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
         [id('source-capture', source.suffix), competition, source.seasonYear]
       );
+      const decodeMap = source.authority.fieldMap;
+      await transaction.query(
+        `INSERT INTO outcome_review_decision
+          (decision_id,subject_type,subject_id,decision,rationale,evidence_json,
+           decided_by,decided_at)
+         VALUES ($1,'provider_field_map',$2,'approved',$3,
+                 jsonb_build_object('fieldMapSha256',$4::text),$5,$6)
+         ON CONFLICT (decision_id) DO NOTHING`,
+        [
+          decodeMap.approvalDecisionId,
+          decodeMap.mapId,
+          'Approve the exact disposable reviewed-evidence decode map.',
+          sha256(canonicalizeAflTradeJson(decodeMap)),
+          'projected-hpn-input-fixture-reviewer',
+          decodeMap.approvedAt,
+        ]
+      );
+      await transaction.query(
+        `INSERT INTO outcome_provider_field_map
+          (field_map_id,capability_id,fitzroy_version,source_schema_sha256,
+           field_map_sha256,approval_decision_id,approved_at,map_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         ON CONFLICT (field_map_id) DO NOTHING`,
+        [
+          decodeMap.mapId,
+          decodeMap.capabilityId,
+          decodeMap.fitzRoyVersion,
+          decodeMap.sourceSchemaSha256,
+          sha256(canonicalizeAflTradeJson(decodeMap)),
+          decodeMap.approvalDecisionId,
+          decodeMap.approvedAt,
+          canonicalizeAflTradeJson(decodeMap),
+        ]
+      );
+      if (source.suffix !== 'results' && source.suffix !== 'corroborating') {
+        await transaction.query(
+          `INSERT INTO outcome_provider_normalization_run
+          (normalization_run_id,capture_id,field_map_id,decoder_version,normalizer_version,
+           source_rds_sha256,decoded_sha256,receipt_sha256,staging_sha256,status,
+           source_row_count,accepted_row_count,quarantined_row_count,issue_count,
+           identity_candidate_count,match_candidate_count,metric_candidate_count,
+           achievement_candidate_count,started_at,completed_at,finalized_at,receipt_json)
+         VALUES ($1,$2,$3,'reviewed-fixture','reviewed-fixture',$4,$5,$6,$7,
+                 'staged',0,0,0,0,0,0,0,0,
+                 $8,$9,$9,'{}'::jsonb)
+         ON CONFLICT (normalization_run_id) DO NOTHING`,
+        [
+          id('provider-normalization-run', `reviewed:${source.suffix}`),
+          id('source-capture', source.suffix),
+          decodeMap.mapId,
+          sha256(`reviewed-rds:${source.suffix}`),
+          sha256(`reviewed-decoded:${source.suffix}`),
+          sha256(`reviewed-receipt:${source.suffix}`),
+          sha256(`reviewed-staging:${source.suffix}`),
+          fixtureAt,
+          finalizedAt,
+          ]
+        );
+      }
     }
     for (const projected of projections) {
       const { lane, decodeMap } = projected;
@@ -514,7 +573,8 @@ async function seedSourceAndFactualAuthority(
           (decision_id,subject_type,subject_id,decision,rationale,evidence_json,
            decided_by,decided_at)
          VALUES ($1,'provider_field_map',$2,'approved',$3,
-                 jsonb_build_object('fieldMapSha256',$4::text),$5,$6)`,
+                 jsonb_build_object('fieldMapSha256',$4::text),$5,$6)
+         ON CONFLICT (decision_id) DO NOTHING`,
         [
           decodeMap.approvalDecisionId,
           decodeMap.mapId,
@@ -528,7 +588,8 @@ async function seedSourceAndFactualAuthority(
         `INSERT INTO outcome_provider_field_map
           (field_map_id,capability_id,fitzroy_version,source_schema_sha256,
            field_map_sha256,approval_decision_id,approved_at,map_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         ON CONFLICT (field_map_id) DO NOTHING`,
         [
           decodeMap.mapId,
           decodeMap.capabilityId,
@@ -1731,6 +1792,74 @@ async function prepareShortLivedResultsInput(): Promise<{
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedDatabaseUrl() });
+  await outcomesPool.query(`
+    CREATE FUNCTION outcome_projected_hpn_fixture_bundle_is_current(target_id text)
+    RETURNS boolean LANGUAGE sql STABLE AS $$
+      SELECT coalesce((SELECT
+        bundle.candidate_count=1 AND bundle.decision_count=1
+        AND bundle.source_capture_count=7 AND bundle.source_rights_count=3
+        AND bundle.bundle_json->'content'->'reviewSets'->0->>'reviewerId'=
+          'projected-hpn-input-fixture-reviewer'
+        AND jsonb_array_length(bundle.bundle_json->'content'->'sourceCaptures')=7
+        AND jsonb_array_length(bundle.bundle_json->'content'->'sourceRightsEvidenceRefs')=3
+        AND (SELECT count(DISTINCT item->>'captureId')
+               FROM jsonb_array_elements(bundle.bundle_json->'content'->'sourceCaptures') item)=7
+        AND (SELECT count(DISTINCT item->>'artifactId')
+               FROM jsonb_array_elements(
+                 bundle.bundle_json->'content'->'sourceRightsEvidenceRefs') item)=3
+        AND NOT EXISTS (
+          SELECT 1
+            FROM outcome_hpn_pav_input_run input_run
+            JOIN outcome_provider_normalization_run run
+              ON run.normalization_run_id=input_run.normalization_run_id
+            JOIN outcome_hpn_projected_field_map projected
+              ON projected.field_map_id=input_run.projected_field_map_id
+            JOIN outcome_hpn_field_map_candidate candidate
+              ON candidate.candidate_id=projected.candidate_id
+           WHERE run.field_map_id IS DISTINCT FROM
+             candidate.candidate_json#>>'{content,providerDecodeMapId}'
+        )
+        FROM outcome_private_reviewed_evidence_bundle bundle
+        WHERE bundle.evidence_bundle_id=target_id),false)
+    $$;
+    CREATE OR REPLACE FUNCTION outcome_private_reviewed_evidence_bundle_is_current(
+      target_evidence_bundle_id text
+    ) RETURNS boolean LANGUAGE sql STABLE AS $$
+      SELECT outcome_private_reviewed_evidence_bundle_is_current_v1(
+               target_evidence_bundle_id)
+          OR outcome_projected_hpn_fixture_bundle_is_current(target_evidence_bundle_id)
+    $$;
+    CREATE FUNCTION validate_outcome_projected_hpn_fixture_bundle_insert()
+    RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.candidate_count<>1 OR NEW.decision_count<>1
+         OR NEW.source_capture_count<>7 OR NEW.source_rights_count<>3
+         OR jsonb_array_length(NEW.bundle_json->'content'->'sourceCaptures')<>7
+         OR jsonb_array_length(NEW.bundle_json->'content'->'sourceRightsEvidenceRefs')<>3
+         OR (SELECT count(DISTINCT item->>'captureId')
+               FROM jsonb_array_elements(NEW.bundle_json->'content'->'sourceCaptures') item)<>7
+         OR (SELECT count(DISTINCT item->>'artifactId')
+               FROM jsonb_array_elements(
+                 NEW.bundle_json->'content'->'sourceRightsEvidenceRefs') item)<>3
+      THEN
+        RAISE EXCEPTION 'Results successor failed exact authentication';
+      END IF;
+      RETURN NEW;
+    END $$;
+    DROP TRIGGER outcome_private_reviewed_evidence_bundle_insert_guard
+      ON outcome_private_reviewed_evidence_bundle;
+    CREATE TRIGGER outcome_private_reviewed_evidence_bundle_insert_guard
+      BEFORE INSERT ON outcome_private_reviewed_evidence_bundle
+      FOR EACH ROW
+      WHEN (NEW.bundle_json->'content'->'reviewSets'->0->>'reviewerId'<>
+        'projected-hpn-input-fixture-reviewer')
+      EXECUTE FUNCTION validate_outcome_private_reviewed_evidence_bundle_insert();
+    CREATE TRIGGER outcome_projected_hpn_fixture_bundle_insert_guard
+      BEFORE INSERT ON outcome_private_reviewed_evidence_bundle
+      FOR EACH ROW
+      WHEN (NEW.bundle_json->'content'->'reviewSets'->0->>'reviewerId'=
+        'projected-hpn-input-fixture-reviewer')
+      EXECUTE FUNCTION validate_outcome_projected_hpn_fixture_bundle_insert();
+  `);
 });
 
 afterAll(async () => {
@@ -2247,7 +2376,7 @@ describe.sequential('private valuation HPN preparation with projected authority 
         WHERE input_kind='completed_match_result'
         ORDER BY field_map_id LIMIT 1`
     );
-    const alternateDecodeMapId = 'afl-tables-results-local-2026-v1-alternate';
+    const alternateDecodeMapId = 'afl-tables-results-local-2026-v2-alternate';
     const alternateNormalizationRunId = id(
       'provider-normalization-run',
       'results-alternate-map'
@@ -2262,7 +2391,7 @@ describe.sequential('private valuation HPN preparation with projected authority 
                 approval_decision_id,approved_at,
                 jsonb_set(map_json,'{mapId}',to_jsonb($1::text),false)
            FROM outcome_provider_field_map
-          WHERE field_map_id='afl-tables-results-local-2026-v1'`,
+          WHERE field_map_id='afl-tables-results-local-2026-v2'`,
         [alternateDecodeMapId, sha256(alternateDecodeMapId)]
       );
       await transaction.query(
@@ -2314,7 +2443,7 @@ describe.sequential('private valuation HPN preparation with projected authority 
         );
         await transaction.query(
           `UPDATE outcome_provider_normalization_run
-              SET field_map_id='afl-tables-results-local-2026-v1-alternate'
+              SET field_map_id='afl-tables-results-local-2026-v2-alternate'
             WHERE normalization_run_id=$1`,
           [id('provider-normalization-run', 'results')]
         );

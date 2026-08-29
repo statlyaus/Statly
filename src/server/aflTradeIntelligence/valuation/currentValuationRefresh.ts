@@ -4,10 +4,14 @@ import { aflTradeContentAddressedIdSchema } from '../artifacts/contentAddress';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { aflTradePrivateValuationDispatchTriggerSchema } from './privateValuationScheduling';
 
-export const AFL_TRADE_CURRENT_VALUATION_REFRESH_RESULT_SCHEMA_VERSION =
+export const AFL_TRADE_CURRENT_VALUATION_NO_CHANGE_RESULT_SCHEMA_VERSION =
   'afl-current-valuation-refresh-result-v1' as const;
+export const AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION =
+  'afl-current-valuation-refresh-result-v2' as const;
 export const AFL_TRADE_CURRENT_VALUATION_REFRESH_LIMITATION =
   'Private local non-production current-authority refresh trace only; no factual, model, prepared-input, private-evaluation, production, activation, or publication authority is granted.' as const;
+export const AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_LIMITATION =
+  'Private local non-production factual refresh authority only; no public release, registry, production, activation, or publication authority is granted.' as const;
 
 const EXECUTION_DATABASE_ROLE = 'afl_trade_private_evaluation_coordinator';
 
@@ -43,9 +47,9 @@ export const aflTradeCurrentValuationRefreshAuthoritySchema = z
   })
   .strict();
 
-export const aflTradeCurrentValuationRefreshResultSchema = z
+const retainedNoChangeResultSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_CURRENT_VALUATION_REFRESH_RESULT_SCHEMA_VERSION),
+    schemaVersion: z.literal(AFL_TRADE_CURRENT_VALUATION_NO_CHANGE_RESULT_SCHEMA_VERSION),
     operationId: aflTradeContentAddressedIdSchema('current-valuation-refresh-operation'),
     scopeKey: idSchema,
     trigger: aflTradeCurrentValuationRefreshTriggerSchema,
@@ -61,7 +65,82 @@ export const aflTradeCurrentValuationRefreshResultSchema = z
     publicationProhibited: z.literal(true),
     limitation: z.literal(AFL_TRADE_CURRENT_VALUATION_REFRESH_LIMITATION),
   })
-  .strict()
+  .strict();
+
+const privateFactualAuthoritySchema = z
+  .object({
+    valuationScopeKey: idSchema,
+    candidateId: aflTradeContentAddressedIdSchema('private-factual-candidate'),
+    evidenceScopeKey: idSchema,
+    evidenceBundleId: aflTradeContentAddressedIdSchema('private-reviewed-evidence-bundle'),
+    reviewDecisionId: aflTradeContentAddressedIdSchema(
+      'private-reviewed-evidence-evaluation-decision'
+    ),
+    normalizedReconciledCustodySha256: z.string().regex(/^[a-f0-9]{64}$/),
+    revision: z.number().int().positive(),
+  })
+  .strict();
+
+const factualRefreshResultSchema = z
+  .object({
+    schemaVersion: z.literal(
+      AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION
+    ),
+    operationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-factual-refresh-operation'
+    ),
+    scopeKey: idSchema,
+    trigger: aflTradeCurrentValuationRefreshTriggerSchema,
+    stableOperationKey: idSchema,
+    state: z.literal('factual_refresh_complete'),
+    factualStage: z.enum(['already_current', 'advanced']),
+    privateFactualAuthority: privateFactualAuthoritySchema,
+    capturedAt: instantSchema,
+    completedAt: instantSchema,
+    executionLocation: z.literal('local'),
+    visibility: z.literal('private'),
+    environment: z.literal('non_production'),
+    publicationEligible: z.literal(false),
+    publicationProhibited: z.literal(true),
+    limitation: z.literal(AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_LIMITATION),
+  })
+  .strict();
+
+const unavailableRefreshResultSchema = z
+  .object({
+    schemaVersion: z.literal(
+      AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION
+    ),
+    operationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-factual-refresh-operation'
+    ),
+    scopeKey: idSchema,
+    trigger: aflTradeCurrentValuationRefreshTriggerSchema,
+    stableOperationKey: idSchema,
+    state: z.literal('unavailable'),
+    cause: z.enum([
+      'source_authority_missing',
+      'source_authority_stale',
+      'source_authority_mismatched',
+      'source_authority_unauthenticated',
+    ]),
+    capturedAt: instantSchema,
+    completedAt: instantSchema,
+    executionLocation: z.literal('local'),
+    visibility: z.literal('private'),
+    environment: z.literal('non_production'),
+    publicationEligible: z.literal(false),
+    publicationProhibited: z.literal(true),
+    limitation: z.literal(AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_LIMITATION),
+  })
+  .strict();
+
+export const aflTradeCurrentValuationRefreshResultSchema = z
+  .discriminatedUnion('state', [
+    retainedNoChangeResultSchema,
+    factualRefreshResultSchema,
+    unavailableRefreshResultSchema,
+  ])
   .superRefine((result, context) => {
     if (Date.parse(result.completedAt) < Date.parse(result.capturedAt)) {
       context.addIssue({
@@ -97,10 +176,23 @@ export function createAflTradeCurrentValuationRefresh(dependencies: {
   return {
     async refreshCurrent(unparsedRequest) {
       const request = aflTradeCurrentValuationRefreshRequestSchema.parse(unparsedRequest);
+      for (const statement of [
+        'SELECT retain_outcome_current_valuation_factual_source($1,$2,$3)',
+        'SELECT compose_outcome_current_valuation_factual_candidate($1,$2,$3)',
+      ]) {
+        await dependencies.client.transaction(async (transaction) => {
+          await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
+          await transaction.query(statement, [
+            request.scopeKey,
+            request.trigger,
+            request.stableOperationKey,
+          ]);
+        });
+      }
       const retained = await dependencies.client.transaction(async (transaction) => {
         await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
         return transaction.query<RetainedRefreshRow>(
-          'SELECT * FROM retain_outcome_current_valuation_refresh_no_change($1,$2,$3)',
+          'SELECT * FROM refresh_outcome_current_valuation_factual($1,$2,$3)',
           [request.scopeKey, request.trigger, request.stableOperationKey]
         );
       });
