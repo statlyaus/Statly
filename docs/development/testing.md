@@ -55,6 +55,36 @@ reuse, governed identity review, current-head resolution loading and post-finali
 Production source commands additionally require reviewed
 JSON, durable Gate records, Redis admission and isolated KMS-backed object custody.
 
+For the current valuation evidence coordinator, run the focused unit and disposable PostgreSQL
+boundaries while editing:
+
+```sh
+npx vitest run --config vitest.config.unit.ts --coverage.enabled=false \
+  tests/unit/afl-trade-intelligence-current-valuation-evidence-orchestration.test.ts \
+  tests/unit/afl-trade-intelligence-local-egress-signing-authority.test.ts \
+  tests/unit/afl-trade-intelligence-private-valuation-worker.test.ts
+
+AFL_OUTCOMES_TEST_DATABASE_URL='<owned-disposable-loopback-postgresql>' \
+  npx vitest run --config vitest.config.outcomes-int.ts \
+  tests/outcomes-integration/afl-current-valuation-evidence-orchestration-postgres.test.ts
+```
+
+The PostgreSQL proof applies the complete migration history and runs all seven exact source lanes
+through the real Gate resolver, cryptographically signed capture receipt, artifact custody, source
+snapshot, contract-faithful offline fixture decoder, normalizer, stage-receipt, and
+reconciliation-fence boundaries. Only the external fitzRoy/network execution and decoded provider
+rows are bounded no-network fixtures. The scenario first retains the missing-reconciliation stop,
+then supplies explicit fixture-owned human review markers, retains the reviewed-authority stop, and
+uses a bounded reviewed-bundle assembler. With production SQL guards still enabled, it first proves
+that this incomplete fixture is rejected and leaves no reviewed bundle, decision, or head. It then
+uses an explicit test-only guard bypass to exercise the real `recordDecision` transaction/head
+persistence and private factual-refresh authority without materializing 146,343 fixture review
+decisions. That second phase is not evidence that the production exact-set admission guard accepts a
+complete dataset. It proves new operation keys reuse the seven finalized normalizations, the captured
+lineage reaches the private factual head without duplicate captures or runs, and the public active
+release and registry remain unchanged. Production construction does not inject the fixture assembler
+or bypass; it uses the complete exact reviewed-provider evidence loader and unchanged SQL guards.
+
 `npm run test:all` runs lint, typecheck, unit, integration, and browser tests. Its integration stage
 includes the persisted 12-team, 22-player-roster, 264-pick draft convergence contract. CI exposes
 these boundaries as stable merge checks so a failure identifies its owning verification stage. The
@@ -86,10 +116,11 @@ Migration `0081_corrected_local_review_lineage` has the same no-rewrite rule for
 reviewed local provider lane. A disposable database that already contains decisions under the
 superseded historical evidence digest cannot migrate in place. Preserve that database and its private
 artifact roots read-only. Retained artifact bytes cannot authenticate corrected pre-capture Gate
-lineage and must not be relabeled as a new capture. This stage consumes an already current reviewed
-head. In a new empty loopback `statly_outcomes_test` database, deploy the complete migration history;
-the separately tracked #569 must then create the replacement governed capture, normalization, and
-reconciliation chain before review can continue. The exact hard stop, preservation,
+lineage and must not be relabeled as a new capture. In a new empty loopback
+`statly_outcomes_test` database, deploy the complete migration history and use the current-evidence
+coordinator to create the replacement governed capture and normalization chain. It stops at the
+separately retained human reconciliation and reviewed-head authorities before continuing. The exact
+hard stop, preservation,
 seven-capture/three-rights preflight, and retirement conditions are
 in [AFL trade intelligence operations](../runbooks/afl-trade-intelligence-operations.md#inspecting-the-governed-five-season-workbook-evaluation).
 Never use this replacement procedure for shared or hosted state.

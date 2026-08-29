@@ -646,16 +646,16 @@ hosted database.
 Keep the old disposable database and its local artifact roots offline and read-only. The corrected
 Gate lineage cannot be reconstructed from retained artifact bytes: its capture execution receipt must
 bind the corrected decision that existed before retrieval. There is therefore no authenticated
-retained-artifact import and no supported in-place upgrade. This factual-activation stage consumes an
-already current reviewed-evidence head and intentionally does not orchestrate raw capture,
-normalization, or reconciliation. Creating a replacement seven-capture chain is tracked separately in
-`statlyaus/Statly#569`; until that work is delivered and a new retrieval is separately authorized, do
-not deploy migration `0081` over the superseded database or attempt the review commands below. Copying,
-relabeling, or replaying old database rows or artifact bytes as a new capture is prohibited.
+retained-artifact import and no supported in-place upgrade. The current-evidence coordinator can
+create the replacement seven-capture chain, but only after the Gate decisions, source-rights records,
+and exact field-map reviews have been separately authorized and retained. It never relabels an old
+artifact or creates a review decision. Do not deploy migration `0081` over the superseded database or
+attempt the review commands below. Copying, relabeling, or replaying old database rows or artifact
+bytes as a new capture is prohibited.
 
-After #569 is delivered and a new retrieval is separately authorized, start a separate empty
-loopback database named exactly `statly_outcomes_test`, authenticate its runtime nonce, and deploy the
-complete migration history. Then use #569's owning boundary to create the corrected governed chain.
+For a separately authorized new retrieval, start a separate empty loopback database named exactly
+`statly_outcomes_test`, authenticate its runtime nonce, and deploy the complete migration history.
+Use the launcher or ad-hoc valuation command with one stable operation key to enter the coordinator.
 Retire the old database only after the new reviewed bundle is current and its capture IDs, artifact
 digests, normalization-run IDs, counts, and three rights artifacts have been privately compared with
 the preserved evidence record.
@@ -893,6 +893,49 @@ cross-scope reads. Remove only the container/schema and artifact directory creat
 
 ### Refreshing private factual authority
 
+The automatic launcher and ad-hoc valuation command now enter the current-evidence coordinator before
+private factual refresh. The coordinator owns exactly these lanes: AFL Tables player statistics for
+2021–2025, official AFL player statistics for 2026, and AFL Tables results for 2026. It requires the
+separately retained current Gate/source-rights and field-map review authority before provider access.
+It never creates those decisions.
+
+Inspect a completed or exhausted dispatch through its append-only evidence result:
+
+```sql
+SELECT stable_operation_key,state,stage,cause,result_json
+  FROM outcome_current_valuation_evidence_orchestration_operation
+ WHERE scope_key='<valuation-scope>'
+ ORDER BY completed_at DESC
+ LIMIT 1;
+```
+
+`capture_authority`, `capture`, `normalization_authority`, or `normalization` identifies the exact
+provider boundary to repair. `reconciliation_authority` with `missing` means the seven finalized
+normalizations are retained but the required human provider review sets are not yet current. Run the
+five-season and official review commands in the preceding inspection procedure. Do not rerun the
+provider capture. Then intentionally enqueue a new outer operation key; the coordinator will reuse
+the seven retained normalizations and recheck reconciliation. If it then returns
+`reviewed_authority` / `review_required`, review the assembled source qualification and use the
+private reviewed-evaluation authority command to authorize or reject its exact bundle. Enqueue a
+third new outer operation key only after that human decision. The next coordinator operation reuses
+the same source custody and may enter private factual refresh.
+
+The local receipt signer is durable private runtime state at
+`<AFL_TRADE_LOCAL_ARTIFACT_ROOT>/current-valuation-evidence/egress-signing-key.pem`, with mode
+`0600`. Preserve that key while any retained non-fixture source snapshot may need to resume after a
+restart. If it is lost, those receipts can no longer be authenticated: the next new outer operation
+must fail at `normalization_authority` / `unauthenticated` until the affected sources are deliberately
+recaptured under newly reviewed authority. Never copy the key into Git, an environment file, logs,
+or shared storage. The configured artifact root must be absolute. Startup rejects a signing key that
+is a symlink, non-regular or multiply linked, owned by another user, or not exactly mode `0600`.
+
+An unavailable outcome is terminal for its derived evidence stable key. Reusing the same outer
+operation key is exact replay and must not be used to continue after a human authority transition.
+Using a new key after review is deliberate continuation, not a transport retry. A superseded review
+set returns stale; malformed authority returns unauthenticated; normalized/reconciled custody drift
+returns mismatched. None of these states authorizes public release, publication, production, model
+training, or redistribution.
+
 Current Valuation Refresh accepts a valuation scope, trigger, and stable operation key. Reuse the same
 stable key after a timeout or lost response; exact replay returns the committed receipt. Never invent a
 new key merely because the caller did not receive the first response.
@@ -925,8 +968,12 @@ The local full-stack launcher starts one backend valuation worker. It authentica
 durable dispatch work. The schedule is Monday 19:00 in `Australia/Melbourne`, calculated as a calendar
 occurrence rather than a 604800-second interval, so daylight-saving changes do not move the local time.
 Startup coalesces missed weeks to the latest occurrence. A newly committed qualified model pair also
-enqueues immediate work. Neither trigger promotes factual data or prepares model evidence: execution
-begins only from the exact current authenticated prepared-v3 head.
+enqueues immediate work. Each claimed dispatch first runs the seven-lane current-evidence coordinator
+and may advance only the private factual head. An unavailable evidence result completes that dispatch
+as exhausted rather than retrying it as a transient failure. A complete factual handoff then enters
+the existing cohort runner, which still requires the exact current authenticated prepared-v3 head.
+The coordinator does not rebuild or activate prepared-v3 evidence, so newly admitted facts cannot
+reach recalculation until that remaining downstream #550 stage is composed.
 
 The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
 It accepts an exact retained dispatch plus its live claim, requires the exact immutable factual output

@@ -26,7 +26,8 @@ import type {
 
 export class AflTradeFitzRoyStagingError extends Error {
   constructor(
-    readonly code: 'INVALID_REQUEST' | 'CUSTODY_UNAVAILABLE' | 'STAGING_FAILED',
+    readonly code:
+      'INVALID_REQUEST' | 'AUTHORITY_INVALID' | 'CUSTODY_UNAVAILABLE' | 'STAGING_FAILED',
     message: string,
     options?: ErrorOptions
   ) {
@@ -127,7 +128,7 @@ export async function stageAflTradeFitzRoySourceSnapshot(
       captureReceipt.content.egressExecutionReceipt === null
     ) {
       throw new AflTradeFitzRoyStagingError(
-        'INVALID_REQUEST',
+        'AUTHORITY_INVALID',
         'Non-fixture staging requires the trusted provider-egress verifier.'
       );
     }
@@ -138,7 +139,7 @@ export async function stageAflTradeFitzRoySourceSnapshot(
       );
     } catch (cause) {
       throw new AflTradeFitzRoyStagingError(
-        'INVALID_REQUEST',
+        'AUTHORITY_INVALID',
         'Provider-egress execution evidence failed signature authentication.',
         { cause }
       );

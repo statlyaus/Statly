@@ -434,17 +434,16 @@ projection, service, API, archive response, and authenticated JSON, CSV and OOXM
 byte. This is disposable local recovery evidence only; it is not evidence for hosted retention,
 point-in-time recovery, cross-host recovery, disaster recovery, or production restore authority.
 
-The existing executable development-only evidence rehearsal retains six one-off governed
-player-stat captures in a caller-owned disposable `statly_outcomes_test` PostgreSQL database: five
-completed AFL Tables seasons for 2021–2025 and official-AFL current-season evidence for 2026. Those
-captures contain 57,621 staged player-match rows. The corrected reviewed-evidence contract also
-requires one separately governed, finalized AFL Tables completed-results capture for 2026 and a third
-source-rights artifact. #569 owns producing that additional custody; until then the executable
-rehearsal cannot create the replacement current reviewed head consumed by factual activation. Capture
-rights, field maps, receipts, decoder provenance, raw-object digests, and staging outcomes remain
-independently attributable to their source decisions. Local raw custody uses the explicit
-`local_non_production_filesystem` profile and confers no hosted durability, redistribution,
-production, or recurring-capture authority.
+The development-only current-evidence coordinator owns exactly seven governed source lanes in a
+caller-owned disposable `statly_outcomes_test` PostgreSQL database: five completed AFL Tables
+player-stat seasons for 2021–2025, official-AFL current-season player-stat evidence for 2026, and one
+separately governed AFL Tables completed-results capture for 2026. The six player-stat captures are
+expected to contain 57,621 staged player-match rows in a real-data run. The seventh capture supplies
+the third source-rights artifact and completed-match universe required by the corrected
+reviewed-evidence contract. Capture rights, field maps, receipts, decoder provenance, raw-object
+digests, and staging outcomes remain independently attributable to their source decisions. Local raw
+custody uses the explicit `local_non_production_filesystem` profile and confers no hosted durability,
+redistribution, production, or recurring-capture authority.
 
 Those local capture-rights artifacts permit bounded capture, raw/hash retention and internal quality
 evaluation only. Model training, derived-feature creation, public derived output, public fact display
@@ -2036,6 +2035,40 @@ stable operation key. A restart resumes those receipts before the private factua
 it does not duplicate a candidate or head transition. The operation either advances the candidate,
 reports it already current, or retains one exact unavailable cause: missing, stale, mismatched, or
 unauthenticated source authority.
+
+The upstream current-evidence operation composes those existing boundaries before factual refresh.
+It resolves the durable Gate decision and source-rights proposal for each of the seven exact
+provider/season tuples, requires the exact current reviewed field map, and either reuses one finalized
+normalization or captures and normalizes the missing lane through the reviewed fitzRoy runtime. Each
+completed source lane is retained as an append-only PostgreSQL stage receipt keyed by the outer stable
+operation. A crash after capture but before normalization resumes the retained source snapshot; a
+crash after a stage receipt skips that lane. The SQL retention boundary independently requires the
+expected provider, capability, season, field-map identity, staged capture, and finalized
+normalization.
+
+The local runtime retains its Ed25519 capture-receipt signing key as a mode-`0600` file beneath the
+ignored private artifact root. A restarted process therefore reconstructs the same verifier before it
+authenticates a retained non-fixture snapshot. The key is local non-production custody only; it is not
+a production KMS identity or provider-egress attestation. Runtime construction requires an absolute
+artifact root and rejects a signing path that is a symlink, a non-regular or multiply linked file,
+owned by another user, or not exactly mode `0600`; it does not silently repair insecure custody.
+
+After all seven lanes, a separate reconciliation fence authenticates the two exact current provider
+review sets and reconstructs the complete normalized/reconciled bundle in one database snapshot. It
+does not insert identity, match, fact, review-set, bundle-authority, or head decisions. Missing review
+sets stop at `reconciliation_authority`; superseded or malformed decisions stop as stale or
+unauthenticated; a custody/count mismatch stops at `reconciliation`. Once the human reconciliation
+reviews exist, the operation separately requires the exact authorized reviewed-evidence head consumed
+by factual refresh. A missing head returns `review_required`. Human review therefore remains an
+explicit authority transition, not an internal worker stage.
+
+Every unavailable result is terminal and append-only for its stable operation key. Exact retry
+returns that result and performs no provider work. After the required review or authority repair, the
+caller supplies a new stable operation key; the new operation discovers and reuses the retained
+captures and finalized normalizations before rechecking reconciliation and reviewed authority. Only
+an authenticated reviewed head permits the content-addressed handoff to the private factual refresh.
+The local launcher maps an unavailable result to one completed, exhausted dispatch rather than a
+transient retry loop.
 
 This is deliberately a private factual candidate and authority, not a factual release. The retained
 reviewed bundle is evidence for composition rather than activation authority in its own right, and it
