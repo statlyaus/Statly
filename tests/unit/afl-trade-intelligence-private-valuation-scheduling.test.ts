@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createAflTradePrivateValuationDispatchEvidenceKey,
   createAflTradePrivateValuationDispatchRequestId,
   latestDueAflTradePrivateValuationOccurrence,
   planAflTradePrivateValuationStartupCatchUp,
@@ -43,6 +44,37 @@ describe('private valuation scheduling', () => {
     );
     expect(createAflTradePrivateValuationDispatchRequestId(request)).toMatch(
       /^private-valuation-dispatch:[a-f0-9]{64}$/
+    );
+  });
+
+  it('uses the exact persisted dispatch identity as the evidence operation key', () => {
+    const firstIdentity = {
+      scopeKey: 'afl-men:2026-trades',
+      trigger: 'weekly' as const,
+      scheduledFor: '2026-07-06T09:00:00.000Z',
+      authorityKey: 'scheduled',
+    };
+    const nextWeekIdentity = {
+      ...firstIdentity,
+      scheduledFor: '2026-07-13T09:00:00.000Z',
+    };
+    const anotherScopeIdentity = {
+      ...firstIdentity,
+      scopeKey: 'afl-men:2026-contenders',
+    };
+    const request = (identity: typeof firstIdentity) => {
+      const requestId = createAflTradePrivateValuationDispatchRequestId(identity);
+      return { requestId, ...identity };
+    };
+
+    const first = request(firstIdentity);
+    const nextWeek = request(nextWeekIdentity);
+    const anotherScope = request(anotherScopeIdentity);
+
+    expect(createAflTradePrivateValuationDispatchEvidenceKey(first)).toBe(first.requestId);
+    expect(createAflTradePrivateValuationDispatchEvidenceKey(nextWeek)).not.toBe(first.requestId);
+    expect(createAflTradePrivateValuationDispatchEvidenceKey(anotherScope)).not.toBe(
+      first.requestId
     );
   });
 });

@@ -11,6 +11,7 @@ import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourc
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
 import { createAflTradeCurrentValuationEvidenceCoordinator } from '../valuation/currentValuationEvidenceOrchestration';
 import { createAflTradeCurrentValuationRefresh } from '../valuation/currentValuationRefresh';
+import { createAflTradePrivateValuationDispatchEvidenceKey } from '../valuation/privateValuationScheduling';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '../valuation/postgresCurrentValuationCohortRunner';
 import { createPostgresGovernedPrivateEvaluationWorkspace } from '../valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '../valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
@@ -245,7 +246,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
         const result = await evidence.refreshCurrent({
           scopeKey: request.scopeKey,
           trigger: request.trigger,
-          stableOperationKey: request.authorityKey,
+          stableOperationKey: createAflTradePrivateValuationDispatchEvidenceKey(request),
         });
         if (result.state === 'unavailable') return { state: 'exhausted' as const };
         return runner.runCurrent(request.scopeKey);
