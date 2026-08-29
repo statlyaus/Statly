@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   canonicalizeAflTradeJson,
   sha256AflTradeCanonicalJson,
@@ -26,6 +28,12 @@ interface TransitionRow {
   readonly revision: number;
   readonly transition_id: string;
   readonly activated_at: Date | string;
+}
+
+interface BatchPreparationAuthorityRow {
+  readonly preparation_authority:
+    'authenticated_calculation_evidence_snapshot' | 'dispatch_bound_private_factual_output';
+  readonly dispatch_request_id: string | null;
 }
 
 type HeadRow = TransitionRow;
@@ -334,15 +342,72 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     try {
       return await this.client.transaction(async (transaction) => {
         await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
-        if (input.dispatchClaim !== undefined) {
+        const authority = await transaction.query<BatchPreparationAuthorityRow>(
+          `SELECT
+             prepared.prepared_set_json->'content'->>'preparationAuthority'
+               AS preparation_authority,
+             prepared.prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'
+               AS dispatch_request_id
+             FROM outcome_private_evaluation_batch batch
+             JOIN outcome_prepared_valuation_input_set prepared
+               ON prepared.prepared_input_set_id=batch.prepared_input_set_id
+            WHERE batch.scope_key=$1 AND batch.batch_id=$2
+            FOR KEY SHARE OF batch,prepared`,
+          [input.scopeKey, input.batchId]
+        );
+        if (authority.rows.length !== 1) {
+          throw new TypeError('Private evaluation batch activation target is not exact.');
+        }
+        const targetAuthority = authority.rows[0]!;
+        const dispatchBound =
+          targetAuthority.preparation_authority === 'dispatch_bound_private_factual_output';
+        if (
+          dispatchBound &&
+          (input.cohortOperationId === undefined || input.dispatchClaim === undefined)
+        ) {
+          throw new TypeError(
+            'Dispatch-bound private batch activation requires its captured live dispatch claim.'
+          );
+        }
+        if (!dispatchBound && input.dispatchClaim !== undefined) {
+          throw new TypeError(
+            'Authenticated-release batch activation must not use a private dispatch claim.'
+          );
+        }
+        if (dispatchBound) {
           await transaction.query(
             `SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)`,
             [
-              input.dispatchClaim.requestId,
-              input.dispatchClaim.claimId,
-              createHash('sha256').update(input.dispatchClaim.leaseToken, 'utf8').digest('hex'),
+              input.dispatchClaim!.requestId,
+              input.dispatchClaim!.claimId,
+              createHash('sha256').update(input.dispatchClaim!.leaseToken, 'utf8').digest('hex'),
             ]
           );
+          const exactCaptureClaim = await transaction.query<{
+            readonly dispatch_request_id: string;
+          }>(
+            `SELECT captured.dispatch_request_id
+               FROM outcome_private_evaluation_cohort_capture captured
+               JOIN outcome_private_evaluation_cohort_batch binding
+                 ON binding.operation_id=captured.operation_id
+                AND binding.batch_id=$4
+              WHERE captured.operation_id=$1
+                AND captured.scope_key=$2
+                AND captured.dispatch_request_id=$3
+              FOR SHARE OF captured,binding`,
+            [
+              input.cohortOperationId!,
+              input.scopeKey,
+              input.dispatchClaim!.requestId,
+              input.batchId,
+            ]
+          );
+          if (
+            exactCaptureClaim.rows.length !== 1 ||
+            exactCaptureClaim.rows[0]?.dispatch_request_id !== targetAuthority.dispatch_request_id
+          ) {
+            throw new TypeError('Private evaluation cohort final authority is stale');
+          }
         }
         const captured = input.cohortOperationId !== undefined;
         const result = await transaction.query<TransitionRow>(
@@ -453,4 +518,3 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     return governedPrivateEvaluationBatchWithdrawalSchema.parse(retained.rows[0]!.withdrawal_json);
   }
 }
-import { createHash } from 'node:crypto';

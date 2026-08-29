@@ -23,6 +23,7 @@ import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/model
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createLocalAflTradePrivateValuationRuntime } from '@/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
+import { PostgresAflTradePrivateEvaluationCohortExecutionRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateEvaluationCohortExecutionRepository';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
 import {
   createGovernedPrivateEvaluationBatch,
@@ -40,6 +41,7 @@ import {
   type AflTradePrivateValuationModelPairRepository,
 } from '@/server/aflTradeIntelligence/valuation/privateValuationModelPair';
 import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
+import { aflTradePreparedValuationInputSetSchema } from '@/server/aflTradeIntelligence/valuation/preparedValuationInputSet';
 import type { AflTradeConstructedCurrentValuationTrade } from '@/server/aflTradeIntelligence/valuation/currentValuationTradePreparation';
 import { createAflTradeCurrentValuationBundleFixture } from '../testUtils/currentValuationCohortFixture';
 import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
@@ -1131,51 +1133,64 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         canonicalizeAflTradeJson(composedFactual),
       ]
     );
-    restartFaults.arm('after_prepared_activation');
-    await expect(composedRuntime.dispatchRequest(composedRequestId)).rejects.toThrow(
-      'simulated restart after prepared activation'
+    const priorPreparedInputSetId = addressed(
+      'prepared-valuation-input-set',
+      'composed-prior-public-authority'
     );
-    expect(restartFaults.fired('after_prepared_activation')).toBe(true);
-
-    const preparedAfterRestart = await outcomesPool.query<{
-      readonly prepared_input_set_id: string;
-      readonly revision: number;
-    }>(
-      `SELECT prepared.prepared_input_set_id,head.revision
-         FROM outcome_current_prepared_valuation_input_set head
-         JOIN outcome_prepared_valuation_input_set prepared
-           ON prepared.prepared_input_set_id=head.prepared_input_set_id
-        WHERE head.scope_key=$1
-          AND prepared.prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$2`,
-      [operation.content.scopeKey, composedRequestId]
+    await mutateFixture(
+      `INSERT INTO outcome_prepared_valuation_input_set
+        (prepared_input_set_id,content_sha256,schema_version,environment,scope_key,
+         factual_release_scope_key,factual_release_id,qualification_report_id,trade_count,
+         ready_count,blocked_count,prepared_at,content_canonical_json,
+         prepared_set_canonical_json,prepared_set_json,finalized_at)
+       VALUES ($1,$2,'afl-trade-prepared-valuation-input-set/v3','non_production',$3,
+               'private-afl-draft-trade-outcomes',$4,$5,2,0,2,$6,'{}','{}',$7::jsonb,$6)`,
+      [
+        priorPreparedInputSetId,
+        digest('composed-prior-public-authority'),
+        operation.content.scopeKey,
+        composedFactualReleaseId,
+        addressed('valuation-source-qualification', 'composed-prior-public-authority'),
+        now,
+        canonicalizeAflTradeJson({
+          preparedInputSetId: priorPreparedInputSetId,
+          content: {
+            preparationAuthority: 'authenticated_calculation_evidence_snapshot',
+          },
+        }),
+      ]
     );
-    expect(preparedAfterRestart.rows).toHaveLength(1);
-    const preparedInputSetId = preparedAfterRestart.rows[0]!.prepared_input_set_id;
-    const preparedInputSetRevision = preparedAfterRestart.rows[0]!.revision;
-    await expect(
-      outcomesPool.query(
-        `SELECT
-           (SELECT count(*)::int FROM outcome_current_valuation_cohort_operation
-             WHERE dispatch_request_id=$1) AS operation_count,
-           (SELECT count(*)::int FROM outcome_prepared_valuation_input_set
-             WHERE prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$1)
-             AS prepared_count,
-           (SELECT count(*)::int FROM outcome_private_evaluation_cohort_capture)
-             AS cohort_capture_count`,
-        [composedRequestId]
-      )
-    ).resolves.toMatchObject({
-      rows: [{ operation_count: 1, prepared_count: 1, cohort_capture_count: 0 }],
-    });
+    for (const [ordinal, tradeId] of [readyTradeId, unavailableTradeId].entries()) {
+      await mutateFixture(
+        `INSERT INTO outcome_prepared_valuation_input_entry
+          (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
+         VALUES ($1,$2,$3,'blocked','{}',$4::jsonb)`,
+        [
+          priorPreparedInputSetId,
+          ordinal + 1,
+          tradeId,
+          canonicalizeAflTradeJson({ tradeId, state: 'blocked' }),
+        ]
+      );
+    }
+    await mutateFixture(
+      `INSERT INTO outcome_current_prepared_valuation_input_set
+        (scope_key,prepared_input_set_id,revision,activated_at)
+       VALUES ($1,$2,1,$3)`,
+      [operation.content.scopeKey, priorPreparedInputSetId, now]
+    );
 
     const batchRepository = new PostgresGovernedPrivateEvaluationBatchRepository(
       client,
       async () => false
     );
+    const previousBatchClock = await outcomesPool.query<{ readonly trusted_now: Date }>(
+      `SELECT transaction_timestamp() AS trusted_now`
+    );
     const previousBatch = createGovernedPrivateEvaluationBatch({
       scopeKey: operation.content.scopeKey,
-      preparedInputSetId,
-      preparedInputSetRevision,
+      preparedInputSetId: priorPreparedInputSetId,
+      preparedInputSetRevision: 1,
       factualReleaseId: composedFactualReleaseId,
       modelQualificationId: qualificationId,
       modelQualificationWorkId,
@@ -1189,7 +1204,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
           },
         ],
       })),
-      createdAt: new Date().toISOString(),
+      createdAt: previousBatchClock.rows[0]!.trusted_now.toISOString(),
     });
     await batchRepository.register(previousBatch);
     await expect(
@@ -1206,6 +1221,77 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         action: 'activate',
       })
     ).resolves.toMatchObject({ revision: 1, batchId: previousBatch.batchId });
+
+    restartFaults.arm('after_prepared_activation');
+    await expect(composedRuntime.dispatchRequest(composedRequestId)).rejects.toThrow(
+      'simulated restart after prepared activation'
+    );
+    expect(restartFaults.fired('after_prepared_activation')).toBe(true);
+
+    const preparedAfterRestart = await outcomesPool.query<{
+      readonly prepared_input_set_id: string;
+      readonly revision: number;
+      readonly prepared_set_json: unknown;
+    }>(
+      `SELECT prepared.prepared_input_set_id,head.revision,prepared.prepared_set_json
+         FROM outcome_current_prepared_valuation_input_set head
+         JOIN outcome_prepared_valuation_input_set prepared
+           ON prepared.prepared_input_set_id=head.prepared_input_set_id
+        WHERE head.scope_key=$1
+          AND prepared.prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$2`,
+      [operation.content.scopeKey, composedRequestId]
+    );
+    expect(preparedAfterRestart.rows).toHaveLength(1);
+    const preparedInputSetId = preparedAfterRestart.rows[0]!.prepared_input_set_id;
+    const preparedInputSetRevision = preparedAfterRestart.rows[0]!.revision;
+    const preparedInputSet = aflTradePreparedValuationInputSetSchema.parse(
+      preparedAfterRestart.rows[0]!.prepared_set_json
+    );
+    if (!('privateAuthority' in preparedInputSet.content)) {
+      throw new Error('Composed restart proof did not retain dispatch-bound private authority.');
+    }
+    await expect(
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_current_valuation_cohort_operation
+             WHERE dispatch_request_id=$1) AS operation_count,
+           (SELECT count(*)::int FROM outcome_prepared_valuation_input_set
+             WHERE prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'=$1)
+             AS prepared_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_cohort_capture)
+             AS cohort_capture_count`,
+        [composedRequestId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ operation_count: 1, prepared_count: 1, cohort_capture_count: 0 }],
+    });
+    const interruptedExecutionRepository =
+      new PostgresAflTradePrivateEvaluationCohortExecutionRepository(client);
+    const interruptedCycle = await interruptedExecutionRepository.openAutomatic({
+      authority: {
+        preparationAuthority: 'dispatch_bound_private_factual_output',
+        scopeKey: operation.content.scopeKey,
+        preparedInputSetId,
+        preparedInputSetRevision,
+        modelQualificationWorkId,
+        modelPairRevision: preparedInputSet.content.privateAuthority.modelQualificationRevision,
+        privateAuthority: preparedInputSet.content.privateAuthority,
+      },
+      readyTradeIds: preparedInputSet.content.entries
+        .filter((entry) => entry.state === 'ready')
+        .map(({ tradeId }) => tradeId),
+      openedAt: preparedInputSet.content.preparedAt,
+    });
+    await expect(
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_cycle
+             WHERE cycle_id=$1) AS cycle_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_work
+             WHERE cycle_id=$1) AS work_count`,
+        [interruptedCycle.cycleId]
+      )
+    ).resolves.toMatchObject({ rows: [{ cycle_count: 1, work_count: 1 }] });
 
     const expireComposedClaim = async (requestId: string) => {
       await mutateFixture(
@@ -1236,6 +1322,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     expect(restartFaults.fired('after_generation_registration')).toBe(true);
     await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
       head: { revision: 1, batchId: previousBatch.batchId },
+      batch: { content: { preparedInputSetId: priorPreparedInputSetId } },
     });
     await expect(
       outcomesPool.query(
@@ -1244,11 +1331,23 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
              WHERE valuation_scope_key=$1 AND trade_id=$2) AS generation_count,
            (SELECT status FROM outcome_private_evaluation_execution_work
              WHERE trade_id=$2) AS work_status,
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_cycle
+             WHERE cycle_id=$3) AS cycle_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_work
+             WHERE cycle_id=$3) AS work_count,
            (SELECT count(*)::int FROM outcome_private_evaluation_batch) AS batch_count`,
-        [operation.content.scopeKey, readyTradeId]
+        [operation.content.scopeKey, readyTradeId, interruptedCycle.cycleId]
       )
     ).resolves.toMatchObject({
-      rows: [{ generation_count: 1, work_status: 'retry_wait', batch_count: 1 }],
+      rows: [
+        {
+          generation_count: 1,
+          work_status: 'retry_wait',
+          cycle_count: 1,
+          work_count: 1,
+          batch_count: 1,
+        },
+      ],
     });
     await mutateFixture(
       `UPDATE outcome_private_valuation_dispatch_request SET available_at=$2
@@ -1268,6 +1367,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     expect(restartFaults.fired('after_batch_registration')).toBe(true);
     await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
       head: { revision: 1, batchId: previousBatch.batchId },
+      batch: { content: { preparedInputSetId: priorPreparedInputSetId } },
     });
     await expect(
       outcomesPool.query(
@@ -1297,7 +1397,14 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     });
     await expect(batchRepository.loadCurrent(operation.content.scopeKey)).resolves.toMatchObject({
       head: { revision: 2 },
-      batch: { content: { tradeCount: 2, readyCount: 1, unavailableCount: 1 } },
+      batch: {
+        content: {
+          preparedInputSetId,
+          tradeCount: 2,
+          readyCount: 1,
+          unavailableCount: 1,
+        },
+      },
     });
     await expect(
       outcomesPool.query(
