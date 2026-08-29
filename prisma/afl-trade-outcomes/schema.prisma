@@ -5417,6 +5417,30 @@ model OutcomePrivateValuationDispatchRequest {
   @@map("outcome_private_valuation_dispatch_request")
 }
 
+model OutcomeCurrentValuationRefreshOperation {
+  operationId              String   @id @map("operation_id") @outcomes.Text
+  scopeKey                 String   @map("scope_key") @outcomes.Text
+  triggerKind              String   @map("trigger_kind") @outcomes.Text
+  stableOperationKey       String   @unique(map: "outcome_current_valuation_refresh_operation_key") @map("stable_operation_key") @outcomes.Text
+  factualReleaseScopeKey   String   @map("factual_release_scope_key") @outcomes.Text
+  factualReleaseId         String   @map("factual_release_id") @outcomes.Text
+  factualReleaseRevision   Int      @map("factual_release_revision")
+  modelQualificationId     String   @map("model_qualification_id") @outcomes.Text
+  modelQualificationWorkId String   @map("model_qualification_work_id") @outcomes.Text
+  modelPairRevision        Int      @map("model_pair_revision")
+  preparedInputSetId       String   @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision Int      @map("prepared_input_set_revision")
+  privateBatchId           String   @map("private_batch_id") @outcomes.Text
+  privateBatchRevision     Int      @map("private_batch_revision")
+  privateBatchTransitionId String   @map("private_batch_transition_id") @outcomes.Text
+  capturedAt               DateTime @map("captured_at") @outcomes.Timestamptz(3)
+  completedAt              DateTime @map("completed_at") @outcomes.Timestamptz(3)
+  operationJson            Json     @map("operation_json")
+  resultJson               Json     @map("result_json")
+
+  @@map("outcome_current_valuation_refresh_operation")
+}
+
 model OutcomePrivateValuationDispatchAttempt {
   claimId          String                                 @id @map("claim_id") @outcomes.Text
   requestId        String                                 @map("request_id") @outcomes.Text
