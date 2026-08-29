@@ -1998,6 +1998,26 @@ whatever exact prepared-v3 head is current. Observation rebuild and prepared-v3 
 to be composed around this dispatch-bound model-pair coordinator before the worker can run raw data
 through to recalculation without manual orchestration.
 
+### Current valuation refresh trace
+
+The backend current-valuation refresh operation now retains the restart-safe terminal case where no
+downstream work is required. Here, `no_change` has a narrow structural meaning: the current factual
+release, qualified model pair, prepared-v3 input set, and private evaluation batch all exist and agree
+on their exact IDs and revisions. It does not compare numerical outputs, authorize a calculation, or
+claim that newly ingested observations have already been prepared.
+
+Callers provide a valuation scope, one of the existing `weekly`, `model_qualified`, or `ad_hoc`
+triggers, and a stable operation key. One PostgreSQL-owned operation captures the aligned authority,
+content-addresses the scope, trigger, stable key, authority, and trusted capture time, and retains the
+result append-only. Exact retry returns the retained result without downstream writes. Reusing the
+stable key for another scope or trigger fails, and missing or incoherent authority fails closed. The
+result explicitly remains local, private, non-production, publication-ineligible, and
+publication-prohibited.
+
+This trace closes only the durable no-change branch. Automated factual observation refresh, factual
+release advancement, prepared-v3 rebuild and activation, and the calculation branch remain separate
+work that must be composed before raw data can flow to recalculation automatically.
+
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream
 Gate approvals, and production storage and release evidence. Stage 5 therefore establishes the
