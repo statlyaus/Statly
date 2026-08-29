@@ -719,9 +719,10 @@ describe('current valuation refresh PostgreSQL tracer', () => {
       stableOperationKey: 'newer-normalization-custody',
     });
     expect(newer).toMatchObject({ state: 'factual_refresh_complete', factualStage: 'advanced' });
-    expect(newer.privateFactualAuthority?.candidateId).not.toBe(
-      firstCandidate.rows[0]?.candidate_id
-    );
+    if (newer.state !== 'factual_refresh_complete') {
+      throw new TypeError(`Expected factual refresh completion, received ${newer.state}.`);
+    }
+    expect(newer.privateFactualAuthority.candidateId).not.toBe(firstCandidate.rows[0]?.candidate_id);
 
     await expect(
       refresh.refreshCurrent({
@@ -734,7 +735,7 @@ describe('current valuation refresh PostgreSQL tracer', () => {
       pool.query(`SELECT candidate_id,revision
       FROM outcome_current_private_factual_authority`)
     ).resolves.toMatchObject({
-      rows: [{ candidate_id: newer.privateFactualAuthority?.candidateId, revision: 1 }],
+      rows: [{ candidate_id: newer.privateFactualAuthority.candidateId, revision: 1 }],
     });
   });
 
@@ -764,6 +765,16 @@ describe('current valuation refresh PostgreSQL tracer', () => {
     const first = await refresh.refreshCurrent(request);
     await expect(refresh.refreshCurrent(request)).resolves.toEqual(first);
     expect(first).toMatchObject({ state: 'unavailable', cause });
+    await expect(
+      pool.query(
+        `SELECT candidate_id,operation_json#>'{content,candidateId}' AS retained_candidate_id
+           FROM outcome_current_valuation_factual_refresh_operation
+          WHERE operation_id=$1`,
+        [first.operationId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ candidate_id: null, retained_candidate_id: null }],
+    });
   });
 
   it('retains mismatched source authority without advancing either factual pointer', async () => {

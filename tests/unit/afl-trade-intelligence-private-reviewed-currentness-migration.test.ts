@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesReview';
+import { assertExactLocalReviewedProviderCaptureTuples } from '@/server/aflTradeIntelligence/development/localReviewedProviderEvidence';
 
 function read(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
@@ -79,6 +80,15 @@ describe('private reviewed evidence currentness migration', () => {
         /AND 1 = \(\s+SELECT count\(\*\)\s+FROM "?outcome_provider_normalization_run"? run/gu
       )
     ).toHaveLength(2);
+    expect(
+      migration.match(
+        /FROM "?outcome_source_capture"? sibling\s+WHERE sibling\.?"?environment"?='non_production'/gu
+      )
+    ).toHaveLength(2);
+    expect(migration).toContain('sibling.anchor_season_year=capture.anchor_season_year');
+    expect(migration).toContain(
+      'sibling."anchor_season_year"=capture."anchor_season_year"'
+    );
     expect(migration).toContain('NEW."source_capture_count"=7');
     expect(migration).toContain('NEW."source_rights_count"=3');
     expect(migration).toContain('Private reviewed-evidence health has unexpected capture counts');
@@ -96,6 +106,36 @@ describe('private reviewed evidence currentness migration', () => {
     expect(loader).toMatch(
       /AND 1 = \(\s+SELECT count\(\*\)\s+FROM outcome_provider_normalization_run run/u
     );
+    expect(loader).toContain('REQUIRED_CAPTURE_TUPLE_KEYS');
+    expect(loader).toContain("'afl_tables\\u0000afl-tables-player-stats\\u00002021'");
+    expect(loader).toContain("'afl_tables\\u0000afl-tables-results\\u00002026'");
+    expect(loader).toContain(
+      "'official_afl\\u0000official-afl-player-stats\\u00002026'"
+    );
+    expect(loader).toContain('captureTupleKeys.size !== REQUIRED_CAPTURE_TUPLE_KEYS.size');
+  });
+
+  it('rejects a duplicated required season even when seven capture rows are present', () => {
+    const exact = [
+      { provider: 'afl_tables', capabilityId: 'afl-tables-player-stats', seasonYear: 2021 },
+      { provider: 'afl_tables', capabilityId: 'afl-tables-player-stats', seasonYear: 2022 },
+      { provider: 'afl_tables', capabilityId: 'afl-tables-player-stats', seasonYear: 2023 },
+      { provider: 'afl_tables', capabilityId: 'afl-tables-player-stats', seasonYear: 2024 },
+      { provider: 'afl_tables', capabilityId: 'afl-tables-player-stats', seasonYear: 2025 },
+      {
+        provider: 'official_afl',
+        capabilityId: 'official-afl-player-stats',
+        seasonYear: 2026,
+      },
+      { provider: 'afl_tables', capabilityId: 'afl-tables-results', seasonYear: 2026 },
+    ];
+
+    expect(() => assertExactLocalReviewedProviderCaptureTuples(exact)).not.toThrow();
+    expect(() =>
+      assertExactLocalReviewedProviderCaptureTuples(
+        exact.map((capture, index) => (index === 4 ? exact[0]! : capture))
+      )
+    ).toThrow(/exactly one capture for each required provider, capability, and season/u);
   });
 
   it('uses the exact bundle selected by the current reviewed-evaluation head', () => {

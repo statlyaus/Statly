@@ -1200,7 +1200,9 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_reviewed_evidence_bundle',
       'outcome_private_reviewed_evaluation_decision',
       'outcome_private_reviewed_evaluation_head',
+      'outcome_private_factual_candidate',
       'outcome_current_private_factual_authority',
+      'outcome_current_valuation_factual_refresh_stage_receipt',
       'outcome_current_valuation_factual_refresh_operation',
       'outcome_hpn_field_map_candidate',
       'outcome_hpn_field_map_review_decision',
@@ -1283,6 +1285,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_reviewed_evidence_bundle_mutation_guard',
       'outcome_private_reviewed_evaluation_decision_mutation_guard',
       'outcome_private_reviewed_evaluation_head_delete_guard',
+      'outcome_private_factual_candidate_no_update_delete',
+      'outcome_factual_refresh_stage_no_update_delete',
       'outcome_current_valuation_factual_refresh_no_update_delete',
     ]) {
       expect(triggerNames).toContain(expected);

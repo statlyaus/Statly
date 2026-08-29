@@ -1,6 +1,6 @@
 -- The current local reviewed-evidence authority is one complete seven-capture bundle: five
 -- historical player-stat captures, one official current-season player-stat capture, and one
--- current-season results capture. Preserve failed raw captures, but admit only captures with a
+-- current-season results capture. Preserve failed raw captures, but admit only captures with
 -- exactly one successfully finalized normalization run. Reuse the installed validation bodies
 -- rather than copying the large currentness functions into another migration.
 DO $migration$
@@ -63,6 +63,22 @@ BEGIN
         WHERE run."capture_id"=capture."capture_id"
           AND run."status" IN ('staged','needs_review')
           AND run."finalized_at" IS NOT NULL
+     )
+     AND 1 = (
+       SELECT count(*)
+         FROM "outcome_source_capture" sibling
+        WHERE sibling."environment"='non_production'
+          AND sibling."status"='staged'
+          AND sibling."provider"=capture."provider"
+          AND sibling."capability_id"=capture."capability_id"
+          AND sibling."anchor_season_year"=capture."anchor_season_year"
+          AND 1 = (
+            SELECT count(*)
+              FROM "outcome_provider_normalization_run" sibling_run
+             WHERE sibling_run."capture_id"=sibling."capture_id"
+               AND sibling_run."status" IN ('staged','needs_review')
+               AND sibling_run."finalized_at" IS NOT NULL
+          )
      );$filter$;
 
       function_definition:=replace(
@@ -89,6 +105,22 @@ BEGIN
         WHERE run.capture_id=capture.capture_id
           AND run.status IN ('staged','needs_review')
           AND run.finalized_at IS NOT NULL
+     )
+     AND 1 = (
+       SELECT count(*)
+         FROM outcome_source_capture sibling
+        WHERE sibling.environment='non_production'
+          AND sibling.status='staged'
+          AND sibling.provider=capture.provider
+          AND sibling.capability_id=capture.capability_id
+          AND sibling.anchor_season_year=capture.anchor_season_year
+          AND 1 = (
+            SELECT count(*)
+              FROM outcome_provider_normalization_run sibling_run
+             WHERE sibling_run.capture_id=sibling.capture_id
+               AND sibling_run.status IN ('staged','needs_review')
+               AND sibling_run.finalized_at IS NOT NULL
+          )
      );$filter$;
 
       IF function_signature='outcome_private_reviewed_evidence_is_current()' THEN
@@ -119,6 +151,8 @@ BEGIN
        OR position('outcome_provider_normalization_run' IN function_definition)=0
        OR position('finalized_at' IN function_definition)=0
        OR position('SELECT count(*)' IN function_definition)=0
+       OR (position('sibling.anchor_season_year' IN function_definition)=0
+           AND position('sibling."anchor_season_year"' IN function_definition)=0)
        OR (function_signature='outcome_private_reviewed_evidence_is_current()'
            AND (position('AND capture_count=7;' IN function_definition)=0
                 OR position('AND capture_count=6;' IN function_definition)>0))

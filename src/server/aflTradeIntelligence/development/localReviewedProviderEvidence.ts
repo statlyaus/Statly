@@ -24,6 +24,15 @@ const HISTORICAL_REVIEW_SET_DECISION_ID =
   `local-afl-tables-review:set:${LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256}` as const;
 const OFFICIAL_REVIEW_SET_DECISION_ID =
   `local-official-afl-review:set:${LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256}` as const;
+const REQUIRED_CAPTURE_TUPLE_KEYS = new Set([
+  'afl_tables\u0000afl-tables-player-stats\u00002021',
+  'afl_tables\u0000afl-tables-player-stats\u00002022',
+  'afl_tables\u0000afl-tables-player-stats\u00002023',
+  'afl_tables\u0000afl-tables-player-stats\u00002024',
+  'afl_tables\u0000afl-tables-player-stats\u00002025',
+  'official_afl\u0000official-afl-player-stats\u00002026',
+  'afl_tables\u0000afl-tables-results\u00002026',
+]);
 
 const instantSchema = z.union([z.date(), z.iso.datetime({ offset: true })]);
 const publicIdSchema = z.string().trim().min(1).max(1_000);
@@ -102,6 +111,29 @@ function reviewSetSnapshot(row: ReviewSetRow) {
 
 function count(value: number | string): number {
   return z.coerce.number().int().nonnegative().parse(value);
+}
+
+function captureTupleKey(provider: string, capabilityId: string, seasonYear: number): string {
+  return `${provider}\u0000${capabilityId}\u0000${seasonYear}`;
+}
+
+export function assertExactLocalReviewedProviderCaptureTuples(
+  captures: readonly { provider: string; capabilityId: string; seasonYear: number }[]
+): void {
+  const captureTupleKeys = new Set(
+    captures.map((capture) =>
+      captureTupleKey(capture.provider, capture.capabilityId, capture.seasonYear)
+    )
+  );
+  if (
+    captures.length !== REQUIRED_CAPTURE_TUPLE_KEYS.size ||
+    captureTupleKeys.size !== REQUIRED_CAPTURE_TUPLE_KEYS.size ||
+    [...REQUIRED_CAPTURE_TUPLE_KEYS].some((tupleKey) => !captureTupleKeys.has(tupleKey))
+  ) {
+    throw new TypeError(
+      'The retained provider capture set must contain exactly one capture for each required provider, capability, and season.'
+    );
+  }
 }
 
 async function loadReviewSets(transaction: AflOutcomeSqlTransaction) {
@@ -411,6 +443,7 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
       }),
     };
   });
+  assertExactLocalReviewedProviderCaptureTuples(sourceCaptures);
   if (rightsByArtifactId.size !== 3) {
     throw new TypeError(
       'The exact retained provider capture set must retain three rights artifacts.'

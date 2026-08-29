@@ -55,7 +55,7 @@ ALTER FUNCTION "retain_outcome_current_valuation_refresh_no_change"(TEXT,TEXT,TE
 CREATE FUNCTION "reject_outcome_current_valuation_factual_refresh_mutation"() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Current valuation factual refresh custody is append-only'; END $$;
 CREATE TRIGGER "outcome_private_factual_candidate_no_update_delete" BEFORE UPDATE OR DELETE ON "outcome_private_factual_candidate" FOR EACH ROW EXECUTE FUNCTION "reject_outcome_current_valuation_factual_refresh_mutation"();
-CREATE TRIGGER "outcome_current_valuation_factual_refresh_stage_no_update_delete" BEFORE UPDATE OR DELETE ON "outcome_current_valuation_factual_refresh_stage_receipt" FOR EACH ROW EXECUTE FUNCTION "reject_outcome_current_valuation_factual_refresh_mutation"();
+CREATE TRIGGER "outcome_factual_refresh_stage_no_update_delete" BEFORE UPDATE OR DELETE ON "outcome_current_valuation_factual_refresh_stage_receipt" FOR EACH ROW EXECUTE FUNCTION "reject_outcome_current_valuation_factual_refresh_mutation"();
 CREATE TRIGGER "outcome_current_valuation_factual_refresh_no_update_delete" BEFORE UPDATE OR DELETE ON "outcome_current_valuation_factual_refresh_operation" FOR EACH ROW EXECUTE FUNCTION "reject_outcome_current_valuation_factual_refresh_mutation"();
 
 CREATE FUNCTION "outcome_private_factual_custody_for_bundle"(target_bundle_id TEXT)
@@ -269,7 +269,7 @@ BEGIN
       IF NOT FOUND THEN RAISE EXCEPTION 'Current private factual authority compare-and-swap revision is stale'; END IF;
     END IF;
   END IF;
-  content:=jsonb_strip_nulls(jsonb_build_object('schemaVersion','afl-current-valuation-factual-refresh-operation/v2','scopeKey',target_scope_key,'trigger',target_trigger,'stableOperationKey',target_stable_operation_key,'state',target_state,'factualStage',target_stage,'cause',target_cause,'candidateId',target_candidate_id,'privateFactualRevision',target_revision,'capturedAt',to_char(trusted_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')));
+  content:=jsonb_strip_nulls(jsonb_build_object('schemaVersion','afl-current-valuation-factual-refresh-operation/v2','scopeKey',target_scope_key,'trigger',target_trigger,'stableOperationKey',target_stable_operation_key,'state',target_state,'factualStage',target_stage,'cause',target_cause,'candidateId',CASE WHEN target_state='factual_refresh_complete' THEN target_candidate_id END,'privateFactualRevision',target_revision,'capturedAt',to_char(trusted_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')));
   oid:='current-valuation-factual-refresh-operation:'||encode(sha256(convert_to("outcome_afl_trade_canonical_json"(content),'UTF8')),'hex');
   result_json:=jsonb_strip_nulls(jsonb_build_object('schemaVersion','afl-current-valuation-refresh-result-v2','operationId',oid,'scopeKey',target_scope_key,'trigger',target_trigger,'stableOperationKey',target_stable_operation_key,'state',target_state,'factualStage',target_stage,'cause',target_cause,
     'privateFactualAuthority',CASE WHEN target_state='factual_refresh_complete' THEN jsonb_build_object('valuationScopeKey',target_scope_key,'candidateId',target_candidate_id,'evidenceScopeKey',target_evidence_scope_key,'evidenceBundleId',target_evidence_bundle_id,'reviewDecisionId',target_review_decision_id,'normalizedReconciledCustodySha256',target_custody_sha,'revision',target_revision) END,
@@ -335,6 +335,8 @@ GRANT SELECT ON "outcome_review_decision","outcome_source_capture","outcome_arti
   TO afl_trade_current_valuation_refresh_owner;
 GRANT INSERT ON "outcome_private_factual_candidate","outcome_current_private_factual_authority","outcome_current_valuation_factual_refresh_stage_receipt","outcome_current_valuation_factual_refresh_operation" TO afl_trade_current_valuation_refresh_owner;
 GRANT UPDATE ON "outcome_current_private_factual_authority" TO afl_trade_current_valuation_refresh_owner;
+-- PostgreSQL requires UPDATE privilege for the FOR SHARE lock that fences head replacement.
+-- This NOLOGIN owner is reachable only through the scoped SECURITY DEFINER functions above.
 GRANT UPDATE ON "outcome_private_reviewed_evaluation_head" TO afl_trade_current_valuation_refresh_owner;
 GRANT EXECUTE ON FUNCTION "outcome_private_factual_custody_for_bundle"(TEXT),"outcome_private_reviewed_evidence_bundle_is_current"(TEXT),"retain_outcome_current_valuation_refresh_no_change_v1"(TEXT,TEXT,TEXT),"retain_outcome_current_valuation_refresh_no_change"(TEXT,TEXT,TEXT) TO afl_trade_current_valuation_refresh_owner;
 DO $membership$ BEGIN
