@@ -293,8 +293,6 @@ END $paths$;
 
 REVOKE ALL ON "outcome_current_valuation_refresh_operation"
   FROM PUBLIC,afl_trade_private_evaluation_coordinator;
-GRANT SELECT ON "outcome_current_valuation_refresh_operation"
-  TO afl_trade_private_evaluation_coordinator;
 REVOKE ALL ON FUNCTION "retain_outcome_current_valuation_refresh_no_change"(TEXT,TEXT,TEXT)
   FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION "retain_outcome_current_valuation_refresh_no_change"(TEXT,TEXT,TEXT)

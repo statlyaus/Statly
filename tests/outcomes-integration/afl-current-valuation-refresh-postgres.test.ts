@@ -269,6 +269,26 @@ describe('current valuation refresh PostgreSQL tracer', () => {
     ).resolves.toMatchObject({ rows: [{ count: 1 }] });
   });
 
+  it('keeps retained history behind the scoped function', async () => {
+    const connection = await pool.connect();
+    try {
+      await connection.query('BEGIN');
+      await connection.query(`SET LOCAL ROLE afl_trade_private_evaluation_coordinator`);
+      await expect(
+        connection.query(
+          `SELECT * FROM retain_outcome_current_valuation_refresh_no_change($1,$2,$3)`,
+          ['afl-men:2026-trades', 'ad_hoc', 'scoped-function-only']
+        )
+      ).resolves.toMatchObject({ rowCount: 1 });
+      await expect(
+        connection.query(`SELECT * FROM outcome_current_valuation_refresh_operation`)
+      ).rejects.toThrow('permission denied');
+    } finally {
+      await connection.query('ROLLBACK');
+      connection.release();
+    }
+  });
+
   it('uses statement time for capture and rejects noncanonical direct-SQL keys', async () => {
     const connection = await pool.connect();
     try {
