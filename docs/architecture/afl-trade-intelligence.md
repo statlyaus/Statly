@@ -1346,6 +1346,15 @@ provider, run an external capture, activate a factual release, calculate a trade
 write a public projection. Those actions remain behind their later rights, release, valuation, and
 operational gates.
 
+The next private Current Valuation Refresh boundary retains one content-addressed model-evidence
+operation against the exact current private factual candidate and revision. Its player observation
+set, pick benchmark evidence, two governed runs, release-level qualification, Gate 3 decisions, and
+qualification work remain exact ancestry rather than reconstructed labels. A passing pair must be the
+single pair that advanced current model authority by one revision. A failed qualification retains its
+run evidence and failure codes while leaving the previous current pair unchanged. Replay returns the
+retained result, and factual or model-head drift fails closed before downstream preparation. This
+boundary remains local, private, non-production, and publication-prohibited.
+
 ### Independent factual and valuation releases
 
 A factual-outcome release binds an exact archive dataset, source snapshot set, metric registry,

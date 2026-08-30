@@ -976,6 +976,14 @@ public display and redistribution, so this operation is not authority to registe
 or serve a factual release. Prepared-v3 and private batch heads remain unchanged until their separate
 coordinators complete.
 
+After factual completion, the model-evidence stage captures the current model-pair revision, derives
+the player observation and pick benchmark inputs from that exact factual candidate, and invokes the
+existing governed execution and qualification boundaries. Reuse the same content-addressed operation
+after acknowledged loss. `qualification_failed` is retained evidence, not a transient retry signal;
+the previous model pair remains current and prepared-v3 must not run. `stale_authority` requires a new
+outer refresh from current factual and model heads. A successful result records the exact two runs,
+qualification, qualification work, and Gate 3 decisions and advances current model authority once.
+
 ### Operating automatic local private valuation
 
 The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback

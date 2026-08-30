@@ -5455,6 +5455,7 @@ model OutcomePrivateFactualCandidate {
   evidenceBundle                      OutcomePrivateReviewedEvidenceBundle     @relation(fields: [evidenceBundleId], references: [evidenceBundleId], onDelete: Restrict)
   reviewDecision                      OutcomePrivateReviewedEvaluationDecision @relation(fields: [reviewDecisionId], references: [decisionId], onDelete: Restrict)
   currentHead                         OutcomeCurrentPrivateFactualAuthority?
+  currentModelEvidenceOperations     OutcomeCurrentValuationModelEvidenceOperation[]
 
   @@map("outcome_private_factual_candidate")
 }
@@ -5496,8 +5497,28 @@ model OutcomeCurrentValuationFactualRefreshOperation {
   completedAt            DateTime  @map("completed_at") @outcomes.Timestamptz(3)
   operationJson          Json      @map("operation_json")
   resultJson             Json      @map("result_json")
+  currentModelEvidenceOperations OutcomeCurrentValuationModelEvidenceOperation[]
 
   @@map("outcome_current_valuation_factual_refresh_operation")
+}
+
+model OutcomeCurrentValuationModelEvidenceOperation {
+  operationId          String                                        @id @map("operation_id") @outcomes.Text
+  scopeKey             String                                        @map("scope_key") @outcomes.Text
+  factualOperationId   String                                        @map("factual_operation_id") @outcomes.Text
+  factualCandidateId   String                                        @map("factual_candidate_id") @outcomes.Text
+  factualRevision      Int                                           @map("factual_revision")
+  expectedModelRevision Int                                          @map("expected_model_revision")
+  resultState          String                                        @map("result_state") @outcomes.Text
+  resultJson           Json                                          @map("result_json")
+  capturedAt           DateTime                                      @map("captured_at") @outcomes.Timestamptz(3)
+  completedAt          DateTime                                      @map("completed_at") @outcomes.Timestamptz(3)
+  recordedAt           DateTime                                      @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  factualOperation     OutcomeCurrentValuationFactualRefreshOperation @relation(fields: [factualOperationId], references: [operationId], onDelete: Restrict, map: "outcome_current_model_evidence_factual_operation_fkey")
+  factualCandidate     OutcomePrivateFactualCandidate                @relation(fields: [factualCandidateId], references: [candidateId], onDelete: Restrict, map: "outcome_current_model_evidence_factual_candidate_fkey")
+
+  @@index([scopeKey, completedAt], map: "outcome_current_model_evidence_scope_idx")
+  @@map("outcome_current_valuation_model_evidence_operation")
 }
 
 model OutcomeCurrentValuationEvidenceOrchestrationOperation {
