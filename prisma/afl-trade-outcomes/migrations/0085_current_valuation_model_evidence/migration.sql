@@ -65,11 +65,25 @@ CREATE TRIGGER "outcome_current_valuation_model_evidence_no_update_delete"
 BEFORE UPDATE OR DELETE ON "outcome_current_valuation_model_evidence_operation"
 FOR EACH ROW EXECUTE FUNCTION "reject_outcome_current_valuation_model_evidence_mutation"();
 
+CREATE FUNCTION "lock_outcome_current_governed_model_pair_scope"()
+RETURNS TRIGGER AS $$ BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'current-governed-valuation-model-pair:' || NEW."scope_key",0));
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "outcome_current_governed_model_pair_scope_lock"
+BEFORE INSERT OR UPDATE ON "outcome_current_governed_valuation_model_pair"
+FOR EACH ROW EXECUTE FUNCTION "lock_outcome_current_governed_model_pair_scope"();
+
 REVOKE ALL ON TABLE "outcome_current_valuation_model_evidence_operation" FROM PUBLIC;
 GRANT SELECT,INSERT ON TABLE "outcome_current_valuation_model_evidence_operation"
   TO "afl_trade_private_evaluation_coordinator";
 GRANT SELECT ON TABLE "outcome_current_valuation_factual_refresh_operation",
+  "outcome_private_factual_candidate",
   "outcome_current_private_factual_authority",
   "outcome_current_governed_valuation_model_pair",
-  "outcome_governed_valuation_model_qualification"
+  "outcome_governed_valuation_model_qualification",
+  "outcome_governed_valuation_component_run",
+  "outcome_governed_component_validation_evidence"
   TO "afl_trade_private_evaluation_coordinator";

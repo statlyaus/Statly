@@ -27,8 +27,12 @@ describe('current valuation model evidence migration', () => {
       'CREATE TRIGGER "outcome_current_valuation_model_evidence_no_update_delete"'
     );
     expect(migration).toContain(
-      '"outcome_current_governed_valuation_model_pair",\n  "outcome_governed_valuation_model_qualification"\n  TO "afl_trade_private_evaluation_coordinator";'
+      'CREATE TRIGGER "outcome_current_governed_model_pair_scope_lock"'
     );
+    expect(migration).toContain(
+      '"outcome_current_governed_valuation_model_pair",\n  "outcome_governed_valuation_model_qualification",'
+    );
+    expect(migration).toContain('"outcome_governed_component_validation_evidence"');
     expect(migration).not.toMatch(/GRANT[^;]+TO\s+(?:"?PUBLIC"?)/isu);
     expect(migration).not.toContain('outcome_active_release');
     expect(migration).not.toContain('outcome_current_valuation_publication');

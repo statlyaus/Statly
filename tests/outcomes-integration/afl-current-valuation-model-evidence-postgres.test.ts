@@ -42,17 +42,29 @@ beforeAll(async () => {
       operation_id text PRIMARY KEY,scope_key text NOT NULL,state text NOT NULL,
       candidate_id text,private_factual_revision integer
     );
-    CREATE TABLE outcome_private_factual_candidate (candidate_id text PRIMARY KEY);
+    CREATE TABLE outcome_private_factual_candidate (
+      candidate_id text PRIMARY KEY,valuation_scope_key text NOT NULL,
+      evidence_scope_key text NOT NULL,evidence_bundle_id text NOT NULL,
+      review_decision_id text NOT NULL,normalized_reconciled_custody_sha256 text NOT NULL
+    );
     CREATE TABLE outcome_current_private_factual_authority (
       valuation_scope_key text PRIMARY KEY,candidate_id text NOT NULL,revision integer NOT NULL
     );
     CREATE TABLE outcome_current_governed_valuation_model_pair (
       scope_key text PRIMARY KEY,revision integer NOT NULL,qualification_id text NOT NULL,
-      player_run_id text NOT NULL,pick_run_id text NOT NULL,work_id text NOT NULL
+      player_run_id text NOT NULL,pick_run_id text NOT NULL,
+      player_gate3_decision_id text NOT NULL,pick_gate3_decision_id text NOT NULL,
+      work_id text NOT NULL
     );
     CREATE TABLE outcome_governed_valuation_model_qualification (
       qualification_id text PRIMARY KEY,scope_key text NOT NULL,outcome text NOT NULL,
-      player_run_id text NOT NULL,pick_run_id text NOT NULL
+      player_run_id text NOT NULL,pick_run_id text NOT NULL,qualification_json jsonb NOT NULL
+    );
+    CREATE TABLE outcome_governed_valuation_component_run (
+      run_id text PRIMARY KEY,role text NOT NULL
+    );
+    CREATE TABLE outcome_governed_component_validation_evidence (
+      run_id text PRIMARY KEY,native_execution_json jsonb NOT NULL
     );
     GRANT SELECT ON ALL TABLES IN SCHEMA "${schemaName}"
       TO afl_trade_private_evaluation_coordinator;
@@ -79,6 +91,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await pool.query(`TRUNCATE outcome_current_valuation_model_evidence_operation,
     outcome_current_governed_valuation_model_pair,outcome_governed_valuation_model_qualification,
+    outcome_governed_component_validation_evidence,outcome_governed_valuation_component_run,
     outcome_current_private_factual_authority,outcome_private_factual_candidate,
     outcome_current_valuation_factual_refresh_operation CASCADE`);
   await pool.query(
@@ -86,7 +99,14 @@ beforeEach(async () => {
       VALUES ($1,$2,'factual_refresh_complete',$3,1)`,
     [factualOperationId, 'afl-men:2026-trades', candidateId]
   );
-  await pool.query(`INSERT INTO outcome_private_factual_candidate VALUES ($1)`, [candidateId]);
+  await pool.query(`INSERT INTO outcome_private_factual_candidate VALUES ($1,$2,$3,$4,$5,$6)`, [
+    candidateId,
+    'afl-men:2026-trades',
+    'reviewed-evidence',
+    id('private-reviewed-evidence-bundle', '3'),
+    id('private-reviewed-evidence-evaluation-decision', '4'),
+    digest('5'),
+  ]);
   await pool.query(`INSERT INTO outcome_current_private_factual_authority VALUES ($1,$2,1)`, [
     'afl-men:2026-trades',
     candidateId,
@@ -123,7 +143,51 @@ const evidence = {
   qualificationId: id('model-qualification', 'a'),
 } as const;
 
-function sqlClient(): AflOutcomeSqlClient {
+async function seedQualifiedModelHead(revision = 1) {
+  await pool.query(
+    `INSERT INTO outcome_governed_valuation_component_run VALUES
+      ($1,'player_contribution_and_availability'),
+      ($2,'draft_pick_and_future_pick_distribution')`,
+    [evidence.playerRunId, evidence.pickRunId]
+  );
+  await pool.query(
+    `INSERT INTO outcome_governed_component_validation_evidence VALUES
+      ($1,jsonb_build_object('content',jsonb_build_object('observationSetId',$2::text))),
+      ($3,jsonb_build_object('content',jsonb_build_object('observationSetId',$4::text)))`,
+    [
+      evidence.playerRunId,
+      evidence.playerObservationSetId,
+      evidence.pickRunId,
+      evidence.pickBenchmarkEvidenceId,
+    ]
+  );
+  await pool.query(
+    `INSERT INTO outcome_current_governed_valuation_model_pair
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [
+      request().scopeKey,
+      revision,
+      evidence.qualificationId,
+      evidence.playerRunId,
+      evidence.pickRunId,
+      id('review-decision', 'c'),
+      id('review-decision', 'd'),
+      id('model-qualification-work', 'b'),
+    ]
+  );
+}
+
+function qualifiedEvidence() {
+  return {
+    state: 'qualified' as const,
+    ...evidence,
+    qualificationWorkId: id('model-qualification-work', 'b'),
+    playerGate3DecisionId: id('review-decision', 'c'),
+    pickGate3DecisionId: id('review-decision', 'd'),
+  };
+}
+
+function sqlClient(afterModelHeadRead?: () => Promise<void>): AflOutcomeSqlClient {
   return {
     query: (sql, parameters) => pool.query(sql, parameters as unknown[]),
     transaction: async (work) => {
@@ -133,6 +197,9 @@ function sqlClient(): AflOutcomeSqlClient {
         const result = await work({
           query: async (sql, parameters) => {
             const queryResult = await client.query(sql, parameters as unknown[]);
+            if (sql.includes('FROM outcome_current_governed_valuation_model_pair')) {
+              await afterModelHeadRead?.();
+            }
             if (sql.startsWith('SET LOCAL ROLE')) {
               await client.query(`SET LOCAL search_path TO "${schemaName}"`);
               const authority = await client.query<{
@@ -169,16 +236,7 @@ function sqlClient(): AflOutcomeSqlClient {
 
 describe.sequential('current valuation model evidence in PostgreSQL', () => {
   it('commits and replays one exact passing pair', async () => {
-    await pool.query(
-      `INSERT INTO outcome_current_governed_valuation_model_pair VALUES ($1,1,$2,$3,$4,$5)`,
-      [
-        request().scopeKey,
-        evidence.qualificationId,
-        evidence.playerRunId,
-        evidence.pickRunId,
-        id('model-qualification-work', 'b'),
-      ]
-    );
+    await seedQualifiedModelHead();
     let executions = 0;
     const client = sqlClient();
     const coordinator = createAflTradeCurrentValuationModelEvidenceCoordinator({
@@ -217,16 +275,7 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
   });
 
   it('returns one retained result to concurrent callers of the same operation', async () => {
-    await pool.query(
-      `INSERT INTO outcome_current_governed_valuation_model_pair VALUES ($1,1,$2,$3,$4,$5)`,
-      [
-        request().scopeKey,
-        evidence.qualificationId,
-        evidence.playerRunId,
-        evidence.pickRunId,
-        id('model-qualification-work', 'b'),
-      ]
-    );
+    await seedQualifiedModelHead();
     let arrivals = 0;
     let release!: () => void;
     const bothPrepared = new Promise<void>((resolve) => {
@@ -265,6 +314,56 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
     ).resolves.toMatchObject({ rows: [{ count: 1 }] });
   });
 
+  it('recovers an exact pair advanced before operation custody was retained', async () => {
+    await seedQualifiedModelHead();
+    const coordinator = createAflTradeCurrentValuationModelEvidenceCoordinator({
+      repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(sqlClient()),
+      captureCurrentModelRevision: async () => 1,
+      prepareAndQualify: async () => qualifiedEvidence(),
+      clock: { now: () => '2026-08-30T10:00:00.000Z' },
+    });
+
+    await expect(coordinator.refresh(request())).resolves.toMatchObject({
+      state: 'qualified',
+      expectedModelRevision: 0,
+      modelRevision: 1,
+    });
+  });
+
+  it('rejects fabricated factual metadata and mismatched qualified component ancestry', async () => {
+    await seedQualifiedModelHead();
+    const repository = new PostgresAflTradeCurrentValuationModelEvidenceRepository(sqlClient());
+    const createCoordinator = (prepared: ReturnType<typeof qualifiedEvidence>) =>
+      createAflTradeCurrentValuationModelEvidenceCoordinator({
+        repository,
+        captureCurrentModelRevision: async () => 0,
+        prepareAndQualify: async () => prepared,
+        clock: { now: () => '2026-08-30T10:00:00.000Z' },
+      });
+
+    await expect(
+      createCoordinator(qualifiedEvidence()).refresh({
+        ...request(),
+        privateFactualAuthority: {
+          ...request().privateFactualAuthority,
+          evidenceBundleId: id('private-reviewed-evidence-bundle', 'f'),
+        },
+      })
+    ).resolves.toMatchObject({ state: 'stale_authority' });
+    await expect(
+      createCoordinator({
+        ...qualifiedEvidence(),
+        pickGate3DecisionId: id('review-decision', 'e'),
+      }).refresh(request())
+    ).resolves.toMatchObject({ state: 'stale_authority' });
+    await expect(
+      createCoordinator({
+        ...qualifiedEvidence(),
+        playerObservationSetId: id('player-observation-set', 'f'),
+      }).refresh(request())
+    ).resolves.toMatchObject({ state: 'stale_authority' });
+  });
+
   it('rejects an existing factual operation with unrelated candidate ancestry', async () => {
     const unrelatedOperation = id('current-valuation-factual-refresh-operation', 'e');
     await pool.query(
@@ -296,8 +395,15 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
 
   it('retains an exact failed pair without moving current authority and rejects stale factual CAS', async () => {
     await pool.query(
-      `INSERT INTO outcome_governed_valuation_model_qualification VALUES ($1,$2,'failed',$3,$4)`,
-      [evidence.qualificationId, request().scopeKey, evidence.playerRunId, evidence.pickRunId]
+      `INSERT INTO outcome_governed_valuation_model_qualification
+        VALUES ($1,$2,'failed',$3,$4,$5::jsonb)`,
+      [
+        evidence.qualificationId,
+        request().scopeKey,
+        evidence.playerRunId,
+        evidence.pickRunId,
+        JSON.stringify({ content: { failureCodes: ['pick_validation_threshold_failed'] } }),
+      ]
     );
     const client = sqlClient();
     const repository = new PostgresAflTradeCurrentValuationModelEvidenceRepository(client);
@@ -317,7 +423,14 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
     });
     const newerCandidate = id('private-factual-candidate', 'f');
     const newerOperation = id('current-valuation-factual-refresh-operation', 'e');
-    await pool.query(`INSERT INTO outcome_private_factual_candidate VALUES ($1)`, [newerCandidate]);
+    await pool.query(`INSERT INTO outcome_private_factual_candidate VALUES ($1,$2,$3,$4,$5,$6)`, [
+      newerCandidate,
+      request().scopeKey,
+      'reviewed-evidence',
+      id('private-reviewed-evidence-bundle', '3'),
+      id('private-reviewed-evidence-evaluation-decision', '4'),
+      digest('5'),
+    ]);
     await pool.query(
       `INSERT INTO outcome_current_valuation_factual_refresh_operation
         VALUES ($1,$2,'factual_refresh_complete',$3,2)`,
@@ -341,5 +454,81 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
     await expect(
       fresh.refresh({ ...request(), factualOperationId: newerOperation })
     ).resolves.toMatchObject({ state: 'stale_authority' });
+  });
+
+  it('rejects failure codes that disagree with the retained qualification', async () => {
+    await pool.query(
+      `INSERT INTO outcome_governed_valuation_model_qualification
+        VALUES ($1,$2,'failed',$3,$4,$5::jsonb)`,
+      [
+        evidence.qualificationId,
+        request().scopeKey,
+        evidence.playerRunId,
+        evidence.pickRunId,
+        JSON.stringify({ content: { failureCodes: ['player_validation_threshold_failed'] } }),
+      ]
+    );
+    const coordinator = createAflTradeCurrentValuationModelEvidenceCoordinator({
+      repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(sqlClient()),
+      captureCurrentModelRevision: async () => 0,
+      prepareAndQualify: async () => ({
+        state: 'qualification_failed',
+        ...evidence,
+        failureCodes: ['pick_validation_threshold_failed'],
+      }),
+      clock: { now: () => '2026-08-30T10:00:00.000Z' },
+    });
+
+    await expect(coordinator.refresh(request())).rejects.toThrow(
+      'Failed current model qualification lacks exact retained evidence.'
+    );
+  });
+
+  it('serializes the first model-head insert against a revision-zero commit', async () => {
+    await pool.query(
+      `INSERT INTO outcome_governed_valuation_model_qualification
+        VALUES ($1,$2,'failed',$3,$4,$5::jsonb)`,
+      [
+        evidence.qualificationId,
+        request().scopeKey,
+        evidence.playerRunId,
+        evidence.pickRunId,
+        JSON.stringify({ content: { failureCodes: ['pick_validation_threshold_failed'] } }),
+      ]
+    );
+    let advanced = false;
+    let advancement: Promise<unknown> | undefined;
+    const client = sqlClient(async () => {
+      if (advanced) return;
+      advanced = true;
+      advancement = pool.query(
+        `INSERT INTO outcome_current_governed_valuation_model_pair
+          VALUES ($1,1,$2,$3,$4,$5,$6,$7)`,
+        [
+          request().scopeKey,
+          id('model-qualification', 'f'),
+          id('model-run', 'd'),
+          id('model-run', 'e'),
+          id('review-decision', 'a'),
+          id('review-decision', 'b'),
+          id('model-qualification-work', 'f'),
+        ]
+      );
+    });
+    const coordinator = createAflTradeCurrentValuationModelEvidenceCoordinator({
+      repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(client),
+      captureCurrentModelRevision: async () => 0,
+      prepareAndQualify: async () => ({
+        state: 'qualification_failed',
+        ...evidence,
+        failureCodes: ['pick_validation_threshold_failed'],
+      }),
+      clock: { now: () => '2026-08-30T10:00:00.000Z' },
+    });
+
+    await expect(coordinator.refresh(request())).resolves.toMatchObject({
+      state: 'qualification_failed',
+    });
+    await advancement;
   });
 });
