@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Current valuation source custody prototype</title>
+  <style>
+    :root{color-scheme:light;--ink:#17202a;--muted:#667085;--line:#d9dee7;--paper:#fff;--wash:#f5f7fa;--accent:#3157d5;--good:#087a55;--warn:#a14b09}*{box-sizing:border-box}body{margin:0;background:var(--wash);color:var(--ink);font:15px/1.45 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:32px 20px 56px}h1{margin:0 0 8px;font-size:28px}h2{font-size:18px;margin:0 0 14px}p{margin:0 0 16px}.intro,.panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}.question{border-left:4px solid var(--accent);padding-left:14px;color:#344054}.verdict{color:var(--good);font-weight:650}.toolbar,.steps,.tabs{display:flex;gap:8px;flex-wrap:wrap}button,select{font:inherit;border:1px solid #aeb7c5;border-radius:7px;background:white;padding:8px 11px;color:var(--ink)}button{cursor:pointer}button:hover,button:focus-visible{border-color:var(--accent);outline:2px solid transparent;box-shadow:0 0 0 2px #cdd7ff}.primary{background:var(--accent);border-color:var(--accent);color:white}.tab[aria-selected=true]{background:#e8edff;border-color:var(--accent);color:#203f9f}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.wide{grid-column:1/-1}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.card{border:1px solid var(--line);border-radius:9px;padding:12px;background:#fbfcfe}.card strong{display:block;margin-bottom:5px}.meta{color:var(--muted);font-size:13px}.tag{display:inline-block;border-radius:20px;background:#e8edff;color:#203f9f;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px}.empty{color:var(--muted);font-style:italic}ol{margin:8px 0 0;padding-left:22px}.event{padding:7px 0;border-bottom:1px solid #edf0f4}.event:last-child{border:0}.changed{color:var(--warn);font-weight:650}@media(max-width:760px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}}
+  </style>
+</head>
+<body><main>
+  <section class="intro">
+    <h1>Fresh observation, stable evidence</h1>
+    <p class="question"><strong>Question:</strong> What minimum durable state distinguishes a fresh source observation from the normalized evidence an operation consumes, so exact retries resume custody, changed data advances, unchanged data avoids redundant review, and concurrent or historical captures remain deterministic?</p>
+    <p class="verdict">Candidate invariant: bind one observed capture to each operation; independently claim one effective normalization by source, bytes, and governing authority.</p>
+    <p class="meta">Throwaway logic prototype. It uses invented hashes and in-memory state only; it does not contact fitzRoy, PostgreSQL, or production data.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Free play</h2>
+    <div class="toolbar">
+      <button class="primary" data-free="START">Start new dispatch</button><select id="operationPicker" aria-label="Active dispatch"></select>
+      <button data-free="OBSERVE" data-hash="v1">Observe unchanged v1</button><button data-free="OBSERVE" data-hash="v2">Observe changed v2</button>
+      <button data-free="NORMALIZE">Resolve evidence</button><button data-free="REVIEW">Approve review</button><button data-free="STAGE">Write stage receipt</button>
+      <button data-free="UNAVAILABLE">Return unavailable</button><button data-free="RETRY">Exact retry</button><button data-free="CRASH">Simulate restart</button><button data-free="RESET">Reset</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Guided walkthroughs</h2><div id="tabs" class="tabs" role="tablist"></div><div id="guide"></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel wide"><h2>Dispatch custody</h2><div id="operations" class="cards"></div></section>
+    <section class="panel"><h2>Observed captures</h2><div id="captures" class="cards"></div></section>
+    <section class="panel"><h2>Effective normalizations</h2><div id="normalizations" class="cards"></div></section>
+    <section class="panel wide"><h2>What just happened</h2><div id="events"></div></section>
+  </div>
+</main>
+<script>
+const CurrentnessModel=(()=>{
+  const initial=()=>({nextOperation:1,nextCapture:1,nextNormalization:1,active:null,operations:[],captures:[],normalizations:[],claims:{},events:["Ready. Start a dispatch or choose a walkthrough."]});
+  const authority="fitzRoy|rights-2026|gate-7|map-3|decoder-2|normalizer-4";
+  const copy=s=>structuredClone(s), op=s=>s.operations.find(x=>x.id===s.active), note=(s,m)=>{s.events.unshift(m);return s};
+  function reduce(previous,a){const s=a.type==="RESET"?initial():copy(previous);if(a.type==="RESET")return s;
+    if(a.type==="START"){const id=a.id||`D${s.nextOperation++}`;s.operations.push({id,status:"awaiting observation",observedCapture:null,effectiveNormalization:null,stageReceipt:null});s.active=id;return note(s,`${id} started as a distinct dispatch.`)}
+    if(a.type==="SELECT"){s.active=a.id;return note(s,`${a.id} selected.`)}
+    if(a.type==="SEED_HISTORY"){s.captures.push({id:"C-old-1",hash:"v1",authority},{id:"C-old-2",hash:"v2",authority});s.normalizations.push({id:"N-old-v1",capture:"C-old-1",hash:"v1",authority,reviewed:true},{id:"N-old-v2",capture:"C-old-2",hash:"v2",authority,reviewed:true});s.claims[`${authority}|v1`]="N-old-v1";s.claims[`${authority}|v2`]="N-old-v2";return note(s,"Two governed historical captures and their effective normalizations were loaded.")}
+    const current=op(s);if(!current)return note(s,"No dispatch selected; start one first.");
+    if(a.type==="OBSERVE"){if(current.observedCapture)return note(s,`${current.id} already owns ${current.observedCapture}; exact work cannot recapture.`);const id=`C${s.nextCapture++}`;s.captures.push({id,hash:a.hash,authority});current.observedCapture=id;current.status="awaiting evidence resolution";return note(s,`${current.id} freshly observed ${a.hash} as ${id}.`)}
+    if(a.type==="NORMALIZE"){if(!current.observedCapture)return note(s,`${current.id} cannot resolve evidence before observation.`);const capture=s.captures.find(x=>x.id===current.observedCapture),key=`${capture.authority}|${capture.hash}`,claimed=s.claims[key];if(claimed){current.effectiveNormalization=claimed;current.status="evidence resolved";return note(s,`${current.id} adopts ${claimed}; its fresh ${capture.id} is byte-and-authority equivalent.`)}const id=`N${s.nextNormalization++}`;s.normalizations.push({id,capture:capture.id,hash:capture.hash,authority:capture.authority,reviewed:false});s.claims[key]=id;current.effectiveNormalization=id;current.status="evidence resolved";return note(s,`${id} normalized ${capture.id} and atomically claimed the equivalence key.`)}
+    if(a.type==="REVIEW"){const n=s.normalizations.find(x=>x.id===current.effectiveNormalization);if(!n)return note(s,"There is no effective normalization to review.");n.reviewed=true;return note(s,`${n.id} is now human-reviewed.`)}
+    if(a.type==="STAGE"){const n=s.normalizations.find(x=>x.id===current.effectiveNormalization);if(!n||!n.reviewed)return note(s,`${current.id} cannot stage without reviewed effective evidence.`);current.stageReceipt=`${current.id}:${current.observedCapture}->${n.id}`;current.status="complete";return note(s,`${current.id} recorded both fresh observation and effective evidence in its stage receipt.`)}
+    if(a.type==="UNAVAILABLE"){current.status="unavailable: review required";return note(s,`${current.id} returned unavailable without losing custody.`)}
+    if(a.type==="RETRY"){const phase=current.stageReceipt?"completed receipt":current.effectiveNormalization?"effective evidence":current.observedCapture?"observed capture":"dispatch start";return note(s,`${current.id} resumed from its ${phase}; no new observation was created.`)}
+    if(a.type==="CRASH")return note(s,"Process restarted; the displayed durable state is unchanged.");return s}
+  return{initial,reduce};
+})();
+
+const scenarios=[
+  ["First dispatch","A first dispatch observes, normalizes, receives review, and records both identities.",[["START","Start dispatch"],["OBSERVE","Observe v1","v1"],["NORMALIZE","Normalize v1"],["REVIEW","Approve evidence"],["STAGE","Record receipt"]]],
+  ["Retry before normalize","A restart after capture must resume the same operation-bound capture.",[["START","Start dispatch"],["OBSERVE","Observe v1","v1"],["CRASH","Restart process"],["RETRY","Retry same dispatch"],["NORMALIZE","Resolve evidence"]]],
+  ["Retry before receipt","A restart after normalization must not capture or normalize again.",[["START","Start dispatch"],["OBSERVE","Observe v1","v1"],["NORMALIZE","Normalize v1"],["REVIEW","Approve evidence"],["CRASH","Restart process"],["RETRY","Retry same dispatch"],["STAGE","Record receipt"]]],
+  ["New, unchanged","A distinct dispatch observes again, then reuses reviewed equivalent evidence.",[["START","Start D1"],["OBSERVE","D1 observes v1","v1"],["NORMALIZE","Normalize v1"],["REVIEW","Approve v1"],["START","Start D2"],["OBSERVE","D2 observes v1","v1"],["NORMALIZE","Reuse N1"],["STAGE","Record D2 receipt"]]],
+  ["New, changed","A distinct dispatch with changed bytes creates new evidence and requires review.",[["START","Start D1"],["OBSERVE","D1 observes v1","v1"],["NORMALIZE","Normalize v1"],["REVIEW","Approve v1"],["START","Start D2"],["OBSERVE","D2 observes v2","v2"],["NORMALIZE","Normalize v2"]]],
+  ["Review continuation","Unavailable work keeps custody; a later dispatch still makes a fresh observation before reuse.",[["START","Start D1"],["OBSERVE","Observe v1","v1"],["NORMALIZE","Normalize v1"],["UNAVAILABLE","Return unavailable"],["REVIEW","Human approves v1"],["START","Start continuation D2"],["OBSERVE","Observe current v1","v1"],["NORMALIZE","Reuse reviewed v1"],["STAGE","Record receipt"]]],
+  ["Concurrent match","Two operations observe identical bytes; one equivalence claim wins and both converge.",[["START","Start D1"],["OBSERVE","D1 observes v1","v1"],["START","Start D2"],["OBSERVE","D2 observes v1","v1"],["SELECT","Select D1",null,"D1"],["NORMALIZE","D1 claims v1"],["SELECT","Select D2",null,"D2"],["NORMALIZE","D2 adopts claim"]]],
+  ["Existing history","Selection is by exact equivalence, never by latest row or capture count.",[["SEED_HISTORY","Load history"],["START","Start D1"],["OBSERVE","Observe current v1","v1"],["NORMALIZE","Resolve exact v1"]]]
+];
+let state=CurrentnessModel.initial(),activeScenario=0,step=0;
+const dispatch=a=>{state=CurrentnessModel.reduce(state,a);render()};
+function render(){
+  operationPicker.innerHTML=state.operations.length?state.operations.map(o=>`<option ${o.id===state.active?"selected":""}>${o.id}</option>`).join(""):"<option>No dispatch</option>";
+  operations.innerHTML=state.operations.length?state.operations.map(o=>`<article class="card"><strong>${o.id} · ${o.status}</strong><div><span class="tag">Observed: ${o.observedCapture||"none"}</span><span class="tag">Effective: ${o.effectiveNormalization||"none"}</span></div><div class="meta">Receipt: ${o.stageReceipt||"not written"}</div></article>`).join(""):empty("No dispatches yet.");
+  captures.innerHTML=state.captures.length?state.captures.map(c=>`<article class="card"><strong>${c.id} · bytes ${c.hash}</strong><div class="meta">Fresh timestamped observation<br>${short(c.authority)}</div></article>`).join(""):empty("No source has been observed.");
+  normalizations.innerHTML=state.normalizations.length?state.normalizations.map(n=>`<article class="card"><strong>${n.id} · bytes ${n.hash}</strong><div>${n.reviewed?'<span class="tag">reviewed</span>':'<span class="tag changed">review pending</span>'}</div><div class="meta">Derived from ${n.capture}<br>${short(n.authority)}</div></article>`).join(""):empty("No effective evidence exists.");
+  events.innerHTML=state.events.slice(0,8).map((e,i)=>`<div class="event ${i===0?"changed":""}">${e}</div>`).join("");renderGuide();
+}
+const empty=t=>`<div class="empty">${t}</div>`,short=a=>a.replaceAll("|"," · ");
+function renderGuide(){tabs.innerHTML=scenarios.map((s,i)=>`<button class="tab" role="tab" aria-selected="${i===activeScenario}" data-tab="${i}">${s[0]}</button>`).join("");const s=scenarios[activeScenario];guide.innerHTML=`<p>${s[1]}</p><div class="steps"><button class="primary" data-guide-reset>Restart walkthrough</button>${s[2].map((x,i)=>`<button data-guide="${i}" ${i!==step?"disabled":""}>${i+1}. ${x[1]}</button>`).join("")}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;if(b.dataset.free){dispatch({type:b.dataset.free,hash:b.dataset.hash});return}if(b.dataset.tab!==undefined){activeScenario=+b.dataset.tab;step=0;state=CurrentnessModel.initial();render();return}if(b.hasAttribute("data-guide-reset")){step=0;state=CurrentnessModel.initial();render();return}if(b.dataset.guide!==undefined){const x=scenarios[activeScenario][2][+b.dataset.guide];dispatch({type:x[0],hash:x[2],id:x[3]});step++;render()}});
+operationPicker.addEventListener("change",e=>dispatch({type:"SELECT",id:e.target.value}));render();
+</script></body></html>
