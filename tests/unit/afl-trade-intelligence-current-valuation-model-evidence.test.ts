@@ -27,16 +27,17 @@ const request = {
 } as const;
 
 class MemoryRepository implements AflTradeCurrentValuationModelEvidenceRepository {
-  retained: AflTradeCurrentValuationModelEvidenceResult | null = null;
+  retained = new Map<string, AflTradeCurrentValuationModelEvidenceResult>();
   currentRevision = 0;
 
-  async load() {
-    return this.retained;
+  async load(operationId: string) {
+    return this.retained.get(operationId) ?? null;
   }
 
   async commit(input: Parameters<AflTradeCurrentValuationModelEvidenceRepository['commit']>[0]) {
-    if (input.expectedModelRevision !== this.currentRevision) return { state: 'stale_authority' as const };
-    this.retained = input.result;
+    if (input.expectedModelRevision !== this.currentRevision)
+      return { state: 'stale_authority' as const };
+    this.retained.set(input.result.operationId, input.result);
     if (input.result.state === 'qualified') this.currentRevision += 1;
     return { state: 'committed' as const, result: input.result };
   }
@@ -160,7 +161,7 @@ describe('current valuation model evidence coordinator', () => {
       state: 'stale_authority',
       expectedModelRevision: 1,
     });
-    expect(repository.retained).toBeNull();
+    expect(repository.retained.size).toBe(0);
   });
 
   it('fails closed without custody when factual derivation rejects unavailable authority', async () => {
@@ -177,7 +178,30 @@ describe('current valuation model evidence coordinator', () => {
     await expect(coordinator.refresh(request)).rejects.toThrow(
       'Factual authority was withdrawn before derivation.'
     );
-    expect(repository.retained).toBeNull();
+    expect(repository.retained.size).toBe(0);
     expect(repository.currentRevision).toBe(0);
+  });
+
+  it('does not replay retained custody for a distinct factual operation', async () => {
+    const repository = new MemoryRepository();
+    let executions = 0;
+    const coordinator = createAflTradeCurrentValuationModelEvidenceCoordinator({
+      repository,
+      captureCurrentModelRevision: async () => repository.currentRevision,
+      prepareAndQualify: async () => {
+        executions += 1;
+        return qualifiedResult();
+      },
+      clock: { now: () => '2026-08-30T10:00:00.000Z' },
+    });
+
+    await coordinator.refresh(request);
+    await coordinator.refresh({
+      ...request,
+      factualOperationId: id('current-valuation-factual-refresh-operation', 'e'),
+    });
+
+    expect(executions).toBe(2);
+    expect(repository.retained.size).toBe(2);
   });
 });

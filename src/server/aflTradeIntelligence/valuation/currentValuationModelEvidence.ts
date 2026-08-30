@@ -106,11 +106,7 @@ export const aflTradeCurrentValuationModelEvidenceResultSchema = z
     }
     const expectedOperationId = createAflTradeContentAddress(
       'current-valuation-model-evidence-operation',
-      {
-        scopeKey: result.scopeKey,
-        factualOperationId: result.factualOperationId,
-        privateFactualAuthority: result.privateFactualAuthority,
-      }
+      createAflTradeCurrentValuationModelEvidenceOperationPreimage(result)
     );
     if (result.operationId !== expectedOperationId) {
       context.addIssue({
@@ -174,6 +170,18 @@ export type AflTradeCurrentValuationModelEvidenceResult = z.infer<
   typeof aflTradeCurrentValuationModelEvidenceResultSchema
 >;
 
+export function createAflTradeCurrentValuationModelEvidenceOperationPreimage(input: {
+  readonly scopeKey: string;
+  readonly factualOperationId: string;
+  readonly privateFactualAuthority: z.infer<typeof aflTradeCurrentPrivateFactualAuthoritySchema>;
+}) {
+  return {
+    scopeKey: input.scopeKey,
+    factualOperationId: input.factualOperationId,
+    privateFactualAuthority: input.privateFactualAuthority,
+  } as const;
+}
+
 type PreparedModelEvidence =
   | Readonly<{
       state: 'qualified';
@@ -211,7 +219,10 @@ export function createAflTradeCurrentValuationModelEvidenceOperationId(
   unparsedRequest: AflTradeCurrentValuationModelEvidenceRequest
 ): string {
   const request = aflTradeCurrentValuationModelEvidenceRequestSchema.parse(unparsedRequest);
-  return createAflTradeContentAddress('current-valuation-model-evidence-operation', request);
+  return createAflTradeContentAddress(
+    'current-valuation-model-evidence-operation',
+    createAflTradeCurrentValuationModelEvidenceOperationPreimage(request)
+  );
 }
 
 export function createAflTradeCurrentValuationModelEvidenceCoordinator(dependencies: {

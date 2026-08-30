@@ -1253,6 +1253,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'validate_outcome_factual_projection_item_insert_trigger',
       'validate_outcome_factual_projection_item_set_insert_trigger',
       'outcome_current_valuation_model_evidence_operation_validate',
+      'outcome_current_valuation_model_evidence_no_update_delete',
       'ab_validate_outcome_factual_projection_item_set_event',
       'outcome_external_canonical_promotion_insert_guard',
       'outcome_external_canonical_promotion_finalization_guard',

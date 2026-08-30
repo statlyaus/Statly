@@ -34,8 +34,8 @@ BEGIN
      OR (content->'privateFactualAuthority'->>'revision')::INTEGER IS DISTINCT FROM NEW."factual_revision"
      OR (content->>'expectedModelRevision')::INTEGER IS DISTINCT FROM NEW."expected_model_revision"
      OR content->>'state' IS DISTINCT FROM NEW."result_state"
-     OR (content->>'capturedAt')::TIMESTAMPTZ IS DISTINCT FROM NEW."captured_at"
-     OR (content->>'completedAt')::TIMESTAMPTZ IS DISTINCT FROM NEW."completed_at"
+     OR (content->>'capturedAt')::TIMESTAMPTZ(3) IS DISTINCT FROM NEW."captured_at"
+     OR (content->>'completedAt')::TIMESTAMPTZ(3) IS DISTINCT FROM NEW."completed_at"
      OR content->>'schemaVersion' IS DISTINCT FROM 'afl-current-valuation-model-evidence-result/v1'
      OR content->>'executionLocation' IS DISTINCT FROM 'local'
      OR content->>'visibility' IS DISTINCT FROM 'private'
@@ -56,6 +56,20 @@ CREATE TRIGGER "outcome_current_valuation_model_evidence_operation_validate"
 BEFORE INSERT ON "outcome_current_valuation_model_evidence_operation"
 FOR EACH ROW EXECUTE FUNCTION "validate_outcome_current_valuation_model_evidence_operation"();
 
+CREATE FUNCTION "reject_outcome_current_valuation_model_evidence_mutation"()
+RETURNS TRIGGER AS $$ BEGIN
+  RAISE EXCEPTION 'Current valuation model evidence custody is append-only';
+END $$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "outcome_current_valuation_model_evidence_no_update_delete"
+BEFORE UPDATE OR DELETE ON "outcome_current_valuation_model_evidence_operation"
+FOR EACH ROW EXECUTE FUNCTION "reject_outcome_current_valuation_model_evidence_mutation"();
+
 REVOKE ALL ON TABLE "outcome_current_valuation_model_evidence_operation" FROM PUBLIC;
 GRANT SELECT,INSERT ON TABLE "outcome_current_valuation_model_evidence_operation"
+  TO "afl_trade_private_evaluation_coordinator";
+GRANT SELECT ON TABLE "outcome_current_valuation_factual_refresh_operation",
+  "outcome_current_private_factual_authority",
+  "outcome_current_governed_valuation_model_pair",
+  "outcome_governed_valuation_model_qualification"
   TO "afl_trade_private_evaluation_coordinator";

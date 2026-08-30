@@ -21,9 +21,15 @@ describe('current valuation model evidence migration', () => {
     expect(migration).toContain('"expected_model_revision" INTEGER NOT NULL');
     expect(migration).toContain("CHECK (\"result_state\" IN ('qualified','qualification_failed'))");
     expect(migration).toContain(
-      'GRANT SELECT,INSERT ON TABLE "outcome_current_valuation_model_evidence_operation"'
+      'GRANT SELECT,INSERT ON TABLE "outcome_current_valuation_model_evidence_operation"\n  TO "afl_trade_private_evaluation_coordinator";'
     );
-    expect(migration).not.toContain('GRANT SELECT ON TABLE');
+    expect(migration).toContain(
+      'CREATE TRIGGER "outcome_current_valuation_model_evidence_no_update_delete"'
+    );
+    expect(migration).toContain(
+      '"outcome_current_governed_valuation_model_pair",\n  "outcome_governed_valuation_model_qualification"\n  TO "afl_trade_private_evaluation_coordinator";'
+    );
+    expect(migration).not.toMatch(/GRANT[^;]+TO\s+(?:"?PUBLIC"?)/isu);
     expect(migration).not.toContain('outcome_active_release');
     expect(migration).not.toContain('outcome_current_valuation_publication');
   });

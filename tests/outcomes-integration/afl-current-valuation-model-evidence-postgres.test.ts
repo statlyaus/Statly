@@ -39,7 +39,8 @@ beforeAll(async () => {
   );
   await pool.query(`
     CREATE TABLE outcome_current_valuation_factual_refresh_operation (
-      operation_id text PRIMARY KEY
+      operation_id text PRIMARY KEY,scope_key text NOT NULL,state text NOT NULL,
+      candidate_id text,private_factual_revision integer
     );
     CREATE TABLE outcome_private_factual_candidate (candidate_id text PRIMARY KEY);
     CREATE TABLE outcome_current_private_factual_authority (
@@ -65,10 +66,14 @@ beforeAll(async () => {
       'utf8'
     )
   );
-  await pool.query(
-    `GRANT SELECT,INSERT ON ALL TABLES IN SCHEMA "${schemaName}"
-       TO afl_trade_private_evaluation_coordinator`
+  const privileges = await pool.query<{ can_select: boolean; can_insert: boolean }>(
+    `SELECT
+       has_table_privilege('afl_trade_private_evaluation_coordinator',
+         'outcome_current_valuation_model_evidence_operation','SELECT') AS can_select,
+       has_table_privilege('afl_trade_private_evaluation_coordinator',
+         'outcome_current_valuation_model_evidence_operation','INSERT') AS can_insert`
   );
+  expect(privileges.rows).toEqual([{ can_select: true, can_insert: true }]);
 });
 
 beforeEach(async () => {
@@ -76,9 +81,11 @@ beforeEach(async () => {
     outcome_current_governed_valuation_model_pair,outcome_governed_valuation_model_qualification,
     outcome_current_private_factual_authority,outcome_private_factual_candidate,
     outcome_current_valuation_factual_refresh_operation CASCADE`);
-  await pool.query(`INSERT INTO outcome_current_valuation_factual_refresh_operation VALUES ($1)`, [
-    factualOperationId,
-  ]);
+  await pool.query(
+    `INSERT INTO outcome_current_valuation_factual_refresh_operation
+      VALUES ($1,$2,'factual_refresh_complete',$3,1)`,
+    [factualOperationId, 'afl-men:2026-trades', candidateId]
+  );
   await pool.query(`INSERT INTO outcome_private_factual_candidate VALUES ($1)`, [candidateId]);
   await pool.query(`INSERT INTO outcome_current_private_factual_authority VALUES ($1,$2,1)`, [
     'afl-men:2026-trades',
@@ -124,10 +131,29 @@ function sqlClient(): AflOutcomeSqlClient {
       try {
         await client.query('BEGIN');
         const result = await work({
-          query: (sql, parameters) =>
-            sql.startsWith('SET LOCAL ROLE')
-              ? Promise.resolve({ rows: [], rowCount: null })
-              : client.query(sql, parameters as unknown[]),
+          query: async (sql, parameters) => {
+            const queryResult = await client.query(sql, parameters as unknown[]);
+            if (sql.startsWith('SET LOCAL ROLE')) {
+              await client.query(`SET LOCAL search_path TO "${schemaName}"`);
+              const authority = await client.query<{
+                current_role: string;
+                current_schema: string;
+                can_select: boolean;
+              }>(
+                `SELECT current_role,current_schema(),
+                   has_table_privilege(current_user,
+                     'outcome_current_valuation_model_evidence_operation','SELECT') AS can_select`
+              );
+              expect(authority.rows).toEqual([
+                {
+                  current_role: 'afl_trade_private_evaluation_coordinator',
+                  current_schema: schemaName,
+                  can_select: true,
+                },
+              ]);
+            }
+            return queryResult;
+          },
         });
         await client.query('COMMIT');
         return result;
@@ -145,8 +171,13 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
   it('commits and replays one exact passing pair', async () => {
     await pool.query(
       `INSERT INTO outcome_current_governed_valuation_model_pair VALUES ($1,1,$2,$3,$4,$5)`,
-      [request().scopeKey, evidence.qualificationId, evidence.playerRunId, evidence.pickRunId,
-        id('model-qualification-work', 'b')]
+      [
+        request().scopeKey,
+        evidence.qualificationId,
+        evidence.playerRunId,
+        evidence.pickRunId,
+        id('model-qualification-work', 'b'),
+      ]
     );
     let executions = 0;
     const client = sqlClient();
@@ -156,7 +187,8 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
       prepareAndQualify: async () => {
         executions += 1;
         return {
-          state: 'qualified', ...evidence,
+          state: 'qualified',
+          ...evidence,
           qualificationWorkId: id('model-qualification-work', 'b'),
           playerGate3DecisionId: id('review-decision', 'c'),
           pickGate3DecisionId: id('review-decision', 'd'),
@@ -176,6 +208,90 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
     });
     await expect(restartedCoordinator.refresh(request())).resolves.toEqual(first);
     expect(executions).toBe(1);
+    await expect(
+      pool.query(
+        `UPDATE outcome_current_valuation_model_evidence_operation
+          SET result_state='qualification_failed'`
+      )
+    ).rejects.toThrow('Current valuation model evidence custody is append-only');
+  });
+
+  it('returns one retained result to concurrent callers of the same operation', async () => {
+    await pool.query(
+      `INSERT INTO outcome_current_governed_valuation_model_pair VALUES ($1,1,$2,$3,$4,$5)`,
+      [
+        request().scopeKey,
+        evidence.qualificationId,
+        evidence.playerRunId,
+        evidence.pickRunId,
+        id('model-qualification-work', 'b'),
+      ]
+    );
+    let arrivals = 0;
+    let release!: () => void;
+    const bothPrepared = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const createCoordinator = () =>
+      createAflTradeCurrentValuationModelEvidenceCoordinator({
+        repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(sqlClient()),
+        captureCurrentModelRevision: async () => 0,
+        prepareAndQualify: async () => {
+          arrivals += 1;
+          if (arrivals === 2) release();
+          await bothPrepared;
+          return {
+            state: 'qualified',
+            ...evidence,
+            qualificationWorkId: id('model-qualification-work', 'b'),
+            playerGate3DecisionId: id('review-decision', 'c'),
+            pickGate3DecisionId: id('review-decision', 'd'),
+          } as const;
+        },
+        clock: { now: () => '2026-08-30T10:00:00.123456Z' },
+      });
+
+    const [first, second] = await Promise.all([
+      createCoordinator().refresh(request()),
+      createCoordinator().refresh(request()),
+    ]);
+
+    expect(second).toEqual(first);
+    await expect(
+      pool.query(
+        `SELECT count(*)::integer AS count
+         FROM outcome_current_valuation_model_evidence_operation`
+      )
+    ).resolves.toMatchObject({ rows: [{ count: 1 }] });
+  });
+
+  it('rejects an existing factual operation with unrelated candidate ancestry', async () => {
+    const unrelatedOperation = id('current-valuation-factual-refresh-operation', 'e');
+    await pool.query(
+      `INSERT INTO outcome_current_valuation_factual_refresh_operation
+        VALUES ($1,$2,'factual_refresh_complete',$3,1)`,
+      [unrelatedOperation, request().scopeKey, id('private-factual-candidate', 'f')]
+    );
+    const coordinator = createAflTradeCurrentValuationModelEvidenceCoordinator({
+      repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(sqlClient()),
+      captureCurrentModelRevision: async () => 0,
+      prepareAndQualify: async () => ({
+        state: 'qualification_failed',
+        ...evidence,
+        failureCodes: ['factual_ancestry_mismatched'],
+      }),
+      clock: { now: () => '2026-08-30T10:00:00.000Z' },
+    });
+
+    await expect(
+      coordinator.refresh({ ...request(), factualOperationId: unrelatedOperation })
+    ).resolves.toMatchObject({ state: 'stale_authority' });
+    await expect(
+      pool.query(
+        `SELECT count(*)::integer AS count
+         FROM outcome_current_valuation_model_evidence_operation`
+      )
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 
   it('retains an exact failed pair without moving current authority and rejects stale factual CAS', async () => {
@@ -189,20 +305,24 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
       repository,
       captureCurrentModelRevision: async () => 0,
       prepareAndQualify: async () => ({
-        state: 'qualification_failed', ...evidence,
+        state: 'qualification_failed',
+        ...evidence,
         failureCodes: ['pick_validation_threshold_failed'],
       }),
       clock: { now: () => '2026-08-30T10:00:00.000Z' },
     });
     await expect(coordinator.refresh(request())).resolves.toMatchObject({
-      state: 'qualification_failed', modelRevision: 0,
+      state: 'qualification_failed',
+      modelRevision: 0,
     });
     const newerCandidate = id('private-factual-candidate', 'f');
     const newerOperation = id('current-valuation-factual-refresh-operation', 'e');
     await pool.query(`INSERT INTO outcome_private_factual_candidate VALUES ($1)`, [newerCandidate]);
-    await pool.query(`INSERT INTO outcome_current_valuation_factual_refresh_operation VALUES ($1)`, [
-      newerOperation,
-    ]);
+    await pool.query(
+      `INSERT INTO outcome_current_valuation_factual_refresh_operation
+        VALUES ($1,$2,'factual_refresh_complete',$3,2)`,
+      [newerOperation, request().scopeKey, newerCandidate]
+    );
     await pool.query(
       `UPDATE outcome_current_private_factual_authority SET candidate_id=$1,revision=2`,
       [newerCandidate]
@@ -211,13 +331,15 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
       repository,
       captureCurrentModelRevision: async () => 0,
       prepareAndQualify: async () => ({
-        state: 'qualification_failed', ...evidence,
+        state: 'qualification_failed',
+        ...evidence,
         qualificationId: id('model-qualification', 'e'),
         failureCodes: ['player_validation_threshold_failed'],
       }),
       clock: { now: () => '2026-08-30T10:00:01.000Z' },
     });
-    await expect(fresh.refresh({ ...request(), factualOperationId: newerOperation }))
-      .resolves.toMatchObject({ state: 'stale_authority' });
+    await expect(
+      fresh.refresh({ ...request(), factualOperationId: newerOperation })
+    ).resolves.toMatchObject({ state: 'stale_authority' });
   });
 });
