@@ -1110,6 +1110,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0081_corrected_local_review_lineage',
       '0082_complete_local_reviewed_evidence',
       '0083_current_valuation_factual_refresh',
+      '0084_current_valuation_evidence_orchestration',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1204,6 +1205,10 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_current_private_factual_authority',
       'outcome_current_valuation_factual_refresh_stage_receipt',
       'outcome_current_valuation_factual_refresh_operation',
+      'outcome_current_valuation_evidence_orchestration_operation',
+      'outcome_current_valuation_evidence_orchestration_stage_receipt',
+      'outcome_current_valuation_evidence_source_work',
+      'outcome_current_valuation_evidence_normalization_claim',
       'outcome_hpn_field_map_candidate',
       'outcome_hpn_field_map_review_decision',
       'outcome_hpn_projected_field_map',
@@ -1288,6 +1293,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_factual_candidate_no_update_delete',
       'outcome_factual_refresh_stage_no_update_delete',
       'outcome_current_valuation_factual_refresh_no_update_delete',
+      'outcome_current_valuation_evidence_operation_no_mutation',
+      'outcome_current_valuation_evidence_stage_no_mutation',
     ]) {
       expect(triggerNames).toContain(expected);
     }

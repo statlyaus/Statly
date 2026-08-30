@@ -88,3 +88,9 @@ export function createAflTradePrivateValuationDispatchRequestId(input: {
   };
   return createAflTradeContentAddress('private-valuation-dispatch', parsed);
 }
+
+export function createAflTradePrivateValuationDispatchEvidenceKey(
+  request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>
+): string {
+  return aflTradePrivateValuationDispatchRequestSchema.parse(request).requestId;
+}

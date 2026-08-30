@@ -61,6 +61,19 @@ function exactRecord(
   );
 }
 
+function addressesSameImmutableArtifact(
+  stored: AflTradeArtifactRef,
+  proposed: AflTradeArtifactRef
+): boolean {
+  return (
+    stored.artifactId === proposed.artifactId &&
+    stored.contentSha256 === proposed.contentSha256 &&
+    stored.storageUri === proposed.storageUri &&
+    stored.mediaType === proposed.mediaType &&
+    stored.byteLength === proposed.byteLength
+  );
+}
+
 function validateObjectKey(objectKey: string): string[] {
   const segments = objectKey.split('/');
   if (
@@ -559,7 +572,22 @@ function createLocalAflTradeFilesystemArtifactRepository(options: {
         ) {
           throw error;
         }
-        const existing = await loadExact(parsed.data, options.maximumObjectBytes);
+        const key = objectKey(parsed.data.contentSha256);
+        const head = await store.headExact({ objectKey: key });
+        const storedReference = head === null ? null : localReferenceFromIdentity(head);
+        if (
+          storedReference !== null &&
+          !addressesSameImmutableArtifact(storedReference, parsed.data)
+        ) {
+          throw new AflTradeArtifactCustodyError(
+            'READBACK_MISMATCH',
+            `The ${boundaryLabel.toLowerCase()} object binds different immutable artifact metadata.`
+          );
+        }
+        const existing =
+          storedReference === null
+            ? null
+            : await loadExact(storedReference, options.maximumObjectBytes);
         if (existing === null) {
           throw new AflTradeArtifactCustodyError(
             'STORAGE_UNAVAILABLE',

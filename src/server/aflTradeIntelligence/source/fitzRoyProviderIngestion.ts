@@ -34,6 +34,11 @@ export interface AflTradeFitzRoyProviderIngestionResult {
   staging: AflTradeFitzRoyStagingResult;
 }
 
+export interface AflTradeFitzRoyProviderCaptureResult {
+  receipt: AflTradeFitzRoyCaptureReceipt;
+  snapshot: ReturnType<typeof createAflTradeSourceSnapshotManifest>;
+}
+
 function requireExactInstant(value: string, name: string): void {
   if (new Date(value).toISOString() !== value) {
     throw new TypeError(`${name} must be an exact UTC instant.`);
@@ -62,10 +67,10 @@ export function requireCurrentAflTradeFitzRoyCaptureAuthority(input: {
   }
 }
 
-export async function ingestAuthorizedAflTradeFitzRoyProviderSeason(
+export async function captureAuthorizedAflTradeFitzRoyProviderSeason(
   command: AflTradeFitzRoyProviderIngestionCommand,
   dependencies: AflTradeFitzRoyProviderIngestionDependencies
-): Promise<AflTradeFitzRoyProviderIngestionResult> {
+): Promise<AflTradeFitzRoyProviderCaptureResult> {
   requireExactInstant(command.effectiveAt, 'effectiveAt');
   const receipt = await captureAuthorizedAflTradeFitzRoyEvidence(
     command.capture,
@@ -148,13 +153,21 @@ export async function ingestAuthorizedAflTradeFitzRoyProviderSeason(
     },
     createdAt,
   });
+  return { receipt, snapshot };
+}
+
+export async function ingestAuthorizedAflTradeFitzRoyProviderSeason(
+  command: AflTradeFitzRoyProviderIngestionCommand,
+  dependencies: AflTradeFitzRoyProviderIngestionDependencies
+): Promise<AflTradeFitzRoyProviderIngestionResult> {
+  const captured = await captureAuthorizedAflTradeFitzRoyProviderSeason(command, dependencies);
   const staging = await stageAflTradeFitzRoySourceSnapshot(
     {
-      snapshot,
+      snapshot: captured.snapshot,
       fieldMapId: command.fieldMapId,
       fieldMap: command.fieldMap,
     },
     dependencies.staging
   );
-  return { receipt, snapshotId: snapshot.snapshotId, staging };
+  return { receipt: captured.receipt, snapshotId: captured.snapshot.snapshotId, staging };
 }

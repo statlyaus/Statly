@@ -5500,6 +5500,65 @@ model OutcomeCurrentValuationFactualRefreshOperation {
   @@map("outcome_current_valuation_factual_refresh_operation")
 }
 
+model OutcomeCurrentValuationEvidenceOrchestrationOperation {
+  operationId          String    @id @map("operation_id") @outcomes.Text
+  scopeKey             String    @map("scope_key") @outcomes.Text
+  triggerKind          String    @map("trigger_kind") @outcomes.Text
+  stableOperationKey   String    @unique @map("stable_operation_key") @outcomes.Text
+  state                String    @outcomes.Text
+  stage                String    @outcomes.Text
+  cause                String?   @outcomes.Text
+  downstreamOperationId String?  @map("downstream_operation_id") @outcomes.Text
+  capturedAt           DateTime  @map("captured_at") @outcomes.Timestamptz(3)
+  completedAt          DateTime  @map("completed_at") @outcomes.Timestamptz(3)
+  operationJson        Json      @map("operation_json")
+  resultJson           Json      @map("result_json")
+
+  @@map("outcome_current_valuation_evidence_orchestration_operation")
+}
+
+model OutcomeCurrentValuationEvidenceOrchestrationStageReceipt {
+  receiptId          String   @id @map("receipt_id") @outcomes.Text
+  scopeKey           String   @map("scope_key") @outcomes.Text
+  triggerKind        String   @map("trigger_kind") @outcomes.Text
+  stableOperationKey String   @map("stable_operation_key") @outcomes.Text
+  sourceKey          String   @map("source_key") @outcomes.Text
+  observedCaptureId  String   @map("observed_capture_id") @outcomes.Text
+  effectiveCaptureId String   @map("effective_capture_id") @outcomes.Text
+  normalizationRunId String   @map("normalization_run_id") @outcomes.Text
+  receiptJson        Json     @map("receipt_json")
+  retainedAt         DateTime @map("retained_at") @outcomes.Timestamptz(3)
+
+  @@unique([stableOperationKey, sourceKey])
+  @@map("outcome_current_valuation_evidence_orchestration_stage_receipt")
+}
+
+model OutcomeCurrentValuationEvidenceSourceWork {
+  stableOperationKey  String   @map("stable_operation_key") @outcomes.Text
+  scopeKey            String   @map("scope_key") @outcomes.Text
+  triggerKind         String   @map("trigger_kind") @outcomes.Text
+  sourceKey           String   @map("source_key") @outcomes.Text
+  observedCaptureId   String   @unique @map("observed_capture_id") @outcomes.Text
+  sourceContentSha256 String   @map("source_content_sha256") @outcomes.Char(64)
+  authoritySha256     String   @map("authority_sha256") @outcomes.Char(64)
+  retainedAt          DateTime @map("retained_at") @outcomes.Timestamptz(3)
+
+  @@id([stableOperationKey, sourceKey])
+  @@map("outcome_current_valuation_evidence_source_work")
+}
+
+model OutcomeCurrentValuationEvidenceNormalizationClaim {
+  sourceKey           String   @map("source_key") @outcomes.Text
+  sourceContentSha256 String   @map("source_content_sha256") @outcomes.Char(64)
+  authoritySha256     String   @map("authority_sha256") @outcomes.Char(64)
+  effectiveCaptureId  String   @map("effective_capture_id") @outcomes.Text
+  normalizationRunId  String   @unique @map("normalization_run_id") @outcomes.Text
+  claimedAt           DateTime @map("claimed_at") @outcomes.Timestamptz(3)
+
+  @@id([sourceKey, sourceContentSha256, authoritySha256])
+  @@map("outcome_current_valuation_evidence_normalization_claim")
+}
+
 model OutcomePrivateValuationDispatchAttempt {
   claimId          String                                 @id @map("claim_id") @outcomes.Text
   requestId        String                                 @map("request_id") @outcomes.Text

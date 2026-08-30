@@ -79,6 +79,8 @@ interface CurrentDecision {
   bundle: AflTradePrivateReviewedEvidenceBundle;
 }
 
+type LoadCurrentEvidence = typeof loadExactLocalReviewedProviderEvidenceBundle;
+
 function isoTimestamp(value: Date | string): string {
   return new Date(instantSchema.parse(value)).toISOString();
 }
@@ -226,14 +228,13 @@ async function loadBundleRow(
 
 async function requireCurrentEvidence(
   transaction: AflOutcomeSqlTransaction,
-  bundle: AflTradePrivateReviewedEvidenceBundle
+  bundle: AflTradePrivateReviewedEvidenceBundle,
+  loadCurrentEvidence: LoadCurrentEvidence,
+  stableOperationKey?: string
 ): Promise<void> {
   let current: AflTradePrivateReviewedEvidenceBundle;
   try {
-    current = await loadExactLocalReviewedProviderEvidenceBundle(
-      transaction,
-      bundle.content.createdAt
-    );
+    current = await loadCurrentEvidence(transaction, bundle.content.createdAt, stableOperationKey);
   } catch (error) {
     throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
       'EVIDENCE_MISMATCH',
@@ -286,7 +287,8 @@ async function resolveDecisionBundle(
   transaction: AflOutcomeSqlTransaction,
   current: CurrentDecision | null,
   status: RecordAflTradePrivateReviewedEvidenceEvaluationDecisionInput['status'],
-  decidedAt: string
+  decidedAt: string,
+  loadCurrentEvidence: LoadCurrentEvidence
 ): Promise<AflTradePrivateReviewedEvidenceBundle> {
   if (current?.decision.content.status === status) {
     if (status !== 'authorized') {
@@ -295,7 +297,7 @@ async function resolveDecisionBundle(
         'A private reviewed-evidence decision must change the current authority state.'
       );
     }
-    const successor = await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
+    const successor = await loadCurrentEvidence(transaction, decidedAt);
     if (exactEvidenceWithoutBundleTime(current.bundle, successor)) {
       throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
         'INVALID_INPUT',
@@ -312,16 +314,24 @@ async function resolveDecisionBundle(
     return successor;
   }
   if (current === null) {
-    const initial = await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
+    const initial = await loadCurrentEvidence(transaction, decidedAt);
     await persistBundle(transaction, initial);
     return initial;
   }
-  await requireCurrentEvidence(transaction, current.bundle);
+  await requireCurrentEvidence(transaction, current.bundle, loadCurrentEvidence);
   return current.bundle;
 }
 
 export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
-  constructor(private readonly client: AflOutcomeSqlClient) {}
+  private readonly loadCurrentEvidence: LoadCurrentEvidence;
+
+  constructor(
+    private readonly client: AflOutcomeSqlClient,
+    dependencies: { readonly loadCurrentEvidence?: LoadCurrentEvidence } = {}
+  ) {
+    this.loadCurrentEvidence =
+      dependencies.loadCurrentEvidence ?? loadExactLocalReviewedProviderEvidenceBundle;
+  }
 
   async recordDecision(
     input: RecordAflTradePrivateReviewedEvidenceEvaluationDecisionInput
@@ -362,7 +372,13 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
         `SELECT transaction_timestamp()::timestamptz(3) AS decided_at`
       );
       const decidedAt = isoTimestamp(clock.rows[0]!.decided_at);
-      const bundle = await resolveDecisionBundle(transaction, current, input.status, decidedAt);
+      const bundle = await resolveDecisionBundle(
+        transaction,
+        current,
+        input.status,
+        decidedAt,
+        this.loadCurrentEvidence
+      );
 
       const decision = createAflTradePrivateReviewedEvidenceEvaluationDecision({
         status: input.status,
@@ -425,13 +441,14 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
           'The private reviewed-evidence decision did not replay exactly.'
         );
       }
-      await requireCurrentEvidence(transaction, retained.bundle);
+      await requireCurrentEvidence(transaction, retained.bundle, this.loadCurrentEvidence);
       return retained.decision;
     });
   }
 
   async assessCurrent(input: {
     readonly valuationScopeKey: string;
+    readonly stableOperationKey?: string;
   }): Promise<AflTradePrivateReviewedEvidenceEvaluationAssessment> {
     const valuationScopeKey = publicIdSchema.parse(input.valuationScopeKey);
     return this.client.transaction(async (transaction) => {
@@ -439,7 +456,12 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
       if (!current) return { state: 'not_authorized', decision: null };
       const row = await loadBundleRow(transaction, current.bundle.evidenceBundleId);
       assertBundleRow(row, current.bundle);
-      await requireCurrentEvidence(transaction, current.bundle);
+      await requireCurrentEvidence(
+        transaction,
+        current.bundle,
+        this.loadCurrentEvidence,
+        input.stableOperationKey
+      );
       return { state: current.decision.content.status, decision: current.decision };
     });
   }
