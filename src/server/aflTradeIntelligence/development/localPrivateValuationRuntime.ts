@@ -5,7 +5,7 @@ import type { Pool } from 'pg';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import { stageAflTradeFitzRoySourceSnapshot } from '../source/fitzRoyCaptureToStaging';
-import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoyProviderIngestion';
+import { captureAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoyProviderIngestion';
 import { PostgresAflTradeProviderObservationRepository } from '../source/postgresProviderObservationRepository';
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
@@ -18,6 +18,7 @@ import { PostgresGovernedPrivateEvaluationBatchRepository } from '../valuation/i
 import {
   PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository,
   createPostgresAflTradeCurrentValuationEvidenceSourceRuntime,
+  retainAflTradeCurrentValuationObservedCapture,
 } from '../valuation/postgresCurrentValuationEvidenceOrchestration';
 import {
   PostgresAflTradePrivateValuationScheduleRepository,
@@ -49,7 +50,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
   readonly pool: Pool;
   readonly artifactRoot: string;
   readonly workerId?: string;
-}) {
+}): ReturnType<typeof createPostgresAflTradePrivateValuationDispatcher> {
   const client = createPgAflOutcomeSqlClient(input.pool);
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);
   const providerObservationRepository = new PostgresAflTradeProviderObservationRepository(client);
@@ -111,7 +112,11 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     client,
     gateRepository,
     clock: { now },
-    captureAndNormalize: async ({ source, authority }) => {
+    normalizationRuntime: {
+      dependencyLockSha256: LOCAL_AFL_TRADE_FITZROY_RUNTIME.dependencyLockSha256,
+      imageDigest: LOCAL_AFL_TRADE_FITZROY_RUNTIME.imageDigest,
+    },
+    capture: async ({ source, authority, request, authoritySha256 }) => {
       await ensureReferenceData();
       const rate = authority.capture.sourceRights.content.automatedAccess.rateLimit;
       const egressPolicyEvidenceId = authority.capture.sourceRights.content.conditions.find(
@@ -120,7 +125,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
       if (rate === null || egressPolicyEvidenceId === undefined) {
         throw new TypeError('Current valuation capture lacks exact egress authority.');
       }
-      const ingestion = await ingestAuthorizedAflTradeFitzRoyProviderSeason(
+      const captured = await captureAuthorizedAflTradeFitzRoyProviderSeason(
         {
           capture: authority.capture,
           fieldMapId: authority.fieldMap.mapId,
@@ -153,11 +158,21 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
           clock: { now },
         }
       );
+      const persisted = await sourceCaptureRepository.persist(captured.snapshot, {
+        afterPersist: async ({ transaction, capture, sourceContentSha256 }) => {
+          await retainAflTradeCurrentValuationObservedCapture(transaction, {
+            request,
+            source,
+            observedCaptureId: capture.captureId,
+            sourceContentSha256,
+            authoritySha256,
+          });
+        },
+      });
       return {
-        state: 'ready',
-        sourceKey: source.sourceKey,
-        captureId: ingestion.staging.capture.captureId,
-        normalizationRunId: ingestion.staging.normalization.normalizationRunId,
+        captureId: persisted.captureId,
+        sourceContentSha256: captured.snapshot.content.sourceArtifact.contentSha256,
+        snapshot: captured.snapshot,
       };
     },
     resumeNormalization: async ({ source, authority, snapshot }) => {
@@ -173,7 +188,8 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
       return {
         state: 'ready',
         sourceKey: source.sourceKey,
-        captureId: staging.capture.captureId,
+        observedCaptureId: staging.capture.captureId,
+        effectiveCaptureId: staging.capture.captureId,
         normalizationRunId: staging.normalization.normalizationRunId,
       };
     },
@@ -184,9 +200,12 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     source: evidenceSource,
     reconciliationAuthority: createLocalAflTradeCurrentValuationReconciliationAuthority(client),
     reviewedAuthority: {
-      assessCurrent: async ({ valuationScopeKey }) => {
+      assessCurrent: async ({ valuationScopeKey, stableOperationKey }) => {
         try {
-          const assessment = await reviewedAuthority.assessCurrent({ valuationScopeKey });
+          const assessment = await reviewedAuthority.assessCurrent({
+            valuationScopeKey,
+            stableOperationKey,
+          });
           if (assessment.state === 'authorized') return { state: 'ready' as const };
           return assessment.state === 'withdrawn'
             ? {

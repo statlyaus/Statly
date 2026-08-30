@@ -127,6 +127,36 @@ describe('local AFL trade conditional object store', () => {
     });
   });
 
+  it('reuses the canonical reference when identical source bytes are observed later', async () => {
+    const root = await temporaryRoot();
+    const repository = createLocalAflTradeNonProductionArtifactRepository({
+      rootDirectory: root,
+      repositoryId: 'local-raw-source-reobservation',
+      artifactClass: 'raw_source',
+      maximumObjectBytes: 1_024,
+    });
+    const bytes = new TextEncoder().encode('unchanged provider bytes');
+    const original = createAflTradeByteArtifactRef(
+      bytes,
+      'application/octet-stream',
+      '2026-08-14T08:00:00.000Z'
+    );
+    const observedLater = createAflTradeByteArtifactRef(
+      bytes,
+      'application/octet-stream',
+      '2026-08-21T08:00:00.000Z'
+    );
+
+    await expect(repository.putIfAbsent(original, bytes)).resolves.toEqual({
+      status: 'stored',
+      reference: original,
+    });
+    await expect(repository.putIfAbsent(observedLater, bytes)).resolves.toEqual({
+      status: 'already_present',
+      reference: original,
+    });
+  });
+
   it('keeps private calculation-review documents in local non-production derived custody', async () => {
     const root = await temporaryRoot();
     const repository = createLocalAflTradePrivateDerivedArtifactRepository({

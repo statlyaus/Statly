@@ -109,6 +109,11 @@ describe('current valuation evidence orchestration', () => {
   });
 
   it('resumes retained normalized sources and stops before a human review decision', async () => {
+    const request = {
+      scopeKey: expected.scopeKey,
+      trigger: expected.trigger,
+      stableOperationKey: expected.stableOperationKey,
+    };
     let terminalResult: typeof expected | null = null;
     const retainedSourceKeys = [AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES[0]!.sourceKey];
     const loadOperation = vi.fn(async () => ({ terminalResult, retainedSourceKeys }));
@@ -122,7 +127,8 @@ describe('current valuation evidence orchestration', () => {
     const ensureCurrent = vi.fn(async (source: { sourceKey: string }) => ({
       state: 'ready' as const,
       sourceKey: source.sourceKey,
-      captureId: `source-capture:${source.sourceKey}`,
+      observedCaptureId: `observed-source-capture:${source.sourceKey}`,
+      effectiveCaptureId: `effective-source-capture:${source.sourceKey}`,
       normalizationRunId: `provider-normalization-run:${source.sourceKey}`,
     }));
     const assessCurrent = vi.fn(async () => ({
@@ -145,17 +151,14 @@ describe('current valuation evidence orchestration', () => {
       reviewedAuthority: { assessCurrent },
       factualRefresh: { refreshCurrent },
     });
-    const request = {
-      scopeKey: expected.scopeKey,
-      trigger: expected.trigger,
-      stableOperationKey: expected.stableOperationKey,
-    };
-
     await expect(coordinator.refreshCurrent(request)).resolves.toEqual(expected);
     await expect(coordinator.refreshCurrent(request)).resolves.toEqual(expected);
 
     expect(ensureCurrent.mock.calls.map(([source]) => source.sourceKey)).toEqual(
       AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES.slice(1).map(({ sourceKey }) => sourceKey)
+    );
+    expect(ensureCurrent.mock.calls.map(([, retainedRequest]) => retainedRequest)).toEqual(
+      Array(6).fill(request)
     );
     expect(retainNormalizedSource).toHaveBeenCalledTimes(6);
     expect(assessCurrent).toHaveBeenCalledOnce();
@@ -276,9 +279,14 @@ describe('current valuation evidence orchestration', () => {
     );
   });
 
-  it('reuses an exact finalized normalization only after durable Gate and field-map review', async () => {
+  it('freshly observes a new operation before reusing equivalent governed normalization', async () => {
     const source = AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES[0]!;
     const authority = createLocalAflTradeFiveSeasonAflTablesAuthority(source.seasonYear);
+    const request = {
+      scopeKey: expected.scopeKey,
+      trigger: 'ad_hoc' as const,
+      stableOperationKey: 'fresh-observation-equivalent-normalization',
+    };
     const query = vi.fn(async (sql: string) => {
       if (sql.includes('FROM outcome_provider_field_map')) {
         return {
@@ -299,13 +307,14 @@ describe('current valuation evidence orchestration', () => {
           rowCount: 1,
         };
       }
-      if (sql.includes('FROM outcome_source_capture')) {
+      if (sql.includes('load_outcome_current_valuation_evidence_source_work')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('load_outcome_current_valuation_evidence_normalization_claim')) {
         return {
           rows: [
             {
-              capture_id: `source-capture:${'3'.repeat(64)}`,
-              source_snapshot_id: `source-snapshot:${'4'.repeat(64)}`,
-              manifest_json: {},
+              effective_capture_id: `source-capture:${'3'.repeat(64)}`,
               normalization_run_id: `provider-normalization-run:${'5'.repeat(64)}`,
             },
           ],
@@ -314,7 +323,11 @@ describe('current valuation evidence orchestration', () => {
       }
       throw new Error(`Unexpected SQL: ${sql}`);
     });
-    const captureAndNormalize = vi.fn();
+    const capture = vi.fn(async () => ({
+      captureId: `source-capture:${'6'.repeat(64)}`,
+      sourceContentSha256: '7'.repeat(64),
+      snapshot: {} as never,
+    }));
     const resumeNormalization = vi.fn();
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
       client: { query } as AflOutcomeSqlClient,
@@ -326,24 +339,122 @@ describe('current valuation evidence orchestration', () => {
         })),
       },
       clock: { now: () => '2026-08-29T12:00:00.000Z' },
-      captureAndNormalize,
+      capture,
+      resumeNormalization,
+      normalizationRuntime: {
+        dependencyLockSha256: '8'.repeat(64),
+        imageDigest: `sha256:${'9'.repeat(64)}`,
+      },
+    });
+
+    await expect(runtime.ensureCurrent(source, request)).resolves.toEqual({
+      state: 'ready',
+      sourceKey: source.sourceKey,
+      observedCaptureId: `source-capture:${'6'.repeat(64)}`,
+      effectiveCaptureId: `source-capture:${'3'.repeat(64)}`,
+      normalizationRunId: `provider-normalization-run:${'5'.repeat(64)}`,
+    });
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source,
+        request,
+        authoritySha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      })
+    );
+    expect(resumeNormalization).not.toHaveBeenCalled();
+  });
+
+  it('normalizes changed bytes and retains the winning effective claim', async () => {
+    const source = AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES[0]!;
+    const authority = createLocalAflTradeFiveSeasonAflTablesAuthority(source.seasonYear);
+    const fieldMapSha256 = createAflTradeFitzRoyFieldMapSha256(authority.fieldMap);
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('FROM outcome_provider_field_map')) {
+        return {
+          rows: [
+            {
+              map_json: authority.fieldMap,
+              field_map_sha256: fieldMapSha256,
+              approval_decision_id: authority.fieldMap.approvalDecisionId,
+              subject_type: 'provider_field_map',
+              subject_id: authority.fieldMap.mapId,
+              decision: 'approved',
+              evidence_json: { fieldMapSha256 },
+              current: true,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes('load_outcome_current_valuation_evidence_source_work')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('load_outcome_current_valuation_evidence_normalization_claim')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('claim_outcome_current_valuation_evidence_normalization')) {
+        return {
+          rows: [
+            {
+              effective_capture_id: `source-capture:${'6'.repeat(64)}`,
+              normalization_run_id: `provider-normalization-run:${'5'.repeat(64)}`,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const resumeNormalization = vi.fn(async () => ({
+      state: 'ready' as const,
+      sourceKey: source.sourceKey,
+      observedCaptureId: `source-capture:${'6'.repeat(64)}`,
+      effectiveCaptureId: `source-capture:${'6'.repeat(64)}`,
+      normalizationRunId: `provider-normalization-run:${'5'.repeat(64)}`,
+    }));
+    const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
+      client: { query } as AflOutcomeSqlClient,
+      gateRepository: {
+        resolveAuthorization: vi.fn(async () => ({
+          revision: 1,
+          ledger: authority.capture.ledger,
+          sourceRights: authority.capture.sourceRights,
+        })),
+      },
+      clock: { now: () => '2026-08-29T12:00:00.000Z' },
+      normalizationRuntime: {
+        dependencyLockSha256: '8'.repeat(64),
+        imageDigest: `sha256:${'9'.repeat(64)}`,
+      },
+      capture: vi.fn(async () => ({
+        captureId: `source-capture:${'6'.repeat(64)}`,
+        sourceContentSha256: '7'.repeat(64),
+        snapshot: {} as never,
+      })),
       resumeNormalization,
     });
 
-    await expect(runtime.ensureCurrent(source)).resolves.toEqual({
+    await expect(
+      runtime.ensureCurrent(source, {
+        scopeKey: expected.scopeKey,
+        trigger: 'ad_hoc',
+        stableOperationKey: 'changed-source-bytes',
+      })
+    ).resolves.toEqual({
       state: 'ready',
       sourceKey: source.sourceKey,
-      captureId: `source-capture:${'3'.repeat(64)}`,
+      observedCaptureId: `source-capture:${'6'.repeat(64)}`,
+      effectiveCaptureId: `source-capture:${'6'.repeat(64)}`,
       normalizationRunId: `provider-normalization-run:${'5'.repeat(64)}`,
     });
-    expect(captureAndNormalize).not.toHaveBeenCalled();
-    expect(resumeNormalization).not.toHaveBeenCalled();
+    expect(resumeNormalization).toHaveBeenCalledOnce();
   });
 
   it('does not capture or synthesize a missing reviewed field-map decision', async () => {
     const source = AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES[0]!;
     const authority = createLocalAflTradeFiveSeasonAflTablesAuthority(source.seasonYear);
-    const captureAndNormalize = vi.fn();
+    const capture = vi.fn();
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
       client: {
         query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
@@ -356,23 +467,33 @@ describe('current valuation evidence orchestration', () => {
         })),
       },
       clock: { now: () => '2026-08-29T12:00:00.000Z' },
-      captureAndNormalize,
+      normalizationRuntime: {
+        dependencyLockSha256: '8'.repeat(64),
+        imageDigest: `sha256:${'9'.repeat(64)}`,
+      },
+      capture,
       resumeNormalization: vi.fn(),
     });
 
-    await expect(runtime.ensureCurrent(source)).resolves.toEqual({
+    await expect(
+      runtime.ensureCurrent(source, {
+        scopeKey: expected.scopeKey,
+        trigger: 'ad_hoc',
+        stableOperationKey: 'missing-field-map-review',
+      })
+    ).resolves.toEqual({
       state: 'unavailable',
       stage: 'normalization_authority',
       cause: 'missing',
     });
-    expect(captureAndNormalize).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it('classifies a superseded reviewed field map as stale authority', async () => {
     const source = AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES[0]!;
     const authority = createLocalAflTradeFiveSeasonAflTablesAuthority(source.seasonYear);
     const fieldMapSha256 = createAflTradeFitzRoyFieldMapSha256(authority.fieldMap);
-    const captureAndNormalize = vi.fn();
+    const capture = vi.fn();
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
       client: {
         query: vi.fn(async () => ({
@@ -399,16 +520,26 @@ describe('current valuation evidence orchestration', () => {
         })),
       },
       clock: { now: () => '2026-08-29T12:00:00.000Z' },
-      captureAndNormalize,
+      normalizationRuntime: {
+        dependencyLockSha256: '8'.repeat(64),
+        imageDigest: `sha256:${'9'.repeat(64)}`,
+      },
+      capture,
       resumeNormalization: vi.fn(),
     });
 
-    await expect(runtime.ensureCurrent(source)).resolves.toEqual({
+    await expect(
+      runtime.ensureCurrent(source, {
+        scopeKey: expected.scopeKey,
+        trigger: 'ad_hoc',
+        stableOperationKey: 'superseded-field-map-review',
+      })
+    ).resolves.toEqual({
       state: 'unavailable',
       stage: 'normalization_authority',
       cause: 'stale',
     });
-    expect(captureAndNormalize).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it('classifies malformed reconciliation review-set authority as unauthenticated', async () => {
@@ -455,7 +586,9 @@ describe('current valuation evidence orchestration', () => {
       { loadReviewedBundle }
     );
 
-    await expect(authority.assessCurrent()).resolves.toEqual({
+    await expect(
+      authority.assessCurrent({ stableOperationKey: 'review-set-authority-missing' })
+    ).resolves.toEqual({
       state: 'unavailable',
       stage: 'reconciliation_authority',
       cause: 'unauthenticated',
@@ -486,7 +619,9 @@ describe('current valuation evidence orchestration', () => {
           rowCount: 1,
         };
       }
-      if (sql.includes('FROM outcome_source_capture')) return { rows: [], rowCount: 0 };
+      if (sql.includes('load_outcome_current_valuation_evidence_source_work')) {
+        return { rows: [], rowCount: 0 };
+      }
       throw new Error(`Unexpected SQL: ${sql}`);
     });
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
@@ -499,13 +634,23 @@ describe('current valuation evidence orchestration', () => {
         })),
       },
       clock: { now: () => '2026-08-29T12:00:00.000Z' },
-      captureAndNormalize: vi.fn(async () => {
+      normalizationRuntime: {
+        dependencyLockSha256: '8'.repeat(64),
+        imageDigest: `sha256:${'9'.repeat(64)}`,
+      },
+      capture: vi.fn(async () => {
         throw new AflTradeFitzRoyCaptureError('SCHEMA_DRIFT', 'Fixture schema drift.');
       }),
       resumeNormalization: vi.fn(),
     });
 
-    await expect(runtime.ensureCurrent(source)).resolves.toEqual({
+    await expect(
+      runtime.ensureCurrent(source, {
+        scopeKey: expected.scopeKey,
+        trigger: 'ad_hoc',
+        stableOperationKey: 'provider-schema-drift',
+      })
+    ).resolves.toEqual({
       state: 'unavailable',
       stage: 'capture',
       cause: 'mismatched',
@@ -534,7 +679,12 @@ describe('current valuation evidence orchestration', () => {
           rowCount: 1,
         };
       }
-      if (sql.includes('FROM outcome_source_capture')) return { rows: [], rowCount: 0 };
+      if (sql.includes('load_outcome_current_valuation_evidence_source_work')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('load_outcome_current_valuation_evidence_normalization_claim')) {
+        return { rows: [], rowCount: 0 };
+      }
       throw new Error(`Unexpected SQL: ${sql}`);
     });
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
@@ -547,16 +697,30 @@ describe('current valuation evidence orchestration', () => {
         })),
       },
       clock: { now: () => '2026-08-29T12:00:00.000Z' },
-      captureAndNormalize: vi.fn(async () => {
+      normalizationRuntime: {
+        dependencyLockSha256: '8'.repeat(64),
+        imageDigest: `sha256:${'9'.repeat(64)}`,
+      },
+      capture: vi.fn(async () => ({
+        captureId: `source-capture:${'6'.repeat(64)}`,
+        sourceContentSha256: '7'.repeat(64),
+        snapshot: {} as never,
+      })),
+      resumeNormalization: vi.fn(async () => {
         throw new AflTradeFitzRoyStagingError(
           'AUTHORITY_INVALID',
           'Retained egress receipt failed authentication.'
         );
       }),
-      resumeNormalization: vi.fn(),
     });
 
-    await expect(runtime.ensureCurrent(source)).resolves.toEqual({
+    await expect(
+      runtime.ensureCurrent(source, {
+        scopeKey: expected.scopeKey,
+        trigger: 'ad_hoc',
+        stableOperationKey: 'failed-normalization-receipt-authority',
+      })
+    ).resolves.toEqual({
       state: 'unavailable',
       stage: 'normalization_authority',
       cause: 'unauthenticated',

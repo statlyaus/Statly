@@ -1,4 +1,4 @@
-import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import { aflTradeSourceSnapshotManifestSchema } from '../artifacts/sourceSnapshotManifest';
 import {
   createLocalAflTradeAflTablesResultsAuthority,
@@ -6,12 +6,16 @@ import {
 } from '../development/localFiveSeasonAflTablesAuthority';
 import { createLocalAflTradeOfficialAfl2026Authority } from '../development/localOfficialAfl2026Authority';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
-import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '../outcomes/postgresOutcomeReleaseRepository';
 import { AflTradeFitzRoyCaptureError } from '../source/fitzRoyCaptureRuntime';
 import { AflTradeFitzRoyStagingError } from '../source/fitzRoyCaptureToStaging';
 import { requireCurrentAflTradeFitzRoyCaptureAuthority } from '../source/fitzRoyProviderIngestion';
 import { AflTradeFitzRoyDecodeError } from '../source/fitzRoyObservationDecodeRuntime';
 import { createAflTradeFitzRoyFieldMapSha256 } from '../source/fitzRoyObservationContracts';
+import { AFL_TRADE_FITZROY_NORMALIZER_VERSION } from '../source/fitzRoyObservationNormalizer';
 import {
   AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES,
   aflTradeCurrentValuationEvidenceOrchestrationResultSchema,
@@ -52,16 +56,33 @@ interface FieldMapAuthorityRow extends Record<string, unknown> {
   readonly current: boolean;
 }
 
-interface CurrentSourceRow extends Record<string, unknown> {
-  readonly capture_id: string;
+interface RetainedSourceWorkRow extends Record<string, unknown> {
+  readonly observed_capture_id: string;
+  readonly source_content_sha256: string;
+  readonly authority_sha256: string;
   readonly source_snapshot_id: string;
   readonly manifest_json: unknown;
-  readonly normalization_run_id: string | null;
+}
+
+interface EquivalentNormalizationRow extends Record<string, unknown> {
+  readonly effective_capture_id: string;
+  readonly normalization_run_id: string;
 }
 
 interface CurrentSourceWorkInput {
   readonly source: AflTradeCurrentValuationEvidenceSource;
   readonly authority: SourceAuthority;
+}
+
+interface CaptureSourceWorkInput extends CurrentSourceWorkInput {
+  readonly request: AflTradeCurrentValuationRefreshRequest;
+  readonly authoritySha256: string;
+}
+
+interface CapturedSourceWork {
+  readonly captureId: string;
+  readonly sourceContentSha256: string;
+  readonly snapshot: ReturnType<typeof aflTradeSourceSnapshotManifestSchema.parse>;
 }
 
 interface ResumeSourceWorkInput extends CurrentSourceWorkInput {
@@ -163,10 +184,37 @@ function parseRetainedResult(
   return result;
 }
 
+export async function retainAflTradeCurrentValuationObservedCapture(
+  transaction: AflOutcomeSqlTransaction,
+  input: {
+    readonly request: AflTradeCurrentValuationRefreshRequest;
+    readonly source: AflTradeCurrentValuationEvidenceSource;
+    readonly observedCaptureId: string;
+    readonly sourceContentSha256: string;
+    readonly authoritySha256: string;
+  }
+): Promise<void> {
+  await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
+  await transaction.query(
+    'SELECT retain_outcome_current_valuation_evidence_observed_capture($1,$2,$3,$4,$5,$6,$7)',
+    [
+      input.request.scopeKey,
+      input.request.trigger,
+      input.request.stableOperationKey,
+      input.source.sourceKey,
+      input.observedCaptureId,
+      input.sourceContentSha256,
+      input.authoritySha256,
+    ]
+  );
+}
+
 export class PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository implements AflTradeCurrentValuationEvidenceOrchestrationRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
-  async loadOperation(request: AflTradeCurrentValuationRefreshRequest) {
+  async loadOperation(
+    request: AflTradeCurrentValuationRefreshRequest
+  ): ReturnType<AflTradeCurrentValuationEvidenceOrchestrationRepository['loadOperation']> {
     const loaded = await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
       return transaction.query<LoadedOperationRow>(
@@ -204,13 +252,14 @@ export class PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository imp
     await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
       await transaction.query(
-        'SELECT retain_outcome_current_valuation_evidence_source($1,$2,$3,$4,$5,$6)',
+        'SELECT retain_outcome_current_valuation_evidence_source($1,$2,$3,$4,$5,$6,$7)',
         [
           input.request.scopeKey,
           input.request.trigger,
           input.request.stableOperationKey,
           input.sourceKey,
-          input.captureId,
+          input.observedCaptureId,
+          input.effectiveCaptureId,
           input.normalizationRunId,
         ]
       );
@@ -222,7 +271,7 @@ export class PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository imp
     unavailable: Parameters<
       AflTradeCurrentValuationEvidenceOrchestrationRepository['retainUnavailable']
     >[1]
-  ) {
+  ): ReturnType<AflTradeCurrentValuationEvidenceOrchestrationRepository['retainUnavailable']> {
     const retained = await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
       return transaction.query<RetainedOperationRow>(
@@ -242,7 +291,7 @@ export class PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository imp
   async retainComplete(
     request: AflTradeCurrentValuationRefreshRequest,
     factualRefresh: AflTradeCurrentValuationRefreshResult
-  ) {
+  ): ReturnType<AflTradeCurrentValuationEvidenceOrchestrationRepository['retainComplete']> {
     const retained = await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
       return transaction.query<RetainedOperationRow>(
@@ -258,15 +307,17 @@ export function createPostgresAflTradeCurrentValuationEvidenceSourceRuntime(depe
   readonly client: AflOutcomeSqlClient;
   readonly gateRepository: Pick<AflTradeGateDecisionLedgerRepository, 'resolveAuthorization'>;
   readonly clock: { now(): string };
-  readonly captureAndNormalize: (
-    input: CurrentSourceWorkInput
-  ) => Promise<AflTradeCurrentValuationNormalizedSource>;
+  readonly normalizationRuntime: {
+    readonly dependencyLockSha256: string;
+    readonly imageDigest: `sha256:${string}`;
+  };
+  readonly capture: (input: CaptureSourceWorkInput) => Promise<CapturedSourceWork>;
   readonly resumeNormalization: (
     input: ResumeSourceWorkInput
   ) => Promise<AflTradeCurrentValuationNormalizedSource>;
 }): AflTradeCurrentValuationEvidenceSourceRuntime {
   return {
-    async ensureCurrent(source) {
+    async ensureCurrent(source, request) {
       const authority = sourceAuthority(source);
       let resolved: Awaited<ReturnType<typeof dependencies.gateRepository.resolveAuthorization>>;
       try {
@@ -336,43 +387,25 @@ export function createPostgresAflTradeCurrentValuationEvidenceSourceRuntime(depe
         return unavailable('normalization_authority', 'unauthenticated');
       }
 
-      const current = await dependencies.client.query<CurrentSourceRow>(
-        `SELECT capture.capture_id,capture.source_snapshot_id,capture.manifest_json,
-                run.normalization_run_id
-           FROM outcome_source_capture capture
-           LEFT JOIN outcome_provider_normalization_run run
-             ON run.capture_id=capture.capture_id
-            AND run.field_map_id=$4
-            AND run.status IN ('staged','needs_review')
-            AND run.finalized_at IS NOT NULL
-          WHERE capture.environment='non_production'
-            AND capture.provider=$1
-            AND capture.capability_id=$2
-            AND capture.anchor_season_year=$3
-            AND capture.status='staged'
-            AND capture.manifest_json->'sourceRightsProposal'->>'rightsArtifactId'=$5
-            AND capture.manifest_json->'gate0aDecision'->>'decisionId'=$6
-          ORDER BY capture.capture_id,run.normalization_run_id`,
-        [
-          source.provider,
-          source.capabilityId,
-          source.seasonYear,
-          authority.fieldMap.mapId,
-          authority.capture.sourceRights.rightsArtifactId,
-          authority.gateDecisionId,
-        ]
+      const authoritySha256 = sha256AflTradeCanonicalJson({
+        source,
+        sourceRightsArtifactId: authority.capture.sourceRights.rightsArtifactId,
+        gateDecisionId: authority.gateDecisionId,
+        fieldMapSha256,
+        decoderDependencyLockSha256: dependencies.normalizationRuntime.dependencyLockSha256,
+        decoderImageDigest: dependencies.normalizationRuntime.imageDigest,
+        normalizerVersion: AFL_TRADE_FITZROY_NORMALIZER_VERSION,
+      });
+      const current = await dependencies.client.query<RetainedSourceWorkRow>(
+        'SELECT * FROM load_outcome_current_valuation_evidence_source_work($1,$2,$3,$4)',
+        [request.scopeKey, request.trigger, request.stableOperationKey, source.sourceKey]
       );
       if (current.rows.length > 1) {
-        return unavailable('normalization', 'mismatched');
+        return unavailable('capture', 'mismatched');
       }
       const retained = current.rows[0];
-      if (retained?.normalization_run_id) {
-        return {
-          state: 'ready',
-          sourceKey: source.sourceKey,
-          captureId: retained.capture_id,
-          normalizationRunId: retained.normalization_run_id,
-        };
+      if (retained && retained.authority_sha256 !== authoritySha256) {
+        return unavailable('normalization_authority', 'stale');
       }
       const exactAuthority: SourceAuthority = {
         ...authority,
@@ -382,40 +415,89 @@ export function createPostgresAflTradeCurrentValuationEvidenceSourceRuntime(depe
           sourceRights: resolved.sourceRights,
         },
       };
+      let observed: CapturedSourceWork;
       if (retained) {
-        let snapshot: ResumeSourceWorkInput['snapshot'];
         try {
-          snapshot = aflTradeSourceSnapshotManifestSchema.parse({
+          const snapshot = aflTradeSourceSnapshotManifestSchema.parse({
             snapshotId: retained.source_snapshot_id,
             content: retained.manifest_json,
           });
+          observed = {
+            captureId: retained.observed_capture_id,
+            sourceContentSha256: retained.source_content_sha256,
+            snapshot,
+          };
         } catch {
           return unavailable('capture', 'unauthenticated');
         }
+      } else {
         try {
-          const resumed = await dependencies.resumeNormalization({
+          observed = await dependencies.capture({
             source,
             authority: exactAuthority,
-            snapshot,
+            request,
+            authoritySha256,
           });
-          return resumed.sourceKey === source.sourceKey
-            ? resumed
-            : unavailable('normalization', 'mismatched');
         } catch (error) {
-          return sourceFailure(error, 'normalization');
+          return sourceFailure(error, 'capture');
         }
       }
+
+      const equivalent = await dependencies.client.query<EquivalentNormalizationRow>(
+        'SELECT * FROM load_outcome_current_valuation_evidence_normalization_claim($1,$2,$3)',
+        [source.sourceKey, observed.sourceContentSha256, authoritySha256]
+      );
+      if (equivalent.rows.length > 1) return unavailable('normalization', 'mismatched');
+      const claimed = equivalent.rows[0];
+      if (claimed) {
+        return {
+          state: 'ready',
+          sourceKey: source.sourceKey,
+          observedCaptureId: observed.captureId,
+          effectiveCaptureId: claimed.effective_capture_id,
+          normalizationRunId: claimed.normalization_run_id,
+        };
+      }
+
+      let effective: AflTradeCurrentValuationNormalizedSource | null = null;
       try {
-        const captured = await dependencies.captureAndNormalize({
+        const resumed = await dependencies.resumeNormalization({
           source,
           authority: exactAuthority,
+          snapshot: observed.snapshot,
         });
-        return captured.sourceKey === source.sourceKey
-          ? captured
-          : unavailable('capture', 'mismatched');
+        effective =
+          resumed.sourceKey === source.sourceKey
+            ? {
+                ...resumed,
+                observedCaptureId: observed.captureId,
+                effectiveCaptureId: resumed.effectiveCaptureId,
+              }
+            : null;
       } catch (error) {
-        return sourceFailure(error, 'capture');
+        return sourceFailure(error, 'normalization');
       }
+      if (effective === null) return unavailable('normalization', 'mismatched');
+      const winner = await dependencies.client.query<EquivalentNormalizationRow>(
+        `SELECT * FROM claim_outcome_current_valuation_evidence_normalization($1,$2,$3,$4,$5)`,
+        [
+          source.sourceKey,
+          observed.sourceContentSha256,
+          authoritySha256,
+          effective.effectiveCaptureId,
+          effective.normalizationRunId,
+        ]
+      );
+      const retainedClaim = winner.rows[0];
+      return winner.rows.length === 1 && retainedClaim
+        ? {
+            state: 'ready',
+            sourceKey: source.sourceKey,
+            observedCaptureId: observed.captureId,
+            effectiveCaptureId: retainedClaim.effective_capture_id,
+            normalizationRunId: retainedClaim.normalization_run_id,
+          }
+        : unavailable('normalization', 'mismatched');
     },
   };
 }

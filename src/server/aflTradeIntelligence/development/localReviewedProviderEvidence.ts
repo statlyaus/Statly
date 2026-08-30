@@ -210,55 +210,53 @@ async function assertHistoricalHealth(transaction: AflOutcomeSqlTransaction): Pr
           AND run.finalized_at IS NOT NULL
           AND identity.native_entity_id IS NOT NULL
           AND metric.metric_code='goals'
+     ), current_reviews AS MATERIALIZED (
+       SELECT decision.decision_id,decision.subject_type,decision.subject_id,
+              decision.evidence_json
+         FROM outcome_review_decision decision
+         LEFT JOIN outcome_review_decision successor
+           ON successor.supersedes_decision_id=decision.decision_id
+        WHERE decision.decision='approved'
+          AND decision.decided_by=$2
+          AND decision.evidence_json->>'evidenceSetSha256'=$1
+          AND decision.subject_type=ANY($3::text[])
+          AND successor.decision_id IS NULL
      )
      SELECT count(*)::integer AS candidate_count,
             count(identity_review.decision_id)::integer AS identity_count,
             count(match_review.decision_id)::integer AS match_count,
             count(factual_review.decision_id)::integer AS factual_count
        FROM candidates candidate
-       LEFT JOIN outcome_review_decision identity_review
+       LEFT JOIN current_reviews identity_review
          ON identity_review.decision_id=
               'local-afl-tables-review:identity:'||candidate.identity_candidate_id
         AND identity_review.subject_type='provider_identity_candidate'
         AND identity_review.subject_id=candidate.identity_candidate_id
-        AND identity_review.decision='approved'
-        AND identity_review.decided_by=$2
-        AND identity_review.evidence_json->>'evidenceSetSha256'=$1
-        AND NOT EXISTS (
-          SELECT 1 FROM outcome_review_decision successor
-           WHERE successor.supersedes_decision_id=identity_review.decision_id
-        )
-       LEFT JOIN outcome_review_decision match_review
+       LEFT JOIN current_reviews match_review
          ON match_review.decision_id='local-afl-tables-review:match:'||candidate.match_candidate_id
         AND match_review.subject_type='provider_match_candidate'
         AND match_review.subject_id=candidate.match_candidate_id
-        AND match_review.decision='approved'
-        AND match_review.decided_by=$2
-        AND match_review.evidence_json->>'evidenceSetSha256'=$1
-        AND NOT EXISTS (
-          SELECT 1 FROM outcome_review_decision successor
-           WHERE successor.supersedes_decision_id=match_review.decision_id
-        )
-       LEFT JOIN outcome_review_decision factual_review
+       LEFT JOIN current_reviews factual_review
          ON factual_review.decision_id=
               'local-afl-tables-review:fact:'||candidate.provider_decoded_row_id
         AND factual_review.subject_type='local_reconciled_player_match_fact'
         AND factual_review.subject_id=candidate.provider_decoded_row_id
-        AND factual_review.decision='approved'
-        AND factual_review.decided_by=$2
-        AND factual_review.evidence_json->>'evidenceSetSha256'=$1
         AND factual_review.evidence_json->>'identityCandidateId'=candidate.identity_candidate_id
         AND factual_review.evidence_json->>'matchCandidateId'=candidate.match_candidate_id
         AND factual_review.evidence_json->>'metricCode'='goals'
         AND factual_review.evidence_json->>'definitionVersion'=candidate.definition_version
         AND factual_review.evidence_json->>'metricAvailability'=candidate.availability
         AND (factual_review.evidence_json->>'numericValue')::numeric
-              IS NOT DISTINCT FROM candidate.numeric_value
-        AND NOT EXISTS (
-          SELECT 1 FROM outcome_review_decision successor
-           WHERE successor.supersedes_decision_id=factual_review.decision_id
-        )`,
-    [LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256, HISTORICAL_REVIEWER]
+              IS NOT DISTINCT FROM candidate.numeric_value`,
+    [
+      LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256,
+      HISTORICAL_REVIEWER,
+      [
+        'provider_identity_candidate',
+        'provider_match_candidate',
+        'local_reconciled_player_match_fact',
+      ],
+    ]
   );
   const row = result.rows[0];
   if (
@@ -357,7 +355,10 @@ async function assertOfficialHealth(transaction: AflOutcomeSqlTransaction): Prom
   }
 }
 
-async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promise<{
+async function loadCaptureEvidence(
+  transaction: AflOutcomeSqlTransaction,
+  stableOperationKey?: string
+): Promise<{
   sourceCaptures: Array<{
     captureId: string;
     provider: string;
@@ -368,7 +369,17 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
   sourceRightsEvidenceRefs: AflTradeArtifactRef[];
 }> {
   const result = await transaction.query<CaptureRow>(
-    `SELECT capture.capture_id,capture.provider,capture.capability_id,
+    `WITH selected_generation AS MATERIALIZED (
+       SELECT receipt.stable_operation_key,max(receipt.retained_at) AS completed_at
+         FROM outcome_current_valuation_evidence_orchestration_stage_receipt receipt
+        WHERE receipt.scope_key='afl-men:2026-trades'
+          AND ($1::text IS NULL OR receipt.stable_operation_key=$1)
+        GROUP BY receipt.stable_operation_key
+       HAVING count(*)=7 AND count(DISTINCT receipt.source_key)=7
+        ORDER BY completed_at DESC,receipt.stable_operation_key DESC
+        LIMIT 1
+     )
+     SELECT capture.capture_id,capture.provider,capture.capability_id,
             capture.anchor_season_year,capture.source_artifact_id,
             capture.manifest_json AS capture_manifest_json,
             custody.content_sha256 AS artifact_content_sha256,
@@ -379,7 +390,22 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
             custody.verified_at AS artifact_verified_at,
             rights.rights_artifact_id,rights.proposed_at AS rights_proposed_at,
             rights.content_json AS rights_content_json
-       FROM outcome_source_capture capture
+       FROM selected_generation generation
+       JOIN outcome_current_valuation_evidence_orchestration_stage_receipt receipt
+         ON receipt.stable_operation_key=generation.stable_operation_key
+       JOIN outcome_current_valuation_evidence_normalization_claim claim
+         ON claim.source_key=receipt.source_key
+        AND claim.effective_capture_id=receipt.effective_capture_id
+        AND claim.normalization_run_id=receipt.normalization_run_id
+       JOIN outcome_source_capture capture
+         ON capture.capture_id=receipt.effective_capture_id
+        AND receipt.source_key=
+              capture.provider||':'||capture.capability_id||':'||capture.anchor_season_year::text
+       JOIN outcome_provider_normalization_run run
+         ON run.normalization_run_id=claim.normalization_run_id
+        AND run.capture_id=capture.capture_id
+        AND run.status IN ('staged','needs_review')
+        AND run.finalized_at IS NOT NULL
        JOIN outcome_artifact_custody custody
          ON custody.artifact_id=capture.source_artifact_id
         AND custody.environment='non_production'
@@ -396,15 +422,9 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
           OR (capture.provider='afl_tables'
               AND capture.capability_id='afl-tables-results'
               AND capture.anchor_season_year=2026))
-        AND 1 = (
-          SELECT count(*)
-            FROM outcome_provider_normalization_run run
-           WHERE run.capture_id=capture.capture_id
-             AND run.status IN ('staged','needs_review')
-             AND run.finalized_at IS NOT NULL
-        )
       ORDER BY capture.capture_id
-      FOR KEY SHARE OF capture,custody,rights`
+      FOR KEY SHARE OF receipt,capture,claim,run,custody,rights`,
+    [stableOperationKey ?? null]
   );
   if (result.rows.length !== 7) {
     throw new TypeError('The exact retained provider capture set must contain seven captures.');
@@ -464,13 +484,14 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
  */
 export async function loadExactLocalReviewedProviderEvidenceBundle(
   transaction: AflOutcomeSqlTransaction,
-  createdAt: string
+  createdAt: string,
+  stableOperationKey?: string
 ): Promise<AflTradePrivateReviewedEvidenceBundle> {
   await assertHistoricalHealth(transaction);
   await assertOfficialHealth(transaction);
   const [reviewSets, captures] = await Promise.all([
     loadReviewSets(transaction),
-    loadCaptureEvidence(transaction),
+    loadCaptureEvidence(transaction, stableOperationKey),
   ]);
   return createAflTradePrivateReviewedEvidenceBundle({
     evidenceScopeKey: LOCAL_REVIEWED_PROVIDER_EVIDENCE_SCOPE_KEY,

@@ -22,7 +22,7 @@ describe('private reviewed evidence currentness migration', () => {
     expect(migration).toContain('IF has_target_private_evidence');
     expect(migration).toContain('outcome_private_reviewed_evidence_bundle');
     expect(migration).toContain('decision."decided_by" IN (');
-    expect(migration).toContain("capture.\"provider\"='afl_tables'");
+    expect(migration).toContain('capture."provider"=\'afl_tables\'');
     expect(migration).toContain('BEFORE UPDATE OR DELETE ON "outcome_review_decision"');
     expect(migration).toContain('evidenceSetSha256');
     expect(migration).toContain('aef663452e66a433048605a71fb4178ed1a5e1d9610c6d3ed75bfb796308b5cb');
@@ -37,9 +37,7 @@ describe('private reviewed evidence currentness migration', () => {
     expect(migration).toContain('sourceCaptures');
     expect(migration).toContain('sourceRightsEvidenceRefs');
     expect(migration).toContain('reviewSets');
-    expect(migration).toContain(
-      'successor."supersedes_decision_id"=predecessor."decision_id"'
-    );
+    expect(migration).toContain('successor."supersedes_decision_id"=predecessor."decision_id"');
     expect(migration).toContain('historical_decision_count<>146307');
     expect(migration).toContain('official_decision_count<>36');
   });
@@ -86,9 +84,7 @@ describe('private reviewed evidence currentness migration', () => {
       )
     ).toHaveLength(2);
     expect(migration).toContain('sibling.anchor_season_year=capture.anchor_season_year');
-    expect(migration).toContain(
-      'sibling."anchor_season_year"=capture."anchor_season_year"'
-    );
+    expect(migration).toContain('sibling."anchor_season_year"=capture."anchor_season_year"');
     expect(migration).toContain('NEW."source_capture_count"=7');
     expect(migration).toContain('NEW."source_rights_count"=3');
     expect(migration).toContain('Private reviewed-evidence health has unexpected capture counts');
@@ -101,17 +97,21 @@ describe('private reviewed evidence currentness migration', () => {
     expect(migration).toContain(
       'DROP TRIGGER "outcome_private_reviewed_evidence_results_successor_insert_guard"'
     );
-    expect(loader).toContain('FROM outcome_provider_normalization_run run');
-    expect(loader).toContain('run.finalized_at IS NOT NULL');
-    expect(loader).toMatch(
-      /AND 1 = \(\s+SELECT count\(\*\)\s+FROM outcome_provider_normalization_run run/u
+    expect(loader).toContain('JOIN outcome_current_valuation_evidence_normalization_claim claim');
+    expect(loader).toContain(
+      'JOIN outcome_current_valuation_evidence_orchestration_stage_receipt receipt'
     );
+    expect(loader).toContain('claim.effective_capture_id=receipt.effective_capture_id');
+    expect(loader).toContain('claim.normalization_run_id=receipt.normalization_run_id');
+    expect(loader).toContain('capture.capture_id=receipt.effective_capture_id');
+    expect(loader).toContain('JOIN outcome_provider_normalization_run run');
+    expect(loader).toContain('run.normalization_run_id=claim.normalization_run_id');
+    expect(loader).toContain('run.capture_id=capture.capture_id');
+    expect(loader).toContain('run.finalized_at IS NOT NULL');
     expect(loader).toContain('REQUIRED_CAPTURE_TUPLE_KEYS');
     expect(loader).toContain("'afl_tables\\u0000afl-tables-player-stats\\u00002021'");
     expect(loader).toContain("'afl_tables\\u0000afl-tables-results\\u00002026'");
-    expect(loader).toContain(
-      "'official_afl\\u0000official-afl-player-stats\\u00002026'"
-    );
+    expect(loader).toContain("'official_afl\\u0000official-afl-player-stats\\u00002026'");
     expect(loader).toContain('captureTupleKeys.size !== REQUIRED_CAPTURE_TUPLE_KEYS.size');
   });
 
@@ -184,9 +184,7 @@ describe('private reviewed evidence currentness migration', () => {
     expect(calculationLoader).toMatch(
       /outcome_private_reviewed_evidence_bundle_is_current\(review\.evidence_bundle_id\)/u
     );
-    expect(calculationLoader).toContain(
-      "head.evidence_bundle_id=review.evidence_bundle_id"
-    );
+    expect(calculationLoader).toContain('head.evidence_bundle_id=review.evidence_bundle_id');
     expect(calculationLoader).toContain('head.valuation_scope_key=$4');
     expect(calculationLoader).toContain('`afl-men:${detail.trade.year}-trades`');
     expect(calculationLoader).toContain("head.status='authorized'");

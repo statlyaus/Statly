@@ -2,11 +2,15 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { aflTradeArtifactReadbackReceiptSchema } from '../artifacts/immutableArtifactRepository';
 import {
   aflTradeSourceSnapshotManifestSchema,
   type AflTradeSourceSnapshotManifest,
 } from '../artifacts/sourceSnapshotManifest';
-import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '../outcomes/postgresOutcomeReleaseRepository';
 
 export interface PersistedAflTradeSourceCapture {
   captureId: string;
@@ -14,6 +18,15 @@ export interface PersistedAflTradeSourceCapture {
   sourceSnapshotId: string;
   status: 'staged';
   idempotentReplay: boolean;
+}
+
+export interface PersistAflTradeSourceCaptureOptions {
+  readonly afterPersist?: (input: {
+    readonly transaction: AflOutcomeSqlTransaction;
+    readonly capture: PersistedAflTradeSourceCapture;
+    readonly snapshot: AflTradeSourceSnapshotManifest;
+    readonly sourceContentSha256: string;
+  }) => Promise<void>;
 }
 
 export class AflTradeSourceCapturePersistenceError extends Error {
@@ -32,6 +45,20 @@ function sameJson(left: unknown, right: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+function sameArtifactCustody(
+  storedCustody: unknown,
+  expectedCustody: AflTradeSourceSnapshotManifest['content']['readbackReceipt']
+): boolean {
+  const stored = aflTradeArtifactReadbackReceiptSchema.safeParse(storedCustody);
+  if (!stored.success) {
+    return false;
+  }
+  return sameJson(
+    { ...stored.data.content, verifiedAt: expectedCustody.content.verifiedAt },
+    expectedCustody.content
+  );
 }
 
 function exactIso(value: string, name: string): string {
@@ -54,7 +81,8 @@ export class PostgresAflTradeSourceCaptureRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
   async persist(
-    unparsedSnapshot: AflTradeSourceSnapshotManifest
+    unparsedSnapshot: AflTradeSourceSnapshotManifest,
+    options: PersistAflTradeSourceCaptureOptions = {}
   ): Promise<PersistedAflTradeSourceCapture> {
     const parsed = aflTradeSourceSnapshotManifestSchema.safeParse(unparsedSnapshot);
     if (!parsed.success || parsed.data.content.capture.kind !== 'fitzroy') {
@@ -171,7 +199,7 @@ export class PostgresAflTradeSourceCaptureRepository {
           row.artifact_class !== readback.artifactClass ||
           row.environment !== readback.custodyEnvironment ||
           row.custody_profile_id !== readback.custodyProfileId ||
-          !sameJson(row.custody_json, binding.readback)
+          !sameArtifactCustody(row.custody_json, binding.readback)
         ) {
           throw new AflTradeSourceCapturePersistenceError(
             'CAPTURE_CONFLICT',
@@ -277,13 +305,20 @@ export class PostgresAflTradeSourceCaptureRepository {
           'Source snapshot already binds a different immutable capture.'
         );
       }
-      return {
+      const persisted = {
         captureId,
         attemptId,
         sourceSnapshotId: snapshot.snapshotId,
         status: 'staged',
         idempotentReplay,
-      };
+      } as const;
+      await options.afterPersist?.({
+        transaction,
+        capture: persisted,
+        snapshot,
+        sourceContentSha256: content.sourceArtifact.contentSha256,
+      });
+      return persisted;
     });
   }
 }

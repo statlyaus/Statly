@@ -26,7 +26,8 @@ import {
   createAflTradeFitzRoyFieldMapSha256,
   type AflTradeDecodedScalar,
 } from '@/server/aflTradeIntelligence/source/fitzRoyObservationContracts';
-import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '@/server/aflTradeIntelligence/source/fitzRoyProviderIngestion';
+import { stageAflTradeFitzRoySourceSnapshot } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureToStaging';
+import { captureAuthorizedAflTradeFitzRoyProviderSeason } from '@/server/aflTradeIntelligence/source/fitzRoyProviderIngestion';
 import { PostgresAflTradeProviderObservationRepository } from '@/server/aflTradeIntelligence/source/postgresProviderObservationRepository';
 import { PostgresAflTradeSourceCaptureRepository } from '@/server/aflTradeIntelligence/source/postgresSourceCaptureRepository';
 import {
@@ -45,7 +46,10 @@ import {
   AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES,
   type AflTradeCurrentValuationEvidenceSource,
 } from '@/server/aflTradeIntelligence/valuation/currentValuationEvidenceOrchestration';
-import { createPostgresAflTradeCurrentValuationEvidenceSourceRuntime } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationEvidenceOrchestration';
+import {
+  createPostgresAflTradeCurrentValuationEvidenceSourceRuntime,
+  retainAflTradeCurrentValuationObservedCapture,
+} from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationEvidenceOrchestration';
 
 const FIXTURE_AT = '2026-08-29T12:00:00.000Z';
 const encoded = (value: unknown) => new TextEncoder().encode(canonicalizeAflTradeJson(value));
@@ -296,11 +300,41 @@ export async function createGovernedCurrentValuationEvidenceSourceFixture(input:
   const egressExecutionVerifier = createAflTradeEd25519EgressExecutionVerifier({
     [signingKeyId]: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
   });
+  let captureSequence = 0;
+  let fixtureNow = FIXTURE_AT;
+  const stagingDependencies = (source: AflTradeCurrentValuationEvidenceSource) => {
+    const fields = fieldsFor(source);
+    const values = fixtureValues(source);
+    const row = fields.map(({ name }) => values[name] ?? ({ kind: 'missing' } as const));
+    return {
+      rawArtifactRepository,
+      sourceCaptureRepository,
+      providerObservationRepository,
+      decoderExecutor: decoder(source, row),
+      clock: { now: () => fixtureNow },
+      dependencyLockSha256: LOCAL_AFL_TRADE_FITZROY_RUNTIME.dependencyLockSha256,
+      imageDigest: LOCAL_AFL_TRADE_FITZROY_RUNTIME.imageDigest,
+      timeoutMs: 30_000,
+      maximumSourceBytes: 1_024 * 1_024,
+      maximumRows: 10,
+      maximumFields: 120,
+      maximumCells: 1_200,
+      maximumCellBytes: 8_192,
+      maximumOutputBytes: 1_024 * 1_024,
+      egressExecutionVerifier,
+    } as const;
+  };
   return createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
     client: input.client,
     gateRepository,
-    clock: { now: () => FIXTURE_AT },
-    captureAndNormalize: async ({ source, authority }) => {
+    clock: { now: () => fixtureNow },
+    normalizationRuntime: {
+      dependencyLockSha256: LOCAL_AFL_TRADE_FITZROY_RUNTIME.dependencyLockSha256,
+      imageDigest: LOCAL_AFL_TRADE_FITZROY_RUNTIME.imageDigest,
+    },
+    capture: async ({ source, authority, request, authoritySha256 }) => {
+      captureSequence += 1;
+      fixtureNow = new Date(Date.parse(FIXTURE_AT) + captureSequence).toISOString();
       input.capturedSourceKeys.push(source.sourceKey);
       const fields = fieldsFor(source);
       const values = fixtureValues(source);
@@ -319,7 +353,7 @@ export async function createGovernedCurrentValuationEvidenceSourceFixture(input:
       const egressPolicyEvidenceId = authority.capture.sourceRights.content.conditions.find(
         ({ conditionId }) => conditionId === 'provider-egress-control'
       )!.verificationEvidenceIds[0]!;
-      const ingestion = await ingestAuthorizedAflTradeFitzRoyProviderSeason(
+      const captured = await captureAuthorizedAflTradeFitzRoyProviderSeason(
         {
           capture: authority.capture,
           fieldMapId: authority.fieldMap.mapId,
@@ -357,8 +391,8 @@ export async function createGovernedCurrentValuationEvidenceSourceFixture(input:
                     cacheSeconds: authority.capture.gateRequest.cacheSeconds!,
                     egressPolicyEvidenceId,
                   },
-                  startedAt: FIXTURE_AT,
-                  completedAt: FIXTURE_AT,
+                  startedAt: fixtureNow,
+                  completedAt: fixtureNow,
                   status: 'succeeded' as const,
                 };
                 const valueBase64Url = sign(
@@ -382,41 +416,45 @@ export async function createGovernedCurrentValuationEvidenceSourceFixture(input:
             },
             egressExecutionVerifier,
             authorizationResolver: gateRepository,
-            clock: { now: () => FIXTURE_AT },
+            clock: { now: () => fixtureNow },
             runtimeIdentity: LOCAL_AFL_TRADE_FITZROY_RUNTIME,
             timeoutMs: 30_000,
             maximumSourceBytes: 1_024 * 1_024,
             maximumDiagnosticsBytes: 1_024 * 1_024,
           },
-          staging: {
-            rawArtifactRepository,
-            sourceCaptureRepository,
-            providerObservationRepository,
-            decoderExecutor: decoder(source, row),
-            clock: { now: () => FIXTURE_AT },
-            dependencyLockSha256: LOCAL_AFL_TRADE_FITZROY_RUNTIME.dependencyLockSha256,
-            imageDigest: LOCAL_AFL_TRADE_FITZROY_RUNTIME.imageDigest,
-            timeoutMs: 30_000,
-            maximumSourceBytes: 1_024 * 1_024,
-            maximumRows: 10,
-            maximumFields: 120,
-            maximumCells: 1_200,
-            maximumCellBytes: 8_192,
-            maximumOutputBytes: 1_024 * 1_024,
-            egressExecutionVerifier,
-          },
-          clock: { now: () => FIXTURE_AT },
+          staging: stagingDependencies(source),
+          clock: { now: () => fixtureNow },
         }
+      );
+      const persisted = await sourceCaptureRepository.persist(captured.snapshot, {
+        afterPersist: async ({ transaction, capture, sourceContentSha256 }) => {
+          await retainAflTradeCurrentValuationObservedCapture(transaction, {
+            request,
+            source,
+            observedCaptureId: capture.captureId,
+            sourceContentSha256,
+            authoritySha256,
+          });
+        },
+      });
+      return {
+        captureId: persisted.captureId,
+        sourceContentSha256: captured.snapshot.content.sourceArtifact.contentSha256,
+        snapshot: captured.snapshot,
+      };
+    },
+    resumeNormalization: async ({ source, authority, snapshot }) => {
+      const staging = await stageAflTradeFitzRoySourceSnapshot(
+        { snapshot, fieldMapId: authority.fieldMap.mapId, fieldMap: authority.fieldMap },
+        stagingDependencies(source)
       );
       return {
         state: 'ready',
         sourceKey: source.sourceKey,
-        captureId: ingestion.staging.capture.captureId,
-        normalizationRunId: ingestion.staging.normalization.normalizationRunId,
+        observedCaptureId: staging.capture.captureId,
+        effectiveCaptureId: staging.capture.captureId,
+        normalizationRunId: staging.normalization.normalizationRunId,
       };
-    },
-    resumeNormalization: async () => {
-      throw new Error('The governed fixture must discover its finalized normalization custody.');
     },
   });
 }

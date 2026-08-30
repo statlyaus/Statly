@@ -2039,12 +2039,16 @@ unauthenticated source authority.
 The upstream current-evidence operation composes those existing boundaries before factual refresh.
 It resolves the durable Gate decision and source-rights proposal for each of the seven exact
 provider/season tuples, requires the exact current reviewed field map, and either reuses one finalized
-normalization or captures and normalizes the missing lane through the reviewed fitzRoy runtime. Each
-completed source lane is retained as an append-only PostgreSQL stage receipt keyed by the outer stable
-operation. A crash after capture but before normalization resumes the retained source snapshot; a
-crash after a stage receipt skips that lane. The SQL retention boundary independently requires the
-expected provider, capability, season, field-map identity, staged capture, and finalized
-normalization.
+normalization or normalizes a fresh observation through the reviewed fitzRoy runtime. Every distinct
+outer operation performs a new timestamped observation. Capture persistence atomically binds that
+observed capture to the operation and source before decoding starts, so a crash after capture resumes
+the exact retained source snapshot instead of recapturing. The effective normalization is a separate
+append-only claim keyed by source, raw-content digest, and the complete rights, Gate, field-map,
+decoder, and normalizer authority digest. Unchanged bytes under unchanged authority therefore reuse
+the claimed normalization and its review without pretending that the new observation did not occur;
+changed bytes or authority require a new normalization. Each completed source receipt retains both
+the observed capture and the effective capture/normalization. A crash after that receipt skips the
+lane, and concurrent equivalent normalizations converge on the one immutable claim.
 
 The local runtime retains its Ed25519 capture-receipt signing key as a mode-`0600` file beneath the
 ignored private artifact root. A restarted process therefore reconstructs the same verifier before it
@@ -2065,7 +2069,8 @@ explicit authority transition, not an internal worker stage.
 Every unavailable result is terminal and append-only for its stable operation key. Exact retry
 returns that result and performs no provider work. After the required review or authority repair, the
 caller supplies a new stable operation key; the new operation discovers and reuses the retained
-captures and finalized normalizations before rechecking reconciliation and reviewed authority. Only
+effective normalizations after freshly observing each source before rechecking reconciliation and
+reviewed authority. Only
 an authenticated reviewed head permits the content-addressed handoff to the private factual refresh.
 The local launcher maps an unavailable result to one completed, exhausted dispatch rather than a
 transient retry loop.

@@ -39,7 +39,7 @@ export function createLocalAflTradeCurrentValuationReconciliationAuthority(
   const loadReviewedBundle =
     dependencies.loadReviewedBundle ?? loadExactLocalReviewedProviderEvidenceBundle;
   return {
-    assessCurrent: () =>
+    assessCurrent: ({ stableOperationKey }) =>
       client.transaction(async (transaction) => {
         const reviewSets = await transaction.query<ReviewSetAuthorityRow>(
           `SELECT decision.decision_id,decision.subject_type,decision.subject_id,
@@ -101,7 +101,11 @@ export function createLocalAflTradeCurrentValuationReconciliationAuthority(
           `SELECT transaction_timestamp()::timestamptz(3) AS trusted_at`
         );
         try {
-          await loadReviewedBundle(transaction, trusted.rows[0]!.trusted_at.toISOString());
+          await loadReviewedBundle(
+            transaction,
+            trusted.rows[0]!.trusted_at.toISOString(),
+            stableOperationKey
+          );
           return { state: 'ready' } as const;
         } catch {
           return {

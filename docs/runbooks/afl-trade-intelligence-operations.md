@@ -912,22 +912,37 @@ SELECT stable_operation_key,state,stage,cause,result_json
 `capture_authority`, `capture`, `normalization_authority`, or `normalization` identifies the exact
 provider boundary to repair. `reconciliation_authority` with `missing` means the seven finalized
 normalizations are retained but the required human provider review sets are not yet current. Run the
-five-season and official review commands in the preceding inspection procedure. Do not rerun the
-provider capture. Then intentionally enqueue a new outer operation key; the coordinator will reuse
-the seven retained normalizations and recheck reconciliation. If it then returns
+five-season and official review commands in the preceding inspection procedure. Do not manually run
+an out-of-band provider capture. Then intentionally enqueue a new outer operation key; the
+coordinator will freshly observe all seven sources and reuse an effective normalization only when the
+raw bytes and complete governing-authority digest are unchanged. Inspect the two identities directly:
+
+```sql
+SELECT source_key,observed_capture_id,effective_capture_id,normalization_run_id
+  FROM outcome_current_valuation_evidence_orchestration_stage_receipt
+ WHERE stable_operation_key = $1
+ ORDER BY source_key;
+```
+
+Different observed and effective capture IDs are expected for unchanged evidence. If the operation then returns
 `reviewed_authority` / `review_required`, review the assembled source qualification and use the
 private reviewed-evaluation authority command to authorize or reject its exact bundle. Enqueue a
-third new outer operation key only after that human decision. The next coordinator operation reuses
-the same source custody and may enter private factual refresh.
+third new outer operation key only after that human decision. The next coordinator operation observes
+the sources again, reuses unchanged effective normalization custody, and may enter private factual
+refresh.
 
 The local receipt signer is durable private runtime state at
 `<AFL_TRADE_LOCAL_ARTIFACT_ROOT>/current-valuation-evidence/egress-signing-key.pem`, with mode
 `0600`. Preserve that key while any retained non-fixture source snapshot may need to resume after a
 restart. If it is lost, those receipts can no longer be authenticated: the next new outer operation
-must fail at `normalization_authority` / `unauthenticated` until the affected sources are deliberately
-recaptured under newly reviewed authority. Never copy the key into Git, an environment file, logs,
-or shared storage. The configured artifact root must be absolute. Startup rejects a signing key that
-is a symlink, non-regular or multiply linked, owned by another user, or not exactly mode `0600`.
+can freshly capture and sign new receipts with a replacement key, but an exact resume that still
+depends on retained source work signed by the lost key must fail at `normalization_authority` /
+`unauthenticated` and remain terminal. Enqueue a new outer operation key to perform a fresh capture
+under the currently governed source and field-map authority; a new human review is required only
+when that capture changes the reviewed evidence or its governing authority. Never copy the key into
+Git, an environment file, logs, or shared storage. The configured artifact root must be absolute.
+Startup rejects a signing key that is a symlink, non-regular or multiply linked, owned by another
+user, or not exactly mode `0600`.
 
 An unavailable outcome is terminal for its derived evidence stable key. Reusing the same outer
 operation key is exact replay and must not be used to continue after a human authority transition.

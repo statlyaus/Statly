@@ -94,7 +94,10 @@ function loadPrivateKey(keyPath: string): KeyObject {
 
 export function createLocalAflTradeEgressSigningAuthority(input: {
   readonly artifactRoot: string;
-}) {
+}): {
+  readonly signingKey: { readonly keyId: string; readonly privateKey: KeyObject };
+  readonly verifier: ReturnType<typeof createAflTradeEd25519EgressExecutionVerifier>;
+} {
   if (!isAbsolute(input.artifactRoot)) {
     throw new TypeError('The local egress signing authority requires an absolute artifact root.');
   }

@@ -229,11 +229,12 @@ async function loadBundleRow(
 async function requireCurrentEvidence(
   transaction: AflOutcomeSqlTransaction,
   bundle: AflTradePrivateReviewedEvidenceBundle,
-  loadCurrentEvidence: LoadCurrentEvidence
+  loadCurrentEvidence: LoadCurrentEvidence,
+  stableOperationKey?: string
 ): Promise<void> {
   let current: AflTradePrivateReviewedEvidenceBundle;
   try {
-    current = await loadCurrentEvidence(transaction, bundle.content.createdAt);
+    current = await loadCurrentEvidence(transaction, bundle.content.createdAt, stableOperationKey);
   } catch (error) {
     throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
       'EVIDENCE_MISMATCH',
@@ -447,6 +448,7 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
 
   async assessCurrent(input: {
     readonly valuationScopeKey: string;
+    readonly stableOperationKey?: string;
   }): Promise<AflTradePrivateReviewedEvidenceEvaluationAssessment> {
     const valuationScopeKey = publicIdSchema.parse(input.valuationScopeKey);
     return this.client.transaction(async (transaction) => {
@@ -454,7 +456,12 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
       if (!current) return { state: 'not_authorized', decision: null };
       const row = await loadBundleRow(transaction, current.bundle.evidenceBundleId);
       assertBundleRow(row, current.bundle);
-      await requireCurrentEvidence(transaction, current.bundle, this.loadCurrentEvidence);
+      await requireCurrentEvidence(
+        transaction,
+        current.bundle,
+        this.loadCurrentEvidence,
+        input.stableOperationKey
+      );
       return { state: current.decision.content.status, decision: current.decision };
     });
   }

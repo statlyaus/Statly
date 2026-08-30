@@ -77,13 +77,23 @@ rows are bounded no-network fixtures. The scenario first retains the missing-rec
 then supplies explicit fixture-owned human review markers, retains the reviewed-authority stop, and
 uses a bounded reviewed-bundle assembler. With production SQL guards still enabled, it first proves
 that this incomplete fixture is rejected and leaves no reviewed bundle, decision, or head. It then
-uses an explicit test-only guard bypass to exercise the real `recordDecision` transaction/head
-persistence and private factual-refresh authority without materializing 146,343 fixture review
-decisions. That second phase is not evidence that the production exact-set admission guard accepts a
-complete dataset. It proves new operation keys reuse the seven finalized normalizations, the captured
-lineage reaches the private factual head without duplicate captures or runs, and the public active
-release and registry remain unchanged. Production construction does not inject the fixture assembler
-or bypass; it uses the complete exact reviewed-provider evidence loader and unchanged SQL guards.
+expands a disposable corpus containing 48,769 historical candidates and 12 official candidates with
+all 146,343 current decisions. The fixture temporarily suppresses immutable-ledger triggers only
+while expanding already-finalized normalization runs; normal trigger behavior is restored before
+reviewed-evidence evaluation. The scenario proves the real
+`outcome_private_reviewed_evidence_is_current()` result and exercises the real `recordDecision`
+transaction, head persistence, and private factual-refresh authority through the unchanged production
+exact-set admission guard. It also proves new operation keys reuse the seven effective
+normalizations, the captured lineage reaches the private factual head without duplicate normalization
+runs, and the public active release and registry remain unchanged. Production construction does not
+inject the fixture assembler; it uses the complete exact reviewed-provider evidence loader and the
+same unchanged SQL guards.
+
+The three distinct operation keys each retain seven fresh observed captures. Because the fixture raw
+bytes and governing authority are unchanged, all three operations converge on seven effective
+normalization claims and create only seven finalized normalization runs. The test also covers restart
+after observed-capture custody and verifies that a later receipt may intentionally bind a new observed
+capture to a historical effective capture and normalization.
 
 `npm run test:all` runs lint, typecheck, unit, integration, and browser tests. Its integration stage
 includes the persisted 12-team, 22-player-roster, 264-pick draft convergence contract. CI exposes

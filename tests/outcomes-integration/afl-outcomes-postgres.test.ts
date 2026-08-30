@@ -1207,6 +1207,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_current_valuation_factual_refresh_operation',
       'outcome_current_valuation_evidence_orchestration_operation',
       'outcome_current_valuation_evidence_orchestration_stage_receipt',
+      'outcome_current_valuation_evidence_source_work',
+      'outcome_current_valuation_evidence_normalization_claim',
       'outcome_hpn_field_map_candidate',
       'outcome_hpn_field_map_review_decision',
       'outcome_hpn_projected_field_map',

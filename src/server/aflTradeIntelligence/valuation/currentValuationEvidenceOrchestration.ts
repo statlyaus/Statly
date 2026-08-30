@@ -139,7 +139,8 @@ export type AflTradeCurrentValuationEvidenceUnavailable = Readonly<{
 export type AflTradeCurrentValuationNormalizedSource = Readonly<{
   state: 'ready';
   sourceKey: string;
-  captureId: string;
+  observedCaptureId: string;
+  effectiveCaptureId: string;
   normalizationRunId: string;
 }>;
 
@@ -165,7 +166,8 @@ export interface AflTradeCurrentValuationEvidenceOrchestrationRepository {
 
 export interface AflTradeCurrentValuationEvidenceSourceRuntime {
   ensureCurrent(
-    source: AflTradeCurrentValuationEvidenceSource
+    source: AflTradeCurrentValuationEvidenceSource,
+    request: AflTradeCurrentValuationRefreshRequest
   ): Promise<
     | AflTradeCurrentValuationNormalizedSource
     | ({ readonly state: 'unavailable' } & AflTradeCurrentValuationEvidenceUnavailable)
@@ -175,6 +177,7 @@ export interface AflTradeCurrentValuationEvidenceSourceRuntime {
 export interface AflTradeCurrentValuationReviewedAuthority {
   assessCurrent(input: {
     readonly valuationScopeKey: string;
+    readonly stableOperationKey: string;
   }): Promise<
     | { readonly state: 'ready' }
     | ({ readonly state: 'unavailable' } & AflTradeCurrentValuationEvidenceUnavailable)
@@ -182,7 +185,9 @@ export interface AflTradeCurrentValuationReviewedAuthority {
 }
 
 export interface AflTradeCurrentValuationReconciliationAuthority {
-  assessCurrent(): Promise<
+  assessCurrent(input: {
+    readonly stableOperationKey: string;
+  }): Promise<
     | { readonly state: 'ready' }
     | ({ readonly state: 'unavailable' } & AflTradeCurrentValuationEvidenceUnavailable)
   >;
@@ -213,7 +218,7 @@ export function createAflTradeCurrentValuationEvidenceCoordinator(dependencies: 
       const retainedSourceKeys = new Set(retained.retainedSourceKeys);
       for (const source of AFL_TRADE_CURRENT_VALUATION_EVIDENCE_SOURCES) {
         if (retainedSourceKeys.has(source.sourceKey)) continue;
-        const result = await dependencies.source.ensureCurrent(source);
+        const result = await dependencies.source.ensureCurrent(source, request);
         if (result.state === 'unavailable') {
           return dependencies.repository.retainUnavailable(request, {
             stage: result.stage,
@@ -225,7 +230,9 @@ export function createAflTradeCurrentValuationEvidenceCoordinator(dependencies: 
         }
         await dependencies.repository.retainNormalizedSource({ ...result, request });
       }
-      const reconciliation = await dependencies.reconciliationAuthority.assessCurrent();
+      const reconciliation = await dependencies.reconciliationAuthority.assessCurrent({
+        stableOperationKey: request.stableOperationKey,
+      });
       if (reconciliation.state === 'unavailable') {
         return dependencies.repository.retainUnavailable(request, {
           stage: reconciliation.stage,
@@ -234,6 +241,7 @@ export function createAflTradeCurrentValuationEvidenceCoordinator(dependencies: 
       }
       const reviewed = await dependencies.reviewedAuthority.assessCurrent({
         valuationScopeKey: request.scopeKey,
+        stableOperationKey: request.stableOperationKey,
       });
       if (reviewed.state === 'unavailable') {
         return dependencies.repository.retainUnavailable(request, {
