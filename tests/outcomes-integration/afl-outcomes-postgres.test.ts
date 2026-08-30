@@ -1111,6 +1111,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0082_complete_local_reviewed_evidence',
       '0083_current_valuation_factual_refresh',
       '0084_current_valuation_evidence_orchestration',
+      '0085_current_valuation_model_evidence',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1209,6 +1210,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_current_valuation_evidence_orchestration_stage_receipt',
       'outcome_current_valuation_evidence_source_work',
       'outcome_current_valuation_evidence_normalization_claim',
+      'outcome_current_valuation_model_evidence_operation',
       'outcome_hpn_field_map_candidate',
       'outcome_hpn_field_map_review_decision',
       'outcome_hpn_projected_field_map',
@@ -1250,6 +1252,9 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'validate_outcome_factual_release_candidate_v3_trigger',
       'validate_outcome_factual_projection_item_insert_trigger',
       'validate_outcome_factual_projection_item_set_insert_trigger',
+      'outcome_current_valuation_model_evidence_operation_validate',
+      'outcome_current_valuation_model_evidence_no_update_delete',
+      'outcome_current_governed_model_pair_scope_lock',
       'ab_validate_outcome_factual_projection_item_set_event',
       'outcome_external_canonical_promotion_insert_guard',
       'outcome_external_canonical_promotion_finalization_guard',
