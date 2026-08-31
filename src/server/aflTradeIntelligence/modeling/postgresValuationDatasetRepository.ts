@@ -15,6 +15,7 @@ import type {
   AflOutcomeSqlTransaction,
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import { aflTradeGate0AReceiptSchema, type AflTradeGate0AReceipt } from '../source/gate0aReceipt';
+import { hasCurrentAflTradeValuationDatasetDomainProvenance } from './postgresValuationDatasetFactualLineageRepository';
 
 export type AflTradeValuationDatasetPersistenceErrorCode =
   'INVALID_INPUT' | 'CONFLICTING_REPLAY' | 'INCOMPLETE_WRITE';
@@ -477,6 +478,16 @@ export class PostgresAflTradeValuationDatasetRepository {
         `valuation-evidence:${evidence.operationalAuthorization.receiptId}`,
       ];
       await lock(transaction, evidenceKeys);
+      if (
+        !(await hasCurrentAflTradeValuationDatasetDomainProvenance(transaction, {
+          factualCandidateId: dataset.content.factualParent.factualCandidateId,
+          lineageId: dataset.content.factualParent.corpusToCandidateLineageId,
+        }))
+      ) {
+        throw invalidInput(
+          'Dataset admission requires current canonical-promotion provenance.'
+        );
+      }
       if (await admissionReplay(transaction, receipt)) {
         return { admissionId: receipt.admissionId, idempotentReplay: true } as const;
       }

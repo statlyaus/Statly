@@ -1116,6 +1116,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0087_dispatch_bound_pick_pav_execution_role',
       '0088_reclaimed_dispatch_pick_component_adoption',
       '0089_dispatch_bound_admitted_player_execution_role',
+      '0090_admitted_player_current_promotion_provenance',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

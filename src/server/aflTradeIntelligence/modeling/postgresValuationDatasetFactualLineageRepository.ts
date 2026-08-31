@@ -100,7 +100,14 @@ interface SpellRow extends Record<string, unknown> {
   player_id: string;
   club_id: string;
   start_event_version_id: string;
+  start_asset_version_id: string;
   event_id: string;
+  event_competition: string;
+  event_season_year: number | string;
+  source_capture_id: string;
+  asset_source_capture_id: string;
+  promotion_environment: string;
+  promotion_competition: string;
 }
 
 interface EdgeRow extends Record<string, unknown> {
@@ -410,16 +417,93 @@ async function deriveDomainMappings(
   );
   const result = await transaction.query<SpellRow>(
     `SELECT spell.spell_version_id,spell.spell_id,spell.player_id,spell.club_id,
-            spell.start_event_version_id,event.event_id
+            spell.start_event_version_id,spell.start_asset_version_id,event.event_id,
+            event_root.competition AS event_competition,
+            event_root.season_year AS event_season_year,promotion_run.capture_id AS source_capture_id,
+            asset_promotion_run.capture_id AS asset_source_capture_id,
+            promotion.environment::text AS promotion_environment,
+            promotion.competition AS promotion_competition
        FROM outcome_acquisition_spell_version spell
        JOIN outcome_event_version event
          ON event.event_version_id=spell.start_event_version_id
+       JOIN outcome_event_asset asset
+         ON asset.asset_version_id=spell.start_asset_version_id
+        AND asset.event_version_id=event.event_version_id
+        AND asset.player_id=spell.player_id
+        AND asset.to_club_id=spell.club_id
+       JOIN outcome_event event_root
+         ON event_root.event_id=event.event_id
+       JOIN outcome_import_row row
+         ON row.import_row_id=event.source_import_row_id
+       JOIN outcome_import_run run
+         ON run.import_run_id=row.import_run_id
+       JOIN outcome_external_canonical_promotion_import_run promotion_run
+         ON promotion_run.import_run_id=run.import_run_id
+        AND promotion_run.capture_id=run.capture_id
+       JOIN outcome_external_canonical_promotion promotion
+         ON promotion.promotion_id=promotion_run.promotion_id
+        AND promotion.status='finalized'
+        AND promotion.finalized_at IS NOT NULL
+       JOIN outcome_external_canonical_promotion_record event_promotion_record
+         ON event_promotion_record.promotion_id=promotion.promotion_id
+        AND event_promotion_record.source_import_row_id=row.import_row_id
+        AND event_promotion_record.canonical_record_id=event.event_version_id
+        AND event_promotion_record.record_kind IN ('transaction','draft_event')
+       JOIN outcome_import_row asset_row
+         ON asset_row.import_row_id=asset.source_import_row_id
+       JOIN outcome_import_run asset_run
+         ON asset_run.import_run_id=asset_row.import_run_id
+       JOIN outcome_external_canonical_promotion_import_run asset_promotion_run
+         ON asset_promotion_run.import_run_id=asset_run.import_run_id
+        AND asset_promotion_run.capture_id=asset_run.capture_id
+        AND asset_promotion_run.promotion_id=promotion.promotion_id
+       JOIN outcome_external_canonical_promotion_record asset_promotion_record
+         ON asset_promotion_record.promotion_id=promotion.promotion_id
+        AND asset_promotion_record.source_import_row_id=asset_row.import_row_id
+        AND asset_promotion_record.canonical_record_id=asset.asset_version_id
+        AND asset_promotion_record.record_kind IN ('transfer','draft_player_asset')
+       JOIN outcome_external_canonical_promotion_review_head review_head
+         ON review_head.candidate_id=promotion.candidate_id
+        AND review_head.decision_id=promotion.approval_decision_id
+        AND review_head.status='approved'
       WHERE spell.spell_version_id=ANY($1::text[])
-      ORDER BY spell.spell_version_id`,
+        AND event.status='approved'
+        AND asset.status='approved'
+        AND row.parse_status='approved'
+        AND run.import_kind='external_canonical_promotion'
+        AND run.status='approved'
+        AND asset_row.parse_status='approved'
+        AND asset_run.import_kind='external_canonical_promotion'
+        AND asset_run.status='approved'
+      ORDER BY spell.spell_version_id
+      FOR SHARE OF promotion,review_head`,
     [spellIds]
   );
   if (result.rows.length !== spellIds.length) {
-    fail('CANDIDATE_UNAVAILABLE', 'Canonical acquisition-spell lineage is unavailable.');
+    fail(
+      'CANDIDATE_UNAVAILABLE',
+      'Domain lineage lacks an authenticated finalized canonical promotion.'
+    );
+  }
+  const candidateCaptureIds = new Set(
+    candidate.content.members.sourceCaptures.map(({ captureId }) => captureId)
+  );
+  if (
+    result.rows.some((row) => {
+      const seasonYear = Number(row.event_season_year);
+      return (
+        !candidateCaptureIds.has(row.source_capture_id) ||
+        !candidateCaptureIds.has(row.asset_source_capture_id) ||
+        row.promotion_environment !== candidate.content.environment ||
+        row.promotion_competition !== candidate.content.competition ||
+        row.event_competition !== candidate.content.competition ||
+        !Number.isSafeInteger(seasonYear) ||
+        seasonYear < candidate.content.validFromSeason ||
+        seasonYear > candidate.content.validThroughSeason
+      );
+    })
+  ) {
+    fail('CANDIDATE_UNAVAILABLE', 'Promoted domain lineage falls outside the factual scope.');
   }
   const eventIds = [...new Set(result.rows.map(({ event_id }) => event_id))].sort();
   const edgeResult = await transaction.query<EdgeRow>(
@@ -482,6 +566,34 @@ async function deriveDomainMappings(
       `${right.eventVersionId}|${right.acquisitionSpellVersionId}`
     )
   );
+}
+
+export async function hasCurrentAflTradeValuationDatasetDomainProvenance(
+  transaction: AflOutcomeSqlTransaction,
+  input: { factualCandidateId: string; lineageId: string }
+): Promise<boolean> {
+  try {
+    let stored = await transaction.query<LineageRow>(
+      `SELECT lineage_json FROM outcome_valuation_dataset_factual_lineage
+        WHERE lineage_id=$1 AND candidate_id=$2 FOR SHARE`,
+      [input.lineageId, input.factualCandidateId]
+    );
+    if (stored.rows.length === 0) {
+      stored = await transaction.query<LineageRow>(
+        `SELECT lineage_json FROM outcome_corpus_factual_lineage
+          WHERE lineage_id=$1 AND candidate_id=$2 FOR SHARE`,
+        [input.lineageId, input.factualCandidateId]
+      );
+    }
+    if (stored.rows.length !== 1) return false;
+    const lineage = aflTradeCorpusFactualLineageSchema.parse(stored.rows[0]!.lineage_json);
+    if (lineage.content.factualCandidateId !== input.factualCandidateId) return false;
+    const candidate = await loadCandidate(transaction, input.factualCandidateId);
+    const currentMappings = await deriveDomainMappings(transaction, candidate);
+    return exactJson(currentMappings, lineage.content.domainLineageMappings);
+  } catch {
+    return false;
+  }
 }
 
 export class PostgresAflTradeValuationDatasetFactualLineageRepository {
@@ -592,6 +704,17 @@ export class PostgresAflTradeValuationDatasetFactualLineageRepository {
       }
       const lineage = aflTradeCorpusFactualLineageSchema.parse(stored.rows[0]!.lineage_json);
       const candidate = await loadCandidate(transaction, lineage.content.factualCandidateId);
+      if (
+        !(await hasCurrentAflTradeValuationDatasetDomainProvenance(transaction, {
+          factualCandidateId: lineage.content.factualCandidateId,
+          lineageId: lineage.lineageId,
+        }))
+      ) {
+        fail(
+          'CANDIDATE_UNAVAILABLE',
+          'The staged lineage no longer has current canonical-promotion authority.'
+        );
+      }
       const authority = await loadLedgerLocked(transaction);
       const decisionKey = createAflTradeValuationDatasetGate2DecisionKey(lineage);
       const resolution = resolveAflTradeGateEligibility(authority.ledger, {

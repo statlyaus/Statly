@@ -28,6 +28,7 @@ import {
   type AflTradePlayerObservationSetV2,
   aflTradePlayerObservationSetV2Schema,
 } from './playerContributionContracts';
+import { hasCurrentAflTradeValuationDatasetDomainProvenance } from './postgresValuationDatasetFactualLineageRepository';
 import {
   type AflTradeAdmittedModelRunEvidence,
   type AflTradeAdmittedModelRunEvidenceAuthenticator,
@@ -102,6 +103,11 @@ interface InstantRow extends Record<string, unknown> {
   instant: Date | string;
 }
 
+interface DatasetProvenanceRow extends Record<string, unknown> {
+  factual_candidate_id: string;
+  lineage_id: string;
+}
+
 function exactInstant(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -126,6 +132,31 @@ function requireOne<Row>(rows: readonly Row[], description: string): Row {
     );
   }
   return rows[0]!;
+}
+
+async function hasCurrentDomainProvenanceForIntent(
+  transaction: AflOutcomeSqlTransaction,
+  intentId: string
+): Promise<boolean> {
+  const result = await transaction.query<DatasetProvenanceRow>(
+    `SELECT dataset.factual_candidate_id,dataset.lineage_id
+       FROM outcome_valuation_model_run_intent intent
+       JOIN outcome_valuation_dataset_candidate dataset
+         ON dataset.dataset_id=intent.dataset_id
+      WHERE intent.intent_id=$1
+        AND dataset.status='finalized' AND dataset.finalized_at IS NOT NULL
+      FOR SHARE OF intent,dataset`,
+    [intentId]
+  );
+  const row = result.rows[0];
+  return (
+    result.rows.length === 1 &&
+    row !== undefined &&
+    (await hasCurrentAflTradeValuationDatasetDomainProvenance(transaction, {
+      factualCandidateId: row.factual_candidate_id,
+      lineageId: row.lineage_id,
+    }))
+  );
 }
 
 function requireMapValue<Key, Value>(
@@ -463,6 +494,17 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     const operationalAuthorization = aflTradeModelRunOperationalAuthorizationSchema.parse(
       row.operational_authorization_json
     );
+    if (
+      !(await hasCurrentAflTradeValuationDatasetDomainProvenance(this.dependencies.sql, {
+        factualCandidateId: datasetCandidate.content.factualParent.factualCandidateId,
+        lineageId: datasetCandidate.content.factualParent.corpusToCandidateLineageId,
+      }))
+    ) {
+      throw new AflTradeModelRunPersistenceError(
+        'MISSING_EVIDENCE',
+        'Model-run authority requires current canonical-promotion provenance.'
+      );
+    }
 
     const admissionReceiptIds = admission.content.sourceRightsEvaluations
       .map(({ admissionEvaluationReceiptId }) => admissionEvaluationReceiptId)
@@ -601,6 +643,7 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     if (authorization.content.runIntentId !== intent.intentId) return false;
     return this.dependencies.sql.transaction(async (transaction) => {
       await lock(transaction, [`valuation-model-intent:${intent.intentId}`]);
+      if (!(await hasCurrentDomainProvenanceForIntent(transaction, intent.intentId))) return false;
       const gateHead = await transaction.query<{ revision: number }>(
         `SELECT revision FROM outcome_gate_ledger_head
           WHERE singleton_id=1 FOR SHARE`
@@ -637,15 +680,19 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     intentId: string;
     consumedAt: string;
   }): Promise<boolean> {
-    const result = await this.dependencies.sql.query(
-      `UPDATE outcome_valuation_model_run_authorization
-          SET consumed_at=$3
-        WHERE authorization_id=$1 AND intent_id=$2 AND consumed_at IS NULL
-          AND clock_timestamp()>=authorized_at AND clock_timestamp()<valid_through
-      RETURNING authorization_id`,
-      [input.authorizationId, input.intentId, input.consumedAt]
-    );
-    return result.rowCount === 1;
+    return this.dependencies.sql.transaction(async (transaction) => {
+      await lock(transaction, [`valuation-model-intent:${input.intentId}`]);
+      if (!(await hasCurrentDomainProvenanceForIntent(transaction, input.intentId))) return false;
+      const result = await transaction.query(
+        `UPDATE outcome_valuation_model_run_authorization
+            SET consumed_at=$3
+          WHERE authorization_id=$1 AND intent_id=$2 AND consumed_at IS NULL
+            AND clock_timestamp()>=authorized_at AND clock_timestamp()<valid_through
+        RETURNING authorization_id`,
+        [input.authorizationId, input.intentId, input.consumedAt]
+      );
+      return result.rowCount === 1;
+    });
   }
 
   async persistCompletedRun(unparsed: AflTradeModelRunManifestV3): Promise<boolean> {
