@@ -676,14 +676,22 @@ function gate2IsCurrent(
     const dimensions = new Map(
       decision.content.scope.dimensions.map(({ name, values }) => [name, values] as const)
     );
-    const legacyScope = exactIds(
-      dimensions.get('scope') ?? [],
-      [evidence.datasetCandidate.content.scopeKey]
-    );
+    const dimensionNames = [...dimensions.keys()].sort();
+    const exactScopeKey = exactIds(dimensions.get('scope') ?? [], [
+      evidence.datasetCandidate.content.scopeKey,
+    ]);
     const validFrom = dimensions.get('valid_from_season') ?? [];
     const validThrough = dimensions.get('valid_through_season') ?? [];
+    const legacyScope =
+      exactScopeKey && exactIds(dimensionNames, ['competition', 'scope']);
     const privateFactualScope =
-      !dimensions.has('scope') &&
+      exactScopeKey &&
+      exactIds(dimensionNames, [
+        'competition',
+        'scope',
+        'valid_from_season',
+        'valid_through_season',
+      ]) &&
       validFrom.length === 1 &&
       validThrough.length === 1 &&
       /^\d{4}$/.test(validFrom[0] ?? '') &&
@@ -718,7 +726,9 @@ function gate2IsCurrent(
   if (
     current.status !== 'mechanically_eligible' ||
     current.decision === null ||
-    !scopeMatches(current.decision)
+    !scopeMatches(current.decision) ||
+    canonicalizeAflTradeJson(current.decision.content.scope) !==
+      canonicalizeAflTradeJson(admittedDecision.content.scope)
   ) {
     return null;
   }

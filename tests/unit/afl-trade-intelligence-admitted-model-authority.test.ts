@@ -28,6 +28,10 @@ import {
   type AflTradeAdmittedModelRunEvidence,
   type AflTradeModelRunAuthorizationStore,
 } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
+import {
+  aflTradeGateDecisionProposalSchema,
+  aflTradeGateDecisionRecordSchema,
+} from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createAflTradePlayerObservationSetV2 } from '@/server/aflTradeIntelligence/modeling/playerContributionContracts';
 import {
   AFL_TRADE_ACQUISITION_SPELL_METRIC_AUTHORITY_BOUNDARY,
@@ -1313,6 +1317,48 @@ describe('admitted AFL trade model authority contracts', () => {
       gate2Ledger: { ...fixture.evidence.gate2Ledger, decisions: [] },
     }).service.authorize(request);
     expect(gate2Withdrawn).toMatchObject({ status: 'blocked' });
+
+    const originalGate2Proposal = fixture.evidence.gate2Ledger.proposals[0]!;
+    const originalGate2Decision = fixture.evidence.gate2Ledger.decisions[0]!;
+    const changedSeasonScope = {
+      ...originalGate2Decision.content.scope,
+      dimensions: [
+        ...originalGate2Decision.content.scope.dimensions,
+        { name: 'valid_from_season', values: ['2027'] },
+        { name: 'valid_through_season', values: ['2027'] },
+      ],
+    };
+    const successorProposalContent = {
+      ...originalGate2Proposal.content,
+      version: 2,
+      scope: changedSeasonScope,
+      proposedAt: '2026-08-10T00:02:10.000Z',
+    };
+    const successorProposal = aflTradeGateDecisionProposalSchema.parse({
+      proposalId: createAflTradeContentAddress('gate-proposal', successorProposalContent),
+      content: successorProposalContent,
+    });
+    const successorDecisionContent = {
+      ...originalGate2Decision.content,
+      proposalId: successorProposal.proposalId,
+      version: 2,
+      scope: changedSeasonScope,
+      decidedAt: '2026-08-10T00:02:20.000Z',
+      effectiveAt: '2026-08-10T00:02:20.000Z',
+      supersedesDecisionId: originalGate2Decision.decisionId,
+    };
+    const successorDecision = aflTradeGateDecisionRecordSchema.parse({
+      decisionId: createAflTradeContentAddress('gate-decision', successorDecisionContent),
+      content: successorDecisionContent,
+    });
+    const changedSeasonSuccessor = await authorityService({
+      ...fixture.evidence,
+      gate2Ledger: {
+        proposals: [...fixture.evidence.gate2Ledger.proposals, successorProposal],
+        decisions: [...fixture.evidence.gate2Ledger.decisions, successorDecision],
+      },
+    }).service.authorize(request);
+    expect(changedSeasonSuccessor).toMatchObject({ status: 'blocked' });
 
     const substitutedArtifact = await authorityService({
       ...fixture.evidence,

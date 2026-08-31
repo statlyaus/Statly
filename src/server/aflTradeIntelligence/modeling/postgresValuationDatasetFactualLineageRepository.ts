@@ -437,6 +437,7 @@ async function deriveDomainMappings(
     candidate.content.members.lineageEdges.map(({ edgeId }) => edgeId)
   );
   const representedEdges = new Set<string>();
+  const representedEventVersions = new Set<string>();
   const mappings = result.rows.map((row) => {
     const event = candidateEvents.get(row.start_event_version_id);
     const spell = candidateSpells.get(row.spell_version_id);
@@ -455,6 +456,7 @@ async function deriveDomainMappings(
     ) {
       fail('CANDIDATE_UNAVAILABLE', 'Factual and canonical domain lineage disagree.');
     }
+    representedEventVersions.add(row.start_event_version_id);
     return {
       eventId: row.event_id,
       eventVersionId: row.start_event_version_id,
@@ -466,7 +468,11 @@ async function deriveDomainMappings(
     };
   });
   if (
-    candidateEvents.size !== mappings.length ||
+    candidateSpells.size !== mappings.length ||
+    candidateEvents.size !== representedEventVersions.size ||
+    [...candidateEvents.keys()].some(
+      (eventVersionId) => !representedEventVersions.has(eventVersionId)
+    ) ||
     candidateEdges.size !== representedEdges.size
   ) {
     fail('CANDIDATE_UNAVAILABLE', 'Factual domain lineage is not exhaustively represented.');
