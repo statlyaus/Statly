@@ -22,6 +22,7 @@ import { materializeAflTradePickPavObservationSet } from '../modeling/pickPavObs
 import { PostgresGovernedPickPavModelExecutionRepository } from '../modeling/postgresGovernedPickPavModelExecutionRepository';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
+  parseGenuineDispatchBoundPickPavExecutionInput,
   type GenuineDispatchBoundPickPavExecutionInput,
 } from './genuineDispatchBoundPickPav';
 import { parseAflTradePrivateValuationFactualOutput } from './privateValuationFactualOutput';
@@ -29,6 +30,19 @@ import { PostgresGovernedValuationComponentRunRepository } from './internal/post
 import { createAflTradeGenuineDispatchBoundGovernedPickExecutor } from './postgresPrivateValuationModelPair';
 
 const EXECUTION_DATABASE_ROLE = 'afl_trade_private_evaluation_coordinator';
+
+function createCoordinatorRoleClient(client: AflOutcomeSqlClient): AflOutcomeSqlClient {
+  const transaction = <T>(work: Parameters<AflOutcomeSqlClient['transaction']>[0]): Promise<T> =>
+    client.transaction(async (roleTransaction) => {
+      await roleTransaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
+      return work(roleTransaction) as Promise<T>;
+    });
+  return {
+    query: (sql, parameters) =>
+      transaction((roleTransaction) => roleTransaction.query(sql, parameters)),
+    transaction,
+  };
+}
 
 interface ExactAuthorityRow {
   readonly output_json: unknown;
@@ -44,6 +58,11 @@ interface ModelAuthorityRow {
   readonly gate_ledger_revision: number;
   readonly protocol_json: unknown;
   readonly prepared_at: Date | string;
+}
+
+interface RetainedComponentRow {
+  readonly run_id: string;
+  readonly execution_id: string;
 }
 
 function sha256(value: string): string {
@@ -86,8 +105,7 @@ function requireMatchingReplay(input: {
     ])
   );
   if (
-    canonicalizeAflTradeJson(replay.content.policy) !==
-      canonicalizeAflTradeJson(input.policy) ||
+    canonicalizeAflTradeJson(replay.content.policy) !== canonicalizeAflTradeJson(input.policy) ||
     replay.content.observations.length !== selections.size ||
     !replay.content.calculations.some(
       ({ calculationId }) => calculationId === input.hpnCalculationId
@@ -107,6 +125,7 @@ export class PostgresGenuineDispatchBoundPickPavMaterializer {
 
   async materialize(execution: GenuineDispatchBoundPickPavExecutionInput) {
     return this.client.transaction(async (transaction) => {
+      await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
       await transaction.query(
         `SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)`,
         [
@@ -209,7 +228,9 @@ export class PostgresGenuineDispatchBoundPickPavMaterializer {
           ({ calculation: member }) => member.calculationId === calculation.calculationId
         )
       ) {
-        throw new TypeError('Exact governed HPN calculation is absent from pick-PAV materialization.');
+        throw new TypeError(
+          'Exact governed HPN calculation is absent from pick-PAV materialization.'
+        );
       }
       const observationSet = materializeAflTradePickPavObservationSet({
         environment: 'non_production',
@@ -237,6 +258,7 @@ export class PostgresGenuineDispatchBoundPickPavMaterializer {
 
 export function createPostgresGenuineDispatchBoundPickPavAuthorityLoader(input: {
   readonly client: AflOutcomeSqlClient;
+  readonly assertClaim: (execution: GenuineDispatchBoundPickPavExecutionInput) => Promise<void>;
   readonly retainAuthorityArtifact: (value: {
     readonly document: unknown;
     readonly createdAt: string;
@@ -247,9 +269,12 @@ export function createPostgresGenuineDispatchBoundPickPavAuthorityLoader(input: 
   const clock = input.clock ?? { now: () => new Date().toISOString() };
   return async (execution: GenuineDispatchBoundPickPavExecutionInput) => {
     const { observationSet, factual } = await materializer.materialize(execution);
+    await input.assertClaim(execution);
     const target = execution.operation.content.pick;
-    const result = await input.client.query<ModelAuthorityRow>(
-      `SELECT dataset.dataset_json,dataset.created_at AS dataset_created_at,
+    const result = await input.client.transaction(async (transaction) => {
+      await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
+      return transaction.query<ModelAuthorityRow>(
+        `SELECT dataset.dataset_json,dataset.created_at AS dataset_created_at,
               admission.admission_json,admission.admitted_at,
               admission.gate_ledger_revision,protocol.protocol_json,protocol.prepared_at
          FROM outcome_valuation_dataset_candidate dataset
@@ -261,10 +286,11 @@ export function createPostgresGenuineDispatchBoundPickPavAuthorityLoader(input: 
            ON protocol.dataset_id=dataset.dataset_id
           AND protocol.admission_id=admission.admission_id
           AND protocol.protocol_id=$3
-        WHERE dataset.dataset_id=$1 AND dataset.environment='non_production'
-          AND dataset.status='finalized' AND dataset.finalized_at IS NOT NULL`,
-      [target.datasetId, target.datasetAdmissionId, target.protocolId]
-    );
+          WHERE dataset.dataset_id=$1 AND dataset.environment='non_production'
+            AND dataset.status='finalized' AND dataset.finalized_at IS NOT NULL`,
+        [target.datasetId, target.datasetAdmissionId, target.protocolId]
+      );
+    });
     if (result.rows.length !== 1) {
       throw new TypeError('Genuine pick-PAV dataset, admission, or protocol authority is absent.');
     }
@@ -288,20 +314,22 @@ export function createPostgresGenuineDispatchBoundPickPavAuthorityLoader(input: 
     ) {
       throw new TypeError('Genuine pick-PAV model authority ancestry is inconsistent.');
     }
-    const [datasetArtifact, datasetAdmissionArtifact, protocolArtifact] = await Promise.all([
-      input.retainAuthorityArtifact({
-        document: dataset,
-        createdAt: instant(row.dataset_created_at),
-      }),
-      input.retainAuthorityArtifact({
-        document: admission,
-        createdAt: instant(row.admitted_at),
-      }),
-      input.retainAuthorityArtifact({
-        document: protocol,
-        createdAt: instant(row.prepared_at),
-      }),
-    ]);
+    await input.assertClaim(execution);
+    const datasetArtifact = await input.retainAuthorityArtifact({
+      document: dataset,
+      createdAt: instant(row.dataset_created_at),
+    });
+    await input.assertClaim(execution);
+    const datasetAdmissionArtifact = await input.retainAuthorityArtifact({
+      document: admission,
+      createdAt: instant(row.admitted_at),
+    });
+    await input.assertClaim(execution);
+    const protocolArtifact = await input.retainAuthorityArtifact({
+      document: protocol,
+      createdAt: instant(row.prepared_at),
+    });
+    await input.assertClaim(execution);
     const evaluatedAt = clock.now();
     return {
       observationSet,
@@ -338,21 +366,95 @@ export function createPostgresGenuineDispatchBoundPickPavExecutor(input: {
   }) => Promise<AflTradeArtifactRef>;
   readonly clock?: { readonly now: () => string };
 }) {
+  const executionClient = createCoordinatorRoleClient(input.client);
   const custody = {
-    client: input.client,
+    client: executionClient,
     artifactRepository: input.artifactRepository,
     maximumArtifactBytes: input.maximumArtifactBytes,
   };
+  const executionRepository = new PostgresGovernedPickPavModelExecutionRepository(custody);
+  const componentRepository = new PostgresGovernedValuationComponentRunRepository(custody);
   return createAflTradeGenuineDispatchBoundGovernedPickExecutor({
+    loadRetainedComponent: async (unparsedExecution) => {
+      const execution = parseGenuineDispatchBoundPickPavExecutionInput(unparsedExecution);
+      const retained = await executionClient.transaction(async (transaction) => {
+        await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
+        await transaction.query(
+          `SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)`,
+          [
+            execution.exactInput.requestId,
+            execution.claim.claimId,
+            sha256(execution.claim.leaseToken),
+          ]
+        );
+        return transaction.query<RetainedComponentRow>(
+          `SELECT component.run_id,native.execution_id
+             FROM outcome_governed_valuation_component_run component
+             JOIN outcome_governed_pick_pav_model_execution native
+               ON native.execution_id=component.native_execution_id
+            WHERE component.role='draft_pick_and_future_pick_distribution'
+              AND component.native_execution_kind='governed_pick_pav_model_execution'
+              AND component.protocol_id=$10 AND component.dataset_id=$11
+              AND component.dataset_admission_id=$12
+              AND native.execution_json->'content'->>'schemaVersion'=
+                'afl-trade-pick-pav-model-execution/v4'
+              AND native.execution_json->'content'->>'policyId'=$9
+              AND native.execution_json->'content'->'privateInput'->>'requestId'=$1
+              AND native.execution_json->'content'->'privateInput'->>'operationId'=$2
+              AND native.execution_json->'content'->'privateInput'->>'claimId'=$3
+              AND (native.execution_json->'content'->'privateInput'->>'attemptNumber')::integer=$4
+              AND native.execution_json->'content'->'privateInput'->>'leaseTokenSha256'=$5
+              AND native.execution_json->'content'->'privateInput'->>'factualOutputId'=$6
+              AND native.execution_json->'content'->'privateInput'->>'hpnCalculationId'=$7
+              AND native.execution_json->'content'->'privateInput'->>'factualValuesSha256'=$8
+              AND native.execution_json->'content'->'privateInput'->>'hpnValuesSha256'=$13`,
+          [
+            execution.exactInput.requestId,
+            execution.operation.operationId,
+            execution.claim.claimId,
+            execution.attemptNumber,
+            sha256(execution.claim.leaseToken),
+            execution.exactInput.factualOutputId,
+            execution.exactInput.hpnCalculationId,
+            execution.exactInput.substantive.factualValuesSha256,
+            execution.operation.content.pick.policyId,
+            execution.operation.content.pick.protocolId,
+            execution.operation.content.pick.datasetId,
+            execution.operation.content.pick.datasetAdmissionId,
+            execution.exactInput.substantive.hpnValuesSha256,
+          ]
+        );
+      });
+      if (retained.rows.length === 0) return null;
+      if (retained.rows.length !== 1) {
+        throw new TypeError('Dispatch-bound pick-PAV component replay is ambiguous.');
+      }
+      const row = retained.rows[0]!;
+      const [native, component] = await Promise.all([
+        executionRepository.loadExact(row.execution_id),
+        componentRepository.loadExact(row.run_id),
+      ]);
+      if (
+        native.execution.executionId !== row.execution_id ||
+        component.manifest.runId !== row.run_id ||
+        component.manifest.content.nativeExecution.executionId !== row.execution_id
+      ) {
+        throw new TypeError('Dispatch-bound pick-PAV component replay is inconsistent.');
+      }
+      await assertPostgresGenuineDispatchBoundPickPavClaim({ client: executionClient, execution });
+      return { runId: row.run_id };
+    },
     loadExactAuthority: createPostgresGenuineDispatchBoundPickPavAuthorityLoader({
-      client: input.client,
+      client: executionClient,
+      assertClaim: (execution) =>
+        assertPostgresGenuineDispatchBoundPickPavClaim({ client: executionClient, execution }),
       retainAuthorityArtifact: input.retainArtifact,
       ...(input.clock === undefined ? {} : { clock: input.clock }),
     }),
     assertClaim: (execution) =>
-      assertPostgresGenuineDispatchBoundPickPavClaim({ client: input.client, execution }),
+      assertPostgresGenuineDispatchBoundPickPavClaim({ client: executionClient, execution }),
     retainArtifact: input.retainArtifact,
-    executionRepository: new PostgresGovernedPickPavModelExecutionRepository(custody),
-    componentRepository: new PostgresGovernedValuationComponentRunRepository(custody),
+    executionRepository,
+    componentRepository,
   });
 }

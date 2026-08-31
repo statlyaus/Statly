@@ -37,7 +37,10 @@ import { createAflTradePickPavPolicy } from '@/server/aflTradeIntelligence/model
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createAflTradePrivateValuationModelOperation } from '@/server/aflTradeIntelligence/valuation/privateValuationModelPair';
 import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
-import { createPostgresGenuineDispatchBoundPickPavExecutor } from '@/server/aflTradeIntelligence/valuation/postgresGenuineDispatchBoundPickPav';
+import {
+  createPostgresGenuineDispatchBoundPickPavExecutor,
+  PostgresGenuineDispatchBoundPickPavMaterializer,
+} from '@/server/aflTradeIntelligence/valuation/postgresGenuineDispatchBoundPickPav';
 import { PostgresAflTradePrivateValuationModelPairRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationModelPair';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
 
@@ -49,6 +52,7 @@ const databaseUrl =
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
 const schemaName = `afl_genuine_pick_pav_${process.pid}_${Date.now()}`;
+const runtimeRoleName = `afl_genuine_pick_pav_runtime_${process.pid}_${Date.now()}`;
 const adminPool = new Pool({ connectionString: databaseUrl });
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -62,6 +66,7 @@ const digest = (value: string) => createHash('sha256').update(value).digest('hex
 const addressed = (prefix: string, value: string) => `${prefix}:${digest(value)}`;
 
 let artifactRoot = '';
+let restrictedPool: Pool | undefined;
 
 function scopedDatabaseUrl(): string {
   const scoped = new URL(databaseUrl);
@@ -503,11 +508,23 @@ beforeAll(async () => {
   artifactRoot = await mkdtemp(join(tmpdir(), 'statly-genuine-pick-pav-'));
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedDatabaseUrl() });
+  await expect(
+    adminPool.query(
+      `SELECT has_table_privilege(
+         'afl_trade_private_evaluation_coordinator',$1,'SELECT'
+       ) AS can_read_policy`,
+      [`${schemaName}.outcome_pick_pav_policy`]
+    )
+  ).resolves.toMatchObject({ rows: [{ can_read_policy: true }] });
+  await adminPool.query(`CREATE ROLE "${runtimeRoleName}" NOLOGIN NOINHERIT`);
+  await adminPool.query(`GRANT afl_trade_private_evaluation_coordinator TO "${runtimeRoleName}"`);
 });
 
 afterAll(async () => {
+  await restrictedPool?.end();
   await pool.end();
   await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+  await adminPool.query(`DROP ROLE IF EXISTS "${runtimeRoleName}"`);
   await adminPool.end();
   await rm(artifactRoot, { recursive: true, force: true });
 });
@@ -608,7 +625,14 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
           (request_id,scope_key,trigger_kind,scheduled_for,authority_key,status,available_at,
            claim_id,lease_token_sha256,lease_expires_at,claimed_at,request_json,claim_sequence)
          VALUES ($1,$2,'ad_hoc',$3,'pick-tracer','claimed',$3,$4,$5,$6,$3,'{}'::jsonb,1)`,
-        [requestId, operation.content.scopeKey, now, claimId, digest(leaseToken), new Date(now.getTime() + 300_000)]
+        [
+          requestId,
+          operation.content.scopeKey,
+          now,
+          claimId,
+          digest(leaseToken),
+          new Date(now.getTime() + 300_000),
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_private_valuation_dispatch_attempt
@@ -641,7 +665,12 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
           (method_id,method_sha256,environment,source_artifact_id,captured_at,registered_at,
            method_canonical_json,method_json)
          VALUES ($1,$2,'non_production',$3,$4,$4,'{}','{}'::jsonb)`,
-        [methodId, methodId.slice('hpn-pav-method:'.length), addressed('artifact', 'method'), retainedAt]
+        [
+          methodId,
+          methodId.slice('hpn-pav-method:'.length),
+          addressed('artifact', 'method'),
+          retainedAt,
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_release_manifest
@@ -695,7 +724,10 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
           },
           recordedAt: `${draftYear}-11-22T00:00:00.000Z`,
         };
-        await seed.query(`INSERT INTO outcome_event VALUES ($1,'AFLM',$2,$1)`, [eventId, draftYear]);
+        await seed.query(`INSERT INTO outcome_event VALUES ($1,'AFLM',$2,$1)`, [
+          eventId,
+          draftYear,
+        ]);
         await seed.query(
           `INSERT INTO outcome_event_version
             (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
@@ -714,7 +746,14 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
             (selection_id,event_version_id,selection_number,pick_id,player_id,player_identity_id,
              club_id,source_import_row_id,status)
            VALUES ($1,$2,$3,$4,$5,$5,$6,$1,'approved')`,
-          [selectionId, eventVersionId, selectionNumber, pickId, `player:${draftYear}`, `club:${draftYear}`]
+          [
+            selectionId,
+            eventVersionId,
+            selectionNumber,
+            pickId,
+            `player:${draftYear}`,
+            `club:${draftYear}`,
+          ]
         );
         await seed.query(
           `INSERT INTO outcome_release_draft_selection
@@ -729,14 +768,25 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
              evidence_json,decided_by,decided_at)
            VALUES ($1,'pick_pav_selection_access',$2,'approved',NULL,'tracer',$3::jsonb,
              'system:pick-tracer',$4)`,
-          [access.decision.id, selectionId, canonicalizeAflTradeJson(accessEvidence), access.recordedAt]
+          [
+            access.decision.id,
+            selectionId,
+            canonicalizeAflTradeJson(accessEvidence),
+            access.recordedAt,
+          ]
         );
         await seed.query(
           `INSERT INTO outcome_pick_pav_selection_access
             (decision_id,selection_id,access_state,restriction,bid_selection_number,recorded_at,
              access_canonical_json,access_json)
            VALUES ($1,$2,'open',NULL,NULL,$3,$4,$5::jsonb)`,
-          [access.decision.id, selectionId, access.recordedAt, canonicalizeAflTradeJson(access), canonicalizeAflTradeJson(access)]
+          [
+            access.decision.id,
+            selectionId,
+            access.recordedAt,
+            canonicalizeAflTradeJson(access),
+            canonicalizeAflTradeJson(access),
+          ]
         );
       }
       for (const value of calculations) {
@@ -768,7 +818,17 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
               (calculation_id,team_id,ordinal,team_sha256,offensive_pav,midfield_pav,
                defensive_pav,total_pav,team_canonical_json)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-            [value.calculationId, team.teamId, ordinal, sha256AflTradeCanonicalJson(team), team.offensivePav, team.midfieldPav, team.defensivePav, team.totalPav, canonicalizeAflTradeJson(team)]
+            [
+              value.calculationId,
+              team.teamId,
+              ordinal,
+              sha256AflTradeCanonicalJson(team),
+              team.offensivePav,
+              team.midfieldPav,
+              team.defensivePav,
+              team.totalPav,
+              canonicalizeAflTradeJson(team),
+            ]
           );
         }
         for (const [ordinal, player] of value.content.players.entries()) {
@@ -777,7 +837,19 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
               (calculation_id,spell_version_id,player_id,team_id,ordinal,player_sha256,
                offensive_pav,midfield_pav,defensive_pav,total_pav,player_canonical_json)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-            [value.calculationId, player.spellVersionId, player.playerId, player.teamId, ordinal, sha256AflTradeCanonicalJson(player), player.offensivePav, player.midfieldPav, player.defensivePav, player.totalPav, canonicalizeAflTradeJson(player)]
+            [
+              value.calculationId,
+              player.spellVersionId,
+              player.playerId,
+              player.teamId,
+              ordinal,
+              sha256AflTradeCanonicalJson(player),
+              player.offensivePav,
+              player.midfieldPav,
+              player.defensivePav,
+              player.totalPav,
+              canonicalizeAflTradeJson(player),
+            ]
           );
         }
         await seed.query(
@@ -795,7 +867,21 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
            dataset_canonical_json,dataset_json,finalized_at)
          VALUES ($1,'non_production',$2,'AFLM',$3,$4,$5,$6,$7,$8,$9,$10,$11,'[]',10,
            'finalized',$12,$13::jsonb,$3)`,
-        [authority.dataset.datasetId, authority.dataset.content.scopeKey, authority.dataset.content.createdAt, authority.dataset.content.knowledgeCutoffAt, factualReleaseId, factualCandidateId, authority.dataset.content.factualParent.corpusId, authority.dataset.content.factualParent.corpusToCandidateLineageId, memberSetSha256, authority.dataset.content.rowCount, authority.dataset.content.rowSetSha256, canonicalizeAflTradeJson(authority.dataset.content), canonicalizeAflTradeJson(authority.dataset)]
+        [
+          authority.dataset.datasetId,
+          authority.dataset.content.scopeKey,
+          authority.dataset.content.createdAt,
+          authority.dataset.content.knowledgeCutoffAt,
+          factualReleaseId,
+          factualCandidateId,
+          authority.dataset.content.factualParent.corpusId,
+          authority.dataset.content.factualParent.corpusToCandidateLineageId,
+          memberSetSha256,
+          authority.dataset.content.rowCount,
+          authority.dataset.content.rowSetSha256,
+          canonicalizeAflTradeJson(authority.dataset.content),
+          canonicalizeAflTradeJson(authority.dataset),
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_valuation_dataset_admission
@@ -804,14 +890,31 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
            operational_authorization_receipt_id,source_count,status,
            admission_canonical_json,admission_json,finalized_at)
          VALUES ($1,$2,'non_production',$3,$4,1,$5,$6,1,'finalized',$7,$8::jsonb,$3)`,
-        [authority.admission.admissionId, authority.dataset.datasetId, authority.admission.content.admittedAt, authority.admission.content.gate2Decision.decisionId, authority.admission.content.analyticalAuthorityReceiptId, authority.admission.content.operationalAuthorizationReceiptId, canonicalizeAflTradeJson(authority.admission.content), canonicalizeAflTradeJson(authority.admission)]
+        [
+          authority.admission.admissionId,
+          authority.dataset.datasetId,
+          authority.admission.content.admittedAt,
+          authority.admission.content.gate2Decision.decisionId,
+          authority.admission.content.analyticalAuthorityReceiptId,
+          authority.admission.content.operationalAuthorizationReceiptId,
+          canonicalizeAflTradeJson(authority.admission.content),
+          canonicalizeAflTradeJson(authority.admission),
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_valuation_model_protocol
           (protocol_id,environment,dataset_id,admission_id,analytical_authority_receipt_id,
            prepared_at,protocol_canonical_json,protocol_json)
          VALUES ($1,'non_production',$2,$3,$4,$5,$6,$7::jsonb)`,
-        [authority.protocol.protocolId, authority.dataset.datasetId, authority.admission.admissionId, authority.admission.content.analyticalAuthorityReceiptId, authority.protocol.content.preparedAt, canonicalizeAflTradeJson(authority.protocol.content), canonicalizeAflTradeJson(authority.protocol)]
+        [
+          authority.protocol.protocolId,
+          authority.dataset.datasetId,
+          authority.admission.admissionId,
+          authority.admission.content.analyticalAuthorityReceiptId,
+          authority.protocol.content.preparedAt,
+          canonicalizeAflTradeJson(authority.protocol.content),
+          canonicalizeAflTradeJson(authority.protocol),
+        ]
       );
       await seed.query('COMMIT');
     } catch (error) {
@@ -823,6 +926,27 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
 
     const pairRepository = new PostgresAflTradePrivateValuationModelPairRepository(client);
     await pairRepository.bindInput({ exactInput, claim: { claimId, leaseToken } });
+    restrictedPool = new Pool({
+      connectionString: databaseUrl,
+      options: `-c search_path=${schemaName} -c role=${runtimeRoleName}`,
+      max: 1,
+    });
+    const restrictedClient = createPgAflOutcomeSqlClient(restrictedPool);
+    const restrictedMaterializer = new PostgresGenuineDispatchBoundPickPavMaterializer(
+      restrictedClient
+    );
+    await expect(
+      restrictedMaterializer.materialize({
+        exactInput,
+        operation,
+        attemptNumber: 1,
+        claim: { claimId, leaseToken },
+      })
+    ).resolves.toMatchObject({
+      observationSet: { content: { releaseId: factualReleaseId } },
+      factual: { outputId: factual.outputId },
+    });
+
     const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
       rootDirectory: artifactRoot,
       repositoryId: 'genuine-pick-pav-postgres-tracer',
@@ -833,7 +957,13 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       artifactRepository,
       maximumArtifactBytes: 4 * 1024 * 1024,
     });
-    const retainArtifact = async ({ document, createdAt }: { document: unknown; createdAt: string }) => {
+    const retainArtifact = async ({
+      document,
+      createdAt,
+    }: {
+      document: unknown;
+      createdAt: string;
+    }) => {
       const reference = createAflTradeCanonicalJsonArtifactRef(document, createdAt);
       await staging.retainArtifact({
         reference,
@@ -842,11 +972,15 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       return reference;
     };
     let modelTimestamp: string | undefined;
+    let successfulWorkRetentions = 0;
     const executor = createPostgresGenuineDispatchBoundPickPavExecutor({
-      client,
+      client: restrictedClient,
       artifactRepository,
       maximumArtifactBytes: 4 * 1024 * 1024,
-      retainArtifact,
+      retainArtifact: async (value) => {
+        successfulWorkRetentions += 1;
+        return retainArtifact(value);
+      },
       clock: { now: () => (modelTimestamp ??= new Date().toISOString()) },
     });
     const execution = {
@@ -855,6 +989,59 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       attemptNumber: 1,
       claim: { claimId, leaseToken },
     };
+
+    const setClaimLease = async (leaseExpiresAtSql: string) => {
+      const lease = await pool.connect();
+      try {
+        await lease.query('BEGIN');
+        await lease.query(`SET LOCAL session_replication_role='replica'`);
+        await lease.query(
+          `UPDATE outcome_private_valuation_dispatch_request
+              SET lease_expires_at=${leaseExpiresAtSql}
+            WHERE request_id=$1`,
+          [requestId]
+        );
+        await lease.query(
+          `UPDATE outcome_private_valuation_dispatch_attempt
+              SET lease_expires_at=${leaseExpiresAtSql}
+            WHERE claim_id=$1`,
+          [claimId]
+        );
+        await lease.query('COMMIT');
+      } catch (error) {
+        await lease.query('ROLLBACK');
+        throw error;
+      } finally {
+        lease.release();
+      }
+    };
+    let expireAfterMaterialization = true;
+    const expiringClient: typeof client = {
+      query: (sql, parameters) => client.query(sql, parameters),
+      async transaction(work) {
+        const result = await client.transaction(work);
+        if (expireAfterMaterialization) {
+          expireAfterMaterialization = false;
+          await setClaimLease(`clock_timestamp()-interval '1 millisecond'`);
+        }
+        return result;
+      },
+    };
+    let staleAuthorityArtifactRetentions = 0;
+    const staleExecutor = createPostgresGenuineDispatchBoundPickPavExecutor({
+      client: expiringClient,
+      artifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      retainArtifact: async (value) => {
+        staleAuthorityArtifactRetentions += 1;
+        return retainArtifact(value);
+      },
+    });
+    await expect(staleExecutor.execute(execution)).resolves.toMatchObject({
+      state: 'stale_authority',
+    });
+    expect(staleAuthorityArtifactRetentions).toBe(0);
+    await setClaimLease(`clock_timestamp()+interval '5 minutes'`);
 
     const completed = await executor.execute(execution);
     if (completed.state !== 'completed') throw new Error(completed.reason);
@@ -908,8 +1095,10 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       ],
     });
 
+    const successfulWorkRetentionsBeforeReplay = successfulWorkRetentions;
     const replayed = await executor.execute(execution);
     expect(replayed).toEqual(completed);
+    expect(successfulWorkRetentions).toBe(successfulWorkRetentionsBeforeReplay);
     await expect(
       pool.query(
         `SELECT

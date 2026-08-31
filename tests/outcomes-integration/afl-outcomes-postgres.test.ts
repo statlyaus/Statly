@@ -1113,6 +1113,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0084_current_valuation_evidence_orchestration',
       '0085_current_valuation_model_evidence',
       '0086_dispatch_bound_pick_pav_observation_release',
+      '0087_dispatch_bound_pick_pav_execution_role',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

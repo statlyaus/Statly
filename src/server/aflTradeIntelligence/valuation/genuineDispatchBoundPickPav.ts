@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
-import { aflTradeContentAddressedIdSchema, aflTradeSha256Schema } from '../artifacts/contentAddress';
+import {
+  aflTradeContentAddressedIdSchema,
+  aflTradeSha256Schema,
+  canonicalizeAflTradeJson,
+} from '../artifacts/contentAddress';
 import { aflTradePickPavObservationSetSchema } from '../modeling/pickOutcomeContracts';
 import {
   aflTradePickPavDistributionBenchmarkConfigSchema,
@@ -36,6 +40,22 @@ const executionInputSchema = z
 
 export type GenuineDispatchBoundPickPavExecutionInput = z.infer<typeof executionInputSchema>;
 
+export function parseGenuineDispatchBoundPickPavExecutionInput(
+  unparsedExecution: unknown
+): GenuineDispatchBoundPickPavExecutionInput {
+  const execution = executionInputSchema.parse(unparsedExecution);
+  const expectedOperation = createAflTradePrivateValuationModelOperation({
+    scopeKey: execution.exactInput.scopeKey,
+    ...execution.exactInput.substantive,
+  });
+  if (
+    canonicalizeAflTradeJson(expectedOperation) !== canonicalizeAflTradeJson(execution.operation)
+  ) {
+    throw new TypeError('Dispatch-bound pick-PAV operation is not content-address authentic.');
+  }
+  return execution;
+}
+
 const exactAuthoritySchema = z
   .object({
     observationSet: aflTradePickPavObservationSetSchema,
@@ -65,21 +85,14 @@ function requireExactTarget(
 ): void {
   const target = execution.operation.content.pick;
   const observation = retained.observationSet.content;
-  const expectedOperation = createAflTradePrivateValuationModelOperation({
-    scopeKey: execution.exactInput.scopeKey,
-    ...execution.exactInput.substantive,
-  });
   if (
-    expectedOperation.operationId !== execution.operation.operationId ||
     retained.authority.datasetId !== target.datasetId ||
     retained.authority.datasetAdmissionId !== target.datasetAdmissionId ||
     retained.authority.protocolId !== target.protocolId ||
     observation.policy.policyId !== target.policyId ||
     observation.policy.content.methodId !== execution.operation.content.hpnMethodId
   ) {
-    throw new TypeError(
-      'Genuine pick-PAV authority does not match the dispatch-bound target.'
-    );
+    throw new TypeError('Genuine pick-PAV authority does not match the dispatch-bound target.');
   }
 }
 
@@ -89,16 +102,13 @@ export function createGenuineDispatchBoundPickPavRunner(dependencies: {
   ) => Promise<GenuineDispatchBoundPickPavAuthority>;
 }) {
   return async (unparsedExecution: GenuineDispatchBoundPickPavExecutionInput) => {
-    const execution = executionInputSchema.parse(unparsedExecution);
-    const retained = exactAuthoritySchema.parse(
-      await dependencies.loadExactAuthority(execution)
-    );
+    const execution = parseGenuineDispatchBoundPickPavExecutionInput(unparsedExecution);
+    const retained = exactAuthoritySchema.parse(await dependencies.loadExactAuthority(execution));
     requireExactTarget(execution, retained);
     return {
       outputs: computeAflTradePickPavModelExecutionOutputs({
         observationSet: retained.observationSet,
-        benchmarkConfig:
-          retained.benchmarkConfig as AflTradePickPavDistributionBenchmarkConfig,
+        benchmarkConfig: retained.benchmarkConfig as AflTradePickPavDistributionBenchmarkConfig,
         validationConfig: retained.validationConfig as AflTradePickPavValidationConfig,
       }),
       completedAt: retained.completedAt,

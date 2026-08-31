@@ -81,8 +81,9 @@ describe('genuine dispatch-bound pick-PAV runner', () => {
       new PostgresGenuineDispatchBoundPickPavMaterializer(client).materialize(input)
     ).rejects.toThrow('Exact dispatch-bound pick-PAV authority is unavailable.');
     expect(queries.some((sql) => sql.includes('outcome_active_release'))).toBe(false);
-    expect(queries.filter((sql) => sql.includes('load_outcome_private_valuation_dispatch')))
-      .toHaveLength(1);
+    expect(
+      queries.filter((sql) => sql.includes('load_outcome_private_valuation_dispatch'))
+    ).toHaveLength(1);
   });
 
   it('fits and validates the existing methodology from exact retained private authority', async () => {
@@ -205,7 +206,7 @@ describe('genuine dispatch-bound pick-PAV runner', () => {
         },
       },
     ]);
-    expect(assertClaim).toHaveBeenCalledTimes(3);
+    expect(assertClaim).toHaveBeenCalledTimes(5);
   });
 
   it('does not retain execution artifacts after the dispatch claim is lost', async () => {
@@ -238,6 +239,32 @@ describe('genuine dispatch-bound pick-PAV runner', () => {
 
     await expect(executor.execute(input)).resolves.toMatchObject({ state: 'stale_authority' });
     expect(retainArtifact).not.toHaveBeenCalled();
+  });
+
+  it('authenticates the complete content-addressed operation before replay lookup', async () => {
+    const { input } = executionInput();
+    const loadRetainedComponent = vi.fn(async () => ({
+      runId: addressed('model-run', 'retained-pick'),
+    }));
+    const executor = createAflTradeGenuineDispatchBoundGovernedPickExecutor({
+      loadRetainedComponent,
+      loadExactAuthority: vi.fn(),
+      assertClaim: vi.fn(),
+      retainArtifact: vi.fn(),
+      executionRepository: { register: vi.fn() },
+      componentRepository: { register: vi.fn() },
+    });
+
+    await expect(
+      executor.execute({
+        ...input,
+        operation: {
+          ...input.operation,
+          content: { ...input.operation.content, scopeKey: 'afl-men:tampered-scope' },
+        },
+      })
+    ).resolves.toMatchObject({ state: 'deterministic_failure' });
+    expect(loadRetainedComponent).not.toHaveBeenCalled();
   });
 
   it('restarts from a retained pick run without repeating successful pick work', async () => {

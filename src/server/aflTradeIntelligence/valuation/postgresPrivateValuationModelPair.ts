@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
-import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import {
+  aflTradeContentAddressedIdSchema,
+  canonicalizeAflTradeJson,
+} from '../artifacts/contentAddress';
 import type { AflTradeModelRunManifestV3 } from '../artifacts/modelRunManifest';
 import {
   AflTradeAdmittedModelRunner,
@@ -35,6 +38,7 @@ import {
 import type { AflTradePrivateValuationHpnPreparationResult } from './postgresPrivateValuationHpnPreparation';
 import {
   createGenuineDispatchBoundPickPavRunner,
+  parseGenuineDispatchBoundPickPavExecutionInput,
   type GenuineDispatchBoundPickPavAuthority,
   type GenuineDispatchBoundPickPavExecutionInput,
 } from './genuineDispatchBoundPickPav';
@@ -594,6 +598,9 @@ type RetainCanonicalArtifact = (input: {
 
 export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
   readonly runModel: (execution: PickExecutorInput) => Promise<DispatchBoundPickPreparation>;
+  readonly loadRetainedComponent?: (
+    execution: PickExecutorInput
+  ) => Promise<{ readonly runId: string } | null>;
   readonly assertClaim?: (execution: PickExecutorInput) => Promise<void>;
   readonly retainArtifact: RetainCanonicalArtifact;
   readonly executionRepository: Pick<PostgresGovernedPickPavModelExecutionRepository, 'register'>;
@@ -602,6 +609,13 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
   return {
     async execute(execution: PickExecutorInput) {
       try {
+        const retained = await input.loadRetainedComponent?.(execution);
+        if (retained !== undefined && retained !== null) {
+          return {
+            state: 'completed' as const,
+            runId: aflTradeContentAddressedIdSchema('model-run').parse(retained.runId),
+          };
+        }
         const prepared = await input.runModel(execution);
         await input.assertClaim?.(execution);
         const governedExecution = createDispatchBoundGovernedAflTradePickPavModelExecution({
@@ -641,6 +655,7 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
           execution: governedExecution,
           artifact: executionArtifact,
         });
+        await input.assertClaim?.(execution);
         const content = retainedExecution.execution.content;
         const manifest = createGovernedValuationComponentRunManifest({
           environment: 'non_production',
@@ -668,6 +683,7 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
           manifest,
           artifact: manifestArtifact,
         });
+        await input.assertClaim?.(execution);
         return { state: 'completed' as const, runId: retainedComponent.manifest.runId };
       } catch (error) {
         return classifiedDispatchAdapterFailure(error);
@@ -677,6 +693,9 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
 }
 
 export function createAflTradeGenuineDispatchBoundGovernedPickExecutor(input: {
+  readonly loadRetainedComponent?: (
+    execution: GenuineDispatchBoundPickPavExecutionInput
+  ) => Promise<{ readonly runId: string } | null>;
   readonly loadExactAuthority: (
     execution: GenuineDispatchBoundPickPavExecutionInput
   ) => Promise<GenuineDispatchBoundPickPavAuthority>;
@@ -686,6 +705,12 @@ export function createAflTradeGenuineDispatchBoundGovernedPickExecutor(input: {
   readonly componentRepository: Pick<PostgresGovernedValuationComponentRunRepository, 'register'>;
 }) {
   return createAflTradeDispatchBoundGovernedPickExecutor({
+    ...(input.loadRetainedComponent === undefined
+      ? {}
+      : {
+          loadRetainedComponent: (execution: GenuineDispatchBoundPickPavExecutionInput) =>
+            input.loadRetainedComponent!(parseGenuineDispatchBoundPickPavExecutionInput(execution)),
+        }),
     runModel: createGenuineDispatchBoundPickPavRunner({
       loadExactAuthority: input.loadExactAuthority,
     }),
