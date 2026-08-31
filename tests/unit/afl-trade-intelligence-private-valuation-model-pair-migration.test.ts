@@ -8,6 +8,10 @@ const migrationPath = join(
   root,
   'prisma/afl-trade-outcomes/migrations/0079_dispatch_bound_private_model_pair/migration.sql'
 );
+const reclaimedPickAdoptionMigrationPath = join(
+  root,
+  'prisma/afl-trade-outcomes/migrations/0088_reclaimed_dispatch_pick_component_adoption/migration.sql'
+);
 const schemaPath = join(root, 'prisma/afl-trade-outcomes/schema.prisma');
 
 describe('dispatch-bound private model-pair migration', () => {
@@ -86,5 +90,17 @@ describe('dispatch-bound private model-pair migration', () => {
 
     expect(migration).not.toMatch(/UPDATE\s+"?outcome_active_release"?/i);
     expect(migration).not.toMatch(/UPDATE\s+"?outcome_current_valuation_publication"?/i);
+  });
+
+  it('adopts an exact retained pick component under a separately authenticated live claim', () => {
+    const migration = readFileSync(reclaimedPickAdoptionMigrationPath, 'utf8');
+
+    expect(migration).toContain('outcome_private_valuation_dispatch_attempt');
+    expect(migration).toContain('retained_attempt."claim_id"');
+    expect(migration).toContain('retained_attempt."attempt_number"');
+    expect(migration).toContain('retained_attempt."lease_token_sha256"');
+    expect(migration).toContain(
+      'replace(current_definition,old_claim_match,retained_attempt_match)'
+    );
   });
 });

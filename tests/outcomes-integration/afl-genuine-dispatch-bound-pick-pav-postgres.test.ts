@@ -990,7 +990,7 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       claim: { claimId, leaseToken },
     };
 
-    const setClaimLease = async (leaseExpiresAtSql: string) => {
+    const setClaimLease = async (leaseExpiresAtSql: string, targetClaimId = claimId) => {
       const lease = await pool.connect();
       try {
         await lease.query('BEGIN');
@@ -1005,7 +1005,7 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
           `UPDATE outcome_private_valuation_dispatch_attempt
               SET lease_expires_at=${leaseExpiresAtSql}
             WHERE claim_id=$1`,
-          [claimId]
+          [targetClaimId]
         );
         await lease.query('COMMIT');
       } catch (error) {
@@ -1109,42 +1109,47 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
     ).resolves.toMatchObject({
       rows: [{ observation_set_count: 1, execution_count: 1, component_count: 1 }],
     });
+    await setClaimLease(`clock_timestamp()-interval '1 millisecond'`);
+    const reclaimedLeaseToken = '4'.repeat(64);
+    const reclaimedClaim = await pool.query<{
+      readonly claim_id: string;
+    }>(
+      `SELECT claim_id
+         FROM claim_outcome_private_valuation_dispatch($1,$2,300,$3)`,
+      ['system:reclaimed-pick-tracer', digest(reclaimedLeaseToken), requestId]
+    );
+    expect(reclaimedClaim.rows).toHaveLength(1);
+    const reclaimedClaimId = reclaimedClaim.rows[0]!.claim_id;
+    const reclaimedExecution = {
+      ...execution,
+      attemptNumber: 2,
+      claim: { claimId: reclaimedClaimId, leaseToken: reclaimedLeaseToken },
+    };
+    await expect(
+      pairRepository.bindInput({ exactInput, claim: reclaimedExecution.claim })
+    ).resolves.toMatchObject({ pickRunId: null });
+    await expect(executor.execute(execution)).resolves.toMatchObject({ state: 'stale_authority' });
+
+    const successfulWorkRetentionsBeforeReclaimedReplay = successfulWorkRetentions;
+    const reclaimedReplay = await executor.execute(reclaimedExecution);
+    expect(reclaimedReplay).toEqual(completed);
+    expect(successfulWorkRetentions).toBe(successfulWorkRetentionsBeforeReclaimedReplay);
     await expect(
       pairRepository.acceptComponent({
         operationId: operation.operationId,
         role: 'pick',
         runId: completed.runId,
-        claim: { claimId, leaseToken },
+        claim: reclaimedExecution.claim,
       })
     ).resolves.toMatchObject({ pickRunId: completed.runId });
     await expect(
-      pairRepository.bindInput({ exactInput, claim: { claimId, leaseToken } })
+      pairRepository.bindInput({ exactInput, claim: reclaimedExecution.claim })
     ).resolves.toMatchObject({ pickRunId: completed.runId });
 
-    const expiry = await pool.connect();
-    try {
-      await expiry.query('BEGIN');
-      await expiry.query(`SET LOCAL session_replication_role='replica'`);
-      await expiry.query(
-        `UPDATE outcome_private_valuation_dispatch_request
-            SET lease_expires_at=clock_timestamp()-interval '1 millisecond'
-          WHERE request_id=$1`,
-        [requestId]
-      );
-      await expiry.query(
-        `UPDATE outcome_private_valuation_dispatch_attempt
-            SET lease_expires_at=clock_timestamp()-interval '1 millisecond'
-          WHERE claim_id=$1`,
-        [claimId]
-      );
-      await expiry.query('COMMIT');
-    } catch (error) {
-      await expiry.query('ROLLBACK');
-      throw error;
-    } finally {
-      expiry.release();
-    }
-    await expect(executor.execute(execution)).resolves.toMatchObject({ state: 'stale_authority' });
+    await setClaimLease(`clock_timestamp()-interval '1 millisecond'`, reclaimedClaimId);
+    await expect(executor.execute(reclaimedExecution)).resolves.toMatchObject({
+      state: 'stale_authority',
+    });
     await expect(
       pool.query(
         `SELECT

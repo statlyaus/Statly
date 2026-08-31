@@ -2022,13 +2022,17 @@ The runner reuses the existing pick-PAV observation materializer, distribution b
 validation harness, governed v4 execution envelope, immutable artifact custody and governed
 component manifest. Live-claim checks bracket observation persistence and precede each execution and
 component custody write. Exact replay revalidates the retained policy and selection membership and
-returns the retained observation set; the model-pair coordinator then skips an already accepted pick
-component, so restart does not refit or register a second component. Migration 0086 preserves the
-public active-release finalization path and adds only the exact live dispatch-binding alternative for
-a retained factual release, including the bound pick policy and HPN calculation. Deterministic
-authority, materialization and validation failures remain closed; only storage or runtime failures
-may return through the dispatch attempt ledger. No new retry ledger, component store, public pointer
-or pick methodology is introduced.
+returns the retained observation set. If a process stops after component registration but before
+operation acceptance, a reclaimed claim for the same request authenticates the retained execution
+against its original immutable dispatch attempt and separately proves the replacement claim is live
+before lookup and acceptance. The accepted operation records the replacement claim while the
+execution retains its historical creation claim; the component is not rematerialized, refitted or
+registered again. The model-pair coordinator also skips an already accepted pick component.
+Migration 0086 preserves the public active-release finalization path and adds only the exact live
+dispatch-binding alternative for a retained factual release, including the bound pick policy and HPN
+calculation. Deterministic authority, materialization and validation failures remain closed; only
+storage or runtime failures may return through the dispatch attempt ledger. No new retry ledger,
+component store, public pointer or pick methodology is introduced.
 
 This is still not a complete new-game-data pipeline. The deployed weekly runner continues to consume
 whatever exact prepared-v3 head is current. Observation rebuild and prepared-v3 activation still need

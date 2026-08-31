@@ -392,36 +392,47 @@ export function createPostgresGenuineDispatchBoundPickPavExecutor(input: {
              FROM outcome_governed_valuation_component_run component
              JOIN outcome_governed_pick_pav_model_execution native
                ON native.execution_id=component.native_execution_id
+             JOIN outcome_private_valuation_model_request_binding binding
+               ON binding.request_id=
+                    native.execution_json->'content'->'privateInput'->>'requestId'
+              AND binding.operation_id=
+                    native.execution_json->'content'->'privateInput'->>'operationId'
+              AND binding.factual_output_id=
+                    native.execution_json->'content'->'privateInput'->>'factualOutputId'
+              AND binding.hpn_calculation_id=
+                    native.execution_json->'content'->'privateInput'->>'hpnCalculationId'
+             JOIN outcome_private_valuation_dispatch_attempt retained_attempt
+               ON retained_attempt.request_id=binding.request_id
+              AND retained_attempt.claim_id=
+                    native.execution_json->'content'->'privateInput'->>'claimId'
+              AND retained_attempt.attempt_number=
+                    (native.execution_json->'content'->'privateInput'->>'attemptNumber')::integer
+              AND retained_attempt.lease_token_sha256=
+                    native.execution_json->'content'->'privateInput'->>'leaseTokenSha256'
             WHERE component.role='draft_pick_and_future_pick_distribution'
               AND component.native_execution_kind='governed_pick_pav_model_execution'
-              AND component.protocol_id=$10 AND component.dataset_id=$11
-              AND component.dataset_admission_id=$12
+              AND component.protocol_id=$8 AND component.dataset_id=$9
+              AND component.dataset_admission_id=$10
               AND native.execution_json->'content'->>'schemaVersion'=
                 'afl-trade-pick-pav-model-execution/v4'
-              AND native.execution_json->'content'->>'policyId'=$9
+              AND native.execution_json->'content'->>'policyId'=$7
               AND native.execution_json->'content'->'privateInput'->>'requestId'=$1
               AND native.execution_json->'content'->'privateInput'->>'operationId'=$2
-              AND native.execution_json->'content'->'privateInput'->>'claimId'=$3
-              AND (native.execution_json->'content'->'privateInput'->>'attemptNumber')::integer=$4
-              AND native.execution_json->'content'->'privateInput'->>'leaseTokenSha256'=$5
-              AND native.execution_json->'content'->'privateInput'->>'factualOutputId'=$6
-              AND native.execution_json->'content'->'privateInput'->>'hpnCalculationId'=$7
-              AND native.execution_json->'content'->'privateInput'->>'factualValuesSha256'=$8
-              AND native.execution_json->'content'->'privateInput'->>'hpnValuesSha256'=$13`,
+              AND native.execution_json->'content'->'privateInput'->>'factualOutputId'=$3
+              AND native.execution_json->'content'->'privateInput'->>'hpnCalculationId'=$4
+              AND native.execution_json->'content'->'privateInput'->>'factualValuesSha256'=$5
+              AND native.execution_json->'content'->'privateInput'->>'hpnValuesSha256'=$6`,
           [
             execution.exactInput.requestId,
             execution.operation.operationId,
-            execution.claim.claimId,
-            execution.attemptNumber,
-            sha256(execution.claim.leaseToken),
             execution.exactInput.factualOutputId,
             execution.exactInput.hpnCalculationId,
             execution.exactInput.substantive.factualValuesSha256,
+            execution.exactInput.substantive.hpnValuesSha256,
             execution.operation.content.pick.policyId,
             execution.operation.content.pick.protocolId,
             execution.operation.content.pick.datasetId,
             execution.operation.content.pick.datasetAdmissionId,
-            execution.exactInput.substantive.hpnValuesSha256,
           ]
         );
       });
