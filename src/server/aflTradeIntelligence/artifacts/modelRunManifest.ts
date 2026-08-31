@@ -33,6 +33,7 @@ const successfulOutcomeSchema = z
   .object({
     status: z.literal('succeeded'),
     modelArtifact: aflTradeArtifactRefSchema,
+    selectionValidationReportArtifact: aflTradeArtifactRefSchema.optional(),
     validationReportArtifact: aflTradeArtifactRefSchema,
     baselineComparisonArtifact: aflTradeArtifactRefSchema,
     calibrationReportArtifact: aflTradeArtifactRefSchema,

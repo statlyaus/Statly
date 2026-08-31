@@ -1218,6 +1218,40 @@ records exist, and it does not fit coefficients, select a champion, issue Gate 3
 trade grade or publish a valuation. Real source evidence, an executable fitting implementation,
 independent numerical validation and their reviewed publication transitions remain required.
 
+The local admitted player runner now implements one named methodology,
+`afl-trade-admitted-player-candidate/v1`, behind that authority boundary. It estimates future
+acquisition-spell contribution above a role-and-era replacement baseline in the protocol's additive
+contribution unit. The target is the separately governed scalar transform of Brownlow votes,
+coaches votes, games and goals observed strictly inside the future target window. Predictors are the
+exact admitted point-in-time feature members and hashes known by the prediction cutoff: expected
+games and prior contribution per game, with governed role and era assignments. Target members are
+never reused as predictors.
+
+The protocol binds the exact feature-value artifact, role and era definitions, scalar transform,
+partition windows and embargo. The run intent binds the exact candidate configuration artifact.
+That versioned configuration declares the role-and-era replacement-baseline policy, ridge penalty,
+interval coverage level, minimum comparable observations and required relative MAE and RMSE
+improvements. Fitting uses `train` only; interval residuals use `calibration`; candidate selection
+uses `validation`; `final_test` is evaluated once after the candidate lock and cannot retune the
+candidate. The native execution retains the fitted coefficients, baseline, validation,
+calibration, interval-coverage, subgroup, sensitivity, leakage-audit, model-card and diagnostics
+artifacts. These records are evidence only and remain publication-ineligible.
+
+The dispatch-bound local composition accepts no caller-supplied operational principal, role,
+environment, execution mode or publication posture. Before materialization it re-authenticates the
+live claim, exact request-to-operation binding, private factual output and the factual
+release/candidate/member root shared by the dataset and admission. A different dataset, admission,
+protocol, observation set or source-rights lineage fails closed. Multiple admitted captures may
+share one rights proposal; they produce one current run-start receipt only when every retained
+receipt has identical request-to-proposal ancestry. Conflicting ancestry is rejected. The existing
+human operational-authorization branch is unchanged.
+
+Successful native runs are wrapped by the existing governed component manifest with exact protocol,
+dataset, admission and Gate-ledger ancestry. Replay first authenticates a retained component against
+the original immutable dispatch attempt and the current live claimant. When it matches, the runner
+returns that component without reconstructing observations, issuing another authorization or
+retraining. No new retry ledger, current pointer or outcomes table is required for this player slice.
+
 ## Temporal contract
 
 Canonical evidence is bitemporal:

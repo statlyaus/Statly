@@ -123,7 +123,14 @@ const dataset = {
 
 function rowFor(sql: string) {
   if (sql.includes('outcome_factual_release_candidate'))
-    return [{ candidate_json: factualCandidate, finalized_at: createdAt }];
+    return [
+      {
+        candidate_id: factualCandidate.candidateId,
+        candidate_sha256: digest('1'),
+        candidate_json: factualCandidate.content,
+        finalized_at: createdAt,
+      },
+    ];
   if (sql.includes('outcome_corpus_factual_lineage'))
     return [{ lineage_json: corpusLineage, gate2_decision_key: 'gate2-lineage' }];
   if (sql.includes('outcome_valuation_dataset_consumed_field_set'))
@@ -139,12 +146,10 @@ function rowFor(sql: string) {
     return [
       {
         capture_id: 'capture-1',
+        source_snapshot_id: id('source-snapshot', '2'),
         manifest_json: {
-          snapshotId: id('source-snapshot', '2'),
-          content: {
-            sourceRightsProposal: { rightsArtifactId: id('source-rights', 'f') },
-            gate0aDecision: { content: { environment: 'test_fixture' } },
-          },
+          sourceRightsProposal: { rightsArtifactId: id('source-rights', 'f') },
+          gate0aDecision: { content: { environment: 'test_fixture' } },
         },
       },
     ];

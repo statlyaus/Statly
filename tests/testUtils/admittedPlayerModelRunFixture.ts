@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
-
-import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeByteArtifactRef,
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   AFL_TRADE_VALUATION_DATASET_CANDIDATE_SCHEMA_VERSION,
   AFL_TRADE_VALUATION_DATASET_ROW_SCHEMA_VERSION,
@@ -12,21 +16,15 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContracts';
 import {
   AFL_TRADE_PLAYER_MODEL_PROTOCOL_SCHEMA_VERSION_V2,
-  aflTradeAnyPlayerContributionModelProtocolSchema,
   createAflTradePlayerContributionModelProtocolV2,
 } from '@/server/aflTradeIntelligence/artifacts/modelProtocol';
 import {
   AFL_TRADE_MODEL_RUN_SCHEMA_VERSION_V3,
-  aflTradeAnyModelRunManifestSchema,
   createAflTradeModelRunIntent,
 } from '@/server/aflTradeIntelligence/artifacts/modelRunManifest';
 import {
-  AflTradeAdmittedModelRunner,
-  AflTradeAdmittedModelRunAuthorityService,
   createAflTradeModelRunOperationalAuthorization,
-  createAflTradePrivateValuationModelRunOperationalAuthorization,
   type AflTradeAdmittedModelRunEvidence,
-  type AflTradeModelRunAuthorizationStore,
 } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
 import { createAflTradePlayerObservationSetV2 } from '@/server/aflTradeIntelligence/modeling/playerContributionContracts';
 import {
@@ -41,13 +39,14 @@ import {
 } from '@/server/aflTradeIntelligence/outcomes/factualReconciliationContracts';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/automatedPrivateEvaluationPolicy';
 
 import { createAflTradeGateDecisionFixture } from '../fixtures/aflDraftTradeOutcomeReleaseFixture';
 
-const digest = (character: string) => character.repeat(64);
+export const digest = (character: string) => character.repeat(64);
 const retainedArtifactBytes = new Map<string, Uint8Array>();
 
-function artifact(character: string) {
+export function artifact(character: string) {
   const bytes = new TextEncoder().encode(`fixture-artifact-${character}`);
   const reference = createAflTradeByteArtifactRef(
     bytes,
@@ -55,6 +54,15 @@ function artifact(character: string) {
     '2026-08-10T00:00:00.000Z'
   );
   retainedArtifactBytes.set(reference.artifactId, bytes);
+  return reference;
+}
+
+function jsonArtifact(document: unknown) {
+  const reference = createAflTradeCanonicalJsonArtifactRef(document, '2026-08-10T00:00:00.000Z');
+  retainedArtifactBytes.set(
+    reference.artifactId,
+    new TextEncoder().encode(canonicalizeAflTradeJson(document))
+  );
   return reference;
 }
 
@@ -68,7 +76,8 @@ function windows() {
   };
 }
 
-const outcomeMetricCodes = ['brownlow_votes', 'coaches_votes', 'games', 'goals'] as const;
+export const outcomeMetricCodes = ['brownlow_votes', 'coaches_votes', 'games', 'goals'] as const;
+type FixtureEnvironment = 'test_fixture' | 'non_production';
 
 function exactReference(prefix: string, marker: string) {
   const sha256 = digest(marker);
@@ -76,6 +85,7 @@ function exactReference(prefix: string, marker: string) {
 }
 
 function spellMetricFixture(input: {
+  environment: FixtureEnvironment;
   index: number;
   season: number;
   playerId: string;
@@ -147,7 +157,7 @@ function spellMetricFixture(input: {
     finalizedAt: input.recordedAt,
   });
   const subjectKey = createAflTradeReconciledSubjectKey({
-    environment: 'test_fixture',
+    environment: input.environment,
     competition: result.content.competition,
     seasonYear: result.content.seasonYear,
     playerId: result.content.playerId,
@@ -161,7 +171,7 @@ function spellMetricFixture(input: {
     publicAssetBoundary: 'source_native_afl_assets_no_user_or_fantasy_ownership',
     authorityBoundary: AFL_TRADE_ACQUISITION_SPELL_METRIC_AUTHORITY_BOUNDARY,
     publicationEligible: false,
-    environment: 'test_fixture',
+    environment: input.environment,
     competition: 'AFLM',
     policyId: policy.id,
     policySha256: policy.sha256,
@@ -199,7 +209,7 @@ function spellMetricFixture(input: {
       {
         factualRunId,
         factualRunSha256: digest(marker),
-        environment: 'test_fixture',
+        environment: input.environment,
         finalization: {
           id: finalizationId,
           sha256: finalizationId.slice('factual-reconciliation-finalization:'.length),
@@ -214,7 +224,46 @@ function spellMetricFixture(input: {
   });
 }
 
-function valuationDatasetFixture() {
+interface AdmittedPlayerFactualParentOverride {
+  readonly scopeKey: string;
+  readonly corpusId?: string;
+  readonly corpusToCandidateLineageId?: string;
+  readonly factualReleaseId: string;
+  readonly factualCandidateId: string;
+  readonly sourceMemberSetSha256: string;
+  readonly archiveDatasetId?: string;
+  readonly sourceSnapshotSetId?: string;
+  readonly metricRegistryVersion: string;
+  readonly acquisitionSpellRuleId: string;
+  readonly factualEffectiveThrough: string;
+  readonly analyticalAuthorityReceiptId?: string;
+  readonly operationalAuthorizationReceiptId?: string;
+  readonly gate2Decision?: Readonly<{
+    decisionId: string;
+    effectiveAt: string;
+    revalidateAt: string;
+  }>;
+  readonly sourceAuthority?: Readonly<{
+    captureId: string;
+    sourceSnapshotId: string;
+    consumedFieldSetId: string;
+    consumedFieldSetSha256: string;
+    rights: ReturnType<typeof aflTradeSourceRightsProposalSchema.parse>;
+    ledger: Parameters<typeof createAflTradeGate0AReceipt>[0];
+    request: Omit<Parameters<typeof createAflTradeGate0AReceipt>[2], 'evaluatedAt'>;
+  }>;
+}
+
+function valuationDatasetFixture(
+  environment: FixtureEnvironment,
+  factualParentOverride?: AdmittedPlayerFactualParentOverride
+) {
+  const datasetCreatedAt = factualParentOverride
+    ? '2026-08-12T00:08:00.000Z'
+    : '2026-08-10T00:00:00.000Z';
+  const knowledgeCutoffAt = factualParentOverride
+    ? '2026-08-12T00:07:00.000Z'
+    : '2026-08-09T00:00:00.000Z';
   const partitions = [
     { role: 'train' as const, season: 2011, prediction: '2011-01-01T00:00:00.000Z' },
     { role: 'train' as const, season: 2011, prediction: '2011-01-01T00:00:00.000Z' },
@@ -232,6 +281,7 @@ function valuationDatasetFixture() {
     const recordedAt = `${season + 1}-01-01T00:00:00.000Z`;
     const rowMetrics = outcomeMetricCodes.map((metricCode, metricIndex) =>
       spellMetricFixture({
+        environment,
         index: index + 1,
         season,
         playerId,
@@ -244,6 +294,7 @@ function valuationDatasetFixture() {
       })
     );
     const featureMetric = spellMetricFixture({
+      environment,
       index: index + 25,
       season: season - 1,
       playerId,
@@ -320,11 +371,11 @@ function valuationDatasetFixture() {
   });
   const specification = createAflTradeValuationDatasetSpecification({
     schemaVersion: 'afl-trade-valuation-dataset-specification/v1',
-    environment: 'test_fixture',
-    scopeKey: 'public-afl-draft-trade-outcomes',
+    environment,
+    scopeKey: factualParentOverride?.scopeKey ?? 'public-afl-draft-trade-outcomes',
     competition: 'AFLM',
     modelKind: 'player_contribution_and_availability',
-    createdAt: '2026-08-10T00:00:00.000Z',
+    createdAt: datasetCreatedAt,
     rowGrain: 'player_acquisition_spell_prediction',
     featurePolicy: {
       knowledgeJoin: 'point_in_time_as_known_at_prediction_cutoff',
@@ -360,22 +411,31 @@ function valuationDatasetFixture() {
     authorityBoundary:
       'private_factual_feature_dataset_no_model_fit_grade_publication_or_fantasy_ownership',
     publicationEligible: false,
-    environment: 'test_fixture',
-    scopeKey: 'public-afl-draft-trade-outcomes',
+    environment,
+    scopeKey: factualParentOverride?.scopeKey ?? 'public-afl-draft-trade-outcomes',
     competition: 'AFLM',
-    createdAt: '2026-08-10T00:00:00.000Z',
-    knowledgeCutoffAt: '2026-08-09T00:00:00.000Z',
+    createdAt: datasetCreatedAt,
+    knowledgeCutoffAt,
     factualParent: {
-      corpusId: `corpus:${digest('1')}`,
-      corpusToCandidateLineageId: `corpus-factual-lineage:${digest('2')}`,
-      factualReleaseId: `outcome-release:${digest('3')}`,
-      factualCandidateId: `factual-release-candidate:${digest('4')}`,
-      sourceMemberSetSha256: digest('5'),
-      archiveDatasetId: `archive-dataset:${digest('6')}`,
-      sourceSnapshotSetId: `source-snapshot-set:${digest('7')}`,
-      metricRegistryVersion: 'fixture-v1',
-      acquisitionSpellRuleId: `acquisition-spell-rule:${digest('8')}`,
-      factualEffectiveThrough: '2025-12-31T00:00:00.000Z',
+      corpusId: factualParentOverride?.corpusId ?? `corpus:${digest('1')}`,
+      corpusToCandidateLineageId:
+        factualParentOverride?.corpusToCandidateLineageId ??
+        `corpus-factual-lineage:${digest('2')}`,
+      factualReleaseId:
+        factualParentOverride?.factualReleaseId ?? `outcome-release:${digest('3')}`,
+      factualCandidateId:
+        factualParentOverride?.factualCandidateId ?? `factual-release-candidate:${digest('4')}`,
+      sourceMemberSetSha256: factualParentOverride?.sourceMemberSetSha256 ?? digest('5'),
+      archiveDatasetId:
+        factualParentOverride?.archiveDatasetId ?? `archive-dataset:${digest('6')}`,
+      sourceSnapshotSetId:
+        factualParentOverride?.sourceSnapshotSetId ?? `source-snapshot-set:${digest('7')}`,
+      metricRegistryVersion: factualParentOverride?.metricRegistryVersion ?? 'fixture-v1',
+      acquisitionSpellRuleId:
+        factualParentOverride?.acquisitionSpellRuleId ??
+        `acquisition-spell-rule:${digest('8')}`,
+      factualEffectiveThrough:
+        factualParentOverride?.factualEffectiveThrough ?? '2025-12-31T00:00:00.000Z',
       releaseRecordStateId: `outcome-release-record-state:${digest('9')}`,
       releaseApprovalEventId: `outcome-release-event:${digest('a')}`,
       releaseRegistryRevision: 1,
@@ -397,10 +457,10 @@ function valuationDatasetFixture() {
   return { candidate, spellMetrics };
 }
 
-function protocolContent() {
+export function protocolContent(environment: FixtureEnvironment = 'test_fixture') {
   return {
     schemaVersion: AFL_TRADE_PLAYER_MODEL_PROTOCOL_SCHEMA_VERSION_V2,
-    environment: 'test_fixture' as const,
+    environment,
     protocolKey: 'fixture-admitted-player-model',
     version: 1,
     modelKind: 'player_contribution_and_availability' as const,
@@ -477,7 +537,9 @@ function protocolContent() {
   };
 }
 
-function runContent(protocol = createAflTradePlayerContributionModelProtocolV2(protocolContent())) {
+export function runContent(
+  protocol = createAflTradePlayerContributionModelProtocolV2(protocolContent())
+) {
   return {
     schemaVersion: AFL_TRADE_MODEL_RUN_SCHEMA_VERSION_V3,
     environment: 'test_fixture' as const,
@@ -499,8 +561,14 @@ function runContent(protocol = createAflTradePlayerContributionModelProtocolV2(p
     job: {
       jobId: 'fixture-model-job',
       attempt: 1,
-      initiatedBy: 'fixture-model-owner',
-      workerIdentity: 'fixture-model-worker',
+      initiatedBy:
+        protocol.content.environment === 'non_production'
+          ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
+          : 'fixture-model-owner',
+      workerIdentity:
+        protocol.content.environment === 'non_production'
+          ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
+          : 'fixture-model-worker',
     },
     startedAt: '2026-08-10T00:03:00.000Z',
     candidateLockedAt: '2026-08-10T00:04:00.000Z',
@@ -530,8 +598,26 @@ function runContent(protocol = createAflTradePlayerContributionModelProtocolV2(p
   };
 }
 
-function admittedRunFixture() {
-  const { candidate: datasetCandidate, spellMetrics } = valuationDatasetFixture();
+export function admittedRunFixture(
+  environment: FixtureEnvironment = 'test_fixture',
+  factualParentOverride?: AdmittedPlayerFactualParentOverride
+) {
+  const datasetCreatedAt = factualParentOverride
+    ? '2026-08-12T00:08:00.000Z'
+    : '2026-08-10T00:00:00.000Z';
+  const admittedAt = factualParentOverride
+    ? '2026-08-12T00:09:00.000Z'
+    : '2026-08-10T00:01:00.000Z';
+  const protocolPreparedAt = factualParentOverride
+    ? '2026-08-12T00:10:00.000Z'
+    : '2026-08-10T00:02:00.000Z';
+  const runStartedAt = factualParentOverride
+    ? '2026-08-12T00:11:00.000Z'
+    : '2026-08-10T00:03:00.000Z';
+  const { candidate: datasetCandidate, spellMetrics } = valuationDatasetFixture(
+    environment,
+    factualParentOverride
+  );
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
     registerId: 'fixture-model-source',
@@ -618,13 +704,15 @@ function admittedRunFixture() {
     proposedBy: 'fixture-owner',
     proposalOrigin: 'human_authored' as const,
   };
-  const rights = aflTradeSourceRightsProposalSchema.parse({
+  const fixtureRights = aflTradeSourceRightsProposalSchema.parse({
     rightsArtifactId: createAflTradeContentAddress('source-rights', rightsContent),
     content: rightsContent,
   });
+  const rights = factualParentOverride?.sourceAuthority?.rights ?? fixtureRights;
   const decisionKey = 'fixture-admitted-model-rights';
-  const gate = createAflTradeGateDecisionFixture({
+  const fixtureGate = createAflTradeGateDecisionFixture({
     gate: 'gate_0a_permission_to_evaluate',
+    environment,
     decisionKey,
     decidedAt: '2026-08-10T00:00:00.000Z',
     revalidateAt: '2027-08-01T00:00:00.000Z',
@@ -640,9 +728,13 @@ function admittedRunFixture() {
       { name: 'operation', values: ['derived_feature_creation', 'model_training'] },
     ],
   });
+  const gate = factualParentOverride?.sourceAuthority
+    ? { ledger: factualParentOverride.sourceAuthority.ledger }
+    : fixtureGate;
   const gate2DecisionKey = 'fixture-admitted-model-corpus';
   const gate2 = createAflTradeGateDecisionFixture({
     gate: 'gate_2_corpus_lineage',
+    environment,
     decisionKey: gate2DecisionKey,
     decidedAt: '2026-08-10T00:00:00.000Z',
     revalidateAt: '2027-08-01T00:00:00.000Z',
@@ -666,9 +758,9 @@ function admittedRunFixture() {
       { name: 'competition', values: [datasetCandidate.content.competition] },
     ],
   });
-  const request = {
+  const fixtureRequest = {
     decisionKey,
-    environment: 'test_fixture' as const,
+    environment,
     rightsArtifactId: rights.rightsArtifactId,
     competition: 'AFLM',
     season: 2026,
@@ -686,32 +778,33 @@ function admittedRunFixture() {
     metadataRetentionDays: 365,
     cacheSeconds: null,
   };
+  const request = factualParentOverride?.sourceAuthority?.request ?? fixtureRequest;
   const derivationReceipt = createAflTradeGate0AReceipt(
     gate.ledger,
     rights,
-    { ...request, evaluatedAt: '2026-08-10T00:00:00.000Z' },
-    '2026-08-10T00:00:00.000Z'
+    { ...request, evaluatedAt: datasetCreatedAt },
+    datasetCreatedAt
   );
   const admissionEvaluationReceipt = createAflTradeGate0AReceipt(
     gate.ledger,
     rights,
-    { ...request, evaluatedAt: '2026-08-10T00:01:00.000Z' },
-    '2026-08-10T00:01:00.000Z'
+    { ...request, evaluatedAt: admittedAt },
+    admittedAt
   );
   const runStartEvaluationReceipt = createAflTradeGate0AReceipt(
     gate.ledger,
     rights,
-    { ...request, evaluatedAt: '2026-08-10T00:03:00.000Z' },
-    '2026-08-10T00:03:00.000Z'
+    { ...request, evaluatedAt: runStartedAt },
+    runStartedAt
   );
   const datasetId = datasetCandidate.datasetId;
   const admission = createAflTradeValuationDatasetAdmissionReceipt({
     schemaVersion: 'afl-trade-dataset-admission/v3',
     authorityBoundary: 'dataset_admission_only_no_model_fit_grade_publication_or_fantasy_ownership',
     publicationEligible: false,
-    environment: 'test_fixture',
-    admittedAt: '2026-08-10T00:01:00.000Z',
-    datasetCreatedAt: '2026-08-10T00:00:00.000Z',
+    environment,
+    admittedAt,
+    datasetCreatedAt,
     datasetId,
     datasetSha256: datasetId.slice('dataset:'.length),
     factualReleaseId: datasetCandidate.content.factualParent.factualReleaseId,
@@ -720,11 +813,15 @@ function admittedRunFixture() {
     corpusId: datasetCandidate.content.factualParent.corpusId,
     corpusToCandidateLineageId: datasetCandidate.content.factualParent.corpusToCandidateLineageId,
     gate2Decision: {
-      decisionId: gate2.ledger.decisions[0]!.decisionId,
+      decisionId:
+        factualParentOverride?.gate2Decision?.decisionId ??
+        gate2.ledger.decisions[0]!.decisionId,
       state: 'approved',
-      effectiveAt: '2026-08-10T00:00:00.000Z',
-      evaluatedAt: '2026-08-10T00:01:00.000Z',
-      revalidateAt: '2027-08-01T00:00:00.000Z',
+      effectiveAt:
+        factualParentOverride?.gate2Decision?.effectiveAt ?? '2026-08-10T00:00:00.000Z',
+      evaluatedAt: admittedAt,
+      revalidateAt:
+        factualParentOverride?.gate2Decision?.revalidateAt ?? '2027-08-01T00:00:00.000Z',
       pinnedCorpusId: datasetCandidate.content.factualParent.corpusId,
       pinnedCorpusToCandidateLineageId:
         datasetCandidate.content.factualParent.corpusToCandidateLineageId,
@@ -733,9 +830,13 @@ function admittedRunFixture() {
     },
     sourceRightsEvaluations: [
       {
-        captureId: 'fixture-capture',
-        sourceSnapshotId: `source-snapshot:${digest('b')}`,
-        consumedFieldSetId: `consumed-field-set:${digest('c')}`,
+        captureId: factualParentOverride?.sourceAuthority?.captureId ?? 'fixture-capture',
+        sourceSnapshotId:
+          factualParentOverride?.sourceAuthority?.sourceSnapshotId ??
+          `source-snapshot:${digest('b')}`,
+        consumedFieldSetId:
+          factualParentOverride?.sourceAuthority?.consumedFieldSetId ??
+          `consumed-field-set:${digest('c')}`,
         proposalId: rights.rightsArtifactId,
         derivationDecisionId: derivationReceipt.content.result.decisionId!,
         derivationEvaluationReceiptId: derivationReceipt.receiptId,
@@ -743,19 +844,83 @@ function admittedRunFixture() {
         admissionDecisionId: admissionEvaluationReceipt.content.result.decisionId!,
         admissionEvaluationReceiptId: admissionEvaluationReceipt.receiptId,
         admissionEvaluatedAt: admissionEvaluationReceipt.content.request.evaluatedAt,
-        consumedFieldSetSha256: digest('d'),
+        consumedFieldSetSha256:
+          factualParentOverride?.sourceAuthority?.consumedFieldSetSha256 ?? digest('d'),
         operations: ['derived_feature_creation', 'model_training'],
         fieldUses: ['derived_feature', 'model_training'],
         status: 'approved',
         termsValidThrough: '2027-08-01T00:00:00.000Z',
       },
     ],
-    analyticalAuthorityReceiptId: `architecture-operation-receipt:${digest('e')}`,
-    operationalAuthorizationReceiptId: `architecture-operation-receipt:${digest('f')}`,
+    analyticalAuthorityReceiptId:
+      factualParentOverride?.analyticalAuthorityReceiptId ??
+      `architecture-operation-receipt:${digest('e')}`,
+    operationalAuthorizationReceiptId:
+      factualParentOverride?.operationalAuthorizationReceiptId ??
+      `architecture-operation-receipt:${digest('f')}`,
   });
-  const protocol = createAflTradePlayerContributionModelProtocolV2({
-    ...protocolContent(),
+  const scalarTransform = {
+    schemaVersion: 'afl-trade-player-scalar-transform/v1' as const,
+    valueUnitId: 'fixture-contribution-unit',
+    weights: { brownlow_votes: 2, coaches_votes: 1.5, games: 1, goals: 0.5 },
+  };
+  const protocolTemplate = protocolContent(environment);
+  const pointInTimeFeatures = {
+    schemaVersion: 'afl-trade-player-point-in-time-feature-set/v1' as const,
     datasetId,
+    createdAt: datasetCreatedAt,
+    roleTaxonomyArtifactId: protocolTemplate.footballContext.roleTaxonomyArtifact.artifactId,
+    eraDefinitionArtifactId: protocolTemplate.footballContext.eraDefinitionArtifact.artifactId,
+    rows: datasetCandidate.content.rows.map(({ rowId, content }, index) => ({
+      datasetRowId: rowId,
+      featureKnownThrough: content.featureKnownThrough,
+      role: 'unknown',
+      roleKnownAt: content.featureKnownThrough,
+      era: 'modern',
+      values: content.featureInputs.map(({ memberId, recordSha256 }) => ({
+        memberId,
+        recordSha256,
+        numericValue: String(index + 1),
+      })),
+    })),
+  };
+  const candidateConfig = {
+    schemaVersion: 'afl-trade-admitted-player-candidate-config/v1' as const,
+    baseline: {
+      schemaVersion: 'afl-trade-player-baseline-config/v1' as const,
+      replacementQuantile: 0.5,
+      minimumGamesForReplacementFit: 1,
+      minimumTrainingObservationsPerGroup: 2,
+      weighting: 'games_played' as const,
+      replacementStratification: 'role_and_era' as const,
+      unavailableAndZeroTreatment: 'distinct' as const,
+      activeCareerTreatment: 'right_censored' as const,
+    },
+    validation: {
+      schemaVersion: 'afl-trade-player-validation-config/v1' as const,
+      minimumComparableObservations: 1,
+      acceptanceRule: 'candidate_improves_both_mae_and_rmse' as const,
+      minimumRelativeMaeImprovement: 0.01,
+      minimumRelativeRmseImprovement: 0.01,
+      incompletePredictionCoverage: 'fail_closed' as const,
+      governanceEffect: 'evidence_only_no_gate_or_source_approval' as const,
+    },
+    ridgeLambda: 1,
+    intervalCoverageLevel: 0.8,
+  };
+  const scalarTransformArtifact = jsonArtifact(scalarTransform);
+  const pointInTimeFeatureValuesArtifact = jsonArtifact(pointInTimeFeatures);
+  const configurationArtifact = jsonArtifact(candidateConfig);
+  const protocol = createAflTradePlayerContributionModelProtocolV2({
+    ...protocolTemplate,
+    datasetId,
+    preparedAt: protocolPreparedAt,
+    valueUnit: {
+      ...protocolTemplate.valueUnit,
+      valueUnitId: scalarTransform.valueUnitId,
+    },
+    scalarValueTransformArtifact: scalarTransformArtifact,
+    pointInTimeFeatureValuesArtifact,
     datasetAdmission: {
       schemaVersion: 'afl-trade-dataset-admission/v3',
       admissionId: admission.admissionId,
@@ -768,8 +933,23 @@ function admittedRunFixture() {
     modelProtocolId: protocol.protocolId,
     spellMetrics,
   });
+  const dependencyLockArtifact = artifact('2');
+  const runtimeArtifact = artifact('3');
+  const containerArtifact = artifact('4');
+  const environmentArtifact = artifact('6');
+  const sourceCodeArtifact = jsonArtifact({
+    schemaVersion: 'afl-trade-admitted-player-executor-build/v1',
+    implementationId: 'statly-admitted-player-contribution-candidate',
+    candidateSchemaVersion: 'afl-trade-admitted-player-candidate/v1',
+    codeCommitSha: digest('a'),
+    cleanWorktree: true,
+    dependencyLockArtifactId: dependencyLockArtifact.artifactId,
+    runtimeArtifactId: runtimeArtifact.artifactId,
+    containerArtifactId: containerArtifact.artifactId,
+    environmentArtifactId: environmentArtifact.artifactId,
+  });
   const intent = createAflTradeModelRunIntent({
-    environment: 'test_fixture',
+    environment,
     modelId: 'fixture-player-model',
     modelVersion: 'fixture-v1',
     datasetId,
@@ -782,17 +962,23 @@ function admittedRunFixture() {
     job: {
       jobId: 'fixture-model-job',
       attempt: 1,
-      initiatedBy: 'fixture-model-owner',
-      workerIdentity: 'fixture-model-worker',
+      initiatedBy:
+        environment === 'non_production'
+          ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
+          : 'fixture-model-owner',
+      workerIdentity:
+        environment === 'non_production'
+          ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
+          : 'fixture-model-worker',
     },
-    startedAt: '2026-08-10T00:03:00.000Z',
+    startedAt: runStartedAt,
     windows: windows(),
-    sourceCodeArtifact: artifact('1'),
-    dependencyLockArtifact: artifact('2'),
-    runtimeArtifact: artifact('3'),
-    containerArtifact: artifact('4'),
-    configurationArtifact: artifact('5'),
-    environmentArtifact: artifact('6'),
+    sourceCodeArtifact,
+    dependencyLockArtifact,
+    runtimeArtifact,
+    containerArtifact,
+    configurationArtifact,
+    environmentArtifact,
     featureDefinitionArtifacts: [
       ...datasetCandidate.content.specification.content.featureDefinitions,
     ],
@@ -806,7 +992,9 @@ function admittedRunFixture() {
     modelProtocolId: intent.content.modelProtocolId,
     observationSetId: intent.content.observationSetId,
     authorizedAt: intent.content.startedAt,
-    validThrough: '2026-08-10T00:03:30.000Z',
+    validThrough: factualParentOverride
+      ? '2026-08-12T00:11:30.000Z'
+      : '2026-08-10T00:03:30.000Z',
     principalRef: 'fixture-model-operator',
     role: 'afl_trade_model_run_operator',
     authorityEvidence: {
@@ -830,6 +1018,7 @@ function admittedRunFixture() {
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    protocol.content.pointInTimeFeatureValuesArtifact!,
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,
@@ -862,6 +1051,7 @@ function admittedRunFixture() {
   return {
     admission,
     datasetCandidate,
+    derivationReceipt,
     evidence,
     intent,
     observationSet,
@@ -871,613 +1061,3 @@ function admittedRunFixture() {
     spellMetrics,
   };
 }
-
-function fixedClock(value = '2026-08-10T00:03:00.000Z') {
-  return { now: async () => value };
-}
-
-function memoryFailureRecorder() {
-  return {
-    recordExecutionFailure: async ({ failedAt }: { failedAt: string }) => ({
-      candidateLockedAt: null,
-      finalTestEvaluatedAt: null,
-      finishedAt: failedAt,
-      outcome: {
-        status: 'failed' as const,
-        failureClassification: 'training_failure' as const,
-        failureArtifact: artifact('d'),
-        diagnosticsArtifact: artifact('e'),
-      },
-    }),
-  };
-}
-
-function memoryAuthorizationStore(): AflTradeModelRunAuthorizationStore & {
-  persistCompletedRun: (run: { runId: string }) => Promise<boolean>;
-} {
-  const authorizationByIntent = new Map<string, string>();
-  const consumedIntents = new Set<string>();
-  return {
-    issueOnceForIntent: async ({ authorization, intent }) => {
-      const prior = authorizationByIntent.get(intent.intentId);
-      if (prior !== undefined && prior !== authorization.authorizationId) return false;
-      authorizationByIntent.set(intent.intentId, authorization.authorizationId);
-      return true;
-    },
-    consumeIntentOnce: async ({ authorizationId, intentId }) => {
-      if (
-        authorizationByIntent.get(intentId) !== authorizationId ||
-        consumedIntents.has(intentId)
-      ) {
-        return false;
-      }
-      consumedIntents.add(intentId);
-      return true;
-    },
-    persistCompletedRun: async () => true,
-  };
-}
-
-function authorityService(
-  evidence: AflTradeAdmittedModelRunEvidence,
-  store = memoryAuthorizationStore(),
-  clock = fixedClock(),
-  authorizationLifetimeMs?: number
-) {
-  return {
-    clock,
-    store,
-    service: new AflTradeAdmittedModelRunAuthorityService({
-      authenticator: { authenticate: async () => evidence },
-      clock,
-      authorizationStore: store,
-      authorizationLifetimeMs,
-    }),
-  };
-}
-
-describe('admitted AFL trade model authority contracts', () => {
-  it('keeps legacy protocol and model-run documents readable', () => {
-    const legacyProtocol = { ...protocolContent(), schemaVersion: 'afl-trade-model-protocol/v1' };
-    delete (legacyProtocol as Partial<typeof legacyProtocol>).datasetAdmission;
-    delete (legacyProtocol as Partial<typeof legacyProtocol>).scalarValueTransformArtifact;
-    const protocol = {
-      protocolId: createAflTradeContentAddress('model-protocol', legacyProtocol),
-      content: legacyProtocol,
-    };
-    const legacyRun = { ...runContent(), schemaVersion: 'afl-trade-model-run/v2' };
-    delete (legacyRun as Partial<typeof legacyRun>).datasetAdmissionId;
-    delete (legacyRun as Partial<typeof legacyRun>).runIntentId;
-    delete (legacyRun as Partial<typeof legacyRun>).runAuthorizationId;
-    delete (legacyRun as Partial<typeof legacyRun>).observationSetId;
-    delete (legacyRun as Partial<typeof legacyRun>).modelTrainingEvaluationReceiptIds;
-    const run = {
-      runId: createAflTradeContentAddress('model-run', legacyRun),
-      content: legacyRun,
-    };
-
-    expect(aflTradeAnyPlayerContributionModelProtocolSchema.safeParse(protocol).success).toBe(true);
-    expect(aflTradeAnyModelRunManifestSchema.safeParse(run).success).toBe(true);
-  });
-
-  it('creates a protocol that binds the exact admitted dataset contract', () => {
-    const protocol = createAflTradePlayerContributionModelProtocolV2(protocolContent());
-
-    expect(protocol.protocolId).toMatch(/^model-protocol:[a-f0-9]{64}$/);
-    expect(protocol.content.observationGrain).toBe('player_acquisition_spell_prediction');
-    expect(protocol.content.sourceOutcomeVector).toEqual(outcomeMetricCodes);
-  });
-
-  it('rejects protocol chronology and duplicate or unordered run-start rights evidence', () => {
-    expect(() =>
-      createAflTradePlayerContributionModelProtocolV2({
-        ...protocolContent(),
-        preparedAt: '2026-08-10T00:00:00.000Z',
-      })
-    ).toThrow();
-
-    const fixture = admittedRunFixture();
-    expect(() =>
-      createAflTradeModelRunIntent({
-        ...fixture.intent.content,
-        modelTrainingEvaluationReceiptIds: [
-          `gate0a-evaluation:${digest('2')}`,
-          `gate0a-evaluation:${digest('1')}`,
-        ],
-      })
-    ).toThrow();
-
-    expect(() =>
-      createAflTradeValuationDatasetAdmissionReceipt({
-        ...fixture.admission.content,
-        gate2Decision: {
-          ...fixture.admission.content.gate2Decision,
-          evaluatedAt: '2026-08-10T00:00:59.000Z',
-        },
-      })
-    ).toThrow();
-    expect(() =>
-      createAflTradeModelRunIntent({
-        ...fixture.intent.content,
-        modelTrainingEvaluationReceiptIds: [
-          `gate0a-evaluation:${digest('1')}`,
-          `gate0a-evaluation:${digest('1')}`,
-        ],
-      })
-    ).toThrow();
-  });
-
-  it('authorizes one exact admitted observation set before constructing its model run', async () => {
-    const fixture = admittedRunFixture();
-    const boundary = authorityService(fixture.evidence);
-    const runner = new AflTradeAdmittedModelRunner(
-      boundary.service,
-      {
-        execute: async () => ({
-          candidateLockedAt: '2026-08-10T00:04:00.000Z',
-          finalTestEvaluatedAt: '2026-08-10T00:05:00.000Z',
-          finishedAt: '2026-08-10T00:06:00.000Z',
-          outcome: runContent(fixture.protocol).outcome,
-        }),
-      },
-      boundary.store,
-      boundary.clock,
-      boundary.store,
-      memoryFailureRecorder()
-    );
-
-    const result = await runner.run({ intent: fixture.intent, protocol: fixture.protocol });
-
-    if (result.status !== 'completed') throw new Error(JSON.stringify(result));
-    expect(result.status).toBe('completed');
-    expect(result.authorization.content).toMatchObject({
-      datasetId: fixture.admission.content.datasetId,
-      datasetAdmissionId: fixture.admission.admissionId,
-      modelProtocolId: fixture.protocol.protocolId,
-      observationSetId: fixture.observationSet.observationSetId,
-      gateLedgerRevision: fixture.evidence.gateLedgerRevision,
-      operationalAuthorizationReceiptId: fixture.operationalAuthorization.receiptId,
-      authorizedAt: fixture.intent.content.startedAt,
-      publicationEligible: false,
-    });
-    expect(result.run.content.runAuthorizationId).toBe(result.authorization.authorizationId);
-    const replay = await runner.run({ intent: fixture.intent, protocol: fixture.protocol });
-    expect(replay).toMatchObject({ status: 'blocked' });
-
-    const capped = await authorityService(
-      fixture.evidence,
-      memoryAuthorizationStore(),
-      fixedClock(),
-      60_000
-    ).service.authorize({ intent: fixture.intent, protocol: fixture.protocol });
-    if (capped.status !== 'authorized') throw new Error(JSON.stringify(capped));
-    expect(capped.authorization.content.validThrough).toBe('2026-08-10T00:03:30.000Z');
-
-    const advancingInstants = [
-      '2026-08-10T00:03:00.000Z',
-      '2026-08-10T00:03:00.000Z',
-      '2026-08-10T00:03:01.000Z',
-    ];
-    const advancingClock = {
-      now: async () => advancingInstants.shift() ?? '2026-08-10T00:03:01.000Z',
-    };
-    const advancingBoundary = authorityService(
-      fixture.evidence,
-      memoryAuthorizationStore(),
-      advancingClock
-    );
-    const advancingRunner = new AflTradeAdmittedModelRunner(
-      advancingBoundary.service,
-      {
-        execute: async () => ({
-          candidateLockedAt: '2026-08-10T00:04:00.000Z',
-          finalTestEvaluatedAt: '2026-08-10T00:05:00.000Z',
-          finishedAt: '2026-08-10T00:06:00.000Z',
-          outcome: runContent(fixture.protocol).outcome,
-        }),
-      },
-      advancingBoundary.store,
-      advancingBoundary.clock,
-      advancingBoundary.store,
-      memoryFailureRecorder()
-    );
-    expect(
-      await advancingRunner.run({ intent: fixture.intent, protocol: fixture.protocol })
-    ).toMatchObject({ status: 'completed' });
-    expect(
-      await advancingRunner.run({ intent: fixture.intent, protocol: fixture.protocol })
-    ).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'authorization_unavailable' }],
-    });
-  });
-
-  it('preserves two acquisition spells for the same player and season as distinct rows', () => {
-    const fixture = admittedRunFixture();
-    const shared = fixture.observationSet.content.observations.filter(
-      (observation) => observation.playerId === 'afl-player:shared' && observation.season === 2011
-    );
-
-    expect(shared).toHaveLength(2);
-    expect(new Set(shared.map(({ acquisitionSpellId }) => acquisitionSpellId)).size).toBe(2);
-  });
-
-  it('does not report an executed model run as completed until its manifest is durable', async () => {
-    const fixture = admittedRunFixture();
-    const store = memoryAuthorizationStore();
-    store.persistCompletedRun = async () => false;
-    const boundary = authorityService(fixture.evidence, store);
-    let executions = 0;
-    const runner = new AflTradeAdmittedModelRunner(
-      boundary.service,
-      {
-        execute: async () => {
-          executions += 1;
-          return {
-            candidateLockedAt: '2026-08-10T00:04:00.000Z',
-            finalTestEvaluatedAt: '2026-08-10T00:05:00.000Z',
-            finishedAt: '2026-08-10T00:06:00.000Z',
-            outcome: runContent(fixture.protocol).outcome,
-          };
-        },
-      },
-      store,
-      boundary.clock,
-      store,
-      memoryFailureRecorder()
-    );
-
-    const failed = await runner.run({ intent: fixture.intent, protocol: fixture.protocol });
-
-    expect(failed).toMatchObject({
-      status: 'persistence_failed',
-      run: { runId: expect.stringMatching(/^model-run:[a-f0-9]{64}$/) },
-      blockers: [{ code: 'run_persistence_failed' }],
-    });
-    expect(executions).toBe(1);
-    expect(await runner.run({ intent: fixture.intent, protocol: fixture.protocol })).toMatchObject({
-      status: 'blocked',
-    });
-    expect(executions).toBe(1);
-  });
-
-  it('persists an immutable failed run when the executor rejects after consumption', async () => {
-    const fixture = admittedRunFixture();
-    const store = memoryAuthorizationStore();
-    const persistedRuns: { content: { outcome: { status: string } } }[] = [];
-    store.persistCompletedRun = async (run) => {
-      persistedRuns.push(run as unknown as (typeof persistedRuns)[number]);
-      return true;
-    };
-    const boundary = authorityService(fixture.evidence, store);
-    const runner = new AflTradeAdmittedModelRunner(
-      boundary.service,
-      {
-        execute: async () => {
-          throw new Error('fitter rejected');
-        },
-      },
-      store,
-      boundary.clock,
-      store,
-      memoryFailureRecorder()
-    );
-
-    const result = await runner.run({ intent: fixture.intent, protocol: fixture.protocol });
-
-    expect(result).toMatchObject({
-      status: 'completed',
-      run: { content: { outcome: { status: 'failed' } } },
-    });
-    expect(persistedRuns).toHaveLength(1);
-    expect(persistedRuns[0]?.content.outcome.status).toBe('failed');
-    expect(await runner.run({ intent: fixture.intent, protocol: fixture.protocol })).toMatchObject({
-      status: 'blocked',
-    });
-  });
-
-  it('never invokes the fitter until the exact intent is authorized', async () => {
-    const fixture = admittedRunFixture();
-    let executions = 0;
-    const boundary = authorityService({
-      ...fixture.evidence,
-      gate2Ledger: { ...fixture.evidence.gate2Ledger, decisions: [] },
-    });
-    const runner = new AflTradeAdmittedModelRunner(
-      boundary.service,
-      {
-        execute: async () => {
-          executions += 1;
-          return {
-            candidateLockedAt: '2026-08-10T00:04:00.000Z',
-            finalTestEvaluatedAt: '2026-08-10T00:05:00.000Z',
-            finishedAt: '2026-08-10T00:06:00.000Z',
-            outcome: runContent(fixture.protocol).outcome,
-          };
-        },
-      },
-      boundary.store,
-      boundary.clock,
-      boundary.store,
-      memoryFailureRecorder()
-    );
-
-    const result = await runner.run({ intent: fixture.intent, protocol: fixture.protocol });
-
-    expect(result.status).toBe('blocked');
-    expect(executions).toBe(0);
-
-    const instants = ['2026-08-10T00:03:00.000Z', '2026-08-09T14:03:31.000-10:00'];
-    const offsetClock = {
-      now: async () => instants.shift() ?? '2026-08-09T14:03:31.000-10:00',
-    };
-    const offsetBoundary = authorityService(
-      fixture.evidence,
-      memoryAuthorizationStore(),
-      offsetClock
-    );
-    const offsetRunner = new AflTradeAdmittedModelRunner(
-      offsetBoundary.service,
-      {
-        execute: async () => {
-          executions += 1;
-          return {
-            candidateLockedAt: '2026-08-10T00:04:00.000Z',
-            finalTestEvaluatedAt: '2026-08-10T00:05:00.000Z',
-            finishedAt: '2026-08-10T00:06:00.000Z',
-            outcome: runContent(fixture.protocol).outcome,
-          };
-        },
-      },
-      offsetBoundary.store,
-      offsetBoundary.clock,
-      offsetBoundary.store,
-      memoryFailureRecorder()
-    );
-    const offsetExpired = await offsetRunner.run({
-      intent: fixture.intent,
-      protocol: fixture.protocol,
-    });
-    expect(offsetExpired).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'authorization_not_consumable' }],
-    });
-    expect(executions).toBe(0);
-  });
-
-  it('blocks omitted, fabricated, or no-longer-current model-training authority', async () => {
-    const fixture = admittedRunFixture();
-    const request = {
-      intent: fixture.intent,
-      protocol: fixture.protocol,
-    };
-
-    const omitted = await authorityService({
-      ...fixture.evidence,
-      runStartEvaluationReceipts: [],
-    }).service.authorize(request);
-    expect(omitted).toMatchObject({ status: 'blocked' });
-
-    const [firstMetric, ...remainingMetrics] = fixture.spellMetrics;
-    if (firstMetric.content.availability.state !== 'complete') {
-      throw new Error('The authority fixture requires a complete first spell metric.');
-    }
-    const changedOutcomeWithOriginalObservationSet = await authorityService({
-      ...fixture.evidence,
-      spellMetrics: [
-        {
-          ...firstMetric,
-          content: {
-            ...firstMetric.content,
-            availability: { state: 'complete', numericValue: '999', reasonCode: null },
-          },
-        },
-        ...remainingMetrics,
-      ],
-    }).service.authorize(request);
-    expect(changedOutcomeWithOriginalObservationSet).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'invalid_evidence' }],
-    });
-
-    const fabricatedIntent = createAflTradeModelRunIntent({
-      ...fixture.intent.content,
-      seed: fixture.intent.content.seed + 1,
-    });
-    const fabricatedOperationalAuthorization = createAflTradeModelRunOperationalAuthorization({
-      ...fixture.operationalAuthorization.content,
-      runIntentId: fabricatedIntent.intentId,
-    });
-    const fabricated = await authorityService({
-      ...fixture.evidence,
-      operationalAuthorization: fabricatedOperationalAuthorization,
-    }).service.authorize({
-      ...request,
-      intent: fabricatedIntent,
-    });
-    if (fabricated.status !== 'authorized') throw new Error(JSON.stringify(fabricated));
-    expect(fabricated).toMatchObject({ status: 'authorized' });
-    const original = await authorityService(fixture.evidence).service.authorize(request);
-    if (original.status !== 'authorized') throw new Error(JSON.stringify(original));
-    expect(fabricated.authorization.authorizationId).not.toBe(
-      original.authorization.authorizationId
-    );
-    const withdrawn = await authorityService({
-      ...fixture.evidence,
-      gateDecisionLedger: { ...fixture.evidence.gateDecisionLedger, decisions: [] },
-    }).service.authorize(request);
-    expect(withdrawn).toMatchObject({ status: 'blocked' });
-
-    const gate2Withdrawn = await authorityService({
-      ...fixture.evidence,
-      gate2Ledger: { ...fixture.evidence.gate2Ledger, decisions: [] },
-    }).service.authorize(request);
-    expect(gate2Withdrawn).toMatchObject({ status: 'blocked' });
-
-    const substitutedArtifact = await authorityService({
-      ...fixture.evidence,
-      executableArtifacts: fixture.evidence.executableArtifacts.map((proof, index) =>
-        index === 0 ? { ...proof, bytes: new TextEncoder().encode('substituted') } : proof
-      ),
-    }).service.authorize(request);
-    expect(substitutedArtifact).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'execution_artifact_mismatch' }],
-    });
-
-    const missingScalarTransform = await authorityService({
-      ...fixture.evidence,
-      executableArtifacts: fixture.evidence.executableArtifacts.filter(
-        ({ artifactId }) =>
-          artifactId !== fixture.protocol.content.scalarValueTransformArtifact.artifactId
-      ),
-    }).service.authorize(request);
-    expect(missingScalarTransform).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'execution_artifact_mismatch' }],
-    });
-
-    const mismatchedFeatureIntent = createAflTradeModelRunIntent({
-      ...fixture.intent.content,
-      featureDefinitionArtifacts: [artifact('2')],
-    });
-    const mismatchedFeature = await authorityService(fixture.evidence).service.authorize({
-      intent: mismatchedFeatureIntent,
-      protocol: fixture.protocol,
-    });
-    expect(mismatchedFeature).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'execution_artifact_mismatch' }],
-    });
-
-    const backdated = await authorityService(
-      fixture.evidence,
-      memoryAuthorizationStore(),
-      fixedClock('2026-08-10T00:04:00.000Z')
-    ).service.authorize(request);
-    expect(backdated).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'invalid_request' }],
-    });
-  });
-
-  it('requires current human operational authorization for the exact executable intent', async () => {
-    const fixture = admittedRunFixture();
-    const request = { intent: fixture.intent, protocol: fixture.protocol };
-
-    const omitted = await authorityService({
-      ...fixture.evidence,
-      operationalAuthorization: null as never,
-    }).service.authorize(request);
-    expect(omitted).toMatchObject({ status: 'blocked' });
-
-    const wrongIntent = createAflTradeModelRunOperationalAuthorization({
-      ...fixture.operationalAuthorization.content,
-      runIntentId: `model-run-intent:${digest('f')}`,
-    });
-    const substituted = await authorityService({
-      ...fixture.evidence,
-      operationalAuthorization: wrongIntent,
-    }).service.authorize(request);
-    expect(substituted).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'operational_authorization_invalid' }],
-    });
-
-    const expired = createAflTradeModelRunOperationalAuthorization({
-      ...fixture.operationalAuthorization.content,
-      authorizedAt: '2026-08-10T00:02:00.000Z',
-      validThrough: '2026-08-10T00:02:59.999Z',
-    });
-    const stale = await authorityService({
-      ...fixture.evidence,
-      operationalAuthorization: expired,
-    }).service.authorize(request);
-    expect(stale).toMatchObject({
-      status: 'blocked',
-      blockers: [{ code: 'operational_authorization_invalid' }],
-    });
-
-    expect(() =>
-      createAflTradeModelRunOperationalAuthorization({
-        ...fixture.operationalAuthorization.content,
-        authorityEvidence: {
-          ...fixture.operationalAuthorization.content.authorityEvidence,
-          sha256: digest('0'),
-        },
-      })
-    ).toThrow(/authority evidence/i);
-  });
-
-  it('creates exact local non-production authority through the fixed private valuation policy', () => {
-    const fixture = admittedRunFixture();
-    const policyAuthorization = createAflTradePrivateValuationModelRunOperationalAuthorization({
-      runIntentId: fixture.intent.intentId,
-      datasetId: fixture.intent.content.datasetId,
-      datasetAdmissionId: fixture.intent.content.datasetAdmissionId,
-      modelProtocolId: fixture.intent.content.modelProtocolId,
-      observationSetId: fixture.intent.content.observationSetId,
-      dispatchRequestId: `private-valuation-dispatch:${digest('d')}`,
-      substantiveOperationId: `private-valuation-model-operation:${digest('e')}`,
-      dispatchClaimId: `private-valuation-dispatch-claim:${digest('f')}`,
-      dispatchAttemptNumber: 1,
-      dispatchLeaseTokenSha256: digest('a'),
-      factualOutputId: `private-valuation-factual-output:${digest('1')}`,
-      hpnCalculationId: `hpn-pav-season:${digest('2')}`,
-      factualValuesSha256: digest('3'),
-      hpnValuesSha256: digest('4'),
-      authorizedAt: fixture.intent.content.startedAt,
-      validThrough: '2026-08-10T00:03:30.000Z',
-    });
-
-    expect(policyAuthorization.content).toMatchObject({
-      authorityBoundary: 'policy_owned_local_private_valuation_for_one_exact_model_run_intent',
-      principalRef: 'system:weekly-valuation-coordinator',
-      role: 'afl_trade_private_evaluation_coordinator',
-      environment: 'non_production',
-      executionMode: 'local',
-      publicationEligible: false,
-      publicationProhibited: true,
-    });
-  });
-
-  it('does not let callers override the private valuation policy authorization', () => {
-    const fixture = admittedRunFixture();
-    const input = {
-      runIntentId: fixture.intent.intentId,
-      datasetId: fixture.intent.content.datasetId,
-      datasetAdmissionId: fixture.intent.content.datasetAdmissionId,
-      modelProtocolId: fixture.intent.content.modelProtocolId,
-      observationSetId: fixture.intent.content.observationSetId,
-      dispatchRequestId: `private-valuation-dispatch:${digest('d')}`,
-      substantiveOperationId: `private-valuation-model-operation:${digest('e')}`,
-      dispatchClaimId: `private-valuation-dispatch-claim:${digest('f')}`,
-      dispatchAttemptNumber: 1,
-      dispatchLeaseTokenSha256: digest('a'),
-      factualOutputId: `private-valuation-factual-output:${digest('1')}`,
-      hpnCalculationId: `hpn-pav-season:${digest('2')}`,
-      factualValuesSha256: digest('3'),
-      hpnValuesSha256: digest('4'),
-      authorizedAt: fixture.intent.content.startedAt,
-      validThrough: '2026-08-10T00:03:30.000Z',
-    };
-
-    const authorization = createAflTradePrivateValuationModelRunOperationalAuthorization({
-      ...input,
-      principalRef: 'caller-controlled-principal',
-      role: 'afl_trade_model_run_operator',
-      environment: 'production',
-      executionMode: 'remote',
-      publicationEligible: true,
-      publicationProhibited: false,
-    } as never);
-    expect(authorization.content).toMatchObject({
-      principalRef: 'system:weekly-valuation-coordinator',
-      role: 'afl_trade_private_evaluation_coordinator',
-      environment: 'non_production',
-      executionMode: 'local',
-      publicationEligible: false,
-      publicationProhibited: true,
-    });
-  });
-});

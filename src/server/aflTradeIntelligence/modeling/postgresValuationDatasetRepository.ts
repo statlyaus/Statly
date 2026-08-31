@@ -176,7 +176,7 @@ async function persistCandidateArtifacts(
   }
 }
 
-async function requireOrInsertFieldSet(
+export async function requireOrInsertAflTradeValuationDatasetFieldSet(
   transaction: AflOutcomeSqlTransaction,
   fieldSet: AflTradeConsumedFieldSet
 ) {
@@ -330,7 +330,7 @@ async function persistEvidenceRecords(
   evidence: ReturnType<typeof parsePersistenceEvidence>
 ) {
   for (const fieldSet of evidence.consumedFieldSets) {
-    await requireOrInsertFieldSet(transaction, fieldSet);
+    await requireOrInsertAflTradeValuationDatasetFieldSet(transaction, fieldSet);
   }
   for (const source of evidence.sourceRights) {
     await requireOrInsertGate0Receipt(

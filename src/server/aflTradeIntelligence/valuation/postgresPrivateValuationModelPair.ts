@@ -445,13 +445,16 @@ export function createPostgresAflTradePrivateValuationModelPairDispatchRunner(
   };
 }
 
-type PlayerExecutorInput = Parameters<
+export type AflTradeDispatchBoundPlayerExecutorInput = Parameters<
   typeof createAflTradePrivateValuationModelPairCoordinator
 >[0]['executePlayer'] extends (input: infer Input) => unknown
   ? Input
   : never;
 
-type PlayerPreparation = Omit<AflTradeModelRunPreparation, 'operationalAuthorization'> &
+export type AflTradeDispatchBoundPlayerPreparation = Omit<
+  AflTradeModelRunPreparation,
+  'operationalAuthorization'
+> &
   Readonly<{ validThrough: string }>;
 
 const STALE_PLAYER_AUTHORITY_CODES = new Set([
@@ -506,19 +509,28 @@ function classifiedDispatchAdapterFailure(error: unknown) {
 }
 
 export function createAflTradeDispatchBoundAdmittedPlayerExecutor(input: {
+  readonly loadRetainedComponent?: (
+    value: AflTradeDispatchBoundPlayerExecutorInput
+  ) => Promise<{ readonly runId: string } | null>;
   readonly admittedRunner: Pick<AflTradeAdmittedModelRunner, 'run'>;
   readonly authorityPreparation: Readonly<{
     prepare(value: AflTradeModelRunPreparation): Promise<void>;
   }>;
-  readonly prepareRun: (value: PlayerExecutorInput) => Promise<PlayerPreparation>;
+  readonly prepareRun: (
+    value: AflTradeDispatchBoundPlayerExecutorInput
+  ) => Promise<AflTradeDispatchBoundPlayerPreparation>;
   readonly registerComponent: (value: {
     readonly run: AflTradeModelRunManifestV3;
-    readonly execution: PlayerExecutorInput;
+    readonly execution: AflTradeDispatchBoundPlayerExecutorInput;
   }) => Promise<{ readonly runId: string }>;
 }) {
   return {
-    async execute(execution: PlayerExecutorInput) {
+    async execute(execution: AflTradeDispatchBoundPlayerExecutorInput) {
       try {
+        const retained = await input.loadRetainedComponent?.(execution);
+        if (retained !== undefined && retained !== null) {
+          return { state: 'completed' as const, runId: retained.runId };
+        }
         const prepared = await input.prepareRun(execution);
         const intent = prepared.intent;
         const operationalAuthorization =

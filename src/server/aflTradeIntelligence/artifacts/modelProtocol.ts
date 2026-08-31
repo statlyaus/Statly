@@ -229,6 +229,10 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
     ]),
     scalarValueTransformArtifact: aflTradeArtifactRefSchema,
     scalarValueDerivation: z.literal('requires_separately_governed_value_unit_transform'),
+    pointInTimeFeatureValuesArtifact: aflTradeArtifactRefSchema.optional(),
+    pointInTimeFeatureValueBinding: z
+      .literal('exact_admitted_feature_member_ids_and_hashes')
+      .optional(),
   })
   .strict()
   .superRefine((protocol, context) => {
@@ -238,6 +242,8 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
       sourceOutcomeVector: _sourceOutcomeVector,
       scalarValueTransformArtifact: _scalarValueTransformArtifact,
       scalarValueDerivation: _scalarValueDerivation,
+      pointInTimeFeatureValuesArtifact: _pointInTimeFeatureValuesArtifact,
+      pointInTimeFeatureValueBinding: _pointInTimeFeatureValueBinding,
       ...legacyContent
     } = protocol;
     const legacyResult = aflTradePlayerContributionModelProtocolContentSchema.safeParse({
@@ -254,6 +260,17 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
         code: 'custom',
         path: ['preparedAt'],
         message: 'An admitted model protocol cannot predate its dataset admission.',
+      });
+    }
+    if (
+      (protocol.pointInTimeFeatureValuesArtifact === undefined) !==
+      (protocol.pointInTimeFeatureValueBinding === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pointInTimeFeatureValuesArtifact'],
+        message:
+          'Point-in-time feature values and their exact admitted-member binding must be declared together.',
       });
     }
   });
@@ -289,7 +306,10 @@ export type AflTradePlayerContributionModelProtocolV2 = z.infer<
 export function createAflTradePlayerContributionModelProtocolV2(
   input: Omit<
     z.input<typeof aflTradePlayerContributionModelProtocolV2ContentSchema>,
-    'observationGrain' | 'sourceOutcomeVector' | 'scalarValueDerivation'
+    | 'observationGrain'
+    | 'sourceOutcomeVector'
+    | 'scalarValueDerivation'
+    | 'pointInTimeFeatureValueBinding'
   >
 ): AflTradePlayerContributionModelProtocolV2 {
   const content = aflTradePlayerContributionModelProtocolV2ContentSchema.parse({
@@ -297,6 +317,11 @@ export function createAflTradePlayerContributionModelProtocolV2(
     observationGrain: 'player_acquisition_spell_prediction',
     sourceOutcomeVector: ['brownlow_votes', 'coaches_votes', 'games', 'goals'],
     scalarValueDerivation: 'requires_separately_governed_value_unit_transform',
+    ...(input.pointInTimeFeatureValuesArtifact === undefined
+      ? {}
+      : {
+          pointInTimeFeatureValueBinding: 'exact_admitted_feature_member_ids_and_hashes' as const,
+        }),
   });
   return aflTradePlayerContributionModelProtocolV2Schema.parse({
     protocolId: createAflTradeContentAddress('model-protocol', content),

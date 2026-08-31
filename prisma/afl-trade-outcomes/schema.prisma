@@ -142,6 +142,7 @@ model OutcomeReleaseManifest {
   reviewMembers                       OutcomeReleaseReviewDecision[]
   activePointer                       OutcomeActiveRelease?
   promotionFactualLineage             OutcomeCorpusFactualLineage?
+  valuationDatasetFactualLineage      OutcomeValuationDatasetFactualLineage?
   publicFactualArchive                OutcomePublicFactualArchive?
   valuationDatasets                   OutcomeValuationDatasetCandidate[]
   valuationDatasetAuthorities         OutcomeValuationDatasetOperationAuthority[]
@@ -788,7 +789,6 @@ model OutcomePromotionBackedCorpus {
   factualReleaseCandidates OutcomeFactualReleaseCandidate[]
   factualLineage           OutcomeCorpusFactualLineage?
   publicFactualArchives    OutcomePublicFactualArchive[]
-  valuationDatasets        OutcomeValuationDatasetCandidate[]
 
   @@unique([environment, competition, knowledgeCutoffAt], map: "outcome_promotion_backed_corpus_scope_cutoff_key")
   @@index([environment, competition, status, createdAt], map: "outcome_promotion_backed_corpus_scope_idx")
@@ -2970,8 +2970,9 @@ model OutcomeFactualReleaseCandidate {
   finalizedAt                     DateTime?                                   @map("finalized_at") @outcomes.Timestamptz(3)
   promotionBackedCorpus           OutcomePromotionBackedCorpus?               @relation(fields: [promotionBackedCorpusId], references: [corpusId], onDelete: Restrict)
   factualLineage                  OutcomeCorpusFactualLineage?
-  publicFactualArchive            OutcomePublicFactualArchive?
+  valuationDatasetFactualLineage  OutcomeValuationDatasetFactualLineage?
   valuationDatasets               OutcomeValuationDatasetCandidate[]
+  publicFactualArchive            OutcomePublicFactualArchive?
   valuationDatasetAuthorities     OutcomeValuationDatasetOperationAuthority[]
   privateValuationFactualOutput    OutcomePrivateValuationFactualOutput?
 
@@ -3060,7 +3061,6 @@ model OutcomeCorpusFactualLineage {
   release                  OutcomeReleaseManifest                 @relation(fields: [releaseId], references: [releaseId], onDelete: Restrict)
   candidate                OutcomeFactualReleaseCandidate         @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
   admissions               OutcomeCorpusFactualLineageAdmission[]
-  valuationDatasets        OutcomeValuationDatasetCandidate[]
 
   @@index([environment, scopeKey, competition, validFromSeason, validThroughSeason], map: "outcome_corpus_factual_lineage_scope_idx")
   @@map("outcome_corpus_factual_lineage")
@@ -3082,6 +3082,42 @@ model OutcomeCorpusFactualLineageAdmission {
 
   @@index([lineageId, admittedAt], map: "outcome_corpus_factual_lineage_admission_lineage_idx")
   @@map("outcome_corpus_factual_lineage_admission")
+}
+
+model OutcomeValuationDatasetFactualLineage {
+  lineageId            String                                           @id @map("lineage_id")
+  corpusId             String                                           @unique @map("corpus_id")
+  releaseId            String                                           @unique @map("release_id")
+  candidateId          String                                           @unique @map("candidate_id")
+  environment          OutcomeEnvironment
+  scopeKey             String                                           @map("scope_key")
+  competition          String
+  sourceMemberSetSha256 String                                          @map("source_member_set_sha256") @outcomes.Char(64)
+  createdAt            DateTime                                         @map("created_at") @outcomes.Timestamptz(3)
+  lineageCanonicalJson String                                           @map("lineage_canonical_json") @outcomes.Text
+  lineageJson          Json                                             @map("lineage_json")
+  release              OutcomeReleaseManifest                           @relation(fields: [releaseId], references: [releaseId], onDelete: Restrict)
+  candidate            OutcomeFactualReleaseCandidate                   @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
+  admission            OutcomeValuationDatasetFactualLineageAdmission?
+
+  @@map("outcome_valuation_dataset_factual_lineage")
+}
+
+model OutcomeValuationDatasetFactualLineageAdmission {
+  admissionId            String                                     @id @map("admission_id")
+  lineageId              String                                     @unique @map("lineage_id")
+  gateProposalId         String                                     @map("gate_proposal_id")
+  gateDecisionId         String                                     @unique @map("gate_decision_id")
+  gateLedgerRevision     Int                                        @map("gate_ledger_revision")
+  admittedAt             DateTime                                   @map("admitted_at") @outcomes.Timestamptz(3)
+  revalidateAt           DateTime                                   @map("revalidate_at") @outcomes.Timestamptz(3)
+  admissionCanonicalJson String                                     @map("admission_canonical_json") @outcomes.Text
+  admissionJson          Json                                       @map("admission_json")
+  lineage                OutcomeValuationDatasetFactualLineage       @relation(fields: [lineageId], references: [lineageId], onDelete: Restrict)
+  gateProposal           OutcomeGateProposal                        @relation(fields: [gateProposalId], references: [proposalId], onDelete: Restrict)
+  gateDecision           OutcomeGateDecision                        @relation(fields: [gateDecisionId], references: [decisionId], onDelete: Restrict)
+
+  @@map("outcome_valuation_dataset_factual_lineage_admission")
 }
 
 model OutcomeReleaseFactualRunMember {
@@ -3833,6 +3869,7 @@ model OutcomeGateProposal {
   proposalJson             Json                                   @map("proposal_json")
   decisions                OutcomeGateDecision[]
   factualLineageAdmissions OutcomeCorpusFactualLineageAdmission[]
+  valuationDatasetFactualLineageAdmissions OutcomeValuationDatasetFactualLineageAdmission[]
 
   @@unique([gate, environment, decisionKey, version], map: "outcome_gate_proposal_scope_version_key")
   @@index([gate, environment, decisionKey, proposedAt], map: "outcome_gate_proposal_scope_idx")
@@ -3856,6 +3893,7 @@ model OutcomeGateDecision {
   supersedes                        OutcomeGateDecision?                     @relation("OutcomeGateDecisionChain", fields: [supersedesDecisionId], references: [decisionId], onDelete: Restrict)
   supersededBy                      OutcomeGateDecision?                     @relation("OutcomeGateDecisionChain")
   factualLineageAdmission           OutcomeCorpusFactualLineageAdmission?
+  valuationDatasetFactualLineageAdmission OutcomeValuationDatasetFactualLineageAdmission?
   valuationDatasetGate2Admissions   OutcomeValuationDatasetAdmission[]       @relation("OutcomeValuationGate2Decision")
   valuationDatasetDerivationSources OutcomeValuationDatasetAdmissionSource[] @relation("OutcomeValuationDerivationDecision")
   valuationDatasetAdmissionSources  OutcomeValuationDatasetAdmissionSource[] @relation("OutcomeValuationAdmissionDecision")
@@ -3888,8 +3926,6 @@ model OutcomeValuationDatasetCandidate {
   finalizedAt                       DateTime?                                          @map("finalized_at") @outcomes.Timestamptz(3)
   factualRelease                    OutcomeReleaseManifest                             @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
   factualCandidate                  OutcomeFactualReleaseCandidate                     @relation(fields: [factualCandidateId], references: [candidateId], onDelete: Restrict)
-  corpus                            OutcomePromotionBackedCorpus                       @relation(fields: [corpusId], references: [corpusId], onDelete: Restrict)
-  lineage                           OutcomeCorpusFactualLineage                        @relation(fields: [lineageId], references: [lineageId], onDelete: Restrict)
   rows                              OutcomeValuationDatasetRow[]
   artifacts                         OutcomeValuationDatasetArtifactMember[]
   admissions                        OutcomeValuationDatasetAdmission[]

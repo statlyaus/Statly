@@ -242,6 +242,45 @@ describe('private valuation dispatch-bound model pair', () => {
     ]);
   });
 
+  it('returns an exact retained player component without preparing or retraining', async () => {
+    const operation = createAflTradePrivateValuationModelOperation({
+      scopeKey: exactInput().scopeKey,
+      ...exactInput().substantive,
+    });
+    const calls: string[] = [];
+    const retainedRunId = id('model-run', '9');
+    const executor = createAflTradeDispatchBoundAdmittedPlayerExecutor({
+      loadRetainedComponent: async () => {
+        calls.push('load_retained');
+        return { runId: retainedRunId };
+      },
+      prepareRun: async () => {
+        calls.push('prepare');
+        throw new Error('retained replay must not prepare');
+      },
+      authorityPreparation: {
+        async prepare() {
+          calls.push('persist_authority');
+        },
+      },
+      admittedRunner: {
+        async run() {
+          calls.push('fit');
+          throw new Error('retained replay must not fit');
+        },
+      },
+      registerComponent: async () => {
+        calls.push('register');
+        throw new Error('retained replay must not register');
+      },
+    });
+
+    await expect(
+      executor.execute({ exactInput: exactInput(), operation, attemptNumber: 2, claim })
+    ).resolves.toEqual({ state: 'completed', runId: retainedRunId });
+    expect(calls).toEqual(['load_retained']);
+  });
+
   it('runs and retains the existing governed pick execution with exact dispatch ancestry', async () => {
     const fixture = createGovernedPickPavModelExecutionFixture();
     const source = fixture.execution.content;

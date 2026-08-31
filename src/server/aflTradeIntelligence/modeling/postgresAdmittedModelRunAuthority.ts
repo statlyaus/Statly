@@ -1,5 +1,6 @@
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
 import type { AflTradeDurableObjectArtifactRepository } from '../artifacts/durableObjectArtifactRepository';
+import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
 import {
   type AflTradeModelRunIntent,
   type AflTradeModelRunManifestV3,
@@ -41,6 +42,20 @@ import {
 } from './admittedModelRunAuthority';
 
 const MAXIMUM_EXECUTABLE_ARTIFACT_BYTES = 128 * 1024 * 1024;
+
+type AflTradeExactExecutableArtifactReader =
+  | Pick<AflTradeDurableObjectArtifactRepository, 'loadExactWithObservation'>
+  | Pick<AflTradeImmutableArtifactRepository, 'loadExact'>;
+
+async function loadExactExecutableArtifact(
+  repository: AflTradeExactExecutableArtifactReader,
+  reference: AflTradeArtifactRef,
+  maximumBytes: number
+) {
+  return 'loadExactWithObservation' in repository
+    ? repository.loadExactWithObservation(reference, maximumBytes)
+    : repository.loadExact(reference, maximumBytes);
+}
 
 export type AflTradeModelRunPersistenceErrorCode =
   'INVALID_INPUT' | 'MISSING_EVIDENCE' | 'CONFLICTING_REPLAY' | 'INCOMPLETE_WRITE';
@@ -176,6 +191,9 @@ function executableReferences(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
+      ? []
+      : [protocol.content.pointInTimeFeatureValuesArtifact]),
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,
@@ -233,7 +251,7 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     private readonly dependencies: {
       sql: AflOutcomeSqlClient;
       gateDecisionLedgerRepository: AflTradeGateDecisionLedgerRepository;
-      artifactRepository: Pick<AflTradeDurableObjectArtifactRepository, 'loadExactWithObservation'>;
+      artifactRepository: AflTradeExactExecutableArtifactReader;
       maximumArtifactBytes?: number;
     }
   ) {}
@@ -493,9 +511,12 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     );
 
     const spellMetricIds = unique(
-      observationSet.content.observations.flatMap(({ outcome }) =>
-        outcome.metrics.map(({ spellMetricVersionId }) => spellMetricVersionId)
-      )
+      observationSet.content.observations.flatMap(({ featureInputs, outcome }) => [
+        ...featureInputs.flatMap((feature) =>
+          feature.kind === 'acquisition_spell_metric' ? [feature.memberId] : []
+        ),
+        ...outcome.metrics.map(({ spellMetricVersionId }) => spellMetricVersionId),
+      ])
     );
     const metricsResult = await this.dependencies.sql.query<JsonRow>(
       `SELECT fact_json AS document_json
@@ -524,7 +545,8 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     for (const reference of [...referenceById.values()].sort((left, right) =>
       left.artifactId.localeCompare(right.artifactId)
     )) {
-      const loaded = await this.dependencies.artifactRepository.loadExactWithObservation(
+      const loaded = await loadExactExecutableArtifact(
+        this.dependencies.artifactRepository,
         reference,
         Math.min(
           this.dependencies.maximumArtifactBytes ?? MAXIMUM_EXECUTABLE_ARTIFACT_BYTES,
@@ -634,12 +656,12 @@ export class PostgresAflTradeAdmittedModelRunAuthority
         intent_json: unknown;
         authorization_json: unknown;
       }>(
-        `SELECT intent.intent_json, authorization.authorization_json
+        `SELECT intent.intent_json,run_authorization.authorization_json
            FROM outcome_valuation_model_run_intent intent
-           JOIN outcome_valuation_model_run_authorization authorization
-             ON authorization.intent_id=intent.intent_id
-          WHERE intent.intent_id=$1 AND authorization.authorization_id=$2
-          FOR SHARE OF intent,authorization`,
+           JOIN outcome_valuation_model_run_authorization run_authorization
+             ON run_authorization.intent_id=intent.intent_id
+          WHERE intent.intent_id=$1 AND run_authorization.authorization_id=$2
+          FOR SHARE OF intent,run_authorization`,
         [run.content.runIntentId, run.content.runAuthorizationId]
       );
       const ancestryRow = ancestry.rows[0];

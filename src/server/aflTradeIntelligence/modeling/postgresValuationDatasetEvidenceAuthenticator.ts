@@ -28,6 +28,8 @@ interface ExactArtifactLoader {
 }
 
 interface FactualCandidateRow extends Record<string, unknown> {
+  candidate_id: string;
+  candidate_sha256: string;
   candidate_json: unknown;
   finalized_at: Date | string | null;
 }
@@ -43,6 +45,7 @@ interface FieldSetRow extends Record<string, unknown> {
 
 interface CaptureRow extends Record<string, unknown> {
   capture_id: string;
+  source_snapshot_id: string;
   manifest_json: unknown;
 }
 
@@ -111,21 +114,41 @@ async function loadFactualParents(
   lineageId: string
 ) {
   const candidateResult = await sql.query<FactualCandidateRow>(
-    `SELECT candidate_json,finalized_at
+    `SELECT candidate_id,candidate_sha256,candidate_json,finalized_at
        FROM outcome_factual_release_candidate
       WHERE candidate_id=$1 AND status='approved' AND finalized_at IS NOT NULL`,
     [factualCandidateId]
   );
   const candidateRow = requireOne(candidateResult.rows, 'finalized factual candidate');
-  const factualCandidate = aflTradeFactualReleaseCandidateSchema.parse(candidateRow.candidate_json);
+  const factualCandidate = aflTradeFactualReleaseCandidateSchema.parse({
+    candidateId: candidateRow.candidate_id,
+    candidateSha256: candidateRow.candidate_sha256,
+    content: candidateRow.candidate_json,
+  });
   const lineageResult = await sql.query<LineageRow>(
     `SELECT lineage.lineage_json,decision.decision_key AS gate2_decision_key
+       FROM outcome_valuation_dataset_factual_lineage lineage
+       JOIN outcome_valuation_dataset_factual_lineage_admission admission
+         ON admission.lineage_id=lineage.lineage_id
+       JOIN outcome_gate_decision decision
+         ON decision.decision_id=admission.gate_decision_id
+      WHERE lineage.lineage_id=$1
+        AND decision.state='approved'
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_gate_decision successor
+           WHERE successor.supersedes_decision_id=decision.decision_id)
+      UNION ALL
+     SELECT lineage.lineage_json,decision.decision_key AS gate2_decision_key
        FROM outcome_corpus_factual_lineage lineage
        JOIN outcome_corpus_factual_lineage_admission admission
          ON admission.lineage_id=lineage.lineage_id
        JOIN outcome_gate_decision decision
          ON decision.decision_id=admission.gate_decision_id
-      WHERE lineage.lineage_id=$1`,
+      WHERE lineage.lineage_id=$1
+        AND decision.state='approved'
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_gate_decision successor
+           WHERE successor.supersedes_decision_id=decision.decision_id)`,
     [lineageId]
   );
   const lineageRow = requireOne(lineageResult.rows, 'corpus-to-factual lineage');
@@ -161,7 +184,7 @@ async function loadSourceAuthority(
     throw new Error('Valuation dataset authentication is missing a consumed field set.');
   }
   const capturesResult = await sql.query<CaptureRow>(
-    `SELECT capture_id,manifest_json
+    `SELECT capture_id,source_snapshot_id,manifest_json
        FROM outcome_source_capture
       WHERE capture_id=ANY($1::text[])
       ORDER BY capture_id`,
@@ -173,7 +196,10 @@ async function loadSourceAuthority(
   const captures = new Map(
     capturesResult.rows.map((row) => [
       row.capture_id,
-      aflTradeSourceSnapshotManifestSchema.parse(row.manifest_json),
+      aflTradeSourceSnapshotManifestSchema.parse({
+        snapshotId: row.source_snapshot_id,
+        content: row.manifest_json,
+      }),
     ])
   );
   const sourceRights = [];

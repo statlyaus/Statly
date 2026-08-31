@@ -1062,6 +1062,35 @@ dispatch attempt ledger to retry only transient PostgreSQL, artifact-custody or 
 failures. This boundary remains local, private, non-production and publication-prohibited and does
 not by itself qualify a model pair, prepare a valuation cohort or activate a batch.
 
+The admitted player-contribution component is available to the same local, private coordinator for
+the later model-pair composition. Its fixed methodology is
+`afl-trade-admitted-player-candidate/v1` under
+`afl-trade-player-contribution-model-protocol/v2`. It fits a ridge candidate against the governed
+role-and-era replacement baseline from the exact finalized dataset, admission, point-in-time feature
+members and target spell metrics selected by the operation. The protocol owns the scalar value unit,
+feature definitions, partition windows and embargo. The candidate configuration owns the baseline,
+ridge penalty, validation thresholds and interval coverage level. Neither the dispatch caller nor an
+operator may override those values at execution time.
+
+Before a run, require one live current dispatch claim, the exact request-to-operation binding, the
+bound private factual output, and identical factual release, candidate and source-member ancestry in
+the dataset and admission. Each source-rights proposal gets one fresh run-start evaluation. Multiple
+captures may share that proposal only when their retained Gate 0-A request ancestry is identical apart
+from evaluation time; disagreement is a deterministic failure. Never substitute a current dataset,
+protocol, public factual release, fixture, fabricated evidence, caller principal or caller execution
+mode. The existing human authorization workflow remains separate and unchanged.
+
+A successful native run retains its fitted model, baseline comparison, validation, calibration,
+interval, subgroup, sensitivity, leakage, model-card and diagnostics artifacts, then registers the
+governed player component with full dataset, admission, protocol and Gate-ledger ancestry. On replay,
+authenticate the component against the original immutable attempt and independently authenticate the
+replacement claimant as current. An exact retained component returns without rematerializing the
+observation set, issuing a second model-run authorization or retraining. This component is not yet
+wired into the local worker or paired with the pick component; that composition belongs to the model
+pair stage. No new player retry ledger or current pointer is part of this slice. Migration 0089 adds
+only the coordinator's least-privilege reads, immutable inserts and narrowly scoped row-lock/update
+permissions required by the existing append-only model-run and artifact-custody triggers.
+
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:
 
