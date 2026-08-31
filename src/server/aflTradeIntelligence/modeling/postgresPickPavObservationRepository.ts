@@ -47,7 +47,7 @@ interface SelectionRow {
   selection_id: string;
   event_id: string;
   event_version_id: string;
-  event_date: Date | string;
+  event_date: string;
   recorded_at: Date | string;
   draft_year: number;
   selection_number: number;
@@ -78,11 +78,14 @@ function iso(value: Date | string): string {
   return parsed.toISOString();
 }
 
-function dateOnly(value: Date | string): string {
+function dateOnly(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) return value;
   return iso(value).slice(0, 10);
 }
 
-async function trustedNow(transaction: AflOutcomeSqlTransaction): Promise<string> {
+export async function loadAflTradePickPavTrustedNow(
+  transaction: AflOutcomeSqlTransaction
+): Promise<string> {
   const result = await transaction.query<{ trusted_at: Date | string }>(
     `SELECT date_trunc('milliseconds',transaction_timestamp()) AS trusted_at`
   );
@@ -92,7 +95,7 @@ async function trustedNow(transaction: AflOutcomeSqlTransaction): Promise<string
   return iso(value);
 }
 
-async function loadPolicy(
+export async function loadAflTradePickPavPolicy(
   transaction: AflOutcomeSqlTransaction,
   policyId: string,
   environment: AflTradePickPavExecutionContext['environment']
@@ -141,11 +144,12 @@ async function loadPolicy(
   }
 }
 
-async function loadSelections(
+export async function loadAflTradePickPavSelections(
   transaction: AflOutcomeSqlTransaction,
   releaseId: string,
   environment: AflTradePickPavExecutionContext['environment'],
-  policy: AflTradePickPavPolicy
+  policy: AflTradePickPavPolicy,
+  authority: 'active_release' | 'exact_retained_release' = 'active_release'
 ): Promise<AflTradePickPavObservation['selection'][]> {
   const reviewedYears = [
     ...new Set(
@@ -157,28 +161,35 @@ async function loadSelections(
       )
     ),
   ].sort((left, right) => left - right);
+  const releaseJoin =
+    authority === 'active_release'
+      ? `FROM outcome_active_release active
+     JOIN outcome_release_manifest release ON release.release_id=active.release_id`
+      : `FROM outcome_release_manifest release`;
+  const releasePredicate =
+    authority === 'active_release' ? 'active.release_id=$1' : 'release.release_id=$1';
+  const releaseLock = authority === 'active_release' ? 'active,release' : 'release';
   await transaction.query(
     `SELECT pg_advisory_xact_lock(hashtextextended(
        'outcome-review-subject:pick_pav_selection_access:'||selection.selection_id,0))
-     FROM outcome_active_release active
-     JOIN outcome_release_manifest release ON release.release_id=active.release_id
+     ${releaseJoin}
      JOIN outcome_release_draft_selection member ON member.release_id=release.release_id
      JOIN outcome_draft_selection selection ON selection.selection_id=member.selection_id
      JOIN outcome_event_version version ON version.event_version_id=selection.event_version_id
      JOIN outcome_event event ON event.event_id=version.event_id
-     WHERE active.release_id=$1 AND release.environment=$2
+     WHERE ${releasePredicate} AND release.environment=$2
        AND event.competition=$3 AND event.season_year=ANY($4::integer[])
        AND version.kind='national_draft'::"OutcomeEventKind"
      ORDER BY selection.selection_id`,
     [releaseId, environment, policy.content.competition, reviewedYears]
   );
   const result = await transaction.query<SelectionRow>(
-    `SELECT selection.selection_id,event.event_id,version.event_version_id,version.event_date,
+    `SELECT selection.selection_id,event.event_id,version.event_version_id,
+       to_char(version.event_date,'YYYY-MM-DD') AS event_date,
        version.recorded_at,event.season_year AS draft_year,selection.selection_number,
        pick.nominal_pick,pick.nominal_round,selection.pick_id,selection.player_id,selection.club_id,
        access.access_json
-     FROM outcome_active_release active
-     JOIN outcome_release_manifest release ON release.release_id=active.release_id
+     ${releaseJoin}
      JOIN outcome_release_draft_selection member ON member.release_id=release.release_id
      JOIN outcome_draft_selection selection ON selection.selection_id=member.selection_id
      JOIN outcome_event_version version ON version.event_version_id=selection.event_version_id
@@ -193,13 +204,13 @@ async function loadSelections(
            WHERE successor.supersedes_decision_id=decision.decision_id)
        ORDER BY reviewed.recorded_at DESC LIMIT 1
      ) access ON TRUE
-     WHERE active.release_id=$1 AND release.environment=$2
+     WHERE ${releasePredicate} AND release.environment=$2
        AND event.competition=$3 AND event.season_year=ANY($4::integer[])
        AND version.kind='national_draft'::"OutcomeEventKind"
        AND version.status='approved'::"OutcomeRecordStatus"
        AND selection.status='approved'::"OutcomeRecordStatus"
      ORDER BY selection.selection_id
-     FOR SHARE OF active,release,member,selection,version,event`,
+     FOR SHARE OF ${releaseLock},member,selection,version,event`,
     [releaseId, environment, policy.content.competition, reviewedYears]
   );
   const observedYears = new Set(result.rows.map(({ draft_year }) => draft_year));
@@ -210,7 +221,7 @@ async function loadSelections(
   ) {
     throw new AflTradePickPavObservationError(
       'SELECTION_MEMBERSHIP_INCOMPLETE',
-      'The active release does not contain four complete reviewed draft classes.'
+      'The selected release does not contain four complete reviewed draft classes.'
     );
   }
   return result.rows.map((row) => {
@@ -251,7 +262,11 @@ async function requireCurrentObservationSetAuthority(
 ): Promise<void> {
   const policy =
     suppliedPolicy ??
-    (await loadPolicy(transaction, set.content.policy.policyId, set.content.environment));
+    (await loadAflTradePickPavPolicy(
+      transaction,
+      set.content.policy.policyId,
+      set.content.environment
+    ));
   if (canonicalizeAflTradeJson(policy) !== canonicalizeAflTradeJson(set.content.policy)) {
     throw new AflTradePickPavObservationError(
       'POLICY_NOT_CURRENT',
@@ -260,7 +275,12 @@ async function requireCurrentObservationSetAuthority(
   }
   const selections =
     suppliedSelections ??
-    (await loadSelections(transaction, set.content.releaseId, set.content.environment, policy));
+    (await loadAflTradePickPavSelections(
+      transaction,
+      set.content.releaseId,
+      set.content.environment,
+      policy
+    ));
   const currentById = new Map(
     selections.map((selection) => [selection.selectionId, canonicalizeAflTradeJson(selection)])
   );
@@ -303,7 +323,7 @@ async function requireCurrentObservationSetAuthority(
   }
 }
 
-async function loadCalculations(
+export async function loadAflTradePickPavCalculations(
   transaction: AflOutcomeSqlTransaction,
   policy: AflTradePickPavPolicy,
   selections: readonly AflTradePickPavObservation['selection'][],
@@ -382,7 +402,7 @@ async function loadCalculations(
   });
 }
 
-async function findReplay(
+export async function findAflTradePickPavReplay(
   transaction: AflOutcomeSqlTransaction,
   environment: AflTradePickPavExecutionContext['environment'],
   releaseId: string,
@@ -425,7 +445,7 @@ async function findReplay(
   }
 }
 
-async function persistSet(
+export async function persistAflTradePickPavObservationSet(
   transaction: AflOutcomeSqlTransaction,
   set: AflTradePickPavObservationSet
 ): Promise<void> {
@@ -734,20 +754,24 @@ export class PostgresAflTradePickPavObservationRepository implements AflTradePic
         await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
           `outcome-pick-pav-set:${request.environment}:${request.releaseId}:${request.policyId}:${request.knowledgeCutoffAt}`,
         ]);
-        const policy = await loadPolicy(transaction, request.policyId, request.environment);
+        const policy = await loadAflTradePickPavPolicy(
+          transaction,
+          request.policyId,
+          request.environment
+        );
         if (policy.content.competition !== request.competition) {
           throw new AflTradePickPavObservationError(
             'POLICY_NOT_CURRENT',
             'The requested competition does not match the current pick-PAV policy.'
           );
         }
-        const selections = await loadSelections(
+        const selections = await loadAflTradePickPavSelections(
           transaction,
           request.releaseId,
           request.environment,
           policy
         );
-        const replay = await findReplay(
+        const replay = await findAflTradePickPavReplay(
           transaction,
           request.environment,
           request.releaseId,
@@ -758,8 +782,8 @@ export class PostgresAflTradePickPavObservationRepository implements AflTradePic
           await requireCurrentObservationSetAuthority(transaction, replay, policy, selections);
           return { observationSet: replay, idempotentReplay: true };
         }
-        const createdAt = await trustedNow(transaction);
-        const calculations = await loadCalculations(
+        const createdAt = await loadAflTradePickPavTrustedNow(transaction);
+        const calculations = await loadAflTradePickPavCalculations(
           transaction,
           policy,
           selections,
@@ -775,7 +799,7 @@ export class PostgresAflTradePickPavObservationRepository implements AflTradePic
           selections,
           calculations,
         });
-        await persistSet(transaction, observationSet);
+        await persistAflTradePickPavObservationSet(transaction, observationSet);
         return { observationSet, idempotentReplay: false };
       });
     } catch (error) {
