@@ -1040,6 +1040,28 @@ worker, and it must not be described as automatic weekly raw-data recalculation 
 and prepared-v3 stages are composed into the same runner. Do not bypass missing HPN map reviews or
 identity resolutions; those states remain backend blockers.
 
+The governed pick-PAV stage can now consume that exact handoff without a public factual-release
+fallback. It requires the live dispatch claim and the retained request-to-model-operation binding.
+The binding's factual output selects the retained draft release; its HPN calculation supplies the
+exact method, factual ancestry, values digest and knowledge cutoff. The operation selects the existing
+approved pick policy, protocol, finalized dataset and dataset admission. If any request, operation,
+claim, attempt, lease, factual, HPN, policy, protocol, dataset or admission identifier disagrees, stop
+the dispatch as stale or deterministic authority failure. Do not substitute the current public
+release or a test fixture. Migration 0086 enforces the retained-release exception at observation-set
+finalization and requires the same live binding, pick policy and bound HPN calculation.
+
+Successful execution retains the native governed pick-PAV v4 execution and its governed component
+manifest. On restart, inspect the model operation's retained `pick_run_id`; when present, the pair
+coordinator reuses it without rematerializing or refitting. When `pick_run_id` is still absent after a
+crash, a replacement claim for the same request may adopt the exact retained component: the retained
+v4 execution must authenticate against its original dispatch attempt, and the replacement claim must
+independently remain live through lookup and operation acceptance. Do not rewrite the execution's
+historical claim envelope or accept it under an expired replacement claim. A deterministic
+observation or validation failure is not a reason to claim another attempt. Allow the existing
+dispatch attempt ledger to retry only transient PostgreSQL, artifact-custody or local runtime
+failures. This boundary remains local, private, non-production and publication-prohibited and does
+not by itself qualify a model pair, prepare a valuation cohort or activate a batch.
+
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:
 

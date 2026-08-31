@@ -12,7 +12,10 @@ import {
 import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/modeling/hpnPavCore';
 import { createAflTradePickPavPolicy } from '@/server/aflTradeIntelligence/modeling/pickOutcomeContracts';
 import { AflTradePickPavObservationError } from '@/server/aflTradeIntelligence/modeling/pickPavObservationRepository';
-import { PostgresAflTradePickPavObservationRepository } from '@/server/aflTradeIntelligence/modeling/postgresPickPavObservationRepository';
+import {
+  loadAflTradePickPavSelections,
+  PostgresAflTradePickPavObservationRepository,
+} from '@/server/aflTradeIntelligence/modeling/postgresPickPavObservationRepository';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlQueryResult,
@@ -195,6 +198,7 @@ class FakePickPavSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
   draftClassCount = 0;
   observationCount = 0;
   trustedTimeReads = 0;
+  selectionSql: string | null = null;
   readonly accessByDecision = new Map<string, { selectionId: string; access: unknown }>();
 
   async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
@@ -219,8 +223,9 @@ class FakePickPavSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
       ]);
     }
     if (sql.includes('SELECT selection.selection_id,event.event_id')) {
+      this.selectionSql = sql;
       return this.result(
-        this.activeRelease
+        this.activeRelease || !sql.includes('outcome_active_release')
           ? this.selections.map((selection) => ({
               ...selection,
               access_json:
@@ -336,6 +341,22 @@ const materializationRequest = (policyId: string) => ({
 });
 
 describe('PostgreSQL pick-PAV observation repository', () => {
+  it('loads an exact retained release without consulting the active pointer', async () => {
+    const sql = new FakePickPavSql();
+    sql.activeRelease = false;
+
+    const selections = await loadAflTradePickPavSelections(
+      sql,
+      releaseId,
+      'test_fixture',
+      sql.policy,
+      'exact_retained_release'
+    );
+
+    expect(selections).toHaveLength(draftYears.length);
+    expect(sql.selectionSql).not.toContain('outcome_active_release');
+  });
+
   it('materializes exact pick outcomes and replays before reading a new trusted time', async () => {
     const sql = new FakePickPavSql();
     const repository = new PostgresAflTradePickPavObservationRepository(sql);

@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
-import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import {
+  aflTradeContentAddressedIdSchema,
+  canonicalizeAflTradeJson,
+} from '../artifacts/contentAddress';
 import type { AflTradeModelRunManifestV3 } from '../artifacts/modelRunManifest';
 import {
   AflTradeAdmittedModelRunner,
@@ -33,6 +36,12 @@ import {
   type AflTradePrivateValuationFactualOutput,
 } from './privateValuationFactualOutput';
 import type { AflTradePrivateValuationHpnPreparationResult } from './postgresPrivateValuationHpnPreparation';
+import {
+  createGenuineDispatchBoundPickPavRunner,
+  parseGenuineDispatchBoundPickPavExecutionInput,
+  type GenuineDispatchBoundPickPavAuthority,
+  type GenuineDispatchBoundPickPavExecutionInput,
+} from './genuineDispatchBoundPickPav';
 import {
   createGovernedValuationComponentRunManifest,
   type GovernedValuationComponentRunManifest,
@@ -460,6 +469,11 @@ const TRANSIENT_PLAYER_AUTHORITY_CODES = new Set([
   'run_persistence_failed',
 ]);
 const STALE_DISPATCH_ADAPTER_ERROR_CODES = new Set(['STALE_GATE_LEDGER', 'STALE_CURRENT_PAIR']);
+const STALE_DISPATCH_ADAPTER_ERROR_MESSAGES = new Set([
+  'Private valuation dispatch request lookup lost its live claim fence',
+  'Private valuation model operation lost its claim.',
+  'Dispatch-bound model qualification lost its live claim fence',
+]);
 const TRANSIENT_DISPATCH_ADAPTER_ERROR_CODES = new Set([
   'STORAGE_UNAVAILABLE',
   'ECONNRESET',
@@ -476,7 +490,10 @@ function classifiedDispatchAdapterFailure(error: unknown) {
   const code =
     typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : null;
   const reason = error instanceof Error ? error.message : 'Private model adapter failed.';
-  if (code !== null && STALE_DISPATCH_ADAPTER_ERROR_CODES.has(code)) {
+  if (
+    (code !== null && STALE_DISPATCH_ADAPTER_ERROR_CODES.has(code)) ||
+    STALE_DISPATCH_ADAPTER_ERROR_MESSAGES.has(reason)
+  ) {
     return { state: 'stale_authority' as const, reason };
   }
   if (
@@ -581,6 +598,10 @@ type RetainCanonicalArtifact = (input: {
 
 export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
   readonly runModel: (execution: PickExecutorInput) => Promise<DispatchBoundPickPreparation>;
+  readonly loadRetainedComponent?: (
+    execution: PickExecutorInput
+  ) => Promise<{ readonly runId: string } | null>;
+  readonly assertClaim?: (execution: PickExecutorInput) => Promise<void>;
   readonly retainArtifact: RetainCanonicalArtifact;
   readonly executionRepository: Pick<PostgresGovernedPickPavModelExecutionRepository, 'register'>;
   readonly componentRepository: Pick<PostgresGovernedValuationComponentRunRepository, 'register'>;
@@ -588,7 +609,15 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
   return {
     async execute(execution: PickExecutorInput) {
       try {
+        const retained = await input.loadRetainedComponent?.(execution);
+        if (retained !== undefined && retained !== null) {
+          return {
+            state: 'completed' as const,
+            runId: aflTradeContentAddressedIdSchema('model-run').parse(retained.runId),
+          };
+        }
         const prepared = await input.runModel(execution);
+        await input.assertClaim?.(execution);
         const governedExecution = createDispatchBoundGovernedAflTradePickPavModelExecution({
           outputs: prepared.outputs,
           completedAt: prepared.completedAt,
@@ -621,10 +650,12 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
           document: governedExecution,
           createdAt: prepared.completedAt,
         });
+        await input.assertClaim?.(execution);
         const retainedExecution = await input.executionRepository.register({
           execution: governedExecution,
           artifact: executionArtifact,
         });
+        await input.assertClaim?.(execution);
         const content = retainedExecution.execution.content;
         const manifest = createGovernedValuationComponentRunManifest({
           environment: 'non_production',
@@ -647,16 +678,47 @@ export function createAflTradeDispatchBoundGovernedPickExecutor(input: {
           document: manifest,
           createdAt: prepared.registeredAt,
         });
+        await input.assertClaim?.(execution);
         const retainedComponent = await input.componentRepository.register({
           manifest,
           artifact: manifestArtifact,
         });
+        await input.assertClaim?.(execution);
         return { state: 'completed' as const, runId: retainedComponent.manifest.runId };
       } catch (error) {
         return classifiedDispatchAdapterFailure(error);
       }
     },
   };
+}
+
+export function createAflTradeGenuineDispatchBoundGovernedPickExecutor(input: {
+  readonly loadRetainedComponent?: (
+    execution: GenuineDispatchBoundPickPavExecutionInput
+  ) => Promise<{ readonly runId: string } | null>;
+  readonly loadExactAuthority: (
+    execution: GenuineDispatchBoundPickPavExecutionInput
+  ) => Promise<GenuineDispatchBoundPickPavAuthority>;
+  readonly assertClaim: (execution: GenuineDispatchBoundPickPavExecutionInput) => Promise<void>;
+  readonly retainArtifact: RetainCanonicalArtifact;
+  readonly executionRepository: Pick<PostgresGovernedPickPavModelExecutionRepository, 'register'>;
+  readonly componentRepository: Pick<PostgresGovernedValuationComponentRunRepository, 'register'>;
+}) {
+  return createAflTradeDispatchBoundGovernedPickExecutor({
+    ...(input.loadRetainedComponent === undefined
+      ? {}
+      : {
+          loadRetainedComponent: (execution: GenuineDispatchBoundPickPavExecutionInput) =>
+            input.loadRetainedComponent!(parseGenuineDispatchBoundPickPavExecutionInput(execution)),
+        }),
+    runModel: createGenuineDispatchBoundPickPavRunner({
+      loadExactAuthority: input.loadExactAuthority,
+    }),
+    assertClaim: input.assertClaim,
+    retainArtifact: input.retainArtifact,
+    executionRepository: input.executionRepository,
+    componentRepository: input.componentRepository,
+  });
 }
 
 type QualificationExecutorInput = Parameters<
