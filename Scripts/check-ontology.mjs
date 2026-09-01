@@ -37,6 +37,21 @@ function parseJson(path, label) {
 
 function validateOntology(document, schemaDocument) {
   validateJsonSchema(document, schemaDocument, schemaDocument, '$');
+  const collections = validateOntologyEnvelope(document, schemaDocument);
+  if (!collections) return;
+
+  const context = buildOntologyContext(document, collections);
+  validateNodes(document.nodes);
+  validateEvidence(document.evidence);
+  validateSymbolicStatements(document.symbolicStatements, context);
+  validateHypotheses(document.hypotheses, context);
+  validateLineages(document.lineages, context);
+  validateHypothesisLineageConsumption(document.hypotheses, document.lineages);
+  validateInvariantReferences(document.protectedInvariants, context.statementIds);
+  validateProtectedInvariants(document);
+}
+
+function validateOntologyEnvelope(document, schemaDocument) {
   assert(
     document.$schema === './statly.ontology.schema.json',
     'ontology must reference its repository-local schema'
@@ -61,8 +76,11 @@ function validateOntology(document, schemaDocument) {
   for (const [name, value] of collections) {
     assert(Array.isArray(value), `${name} must be an array`);
   }
-  if (collections.some(([, value]) => !Array.isArray(value))) return;
+  if (collections.some(([, value]) => !Array.isArray(value))) return null;
+  return collections;
+}
 
+function buildOntologyContext(document, collections) {
   const allTopLevelItems = collections.flatMap(([, value]) => value);
   const allIds = new Set();
   for (const item of allTopLevelItems) {
@@ -71,27 +89,30 @@ function validateOntology(document, schemaDocument) {
     allIds.add(item.id);
   }
 
-  const nodeIds = new Set(document.nodes.map(({ id }) => id));
-  const evidenceIds = new Set(document.evidence.map(({ id }) => id));
-  const statementIds = new Set(document.symbolicStatements.map(({ id }) => id));
-  const hypothesisIds = new Set(document.hypotheses.map(({ id }) => id));
-  const lineageIds = new Set(document.lineages.map(({ id }) => id));
-  const relationTypes = new Set(document.relationTypes ?? []);
+  return {
+    nodeIds: new Set(document.nodes.map(({ id }) => id)),
+    evidenceIds: new Set(document.evidence.map(({ id }) => id)),
+    statementIds: new Set(document.symbolicStatements.map(({ id }) => id)),
+    hypothesisIds: new Set(document.hypotheses.map(({ id }) => id)),
+    lineageIds: new Set(document.lineages.map(({ id }) => id)),
+    relationTypes: new Set(document.relationTypes ?? []),
+  };
+}
 
-  validateNodes(document.nodes);
-  validateEvidence(document.evidence);
-
-  for (const statement of document.symbolicStatements) {
-    validateTriple(statement, nodeIds, relationTypes);
+function validateSymbolicStatements(statements, context) {
+  for (const statement of statements) {
+    validateTriple(statement, context.nodeIds, context.relationTypes);
     assert(
       ['asserted', 'observed', 'rejected'].includes(statement.epistemicState),
       `${statement.id}: symbolic statements cannot be inferred`
     );
-    validateEvidenceReferences(statement.id, statement.evidence, evidenceIds, true);
+    validateEvidenceReferences(statement.id, statement.evidence, context.evidenceIds, true);
   }
+}
 
-  for (const hypothesis of document.hypotheses) {
-    validateTriple(hypothesis, nodeIds, relationTypes);
+function validateHypotheses(hypotheses, context) {
+  for (const hypothesis of hypotheses) {
+    validateTriple(hypothesis, context.nodeIds, context.relationTypes);
     assert(
       ['inferred', 'rejected'].includes(hypothesis.epistemicState),
       `${hypothesis.id}: hypothesis must be inferred or rejected`
@@ -106,11 +127,11 @@ function validateOntology(document, schemaDocument) {
     validateEvidenceReferences(
       hypothesis.id,
       [...hypothesis.supportingEvidence, ...hypothesis.contradictingEvidence],
-      evidenceIds,
+      context.evidenceIds,
       false
     );
     assert(
-      lineageIds.has(hypothesis.lineage),
+      context.lineageIds.has(hypothesis.lineage),
       `${hypothesis.id}: missing lineage ${hypothesis.lineage}`
     );
     assert(
@@ -118,22 +139,26 @@ function validateOntology(document, schemaDocument) {
       `${hypothesis.id}: rejected hypotheses must be retired`
     );
   }
+}
 
+function validateLineages(lineages, context) {
   const lineageStepIds = new Set();
-  for (const lineage of document.lineages) {
+  for (const lineage of lineages) {
     assert(
-      hypothesisIds.has(lineage.hypothesis),
+      context.hypothesisIds.has(lineage.hypothesis),
       `${lineage.id}: missing hypothesis ${lineage.hypothesis}`
     );
     assert(
       Array.isArray(lineage.steps) && lineage.steps.length > 0,
       `${lineage.id}: lineage has no steps`
     );
-    validateLineage(lineage, evidenceIds, hypothesisIds, lineageStepIds);
+    validateLineage(lineage, context.evidenceIds, context.hypothesisIds, lineageStepIds);
   }
+}
 
-  for (const hypothesis of document.hypotheses) {
-    const lineage = document.lineages.find(({ id }) => id === hypothesis.lineage);
+function validateHypothesisLineageConsumption(hypotheses, lineages) {
+  for (const hypothesis of hypotheses) {
+    const lineage = lineages.find(({ id }) => id === hypothesis.lineage);
     assert(
       lineage?.hypothesis === hypothesis.id,
       `${hypothesis.id}: lineage does not point back to its hypothesis`
@@ -151,15 +176,15 @@ function validateOntology(document, schemaDocument) {
       }
     }
   }
+}
 
-  for (const invariant of document.protectedInvariants) {
+function validateInvariantReferences(invariants, statementIds) {
+  for (const invariant of invariants) {
     assert(
       statementIds.has(invariant.requiredStatement),
       `${invariant.id}: missing required statement ${invariant.requiredStatement}`
     );
   }
-
-  validateProtectedInvariants(document);
 }
 
 function validateNodes(nodes) {
@@ -384,12 +409,26 @@ function validateProtectedInvariants(document) {
 
 function validateJsonSchema(value, schemaNode, rootSchema, path) {
   if (schemaNode.$ref) {
-    const reference = resolveSchemaReference(rootSchema, schemaNode.$ref);
-    assert(Boolean(reference), `${path}: unresolved schema reference ${schemaNode.$ref}`);
-    if (reference) validateJsonSchema(value, reference, rootSchema, path);
+    validateSchemaReference(value, schemaNode.$ref, rootSchema, path);
     return;
   }
 
+  validateSchemaComposition(value, schemaNode, rootSchema, path);
+  if (!validateSchemaValue(value, schemaNode, path)) return;
+  validateStringSchema(value, schemaNode, path);
+  validateNumberSchema(value, schemaNode, path);
+  validateArraySchema(value, schemaNode, rootSchema, path);
+  validateObjectSchema(value, schemaNode, rootSchema, path);
+  validateAnyOfSchema(value, schemaNode, rootSchema, path);
+}
+
+function validateSchemaReference(value, schemaReference, rootSchema, path) {
+  const reference = resolveSchemaReference(rootSchema, schemaReference);
+  assert(Boolean(reference), `${path}: unresolved schema reference ${schemaReference}`);
+  if (reference) validateJsonSchema(value, reference, rootSchema, path);
+}
+
+function validateSchemaComposition(value, schemaNode, rootSchema, path) {
   if (schemaNode.allOf) {
     for (const branch of schemaNode.allOf) validateJsonSchema(value, branch, rootSchema, path);
   }
@@ -401,7 +440,9 @@ function validateJsonSchema(value, schemaNode, rootSchema, path) {
   if (schemaNode.not && matchesJsonSchema(value, schemaNode.not, rootSchema)) {
     errors.push(`${path}: value matches a prohibited schema`);
   }
+}
 
+function validateSchemaValue(value, schemaNode, path) {
   if (schemaNode.enum && !schemaNode.enum.some((candidate) => Object.is(candidate, value))) {
     errors.push(`${path}: value is not one of the allowed schema values`);
   }
@@ -411,81 +452,100 @@ function validateJsonSchema(value, schemaNode, rootSchema, path) {
 
   if (schemaNode.type && !hasJsonType(value, schemaNode.type)) {
     errors.push(`${path}: expected ${schemaNode.type}`);
-    return;
+    return false;
   }
+  return true;
+}
 
-  if (typeof value === 'string') {
-    if (schemaNode.minLength !== undefined && value.length < schemaNode.minLength) {
-      errors.push(`${path}: string is shorter than ${schemaNode.minLength}`);
-    }
-    if (schemaNode.pattern && !new RegExp(schemaNode.pattern).test(value)) {
-      errors.push(`${path}: string does not match ${schemaNode.pattern}`);
-    }
-    if (schemaNode.format === 'date' && !isIsoDate(value)) {
-      errors.push(`${path}: string is not a valid ISO date`);
-    }
+function validateStringSchema(value, schemaNode, path) {
+  if (typeof value !== 'string') return;
+  if (schemaNode.minLength !== undefined && value.length < schemaNode.minLength) {
+    errors.push(`${path}: string is shorter than ${schemaNode.minLength}`);
   }
-
-  if (typeof value === 'number') {
-    if (schemaNode.minimum !== undefined && value < schemaNode.minimum) {
-      errors.push(`${path}: number is below ${schemaNode.minimum}`);
-    }
-    if (schemaNode.maximum !== undefined && value > schemaNode.maximum) {
-      errors.push(`${path}: number is above ${schemaNode.maximum}`);
-    }
-    if (schemaNode.exclusiveMinimum !== undefined && value <= schemaNode.exclusiveMinimum) {
-      errors.push(`${path}: number must be greater than ${schemaNode.exclusiveMinimum}`);
-    }
-    if (schemaNode.exclusiveMaximum !== undefined && value >= schemaNode.exclusiveMaximum) {
-      errors.push(`${path}: number must be less than ${schemaNode.exclusiveMaximum}`);
-    }
+  if (schemaNode.pattern && !new RegExp(schemaNode.pattern).test(value)) {
+    errors.push(`${path}: string does not match ${schemaNode.pattern}`);
   }
-
-  if (Array.isArray(value)) {
-    if (schemaNode.minItems !== undefined && value.length < schemaNode.minItems) {
-      errors.push(`${path}: array has fewer than ${schemaNode.minItems} items`);
-    }
-    if (schemaNode.uniqueItems) {
-      const serialized = value.map((item) => JSON.stringify(item));
-      if (new Set(serialized).size !== serialized.length)
-        errors.push(`${path}: array items are not unique`);
-    }
-    if (schemaNode.items) {
-      value.forEach((item, index) =>
-        validateJsonSchema(item, schemaNode.items, rootSchema, `${path}[${index}]`)
-      );
-    }
+  if (schemaNode.format === 'date' && !isIsoDate(value)) {
+    errors.push(`${path}: string is not a valid ISO date`);
   }
+}
 
-  if (isPlainObject(value)) {
-    const properties = schemaNode.properties ?? {};
-    for (const requiredProperty of schemaNode.required ?? []) {
-      if (!(requiredProperty in value))
-        errors.push(`${path}: missing required property ${requiredProperty}`);
-    }
-    for (const [key, child] of Object.entries(value)) {
-      if (properties[key]) {
-        validateJsonSchema(child, properties[key], rootSchema, `${path}.${key}`);
-      } else if (schemaNode.additionalProperties === false) {
-        errors.push(`${path}: unexpected property ${key}`);
-      } else if (isPlainObject(schemaNode.additionalProperties)) {
-        validateJsonSchema(child, schemaNode.additionalProperties, rootSchema, `${path}.${key}`);
-      }
-    }
-    if (
-      schemaNode.minProperties !== undefined &&
-      Object.keys(value).length < schemaNode.minProperties
-    ) {
-      errors.push(`${path}: object has fewer than ${schemaNode.minProperties} properties`);
+function validateNumberSchema(value, schemaNode, path) {
+  if (typeof value !== 'number') return;
+  if (schemaNode.minimum !== undefined && value < schemaNode.minimum) {
+    errors.push(`${path}: number is below ${schemaNode.minimum}`);
+  }
+  if (schemaNode.maximum !== undefined && value > schemaNode.maximum) {
+    errors.push(`${path}: number is above ${schemaNode.maximum}`);
+  }
+  if (schemaNode.exclusiveMinimum !== undefined && value <= schemaNode.exclusiveMinimum) {
+    errors.push(`${path}: number must be greater than ${schemaNode.exclusiveMinimum}`);
+  }
+  if (schemaNode.exclusiveMaximum !== undefined && value >= schemaNode.exclusiveMaximum) {
+    errors.push(`${path}: number must be less than ${schemaNode.exclusiveMaximum}`);
+  }
+}
+
+function validateArraySchema(value, schemaNode, rootSchema, path) {
+  if (!Array.isArray(value)) return;
+  if (schemaNode.minItems !== undefined && value.length < schemaNode.minItems) {
+    errors.push(`${path}: array has fewer than ${schemaNode.minItems} items`);
+  }
+  if (schemaNode.uniqueItems) {
+    const serialized = value.map((item) => JSON.stringify(item));
+    if (new Set(serialized).size !== serialized.length) {
+      errors.push(`${path}: array items are not unique`);
     }
   }
-
-  if (schemaNode.anyOf) {
-    const validBranches = schemaNode.anyOf.filter((branch) =>
-      matchesJsonSchema(value, branch, rootSchema)
+  if (schemaNode.items) {
+    value.forEach((item, index) =>
+      validateJsonSchema(item, schemaNode.items, rootSchema, `${path}[${index}]`)
     );
-    if (validBranches.length === 0) errors.push(`${path}: value does not match any allowed schema`);
   }
+}
+
+function validateObjectSchema(value, schemaNode, rootSchema, path) {
+  if (!isPlainObject(value)) return;
+  const properties = schemaNode.properties ?? {};
+  for (const requiredProperty of schemaNode.required ?? []) {
+    if (!(requiredProperty in value)) {
+      errors.push(`${path}: missing required property ${requiredProperty}`);
+    }
+  }
+  for (const [key, child] of Object.entries(value)) {
+    validateObjectProperty(
+      child,
+      key,
+      properties,
+      schemaNode.additionalProperties,
+      rootSchema,
+      path
+    );
+  }
+  if (
+    schemaNode.minProperties !== undefined &&
+    Object.keys(value).length < schemaNode.minProperties
+  ) {
+    errors.push(`${path}: object has fewer than ${schemaNode.minProperties} properties`);
+  }
+}
+
+function validateObjectProperty(child, key, properties, additionalProperties, rootSchema, path) {
+  if (properties[key]) {
+    validateJsonSchema(child, properties[key], rootSchema, `${path}.${key}`);
+  } else if (additionalProperties === false) {
+    errors.push(`${path}: unexpected property ${key}`);
+  } else if (isPlainObject(additionalProperties)) {
+    validateJsonSchema(child, additionalProperties, rootSchema, `${path}.${key}`);
+  }
+}
+
+function validateAnyOfSchema(value, schemaNode, rootSchema, path) {
+  if (!schemaNode.anyOf) return;
+  const validBranches = schemaNode.anyOf.filter((branch) =>
+    matchesJsonSchema(value, branch, rootSchema)
+  );
+  if (validBranches.length === 0) errors.push(`${path}: value does not match any allowed schema`);
 }
 
 function matchesJsonSchema(value, schemaNode, rootSchema) {

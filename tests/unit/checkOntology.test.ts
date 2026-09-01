@@ -14,24 +14,122 @@ afterEach(() => {
 });
 
 describe('ontology validation command', () => {
+  it('accepts the valid ontology fixture', () => {
+    const result = runOntologyCheck(createOntologyFixture());
+
+    expect(result).toEqual({
+      status: 0,
+      stderr: '',
+      stdout:
+        'Ontology checks passed: 31 nodes, 28 symbolic statements, 3 hypotheses, and 3 lineages.\n',
+    });
+  });
+
   it('rejects a repository evidence location that does not exist', () => {
     const root = createOntologyFixture();
-    const ontologyPath = join(root, 'config/ontology/statly.ontology.json');
-    const ontology = JSON.parse(readFileSync(ontologyPath, 'utf8'));
-    ontology.evidence[0].location = 'docs/does-not-exist.md';
-    writeFileSync(ontologyPath, `${JSON.stringify(ontology, null, 2)}\n`, 'utf8');
-
-    const result = spawnSync(process.execPath, ['Scripts/check-ontology.mjs'], {
-      cwd: root,
-      encoding: 'utf8',
+    mutateOntology(root, (ontology) => {
+      ontology.evidence[0].location = 'docs/does-not-exist.md';
     });
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'evidence:agents_guide: repository evidence location does not exist: docs/does-not-exist.md'
-    );
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (1):\n' +
+        '- evidence:agents_guide: repository evidence location does not exist: docs/does-not-exist.md\n',
+      stdout: '',
+    });
+  });
+
+  it('reports schema and ontology collection failures in validation order', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.nodes = {};
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (2):\n' +
+        '- $.nodes: expected array\n' +
+        '- nodes must be an array\n',
+      stdout: '',
+    });
+  });
+
+  it('rejects schema composition violations at the command boundary', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.hypotheses[0].probability = 0.5;
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (2):\n' +
+        '- $.hypotheses[0].probability: number is below 0.8\n' +
+        '- hypothesis:route_tree_maps_to_domain_modules: probability does not match high calibration\n',
+      stdout: '',
+    });
+  });
+
+  it('rejects lineage that does not consume all declared evidence', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.lineages[0].steps[0].inputs = ['evidence:server_tree'];
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (1):\n' +
+        '- hypothesis:route_tree_maps_to_domain_modules: lineage does not consume declared evidence evidence:app_route_tree\n',
+      stdout: '',
+    });
+  });
+
+  it('rejects a protected statement whose meaning changes', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      const statement = ontology.symbolicStatements.find(
+        ({ id }: { id: string }) => id === 'statement:prisma_owns_protected_state'
+      );
+      statement.object = 'concept:identity';
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (1):\n' +
+        '- statement:prisma_owns_protected_state: protected statement has changed meaning\n',
+      stdout: '',
+    });
   });
 });
+
+function runOntologyCheck(root: string) {
+  const result = spawnSync(process.execPath, ['Scripts/check-ontology.mjs'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  return { status: result.status, stderr: result.stderr, stdout: result.stdout };
+}
+
+function mutateOntology(root: string, mutate: (ontology: any) => void): void {
+  const ontologyPath = join(root, 'config/ontology/statly.ontology.json');
+  const ontology = JSON.parse(readFileSync(ontologyPath, 'utf8'));
+  mutate(ontology);
+  writeFileSync(ontologyPath, `${JSON.stringify(ontology, null, 2)}\n`, 'utf8');
+}
 
 function createOntologyFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'statly-ontology-check-'));
