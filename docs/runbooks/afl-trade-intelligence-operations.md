@@ -1072,6 +1072,12 @@ feature definitions, partition windows and embargo. The candidate configuration 
 ridge penalty, validation thresholds and interval coverage level. Neither the dispatch caller nor an
 operator may override those values at execution time.
 
+For candidate version 1, verify the retained configuration uses a games-played-weighted 25th
+percentile replacement level per role and era, minimum one game, minimum one training observation per
+group, ridge lambda `1`, 80% interval coverage, and minimum one comparable validation observation.
+Both relative MAE and relative RMSE must improve by at least 1% over the games-only comparator, and
+incomplete prediction coverage must fail closed.
+
 Before a run, require one live current dispatch claim, the exact request-to-operation binding, the
 bound private factual output, and identical factual release, candidate and source-member ancestry in
 the dataset and admission. Each source-rights proposal gets one fresh run-start evaluation. Multiple
@@ -1090,6 +1096,16 @@ wired into the local worker or paired with the pick component; that composition 
 pair stage. No new player retry ledger or current pointer is part of this slice. Migration 0089 adds
 only the coordinator's least-privilege reads, immutable inserts and narrowly scoped row-lock/update
 permissions required by the existing append-only model-run and artifact-custody triggers.
+
+The genuine local player adapter measures execution ancestry at run start. It derives the Git root
+from the executing module, resolves the exact commit, requires a clean checkout including untracked
+files, hashes the actual dependency lock and Node executable, and retains the fixed candidate
+configuration plus a generated digest manifest of every tracked application source file captured
+when the candidate process loaded. Container identity is recorded as unverified unless a separately
+authenticated boundary supplies it; the adapter does not infer non-containerization. It does not accept an
+operator-authored checkout, commit, artifact set or clean-worktree claim. It rechecks the same commit,
+clean status, lock hash and loaded source hashes after retention; a dirty checkout, changed lock,
+stale loaded process or unstable file fails before model-run authorization.
 
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:

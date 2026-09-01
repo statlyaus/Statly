@@ -423,13 +423,14 @@ export function createLocalAflTradePostgresAdmittedPlayerPreparation(input: {
     PostgresGovernedValuationComponentRunRepository,
     'register' | 'loadExact'
   >;
-  readonly profile: LocalAflTradeAdmittedPlayerRunProfile;
+  readonly attestRunProfile: (input: {
+    readonly createdAt: string;
+    readonly retainArtifact: (value: {
+      readonly document: unknown;
+      readonly createdAt: string;
+    }) => Promise<AflTradeArtifactRef>;
+  }) => Promise<LocalAflTradeAdmittedPlayerRunProfile>;
 }) {
-  const lifetime = input.profile.operationalAuthorizationLifetimeMs ?? 30_000;
-  if (!Number.isSafeInteger(lifetime) || lifetime <= 0 || lifetime > 300_000) {
-    throw new TypeError('Local player operational authorization lifetime is invalid.');
-  }
-
   const retainArtifact = (value: { readonly document: unknown; readonly createdAt: string }) =>
     retainCanonical({
       sql: input.sql,
@@ -463,6 +464,11 @@ export function createLocalAflTradePostgresAdmittedPlayerPreparation(input: {
         startedAt,
       }),
     ]);
+    const profile = await input.attestRunProfile({ createdAt: startedAt, retainArtifact });
+    const lifetime = profile.operationalAuthorizationLifetimeMs ?? 30_000;
+    if (!Number.isSafeInteger(lifetime) || lifetime <= 0 || lifetime > 300_000) {
+      throw new TypeError('Local player operational authorization lifetime is invalid.');
+    }
     const observationSet = createAflTradePlayerObservationSetV2({
       candidate: authority.dataset,
       datasetAdmissionId: authority.admission.admissionId,
@@ -477,9 +483,9 @@ export function createLocalAflTradePostgresAdmittedPlayerPreparation(input: {
       datasetAdmissionId: target.datasetAdmissionId,
       modelProtocolId: target.protocolId,
       observationSetId: observationSet.observationSetId,
-      codeCommitSha: input.profile.codeCommitSha,
+      codeCommitSha: profile.codeCommitSha,
       cleanWorktree: true,
-      seed: input.profile.seed,
+      seed: profile.seed,
       job: {
         jobId: execution.operation.operationId,
         attempt: execution.attemptNumber,
@@ -488,12 +494,12 @@ export function createLocalAflTradePostgresAdmittedPlayerPreparation(input: {
       },
       startedAt,
       windows: authority.protocol.content.windows,
-      sourceCodeArtifact: input.profile.sourceCodeArtifact,
-      dependencyLockArtifact: input.profile.dependencyLockArtifact,
-      runtimeArtifact: input.profile.runtimeArtifact,
-      containerArtifact: input.profile.containerArtifact,
-      configurationArtifact: input.profile.configurationArtifact,
-      environmentArtifact: input.profile.environmentArtifact,
+      sourceCodeArtifact: profile.sourceCodeArtifact,
+      dependencyLockArtifact: profile.dependencyLockArtifact,
+      runtimeArtifact: profile.runtimeArtifact,
+      containerArtifact: profile.containerArtifact,
+      configurationArtifact: profile.configurationArtifact,
+      environmentArtifact: profile.environmentArtifact,
       featureDefinitionArtifacts:
         authority.dataset.content.specification.content.featureDefinitions,
       modelTrainingEvaluationReceiptIds: runStartEvaluationReceipts.map(

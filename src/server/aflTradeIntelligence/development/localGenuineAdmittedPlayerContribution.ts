@@ -5,11 +5,9 @@ import { AflTradeAdmittedModelRunner } from '../modeling/admittedModelRunAuthori
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { createAflTradeDispatchBoundAdmittedPlayerExecutor } from '../valuation/postgresPrivateValuationModelPair';
 import type { PostgresGovernedValuationComponentRunRepository } from '../valuation/internal/postgresGovernedValuationComponentRunRepository';
+import { attestLocalAflTradeAdmittedPlayerRunProfile } from './localAdmittedPlayerRunAttestation';
 import { createLocalAflTradePostgresAdmittedPlayerAuthority } from './localPostgresAdmittedPlayerAuthority';
-import {
-  createLocalAflTradePostgresAdmittedPlayerPreparation,
-  type LocalAflTradeAdmittedPlayerRunProfile,
-} from './localPostgresAdmittedPlayerPreparation';
+import { createLocalAflTradePostgresAdmittedPlayerPreparation } from './localPostgresAdmittedPlayerPreparation';
 
 /**
  * Compose the genuine player contribution runner for the fixed local, private,
@@ -24,7 +22,8 @@ export function createLocalAflTradeGenuineAdmittedPlayerExecutor(input: {
     PostgresGovernedValuationComponentRunRepository,
     'register' | 'loadExact'
   >;
-  readonly profile: LocalAflTradeAdmittedPlayerRunProfile;
+  readonly seed: number;
+  readonly operationalAuthorizationLifetimeMs?: number;
 }) {
   const authority = createLocalAflTradePostgresAdmittedPlayerAuthority({
     sql: input.sql,
@@ -38,7 +37,13 @@ export function createLocalAflTradeGenuineAdmittedPlayerExecutor(input: {
     maximumArtifactBytes: input.maximumArtifactBytes,
     gateDecisionLedgerRepository: input.gateDecisionLedgerRepository,
     componentRepository: input.componentRepository,
-    profile: input.profile,
+    attestRunProfile: ({ createdAt, retainArtifact }) =>
+      attestLocalAflTradeAdmittedPlayerRunProfile({
+        seed: input.seed,
+        createdAt,
+        retainArtifact,
+        operationalAuthorizationLifetimeMs: input.operationalAuthorizationLifetimeMs,
+      }),
   });
   const runner = new AflTradeAdmittedModelRunner(
     authority.authority,

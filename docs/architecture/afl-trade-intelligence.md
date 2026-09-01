@@ -301,10 +301,10 @@ report for both blocked and eligible outcomes. Registration re-authenticates tho
 recomputes the exact policy result, finalizes atomically, and enforces exact replay and append-only
 custody. A blocked prepared-input set must reference that exact report and repeat its complete blocker
 decision; a raw rights proposal or transient positive result cannot grant dataset or model authority.
-The current local AFL Tables 2021-2025 and official-AFL 2026 policies block model training and
-derived-feature creation, so the local readiness command and admitted private workbook UI read the
-latest retained report for its still-active factual release and its bound blocker set from disposable
-PostgreSQL. If no current report exists,
+The current local AFL Tables 2021-2025 and official-AFL 2026 rehearsal policies permit private
+derived-feature creation but block model training and every public use. The local readiness command
+and admitted private workbook UI therefore read the latest retained report for its still-active
+factual release and its bound blocker set from disposable PostgreSQL. If no current report exists,
 readiness says qualification has not run; it does not reconstruct policy from code, invoke a scorer,
 infer new rights, or substitute a zero value. The workbook
 review service no longer imports or exports the legacy name/year/pick value projection: it exposes
@@ -445,9 +445,9 @@ digests, and staging outcomes remain independently attributable to their source 
 custody uses the explicit `local_non_production_filesystem` profile and confers no hosted durability,
 redistribution, production, or recurring-capture authority.
 
-Those local capture-rights artifacts permit bounded capture, raw/hash retention and internal quality
-evaluation only. Model training, derived-feature creation, public derived output, public fact display
-and raw redistribution are blocked at both field-use and operation scope. Before any staging mutation,
+Those local capture-rights artifacts permit bounded capture, raw/hash retention, internal quality
+evaluation and private derived-feature creation. Model training, public derived output, public fact
+display and raw redistribution are blocked at both field-use and operation scope. Before any staging mutation,
 the caller must authenticate the exact loopback `statly_outcomes_test` runtime nonce. Retained
 historical rows become eligible only after the exact five-season evidence digest has three current
 local receipts per admitted row and one complete-set admission decision. Retained official rows
@@ -1231,9 +1231,14 @@ The protocol binds the exact feature-value artifact, role and era definitions, s
 partition windows and embargo. The run intent binds the exact candidate configuration artifact.
 That versioned configuration declares the role-and-era replacement-baseline policy, ridge penalty,
 interval coverage level, minimum comparable observations and required relative MAE and RMSE
-improvements. Fitting uses `train` only; interval residuals use `calibration`; candidate selection
-uses `validation`; `final_test` is evaluated once after the candidate lock and cannot retune the
-candidate. The native execution retains the fitted coefficients, baseline, validation,
+improvements. Version 1 fixes the replacement level at the games-played-weighted 25th percentile
+within each role-and-era training group, admits players with at least one game and groups with at
+least one training observation, uses ridge lambda `1`, and targets 80% interval coverage. Validation
+requires at least one comparable observation and at least 1% relative improvement over the
+games-only comparator in both MAE and RMSE; incomplete prediction coverage fails closed. Fitting uses
+`train` only; interval residuals use `calibration`; candidate selection uses `validation`;
+`final_test` is evaluated once after the candidate lock and cannot retune the candidate. The native
+execution retains the fitted coefficients, baseline, validation,
 calibration, interval-coverage, subgroup, sensitivity, leakage-audit, model-card and diagnostics
 artifacts. These records are evidence only and remain publication-ineligible.
 
@@ -1245,6 +1250,13 @@ protocol, observation set or source-rights lineage fails closed. Multiple admitt
 share one rights proposal; they produce one current run-start receipt only when every retained
 receipt has identical request-to-proposal ancestry. Conflicting ancestry is rejected. The existing
 human operational-authorization branch is unchanged.
+
+The restricted five-season rehearsal proposal is never a player-model training authority. A genuine
+admitted-player run must use the standing AFL Tables player-stat policy through fitzRoy, materialized
+as exact current non-production Gate 0A records that explicitly permit `model_training`. The capture
+must occur under that authority and retain its original receipts; an earlier rehearsal capture cannot
+be relabelled after retrieval. Canonical promotion must cover both the transaction/event and player
+asset ancestry before factual lineage, dataset admission or execution may proceed.
 
 Successful native runs are wrapped by the existing governed component manifest with exact protocol,
 dataset, admission and Gate-ledger ancestry. Replay first authenticates a retained component against
