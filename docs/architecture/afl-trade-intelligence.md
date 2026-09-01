@@ -1258,6 +1258,13 @@ must occur under that authority and retain its original receipts; an earlier reh
 be relabelled after retrieval. Canonical promotion must cover both the transaction/event and player
 asset ancestry before factual lineage, dataset admission or execution may proceed.
 
+The local execution entry point is request-bound rather than target-bound. Its public input is the
+retained dispatch request identifier plus live claim custody. Inside the coordinator database role it
+loads the request-to-operation binding and constructs the exact execution input from the immutable
+operation's factual and HPN digests, player and pick targets, and qualification policy. Request scope
+and operation scope must agree. A caller cannot supply a replacement dataset, admission, protocol,
+model version or source-rights receipt through this boundary.
+
 Successful native runs are wrapped by the existing governed component manifest with exact protocol,
 dataset, admission and Gate-ledger ancestry. Replay first authenticates a retained component against
 the original immutable dispatch attempt and the current live claimant. When it matches, the runner

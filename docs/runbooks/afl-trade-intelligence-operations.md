@@ -1107,6 +1107,30 @@ operator-authored checkout, commit, artifact set or clean-worktree claim. It rec
 clean status, lock hash and loaded source hashes after retention; a dirty checkout, changed lock,
 stale loaded process or unstable file fails before model-run authorization.
 
+The genuine player request adapter accepts only a request ID and its current claim. It loads the
+already-bound model operation from PostgreSQL and derives the player dataset, admission, protocol,
+factual output and HPN calculation from that immutable record. There is no CLI argument for selecting
+or overriding those targets.
+
+Run the positive migrated tracer only against a disposable loopback `statly_outcomes_test` database
+that already contains the genuine bound operation. Supply its active claim custody through the
+`AFL_GENUINE_ADMITTED_PLAYER_DATABASE_URL`, `AFL_GENUINE_ADMITTED_PLAYER_REQUEST_ID`,
+`AFL_GENUINE_ADMITTED_PLAYER_CLAIM_ID`, `AFL_GENUINE_ADMITTED_PLAYER_LEASE_TOKEN` and
+`AFL_GENUINE_ADMITTED_PLAYER_ARTIFACT_ROOT` environment variables, then run:
+
+```sh
+npx vitest run --config vitest.config.outcomes-int.ts \
+  tests/outcomes-integration/afl-genuine-admitted-player-provisioned-postgres.test.ts \
+  --coverage.enabled=false
+```
+
+Obtain the claim values from the running local coordinator that owns a fresh request with no retained
+player component; do not recover or copy lease tokens from database or log files. The tracer fails
+closed unless migration `0090` is present, executes the component once, repeats the same request, and
+proves the second result is the same retained run without a second native execution. With none of the
+provisioned values it is skipped; a partial configuration fails, and neither case is replaced by
+fixture data.
+
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:
 
