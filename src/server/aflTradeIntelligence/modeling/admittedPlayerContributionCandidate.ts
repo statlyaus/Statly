@@ -701,6 +701,41 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         validationPredictions,
         config.validation
       );
+      if (
+        validationReport.content.acceptanceOutcome !== 'meets_declared_predictive_thresholds'
+      ) {
+        const finishedAt = await input.now();
+        const retained = await retainArtifacts({
+          repository: input.artifactRepository,
+          createdAt: finishedAt,
+          maximumArtifactBytes: input.maximumArtifactBytes,
+          documents: {
+            failureArtifact: validationReport,
+            diagnosticsArtifact: {
+              schemaVersion: 'afl-trade-admitted-player-candidate-diagnostics/v1',
+              sourceObservations: observationSet.content.observations.length,
+              materializedObservations: materialized.set.content.observations.length,
+              scoredTrainingObservations: baseline.content.scores.filter(
+                ({ partition }) => partition === 'train'
+              ).length,
+              validationReportId: validationReport.validationReportId,
+              validationOutcome: validationReport.content.acceptanceOutcome,
+              failure: 'candidate_did_not_meet_declared_validation_thresholds',
+            },
+          },
+        });
+        return {
+          candidateLockedAt: null,
+          finalTestEvaluatedAt: null,
+          finishedAt,
+          outcome: {
+            status: 'failed' as const,
+            failureClassification: 'validation_failure' as const,
+            failureArtifact: retained.failureArtifact!,
+            diagnosticsArtifact: retained.diagnosticsArtifact!,
+          },
+        };
+      }
       const calibrationResiduals = residualsFor({
         partition: 'calibration',
         set: materialized.set,

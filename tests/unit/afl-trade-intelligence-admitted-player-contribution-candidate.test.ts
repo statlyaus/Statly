@@ -62,8 +62,66 @@ describe('admitted player contribution candidate', () => {
     ).toThrow('does not match the model value unit');
   });
 
-  it('fits the declared partitions and retains complete native model ancestry', async () => {
+  it('fits the declared partitions and retains validation failure ancestry', async () => {
     const fixture = admittedRunFixture('non_production');
+    const retained = new Map<string, Uint8Array>();
+    const repository = {
+      assurance: 'local_non_production_filesystem' as const,
+      artifactClass: 'derived_private' as const,
+      custodyProfile: null,
+      async putIfAbsent(reference: { artifactId: string }, bytes: Uint8Array) {
+        retained.set(reference.artifactId, bytes);
+        return { status: 'stored' as const, reference };
+      },
+      async loadExact(reference: { artifactId: string }) {
+        const bytes = retained.get(reference.artifactId);
+        return bytes === undefined ? null : { reference, bytes };
+      },
+    };
+    const times = [
+      '2026-08-10T00:03:01.000Z',
+      '2026-08-10T00:03:02.000Z',
+      '2026-08-10T00:03:03.000Z',
+    ];
+    const executor = createAflTradeAdmittedPlayerContributionExecutor({
+      artifactRepository: repository as never,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      now: () => times.shift()!,
+    });
+
+    const result = await executor.execute({
+      intent: fixture.intent,
+      authorization: {} as never,
+      protocol: fixture.protocol,
+      observationSet: fixture.observationSet,
+      spellMetrics: fixture.evidence.spellMetrics,
+      executableArtifacts: fixture.evidence.executableArtifacts,
+    });
+
+    expect(result).toMatchObject({
+      candidateLockedAt: null,
+      finalTestEvaluatedAt: null,
+      finishedAt: '2026-08-10T00:03:01.000Z',
+      outcome: { status: 'failed', failureClassification: 'validation_failure' },
+    });
+    if (result.outcome.status !== 'failed') throw new Error('Expected a rejected fit.');
+    const selectionReport = JSON.parse(
+      new TextDecoder().decode(retained.get(result.outcome.failureArtifact.artifactId))
+    );
+    expect(selectionReport).toMatchObject({
+      validationReportId: expect.stringMatching(/^player-validation-report:/u),
+      content: {
+        evaluatedPartition: 'validation',
+        acceptanceOutcome: 'does_not_meet_declared_predictive_thresholds',
+      },
+    });
+    expect(retained).toHaveLength(2);
+  });
+
+  it('retains the complete accepted candidate ancestry when declared thresholds pass', async () => {
+    const fixture = admittedRunFixture('non_production', undefined, {
+      predictiveFeatures: true,
+    });
     const retained = new Map<string, Uint8Array>();
     const repository = {
       assurance: 'local_non_production_filesystem' as const,
@@ -104,7 +162,7 @@ describe('admitted player contribution candidate', () => {
       finishedAt: '2026-08-10T00:03:03.000Z',
       outcome: { status: 'succeeded' },
     });
-    if (result.outcome.status !== 'succeeded') throw new Error('Expected a successful fit.');
+    if (result.outcome.status !== 'succeeded') throw new Error('Expected an accepted fit.');
     const model = JSON.parse(
       new TextDecoder().decode(retained.get(result.outcome.modelArtifact.artifactId))
     );
@@ -125,9 +183,74 @@ describe('admitted player contribution candidate', () => {
     );
     expect(selectionReport).toMatchObject({
       validationReportId: expect.stringMatching(/^player-validation-report:/u),
-      content: { evaluatedPartition: 'validation' },
+      content: {
+        evaluatedPartition: 'validation',
+        acceptanceOutcome: 'meets_declared_predictive_thresholds',
+      },
     });
     expect(retained).toHaveLength(11);
+  });
+
+  it('retains a failed run and does not accept a candidate below declared thresholds', async () => {
+    const fixture = admittedRunFixture('non_production');
+    const configurationReference = fixture.intent.content.configurationArtifact;
+    const configurationArtifact = fixture.evidence.executableArtifacts.find(
+      ({ artifactId }) => artifactId === configurationReference.artifactId
+    )!;
+    const configuration = JSON.parse(new TextDecoder().decode(configurationArtifact.bytes));
+    configuration.validation.minimumRelativeMaeImprovement = 1;
+    configuration.validation.minimumRelativeRmseImprovement = 1;
+    const changedReference = createAflTradeCanonicalJsonArtifactRef(
+      configuration,
+      configurationReference.createdAt
+    );
+    const changedBytes = new TextEncoder().encode(canonicalizeAflTradeJson(configuration));
+    const retained = new Map<string, Uint8Array>();
+    const executor = createAflTradeAdmittedPlayerContributionExecutor({
+      artifactRepository: {
+        assurance: 'local_non_production_filesystem',
+        artifactClass: 'derived_private',
+        custodyProfile: null,
+        async putIfAbsent(reference, bytes) {
+          retained.set(reference.artifactId, bytes);
+          return { status: 'stored' as const, reference };
+        },
+        async loadExact(reference) {
+          const bytes = retained.get(reference.artifactId);
+          return bytes === undefined ? null : { reference, bytes };
+        },
+      },
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      now: () => '2026-08-10T00:03:01.000Z',
+    });
+
+    const result = await executor.execute({
+      intent: {
+        ...fixture.intent,
+        content: { ...fixture.intent.content, configurationArtifact: changedReference },
+      },
+      authorization: {} as never,
+      protocol: fixture.protocol,
+      observationSet: fixture.observationSet,
+      spellMetrics: fixture.evidence.spellMetrics,
+      executableArtifacts: fixture.evidence.executableArtifacts
+        .filter(({ artifactId }) => artifactId !== configurationReference.artifactId)
+        .concat({ artifactId: changedReference.artifactId, bytes: changedBytes }),
+    });
+
+    expect(result).toMatchObject({
+      candidateLockedAt: null,
+      finalTestEvaluatedAt: null,
+      outcome: { status: 'failed', failureClassification: 'validation_failure' },
+    });
+    expect(retained).toHaveLength(2);
+    if (result.outcome.status !== 'failed') throw new Error('Expected a rejected candidate.');
+    const failure = JSON.parse(
+      new TextDecoder().decode(retained.get(result.outcome.failureArtifact.artifactId))
+    );
+    expect(failure.content.acceptanceOutcome).toBe(
+      'does_not_meet_declared_predictive_thresholds'
+    );
   });
 
   it('rejects a hash-correct feature artifact whose value differs from its factual body', async () => {

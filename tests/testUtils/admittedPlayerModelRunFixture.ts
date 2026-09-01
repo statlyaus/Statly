@@ -257,7 +257,8 @@ interface AdmittedPlayerFactualParentOverride {
 function valuationDatasetFixture(
   environment: FixtureEnvironment,
   factualParentOverride?: AdmittedPlayerFactualParentOverride,
-  additionalFinalRows = 0
+  additionalFinalRows = 0,
+  predictiveFeatures = false
 ) {
   const datasetCreatedAt = factualParentOverride
     ? '2026-08-12T00:08:00.000Z'
@@ -313,7 +314,25 @@ function valuationDatasetFixture(
       numericValue: String(index + 1),
       recordedAt: prediction,
     });
-    spellMetrics.push(featureMetric, ...rowMetrics);
+    const featureGamesMetric = predictiveFeatures
+      ? spellMetricFixture({
+          environment,
+          index: index + 50,
+          season: season - 1,
+          playerId,
+          clubId,
+          spellId: `feature-games-spell:${index + 1}`,
+          spellVersionId: `acquisition-spell-version:${(index + 10).toString(16).repeat(64)}`,
+          metricCode: 'games',
+          numericValue: '1',
+          recordedAt: prediction,
+        })
+      : null;
+    spellMetrics.push(
+      featureMetric,
+      ...(featureGamesMetric ? [featureGamesMetric] : []),
+      ...rowMetrics
+    );
     const targetInputs = rowMetrics
       .map((metric) => ({
         kind: 'acquisition_spell_metric' as const,
@@ -373,7 +392,25 @@ function valuationDatasetFixture(
           spellVersionId: featureMetric.content.spell.spellVersionId,
           metricCode: 'goals',
         },
-      ],
+        ...(featureGamesMetric
+          ? [
+              {
+                kind: 'acquisition_spell_metric' as const,
+                memberId: featureGamesMetric.spellMetricVersionId,
+                recordSha256: featureGamesMetric.factSha256,
+                headRevision: 1,
+                effectiveFrom: `${season - 1}-01-01`,
+                effectiveThrough: featureGamesMetric.content.effectiveThrough,
+                recordedAt: featureGamesMetric.content.recordedAt,
+                state: 'complete' as const,
+                playerId,
+                clubId,
+                spellVersionId: featureGamesMetric.content.spell.spellVersionId,
+                metricCode: 'games' as const,
+              },
+            ]
+          : []),
+      ].sort((left, right) => left.memberId.localeCompare(right.memberId)),
       targetInputs,
     });
   });
@@ -606,7 +643,7 @@ export function runContent(
 export function admittedRunFixture(
   environment: FixtureEnvironment = 'test_fixture',
   factualParentOverride?: AdmittedPlayerFactualParentOverride,
-  options: { additionalFinalRows?: number } = {}
+  options: { additionalFinalRows?: number; predictiveFeatures?: boolean } = {}
 ) {
   const datasetCreatedAt = factualParentOverride
     ? '2026-08-12T00:08:00.000Z'
@@ -623,7 +660,8 @@ export function admittedRunFixture(
   const { candidate: datasetCandidate, spellMetrics } = valuationDatasetFixture(
     environment,
     factualParentOverride,
-    options.additionalFinalRows
+    options.additionalFinalRows,
+    options.predictiveFeatures
   );
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
@@ -876,17 +914,22 @@ export function admittedRunFixture(
     createdAt: datasetCreatedAt,
     roleTaxonomyArtifactId: protocolTemplate.footballContext.roleTaxonomyArtifact.artifactId,
     eraDefinitionArtifactId: protocolTemplate.footballContext.eraDefinitionArtifact.artifactId,
-    rows: datasetCandidate.content.rows.map(({ rowId, content }, index) => ({
+    rows: datasetCandidate.content.rows.map(({ rowId, content }) => ({
       datasetRowId: rowId,
       featureKnownThrough: content.featureKnownThrough,
       role: 'unknown',
       roleKnownAt: content.featureKnownThrough,
       era: 'modern',
-      values: content.featureInputs.map(({ memberId, recordSha256 }) => ({
-        memberId,
-        recordSha256,
-        numericValue: String(index + 1),
-      })),
+      values: content.featureInputs.map(({ memberId, recordSha256 }) => {
+        const metric = spellMetrics.find(
+          ({ spellMetricVersionId }) => spellMetricVersionId === memberId
+        )!;
+        return {
+          memberId,
+          recordSha256,
+          numericValue: metric.content.availability.numericValue!,
+        };
+      }),
     })),
   };
   const candidateConfig = {

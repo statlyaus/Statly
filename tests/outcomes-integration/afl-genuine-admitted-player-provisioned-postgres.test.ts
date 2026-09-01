@@ -148,12 +148,11 @@ describe
               JOIN outcome_valuation_model_run_intent intent ON intent.intent_id=run.intent_id
              JOIN outcome_valuation_model_run_operational_authorization authority
                 ON authority.intent_id=intent.intent_id
-             WHERE run.run_id=$4
-               AND authority.receipt_json->'content'->>'dispatchRequestId'=$1
+             WHERE authority.receipt_json->'content'->>'dispatchRequestId'=$1
                AND authority.receipt_json->'content'->>'substantiveOperationId'=$2) AS native_runs,
            (SELECT count(*)::integer FROM outcome_governed_valuation_component_run
              WHERE run_id=$3) AS components`,
-        [configuration.requestId, operationId, completed.runId, nativeExecutionId]
+        [configuration.requestId, operationId, completed.runId]
       );
       expect(afterReplay.rows).toEqual([{ native_runs: 1, components: 1 }]);
     });

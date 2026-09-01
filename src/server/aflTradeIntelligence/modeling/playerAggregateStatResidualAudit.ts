@@ -180,6 +180,11 @@ interface ComparableRow {
   features: Record<z.infer<typeof featureSchema>, number>;
 }
 
+interface ExcludedRow {
+  observationId: string;
+  reason: 'baseline_unscored' | 'missing_pav_observation' | 'incomplete_historical_pav';
+}
+
 function mean(values: readonly number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
@@ -232,6 +237,162 @@ function summarizePavFeatureValues(
     { games: 0, offensive: 0, midfield: 0, defensive: 0, total: 0 }
   );
   return { complete, totals };
+}
+
+function collectComparableRows(input: {
+  evaluated: readonly AflTradePlayerObservationSetV2['content']['observations'][number][];
+  predictions: AflTradePlayerPredictionSet;
+  baseline: AflTradePlayerBaselineFit;
+  pavSet: AflTradePlayerPavObservationSet;
+  minimumComparableObservations: number;
+}): { comparable: readonly ComparableRow[]; excluded: readonly ExcludedRow[] } {
+  const comparable: ComparableRow[] = [];
+  const excluded: ExcludedRow[] = [];
+  const partition = input.predictions.content.evaluatedPartition;
+  for (const observation of input.evaluated) {
+    const prediction = input.predictions.content.predictions.find(
+      (candidate) => candidate.observationId === observation.observationId
+    )!;
+    if (prediction.featureCutoffAt !== observation.predictionCutoffAt) {
+      throw new RangeError('Residual-audit prediction cutoff must match the admitted observation.');
+    }
+    const score = input.baseline.content.scores.find(
+      (candidate) => candidate.observationId === observation.observationId
+    );
+    if (!score) {
+      excluded.push({ observationId: observation.observationId, reason: 'baseline_unscored' });
+      continue;
+    }
+    if (
+      score.playerId !== observation.playerId ||
+      score.season !== observation.season ||
+      score.partition !== observation.partition
+    ) {
+      throw new RangeError(
+        'Residual-audit baseline score must match the admitted player and season.'
+      );
+    }
+    const pavMatches = input.pavSet.content.observations.filter(
+      (candidate) =>
+        candidate.partition === partition &&
+        candidate.playerId === observation.playerId &&
+        candidate.acquisitionSpell.spellId === observation.acquisitionSpellId &&
+        candidate.acquisitionSpell.spellVersionId === observation.acquisitionSpellVersionId &&
+        candidate.predictionSeason + 1 === observation.season
+    );
+    if (pavMatches.length > 1) {
+      throw new RangeError('Residual audit found duplicate exact player-PAV matches.');
+    }
+    const pav = pavMatches[0];
+    if (!pav) {
+      excluded.push({
+        observationId: observation.observationId,
+        reason: 'missing_pav_observation',
+      });
+      continue;
+    }
+    if (
+      Date.parse(pav.predictionCutoffAt) > Date.parse(observation.predictionCutoffAt) ||
+      pav.featureValues.some(
+        (value) =>
+          Date.parse(value.effectiveThrough) > Date.parse(observation.featureKnownThrough) ||
+          Date.parse(value.calculatedAt) > Date.parse(observation.featureKnownThrough)
+      )
+    ) {
+      throw new RangeError('Player-PAV features were not known by the admitted prediction cutoff.');
+    }
+    const featureSummary = summarizePavFeatureValues(pav);
+    if (!featureSummary.complete || featureSummary.totals.games === 0) {
+      excluded.push({
+        observationId: observation.observationId,
+        reason: 'incomplete_historical_pav',
+      });
+      continue;
+    }
+    const { games, offensive, midfield, defensive, total } = featureSummary.totals;
+    const offensivePerGame = offensive / games;
+    const midfieldPerGame = midfield / games;
+    const defensivePerGame = defensive / games;
+    comparable.push({
+      candidateResidual:
+        prediction.candidatePredictedContributionAboveReplacement -
+        score.observedContributionAboveReplacement,
+      gamesOnlyResidual:
+        prediction.gamesOnlyPredictedContributionAboveReplacement -
+        score.observedContributionAboveReplacement,
+      profile: dominantProfile(offensivePerGame, midfieldPerGame, defensivePerGame),
+      features: {
+        offensive_pav_per_game: offensivePerGame,
+        midfield_pav_per_game: midfieldPerGame,
+        defensive_pav_per_game: defensivePerGame,
+        total_pav_per_game: total / games,
+        historical_games_per_feature_season: games / pav.featureCalculationSeasons.length,
+      },
+    });
+  }
+  if (comparable.length < input.minimumComparableObservations) {
+    throw new RangeError(
+      'Residual-audit comparable observations do not meet the declared minimum.'
+    );
+  }
+  return { comparable, excluded };
+}
+
+function summarizeFeatureResiduals(
+  comparable: readonly ComparableRow[],
+  minimumCorrelationObservations: number
+) {
+  return featureSchema.options.map((feature) => {
+    const values = comparable.map((row) => row.features[feature]);
+    const candidateResiduals = comparable.map((row) => row.candidateResidual);
+    const gamesOnlyResiduals = comparable.map((row) => row.gamesOnlyResidual);
+    const hasSupport = comparable.length >= minimumCorrelationObservations;
+    const candidateSigned = hasSupport ? correlation(values, candidateResiduals) : null;
+    const candidateAbsolute = hasSupport
+      ? correlation(values, candidateResiduals.map(Math.abs))
+      : null;
+    const gamesOnlySigned = hasSupport ? correlation(values, gamesOnlyResiduals) : null;
+    const gamesOnlyAbsolute = hasSupport
+      ? correlation(values, gamesOnlyResiduals.map(Math.abs))
+      : null;
+    return {
+      feature,
+      count: comparable.length,
+      candidate: {
+        ...errorSummary(comparable, 'candidateResidual'),
+        signedResidualCorrelation: candidateSigned,
+        absoluteResidualCorrelation: candidateAbsolute,
+      },
+      gamesOnly: {
+        ...errorSummary(comparable, 'gamesOnlyResidual'),
+        signedResidualCorrelation: gamesOnlySigned,
+        absoluteResidualCorrelation: gamesOnlyAbsolute,
+      },
+      correlationStatus: !hasSupport
+        ? ('insufficient_support' as const)
+        : [candidateSigned, candidateAbsolute, gamesOnlySigned, gamesOnlyAbsolute].some(
+              (value) => value === null
+            )
+          ? ('no_variance' as const)
+          : ('available' as const),
+    };
+  });
+}
+
+function summarizeComponentProfiles(comparable: readonly ComparableRow[]) {
+  return profileSchema.options.flatMap((profile) => {
+    const rows = comparable.filter((row) => row.profile === profile);
+    return rows.length === 0
+      ? []
+      : [
+          {
+            profile,
+            count: rows.length,
+            candidate: errorSummary(rows, 'candidateResidual'),
+            gamesOnly: errorSummary(rows, 'gamesOnlyResidual'),
+          },
+        ];
+  });
 }
 
 export function evaluateAflTradePlayerAggregateStatResiduals(input: {
@@ -385,146 +546,18 @@ export function evaluateAflTradePlayerAggregateStatResiduals(input: {
     );
   }
 
-  const comparable: ComparableRow[] = [];
-  const excluded: Array<{
-    observationId: string;
-    reason: 'baseline_unscored' | 'missing_pav_observation' | 'incomplete_historical_pav';
-  }> = [];
-  for (const observation of evaluated) {
-    const prediction = predictions.content.predictions.find(
-      (candidate) => candidate.observationId === observation.observationId
-    )!;
-    if (prediction.featureCutoffAt !== observation.predictionCutoffAt) {
-      throw new RangeError('Residual-audit prediction cutoff must match the admitted observation.');
-    }
-    const score = baseline.content.scores.find(
-      (candidate) => candidate.observationId === observation.observationId
-    );
-    if (!score) {
-      excluded.push({ observationId: observation.observationId, reason: 'baseline_unscored' });
-      continue;
-    }
-    if (
-      score.playerId !== observation.playerId ||
-      score.season !== observation.season ||
-      score.partition !== observation.partition
-    ) {
-      throw new RangeError(
-        'Residual-audit baseline score must match the admitted player and season.'
-      );
-    }
-    const pavMatches = pavSet.content.observations.filter(
-      (candidate) =>
-        candidate.partition === partition &&
-        candidate.playerId === observation.playerId &&
-        candidate.acquisitionSpell.spellId === observation.acquisitionSpellId &&
-        candidate.acquisitionSpell.spellVersionId === observation.acquisitionSpellVersionId &&
-        candidate.predictionSeason + 1 === observation.season
-    );
-    if (pavMatches.length > 1) {
-      throw new RangeError('Residual audit found duplicate exact player-PAV matches.');
-    }
-    const pav = pavMatches[0];
-    if (!pav) {
-      excluded.push({
-        observationId: observation.observationId,
-        reason: 'missing_pav_observation',
-      });
-      continue;
-    }
-    if (
-      Date.parse(pav.predictionCutoffAt) > Date.parse(observation.predictionCutoffAt) ||
-      pav.featureValues.some(
-        (value) =>
-          Date.parse(value.effectiveThrough) > Date.parse(observation.featureKnownThrough) ||
-          Date.parse(value.calculatedAt) > Date.parse(observation.featureKnownThrough)
-      )
-    ) {
-      throw new RangeError('Player-PAV features were not known by the admitted prediction cutoff.');
-    }
-    const featureSummary = summarizePavFeatureValues(pav);
-    if (!featureSummary.complete || featureSummary.totals.games === 0) {
-      excluded.push({
-        observationId: observation.observationId,
-        reason: 'incomplete_historical_pav',
-      });
-      continue;
-    }
-    const { games, offensive, midfield, defensive, total } = featureSummary.totals;
-    const offensivePerGame = offensive / games;
-    const midfieldPerGame = midfield / games;
-    const defensivePerGame = defensive / games;
-    comparable.push({
-      candidateResidual:
-        prediction.candidatePredictedContributionAboveReplacement -
-        score.observedContributionAboveReplacement,
-      gamesOnlyResidual:
-        prediction.gamesOnlyPredictedContributionAboveReplacement -
-        score.observedContributionAboveReplacement,
-      profile: dominantProfile(offensivePerGame, midfieldPerGame, defensivePerGame),
-      features: {
-        offensive_pav_per_game: offensivePerGame,
-        midfield_pav_per_game: midfieldPerGame,
-        defensive_pav_per_game: defensivePerGame,
-        total_pav_per_game: total / games,
-        historical_games_per_feature_season: games / pav.featureCalculationSeasons.length,
-      },
-    });
-  }
-  if (comparable.length < config.minimumComparableObservations) {
-    throw new RangeError(
-      'Residual-audit comparable observations do not meet the declared minimum.'
-    );
-  }
-
-  const featureResiduals = featureSchema.options.map((feature) => {
-    const values = comparable.map((row) => row.features[feature]);
-    const candidateResiduals = comparable.map((row) => row.candidateResidual);
-    const gamesOnlyResiduals = comparable.map((row) => row.gamesOnlyResidual);
-    const hasSupport = comparable.length >= config.minimumCorrelationObservations;
-    const candidateSigned = hasSupport ? correlation(values, candidateResiduals) : null;
-    const candidateAbsolute = hasSupport
-      ? correlation(values, candidateResiduals.map(Math.abs))
-      : null;
-    const gamesOnlySigned = hasSupport ? correlation(values, gamesOnlyResiduals) : null;
-    const gamesOnlyAbsolute = hasSupport
-      ? correlation(values, gamesOnlyResiduals.map(Math.abs))
-      : null;
-    return {
-      feature,
-      count: comparable.length,
-      candidate: {
-        ...errorSummary(comparable, 'candidateResidual'),
-        signedResidualCorrelation: candidateSigned,
-        absoluteResidualCorrelation: candidateAbsolute,
-      },
-      gamesOnly: {
-        ...errorSummary(comparable, 'gamesOnlyResidual'),
-        signedResidualCorrelation: gamesOnlySigned,
-        absoluteResidualCorrelation: gamesOnlyAbsolute,
-      },
-      correlationStatus: !hasSupport
-        ? ('insufficient_support' as const)
-        : [candidateSigned, candidateAbsolute, gamesOnlySigned, gamesOnlyAbsolute].some(
-              (value) => value === null
-            )
-          ? ('no_variance' as const)
-          : ('available' as const),
-    };
+  const { comparable, excluded } = collectComparableRows({
+    evaluated,
+    predictions,
+    baseline,
+    pavSet,
+    minimumComparableObservations: config.minimumComparableObservations,
   });
-  const componentProfiles = profileSchema.options.flatMap((profile) => {
-    const rows = comparable.filter((row) => row.profile === profile);
-    return rows.length === 0
-      ? []
-      : [
-          {
-            profile,
-            count: rows.length,
-            candidate: errorSummary(rows, 'candidateResidual'),
-            gamesOnly: errorSummary(rows, 'gamesOnlyResidual'),
-          },
-        ];
-  });
+  const featureResiduals = summarizeFeatureResiduals(
+    comparable,
+    config.minimumCorrelationObservations
+  );
+  const componentProfiles = summarizeComponentProfiles(comparable);
   const content = reportContentSchema.parse({
     schemaVersion: AFL_TRADE_PLAYER_AGGREGATE_STAT_RESIDUAL_AUDIT_SCHEMA_VERSION,
     publicIdentityBoundary: 'source_native_no_fantasy_ownership',
@@ -546,7 +579,7 @@ export function evaluateAflTradePlayerAggregateStatResiduals(input: {
     coverage: {
       evaluatedObservationCount: evaluated.length,
       comparableObservationCount: comparable.length,
-      excludedObservations: excluded.sort((left, right) =>
+      excludedObservations: [...excluded].sort((left, right) =>
         left.observationId.localeCompare(right.observationId)
       ),
     },

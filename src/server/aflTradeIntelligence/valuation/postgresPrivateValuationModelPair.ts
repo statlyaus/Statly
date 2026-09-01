@@ -561,6 +561,12 @@ export function createAflTradeDispatchBoundAdmittedPlayerExecutor(input: {
         });
         const result = await input.admittedRunner.run({ intent, protocol: prepared.protocol });
         if (result.status === 'completed') {
+          if (result.run.content.outcome.status !== 'succeeded') {
+            return {
+              state: 'deterministic_failure' as const,
+              reason: 'Player candidate run failed before it could be accepted.',
+            };
+          }
           const retained = await input.registerComponent({ run: result.run, execution });
           return { state: 'completed' as const, runId: retained.runId };
         }

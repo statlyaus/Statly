@@ -316,32 +316,83 @@ END $$;
 
 -- Permit only the fixed local private-evaluation role to execute the admitted
 -- player component through the durable model-run and artifact-custody boundary.
-GRANT SELECT ON
-  "outcome_private_valuation_dispatch_request",
-  "outcome_private_valuation_dispatch_attempt",
-  "outcome_private_valuation_factual_output",
-  "outcome_private_valuation_model_request_binding",
-  "outcome_private_valuation_model_operation",
-  "outcome_valuation_dataset_factual_lineage",
-  "outcome_valuation_dataset_factual_lineage_admission",
-  "outcome_valuation_dataset_candidate",
-  "outcome_valuation_dataset_operation_authority",
-  "outcome_valuation_dataset_admission",
-  "outcome_valuation_model_protocol",
-  "outcome_valuation_dataset_gate0_evaluation",
-  "outcome_source_rights_proposal",
-  "outcome_acquisition_spell_metric_version",
-  "outcome_gate_ledger_head",
-  "outcome_gate_proposal",
-  "outcome_gate_decision",
-  "outcome_valuation_player_observation_set",
-  "outcome_valuation_model_run_intent",
-  "outcome_valuation_model_run_operational_authorization",
-  "outcome_valuation_model_run_authorization",
-  "outcome_valuation_model_run",
-  "outcome_artifact_custody",
-  "outcome_governed_valuation_component_run"
+GRANT SELECT ("request_id", "scope_key", "claim_id")
+ON "outcome_private_valuation_dispatch_request" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "request_id", "claim_id", "attempt_number", "lease_token_sha256", "finished_at"
+)
+ON "outcome_private_valuation_dispatch_attempt" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("request_id", "output_id", "output_json")
+ON "outcome_private_valuation_factual_output" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "request_id", "operation_id", "factual_output_id", "hpn_calculation_id", "claim_id",
+  "attempt_number"
+) ON "outcome_private_valuation_model_request_binding"
 TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "operation_id", "operation_json", "player_run_id", "pick_run_id", "pair_accepted_at",
+  "qualification_id", "qualification_outcome", "player_model_id", "player_model_version",
+  "player_protocol_id", "player_dataset_id", "player_dataset_admission_id"
+) ON "outcome_private_valuation_model_operation" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("lineage_id", "candidate_id", "lineage_json")
+ON "outcome_valuation_dataset_factual_lineage" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("lineage_id", "gate_decision_id", "admission_json")
+ON "outcome_valuation_dataset_factual_lineage_admission"
+TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "dataset_id", "factual_candidate_id", "lineage_id", "status", "finalized_at", "dataset_json"
+) ON "outcome_valuation_dataset_candidate" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("receipt_id", "dataset_id", "authority_kind", "valid_through", "receipt_json")
+ON "outcome_valuation_dataset_operation_authority"
+TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "admission_id", "dataset_id", "gate2_decision_id", "gate_ledger_revision", "status",
+  "finalized_at", "admission_json"
+) ON "outcome_valuation_dataset_admission" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("protocol_id", "dataset_id", "admission_id", "protocol_json")
+ON "outcome_valuation_model_protocol" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "receipt_id", "rights_artifact_id", "environment", "evaluated_at", "operation_kind",
+  "receipt_json"
+) ON "outcome_valuation_dataset_gate0_evaluation"
+TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("rights_artifact_id", "content_json")
+ON "outcome_source_rights_proposal" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("spell_metric_version_id", "fact_json")
+ON "outcome_acquisition_spell_metric_version" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("singleton_id", "revision")
+ON "outcome_gate_ledger_head" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("proposal_id", "proposal_json", "proposed_at", "gate", "decision_key", "version")
+ON "outcome_gate_proposal" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "decision_id", "proposal_id", "decision_key", "gate", "state", "environment", "effective_at",
+  "revalidate_at", "supersedes_decision_id", "version", "decision_json"
+) ON "outcome_gate_decision" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("observation_set_id", "observation_json")
+ON "outcome_valuation_player_observation_set" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "intent_id", "dataset_id", "admission_id", "protocol_id", "observation_set_id", "intent_json"
+) ON "outcome_valuation_model_run_intent" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("receipt_id", "intent_id", "receipt_json")
+ON "outcome_valuation_model_run_operational_authorization"
+TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "authorization_id", "intent_id", "operational_authorization_receipt_id", "authorization_json",
+  "consumed_at"
+)
+ON "outcome_valuation_model_run_authorization" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT ("run_id", "intent_id", "authorization_id", "status", "run_json")
+ON "outcome_valuation_model_run" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "artifact_id", "content_sha256", "storage_uri", "media_type", "byte_length", "created_at"
+) ON "outcome_artifact_custody" TO afl_trade_private_evaluation_coordinator;
+GRANT SELECT (
+  "run_id", "role", "native_execution_kind", "native_execution_id", "artifact_id",
+  "native_execution_artifact_id", "protocol_id", "protocol_artifact_id", "dataset_id",
+  "dataset_artifact_id", "dataset_admission_id", "dataset_admission_artifact_id",
+  "dataset_admission_gate_ledger_revision", "registered_at", "content_sha256",
+  "content_canonical_json", "manifest_json"
+) ON "outcome_governed_valuation_component_run" TO afl_trade_private_evaluation_coordinator;
 
 GRANT INSERT ON
   "outcome_valuation_dataset_gate0_evaluation",
