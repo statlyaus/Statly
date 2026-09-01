@@ -256,7 +256,8 @@ interface AdmittedPlayerFactualParentOverride {
 
 function valuationDatasetFixture(
   environment: FixtureEnvironment,
-  factualParentOverride?: AdmittedPlayerFactualParentOverride
+  factualParentOverride?: AdmittedPlayerFactualParentOverride,
+  additionalFinalRows = 0
 ) {
   const datasetCreatedAt = factualParentOverride
     ? '2026-08-12T00:08:00.000Z'
@@ -270,6 +271,11 @@ function valuationDatasetFixture(
     { role: 'calibration' as const, season: 2014, prediction: '2014-01-08T00:00:00.000Z' },
     { role: 'validation' as const, season: 2017, prediction: '2017-01-08T00:00:00.000Z' },
     { role: 'final_test' as const, season: 2020, prediction: '2020-01-08T00:00:00.000Z' },
+    ...Array.from({ length: additionalFinalRows }, () => ({
+      role: 'final_test' as const,
+      season: 2020,
+      prediction: '2020-01-08T00:00:00.000Z',
+    })),
   ];
   const spellMetrics: AflTradeAcquisitionSpellMetric[] = [];
   const rows = partitions.map(({ role, season, prediction }, index) => {
@@ -277,7 +283,9 @@ function valuationDatasetFixture(
     const playerId = index < 2 ? 'afl-player:shared' : `afl-player:${index + 1}`;
     const clubId = `afl-club:${index + 1}`;
     const spellId = `acquisition-spell:${index + 1}`;
-    const spellVersionId = `acquisition-spell-version:${String(index + 1).repeat(64)}`;
+    const rowDigest = (index + 1).toString(16).repeat(64);
+    const featureDigest = (index + 5).toString(16).repeat(64);
+    const spellVersionId = `acquisition-spell-version:${rowDigest}`;
     const recordedAt = `${season + 1}-01-01T00:00:00.000Z`;
     const rowMetrics = outcomeMetricCodes.map((metricCode, metricIndex) =>
       spellMetricFixture({
@@ -300,7 +308,7 @@ function valuationDatasetFixture(
       playerId,
       clubId,
       spellId: `feature-spell:${index + 1}`,
-      spellVersionId: `acquisition-spell-version:${String(index + 5).repeat(64)}`,
+      spellVersionId: `acquisition-spell-version:${featureDigest}`,
       metricCode: 'goals',
       numericValue: String(index + 1),
       recordedAt: prediction,
@@ -337,10 +345,10 @@ function valuationDatasetFixture(
       leakageGroups: { acquisition_spell: spellId, event: `event:${index + 1}`, player: playerId },
       identity: {
         playerId,
-        playerResolutionDecisionId: `provider-resolution-decision:${String(index + 1).repeat(64)}`,
+        playerResolutionDecisionId: `provider-resolution-decision:${rowDigest}`,
         playerAssignmentRevision: 1,
         clubId,
-        clubResolutionDecisionId: `provider-resolution-decision:${String(index + 5).repeat(64)}`,
+        clubResolutionDecisionId: `provider-resolution-decision:${featureDigest}`,
         clubAssignmentRevision: 1,
       },
       lineage: {
@@ -421,19 +429,16 @@ function valuationDatasetFixture(
       corpusToCandidateLineageId:
         factualParentOverride?.corpusToCandidateLineageId ??
         `corpus-factual-lineage:${digest('2')}`,
-      factualReleaseId:
-        factualParentOverride?.factualReleaseId ?? `outcome-release:${digest('3')}`,
+      factualReleaseId: factualParentOverride?.factualReleaseId ?? `outcome-release:${digest('3')}`,
       factualCandidateId:
         factualParentOverride?.factualCandidateId ?? `factual-release-candidate:${digest('4')}`,
       sourceMemberSetSha256: factualParentOverride?.sourceMemberSetSha256 ?? digest('5'),
-      archiveDatasetId:
-        factualParentOverride?.archiveDatasetId ?? `archive-dataset:${digest('6')}`,
+      archiveDatasetId: factualParentOverride?.archiveDatasetId ?? `archive-dataset:${digest('6')}`,
       sourceSnapshotSetId:
         factualParentOverride?.sourceSnapshotSetId ?? `source-snapshot-set:${digest('7')}`,
       metricRegistryVersion: factualParentOverride?.metricRegistryVersion ?? 'fixture-v1',
       acquisitionSpellRuleId:
-        factualParentOverride?.acquisitionSpellRuleId ??
-        `acquisition-spell-rule:${digest('8')}`,
+        factualParentOverride?.acquisitionSpellRuleId ?? `acquisition-spell-rule:${digest('8')}`,
       factualEffectiveThrough:
         factualParentOverride?.factualEffectiveThrough ?? '2025-12-31T00:00:00.000Z',
       releaseRecordStateId: `outcome-release-record-state:${digest('9')}`,
@@ -600,7 +605,8 @@ export function runContent(
 
 export function admittedRunFixture(
   environment: FixtureEnvironment = 'test_fixture',
-  factualParentOverride?: AdmittedPlayerFactualParentOverride
+  factualParentOverride?: AdmittedPlayerFactualParentOverride,
+  options: { additionalFinalRows?: number } = {}
 ) {
   const datasetCreatedAt = factualParentOverride
     ? '2026-08-12T00:08:00.000Z'
@@ -616,7 +622,8 @@ export function admittedRunFixture(
     : '2026-08-10T00:03:00.000Z';
   const { candidate: datasetCandidate, spellMetrics } = valuationDatasetFixture(
     environment,
-    factualParentOverride
+    factualParentOverride,
+    options.additionalFinalRows
   );
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
@@ -814,11 +821,9 @@ export function admittedRunFixture(
     corpusToCandidateLineageId: datasetCandidate.content.factualParent.corpusToCandidateLineageId,
     gate2Decision: {
       decisionId:
-        factualParentOverride?.gate2Decision?.decisionId ??
-        gate2.ledger.decisions[0]!.decisionId,
+        factualParentOverride?.gate2Decision?.decisionId ?? gate2.ledger.decisions[0]!.decisionId,
       state: 'approved',
-      effectiveAt:
-        factualParentOverride?.gate2Decision?.effectiveAt ?? '2026-08-10T00:00:00.000Z',
+      effectiveAt: factualParentOverride?.gate2Decision?.effectiveAt ?? '2026-08-10T00:00:00.000Z',
       evaluatedAt: admittedAt,
       revalidateAt:
         factualParentOverride?.gate2Decision?.revalidateAt ?? '2027-08-01T00:00:00.000Z',
@@ -992,9 +997,7 @@ export function admittedRunFixture(
     modelProtocolId: intent.content.modelProtocolId,
     observationSetId: intent.content.observationSetId,
     authorizedAt: intent.content.startedAt,
-    validThrough: factualParentOverride
-      ? '2026-08-12T00:11:30.000Z'
-      : '2026-08-10T00:03:30.000Z',
+    validThrough: factualParentOverride ? '2026-08-12T00:11:30.000Z' : '2026-08-10T00:03:30.000Z',
     principalRef: 'fixture-model-operator',
     role: 'afl_trade_model_run_operator',
     authorityEvidence: {

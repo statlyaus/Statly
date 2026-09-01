@@ -150,13 +150,40 @@ const candidateConfigSchema = z
   })
   .strict();
 
+const candidateCoefficientsSchema = z
+  .object({
+    gamesOnly: z.number().finite(),
+    candidateGames: z.number().finite(),
+    candidatePriorContribution: z.number().finite(),
+  })
+  .strict();
+
+export const aflTradeAdmittedPlayerCandidateSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_ADMITTED_PLAYER_CANDIDATE_SCHEMA_VERSION),
+    modelId: publicIdSchema,
+    sourceObservationSetId: z.string().regex(/^player-observation-set:[a-f0-9]{64}$/u),
+    materializedObservationSetId: z.string().regex(/^player-observation-set:[a-f0-9]{64}$/u),
+    scalarTransformArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
+    pointInTimeFeatureValuesArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
+    configurationArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
+    baselineFitId: z.string().regex(/^player-baseline-fit:[a-f0-9]{64}$/u),
+    coefficients: candidateCoefficientsSchema,
+    trainingPartition: z.literal('train'),
+    finalTestRetuning: z.literal('prohibited'),
+  })
+  .strict();
+
 type ScalarTransform = z.infer<typeof scalarTransformSchema>;
 type PointInTimeFeatureSet = z.infer<typeof aflTradePlayerPointInTimeFeatureSetSchema>;
-type ExecutableArtifact = Readonly<{ artifactId: string; bytes: Uint8Array }>;
+export type AflTradeAdmittedPlayerExecutableArtifact = Readonly<{
+  artifactId: string;
+  bytes: Uint8Array;
+}>;
 
 function parseAuthenticatedJson<T>(input: {
   reference: AflTradeArtifactRef;
-  executableArtifacts: readonly ExecutableArtifact[];
+  executableArtifacts: readonly AflTradeAdmittedPlayerExecutableArtifact[];
   schema: z.ZodType<T>;
   label: string;
 }): T {
@@ -184,7 +211,7 @@ function parseAuthenticatedJson<T>(input: {
 
 export function loadGovernedScalarTransform(input: {
   protocol: AflTradePlayerContributionModelProtocolV2;
-  executableArtifacts: readonly ExecutableArtifact[];
+  executableArtifacts: readonly AflTradeAdmittedPlayerExecutableArtifact[];
 }): ScalarTransform {
   const transform = parseAuthenticatedJson({
     reference: input.protocol.content.scalarValueTransformArtifact,
@@ -198,9 +225,21 @@ export function loadGovernedScalarTransform(input: {
   return transform;
 }
 
-function loadGovernedFeatureSet(input: {
+export function loadGovernedAflTradeAdmittedPlayerCandidate(input: {
+  reference: AflTradeArtifactRef;
+  executableArtifacts: readonly AflTradeAdmittedPlayerExecutableArtifact[];
+}) {
+  return parseAuthenticatedJson({
+    reference: input.reference,
+    executableArtifacts: input.executableArtifacts,
+    schema: aflTradeAdmittedPlayerCandidateSchema,
+    label: 'admitted player candidate model',
+  });
+}
+
+export function loadGovernedAflTradePlayerFeatureSet(input: {
   protocol: AflTradePlayerContributionModelProtocolV2;
-  executableArtifacts: readonly ExecutableArtifact[];
+  executableArtifacts: readonly AflTradeAdmittedPlayerExecutableArtifact[];
   observationSet: AflTradePlayerObservationSetV2;
 }): PointInTimeFeatureSet {
   const reference = input.protocol.content.pointInTimeFeatureValuesArtifact;
@@ -315,7 +354,7 @@ function latestFeatureMetrics(input: {
   };
 }
 
-function materializeContributionSet(input: {
+export function materializeAflTradeAdmittedPlayerContributionSet(input: {
   observationSet: AflTradePlayerObservationSetV2;
   transform: ScalarTransform;
   featureSet: PointInTimeFeatureSet;
@@ -408,11 +447,7 @@ function materializeContributionSet(input: {
   };
 }
 
-interface CandidateCoefficients {
-  gamesOnly: number;
-  candidateGames: number;
-  candidatePriorContribution: number;
-}
+type CandidateCoefficients = z.infer<typeof candidateCoefficientsSchema>;
 
 function fitCandidate(input: {
   set: AflTradePlayerObservationSet;
@@ -492,7 +527,7 @@ function predictionValues(input: {
   };
 }
 
-function createPredictions(input: {
+export function createAflTradeAdmittedPlayerPredictions(input: {
   partition: 'validation' | 'final_test';
   set: AflTradePlayerObservationSet;
   baseline: AflTradePlayerBaselineFit;
@@ -628,7 +663,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         protocol: request.protocol,
         executableArtifacts: request.executableArtifacts,
       });
-      const featureSet = loadGovernedFeatureSet({
+      const featureSet = loadGovernedAflTradePlayerFeatureSet({
         protocol: request.protocol,
         executableArtifacts: request.executableArtifacts,
         observationSet,
@@ -639,7 +674,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         schema: candidateConfigSchema,
         label: 'candidate configuration',
       });
-      const materialized = materializeContributionSet({
+      const materialized = materializeAflTradeAdmittedPlayerContributionSet({
         observationSet,
         transform,
         featureSet,
@@ -652,7 +687,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         predictorByObservationId: materialized.predictorByObservationId,
         ridgeLambda: config.ridgeLambda,
       });
-      const validationPredictions = createPredictions({
+      const validationPredictions = createAflTradeAdmittedPlayerPredictions({
         partition: 'validation',
         set: materialized.set,
         baseline,
@@ -678,7 +713,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         config.intervalCoverageLevel
       );
       const candidateLockedAt = await input.now();
-      const finalPredictions = createPredictions({
+      const finalPredictions = createAflTradeAdmittedPlayerPredictions({
         partition: 'final_test',
         set: materialized.set,
         baseline,
@@ -731,7 +766,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
       });
       const featureReference = request.protocol.content.pointInTimeFeatureValuesArtifact!;
       const documents = {
-        modelArtifact: {
+        modelArtifact: aflTradeAdmittedPlayerCandidateSchema.parse({
           schemaVersion: AFL_TRADE_ADMITTED_PLAYER_CANDIDATE_SCHEMA_VERSION,
           modelId: request.intent.content.modelId,
           sourceObservationSetId: observationSet.observationSetId,
@@ -744,7 +779,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
           coefficients,
           trainingPartition: 'train',
           finalTestRetuning: 'prohibited',
-        },
+        }),
         selectionValidationReportArtifact: validationReport,
         validationReportArtifact: finalReport,
         baselineComparisonArtifact: baseline,
