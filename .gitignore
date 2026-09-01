@@ -1,6 +1,7 @@
 # --- Environment Files ---
 .env*
 !.env.example
+.venv/
 .Renviron
 .Rhistory
 
