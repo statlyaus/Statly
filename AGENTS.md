@@ -18,6 +18,43 @@ involvements.
 - `tests` and colocated `*.test.*`: regression and browser coverage.
 - `docs`: canonical architecture, domain, development, product, and runbook documentation.
 
+## Mandatory engineering workflow
+
+For every request that creates, changes, fixes, refactors, reviews, or prepares delivery of
+repository files, load and follow `.agents/skills/statly-engineering-workflow/SKILL.md`.
+
+The workflow is mandatory even when a request does not explicitly name a skill. Work on one file at
+a time. Complex changes and files over 300 lines require an approved proposed edit plan before
+editing.
+
+## Agent skills
+
+### Routing
+
+Use [`docs/agents/skill-routing.md`](docs/agents/skill-routing.md) as the Statly-owned routing layer
+over the locked upstream `ask-matt` skill. Do not recommend or invoke upstream routes that are not
+installed in this repository, and keep domain, architecture, specification, and delivery records in
+the Statly-owned locations defined there.
+
+### Issue tracker
+
+Issues and specifications use `statlyaus/Statly` GitHub Issues only when tracker writes are requested.
+See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Use the existing `docs/domain/` and `docs/architecture/` sources; do not create a parallel context or
+ADR structure. See `docs/agents/domain.md`.
+
+### Setup and upstream updates
+
+When running `setup-matt-pocock-skills`, apply the Statly-owned constraints in
+`docs/agents/setup-matt-pocock-skills.md` without modifying vendored upstream skill files.
+
+Run `npx skills update -p -y` only on a dedicated scheduled branch or pull-request branch, never
+directly against `main`. Review upstream instruction changes and require the normal CI and pull
+request gates before merging them.
+
 ## Sources of truth
 
 - Prisma services own protected league, season, membership, draft, pick, roster, lineup, matchup,

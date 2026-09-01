@@ -1,0 +1,354 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://statly.com.au/schemas/statly.ontology.schema.json",
+  "title": "Statly hybrid ontology",
+  "description": "Schema for the symbolic graph, probabilistic hypotheses, and inspectable inference lineages in Statly's ontology kernel.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ontologyId",
+    "version",
+    "generated",
+    "lastVerified",
+    "description",
+    "namespaces",
+    "relationTypes",
+    "nodes",
+    "evidence",
+    "symbolicStatements",
+    "hypotheses",
+    "lineages",
+    "protectedInvariants"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "ontologyId": {
+      "type": "string",
+      "pattern": "^ontology:[a-z][a-z0-9_]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated": {
+      "type": "boolean"
+    },
+    "lastVerified": {
+      "type": "string",
+      "format": "date"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "namespaces": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "relationTypes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "symbolicStatements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/symbolicStatement"
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hypothesis"
+      }
+    },
+    "lineages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lineage"
+      }
+    },
+    "protectedInvariants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/protectedInvariant"
+      }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "label", "description"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "kind": {
+          "enum": [
+            "domain_concept",
+            "module",
+            "interface",
+            "runtime_process",
+            "store",
+            "external_system",
+            "repository_artifact",
+            "local_capability"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "durability": {
+          "enum": ["durable", "durable_local", "durable_projection", "ephemeral"]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "location", "digestPolicy"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "kind": {
+          "enum": [
+            "canonical_document",
+            "executable_schema",
+            "configuration",
+            "repository_observation",
+            "runtime_observation",
+            "test_result"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "anyOf": [
+              { "pattern": "^/" },
+              { "pattern": "(^|/)\\.env($|\\.)" },
+              { "pattern": "(^|/)prisma/dev\\.db$" }
+            ]
+          }
+        },
+        "digestPolicy": {
+          "enum": ["path_and_review_date", "content_digest_allowed"]
+        }
+      }
+    },
+    "epistemicState": {
+      "enum": ["asserted", "observed", "inferred", "rejected"]
+    },
+    "symbolicStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "subject", "predicate", "object", "epistemicState", "evidence"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "subject": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "predicate": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "object": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "epistemicState": {
+          "enum": ["asserted", "observed", "rejected"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "hypothesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "subject",
+        "predicate",
+        "object",
+        "epistemicState",
+        "probability",
+        "calibration",
+        "status",
+        "supportingEvidence",
+        "contradictingEvidence",
+        "lineage"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "subject": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "predicate": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "object": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "epistemicState": {
+          "enum": ["inferred", "rejected"]
+        },
+        "probability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "calibration": {
+          "enum": ["low", "medium", "high", "near_certain"]
+        },
+        "status": {
+          "enum": ["active", "retired"]
+        },
+        "supportingEvidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/namespacedId"
+          }
+        },
+        "contradictingEvidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/namespacedId"
+          }
+        },
+        "lineage": {
+          "$ref": "#/$defs/namespacedId"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "calibration": { "const": "low" } } },
+          "then": { "properties": { "probability": { "minimum": 0, "exclusiveMaximum": 0.5 } } }
+        },
+        {
+          "if": { "properties": { "calibration": { "const": "medium" } } },
+          "then": { "properties": { "probability": { "minimum": 0.5, "exclusiveMaximum": 0.8 } } }
+        },
+        {
+          "if": { "properties": { "calibration": { "const": "high" } } },
+          "then": { "properties": { "probability": { "minimum": 0.8, "exclusiveMaximum": 0.95 } } }
+        },
+        {
+          "if": { "properties": { "calibration": { "const": "near_certain" } } },
+          "then": { "properties": { "probability": { "minimum": 0.95, "maximum": 1 } } }
+        }
+      ]
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "hypothesis", "steps"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "hypothesis": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/lineageStep"
+          }
+        }
+      }
+    },
+    "lineageStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "inputs", "output"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "operation": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "inputs": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "protectedInvariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "requiredStatement"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/namespacedId"
+        },
+        "requiredStatement": {
+          "$ref": "#/$defs/namespacedId"
+        }
+      }
+    }
+  }
+}

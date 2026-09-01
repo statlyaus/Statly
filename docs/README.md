@@ -16,6 +16,8 @@ authority when a document and implementation disagree; fix the document in the s
   accepted production target.
 - [Realtime delivery](architecture/realtime.md) — Socket.IO, Redis, BullMQ, reconnect, and authority
   boundaries.
+- [Hybrid repository and runtime ontology](architecture/hybrid-ontology.md) — symbolic authority,
+  probabilistic inference, evidence lineage, and supported local capabilities.
 
 ## Domain
 
