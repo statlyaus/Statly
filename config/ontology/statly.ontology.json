@@ -1,0 +1,677 @@
+{
+  "$schema": "./statly.ontology.schema.json",
+  "ontologyId": "ontology:statly",
+  "version": "1.0.0",
+  "generated": false,
+  "lastVerified": "2026-08-30",
+  "description": "Hybrid symbolic and probabilistic knowledge model for the Statly domain, repository, and supported local runtime.",
+  "namespaces": {
+    "concept": "Statly domain concept",
+    "module": "Deep module or owning implementation",
+    "interface": "Caller-visible module contract",
+    "process": "Runtime process class",
+    "store": "Persistent or ephemeral data store",
+    "external": "External system or evidence provider",
+    "artifact": "Repository-relative evidence artifact",
+    "capability": "Supported local development capability",
+    "statement": "Symbolic graph statement",
+    "evidence": "Evidence item",
+    "hypothesis": "Probabilistic graph statement",
+    "lineage": "Inference lineage"
+  },
+  "relationTypes": [
+    "owns",
+    "identifies",
+    "authorizes",
+    "scopes",
+    "implements",
+    "exposes",
+    "depends_on",
+    "reads_from",
+    "writes_to",
+    "projects_to",
+    "coordinates_via",
+    "transports",
+    "runs_as",
+    "starts_with",
+    "verified_by",
+    "defined_by",
+    "documented_by",
+    "requires",
+    "supersedes",
+    "must_not_own",
+    "does_not_authorize",
+    "must_not_target"
+  ],
+  "nodes": [
+    {
+      "id": "concept:identity",
+      "kind": "domain_concept",
+      "label": "User identity",
+      "description": "Verified knowledge of which user is making a request."
+    },
+    {
+      "id": "concept:authorization",
+      "kind": "domain_concept",
+      "label": "Domain authorization",
+      "description": "League-, season-, role-, and ownership-aware permission to act."
+    },
+    {
+      "id": "concept:protected_fantasy_state",
+      "kind": "domain_concept",
+      "label": "Protected fantasy state",
+      "description": "League, season, membership, draft, pick, roster, lineup, matchup, trade, and waiver state."
+    },
+    {
+      "id": "concept:league_scope",
+      "kind": "domain_concept",
+      "label": "League scope",
+      "description": "Tenant identity retained by every protected operation."
+    },
+    {
+      "id": "concept:season_scope",
+      "kind": "domain_concept",
+      "label": "League season scope",
+      "description": "Season identity retained by season-dependent protected operations."
+    },
+    {
+      "id": "concept:live_stat_evidence",
+      "kind": "domain_concept",
+      "label": "Live AFL stat evidence",
+      "description": "Normalized external match-stat evidence used by fantasy calculations."
+    },
+    {
+      "id": "concept:realtime_delivery",
+      "kind": "domain_concept",
+      "label": "Realtime delivery",
+      "description": "Bidirectional delivery that converges on persisted server-authoritative state."
+    },
+    {
+      "id": "concept:fail_closed_ingestion",
+      "kind": "domain_concept",
+      "label": "Fail-closed ingestion",
+      "description": "External fetch, parse, validation, or write failure fails the production ingestion cycle."
+    },
+    {
+      "id": "concept:reconnect_catch_up",
+      "kind": "domain_concept",
+      "label": "Reconnect catch-up",
+      "description": "Recovery behavior that rebuilds current realtime state from persisted authority after disconnection."
+    },
+    {
+      "id": "module:prisma_domain_services",
+      "kind": "module",
+      "label": "Prisma domain services",
+      "description": "Owning modules for protected relational fantasy state."
+    },
+    {
+      "id": "module:league_services",
+      "kind": "module",
+      "label": "League services",
+      "description": "League scoring, standings, fixtures, and competition-rule implementation."
+    },
+    {
+      "id": "module:draft_services",
+      "kind": "module",
+      "label": "Draft services",
+      "description": "Persisted draft commands, picks, projections, and publication."
+    },
+    {
+      "id": "module:etl_pipeline",
+      "kind": "module",
+      "label": "AFL ETL pipeline",
+      "description": "Fetches, validates, normalizes, and writes external AFL evidence."
+    },
+    {
+      "id": "interface:http_routes",
+      "kind": "interface",
+      "label": "HTTP transport routes",
+      "description": "Authenticated transport adapters that delegate domain authorization to owning modules."
+    },
+    {
+      "id": "interface:socket_commands",
+      "kind": "interface",
+      "label": "Socket command interface",
+      "description": "Realtime commands and events with persisted catch-up behavior."
+    },
+    {
+      "id": "process:web",
+      "kind": "runtime_process",
+      "label": "Next.js web and API process",
+      "description": "Serves the application and HTTP transport routes."
+    },
+    {
+      "id": "process:socket",
+      "kind": "runtime_process",
+      "label": "Socket.IO process",
+      "description": "Runs bidirectional realtime rooms and delivery."
+    },
+    {
+      "id": "process:draft_worker",
+      "kind": "runtime_process",
+      "label": "Draft worker process",
+      "description": "Runs delayed and background draft work through BullMQ."
+    },
+    {
+      "id": "process:etl",
+      "kind": "runtime_process",
+      "label": "ETL process",
+      "description": "Runs supported AFL ingestion and normalization."
+    },
+    {
+      "id": "store:prisma_sqlite",
+      "kind": "store",
+      "label": "Prisma SQLite development store",
+      "description": "Supported local relational store; disposable databases are required for tests.",
+      "durability": "durable_local"
+    },
+    {
+      "id": "store:prisma_dev_db",
+      "kind": "store",
+      "label": "Protected local Prisma development database",
+      "description": "The repository-local development database that must never be read as ontology evidence or selected as a test target.",
+      "durability": "durable_local"
+    },
+    {
+      "id": "store:postgresql_target",
+      "kind": "store",
+      "label": "Managed PostgreSQL production target",
+      "description": "Accepted production relational target whose cutover is not complete.",
+      "durability": "durable"
+    },
+    {
+      "id": "store:firestore",
+      "kind": "store",
+      "label": "Firestore",
+      "description": "Ingestion evidence and temporary compatibility projection surface.",
+      "durability": "durable_projection"
+    },
+    {
+      "id": "store:redis",
+      "kind": "store",
+      "label": "Redis",
+      "description": "Ephemeral queues, locks, caches, rate limits, and Pub/Sub coordination.",
+      "durability": "ephemeral"
+    },
+    {
+      "id": "external:firebase_auth",
+      "kind": "external_system",
+      "label": "Firebase Authentication",
+      "description": "Identity provider whose verified UID is an input to domain authorization."
+    },
+    {
+      "id": "external:footywire_fitzroy",
+      "kind": "external_system",
+      "label": "Footywire through fitzRoy",
+      "description": "Supported external AFL data source."
+    },
+    {
+      "id": "capability:node22_npm",
+      "kind": "local_capability",
+      "label": "Node.js 22 and npm",
+      "description": "Required JavaScript runtime and package manager."
+    },
+    {
+      "id": "capability:firebase_emulators",
+      "kind": "local_capability",
+      "label": "Firebase emulators",
+      "description": "Supported local Auth and Firestore environment."
+    },
+    {
+      "id": "capability:docker_test_services",
+      "kind": "local_capability",
+      "label": "Docker test services",
+      "description": "Optional local PostgreSQL and Redis services defined by repository configuration."
+    },
+    {
+      "id": "capability:r_etl",
+      "kind": "local_capability",
+      "label": "R for ETL",
+      "description": "Required local capability for fitzRoy-backed ingestion work."
+    },
+    {
+      "id": "capability:disposable_test_database",
+      "kind": "local_capability",
+      "label": "Disposable test database",
+      "description": "Isolated database selected specifically for verification."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence:agents_guide",
+      "kind": "canonical_document",
+      "location": "AGENTS.md",
+      "digestPolicy": "path_and_review_date"
+    },
+    {
+      "id": "evidence:data_platform_doc",
+      "kind": "canonical_document",
+      "location": "docs/architecture/data-platform.md",
+      "digestPolicy": "path_and_review_date"
+    },
+    {
+      "id": "evidence:fantasy_model_doc",
+      "kind": "canonical_document",
+      "location": "docs/domain/fantasy-model.md",
+      "digestPolicy": "path_and_review_date"
+    },
+    {
+      "id": "evidence:setup_doc",
+      "kind": "canonical_document",
+      "location": "docs/development/setup.md",
+      "digestPolicy": "path_and_review_date"
+    },
+    {
+      "id": "evidence:prisma_schema",
+      "kind": "executable_schema",
+      "location": "prisma/schema.prisma",
+      "digestPolicy": "content_digest_allowed"
+    },
+    {
+      "id": "evidence:package_manifest",
+      "kind": "configuration",
+      "location": "package.json",
+      "digestPolicy": "content_digest_allowed"
+    },
+    {
+      "id": "evidence:docker_compose",
+      "kind": "configuration",
+      "location": "docker-compose.yml",
+      "digestPolicy": "content_digest_allowed"
+    },
+    {
+      "id": "evidence:server_tree",
+      "kind": "repository_observation",
+      "location": "src/server",
+      "digestPolicy": "path_and_review_date"
+    },
+    {
+      "id": "evidence:app_route_tree",
+      "kind": "repository_observation",
+      "location": "src/app",
+      "digestPolicy": "path_and_review_date"
+    },
+    {
+      "id": "evidence:etl_tree",
+      "kind": "repository_observation",
+      "location": "etl",
+      "digestPolicy": "path_and_review_date"
+    }
+  ],
+  "symbolicStatements": [
+    {
+      "id": "statement:firebase_identifies_user",
+      "subject": "external:firebase_auth",
+      "predicate": "identifies",
+      "object": "concept:identity",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:agents_guide"]
+    },
+    {
+      "id": "statement:firebase_does_not_authorize",
+      "subject": "external:firebase_auth",
+      "predicate": "does_not_authorize",
+      "object": "concept:authorization",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:fantasy_model_doc"]
+    },
+    {
+      "id": "statement:prisma_owns_protected_state",
+      "subject": "module:prisma_domain_services",
+      "predicate": "owns",
+      "object": "concept:protected_fantasy_state",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc", "evidence:prisma_schema"]
+    },
+    {
+      "id": "statement:authorization_scoped_by_league",
+      "subject": "concept:authorization",
+      "predicate": "scopes",
+      "object": "concept:league_scope",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:fantasy_model_doc"]
+    },
+    {
+      "id": "statement:authorization_scoped_by_season",
+      "subject": "concept:authorization",
+      "predicate": "scopes",
+      "object": "concept:season_scope",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:fantasy_model_doc"]
+    },
+    {
+      "id": "statement:prisma_services_authorize_protected_state",
+      "subject": "module:prisma_domain_services",
+      "predicate": "authorizes",
+      "object": "concept:protected_fantasy_state",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:fantasy_model_doc"]
+    },
+    {
+      "id": "statement:http_exposes_domain",
+      "subject": "process:web",
+      "predicate": "exposes",
+      "object": "interface:http_routes",
+      "epistemicState": "observed",
+      "evidence": ["evidence:app_route_tree", "evidence:package_manifest"]
+    },
+    {
+      "id": "statement:http_depends_on_prisma_services",
+      "subject": "interface:http_routes",
+      "predicate": "depends_on",
+      "object": "module:prisma_domain_services",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:draft_services_write_prisma",
+      "subject": "module:draft_services",
+      "predicate": "writes_to",
+      "object": "store:prisma_sqlite",
+      "epistemicState": "observed",
+      "evidence": ["evidence:server_tree", "evidence:prisma_schema"]
+    },
+    {
+      "id": "statement:socket_exposes_commands",
+      "subject": "process:socket",
+      "predicate": "exposes",
+      "object": "interface:socket_commands",
+      "epistemicState": "observed",
+      "evidence": ["evidence:server_tree", "evidence:package_manifest"]
+    },
+    {
+      "id": "statement:socket_transports_realtime",
+      "subject": "process:socket",
+      "predicate": "transports",
+      "object": "concept:realtime_delivery",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:socket_commands_depend_on_persisted_state",
+      "subject": "interface:socket_commands",
+      "predicate": "depends_on",
+      "object": "module:prisma_domain_services",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:realtime_requires_reconnect_catch_up",
+      "subject": "concept:realtime_delivery",
+      "predicate": "requires",
+      "object": "concept:reconnect_catch_up",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:socket_coordinates_via_redis",
+      "subject": "process:socket",
+      "predicate": "coordinates_via",
+      "object": "store:redis",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:package_manifest"]
+    },
+    {
+      "id": "statement:draft_worker_coordinates_via_redis",
+      "subject": "process:draft_worker",
+      "predicate": "coordinates_via",
+      "object": "store:redis",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:package_manifest"]
+    },
+    {
+      "id": "statement:redis_must_not_own_protected_state",
+      "subject": "store:redis",
+      "predicate": "must_not_own",
+      "object": "concept:protected_fantasy_state",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:etl_reads_footywire",
+      "subject": "module:etl_pipeline",
+      "predicate": "reads_from",
+      "object": "external:footywire_fitzroy",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:etl_tree"]
+    },
+    {
+      "id": "statement:etl_implements_fail_closed_ingestion",
+      "subject": "module:etl_pipeline",
+      "predicate": "implements",
+      "object": "concept:fail_closed_ingestion",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:etl_writes_firestore",
+      "subject": "module:etl_pipeline",
+      "predicate": "writes_to",
+      "object": "store:firestore",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:etl_tree"]
+    },
+    {
+      "id": "statement:firestore_projects_live_evidence",
+      "subject": "store:firestore",
+      "predicate": "projects_to",
+      "object": "concept:live_stat_evidence",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc", "evidence:fantasy_model_doc"]
+    },
+    {
+      "id": "statement:firestore_must_not_own_protected_state",
+      "subject": "store:firestore",
+      "predicate": "must_not_own",
+      "object": "concept:protected_fantasy_state",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:postgres_supersedes_sqlite_production",
+      "subject": "store:postgresql_target",
+      "predicate": "supersedes",
+      "object": "store:prisma_sqlite",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:data_platform_doc"]
+    },
+    {
+      "id": "statement:web_requires_node",
+      "subject": "process:web",
+      "predicate": "requires",
+      "object": "capability:node22_npm",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:setup_doc", "evidence:package_manifest"]
+    },
+    {
+      "id": "statement:etl_requires_r",
+      "subject": "process:etl",
+      "predicate": "requires",
+      "object": "capability:r_etl",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:setup_doc", "evidence:etl_tree"]
+    },
+    {
+      "id": "statement:local_firebase_supported",
+      "subject": "process:web",
+      "predicate": "requires",
+      "object": "capability:firebase_emulators",
+      "epistemicState": "observed",
+      "evidence": ["evidence:setup_doc", "evidence:package_manifest"]
+    },
+    {
+      "id": "statement:docker_starts_test_stores",
+      "subject": "capability:docker_test_services",
+      "predicate": "starts_with",
+      "object": "store:redis",
+      "epistemicState": "observed",
+      "evidence": ["evidence:docker_compose"]
+    },
+    {
+      "id": "statement:tests_require_disposable_db",
+      "subject": "module:prisma_domain_services",
+      "predicate": "verified_by",
+      "object": "capability:disposable_test_database",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:setup_doc"]
+    },
+    {
+      "id": "statement:tests_must_not_target_prisma_dev_db",
+      "subject": "capability:disposable_test_database",
+      "predicate": "must_not_target",
+      "object": "store:prisma_dev_db",
+      "epistemicState": "asserted",
+      "evidence": ["evidence:agents_guide", "evidence:setup_doc"]
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "hypothesis:route_tree_maps_to_domain_modules",
+      "subject": "interface:http_routes",
+      "predicate": "depends_on",
+      "object": "module:league_services",
+      "epistemicState": "inferred",
+      "probability": 0.86,
+      "calibration": "high",
+      "status": "active",
+      "supportingEvidence": ["evidence:app_route_tree", "evidence:server_tree"],
+      "contradictingEvidence": [],
+      "lineage": "lineage:route_to_module_semantics"
+    },
+    {
+      "id": "hypothesis:local_stack_uses_docker_redis",
+      "subject": "process:socket",
+      "predicate": "depends_on",
+      "object": "capability:docker_test_services",
+      "epistemicState": "inferred",
+      "probability": 0.67,
+      "calibration": "medium",
+      "status": "active",
+      "supportingEvidence": ["evidence:docker_compose", "evidence:package_manifest"],
+      "contradictingEvidence": ["evidence:setup_doc"],
+      "lineage": "lineage:local_redis_choice"
+    },
+    {
+      "id": "hypothesis:firestore_can_own_fantasy_state",
+      "subject": "store:firestore",
+      "predicate": "owns",
+      "object": "concept:protected_fantasy_state",
+      "epistemicState": "rejected",
+      "probability": 0.01,
+      "calibration": "low",
+      "status": "retired",
+      "supportingEvidence": [],
+      "contradictingEvidence": ["evidence:agents_guide", "evidence:data_platform_doc"],
+      "lineage": "lineage:firestore_authority_rejection"
+    }
+  ],
+  "lineages": [
+    {
+      "id": "lineage:route_to_module_semantics",
+      "hypothesis": "hypothesis:route_tree_maps_to_domain_modules",
+      "steps": [
+        {
+          "id": "lineage-step:route_paths",
+          "operation": "observe_repository_structure",
+          "inputs": ["evidence:app_route_tree"],
+          "output": "signal:league_route_names"
+        },
+        {
+          "id": "lineage-step:server_modules",
+          "operation": "observe_repository_structure",
+          "inputs": ["evidence:server_tree"],
+          "output": "signal:league_module_names"
+        },
+        {
+          "id": "lineage-step:semantic_affinity",
+          "operation": "compare_semantic_affinity",
+          "inputs": ["signal:league_route_names", "signal:league_module_names"],
+          "output": "hypothesis:route_tree_maps_to_domain_modules",
+          "tool": "human-reviewed ontology bootstrap"
+        }
+      ]
+    },
+    {
+      "id": "lineage:local_redis_choice",
+      "hypothesis": "hypothesis:local_stack_uses_docker_redis",
+      "steps": [
+        {
+          "id": "lineage-step:compose_services",
+          "operation": "extract_declared_services",
+          "inputs": ["evidence:docker_compose"],
+          "output": "signal:docker_redis_available"
+        },
+        {
+          "id": "lineage-step:redis_scripts",
+          "operation": "extract_process_dependencies",
+          "inputs": [
+            "evidence:package_manifest",
+            "evidence:setup_doc",
+            "signal:docker_redis_available"
+          ],
+          "output": "hypothesis:local_stack_uses_docker_redis",
+          "tool": "human-reviewed ontology bootstrap"
+        }
+      ]
+    },
+    {
+      "id": "lineage:firestore_authority_rejection",
+      "hypothesis": "hypothesis:firestore_can_own_fantasy_state",
+      "steps": [
+        {
+          "id": "lineage-step:authority_sources",
+          "operation": "compare_against_protected_invariants",
+          "inputs": ["evidence:agents_guide", "evidence:data_platform_doc"],
+          "output": "hypothesis:firestore_can_own_fantasy_state",
+          "tool": "symbolic invariant checker"
+        }
+      ]
+    }
+  ],
+  "protectedInvariants": [
+    {
+      "id": "invariant:prisma_authority",
+      "requiredStatement": "statement:prisma_owns_protected_state"
+    },
+    {
+      "id": "invariant:authentication_not_authorization",
+      "requiredStatement": "statement:firebase_does_not_authorize"
+    },
+    {
+      "id": "invariant:firestore_non_authority",
+      "requiredStatement": "statement:firestore_must_not_own_protected_state"
+    },
+    {
+      "id": "invariant:redis_non_authority",
+      "requiredStatement": "statement:redis_must_not_own_protected_state"
+    },
+    {
+      "id": "invariant:league_scope",
+      "requiredStatement": "statement:authorization_scoped_by_league"
+    },
+    {
+      "id": "invariant:season_scope",
+      "requiredStatement": "statement:authorization_scoped_by_season"
+    },
+    {
+      "id": "invariant:realtime_persistence",
+      "requiredStatement": "statement:socket_commands_depend_on_persisted_state"
+    },
+    {
+      "id": "invariant:realtime_reconnect_catch_up",
+      "requiredStatement": "statement:realtime_requires_reconnect_catch_up"
+    },
+    {
+      "id": "invariant:etl_fails_closed",
+      "requiredStatement": "statement:etl_implements_fail_closed_ingestion"
+    },
+    {
+      "id": "invariant:disposable_test_database",
+      "requiredStatement": "statement:tests_require_disposable_db"
+    },
+    {
+      "id": "invariant:prisma_dev_db_not_test_target",
+      "requiredStatement": "statement:tests_must_not_target_prisma_dev_db"
+    }
+  ]
+}

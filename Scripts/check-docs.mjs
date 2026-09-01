@@ -58,7 +58,10 @@ async function run() {
     encoding: 'utf8',
   }).trim();
   const errors = [];
-  const markdownFiles = listMarkdownFiles(root);
+  const lockedSkillPrefixes = listLockedSkillPrefixes(root);
+  const markdownFiles = listMarkdownFiles(root).filter(
+    (file) => !lockedSkillPrefixes.some((prefix) => file.startsWith(prefix))
+  );
   const trackedFiles = listGitFiles(root, ['ls-files']);
 
   for (const required of requiredDocuments) {
@@ -122,6 +125,14 @@ function listMarkdownFiles(root) {
     '*.md',
     '*.MD',
   ]).filter((file) => extname(file).toLowerCase() === '.md');
+}
+
+function listLockedSkillPrefixes(root) {
+  const lockfile = join(root, 'skills-lock.json');
+  if (!existsSync(lockfile)) return [];
+
+  const parsed = JSON.parse(readFileSync(lockfile, 'utf8'));
+  return Object.keys(parsed.skills ?? {}).map((name) => `.agents/skills/${name}/`);
 }
 
 export function isProhibitedTrackedEnvironment(file) {

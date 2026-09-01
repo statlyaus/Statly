@@ -27,6 +27,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run skills:check
       - run: npm run docs:check
 
   lint:
