@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -126,9 +126,9 @@ function validateHypotheses(hypotheses, context) {
     validateCalibration(hypothesis);
     validateEvidenceReferences(
       hypothesis.id,
-      [...hypothesis.supportingEvidence, ...hypothesis.contradictingEvidence],
+      collectHypothesisEvidenceIds(hypothesis),
       context.evidenceIds,
-      false
+      true
     );
     assert(
       context.lineageIds.has(hypothesis.lineage),
@@ -152,6 +152,7 @@ function validateLineages(lineages, context) {
       Array.isArray(lineage.steps) && lineage.steps.length > 0,
       `${lineage.id}: lineage has no steps`
     );
+    if (!Array.isArray(lineage.steps)) continue;
     validateLineage(lineage, context.evidenceIds, context.hypothesisIds, lineageStepIds);
   }
 }
@@ -163,12 +164,11 @@ function validateHypothesisLineageConsumption(hypotheses, lineages) {
       lineage?.hypothesis === hypothesis.id,
       `${hypothesis.id}: lineage does not point back to its hypothesis`
     );
-    if (lineage) {
-      const lineageInputs = new Set(lineage.steps.flatMap(({ inputs }) => inputs));
-      for (const evidenceId of [
-        ...hypothesis.supportingEvidence,
-        ...hypothesis.contradictingEvidence,
-      ]) {
+    if (lineage && Array.isArray(lineage.steps)) {
+      const lineageInputs = new Set(
+        lineage.steps.flatMap((step) => (Array.isArray(step?.inputs) ? step.inputs : []))
+      );
+      for (const evidenceId of collectHypothesisEvidenceIds(hypothesis)) {
         assert(
           lineageInputs.has(evidenceId),
           `${hypothesis.id}: lineage does not consume declared evidence ${evidenceId}`
@@ -176,6 +176,13 @@ function validateHypothesisLineageConsumption(hypotheses, lineages) {
       }
     }
   }
+}
+
+function collectHypothesisEvidenceIds(hypothesis) {
+  return [
+    ...(Array.isArray(hypothesis.supportingEvidence) ? hypothesis.supportingEvidence : []),
+    ...(Array.isArray(hypothesis.contradictingEvidence) ? hypothesis.contradictingEvidence : []),
+  ];
 }
 
 function validateInvariantReferences(invariants, statementIds) {
@@ -213,26 +220,31 @@ function validateEvidence(evidenceItems) {
     'repository_observation',
   ]);
   for (const item of evidenceItems) {
+    const normalizedLocation =
+      typeof item.location === 'string' ? item.location.replaceAll('\\', '/') : '';
     assert(nonEmpty(item.location), `${item.id}: evidence location is required`);
-    assert(!item.location.startsWith('/'), `${item.id}: absolute paths are prohibited`);
     assert(
-      !/(^|\/)\.env($|\.)/.test(item.location),
+      !normalizedLocation.startsWith('/') && !win32.isAbsolute(normalizedLocation),
+      `${item.id}: absolute paths are prohibited`
+    );
+    assert(
+      !/(^|\/)\.env($|\.)/.test(normalizedLocation),
       `${item.id}: environment files are prohibited`
     );
     assert(
-      item.location !== 'prisma/dev.db',
+      normalizedLocation !== 'prisma/dev.db',
       `${item.id}: local development database is prohibited`
     );
     assert(
-      !item.location.includes('..'),
+      !normalizedLocation.includes('..'),
       `${item.id}: evidence path must remain inside the repository`
     );
     assert(
-      !/(^|\/)(node_modules|\.next|dist)(\/|$)/.test(item.location),
+      !/(^|\/)(node_modules|\.next|dist)(\/|$)/.test(normalizedLocation),
       `${item.id}: generated or dependency trees are prohibited evidence`
     );
     if (repositoryEvidenceKinds.has(item.kind)) {
-      const evidencePath = resolve(repositoryRoot, item.location);
+      const evidencePath = resolve(repositoryRoot, normalizedLocation);
       assert(
         existsSync(evidencePath),
         `${item.id}: repository evidence location does not exist: ${item.location}`
@@ -290,12 +302,14 @@ function validateLineage(lineage, evidenceIds, hypothesisIds, lineageStepIds) {
   const availableOutputs = new Set(evidenceIds);
 
   for (const step of lineage.steps) {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) continue;
     assert(isNamespacedId(step.id), `${lineage.id}: invalid lineage step ID ${String(step.id)}`);
     assert(!lineageStepIds.has(step.id), `${lineage.id}: duplicate lineage step ID ${step.id}`);
     lineageStepIds.add(step.id);
     assert(nonEmpty(step.operation), `${step.id}: operation is required`);
     assert(Array.isArray(step.inputs) && step.inputs.length > 0, `${step.id}: inputs are required`);
-    for (const input of step.inputs ?? []) {
+    const inputs = Array.isArray(step.inputs) ? step.inputs : [];
+    for (const input of inputs) {
       assert(
         availableOutputs.has(input),
         `${step.id}: input ${input} has no prior evidence or output`

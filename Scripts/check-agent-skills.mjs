@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { access, readdir, readFile } from 'node:fs/promises';
+import { access, lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +42,7 @@ const requiredWorkflowSkills = [
   'draft-reliability-loop',
   'grill-with-docs',
   'grilling',
+  'implement',
   'product-design-review',
   'prototype',
   'tdd',
@@ -68,6 +69,12 @@ async function collectSkillFiles(baseDirectory, currentDirectory, files) {
   await Promise.all(
     entries.map(async (entry) => {
       const fullPath = path.join(currentDirectory, entry.name);
+      const relativePath = path.relative(repoRoot, fullPath).split(path.sep).join('/');
+
+      assert(
+        !entry.isSymbolicLink(),
+        `${relativePath}: symbolic links are prohibited in locked skills`
+      );
 
       if (entry.isDirectory()) {
         if (entry.name === '.git' || entry.name === 'node_modules') return;
@@ -157,7 +164,14 @@ async function checkLockfile() {
     );
     assert(await exists(`.agents/skills/${name}/SKILL.md`), `${name} is locked but not installed`);
 
-    const installedHash = await computeSkillFolderHash(path.join(skillsRoot, name));
+    const installedDirectory = path.join(skillsRoot, name);
+    const installedStats = await lstat(installedDirectory);
+    assert(
+      !installedStats.isSymbolicLink(),
+      `.agents/skills/${name}: symbolic links are prohibited in locked skills`
+    );
+
+    const installedHash = await computeSkillFolderHash(installedDirectory);
     assert(
       installedHash === locked.computedHash,
       `${name} differs from its locked upstream content; update the lock on a review branch`
@@ -211,6 +225,7 @@ async function checkStatlyGuidance() {
     'diagnosing-bugs',
     'codebase-design',
     'domain-modeling',
+    '`implement`',
     'tdd',
     'to-spec',
     'to-tickets',

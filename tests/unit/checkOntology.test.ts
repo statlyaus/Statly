@@ -42,6 +42,25 @@ describe('ontology validation command', () => {
     });
   });
 
+  it('rejects Windows absolute and environment-file evidence locations', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.evidence[0].kind = 'runtime_observation';
+      ontology.evidence[0].location = 'C:\\Users\\alice\\.env.production';
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (2):\n' +
+        '- evidence:agents_guide: absolute paths are prohibited\n' +
+        '- evidence:agents_guide: environment files are prohibited\n',
+      stdout: '',
+    });
+  });
+
   it('reports schema and ontology collection failures in validation order', () => {
     const root = createOntologyFixture();
     mutateOntology(root, (ontology) => {
@@ -78,6 +97,39 @@ describe('ontology validation command', () => {
     });
   });
 
+  it('rejects a hypothesis with no supporting or contradicting evidence', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.hypotheses[0].supportingEvidence = [];
+      ontology.hypotheses[0].contradictingEvidence = [];
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (1):\n' +
+        '- hypothesis:route_tree_maps_to_domain_modules: at least one evidence item is required\n',
+      stdout: '',
+    });
+  });
+
+  it('reports malformed hypothesis evidence without an uncaught exception', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.hypotheses[0].supportingEvidence = {};
+      ontology.hypotheses[0].contradictingEvidence = [];
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('$.hypotheses[0].supportingEvidence: expected array');
+    expect(result.stderr).not.toContain('TypeError');
+  });
+
   it('rejects lineage that does not consume all declared evidence', () => {
     const root = createOntologyFixture();
     mutateOntology(root, (ontology) => {
@@ -93,6 +145,38 @@ describe('ontology validation command', () => {
         '- hypothesis:route_tree_maps_to_domain_modules: lineage does not consume declared evidence evidence:app_route_tree\n',
       stdout: '',
     });
+  });
+
+  it('reports malformed lineage steps without an uncaught exception', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.lineages[0].steps = {};
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result).toEqual({
+      status: 1,
+      stderr:
+        'Ontology checks failed (2):\n' +
+        '- $.lineages[0].steps: expected array\n' +
+        '- lineage:route_to_module_semantics: lineage has no steps\n',
+      stdout: '',
+    });
+  });
+
+  it('reports malformed lineage step inputs without an uncaught exception', () => {
+    const root = createOntologyFixture();
+    mutateOntology(root, (ontology) => {
+      ontology.lineages[0].steps[0].inputs = {};
+    });
+
+    const result = runOntologyCheck(root);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('$.lineages[0].steps[0].inputs: expected array');
+    expect(result.stderr).not.toContain('TypeError');
   });
 
   it('rejects a protected statement whose meaning changes', () => {
