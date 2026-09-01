@@ -640,23 +640,46 @@ export function runContent(
   };
 }
 
+function admittedRunTimeline(hasFactualParentOverride: boolean) {
+  return hasFactualParentOverride
+    ? {
+        datasetCreatedAt: '2026-08-12T00:08:00.000Z',
+        admittedAt: '2026-08-12T00:09:00.000Z',
+        protocolPreparedAt: '2026-08-12T00:10:00.000Z',
+        runStartedAt: '2026-08-12T00:11:00.000Z',
+        authorizationValidThrough: '2026-08-12T00:11:30.000Z',
+      }
+    : {
+        datasetCreatedAt: '2026-08-10T00:00:00.000Z',
+        admittedAt: '2026-08-10T00:01:00.000Z',
+        protocolPreparedAt: '2026-08-10T00:02:00.000Z',
+        runStartedAt: '2026-08-10T00:03:00.000Z',
+        authorizationValidThrough: '2026-08-10T00:03:30.000Z',
+      };
+}
+
+function admittedRunJob(environment: FixtureEnvironment) {
+  const automated = environment === 'non_production';
+  return {
+    jobId: 'fixture-model-job',
+    attempt: 1,
+    initiatedBy: automated ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID : 'fixture-model-owner',
+    workerIdentity: automated ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID : 'fixture-model-worker',
+  };
+}
+
 export function admittedRunFixture(
   environment: FixtureEnvironment = 'test_fixture',
   factualParentOverride?: AdmittedPlayerFactualParentOverride,
   options: { additionalFinalRows?: number; predictiveFeatures?: boolean } = {}
 ) {
-  const datasetCreatedAt = factualParentOverride
-    ? '2026-08-12T00:08:00.000Z'
-    : '2026-08-10T00:00:00.000Z';
-  const admittedAt = factualParentOverride
-    ? '2026-08-12T00:09:00.000Z'
-    : '2026-08-10T00:01:00.000Z';
-  const protocolPreparedAt = factualParentOverride
-    ? '2026-08-12T00:10:00.000Z'
-    : '2026-08-10T00:02:00.000Z';
-  const runStartedAt = factualParentOverride
-    ? '2026-08-12T00:11:00.000Z'
-    : '2026-08-10T00:03:00.000Z';
+  const {
+    datasetCreatedAt,
+    admittedAt,
+    protocolPreparedAt,
+    runStartedAt,
+    authorizationValidThrough,
+  } = admittedRunTimeline(factualParentOverride !== undefined);
   const { candidate: datasetCandidate, spellMetrics } = valuationDatasetFixture(
     environment,
     factualParentOverride,
@@ -1007,18 +1030,7 @@ export function admittedRunFixture(
     codeCommitSha: digest('a'),
     cleanWorktree: true,
     seed: 17,
-    job: {
-      jobId: 'fixture-model-job',
-      attempt: 1,
-      initiatedBy:
-        environment === 'non_production'
-          ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
-          : 'fixture-model-owner',
-      workerIdentity:
-        environment === 'non_production'
-          ? AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
-          : 'fixture-model-worker',
-    },
+    job: admittedRunJob(environment),
     startedAt: runStartedAt,
     windows: windows(),
     sourceCodeArtifact,
@@ -1040,7 +1052,7 @@ export function admittedRunFixture(
     modelProtocolId: intent.content.modelProtocolId,
     observationSetId: intent.content.observationSetId,
     authorizedAt: intent.content.startedAt,
-    validThrough: factualParentOverride ? '2026-08-12T00:11:30.000Z' : '2026-08-10T00:03:30.000Z',
+    validThrough: authorizationValidThrough,
     principalRef: 'fixture-model-operator',
     role: 'afl_trade_model_run_operator',
     authorityEvidence: {
