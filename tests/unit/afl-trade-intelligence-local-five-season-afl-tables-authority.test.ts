@@ -27,6 +27,7 @@ describe('local five-season AFL Tables authority', () => {
         'Home.team',
         'Away.team',
         'Goals',
+        'Brownlow.Votes',
       ])
     );
     expect(authority.capture.captureRequest).toMatchObject({
@@ -71,6 +72,9 @@ describe('local five-season AFL Tables authority', () => {
     );
     expect(authority.capture.gateRequest.fieldUses).toHaveLength(81);
     expect(authority.fieldMap).toMatchObject({
+      mapId: 'afl-tables-player-stats-local-2025-v2',
+      approvedAt: '2026-09-02T00:00:03.000Z',
+      approvalDecisionId: 'local-afl-tables-field-map-review-2025-v2',
       capabilityId: 'afl-tables-player-stats',
       competition: 'AFLM',
       validFromSeason: 2025,
@@ -99,6 +103,13 @@ describe('local five-season AFL Tables authority', () => {
           sourceField: 'Goals',
           definitionVersion: 'goals/v1',
           unit: 'goals',
+          zeroSemantics: 'provider_zero_may_mean_missing',
+        },
+        {
+          metricCode: 'brownlow_votes',
+          sourceField: 'Brownlow.Votes',
+          definitionVersion: 'brownlow-votes/v1',
+          unit: 'votes',
           zeroSemantics: 'provider_zero_may_mean_missing',
         },
       ],

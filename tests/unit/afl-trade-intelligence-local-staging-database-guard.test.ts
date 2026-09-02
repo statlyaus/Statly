@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { stageLocalAflcaCoachesVotes } from '@/server/aflTradeIntelligence/development/localAflcaCoachesVotesStaging';
 import { stageLocalAflTradeFiveSeasonAflTablesOutcomes } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesStaging';
 import { stageLocalAflTradeOfficialAfl2026Outcomes } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Staging';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
@@ -22,6 +23,7 @@ function unauthenticatedClient() {
 
 describe('local capture staging database guard', () => {
   it.each([
+    ['AFLCA coaches votes', stageLocalAflcaCoachesVotes],
     ['five-season AFL Tables', stageLocalAflTradeFiveSeasonAflTablesOutcomes],
     ['official AFL 2026', stageLocalAflTradeOfficialAfl2026Outcomes],
   ] as const)('fails closed before mutation for %s staging', async (_label, stage) => {

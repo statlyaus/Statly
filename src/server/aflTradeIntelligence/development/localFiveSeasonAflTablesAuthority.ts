@@ -321,12 +321,10 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
   };
   const fieldMap = parseAflTradeFitzRoyFieldMap({
     schemaVersion: AFL_TRADE_FITZROY_FIELD_MAP_SCHEMA_VERSION,
-    mapId: `afl-tables-player-stats-local-${season}-v1`,
+    mapId: `afl-tables-player-stats-local-${season}-v2`,
     capabilityId: 'afl-tables-player-stats',
     fitzRoyVersion: '1.7.0',
-    sourceSchemaSha256: createDecodedFieldSchemaSha256(
-      LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA
-    ),
+    sourceSchemaSha256: createDecodedFieldSchemaSha256(LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA),
     exactOrderedFields: exactFields,
     observationKind: 'player_stat',
     competition: 'AFLM',
@@ -336,17 +334,9 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
     seasonField: { sourceField: 'Season', required: true },
     roundLabelField: { sourceField: 'Round', required: true },
     observedDateField: { sourceField: 'Date', required: true },
-    naturalKeyFields: [
-      'Season',
-      'Round',
-      'Date',
-      'Home.team',
-      'Away.team',
-      'ID',
-      'Playing.for',
-    ],
-    approvedAt: '2026-08-14T00:00:03.000Z',
-    approvalDecisionId: `local-afl-tables-field-map-review-${season}`,
+    naturalKeyFields: ['Season', 'Round', 'Date', 'Home.team', 'Away.team', 'ID', 'Playing.for'],
+    approvedAt: '2026-09-02T00:00:03.000Z',
+    approvalDecisionId: `local-afl-tables-field-map-review-${season}-v2`,
     identity: {
       nativeId: { sourceField: 'ID', required: true },
       recordedName: { sourceField: 'Player', required: true },
@@ -370,6 +360,13 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
         sourceField: 'Goals',
         definitionVersion: 'goals/v1',
         unit: 'goals',
+        zeroSemantics: 'provider_zero_may_mean_missing',
+      },
+      {
+        metricCode: 'brownlow_votes',
+        sourceField: 'Brownlow.Votes',
+        definitionVersion: 'brownlow-votes/v1',
+        unit: 'votes',
         zeroSemantics: 'provider_zero_may_mean_missing',
       },
     ],

@@ -634,6 +634,42 @@ no network or live source, creates no hosted or billable resource, grants no rev
 authority, and does not satisfy real-source custody, hosted durability or hosted backup/restore,
 alerting, scheduling, deployment, or production-activation requirements.
 
+### Retaining private AFLCA coaches-vote evidence
+
+This optional local command performs live upstream retrieval. Run it only after the product-owner
+source decision is current, against the authenticated disposable loopback outcomes database, with the
+pinned fitzRoy image and private artifact root:
+
+```sh
+export AFL_OUTCOMES_DATABASE_URL='postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_outcomes_test?sslmode=disable'
+npm run dev:outcomes:authenticate
+
+IFS= read -r STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE < .statly-local/afl-trade-outcomes-runtime-nonce
+export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
+
+npm run dev:outcomes:stage-aflca-coaches-votes
+```
+
+The command retains one authenticated private capture for each season from 2021 through 2025 and
+reuses exact finalized captures on retry. It does not resolve identities, reconcile matches, promote
+facts, admit a model dataset, train a model, or grant publication authority. Its completion message
+must report `fitzroy_aflca_award_scope_ambiguous`; that blocker is expected for the pinned `1.7.0`
+function and must not be overridden. After each successful normalization, staging appends an immutable
+rejection that supersedes the schema-map approval. Dataset admission must require the map approval to
+remain current, so these captures cannot satisfy training or factual-promotion authority.
+
+The retained 2026-09-02 rehearsal contained 6,854 rows. Normalization quarantined 6, 12, 16, 32, and
+48 rows in seasons 2021 through 2025 respectively. Those row counts are diagnostic evidence, not a
+completeness threshold. The deeper stop condition is structural: the upstream function combines the
+home-and-away and finals award requests from round 19 without retaining award scope, and excludes
+non-finals rounds above 23. Some ambiguous rows still contain integer-looking values, so filtering
+only decimal text is prohibited. Do not use these normalizations for #574, even after identity review.
+
+To unblock the lane, build and review a new authenticated capture capability that retains award scope
+per row, then compare its complete home-and-away round and match set with the independently admitted
+AFL results universe. Use a new capability, field-map, and capture lineage; never relabel these
+retained captures.
+
 ### Inspecting the governed five-season workbook evaluation
 
 Migration `0081_corrected_local_review_lineage` is an intentional one-time boundary for this

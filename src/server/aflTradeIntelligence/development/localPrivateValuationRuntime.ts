@@ -87,7 +87,9 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
          non_negative,definition_json,status)
        VALUES
         ('goals','goals/v1','Goals','numeric','goals',true,'{}'::jsonb,'approved'),
-        ('games','games/v1','Games','numeric','games',true,'{}'::jsonb,'approved')
+        ('games','games/v1','Games','numeric','games',true,'{}'::jsonb,'approved'),
+        ('brownlow_votes','brownlow-votes/v1','Brownlow votes','numeric','votes',true,'{}'::jsonb,'approved'),
+        ('coaches_votes','coaches-votes/v1','Coaches votes','numeric','votes',true,'{}'::jsonb,'approved')
        ON CONFLICT DO NOTHING`
     );
   };

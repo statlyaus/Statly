@@ -118,6 +118,12 @@ describe('fitzRoy provider capability contract', () => {
       'returned zero is not automatically a measured zero'
     );
     expect(coaches?.knownCautions.join(' ')).toContain('silently removes per-round scrape errors');
+    expect(coaches?.knownCautions.join(' ')).toContain(
+      'drops the finals discriminator from returned rows'
+    );
+    expect(coaches?.requiredCaptureChecks.join(' ')).toContain(
+      'explicit award-scope discriminator'
+    );
     expect(
       AFL_TRADE_FITZROY_CAPABILITIES.every(
         ({ knownCautions, requiredCaptureChecks }) =>

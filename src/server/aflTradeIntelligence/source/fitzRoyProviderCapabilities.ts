@@ -324,10 +324,12 @@ export const AFL_TRADE_FITZROY_CAPABILITIES = [
     requiredCaptureChecks: [
       'Build a match key from season, round/finals, and the two clubs before player resolution.',
       'Verify every requested round and distinguish a true no-vote result from a scrape failure.',
+      'Reject a full-season capture unless home-and-away and finals award rows retain an explicit award-scope discriminator.',
     ],
     knownCautions: [
       'The function scrapes the AFL Coaches Association rather than AFL, AFL Tables, or FootyWire.',
       'The pinned implementation warns that no data exists before 2006 and silently removes per-round scrape errors.',
+      'The pinned 1.7.0 implementation combines home-and-away and finals award requests from round 19, drops the finals discriminator from returned rows, and excludes non-finals rounds above 23.',
     ],
   },
   {
