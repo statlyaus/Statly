@@ -1453,6 +1453,37 @@ describe('valuation dataset admission contracts', () => {
     ).toThrow(/target/i);
   });
 
+  it('keeps late-captured historical evidence explicit instead of backdating it', () => {
+    const fixture = datasetFixture();
+    const lateCapturedRow = createAflTradeValuationDatasetRow({
+      ...fixture.row.content,
+      featureKnownThrough: instant(9),
+    });
+    expect(() =>
+      createAflTradeValuationDatasetCandidate({
+        ...fixture.dataset.content,
+        rows: [lateCapturedRow],
+      } as never)
+    ).toThrow(/factual cutoff/i);
+
+    const retrospectiveSpecification = createAflTradeValuationDatasetSpecification({
+      ...fixture.dataset.content.specification.content,
+      featurePolicy: {
+        ...fixture.dataset.content.specification.content.featurePolicy,
+        knowledgeJoin: 'retrospective_as_captured_at_dataset_creation',
+      },
+    });
+    const retrospective = createAflTradeValuationDatasetCandidate({
+      ...fixture.dataset.content,
+      specification: retrospectiveSpecification,
+      rows: [lateCapturedRow],
+    } as never);
+
+    expect(retrospective.content.specification.content.featurePolicy.knowledgeJoin).toBe(
+      'retrospective_as_captured_at_dataset_creation'
+    );
+  });
+
   it('requires stable row-key order rather than a row-id fixed point', () => {
     const fixture = datasetFixture();
     const second = createAflTradeValuationDatasetRow({

@@ -64,6 +64,9 @@ const metricDefinitionsSchema = z
 
 const sourceRightsBindingSchema = z
   .object({
+    sourceUseBoundary: z
+      .literal('private_derived_feature_and_model_training_no_public_release')
+      .optional(),
     sourceSnapshotId: aflTradeContentAddressedIdSchema('source-snapshot'),
     sourceRightsArtifactId: aflTradeContentAddressedIdSchema('source-rights'),
     gateDecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
@@ -74,11 +77,10 @@ const sourceRightsBindingSchema = z
   .strict()
   .superRefine((binding, context) => {
     const { request, result } = binding.gate0aReceipt.content;
-    const requiredOperations = [
-      'raw_evidence_retention',
-      'public_derived_output',
-      'public_fact_display',
-    ] as const;
+    const privateModeling = binding.sourceUseBoundary !== undefined;
+    const requiredOperations = privateModeling
+      ? (['raw_evidence_retention', 'derived_feature_creation', 'model_training'] as const)
+      : (['raw_evidence_retention', 'public_derived_output', 'public_fact_display'] as const);
     if (
       result.status !== 'mechanically_eligible' ||
       result.decisionId !== binding.gateDecisionId ||
@@ -113,14 +115,30 @@ const sourceRightsBindingSchema = z
         message: 'Public releases require raw retention, derived output, and fact display rights.',
       });
     }
+    const expectedUses = privateModeling
+      ? (['derived_feature', 'model_training'] as const)
+      : (['public_display'] as const);
+    const expectedFieldUses = consumedFields.flatMap((sourceField) =>
+      expectedUses.map((use) => `${sourceField}\u0000${use}`)
+    );
+    const actualFieldUses = request.fieldUses
+      .map(({ sourceField, use }) => `${sourceField}\u0000${use}`)
+      .sort();
     if (
-      request.fieldUses.length !== consumedFields.length ||
-      request.fieldUses.some(({ use }) => use !== 'public_display')
+      actualFieldUses.length !== expectedFieldUses.length ||
+      actualFieldUses.some((value, index) => value !== expectedFieldUses.sort()[index]) ||
+      (privateModeling &&
+        request.operations.some(
+          (operation) =>
+            operation === 'public_derived_output' || operation === 'public_fact_display'
+        ))
     ) {
       context.addIssue({
         code: 'custom',
         path: ['gate0aReceipt', 'content', 'request', 'fieldUses'],
-        message: 'Every consumed field must have exactly one public-display use.',
+        message: privateModeling
+          ? 'Every consumed field must have exact private derived-feature and model-training uses.'
+          : 'Every consumed field must have exactly one public-display use.',
       });
     }
   });
@@ -618,8 +636,7 @@ export function validateAflDraftTradeOutcomeReleaseProjectionPair(
     );
   }
   if (
-    projectionContent.schemaVersion ===
-    AFL_TRADE_PROMOTION_BACKED_FACTUAL_PROJECTION_SCHEMA_VERSION
+    projectionContent.schemaVersion === AFL_TRADE_PROMOTION_BACKED_FACTUAL_PROJECTION_SCHEMA_VERSION
   ) {
     return false;
   }

@@ -6,7 +6,6 @@ import {
   type AflTradeCorpusFactualLineage,
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
-import { aflTradeSourceSnapshotManifestSchema } from '../artifacts/sourceSnapshotManifest';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { aflTradeFactualReleaseCandidateSchema } from '../outcomes/factualReleaseCandidateContracts';
 import type { AflDraftTradeOutcomeReleaseRepository } from '../outcomes/outcomeReleaseRepository';
@@ -17,6 +16,7 @@ import {
   AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
   type AflTradeValuationDatasetAdmissionEvidenceAuthenticator,
 } from './valuationDatasetAdmission';
+import { parseAflTradeModelSourceSnapshotRecord } from './postgresValuationDatasetFactualLineageRepository';
 
 const MAXIMUM_DATASET_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
@@ -194,13 +194,22 @@ async function loadSourceAuthority(
     throw new Error('Valuation dataset authentication is missing a contributing source capture.');
   }
   const captures = new Map(
-    capturesResult.rows.map((row) => [
-      row.capture_id,
-      aflTradeSourceSnapshotManifestSchema.parse({
-        snapshotId: row.source_snapshot_id,
-        content: row.manifest_json,
-      }),
-    ])
+    capturesResult.rows.map((row) => {
+      const snapshot = parseAflTradeModelSourceSnapshotRecord(row);
+      return [
+        row.capture_id,
+        {
+          ...snapshot,
+          sourceSnapshotManifest: {
+            snapshotId: snapshot.snapshotId,
+            content: {
+              capturedFields: [...snapshot.capturedFields],
+              createdAt: snapshot.createdAt,
+            },
+          },
+        },
+      ] as const;
+    })
   );
   const sourceRights = [];
   for (const mapping of mappings) {
@@ -208,7 +217,7 @@ async function loadSourceAuthority(
     if (!snapshot || snapshot.snapshotId !== mapping.sourceSnapshotId) {
       throw new Error('Valuation dataset source capture and lineage do not match.');
     }
-    const rightsArtifactId = snapshot.content.sourceRightsProposal.rightsArtifactId;
+    const rightsArtifactId = snapshot.rightsProposal.rightsArtifactId;
     const evaluations = await sql.query<EvaluationRow>(
       `SELECT operation_kind,receipt_json
          FROM outcome_valuation_dataset_gate0_evaluation
@@ -217,12 +226,7 @@ async function loadSourceAuthority(
           AND ((operation_kind='derived_feature_creation' AND evaluated_at<=$3)
             OR (operation_kind='model_training' AND evaluated_at=$4))
         ORDER BY operation_kind,evaluated_at DESC`,
-      [
-        rightsArtifactId,
-        snapshot.content.gate0aDecision.content.environment,
-        datasetCreatedAt,
-        admittedAt,
-      ]
+      [rightsArtifactId, snapshot.environment, datasetCreatedAt, admittedAt]
     );
     const derivationRows = evaluations.rows.filter(
       ({ operation_kind }) => operation_kind === 'derived_feature_creation'
@@ -243,8 +247,8 @@ async function loadSourceAuthority(
       captureId: mapping.captureId,
       sourceSnapshotId: mapping.sourceSnapshotId,
       consumedFieldSetId: mapping.consumedFieldSetId,
-      sourceSnapshotManifest: snapshot,
-      rightsProposal: snapshot.content.sourceRightsProposal,
+      sourceSnapshotManifest: snapshot.sourceSnapshotManifest,
+      rightsProposal: snapshot.rightsProposal,
       derivationReceipt,
       admissionReceipt,
       gateLedger,

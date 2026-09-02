@@ -32,6 +32,7 @@ import {
   createAflDraftTradeOutcomeReleaseRegistry,
   registerAflDraftTradeOutcomeRelease,
 } from '@/server/aflTradeIntelligence/outcomes/outcomeReleaseState';
+import { aflTradeGate0AReceiptSchema } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY } from '@/types/aflDraftTradeOutcomes';
 
 import { createAflDraftTradeOutcomeReleaseFixture } from '../fixtures/aflDraftTradeOutcomeReleaseFixture';
@@ -294,6 +295,65 @@ function fakeClient(replay = false) {
 }
 
 describe('AFL trade factual release candidate v3', () => {
+  it('represents exact private feature-and-training ancestry without claiming public rights', () => {
+    const fieldUses = sourceRightsBinding.consumedSourceFields.flatMap((sourceField) => [
+      { sourceField, use: 'derived_feature' as const },
+      { sourceField, use: 'model_training' as const },
+    ]);
+    const receiptContent = {
+      ...sourceRightsBinding.gate0aReceipt.content,
+      request: {
+        ...sourceRightsBinding.gate0aReceipt.content.request,
+        operations: [
+          'raw_evidence_retention' as const,
+          'derived_feature_creation' as const,
+          'model_training' as const,
+        ],
+        fieldUses,
+      },
+    };
+    const gate0aReceipt = aflTradeGate0AReceiptSchema.parse({
+      receiptId: createAflTradeContentAddress('gate0a-evaluation', receiptContent),
+      content: receiptContent,
+    });
+    const privateBinding = {
+      ...sourceRightsBinding,
+      sourceUseBoundary: 'private_derived_feature_and_model_training_no_public_release' as const,
+      gate0aReceipt,
+    };
+
+    const release = createAflDraftTradeOutcomeFactualReleaseManifest({
+      ...baseRelease.content,
+      schemaVersion: 'afl-draft-trade-outcome-release/v2',
+      factualCandidateSchemaVersion: AFL_TRADE_FACTUAL_RELEASE_CANDIDATE_SCHEMA_VERSION,
+      sourceMemberSetSha256: 'c'.repeat(64),
+      sourceRightsBindings: [privateBinding],
+    });
+    expect(release.content.sourceRightsBindings[0]?.sourceUseBoundary).toBe(
+      'private_derived_feature_and_model_training_no_public_release'
+    );
+
+    const narrowedContent = {
+      ...gate0aReceipt.content,
+      request: {
+        ...gate0aReceipt.content.request,
+        fieldUses: gate0aReceipt.content.request.fieldUses.filter(
+          ({ use }) => use === 'derived_feature'
+        ),
+      },
+    };
+    const narrowedReceipt = aflTradeGate0AReceiptSchema.parse({
+      receiptId: createAflTradeContentAddress('gate0a-evaluation', narrowedContent),
+      content: narrowedContent,
+    });
+    expect(() =>
+      createAflDraftTradeOutcomeFactualReleaseManifest({
+        ...release.content,
+        sourceRightsBindings: [{ ...privateBinding, gate0aReceipt: narrowedReceipt }],
+      })
+    ).toThrow();
+  });
+
   it('creates a deterministic typed private candidate', () => {
     const content = validContent();
     const candidate = createAflTradeFactualReleaseCandidate(content);

@@ -1060,6 +1060,12 @@ function requireSourceRights(
     return;
   }
   for (const binding of record.releaseManifest.content.sourceRightsBindings) {
+    if (binding.sourceUseBoundary !== undefined) {
+      throw new AflDraftTradeOutcomeReleaseStateError(
+        'INEFFECTIVE_DECISION',
+        'Private modeling source bindings cannot authorize factual release registration or activation.'
+      );
+    }
     const currentEvaluation = evaluateAflTradeGate0A(input.ledger, binding.sourceRightsProposal, {
       ...binding.gate0aReceipt.content.request,
       evaluatedAt: input.evaluatedAt,

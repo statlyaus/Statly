@@ -92,6 +92,9 @@ function fakeClient(options?: {
       };
     }
     if (sql.includes('FROM outcome_artifact_custody')) {
+      const custodyInsert = statements.find(({ sql: statement }) =>
+        statement.includes('INSERT INTO outcome_artifact_custody')
+      );
       return {
         rows: [
           {
@@ -102,7 +105,8 @@ function fakeClient(options?: {
             artifact_class: 'raw_source',
             environment: options?.custodyEnvironment ?? 'test_fixture',
             custody_profile_id: parameters[7],
-            custody_json: options?.existingCustodyJson ?? JSON.parse(String(parameters[10])),
+            custody_json:
+              options?.existingCustodyJson ?? JSON.parse(String(custodyInsert?.parameters[10])),
           },
         ],
         rowCount: 1,
@@ -217,6 +221,10 @@ describe('PostgreSQL external page capture registry', () => {
       fixture.statements.some(({ sql }) => sql.includes('outcome_source_capture_attempt'))
     ).toBe(true);
     expect(fixture.statements.some(({ sql }) => sql.includes('outcome_source_capture'))).toBe(true);
+    const custodyRead = fixture.statements.find(
+      ({ sql }) => sql.includes('FROM outcome_artifact_custody') && sql.includes('FOR SHARE')
+    );
+    expect(custodyRead?.parameters).toHaveLength(8);
   });
 
   it('persists a content-addressed not-modified audit attempt', async () => {

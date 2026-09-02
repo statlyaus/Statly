@@ -330,6 +330,10 @@ export const aflTradePlayerObservationSetV2ContentSchema = z
     ),
     publicationEligible: z.literal(false),
     observationGrain: z.literal('player_acquisition_spell_prediction'),
+    featureKnowledgePolicy: z.enum([
+      'point_in_time_as_known_at_prediction_cutoff',
+      'retrospective_as_captured_at_dataset_creation',
+    ]),
     outcomeVector: z.tuple([
       z.literal('brownlow_votes'),
       z.literal('coaches_votes'),
@@ -365,6 +369,7 @@ export const aflTradePlayerObservationSetV2ContentSchema = z
       }
     }
     for (let index = 1; index < AFL_TRADE_MODEL_PARTITIONS.length; index += 1) {
+      if (set.featureKnowledgePolicy === 'retrospective_as_captured_at_dataset_creation') break;
       const previous = AFL_TRADE_MODEL_PARTITIONS[index - 1];
       const current = AFL_TRADE_MODEL_PARTITIONS[index];
       const previousOutcomes = set.observations
@@ -690,6 +695,7 @@ export function createAflTradePlayerObservationSetV2(input: {
       'deterministic_admitted_dataset_projection_no_fit_grade_publication_or_fantasy_ownership',
     publicationEligible: false,
     observationGrain: 'player_acquisition_spell_prediction',
+    featureKnowledgePolicy: candidate.content.specification.content.featurePolicy.knowledgeJoin,
     outcomeVector: ['brownlow_votes', 'coaches_votes', 'games', 'goals'],
     datasetId: candidate.datasetId,
     datasetRowSetSha256: candidate.content.rowSetSha256,

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildDraftguruCrawlPlan,
   captureDraftguruSource,
+  parseDraftguruPlayerTradeDetail,
   parseDraftguruTradeDetail,
   parseDraftguruTradeIndex,
   parseDraftguruTradeIndexEvidence,
@@ -107,6 +108,36 @@ describe('Draftguru source adapter', () => {
     expect(JSON.stringify(claims)).not.toContain('games');
     expect(JSON.stringify(claims)).not.toContain('XG');
     expect(result.issues).toEqual([]);
+  });
+
+  it('projects one exact player transfer without admitting unrelated pick movements', () => {
+    const html = `
+      <h2 class="heading">2025 GWS and Western Bulldogs Trade</h2>
+      <table class="individual-trade">
+        <tr class="club-header"><td>Greater Western Sydney</td></tr>
+        <tr class="movement"><td class="player-name actual-asset"><a href="/players/sam_taylor/1">Sam Taylor</a></td><td></td><td></td><td></td><td></td><td class="pick-name actual-asset">Pick 12</td><td></td><td></td><td></td><td></td></tr>
+        <tr class="club-header"><td>Western Bulldogs</td></tr>
+        <tr class="movement"><td class="pick-name actual-asset">Pick 12</td><td></td><td></td><td></td><td></td><td class="player-name actual-asset"><a href="/players/sam_taylor/1">Sam Taylor</a></td><td></td><td></td><td></td><td></td></tr>
+      </table>`;
+
+    const result = parseDraftguruPlayerTradeDetail(html, {
+      capture: { ...capture, parserVersion: 'draftguru-player-trade-parser/v1' },
+      draftYear: 2025,
+      effectiveAt: '2025-10-08T00:00:00.000Z',
+      playerNativeId: 'sam_taylor/1',
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(result.evidence.map(({ content }) => content.claim.kind)).toEqual([
+      'transaction',
+      'transaction_party',
+      'transaction_party',
+      'directed_transfer',
+    ]);
+    expect(result.evidence[3]?.content.claim).toMatchObject({
+      kind: 'directed_transfer',
+      asset: { kind: 'player', player: { nativeId: 'sam_taylor/1' } },
+    });
   });
 
   it('quarantines an unpaired trade side instead of inventing direction', () => {

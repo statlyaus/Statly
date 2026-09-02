@@ -181,7 +181,7 @@ const executionReceiptContentSchema = z
     }
   });
 
-const executionReceiptSchema = z
+export const aflTradeExternalCaptureExecutionReceiptSchema = z
   .object({
     receiptId: aflTradeContentAddressedIdSchema('external-capture-execution'),
     content: z.union([
@@ -201,12 +201,14 @@ const executionReceiptSchema = z
     );
   });
 
-export type AflTradeExternalCaptureExecutionReceipt = z.infer<typeof executionReceiptSchema>;
+export type AflTradeExternalCaptureExecutionReceipt = z.infer<
+  typeof aflTradeExternalCaptureExecutionReceiptSchema
+>;
 
 export function parseAflTradeExternalCaptureExecutionReceipt(
   input: unknown
 ): AflTradeExternalCaptureExecutionReceipt {
-  return executionReceiptSchema.parse(input);
+  return aflTradeExternalCaptureExecutionReceiptSchema.parse(input);
 }
 
 export function createAflTradeExternalCaptureExecutionReceipt(
@@ -217,7 +219,7 @@ export function createAflTradeExternalCaptureExecutionReceipt(
   const parsed = z
     .union([legacyExecutionReceiptContentSchema, executionReceiptContentSchema])
     .parse(content);
-  return executionReceiptSchema.parse({
+  return aflTradeExternalCaptureExecutionReceiptSchema.parse({
     receiptId: createAflTradeContentAddress('external-capture-execution', parsed),
     content: parsed,
   });
@@ -227,7 +229,7 @@ export function createAflTradeLocalFixtureExecutionReceipt(
   content: z.input<typeof localFixtureExecutionReceiptContentSchema>
 ): AflTradeExternalCaptureExecutionReceipt {
   const parsed = localFixtureExecutionReceiptContentSchema.parse(content);
-  return executionReceiptSchema.parse({
+  return aflTradeExternalCaptureExecutionReceiptSchema.parse({
     receiptId: createAflTradeContentAddress('external-capture-execution', parsed),
     content: parsed,
   });
@@ -485,7 +487,7 @@ function requireExecutionReceipt(
   validators: ExternalPageValidators | null,
   unparsedReceipt: unknown
 ): AflTradeExternalCaptureExecutionReceipt {
-  const receipt = executionReceiptSchema.parse(unparsedReceipt);
+  const receipt = aflTradeExternalCaptureExecutionReceiptSchema.parse(unparsedReceipt);
   if (receipt.content.schemaVersion === 'statly-local-fixture-execution/v1') {
     throw new AflTradeExternalPageIngestionError(
       'CAPTURE_MISMATCH',

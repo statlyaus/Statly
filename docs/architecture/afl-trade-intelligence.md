@@ -1161,11 +1161,18 @@ inventing a new digest preimage. Round-grain achievements are ineligible until t
 round valid-time coordinate is represented explicitly. Reconciled metrics are likewise ineligible
 until factual membership distinguishes match from season grain and carries authoritative match/valid
 time; no season-start date is fabricated for either case.
-Feature knowledge must predate the row cutoff; target effective time must fall strictly after the
-prediction origin and within the factual release cutoff. Training labels must be known before the next
-partition prediction origin plus its embargo. Player, event, and acquisition-spell groups cannot cross
-model partitions. Missing, unavailable, unresolved, conflicting, quarantined, and not-applicable
-evidence remains distinct from measured zero.
+The dataset declares one knowledge-join policy. The default
+`point_in_time_as_known_by_prediction_cutoff` policy requires feature knowledge to predate the row
+cutoff and each earlier partition's labels to be known before the next partition prediction origin
+plus its embargo. The explicit
+`retrospective_as_captured_at_dataset_creation` policy instead preserves the evidence's real
+capture/recording timestamps and requires them to be no later than dataset creation. It may support a
+current retrospective diagnostic over historical effective time, but it must never be described as
+an original-vintage backtest or as evidence available at the historical prediction cutoff. Under
+either policy, target effective time must fall strictly after the prediction origin and within the
+factual release cutoff. Player, event, and acquisition-spell groups cannot cross model partitions.
+Missing, unavailable, unresolved, conflicting, quarantined, and not-applicable evidence remains
+distinct from measured zero.
 
 Public factual-display authority is insufficient for this seam. Admission derives the contributing
 source set from every source capture in the sealed factual candidate. For each source it authenticates
@@ -1225,9 +1232,10 @@ The local admitted player runner now implements one named methodology,
 acquisition-spell contribution above a role-and-era replacement baseline in the protocol's additive
 contribution unit. The target is the separately governed scalar transform of Brownlow votes,
 coaches votes, games and goals observed strictly inside the future target window. Predictors are the
-exact admitted point-in-time feature members and hashes known by the prediction cutoff: expected
-games and prior contribution per game, with governed role and era assignments. Target members are
-never reused as predictors.
+exact admitted feature members and hashes joined under the dataset's declared knowledge policy:
+expected games and prior contribution per game, with governed role and era assignments. Target
+members are never reused as predictors, and the executor rejects a protocol whose knowledge policy
+differs from its sealed observation set.
 
 The protocol binds the exact feature-value artifact, role and era definitions, scalar transform,
 partition windows and embargo. The run intent binds the exact candidate configuration artifact.
@@ -1261,6 +1269,20 @@ capture cannot be relabelled after retrieval. The scoped AFLCA lane separately p
 reconciled `Coaches.Votes` field as a private training input. Canonical promotion must cover both the
 transaction/event and player asset ancestry before factual lineage, dataset admission or execution
 may proceed.
+
+The issue 574 genuine non-production diagnostic is deliberately small and retrospective. It uses
+five genuine Draftguru player trades—Adam Saad to Carlton, Jeremy Cameron to Geelong, Jordan Dawson
+to Adelaide, Josh Dunkley to Brisbane and Brodie Grundy to Sydney—joined to genuine AFL Tables match
+statistics and the scoped AFLCA `Coaches.Votes` field. For each acquisition spell, the first five
+home-and-away appearances form the prior-contribution feature window and the remaining appearances
+in that AFL season form the target window. The registered additive scalar is
+`0.05 * games + 0.08 * goals + 0.01 * Brownlow votes + 0.01 * coaches votes`. The two 2021 rows are
+training, 2022 is calibration, 2023 is validation and 2024 is final test; player, trade-event and
+acquisition-spell identities do not cross partitions. This slice demonstrates authorized ingestion,
+exact admission, native execution and retained replay only. Its five selected transfers, one-row
+validation partition, retrospective capture in 2026, hand-selected scalar and lack of role diversity
+make it unsuitable for population inference, historical point-in-time claims, Gate 3 approval,
+production valuation or publication.
 
 The local execution entry point is request-bound rather than target-bound. Its public input is the
 retained dispatch request identifier plus live claim custody. Inside the coordinator database role it

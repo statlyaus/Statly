@@ -383,12 +383,18 @@ export function materializeAflTradeAdmittedPlayerContributionSet(input: {
   >();
   const observations = input.observationSet.content.observations.map((observation) => {
     const row = rowsById.get(observation.datasetRowId)!;
+    const pointInTime =
+      input.observationSet.content.featureKnowledgePolicy ===
+      'point_in_time_as_known_at_prediction_cutoff';
     if (
       row.featureKnownThrough !== observation.featureKnownThrough ||
-      Date.parse(row.featureKnownThrough) > Date.parse(observation.predictionCutoffAt) ||
-      Date.parse(row.roleKnownAt) > Date.parse(observation.predictionCutoffAt)
+      (pointInTime &&
+        Date.parse(row.featureKnownThrough) > Date.parse(observation.predictionCutoffAt)) ||
+      Date.parse(row.roleKnownAt) > Date.parse(row.featureKnownThrough)
     ) {
-      throw new RangeError('Governed feature and role values must be known at prediction cutoff.');
+      throw new RangeError(
+        'Governed feature and role values violate their declared knowledge policy.'
+      );
     }
     const featureMetrics = latestFeatureMetrics({ observation, row, spellMetricById });
     const priorContribution = (
@@ -659,6 +665,14 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         );
       }
       const observationSet = aflTradePlayerObservationSetV2Schema.parse(request.observationSet);
+      if (
+        observationSet.content.featureKnowledgePolicy !==
+        request.protocol.content.featurePolicy.knowledgeJoin
+      ) {
+        throw new RangeError(
+          'The admitted observations do not match the protocol knowledge policy.'
+        );
+      }
       const transform = loadGovernedScalarTransform({
         protocol: request.protocol,
         executableArtifacts: request.executableArtifacts,
@@ -701,9 +715,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         validationPredictions,
         config.validation
       );
-      if (
-        validationReport.content.acceptanceOutcome !== 'meets_declared_predictive_thresholds'
-      ) {
+      if (validationReport.content.acceptanceOutcome !== 'meets_declared_predictive_thresholds') {
         const finishedAt = await input.now();
         const retained = await retainArtifacts({
           repository: input.artifactRepository,
@@ -880,7 +892,7 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
           binding: 'exact_admitted_feature_member_ids_and_hashes',
           verifiedRows: observationSet.content.observations.length,
           targetMemberReuse: 'prohibited_and_rejected',
-          featureCutoffPolicy: 'point_in_time_as_known_at_prediction_cutoff',
+          featureCutoffPolicy: observationSet.content.featureKnowledgePolicy,
           targetMetricsUsedOnlyForOutcomeAndEvaluation: true,
         },
         modelCardArtifact: {

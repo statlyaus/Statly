@@ -1115,8 +1115,9 @@ The admitted player-contribution component is available to the same local, priva
 the later model-pair composition. Its fixed methodology is
 `afl-trade-admitted-player-candidate/v1` under
 `afl-trade-player-contribution-model-protocol/v2`. It fits a ridge candidate against the governed
-role-and-era replacement baseline from the exact finalized dataset, admission, point-in-time feature
-members and target spell metrics selected by the operation. The protocol owns the scalar value unit,
+role-and-era replacement baseline from the exact finalized dataset, admission, feature members joined
+under its declared knowledge policy, and target spell metrics selected by the operation. The protocol
+owns the scalar value unit,
 feature definitions, partition windows and embargo. The candidate configuration owns the baseline,
 ridge penalty, validation thresholds and interval coverage level. Neither the dispatch caller nor an
 operator may override those values at execution time.
@@ -1160,6 +1161,18 @@ The genuine player request adapter accepts only a request ID and its current cla
 already-bound model operation from PostgreSQL and derives the player dataset, admission, protocol,
 factual output and HPN calculation from that immutable record. There is no CLI argument for selecting
 or overriding those targets.
+
+For the issue 574 genuine diagnostic, preserve the real 2026 capture/recording timestamps and select
+`retrospective_as_captured_at_dataset_creation`; do not backdate evidence to make the historical rows
+look point-in-time. The exact five rows are Adam Saad/Carlton 2021 and Jeremy Cameron/Geelong 2021
+(`train`), Jordan Dawson/Adelaide 2022 (`calibration`), Josh Dunkley/Brisbane 2023 (`validation`), and
+Brodie Grundy/Sydney 2024 (`final_test`). Use the first five home-and-away appearances after the
+transfer as the feature window and the remaining home-and-away appearances that season as the target
+window. Register the scalar exactly as `0.05 * games + 0.08 * goals + 0.01 * Brownlow votes + 0.01 *
+coaches votes`; verify goals conserve to match rows, Brownlow votes sum to six per match and scoped
+AFLCA votes sum to 30 per matched match. Treat the result only as a private execution/replay
+diagnostic: five selected transfers and a single validation row do not support population, historical
+backtest, Gate 3, production or publication claims.
 
 Run the positive migrated tracer only against a disposable loopback `statly_outcomes_test` database
 that already contains the genuine bound operation. Supply its active claim custody through the
@@ -1600,11 +1613,14 @@ This procedure creates private model-input evidence only. It cannot publish a va
 2. Resolve the governed corpus-to-factual-candidate lineage commitment, then require a current Gate 2
    decision that pins the exact corpus, lineage commitment, factual release and factual candidate. Gate
    2 must not name the future dataset. Do not infer ancestry from dates, counts, names or provider labels.
-3. Pre-register the dataset-v4/player-row-v3 point-in-time specification: stable
-   player/acquisition-spell row grain, prediction cutoff, target horizon and maturity, value unit,
-   role/era/censoring policies, chronological train/calibration/validation/final-test windows, embargo,
-   and exact player/event/acquisition-spell leakage groups. Dataset v4/row v3 does not admit
-   draft-pick rows.
+3. Pre-register the dataset-v4/player-row-v3 specification: stable player/acquisition-spell row
+   grain, prediction cutoff, target horizon and maturity, value unit, role/era/censoring policies,
+   chronological train/calibration/validation/final-test windows, embargo, exact
+   player/event/acquisition-spell leakage groups, and one knowledge-join policy. Use
+   `point_in_time_as_known_by_prediction_cutoff` for an original-vintage backtest. Use
+   `retrospective_as_captured_at_dataset_creation` only for an explicitly labelled current
+   retrospective diagnostic; retain the real late knowledge timestamps and never claim historical
+   availability. Dataset v4/row v3 does not admit draft-pick rows.
 4. Under the evidence authenticator's transactionally consistent read, load every exact typed factual
    member, current player/club identity assignment, event/acquisition-spell/lineage version, and retained
    dataset, exclusion, extractor, configuration, feature, target, value-unit, role, era, censoring and
@@ -1620,12 +1636,15 @@ This procedure creates private model-input evidence only. It cannot publish a va
    evidence. Exclude round-grain achievements and reconciled metrics until their exact grain and
    match/valid time are represented.
 5. Materialize rows in unique stable-row-key order with contiguous ordinals. Carry effective-from/
-   through time separately from recorded-at knowledge time. Reject a feature known after its cutoff, a
-   feature reused as its own target, a target outside the future valid-time window, a leakage group in
-   multiple partitions, or prior-partition labels not known before the next prediction origin plus
-   embargo. The three leakage values must equal the row's stable acquisition-spell subject, stable
-   event subject, and player IDs; exact spell/event version IDs remain provenance and must not split
-   revisions of one subject across partitions. Never accept producer-defined aliases.
+   through time separately from recorded-at knowledge time. Under the point-in-time policy, reject a
+   feature known after its cutoff or prior-partition labels not known before the next prediction origin
+   plus embargo. Under the retrospective policy, require all feature knowledge no later than the
+   canonical dataset creation instant and retain the late timestamps unchanged. Under either policy,
+   reject a feature reused as its own target, a target outside the future valid-time window, or a
+   leakage group in multiple partitions. The three leakage values must equal the row's stable
+   acquisition-spell subject, stable event subject, and player IDs; exact spell/event version IDs
+   remain provenance and must not split revisions of one subject across partitions. Never accept
+   producer-defined aliases.
 6. For every source capture in the sealed factual candidate, authenticate its unique content-addressed
    consumed-field set and exact corpus source mapping. Recompute the field-set root and require the Gate
    0A requests to equal the complete field/use preimage. Load the exact retained source-snapshot manifest

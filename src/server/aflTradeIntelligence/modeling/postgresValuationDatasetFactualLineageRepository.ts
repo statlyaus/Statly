@@ -24,6 +24,8 @@ import {
   aflTradeFactualReleaseCandidateSchema,
   type AflTradeFactualReleaseCandidate,
 } from '../outcomes/factualReleaseCandidateContracts';
+import { parseAflTradeExternalCaptureExecutionReceipt } from '../source/externalDraftTradeIngestion';
+import type { AflTradeSourceRightsProposal } from '../source/sourceRights';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
@@ -362,6 +364,95 @@ export function selectAflTradeModelConsumedSourceFields(
     .sort();
 }
 
+export function parseAflTradeModelSourceSnapshotRecord(row: SnapshotRow): {
+  readonly snapshotId: string;
+  readonly fieldUses: readonly Readonly<{ sourceField: string; use: string }>[];
+  readonly rightsProposal: AflTradeSourceRightsProposal;
+  readonly environment: 'test_fixture' | 'non_production' | 'production';
+  readonly capturedFields: readonly string[];
+  readonly createdAt: string;
+} {
+  const sourceSnapshot = aflTradeSourceSnapshotManifestSchema.safeParse({
+    snapshotId: row.source_snapshot_id,
+    content: row.manifest_json,
+  });
+  if (sourceSnapshot.success) {
+    return {
+      snapshotId: sourceSnapshot.data.snapshotId,
+      fieldUses: sourceSnapshot.data.content.gate0aReceipt.content.request.fieldUses,
+      rightsProposal: sourceSnapshot.data.content.sourceRightsProposal,
+      environment: sourceSnapshot.data.content.gate0aDecision.content.environment,
+      capturedFields: sourceSnapshot.data.content.capturedFields,
+      createdAt: sourceSnapshot.data.content.createdAt,
+    };
+  }
+  if (
+    typeof row.manifest_json !== 'object' ||
+    row.manifest_json === null ||
+    Array.isArray(row.manifest_json)
+  ) {
+    fail('CANDIDATE_UNAVAILABLE', 'A contributing source snapshot is malformed.');
+  }
+  const manifest = row.manifest_json as Record<string, unknown>;
+  if (manifest.schemaVersion !== 'afl-trade-external-source-snapshot/v1') {
+    fail('CANDIDATE_UNAVAILABLE', 'A contributing source snapshot is malformed.');
+  }
+  const snapshotContent = {
+    schemaVersion: manifest.schemaVersion,
+    provider: manifest.provider,
+    dataset: manifest.dataset,
+    datasetVersion: manifest.datasetVersion,
+    capabilityId: manifest.capabilityId,
+    competition: manifest.competition,
+    anchorSeasonYear: manifest.anchorSeasonYear,
+    draftPathway: manifest.draftPathway,
+    sourceUrl: manifest.sourceUrl,
+    sourceArtifactId: manifest.sourceArtifactId,
+    sourceSha256: manifest.sourceSha256,
+    parserVersion: manifest.parserVersion,
+    fieldManifestSha256: manifest.fieldManifestSha256,
+    effectiveAt: manifest.effectiveAt,
+    capturedAt: manifest.capturedAt,
+  };
+  const expectedSnapshotId = createAflTradeContentAddress('source-snapshot', snapshotContent);
+  let execution: ReturnType<typeof parseAflTradeExternalCaptureExecutionReceipt>;
+  try {
+    execution = parseAflTradeExternalCaptureExecutionReceipt(manifest.executionReceipt);
+  } catch (cause) {
+    fail('CANDIDATE_UNAVAILABLE', 'An external source execution receipt is malformed.', cause);
+  }
+  if (
+    execution.content.schemaVersion !== 'afl-trade-external-capture-execution/v2' ||
+    manifest.sourceSnapshotId !== expectedSnapshotId ||
+    row.source_snapshot_id !== expectedSnapshotId ||
+    execution.content.request.provider !== manifest.provider ||
+    execution.content.request.capabilityId !== manifest.capabilityId ||
+    execution.content.request.parserVersion !== manifest.parserVersion ||
+    execution.content.request.fieldManifestSha256 !== manifest.fieldManifestSha256 ||
+    execution.content.gate0aReceipt.content.request.rightsArtifactId !==
+      execution.content.sourceRights.rightsArtifactId
+  ) {
+    fail(
+      'CANDIDATE_UNAVAILABLE',
+      'An external source snapshot does not authenticate its exact execution authority.'
+    );
+  }
+  return {
+    snapshotId: expectedSnapshotId,
+    fieldUses: execution.content.gate0aReceipt.content.request.fieldUses,
+    rightsProposal: execution.content.sourceRights,
+    environment: execution.content.gate0aReceipt.content.request.environment,
+    capturedFields: [
+      ...new Set(
+        execution.content.gate0aReceipt.content.request.fieldUses.map(
+          ({ sourceField }) => sourceField
+        )
+      ),
+    ].sort(),
+    createdAt: String(manifest.capturedAt),
+  };
+}
+
 async function deriveSourceMappings(
   transaction: AflOutcomeSqlTransaction,
   candidate: AflTradeFactualReleaseCandidate,
@@ -384,13 +475,8 @@ async function deriveSourceMappings(
   const mappings = candidate.content.members.sourceCaptures.map((member) => {
     const row = rows.get(member.captureId);
     if (row === undefined) fail('CANDIDATE_UNAVAILABLE', 'A source capture is ambiguous.');
-    const snapshot = aflTradeSourceSnapshotManifestSchema.parse({
-      snapshotId: row.source_snapshot_id,
-      content: row.manifest_json,
-    });
-    const sourceFields = selectAflTradeModelConsumedSourceFields(
-      snapshot.content.gate0aReceipt.content.request.fieldUses
-    );
+    const snapshot = parseAflTradeModelSourceSnapshotRecord(row);
+    const sourceFields = selectAflTradeModelConsumedSourceFields(snapshot.fieldUses);
     if (sourceFields.length === 0) {
       fail(
         'CANDIDATE_UNAVAILABLE',

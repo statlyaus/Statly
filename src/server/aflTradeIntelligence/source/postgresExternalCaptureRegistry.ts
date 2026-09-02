@@ -514,7 +514,7 @@ export class PostgresAflTradeExternalCaptureRegistry implements AflTradeExternal
             AND byte_length=$5 AND artifact_class=$6::"OutcomeArtifactClass"
             AND environment=$7::"OutcomeEnvironment" AND custody_profile_id IS NOT DISTINCT FROM $8
           FOR SHARE`,
-        custodyParameters
+        custodyParameters.slice(0, 8)
       );
       const custodyRow = custody.rows[0];
       const storedReadback = aflTradeArtifactReadbackReceiptSchema.safeParse(

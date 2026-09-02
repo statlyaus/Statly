@@ -130,7 +130,10 @@ export const aflTradePlayerContributionModelProtocolContentSchema = z
       .strict(),
     featurePolicy: z
       .object({
-        knowledgeJoin: z.literal('point_in_time_as_known_at_prediction_cutoff'),
+        knowledgeJoin: z.enum([
+          'point_in_time_as_known_at_prediction_cutoff',
+          'retrospective_as_captured_at_dataset_creation',
+        ]),
         correctionAvailability: z.literal('only_after_known_from'),
         unknownAndZero: z.literal('distinct'),
         targetDerivedFeatures: z.literal('prohibited'),
