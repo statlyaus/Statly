@@ -58,7 +58,7 @@ fitzRoy silently removes failed per-round scrapes, an absent round or player is 
 never zero coaches votes. Player-name equality alone cannot resolve an identity, and the AFLCA lane
 cannot be added to an existing reviewed bundle by relabelling an earlier capture.
 
-A retained local rehearsal on 2026-09-02 exposed an additional pinned-function blocker. fitzRoy
+A retained local rehearsal on 2026-09-02 exposed an additional pinned-function blocker. Unpatched fitzRoy
 `1.7.0` expands a season request across both the home-and-away award and Gary Ayres finals award from
 round 19, but returns only `Season` and numeric `Round`; it drops the award-scope discriminator. The
 same implementation excludes non-finals rounds above 23, which omits the 24-round home-and-away
@@ -71,9 +71,17 @@ after normalization, and the capture Gate request omits model training. The broa
 source policy remains available for a future corrected capability, but a downstream admission must
 authenticate current map approval and therefore cannot promote these retained normalizations.
 
-The required remedy is a new authenticated capture boundary that retains home-and-away versus finals
-scope on every row and proves requested-round coverage against the independently reviewed AFL match
-universe. This is a technical evidence blocker, separate from the product-owner source-use decision.
+The remedy is now implemented as the separate `aflca-coaches-votes-scoped` capability. Its
+content-addressed patch adds an explicit home-and-away award scope and caller-supplied round set to
+the verified fitzRoy `1.7.0` source, while preserving fitzRoy as the retrieval boundary. The current
+2021-2025 captures reconcile all 1,017 requested home-and-away matches against the independently
+reviewed AFL Tables match universe and retain 6,655 vote rows with exactly 30 votes per match. Only
+the reconciled `Coaches.Votes` field is authorized for private local non-production model training;
+the identifying fields remain reconciliation evidence and all public use remains blocked. The older
+ambiguous captures and their rejected maps stay retained as negative evidence and cannot be promoted.
+The two 2025 players absent from the current AFL Tables match rows resolve only through explicit,
+content-addressed human reviews binding historical native IDs `12576` and `12712`; the reconciler no
+longer manufactures current player-club identities from name equality.
 
 ### Verified technical smoke baseline
 

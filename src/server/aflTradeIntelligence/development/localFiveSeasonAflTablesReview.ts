@@ -37,7 +37,7 @@ export interface LocalFiveSeasonAflTablesReviewEvidence {
 
 const EXPECTED_APPEARANCE_COUNT = 48_769;
 export const LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 =
-  '7ef741add1ae94133c597581f8a2175118058bedd2ffe8a107213630e1b0fd10';
+  '41a90da56a0e682888d50f0e95e729af838f9103708eba50bffae82f33c4523b';
 const DECIDED_AT = '2026-08-14T12:15:00.000Z';
 
 const REVIEWED_ROWS_CTE = `WITH reviewed_rows AS (
@@ -187,7 +187,11 @@ async function insertIdentityReviews(
               'identityCandidateSha256',identity_candidate_sha256
             ),'local-five-season-evidence-reviewer',$2::timestamptz
        FROM reviewed_rows
-     ON CONFLICT (decision_id) DO NOTHING`,
+      WHERE NOT EXISTS (
+        SELECT 1 FROM outcome_review_decision existing
+         WHERE existing.decision_id=
+               'local-afl-tables-review:identity:' || reviewed_rows.identity_candidate_id
+      )`,
     [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds]
   );
 }
@@ -216,7 +220,11 @@ async function insertMatchReviews(
               'matchDate',match_date_text
             ),'local-five-season-evidence-reviewer',$2::timestamptz
        FROM reviewed_rows
-     ON CONFLICT (decision_id) DO NOTHING`,
+      WHERE NOT EXISTS (
+        SELECT 1 FROM outcome_review_decision existing
+         WHERE existing.decision_id=
+               'local-afl-tables-review:match:' || reviewed_rows.match_candidate_id
+      )`,
     [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds]
   );
 }
@@ -249,7 +257,11 @@ async function insertFactualReviews(
               'sourceField',source_field
             )),'local-five-season-evidence-reviewer',$2::timestamptz
        FROM reviewed_rows
-     ON CONFLICT (decision_id) DO NOTHING`,
+      WHERE NOT EXISTS (
+        SELECT 1 FROM outcome_review_decision existing
+         WHERE existing.decision_id=
+               'local-afl-tables-review:fact:' || reviewed_rows.provider_decoded_row_id
+      )`,
     [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds]
   );
 }

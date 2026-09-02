@@ -30,8 +30,7 @@ import type {
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import { requireOrInsertAflTradeValuationDatasetFieldSet } from './postgresValuationDatasetRepository';
 
-const ADMISSION_SCHEMA_VERSION =
-  'afl-trade-valuation-dataset-lineage-admission/v1' as const;
+const ADMISSION_SCHEMA_VERSION = 'afl-trade-valuation-dataset-lineage-admission/v1' as const;
 const ADMISSION_AUTHORITY_BOUNDARY =
   'gate_2_private_factual_lineage_only_no_model_grade_publication_or_activation_authority' as const;
 
@@ -345,6 +344,24 @@ async function loadCandidate(
   }
 }
 
+export function selectAflTradeModelConsumedSourceFields(
+  fieldUses: readonly Readonly<{ sourceField: string; use: string }>[]
+): string[] {
+  const requestedUsesByField = new Map<string, Set<string>>();
+  for (const { sourceField, use } of fieldUses) {
+    const requestedUses = requestedUsesByField.get(sourceField) ?? new Set<string>();
+    requestedUses.add(use);
+    requestedUsesByField.set(sourceField, requestedUses);
+  }
+  return [...requestedUsesByField]
+    .filter(
+      ([, requestedUses]) =>
+        requestedUses.has('derived_feature') && requestedUses.has('model_training')
+    )
+    .map(([sourceField]) => sourceField)
+    .sort();
+}
+
 async function deriveSourceMappings(
   transaction: AflOutcomeSqlTransaction,
   candidate: AflTradeFactualReleaseCandidate,
@@ -371,13 +388,15 @@ async function deriveSourceMappings(
       snapshotId: row.source_snapshot_id,
       content: row.manifest_json,
     });
-    const sourceFields = [
-      ...new Set(
-        snapshot.content.gate0aReceipt.content.request.fieldUses.map(
-          ({ sourceField }) => sourceField
-        )
-      ),
-    ].sort();
+    const sourceFields = selectAflTradeModelConsumedSourceFields(
+      snapshot.content.gate0aReceipt.content.request.fieldUses
+    );
+    if (sourceFields.length === 0) {
+      fail(
+        'CANDIDATE_UNAVAILABLE',
+        'A contributing source snapshot has no fields admitted for feature derivation and model training.'
+      );
+    }
     const fieldSet = createAflTradeConsumedFieldSet({
       schemaVersion: 'afl-trade-consumed-field-set/v1',
       captureId: member.captureId,

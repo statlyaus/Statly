@@ -301,8 +301,10 @@ report for both blocked and eligible outcomes. Registration re-authenticates tho
 recomputes the exact policy result, finalizes atomically, and enforces exact replay and append-only
 custody. A blocked prepared-input set must reference that exact report and repeat its complete blocker
 decision; a raw rights proposal or transient positive result cannot grant dataset or model authority.
-The current local AFL Tables 2021-2025 and official-AFL 2026 rehearsal policies permit private
-derived-feature creation but block model training and every public use. The local readiness command
+The current local AFL Tables 2021-2025 player-stat policies permit private derived-feature creation
+and model training under their exact non-production Gate 0A receipts. The separate official-AFL 2026
+and AFL Tables 2026 results policies still block model training, and every policy blocks public use.
+The local readiness command
 and admitted private workbook UI therefore read the latest retained report for its still-active
 factual release and its bound blocker set from disposable PostgreSQL. If no current report exists,
 readiness says qualification has not run; it does not reconstruct policy from code, invoke a scorer,
@@ -1251,12 +1253,14 @@ share one rights proposal; they produce one current run-start receipt only when 
 receipt has identical request-to-proposal ancestry. Conflicting ancestry is rejected. The existing
 human operational-authorization branch is unchanged.
 
-The restricted five-season rehearsal proposal is never a player-model training authority. A genuine
-admitted-player run must use the standing AFL Tables player-stat policy through fitzRoy, materialized
-as exact current non-production Gate 0A records that explicitly permit `model_training`. The capture
-must occur under that authority and retain its original receipts; an earlier rehearsal capture cannot
-be relabelled after retrieval. Canonical promotion must cover both the transaction/event and player
-asset ancestry before factual lineage, dataset admission or execution may proceed.
+The superseded restricted five-season rehearsal proposal is not a player-model training authority.
+A genuine admitted-player run must use the current AFL Tables player-stat policy through fitzRoy,
+materialized as exact non-production Gate 0A records that explicitly permit `model_training`. The
+capture must occur under that authority and retain its original receipts; an earlier rehearsal
+capture cannot be relabelled after retrieval. The scoped AFLCA lane separately permits only the
+reconciled `Coaches.Votes` field as a private training input. Canonical promotion must cover both the
+transaction/event and player asset ancestry before factual lineage, dataset admission or execution
+may proceed.
 
 The local execution entry point is request-bound rather than target-bound. Its public input is the
 retained dispatch request identifier plus live claim custody. Inside the coordinator database role it

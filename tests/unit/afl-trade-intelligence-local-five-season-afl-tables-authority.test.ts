@@ -41,7 +41,7 @@ describe('local five-season AFL Tables authority', () => {
         provider: 'afl_tables',
         operations: {
           internal_quality_evaluation: 'allowed',
-          model_training: 'blocked',
+          model_training: 'allowed',
           derived_feature_creation: 'allowed',
           public_derived_output: 'blocked',
           public_fact_display: 'blocked',
@@ -65,12 +65,18 @@ describe('local five-season AFL Tables authority', () => {
         'raw_evidence_retention',
         'metadata_hash_retention',
         'internal_quality_evaluation',
+        'model_training',
+        'derived_feature_creation',
       ],
     });
     expect(authority.capture.gateRequest.fieldUses).toEqual(
-      expect.arrayContaining([{ sourceField: 'Goals', use: 'archive_fact' }])
+      expect.arrayContaining([
+        { sourceField: 'Goals', use: 'archive_fact' },
+        { sourceField: 'Goals', use: 'derived_feature' },
+        { sourceField: 'Goals', use: 'model_training' },
+      ])
     );
-    expect(authority.capture.gateRequest.fieldUses).toHaveLength(81);
+    expect(authority.capture.gateRequest.fieldUses).toHaveLength(243);
     expect(authority.fieldMap).toMatchObject({
       mapId: 'afl-tables-player-stats-local-2025-v2',
       approvedAt: '2026-09-02T00:00:03.000Z',

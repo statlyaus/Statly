@@ -647,16 +647,29 @@ npm run dev:outcomes:authenticate
 IFS= read -r STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE < .statly-local/afl-trade-outcomes-runtime-nonce
 export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
 
-npm run dev:outcomes:stage-aflca-coaches-votes
+npm run dev:outcomes:stage-scoped-aflca-coaches-votes
 ```
 
-The command retains one authenticated private capture for each season from 2021 through 2025 and
-reuses exact finalized captures on retry. It does not resolve identities, reconcile matches, promote
-facts, admit a model dataset, train a model, or grant publication authority. Its completion message
-must report `fitzroy_aflca_award_scope_ambiguous`; that blocker is expected for the pinned `1.7.0`
-function and must not be overridden. After each successful normalization, staging appends an immutable
-rejection that supersedes the schema-map approval. Dataset admission must require the map approval to
-remain current, so these captures cannot satisfy training or factual-promotion authority.
+The command derives each requested round set from the current retained AFL Tables home-and-away match
+universe, then retains one authenticated private scoped capture for each season from 2021 through
+2025 and reuses exact finalized captures on retry. It executes the content-addressed Statly patch to
+the verified fitzRoy `1.7.0` source, retains `Award.Scope=home_and_away` on every row, and reconciles
+every returned match and player before review. Completion requires all 1,017 requested matches and
+exactly 30 coaches votes per match; the current admitted evidence contains 6,655 vote rows.
+
+Two 2025 vote rows are absent from the current AFL Tables player-match rows. They may resolve only
+through the retained human-reviewed mappings for historical AFL Tables player `12576` (Jack Graham)
+and `12712` (Jack Ross). The mapping decision, historical seasons, recorded names, recorded clubs and
+target AFLCA identity are content-addressed into each affected identity review. The reconciler does
+not infer a new club identity from display-name equality, and any unreviewed or unused mapping fails
+closed.
+
+The scoped source policy permits the reconciled `Coaches.Votes` field for private local
+non-production feature construction and model training. Season, round, club and player-name fields
+remain reconciliation evidence rather than model features. The command does not promote transaction
+facts, admit a model dataset, execute a model, or grant publication authority; those remain separate
+governed boundaries. Public display, public derived output, redistribution, production activation
+and fantasy use remain prohibited.
 
 The retained 2026-09-02 rehearsal contained 6,854 rows. Normalization quarantined 6, 12, 16, 32, and
 48 rows in seasons 2021 through 2025 respectively. Those row counts are diagnostic evidence, not a
@@ -665,10 +678,10 @@ home-and-away and finals award requests from round 19 without retaining award sc
 non-finals rounds above 23. Some ambiguous rows still contain integer-looking values, so filtering
 only decimal text is prohibited. Do not use these normalizations for #574, even after identity review.
 
-To unblock the lane, build and review a new authenticated capture capability that retains award scope
-per row, then compare its complete home-and-away round and match set with the independently admitted
-AFL results universe. Use a new capability, field-map, and capture lineage; never relabel these
-retained captures.
+The older `dev:outcomes:stage-aflca-coaches-votes` command remains a negative-evidence rehearsal. Its
+ambiguous normalizations and superseding map rejections must remain retained and must never be
+relabeled. Only the new scoped capability, field map, Gate receipts and reconciliation evidence may
+feed the #574 training path.
 
 ### Inspecting the governed five-season workbook evaluation
 

@@ -15,7 +15,7 @@ import {
   aflTradeGateDecisionProposalSchema,
   aflTradeGateDecisionRecordSchema,
 } from '../governance/gateDecisionTypes';
-import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
+import { evaluateAflTradeGate0AAgainstDecision } from '../source/gate0aEvaluation';
 import { aflTradeFitzRoyCaptureReceiptSchema } from '../source/fitzRoyCaptureReceipt';
 import { aflTradeGate0AReceiptSchema } from '../source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '../source/sourceRights';
@@ -140,11 +140,8 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
   .superRefine((snapshot, context) => {
     const receiptRequest = snapshot.gate0aReceipt.content.request;
     const receiptResult = snapshot.gate0aReceipt.content.result;
-    const mechanicalEvaluation = evaluateAflTradeGate0A(
-      {
-        proposals: [snapshot.gate0aProposal],
-        decisions: [snapshot.gate0aDecision],
-      },
+    const mechanicalEvaluation = evaluateAflTradeGate0AAgainstDecision(
+      snapshot.gate0aDecision,
       snapshot.sourceRightsProposal,
       receiptRequest
     );

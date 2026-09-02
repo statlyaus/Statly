@@ -20,6 +20,21 @@ export const AFL_TRADE_FITZROY_DIAGNOSTICS_SCHEMA_VERSION =
 
 const seasonSchema = z.number().int().min(1897).max(2200);
 const roundNumberSchema = z.number().int().min(0).max(100).nullable();
+const scopedRoundNumbersSchema = z
+  .array(z.number().int().min(0).max(100))
+  .min(1)
+  .max(30)
+  .superRefine((roundNumbers, context) => {
+    for (let index = 1; index < roundNumbers.length; index += 1) {
+      if (roundNumbers[index] <= roundNumbers[index - 1]) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Scoped coaches-vote rounds must be strictly increasing and unique.',
+        });
+        return;
+      }
+    }
+  });
 const teamSchema = z.string().trim().min(1).max(200).nullable();
 const capabilityIdSchema = z.string().trim().min(1).max(200);
 
@@ -51,6 +66,14 @@ const parameterSchemas = {
   'aflca-coaches-votes': z
     .object({ season: seasonSchema, roundNumber: roundNumberSchema, team: teamSchema })
     .strict(),
+  'aflca-coaches-votes-scoped': z
+    .object({
+      season: seasonSchema,
+      roundNumbers: scopedRoundNumbersSchema,
+      awardScope: z.literal('home_and_away'),
+      team: teamSchema,
+    })
+    .strict(),
   'footywire-brownlow-awards': z
     .object({ season: seasonSchema, type: z.enum(['player', 'team']) })
     .strict(),
@@ -68,7 +91,11 @@ const parameterSchemas = {
 
 const invocationArgumentSchemas = {
   'official-afl-player-stats': z
-    .object({ season: seasonSchema, round_number: roundNumberSchema, comp: z.enum(['AFLM', 'AFLW']) })
+    .object({
+      season: seasonSchema,
+      round_number: roundNumberSchema,
+      comp: z.enum(['AFLM', 'AFLW']),
+    })
     .strict(),
   'afl-tables-player-stats': z
     .object({
@@ -85,7 +112,11 @@ const invocationArgumentSchemas = {
     .object({ season: seasonSchema, round_number: z.null(), comp: z.enum(['AFLM', 'AFLW']) })
     .strict(),
   'official-afl-results': z
-    .object({ season: seasonSchema, round_number: roundNumberSchema, comp: z.enum(['AFLM', 'AFLW']) })
+    .object({
+      season: seasonSchema,
+      round_number: roundNumberSchema,
+      comp: z.enum(['AFLM', 'AFLW']),
+    })
     .strict(),
   'afl-tables-results': z
     .object({ season: seasonSchema, round_number: roundNumberSchema })
@@ -107,6 +138,15 @@ const invocationArgumentSchemas = {
       round_number: roundNumberSchema,
       comp: z.enum(['AFLM', 'AFLW']),
       team: teamSchema,
+    })
+    .strict(),
+  'aflca-coaches-votes-scoped': z
+    .object({
+      season: seasonSchema,
+      round_number: scopedRoundNumbersSchema,
+      comp: z.literal('AFLM'),
+      team: teamSchema,
+      award_scope: z.literal('home_and_away'),
     })
     .strict(),
   'footywire-brownlow-awards': z
@@ -231,14 +271,13 @@ export const aflTradeFitzRoyInvocationSchema = z
       });
     }
     if (invocation.capabilityId === 'afl-tables-player-stats') {
-      const argumentsForAflTables = invocationArgumentSchemas[
-        'afl-tables-player-stats'
-      ].parse(parsedArguments.data);
+      const argumentsForAflTables = invocationArgumentSchemas['afl-tables-player-stats'].parse(
+        parsedArguments.data
+      );
       if (
         (argumentsForAflTables.rescrape &&
           argumentsForAflTables.rescrape_start_season !== invocation.authorizationSeason) ||
-        (!argumentsForAflTables.rescrape &&
-          argumentsForAflTables.rescrape_start_season !== null)
+        (!argumentsForAflTables.rescrape && argumentsForAflTables.rescrape_start_season !== null)
       ) {
         context.addIssue({
           code: 'custom',
@@ -366,6 +405,14 @@ function canonicalArguments(request: AflTradeFitzRoyCaptureRequest): Record<stri
         comp: request.competition,
         team: parameters.team,
       };
+    case 'aflca-coaches-votes-scoped':
+      return {
+        season: parameters.season,
+        round_number: parameters.roundNumbers,
+        comp: request.competition,
+        team: parameters.team,
+        award_scope: parameters.awardScope,
+      };
     case 'footywire-brownlow-awards':
     case 'footywire-all-australian':
       return { season: parameters.season, type: parameters.type };
@@ -473,8 +520,7 @@ export function getAflTradeFitzRoyObservedScopeError(
   diagnostics: AflTradeFitzRoyCaptureDiagnostics
 ): string | null {
   const authorizedSeason = String(invocation.authorizationSeason);
-  const observedDateYears =
-    diagnostics.observedDateRange?.map((value) => value.slice(0, 4)) ?? [];
+  const observedDateYears = diagnostics.observedDateRange?.map((value) => value.slice(0, 4)) ?? [];
   const diagnosticFields = new Set(diagnostics.fields.map(({ name }) => name));
   const officialScopeIsRetainedForDecode =
     invocation.capabilityId === 'official-afl-player-stats' &&
@@ -496,10 +542,7 @@ export function getAflTradeFitzRoyObservedScopeError(
       const match = value.trim().match(/^(?:round|r)?\s*0*(\d+)$/i);
       return match === null ? null : Number(match[1]);
     });
-    if (
-      observedRounds.length === 0 ||
-      observedRounds.some((round) => round !== requestedRound)
-    ) {
+    if (observedRounds.length === 0 || observedRounds.some((round) => round !== requestedRound)) {
       return 'fitzRoy output round evidence falls outside the authorized requested round.';
     }
   }
