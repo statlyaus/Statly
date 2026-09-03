@@ -1155,6 +1155,12 @@ wired into the local worker or paired with the pick component; that composition 
 pair stage. No new player retry ledger or current pointer is part of this slice. Migration 0089 adds
 only the coordinator's least-privilege reads, immutable inserts and narrowly scoped row-lock/update
 permissions required by the existing append-only model-run and artifact-custody triggers.
+Migration 0102 adds the admitted-player factual-output v2 parent, exact source-capture and
+spell-batch authentication, and request-scoped replay semantics. It preserves legacy v1
+candidate/release uniqueness with partial indexes, while allowing a later dispatch request to bind
+the same sealed v2 candidate and release through its own immutable output. Its model-run guard counts
+distinct run receipts and distinct proposal identities, not capture rows, after authenticating every
+capture-level admission evaluation.
 
 The genuine local player adapter measures execution ancestry at run start. It derives the Git root
 from the executing module, resolves the exact commit, requires a clean checkout including untracked
@@ -1207,6 +1213,23 @@ closed unless migration `0090` is present, executes the component once, repeats 
 proves the second result is the same retained run without a second native execution. With none of the
 provisioned values it is skipped; a partial configuration fails, and neither case is replaced by
 fixture data.
+
+The retained issue 574 proof used request
+`private-valuation-dispatch:90879942135e996b4e3f08ad1be825dd3f5dc633ccab88b03585a3cc6f8e3b7c`,
+operation
+`private-valuation-model-operation:c71662b13d1d2682d33b8d4c65877f1087f99078423fa9903138713e0b4b8144`,
+dataset `dataset:01948eb2e5da047017f0d862c474a40eddefa5344568989a79b8748de02ad62a`,
+admission
+`dataset-admission:e2d4113118567e1f3f4674eef0a6909779368b61ff4ef691f43573d2a526ca90`
+and protocol `model-protocol:25e1fb6fa2edd333000aa2461fa6153068d548bdf23473331059ab16601a693e`.
+Clean commit `43bb49e57f9120d77b7b36a6df92fefbf195dd9e`, Node runtime attestation and seed 574 produced native
+run `model-run:fafb4db94aa683924aa6f9ff3efc4bcbaee4d537861e3a7e925c0c0aedbdb2c5` and player component
+`model-run:02c9bdd6b41a00028f41d0831adfe5606f97767a0bac3a7263fadcaeb1f56033`.
+The tracer then observed exactly one native run and one component after replay. Validation improved
+both MAE and RMSE by 77.3651% on its one comparable validation row; final test improved both by
+90.9550% on its one row, which was inside the calibrated 80% interval. Record these values as a
+bounded execution diagnostic, not as model-quality or population evidence. HPN and pick remained
+`not_executed`; qualification, pair selection, Gate 3, activation and publication remained absent.
 
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:

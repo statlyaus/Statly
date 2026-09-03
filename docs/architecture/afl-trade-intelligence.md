@@ -1311,6 +1311,36 @@ the original immutable dispatch attempt and the current live claimant. When it m
 returns that component without reconstructing observations, issuing another authorization or
 retraining. No new retry ledger, current pointer or outcomes table is required for this player slice.
 
+### Issue 574 retained execution evidence
+
+The genuine non-production run on 2026-09-03 used finalized dataset
+`dataset:01948eb2e5da047017f0d862c474a40eddefa5344568989a79b8748de02ad62a` and admission
+`dataset-admission:e2d4113118567e1f3f4674eef0a6909779368b61ff4ef691f43573d2a526ca90`.
+The five rows bind 13 exact source captures and 10 finalized acquisition-spell metric batches. Its
+request-scoped factual output is
+`private-valuation-factual-output:32977091131fc3c07e9e43e3cf951f1e947c5399f8ba1577b16061094421d231`,
+and protocol `model-protocol:25e1fb6fa2edd333000aa2461fa6153068d548bdf23473331059ab16601a693e`
+binds the methodology above. Factual-output v2 therefore permits distinct dispatch requests to bind
+the same sealed candidate and release while retaining legacy v1 one-candidate/one-release uniqueness;
+each v2 output remains unique and immutable by request.
+
+Request `private-valuation-dispatch:90879942135e996b4e3f08ad1be825dd3f5dc633ccab88b03585a3cc6f8e3b7c`
+bound operation
+`private-valuation-model-operation:c71662b13d1d2682d33b8d4c65877f1087f99078423fa9903138713e0b4b8144`
+and executed clean commit `43bb49e57f9120d77b7b36a6df92fefbf195dd9e` with seed 574. Native run
+`model-run:fafb4db94aa683924aa6f9ff3efc4bcbaee4d537861e3a7e925c0c0aedbdb2c5` succeeded and was
+registered as player component
+`model-run:02c9bdd6b41a00028f41d0831adfe5606f97767a0bac3a7263fadcaeb1f56033`.
+Validation used one comparable row: candidate MAE/RMSE was `0.0916872346` versus `0.4050700280`
+for the games-only comparator, a `77.3651%` relative improvement in both measures. The single final
+test row produced candidate MAE/RMSE `0.0292086916` versus `0.3229271709`, a `90.9550%`
+improvement, and fell inside the calibrated 80% interval. These one-row results prove executable
+plumbing and deterministic evidence, not statistical adequacy.
+
+The immediate replay returned the same component with exactly one native run and one component row.
+HPN and pick components were deliberately marked `not_executed`, and no qualification, pair
+selection, Gate 3 decision, activation or publication was created or claimed.
+
 ## Temporal contract
 
 Canonical evidence is bitemporal:

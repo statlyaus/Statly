@@ -83,6 +83,31 @@ The two 2025 players absent from the current AFL Tables match rows resolve only 
 content-addressed human reviews binding historical native IDs `12576` and `12712`; the reconciler no
 longer manufactures current player-club identities from name equality.
 
+### Issue 574 admitted evidence boundary
+
+The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five
+scoped AFLCA home-and-away captures, and the bounded Draftguru transaction evidence that establishes
+the five acquisition spells. The AFL Tables review covered 48,769 rows across 2021–2025: 15,886
+positive-goal rows entered the reviewed positive slice and 32,883 measured-zero rows were preserved
+as explicit zero evidence rather than inferred absence. The scoped AFLCA captures retained 6,655
+positive vote rows over 1,017 home-and-away matches, conserving exactly 30,510 votes. Identity
+reconciliation resolved 6,430 rows and retained 225 unresolved rows as exclusions; unresolved names
+were never converted to zero or silently joined.
+
+Gate 0A evaluates the exact fields consumed for each operation. A capture may retain additional
+identifying or reconciliation fields without pretending that model training consumes them, so the
+consumed field set may be a strict authenticated subset of the retained capture field set. This does
+not broaden rights: every consumed field must still be present in the capture and explicitly approved
+for its requested use. The model-run boundary deduplicates run-start receipts by source-rights
+proposal identity only after authenticating every capture-level admission evaluation for that
+proposal.
+
+The admitted dataset and its factual-output v2 records remain private and non-production. The
+underlying factual release may be validated as an approved private parent, but the player execution
+path rejects an active/public release and grants no raw redistribution, public factual display,
+public derived output, fantasy use, production activation, or publication authority. The successful
+diagnostic therefore changes none of the AFLCA risk assumptions above.
+
 ### Verified technical smoke baseline
 
 On 2026-08-08, an isolated fitzRoy `1.7.0` smoke run requested the complete 2024 AFLM season from all
