@@ -719,8 +719,8 @@ export class PostgresAflTradeValuationDatasetFactualLineageRepository {
       if (Date.parse(input.createdAt) < Date.parse(candidate.content.createdAt)) {
         fail('INVALID_INPUT', 'Lineage creation cannot predate factual finalization.');
       }
-      const source = await deriveSourceMappings(transaction, candidate, input.createdAt);
       const domainLineageMappings = await deriveDomainMappings(transaction, candidate);
+      const source = await deriveSourceMappings(transaction, candidate, input.createdAt);
       const corpusId = createAflTradeContentAddress('corpus', {
         schemaVersion: 'afl-trade-private-factual-corpus/v1',
         factualReleaseId: candidate.content.targetRelease.id,
