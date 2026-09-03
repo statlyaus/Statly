@@ -250,6 +250,46 @@ WHEN ((NEW."output_json"->'content'->>'schemaVersion') =
   'afl-trade-private-valuation-factual-output/v2')
 EXECUTE FUNCTION "validate_outcome_admitted_player_factual_output"();
 
+-- A source-rights proposal may authorize several exact captures. Count proposal identities,
+-- not capture-level admission evaluations, when issuing one model-run authorization.
+DO $patch_model_run_multi_capture_rights$
+DECLARE
+  current_definition TEXT;
+  updated_definition TEXT;
+  old_required_count TEXT := $old$  SELECT jsonb_array_length(
+    admission_row."admission_json"->'content'->'sourceRightsEvaluations'
+  ) INTO required_proposal_count;$old$;
+  new_required_count TEXT := $new$  SELECT count(DISTINCT required."evaluation"->>'proposalId')
+    INTO required_proposal_count
+    FROM jsonb_array_elements(
+      admission_row."admission_json"->'content'->'sourceRightsEvaluations'
+    ) required("evaluation");$new$;
+  old_covered_count TEXT := $old$  SELECT count(*) INTO covered_proposal_count
+    FROM jsonb_array_elements(
+      admission_row."admission_json"->'content'->'sourceRightsEvaluations'
+    ) required("evaluation")$old$;
+  new_covered_count TEXT := $new$  SELECT count(DISTINCT required."evaluation"->>'proposalId')
+    INTO covered_proposal_count
+    FROM jsonb_array_elements(
+      admission_row."admission_json"->'content'->'sourceRightsEvaluations'
+    ) required("evaluation")$new$;
+BEGIN
+  SELECT pg_get_functiondef(
+    'validate_outcome_valuation_model_authorization_insert()'::regprocedure
+  ) INTO current_definition;
+  updated_definition:=replace(current_definition,old_required_count,new_required_count);
+  IF updated_definition=current_definition THEN
+    RAISE EXCEPTION 'Expected model-run required proposal count was not found';
+  END IF;
+  current_definition:=updated_definition;
+  updated_definition:=replace(current_definition,old_covered_count,new_covered_count);
+  IF updated_definition=current_definition THEN
+    RAISE EXCEPTION 'Expected model-run covered proposal count was not found';
+  END IF;
+  EXECUTE updated_definition;
+END
+$patch_model_run_multi_capture_rights$;
+
 CREATE OR REPLACE FUNCTION "validate_outcome_private_valuation_model_request_binding"()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE request RECORD; attempt RECORD; operation RECORD; factual RECORD; calculation RECORD;
