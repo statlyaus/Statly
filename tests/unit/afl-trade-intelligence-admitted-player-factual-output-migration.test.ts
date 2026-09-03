@@ -34,4 +34,16 @@ describe('admitted-player factual output migration', () => {
     expect(migration).toContain(`OR NEW."source_admission_id" IS NOT NULL`);
     expect(migration).toContain('expected_output_id');
   });
+
+  it('permits request-scoped v2 replay while retaining v1 parent uniqueness', () => {
+    expect(migration).toContain(
+      'DROP CONSTRAINT "outcome_private_valuation_factual_output_candidate_id_key"'
+    );
+    expect(migration).toContain(
+      'DROP CONSTRAINT "outcome_private_valuation_factual_output_factual_release_id_key"'
+    );
+    expect(migration).toContain('outcome_private_factual_output_v1_candidate_key');
+    expect(migration).toContain('outcome_private_factual_output_v1_release_key');
+    expect(migration).toContain('enqueue_outcome_admitted_player_dispatch');
+  });
 });

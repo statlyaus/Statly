@@ -152,7 +152,7 @@ model OutcomeReleaseManifest {
   privateValuationEvaluationDecisions OutcomePrivateValuationEvaluationDecision[]
   privateValuationEvaluationHeads     OutcomePrivateValuationEvaluationHead[]
   currentValuationCohortOperations    OutcomeCurrentValuationCohortOperation[]
-  privateValuationFactualOutput       OutcomePrivateValuationFactualOutput?
+  privateValuationFactualOutputs      OutcomePrivateValuationFactualOutput[]
 
   @@index([scopeKey, createdAt])
   @@map("outcome_release_manifest")
@@ -2974,7 +2974,7 @@ model OutcomeFactualReleaseCandidate {
   valuationDatasets               OutcomeValuationDatasetCandidate[]
   publicFactualArchive            OutcomePublicFactualArchive?
   valuationDatasetAuthorities     OutcomeValuationDatasetOperationAuthority[]
-  privateValuationFactualOutput    OutcomePrivateValuationFactualOutput?
+  privateValuationFactualOutputs   OutcomePrivateValuationFactualOutput[]
 
   @@index([environment, scopeKey, status], map: "outcome_factual_release_candidate_scope_idx")
   @@index([promotionBackedCorpusId, status], map: "outcome_factual_candidate_promotion_corpus_idx")
@@ -5776,8 +5776,8 @@ model OutcomePrivateValuationFactualOutput {
   normalizationRunId  String?                                             @map("normalization_run_id") @outcomes.Text
   factBatchId         String?                                             @map("fact_batch_id") @outcomes.Text
   factualRunId        String?                                             @map("factual_run_id") @outcomes.Text
-  candidateId         String                                              @unique @map("candidate_id") @outcomes.Text
-  factualReleaseId    String                                              @unique @map("factual_release_id") @outcomes.Text
+  candidateId         String                                              @map("candidate_id") @outcomes.Text
+  factualReleaseId    String                                              @map("factual_release_id") @outcomes.Text
   playerDatasetId     String?                                             @map("player_dataset_id") @outcomes.Text
   playerAdmissionId   String?                                             @map("player_dataset_admission_id") @outcomes.Text
   preparedAt          DateTime                                            @map("prepared_at") @outcomes.Timestamptz(3)
@@ -5793,6 +5793,8 @@ model OutcomePrivateValuationFactualOutput {
   playerAdmission     OutcomeValuationDatasetAdmission?                   @relation("OutcomeAdmittedPlayerFactualAdmission", fields: [playerAdmissionId], references: [admissionId], onDelete: Restrict)
   spellMetricBatches  OutcomePrivateValuationFactualOutputSpellBatch[]
 
+  @@index([candidateId], map: "outcome_private_factual_output_candidate_idx")
+  @@index([factualReleaseId], map: "outcome_private_factual_output_release_idx")
   @@map("outcome_private_valuation_factual_output")
 }
 

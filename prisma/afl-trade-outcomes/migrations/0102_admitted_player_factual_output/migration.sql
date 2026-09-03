@@ -40,6 +40,23 @@ ALTER TABLE "outcome_private_valuation_factual_output"
     REFERENCES "outcome_valuation_dataset_admission"("admission_id") ON DELETE RESTRICT;
 
 ALTER TABLE "outcome_private_valuation_factual_output"
+  DROP CONSTRAINT "outcome_private_valuation_factual_output_candidate_id_key",
+  DROP CONSTRAINT "outcome_private_valuation_factual_output_factual_release_id_key";
+
+CREATE UNIQUE INDEX "outcome_private_factual_output_v1_candidate_key"
+  ON "outcome_private_valuation_factual_output"("candidate_id")
+  WHERE "output_json"->'content'->>'schemaVersion' =
+    'afl-trade-private-valuation-factual-output/v1';
+CREATE UNIQUE INDEX "outcome_private_factual_output_v1_release_key"
+  ON "outcome_private_valuation_factual_output"("factual_release_id")
+  WHERE "output_json"->'content'->>'schemaVersion' =
+    'afl-trade-private-valuation-factual-output/v1';
+CREATE INDEX "outcome_private_factual_output_candidate_idx"
+  ON "outcome_private_valuation_factual_output"("candidate_id");
+CREATE INDEX "outcome_private_factual_output_release_idx"
+  ON "outcome_private_valuation_factual_output"("factual_release_id");
+
+ALTER TABLE "outcome_private_valuation_factual_output"
   DROP CONSTRAINT "outcome_private_valuation_factual_output_parent_ids_check",
   ADD CONSTRAINT "outcome_private_valuation_factual_output_parent_ids_check" CHECK (
     "candidate_id" ~ '^factual-release-candidate:[a-f0-9]{64}$'
