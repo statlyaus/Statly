@@ -396,11 +396,24 @@ model OutcomeSourceCapture {
   privateValuationCaptureBindings OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureSource")
   privateValuationSourceAdmission OutcomePrivateValuationSourceAdmission?
   privateValuationHpnSourceAdmission OutcomePrivateValuationHpnSourceAdmission?
+  reviewedTrainingSourceAdmission OutcomeReviewedTrainingSourceAdmission?
 
   @@unique([captureId, attemptId, sourceSnapshotId], map: "outcome_source_capture_exact_ancestry_key")
   @@index([provider, dataset, capturedAt], map: "outcome_source_capture_provider_captured_idx")
   @@index([sourceArtifactId], map: "outcome_source_capture_artifact_idx")
   @@map("outcome_source_capture")
+}
+
+model OutcomeReviewedTrainingSourceAdmission {
+  admissionId         String                @id @map("admission_id") @outcomes.Text
+  sourceCaptureId     String                @unique @map("source_capture_id") @outcomes.Text
+  reviewSetDecisionId String                @map("review_set_decision_id") @outcomes.Text
+  admittedAt          DateTime              @map("admitted_at") @outcomes.Timestamptz(3)
+  admissionJson       Json                  @map("admission_json")
+  sourceCapture       OutcomeSourceCapture  @relation(fields: [sourceCaptureId], references: [captureId], onDelete: Restrict)
+  reviewSetDecision   OutcomeReviewDecision @relation(fields: [reviewSetDecisionId], references: [decisionId], onDelete: Restrict)
+
+  @@map("outcome_reviewed_training_source_admission")
 }
 
 model OutcomeExternalEvidenceBatch {
@@ -3419,6 +3432,7 @@ model OutcomeReviewDecision {
   outcomeHpnPavFieldMaps           OutcomeHpnPavFieldMap[]
   pickPavPolicies                  OutcomePickPavPolicy[]
   pickPavAccess                    OutcomePickPavSelectionAccess[]
+  reviewedTrainingSourceAdmissions OutcomeReviewedTrainingSourceAdmission[]
 
   @@index([subjectType, subjectId, decidedAt], map: "outcome_review_decision_subject_idx")
   @@map("outcome_review_decision")
