@@ -5,7 +5,10 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import { createAflTradeAdmittedPlayerRunStartReceipts } from '@/server/aflTradeIntelligence/development/localPostgresAdmittedPlayerPreparation';
+import {
+  createAflTradeAdmittedPlayerRunStartReceipts,
+  parsePersistedAflTradeAcquisitionSpellMetric,
+} from '@/server/aflTradeIntelligence/development/localPostgresAdmittedPlayerPreparation';
 import {
   createAflTradeAdmittedPlayerContributionExecutor,
   loadGovernedScalarTransform,
@@ -29,6 +32,18 @@ function executableArtifact(reference: ReturnType<typeof createAflTradeCanonical
 }
 
 describe('admitted player contribution candidate', () => {
+  it('reconstructs a content-addressed spell metric from normalized persistence columns', () => {
+    const metric = admittedRunFixture().spellMetrics[0]!;
+
+    expect(
+      parsePersistedAflTradeAcquisitionSpellMetric({
+        id: metric.spellMetricVersionId,
+        fact_sha256: metric.factSha256,
+        document_json: metric.content,
+      })
+    ).toEqual(metric);
+  });
+
   it('loads only the scalar transform bound to the protocol value unit', async () => {
     const reference = createAflTradeCanonicalJsonArtifactRef(transform, '2026-08-26T00:00:00.000Z');
     const protocol = {

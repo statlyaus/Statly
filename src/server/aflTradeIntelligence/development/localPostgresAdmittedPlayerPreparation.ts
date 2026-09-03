@@ -48,6 +48,20 @@ interface JsonRow {
   readonly document_json: unknown;
 }
 
+interface SpellMetricRow extends JsonRow {
+  readonly fact_sha256: string;
+}
+
+export function parsePersistedAflTradeAcquisitionSpellMetric(
+  row: Readonly<{ id: string; fact_sha256: string; document_json: unknown }>
+) {
+  return aflTradeAcquisitionSpellMetricSchema.parse({
+    spellMetricVersionId: row.id,
+    factSha256: row.fact_sha256,
+    content: row.document_json,
+  });
+}
+
 interface InstantRow {
   readonly instant: Date | string;
 }
@@ -367,8 +381,8 @@ async function loadSpellMetrics(
       )
     ),
   ].sort();
-  const result = await sql.query<JsonRow>(
-    `SELECT spell_metric_version_id AS id,fact_json AS document_json
+  const result = await sql.query<SpellMetricRow>(
+    `SELECT spell_metric_version_id AS id,fact_sha256,fact_json AS document_json
        FROM outcome_acquisition_spell_metric_version
       WHERE spell_metric_version_id=ANY($1::text[])
       ORDER BY spell_metric_version_id`,
@@ -380,9 +394,7 @@ async function loadSpellMetrics(
   ) {
     throw new TypeError('Local player preparation is missing exact admitted target metrics.');
   }
-  return result.rows.map(({ document_json }) =>
-    aflTradeAcquisitionSpellMetricSchema.parse(document_json)
-  );
+  return result.rows.map(parsePersistedAflTradeAcquisitionSpellMetric);
 }
 
 async function prepareRunStartReceipts(input: {
