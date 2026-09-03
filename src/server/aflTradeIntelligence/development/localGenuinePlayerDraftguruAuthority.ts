@@ -68,17 +68,27 @@ const PLAYER_DETAIL_FIELDS = [
 type CapabilityId =
   'draftguru-trade-index' | 'draftguru-trade-detail' | 'draftguru-player-trade-detail';
 
+export interface LocalGenuinePlayerDraftguruAuthorityEvidence {
+  readonly productOwnerAuthorizationArtifactId: string;
+  readonly boundedCapturePlanArtifactId: string;
+  readonly publicAccessReviewArtifactId: string;
+  readonly fieldBoundaryReviewArtifactId: string;
+}
+
 export const LOCAL_GENUINE_PLAYER_DRAFTGURU_PARSER_VERSION =
   'local-genuine-draftguru-html/v1' as const;
 export const LOCAL_GENUINE_PLAYER_DRAFTGURU_PLAYER_PARSER_VERSION =
   'local-genuine-draftguru-player-trade-html/v1' as const;
 
-function evidence(label: string): string {
-  return `artifact:${sha256AflTradeCanonicalJson({
-    boundary: 'local-genuine-player-draftguru-authority',
-    decisionDate: '2026-09-03',
-    label,
-  })}`;
+function parseEvidence(
+  input: LocalGenuinePlayerDraftguruAuthorityEvidence
+): LocalGenuinePlayerDraftguruAuthorityEvidence {
+  for (const [label, artifactId] of Object.entries(input)) {
+    if (!/^artifact:[a-f0-9]{64}$/u.test(artifactId)) {
+      throw new TypeError(`Draftguru ${label} must identify retained authority evidence.`);
+    }
+  }
+  return { ...input };
 }
 
 function sourceFieldUse(sourceField: string) {
@@ -97,7 +107,11 @@ function sourceFieldUse(sourceField: string) {
   };
 }
 
-function createAuthority(capabilityId: CapabilityId, fields: readonly string[]) {
+function createAuthority(
+  capabilityId: CapabilityId,
+  fields: readonly string[],
+  evidence: LocalGenuinePlayerDraftguruAuthorityEvidence
+) {
   const playerProjection = capabilityId === 'draftguru-player-trade-detail';
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
@@ -181,7 +195,7 @@ function createAuthority(capabilityId: CapabilityId, fields: readonly string[]) 
         description:
           'Capture only the approved 2020-2024 trade index and linked trade-detail pages with sequential provider egress.',
         appliesToOperations: ['bounded_evaluation_capture' as const],
-        verificationEvidenceIds: [evidence('bounded-capture-plan')],
+        verificationEvidenceIds: [evidence.boundedCapturePlanArtifactId],
       },
       {
         conditionId: 'private-nonproduction-use',
@@ -193,13 +207,13 @@ function createAuthority(capabilityId: CapabilityId, fields: readonly string[]) 
           'model_training' as const,
           'derived_feature_creation' as const,
         ],
-        verificationEvidenceIds: [evidence('product-owner-authorization')],
+        verificationEvidenceIds: [evidence.productOwnerAuthorizationArtifactId],
       },
     ],
     rightsEvidenceIds: [
-      evidence('product-owner-authorization'),
-      evidence('public-access-review'),
-      evidence('field-boundary-review'),
+      evidence.productOwnerAuthorizationArtifactId,
+      evidence.publicAccessReviewArtifactId,
+      evidence.fieldBoundaryReviewArtifactId,
     ],
     termsEffectiveAt: '2026-09-02T20:00:00.000Z',
     termsExpireAt: '2027-09-03T00:00:00.000Z',
@@ -287,7 +301,7 @@ function createAuthority(capabilityId: CapabilityId, fields: readonly string[]) 
     accountableOwner: 'statly-product-owner',
     decidedBy: 'statly-product-owner',
     reviewers: [] as never[],
-    authorityEvidenceIds: [evidence('product-owner-authorization')],
+    authorityEvidenceIds: [evidence.productOwnerAuthorizationArtifactId],
     conditionResults: rightsContent.conditions.map((condition) => ({
       conditionId: condition.conditionId,
       status: 'satisfied' as const,
@@ -311,11 +325,14 @@ function createAuthority(capabilityId: CapabilityId, fields: readonly string[]) 
   return { capabilityId, sourceRights, proposal, decision };
 }
 
-export function createLocalGenuinePlayerDraftguruAuthorities() {
+export function createLocalGenuinePlayerDraftguruAuthorities(
+  unparsedEvidence: LocalGenuinePlayerDraftguruAuthorityEvidence
+) {
+  const evidence = parseEvidence(unparsedEvidence);
   return [
-    createAuthority('draftguru-trade-index', INDEX_FIELDS),
-    createAuthority('draftguru-trade-detail', DETAIL_FIELDS),
-    createAuthority('draftguru-player-trade-detail', PLAYER_DETAIL_FIELDS),
+    createAuthority('draftguru-trade-index', INDEX_FIELDS, evidence),
+    createAuthority('draftguru-trade-detail', DETAIL_FIELDS, evidence),
+    createAuthority('draftguru-player-trade-detail', PLAYER_DETAIL_FIELDS, evidence),
   ] as const;
 }
 
@@ -401,10 +418,11 @@ export function createLocalGenuinePlayerDraftguruCaptureCommand(
 }
 
 export async function recordLocalGenuinePlayerDraftguruAuthorities(
-  repository: Pick<AflTradeGateDecisionLedgerRepository, 'load' | 'appendBatch'>
+  repository: Pick<AflTradeGateDecisionLedgerRepository, 'load' | 'appendBatch'>,
+  evidence: LocalGenuinePlayerDraftguruAuthorityEvidence
 ) {
   const stored = await repository.load();
-  const authorities = createLocalGenuinePlayerDraftguruAuthorities();
+  const authorities = createLocalGenuinePlayerDraftguruAuthorities(evidence);
   return repository.appendBatch({
     expectedRevision: stored.revision,
     records: authorities.map(({ sourceRights, proposal, decision }) => ({

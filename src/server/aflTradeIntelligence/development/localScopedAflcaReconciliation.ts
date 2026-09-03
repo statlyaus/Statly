@@ -25,12 +25,15 @@ export interface LocalScopedAflcaVote {
 }
 
 export interface LocalScopedAflcaReconciledVote extends LocalScopedAflcaVote {
-  readonly canonicalPlayerClubId: string;
+  readonly canonicalPlayerClubId: string | null;
   readonly canonicalMatchId: string;
   readonly canonicalClubName: string;
-  readonly resolvedPlayerName: string;
+  readonly resolvedPlayerName: string | null;
+  readonly identityResolution: 'exact_reviewed_match' | 'reviewed_mapping' | 'unresolved';
   readonly identityMappingEvidenceId: string | null;
   readonly identityMappingReviewDecisionId: string | null;
+  readonly matchMappingEvidenceId: string | null;
+  readonly matchMappingReviewDecisionId: string | null;
 }
 
 export interface LocalScopedAflcaReviewedIdentityMapping {
@@ -38,6 +41,23 @@ export interface LocalScopedAflcaReviewedIdentityMapping {
   readonly recordedPlayerName: string;
   readonly canonicalClubName: string;
   readonly canonicalPlayerClubId: string;
+  readonly evidenceId: string;
+  readonly reviewDecisionId: string;
+}
+
+export interface LocalScopedAflcaReviewedMatchMapping {
+  readonly source: {
+    readonly seasonYear: number;
+    readonly roundNumber: number;
+    readonly homeClubName: string;
+    readonly awayClubName: string;
+  };
+  readonly target: {
+    readonly seasonYear: number;
+    readonly roundNumber: number;
+    readonly homeClubName: string;
+    readonly awayClubName: string;
+  };
   readonly evidenceId: string;
   readonly reviewDecisionId: string;
 }
@@ -119,59 +139,6 @@ function matchKey(value: {
   ].join('\u0000');
 }
 
-function unorderedRoundMatchKey(value: {
-  seasonYear: number;
-  roundNumber: number;
-  homeClubName: string;
-  awayClubName: string;
-}): string {
-  return [
-    value.seasonYear,
-    value.roundNumber,
-    ...[value.homeClubName, value.awayClubName].sort(),
-  ].join('\u0000');
-}
-
-function orderedSeasonMatchKey(value: {
-  seasonYear: number;
-  homeClubName: string;
-  awayClubName: string;
-}): string {
-  return [value.seasonYear, value.homeClubName, value.awayClubName].join('\u0000');
-}
-
-function addCandidate(index: Map<string, Set<string>>, key: string, matchKeyValue: string): void {
-  const candidates = index.get(key) ?? new Set<string>();
-  candidates.add(matchKeyValue);
-  index.set(key, candidates);
-}
-
-function soleCandidate(candidates: ReadonlySet<string> | undefined): string | undefined {
-  return candidates?.size === 1 ? [...candidates][0] : undefined;
-}
-
-function compactName(value: string): string {
-  return value
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/gu, '');
-}
-
-function fallbackNameKey(value: string): string {
-  const tokens = value
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, ' ')
-    .trim()
-    .split(/ +/u);
-  const first = tokens[0]?.[0];
-  const last = tokens.at(-1);
-  if (first === undefined || last === undefined) {
-    throw new TypeError('A reconciled player name must contain a first and last token.');
-  }
-  return `${first}\u0000${last}`;
-}
-
 function reviewedIdentityKey(value: { seasonYear: number; recordedPlayerName: string }): string {
   return `${value.seasonYear}\u0000${requireText(value.recordedPlayerName, 'recorded player name')}`;
 }
@@ -193,14 +160,13 @@ export function reconcileLocalScopedAflcaVotes(input: {
   readonly expectedParticipants: readonly LocalScopedAflTablesParticipant[];
   readonly votes: readonly LocalScopedAflcaVote[];
   readonly reviewedIdentityMappings?: readonly LocalScopedAflcaReviewedIdentityMapping[];
+  readonly reviewedMatchMappings?: readonly LocalScopedAflcaReviewedMatchMapping[];
 }) {
   if (input.expectedParticipants.length === 0 || input.votes.length === 0) {
     throw new TypeError('Scoped AFLCA reconciliation requires factual participants and votes.');
   }
   const participantsByMatch = new Map<string, LocalScopedAflTablesParticipant[]>();
   const canonicalMatchByKey = new Map<string, string>();
-  const matchKeysByUnorderedRound = new Map<string, Set<string>>();
-  const matchKeysByOrderedSeason = new Map<string, Set<string>>();
   for (const participant of input.expectedParticipants) {
     const key = matchKey(participant);
     const existingMatchId = canonicalMatchByKey.get(key);
@@ -211,8 +177,6 @@ export function reconcileLocalScopedAflcaVotes(input: {
     const participants = participantsByMatch.get(key) ?? [];
     participants.push(participant);
     participantsByMatch.set(key, participants);
-    addCandidate(matchKeysByUnorderedRound, unorderedRoundMatchKey(participant), key);
-    addCandidate(matchKeysByOrderedSeason, orderedSeasonMatchKey(participant), key);
   }
 
   const seenRows = new Set<string>();
@@ -233,6 +197,22 @@ export function reconcileLocalScopedAflcaVotes(input: {
     reviewedIdentityMappings.set(key, mapping);
   }
   const usedReviewedIdentityMappings = new Set<string>();
+  const reviewedMatchMappings = new Map<string, LocalScopedAflcaReviewedMatchMapping>();
+  for (const mapping of input.reviewedMatchMappings ?? []) {
+    const sourceKey = matchKey(mapping.source);
+    const targetKey = matchKey(mapping.target);
+    if (
+      reviewedMatchMappings.has(sourceKey) ||
+      sourceKey === targetKey ||
+      !participantsByMatch.has(targetKey) ||
+      !/^artifact:[a-f0-9]{64}$/u.test(mapping.evidenceId) ||
+      !/^local-scoped-aflca-match-mapping:[a-f0-9]{64}$/u.test(mapping.reviewDecisionId)
+    ) {
+      throw new TypeError('A reviewed AFLCA match mapping is malformed or duplicated.');
+    }
+    reviewedMatchMappings.set(sourceKey, mapping);
+  }
+  const usedReviewedMatchMappings = new Set<string>();
   for (const vote of input.votes) {
     if (vote.awardScope !== 'home_and_away') {
       throw new TypeError('Scoped AFLCA reconciliation accepts only home_and_away evidence.');
@@ -253,19 +233,16 @@ export function reconcileLocalScopedAflcaVotes(input: {
     const homeClubName = canonicalAflcaClub(vote.homeClubName);
     const awayClubName = canonicalAflcaClub(vote.awayClubName);
     const exactKey = matchKey({ ...vote, homeClubName, awayClubName });
-    const resolvedMatchKey =
-      (participantsByMatch.has(exactKey) ? exactKey : undefined) ??
-      soleCandidate(
-        matchKeysByUnorderedRound.get(
-          unorderedRoundMatchKey({ ...vote, homeClubName, awayClubName })
-        )
-      ) ??
-      soleCandidate(
-        matchKeysByOrderedSeason.get(orderedSeasonMatchKey({ ...vote, homeClubName, awayClubName }))
-      );
+    const reviewedMatch = reviewedMatchMappings.get(exactKey);
+    const resolvedMatchKey = participantsByMatch.has(exactKey)
+      ? exactKey
+      : reviewedMatch === undefined
+        ? undefined
+        : matchKey(reviewedMatch.target);
     if (resolvedMatchKey === undefined) {
       throw new TypeError('A scoped AFLCA row does not resolve to one reviewed AFL Tables match.');
     }
+    if (reviewedMatch !== undefined) usedReviewedMatchMappings.add(exactKey);
     const participants = participantsByMatch.get(resolvedMatchKey);
     const canonicalMatchId = canonicalMatchByKey.get(resolvedMatchKey);
     if (participants === undefined || canonicalMatchId === undefined) {
@@ -281,15 +258,8 @@ export function reconcileLocalScopedAflcaVotes(input: {
     let identityMappingEvidenceId: string | null = null;
     let identityMappingReviewDecisionId: string | null = null;
     let candidates = clubParticipants.filter(
-      ({ recordedPlayerName }) =>
-        compactName(recordedPlayerName) === compactName(parsedPlayer.playerName)
+      ({ recordedPlayerName }) => recordedPlayerName === parsedPlayer.playerName
     );
-    if (candidates.length === 0) {
-      const fallbackKey = fallbackNameKey(parsedPlayer.playerName);
-      candidates = clubParticipants.filter(
-        ({ recordedPlayerName }) => fallbackNameKey(recordedPlayerName) === fallbackKey
-      );
-    }
     if (candidates.length === 0) {
       const reviewedKey = reviewedIdentityKey(vote);
       const reviewed = reviewedIdentityMappings.get(reviewedKey);
@@ -307,14 +277,14 @@ export function reconcileLocalScopedAflcaVotes(input: {
         identityMappingReviewDecisionId = reviewed.reviewDecisionId;
       }
     }
-    if (candidates.length !== 1) {
+    if (candidates.length > 1) {
       throw new TypeError(
         `A scoped AFLCA row must resolve to exactly one AFL Tables player: ` +
           `${vote.seasonYear} round ${vote.roundNumber}, ${vote.recordedPlayerName}, ` +
           `${candidates.length} candidates.`
       );
     }
-    const player = candidates[0]!;
+    const player = candidates[0] ?? null;
     observedMatchKeys.add(resolvedMatchKey);
     voteTotalByMatch.set(
       resolvedMatchKey,
@@ -322,12 +292,23 @@ export function reconcileLocalScopedAflcaVotes(input: {
     );
     reconciled.push({
       ...vote,
-      canonicalPlayerClubId: requireText(player.canonicalPlayerClubId, 'canonical player-club ID'),
+      canonicalPlayerClubId:
+        player === null
+          ? null
+          : requireText(player.canonicalPlayerClubId, 'canonical player-club ID'),
       canonicalMatchId,
       canonicalClubName: parsedPlayer.clubName,
-      resolvedPlayerName: player.recordedPlayerName,
+      resolvedPlayerName: player?.recordedPlayerName ?? null,
+      identityResolution:
+        player === null
+          ? 'unresolved'
+          : identityMappingReviewDecisionId === null
+            ? 'exact_reviewed_match'
+            : 'reviewed_mapping',
       identityMappingEvidenceId,
       identityMappingReviewDecisionId,
+      matchMappingEvidenceId: reviewedMatch?.evidenceId ?? null,
+      matchMappingReviewDecisionId: reviewedMatch?.reviewDecisionId ?? null,
     });
   }
 
@@ -347,10 +328,19 @@ export function reconcileLocalScopedAflcaVotes(input: {
       'Every reviewed AFLCA identity mapping must resolve one retained vote row.'
     );
   }
+  if (usedReviewedMatchMappings.size !== reviewedMatchMappings.size) {
+    throw new TypeError('Every reviewed AFLCA match mapping must resolve retained vote rows.');
+  }
   const evidenceSetSha256 = sha256AflTradeCanonicalJson(reconciled);
   return {
     matchCount: observedMatchKeys.size,
     voteRowCount: reconciled.length,
+    resolvedVoteRowCount: reconciled.filter(
+      ({ canonicalPlayerClubId }) => canonicalPlayerClubId !== null
+    ).length,
+    unresolvedIdentityRowCount: reconciled.filter(
+      ({ canonicalPlayerClubId }) => canonicalPlayerClubId === null
+    ).length,
     totalVotes: reconciled.reduce((sum, row) => sum + row.numericVotes, 0),
     evidenceSetSha256,
     reconciled,

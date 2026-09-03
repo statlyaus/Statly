@@ -9,6 +9,7 @@ import { createAflTradeAdmittedPlayerRunStartReceipts } from '@/server/aflTradeI
 import {
   createAflTradeAdmittedPlayerContributionExecutor,
   loadGovernedScalarTransform,
+  materializeAflTradeAdmittedPlayerContributionSet,
 } from '@/server/aflTradeIntelligence/modeling/admittedPlayerContributionCandidate';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 
@@ -62,60 +63,50 @@ describe('admitted player contribution candidate', () => {
     ).toThrow('does not match the model value unit');
   });
 
-  it('fits the declared partitions and retains validation failure ancestry', async () => {
+  it('rejects an admitted observation that omits a scalar feature metric', () => {
     const fixture = admittedRunFixture('non_production');
-    const retained = new Map<string, Uint8Array>();
-    const repository = {
-      assurance: 'local_non_production_filesystem' as const,
-      artifactClass: 'derived_private' as const,
-      custodyProfile: null,
-      async putIfAbsent(reference: { artifactId: string }, bytes: Uint8Array) {
-        retained.set(reference.artifactId, bytes);
-        return { status: 'stored' as const, reference };
-      },
-      async loadExact(reference: { artifactId: string }) {
-        const bytes = retained.get(reference.artifactId);
-        return bytes === undefined ? null : { reference, bytes };
-      },
-    };
-    const times = [
-      '2026-08-10T00:03:01.000Z',
-      '2026-08-10T00:03:02.000Z',
-      '2026-08-10T00:03:03.000Z',
-    ];
-    const executor = createAflTradeAdmittedPlayerContributionExecutor({
-      artifactRepository: repository as never,
-      maximumArtifactBytes: 4 * 1024 * 1024,
-      now: () => times.shift()!,
-    });
-
-    const result = await executor.execute({
-      intent: fixture.intent,
-      authorization: {} as never,
-      protocol: fixture.protocol,
-      observationSet: fixture.observationSet,
-      spellMetrics: fixture.evidence.spellMetrics,
-      executableArtifacts: fixture.evidence.executableArtifacts,
-    });
-
-    expect(result).toMatchObject({
-      candidateLockedAt: null,
-      finalTestEvaluatedAt: null,
-      finishedAt: '2026-08-10T00:03:01.000Z',
-      outcome: { status: 'failed', failureClassification: 'validation_failure' },
-    });
-    if (result.outcome.status !== 'failed') throw new Error('Expected a rejected fit.');
-    const selectionReport = JSON.parse(
-      new TextDecoder().decode(retained.get(result.outcome.failureArtifact.artifactId))
+    const first = fixture.observationSet.content.observations[0]!;
+    const featureArtifactId = fixture.protocol.content.pointInTimeFeatureValuesArtifact!.artifactId;
+    const featureArtifact = fixture.evidence.executableArtifacts.find(
+      ({ artifactId }) => artifactId === featureArtifactId
+    )!;
+    const omittedMemberId = first.featureInputs[0]!.memberId;
+    const featureSet = JSON.parse(new TextDecoder().decode(featureArtifact.bytes));
+    featureSet.rows = featureSet.rows.map((row: { datasetRowId: string; values: unknown[] }) =>
+      row.datasetRowId === first.datasetRowId
+        ? {
+            ...row,
+            values: row.values.filter(
+              (value) => (value as { memberId: string }).memberId !== omittedMemberId
+            ),
+          }
+        : row
     );
-    expect(selectionReport).toMatchObject({
-      validationReportId: expect.stringMatching(/^player-validation-report:/u),
-      content: {
-        evaluatedPartition: 'validation',
-        acceptanceOutcome: 'does_not_meet_declared_predictive_thresholds',
-      },
-    });
-    expect(retained).toHaveLength(2);
+
+    expect(() =>
+      materializeAflTradeAdmittedPlayerContributionSet({
+        observationSet: {
+          ...fixture.observationSet,
+          content: {
+            ...fixture.observationSet.content,
+            observations: [
+              {
+                ...first,
+                featureInputs: first.featureInputs.filter(
+                  ({ memberId }) => memberId !== omittedMemberId
+                ),
+              },
+              ...fixture.observationSet.content.observations.slice(1),
+            ],
+          },
+        } as never,
+        transform,
+        featureSet,
+        spellMetrics: fixture.evidence.spellMetrics,
+      })
+    ).toThrow(
+      /Every scalar feature metric requires one authenticated complete or explicit-zero fact/u
+    );
   });
 
   it('retains the complete accepted candidate ancestry when declared thresholds pass', async () => {
@@ -248,9 +239,7 @@ describe('admitted player contribution candidate', () => {
     const failure = JSON.parse(
       new TextDecoder().decode(retained.get(result.outcome.failureArtifact.artifactId))
     );
-    expect(failure.content.acceptanceOutcome).toBe(
-      'does_not_meet_declared_predictive_thresholds'
-    );
+    expect(failure.content.acceptanceOutcome).toBe('does_not_meet_declared_predictive_thresholds');
   });
 
   it('rejects a hash-correct feature artifact whose value differs from its factual body', async () => {

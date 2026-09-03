@@ -86,6 +86,76 @@ const REVIEWED_2025_AFLCA_IDENTITY_MAPPINGS = [
   };
 });
 
+const REVIEWED_AFLCA_MATCH_MAPPINGS = [
+  {
+    source: [2023, 5, 'Hawthorn', 'Greater Western Sydney'],
+    target: [2023, 5, 'Greater Western Sydney', 'Hawthorn'],
+    rationale:
+      'The retained 2023 round-five sources record the same clubs in opposite home/away order.',
+  },
+  {
+    source: [2023, 5, 'North Melbourne', 'Brisbane Lions'],
+    target: [2023, 5, 'Brisbane Lions', 'North Melbourne'],
+    rationale:
+      'The retained 2023 round-five sources record the same clubs in opposite home/away order.',
+  },
+  {
+    source: [2023, 5, 'St Kilda', 'Collingwood'],
+    target: [2023, 5, 'Collingwood', 'St Kilda'],
+    rationale:
+      'The retained 2023 round-five sources record the same clubs in opposite home/away order.',
+  },
+  {
+    source: [2023, 5, 'Sydney', 'Richmond'],
+    target: [2023, 5, 'Richmond', 'Sydney'],
+    rationale:
+      'The retained 2023 round-five sources record the same clubs in opposite home/away order.',
+  },
+  {
+    source: [2025, 4, 'Brisbane Lions', 'Geelong'],
+    target: [2025, 1, 'Brisbane Lions', 'Geelong'],
+    rationale: 'The retained AFLCA source labels the 2025 Opening Round match as round four.',
+  },
+  {
+    source: [2025, 25, 'Gold Coast', 'Essendon'],
+    target: [2025, 1, 'Gold Coast', 'Essendon'],
+    rationale:
+      'The retained AFLCA source labels the 2025 Opening Round match as round twenty-five.',
+  },
+] as const;
+
+const REVIEWED_AFLCA_MATCH_MAPPING_RECORDS = REVIEWED_AFLCA_MATCH_MAPPINGS.map((mapping) => {
+  const [sourceSeason, sourceRound, sourceHome, sourceAway] = mapping.source;
+  const [targetSeason, targetRound, targetHome, targetAway] = mapping.target;
+  const reviewContent = {
+    schemaVersion: 'local-scoped-aflca-reviewed-match/v1',
+    decision: 'approved',
+    decidedAt: DECIDED_AT,
+    decidedBy: 'statly-product-owner',
+    source: {
+      seasonYear: sourceSeason,
+      roundNumber: sourceRound,
+      homeClubName: sourceHome,
+      awayClubName: sourceAway,
+    },
+    target: {
+      seasonYear: targetSeason,
+      roundNumber: targetRound,
+      homeClubName: targetHome,
+      awayClubName: targetAway,
+    },
+    rationale: mapping.rationale,
+  } as const;
+  const reviewSha256 = sha256AflTradeCanonicalJson(reviewContent);
+  return {
+    source: reviewContent.source,
+    target: reviewContent.target,
+    evidenceId: `artifact:${reviewSha256}`,
+    reviewDecisionId: `local-scoped-aflca-match-mapping:${reviewSha256}`,
+    reviewContent,
+  };
+});
+
 export interface LocalScopedAflcaStagingOptions {
   readonly artifactRootDirectory: string;
   readonly expectedRuntimeNonce: string;
@@ -410,6 +480,26 @@ async function retainReviewedIdentityMappings(client: AflOutcomeSqlClient): Prom
   }
 }
 
+async function retainReviewedMatchMappings(client: AflOutcomeSqlClient): Promise<void> {
+  for (const mapping of REVIEWED_AFLCA_MATCH_MAPPING_RECORDS) {
+    const evidenceJson = canonicalizeAflTradeJson(mapping.reviewContent);
+    await client.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+       VALUES ($1,'local_scoped_aflca_match_mapping',$2,'approved',$3,$4::jsonb,
+               'statly-product-owner',$5)
+       ON CONFLICT (decision_id) DO NOTHING`,
+      [
+        mapping.reviewDecisionId,
+        mapping.evidenceId,
+        mapping.reviewContent.rationale,
+        evidenceJson,
+        DECIDED_AT,
+      ]
+    );
+  }
+}
+
 async function retainReviewSet(
   client: AflOutcomeSqlClient,
   result: ReturnType<typeof reconcileLocalScopedAflcaVotes>
@@ -423,15 +513,19 @@ async function retainReviewSet(
     numericVotes: row.numericVotes,
     identityMappingEvidenceId: row.identityMappingEvidenceId,
     identityMappingReviewDecisionId: row.identityMappingReviewDecisionId,
+    matchMappingEvidenceId: row.matchMappingEvidenceId,
+    matchMappingReviewDecisionId: row.matchMappingReviewDecisionId,
   }));
-  for (let offset = 0; offset < rows.length; offset += 500) {
-    const batch = rows.slice(offset, offset + 500);
+  const resolvedRows = rows.filter(({ canonicalPlayerClubId }) => canonicalPlayerClubId !== null);
+  for (let offset = 0; offset < resolvedRows.length; offset += 500) {
+    const batch = resolvedRows.slice(offset, offset + 500);
     await client.transaction(async (transaction) => {
       await transaction.query(
         `WITH reviewed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS row(
            "providerDecodedRowId" text,"identityCandidateId" text,"matchCandidateId" text,
            "canonicalPlayerClubId" text,"canonicalMatchId" text,"numericVotes" integer,
-           "identityMappingEvidenceId" text,"identityMappingReviewDecisionId" text))
+           "identityMappingEvidenceId" text,"identityMappingReviewDecisionId" text,
+           "matchMappingEvidenceId" text,"matchMappingReviewDecisionId" text))
          INSERT INTO outcome_review_decision
            (decision_id,subject_type,subject_id,decision,canonical_record_type,
             canonical_record_id,rationale,evidence_json,decided_by,decided_at)
@@ -442,7 +536,9 @@ async function retainReviewSet(
                 jsonb_build_object('evidenceSetSha256',$2::text,
                   'providerDecodedRowId',"providerDecodedRowId",
                   'identityMappingEvidenceId',"identityMappingEvidenceId",
-                  'identityMappingReviewDecisionId',"identityMappingReviewDecisionId"),$3,$4::timestamptz
+                  'identityMappingReviewDecisionId',"identityMappingReviewDecisionId",
+                  'matchMappingEvidenceId',"matchMappingEvidenceId",
+                  'matchMappingReviewDecisionId',"matchMappingReviewDecisionId"),$3,$4::timestamptz
            FROM reviewed ON CONFLICT (decision_id) DO NOTHING`,
         [JSON.stringify(batch), result.evidenceSetSha256, REVIEWER, DECIDED_AT]
       );
@@ -450,7 +546,8 @@ async function retainReviewSet(
         `WITH reviewed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS row(
            "providerDecodedRowId" text,"identityCandidateId" text,"matchCandidateId" text,
            "canonicalPlayerClubId" text,"canonicalMatchId" text,"numericVotes" integer,
-           "identityMappingEvidenceId" text,"identityMappingReviewDecisionId" text))
+           "identityMappingEvidenceId" text,"identityMappingReviewDecisionId" text,
+           "matchMappingEvidenceId" text,"matchMappingReviewDecisionId" text))
          INSERT INTO outcome_review_decision
            (decision_id,subject_type,subject_id,decision,canonical_record_type,
             canonical_record_id,rationale,evidence_json,decided_by,decided_at)
@@ -458,7 +555,9 @@ async function retainReviewSet(
                 'provider_match_candidate',"matchCandidateId",'approved','local_afl_match',
                 "canonicalMatchId",'Resolve the scoped AFLCA match to the reviewed AFL Tables universe.',
                 jsonb_build_object('evidenceSetSha256',$2::text,
-                  'providerDecodedRowId',"providerDecodedRowId"),$3,$4::timestamptz
+                  'providerDecodedRowId',"providerDecodedRowId",
+                  'matchMappingEvidenceId',"matchMappingEvidenceId",
+                  'matchMappingReviewDecisionId',"matchMappingReviewDecisionId"),$3,$4::timestamptz
            FROM reviewed ON CONFLICT (decision_id) DO NOTHING`,
         [JSON.stringify(batch), result.evidenceSetSha256, REVIEWER, DECIDED_AT]
       );
@@ -466,7 +565,8 @@ async function retainReviewSet(
         `WITH reviewed AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS row(
            "providerDecodedRowId" text,"identityCandidateId" text,"matchCandidateId" text,
            "canonicalPlayerClubId" text,"canonicalMatchId" text,"numericVotes" integer,
-           "identityMappingEvidenceId" text,"identityMappingReviewDecisionId" text))
+           "identityMappingEvidenceId" text,"identityMappingReviewDecisionId" text,
+           "matchMappingEvidenceId" text,"matchMappingReviewDecisionId" text))
          INSERT INTO outcome_review_decision
            (decision_id,subject_type,subject_id,decision,canonical_record_type,
             canonical_record_id,rationale,evidence_json,decided_by,decided_at)
@@ -498,7 +598,9 @@ async function retainReviewSet(
         matchCount: result.matchCount,
         voteRowCount: result.voteRowCount,
         totalVotes: result.totalVotes,
-        decisionCount: result.voteRowCount * 3,
+        resolvedVoteRowCount: result.resolvedVoteRowCount,
+        unresolvedIdentityRowCount: result.unresolvedIdentityRowCount,
+        decisionCount: result.resolvedVoteRowCount * 3,
       }),
       REVIEWER,
       DECIDED_AT,
@@ -717,10 +819,12 @@ export async function stageLocalScopedAflcaCoachesVotes(
     throw new TypeError('Scoped AFLCA staging requires exactly one capture per reviewed season.');
   }
   await retainReviewedIdentityMappings(client);
+  await retainReviewedMatchMappings(client);
   const reconciliation = reconcileLocalScopedAflcaVotes({
     expectedParticipants: participants,
     votes: await loadVotes(client, captures),
     reviewedIdentityMappings: REVIEWED_2025_AFLCA_IDENTITY_MAPPINGS,
+    reviewedMatchMappings: REVIEWED_AFLCA_MATCH_MAPPING_RECORDS,
   });
   await retainReviewSet(client, reconciliation);
   return { captures, reconciliation } as const;

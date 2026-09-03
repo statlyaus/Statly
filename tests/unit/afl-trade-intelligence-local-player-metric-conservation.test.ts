@@ -158,6 +158,80 @@ describe('local player metric conservation', () => {
     expect(conserveLocalPlayerMatchMetrics(match)).toEqual(result);
   });
 
+  it('derives a selected-player zero from complete totals without resolving other recipients', () => {
+    const selectedPlayerId = 'afl-player:away-two';
+    const result = conserveLocalPlayerMatchMetrics({
+      ...match,
+      appearances: match.appearances.filter(({ playerId }) => playerId === selectedPlayerId),
+      positiveMetrics: [],
+      completeMetricEvidence: [
+        {
+          metricCode: 'goals',
+          clubId: 'afl-club:home',
+          expectedTotal: 2,
+          observedTotal: 2,
+          sourceFactIds: ['local-fact:complete-home-goals'],
+          reviewedPlayerIds: [],
+        },
+        {
+          metricCode: 'goals',
+          clubId: 'afl-club:away',
+          expectedTotal: 1,
+          observedTotal: 1,
+          sourceFactIds: ['local-fact:complete-away-goals'],
+          reviewedPlayerIds: [selectedPlayerId],
+        },
+        {
+          metricCode: 'brownlow_votes',
+          clubId: null,
+          expectedTotal: 6,
+          observedTotal: 6,
+          sourceFactIds: ['local-fact:complete-brownlow'],
+          reviewedPlayerIds: [selectedPlayerId],
+        },
+        {
+          metricCode: 'coaches_votes',
+          clubId: null,
+          expectedTotal: 30,
+          observedTotal: 30,
+          sourceFactIds: ['local-fact:complete-coaches'],
+          reviewedPlayerIds: [selectedPlayerId],
+        },
+      ],
+    });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      playerId: selectedPlayerId,
+      metrics: { games: 1, goals: 0, brownlow_votes: 0, coaches_votes: 0 },
+    });
+    expect(result.rows[0]?.provenance.coaches_votes.sourceFactIds).toContain(
+      'local-fact:complete-coaches'
+    );
+  });
+
+  it('rejects incomplete or differently scoped total evidence', () => {
+    expect(() =>
+      conserveLocalPlayerMatchMetrics({
+        ...match,
+        completeMetricEvidence: [
+          {
+            metricCode: 'coaches_votes',
+            clubId: null,
+            expectedTotal: 30,
+            observedTotal: 29,
+            sourceFactIds: ['local-fact:incomplete-coaches'],
+            reviewedPlayerIds: match.appearances.map(({ playerId }) => playerId),
+          },
+        ],
+      })
+    ).toThrowError(
+      expect.objectContaining<Partial<LocalPlayerMetricConservationError>>({
+        code: 'METRIC_COMPLETENESS_MISMATCH',
+      })
+    );
+  });
+
   it.each([
     {
       name: 'club goals',

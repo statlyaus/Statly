@@ -30,6 +30,16 @@ export interface LocalPlayerMatchMetricConservationInput {
   clubGoalTotals: readonly { clubId: string; goals: number; sourceFactId: string }[];
   appearances: readonly LocalPlayerMatchAppearance[];
   positiveMetrics: readonly LocalPositivePlayerMetric[];
+  completeMetricEvidence?: readonly LocalCompleteMetricEvidence[];
+}
+
+export interface LocalCompleteMetricEvidence {
+  metricCode: ConservedMetricCode;
+  clubId: string | null;
+  expectedTotal: number;
+  observedTotal: number;
+  sourceFactIds: readonly string[];
+  reviewedPlayerIds: readonly string[];
 }
 
 type MetricProvenance = Readonly<{
@@ -60,6 +70,7 @@ export interface ConservedLocalPlayerMatchMetricRow {
 export interface ConservedLocalPlayerMatchMetrics {
   policyVersion: typeof LOCAL_GENUINE_PLAYER_MATCH_CONSERVATION_POLICY_VERSION;
   conservationSha256: string;
+  completeMetricEvidence: readonly LocalCompleteMetricEvidence[];
   rows: readonly ConservedLocalPlayerMatchMetricRow[];
 }
 
@@ -72,7 +83,8 @@ export class LocalPlayerMetricConservationError extends Error {
       | 'DUPLICATE_METRIC_FACT'
       | 'GOAL_TOTAL_MISMATCH'
       | 'BROWNLOW_TOTAL_MISMATCH'
-      | 'COACHES_TOTAL_MISMATCH',
+      | 'COACHES_TOTAL_MISMATCH'
+      | 'METRIC_COMPLETENESS_MISMATCH',
     message: string
   ) {
     super(message);
@@ -98,6 +110,12 @@ function appearanceKey(appearance: LocalPlayerMatchAppearance): string {
 
 function metricKey(metric: Pick<LocalPositivePlayerMetric, 'playerId' | 'metricCode'>): string {
   return `${metric.playerId}\u0000${metric.metricCode}`;
+}
+
+function completenessKey(
+  evidence: Pick<LocalCompleteMetricEvidence, 'metricCode' | 'clubId'>
+): string {
+  return `${evidence.metricCode}\u0000${evidence.clubId ?? ''}`;
 }
 
 function validateMatch(input: LocalPlayerMatchMetricConservationInput): void {
@@ -198,16 +216,64 @@ function validateMetrics(
   return metrics;
 }
 
+function validateCompleteMetricEvidence(
+  input: LocalPlayerMatchMetricConservationInput
+): Map<string, LocalCompleteMetricEvidence> {
+  const result = new Map<string, LocalCompleteMetricEvidence>();
+  for (const evidence of input.completeMetricEvidence ?? []) {
+    const key = completenessKey(evidence);
+    const expectedForScope =
+      evidence.metricCode === 'goals'
+        ? input.clubGoalTotals.find(({ clubId }) => clubId === evidence.clubId)?.goals
+        : evidence.metricCode === 'brownlow_votes'
+          ? 6
+          : 30;
+    const reviewedPlayerIds = [...evidence.reviewedPlayerIds];
+    const expectedPlayerIds = new Set(
+      input.appearances
+        .filter(({ clubId }) => evidence.metricCode !== 'goals' || clubId === evidence.clubId)
+        .map(({ playerId }) => playerId)
+    );
+    if (
+      result.has(key) ||
+      expectedForScope === undefined ||
+      evidence.expectedTotal !== expectedForScope ||
+      evidence.observedTotal !== evidence.expectedTotal ||
+      evidence.sourceFactIds.length === 0 ||
+      evidence.sourceFactIds.some((sourceFactId) => !nonEmpty(sourceFactId)) ||
+      new Set(evidence.sourceFactIds).size !== evidence.sourceFactIds.length ||
+      reviewedPlayerIds.length !== expectedPlayerIds.size ||
+      new Set(reviewedPlayerIds).size !== reviewedPlayerIds.length ||
+      reviewedPlayerIds.some((playerId) => !expectedPlayerIds.has(playerId)) ||
+      (evidence.metricCode === 'goals' && evidence.clubId === null) ||
+      (evidence.metricCode !== 'goals' && evidence.clubId !== null)
+    ) {
+      throw new LocalPlayerMetricConservationError(
+        'METRIC_COMPLETENESS_MISMATCH',
+        'Complete metric evidence must bind the exact conserved total and every reviewed output player.'
+      );
+    }
+    result.set(key, evidence);
+  }
+  return result;
+}
+
 function requireConservation(
   input: LocalPlayerMatchMetricConservationInput,
-  metrics: ReadonlyMap<string, LocalPositivePlayerMetric>
+  metrics: ReadonlyMap<string, LocalPositivePlayerMetric>,
+  completeMetricEvidence: ReadonlyMap<string, LocalCompleteMetricEvidence>
 ): void {
   const goalTotals = new Map(input.clubGoalTotals.map(({ clubId, goals }) => [clubId, goals]));
   for (const clubId of [input.homeClubId, input.awayClubId]) {
     const observed = [...metrics.values()]
       .filter((metric) => metric.metricCode === 'goals' && metric.clubId === clubId)
       .reduce((total, metric) => total + metric.value, 0);
-    if (observed !== goalTotals.get(clubId)) {
+    const complete = completeMetricEvidence.get(completenessKey({ metricCode: 'goals', clubId }));
+    if (
+      complete === undefined
+        ? observed !== goalTotals.get(clubId)
+        : observed > complete.observedTotal
+    ) {
       throw new LocalPlayerMetricConservationError(
         'GOAL_TOTAL_MISMATCH',
         `Positive player goals do not conserve the exact ${clubId} scoreboard total.`
@@ -218,13 +284,27 @@ function requireConservation(
     [...metrics.values()]
       .filter((metric) => metric.metricCode === metricCode)
       .reduce((sum, metric) => sum + metric.value, 0);
-  if (total('brownlow_votes') !== 6) {
+  const brownlowComplete = completeMetricEvidence.get(
+    completenessKey({ metricCode: 'brownlow_votes', clubId: null })
+  );
+  if (
+    brownlowComplete === undefined
+      ? total('brownlow_votes') !== 6
+      : total('brownlow_votes') > brownlowComplete.observedTotal
+  ) {
     throw new LocalPlayerMetricConservationError(
       'BROWNLOW_TOTAL_MISMATCH',
       'Positive Brownlow votes must conserve the exact six-vote home-and-away match total.'
     );
   }
-  if (total('coaches_votes') !== 30) {
+  const coachesComplete = completeMetricEvidence.get(
+    completenessKey({ metricCode: 'coaches_votes', clubId: null })
+  );
+  if (
+    coachesComplete === undefined
+      ? total('coaches_votes') !== 30
+      : total('coaches_votes') > coachesComplete.observedTotal
+  ) {
     throw new LocalPlayerMetricConservationError(
       'COACHES_TOTAL_MISMATCH',
       'Positive coaches votes must conserve the exact thirty-vote home-and-away match total.'
@@ -236,7 +316,8 @@ function metricValue(
   metrics: ReadonlyMap<string, LocalPositivePlayerMetric>,
   playerId: string,
   metricCode: ConservedMetricCode,
-  zeroEvidenceIds: readonly string[]
+  zeroEvidenceIds: readonly string[],
+  completeEvidence: LocalCompleteMetricEvidence | undefined
 ): { value: number; provenance: MetricProvenance } {
   const measured = metrics.get(metricKey({ playerId, metricCode }));
   return measured
@@ -248,7 +329,9 @@ function metricValue(
         value: 0,
         provenance: {
           kind: 'conservation_derived_zero',
-          sourceFactIds: [...new Set(zeroEvidenceIds)].sort(),
+          sourceFactIds: [
+            ...new Set([...(completeEvidence?.sourceFactIds ?? []), ...zeroEvidenceIds]),
+          ].sort(),
         },
       };
 }
@@ -259,7 +342,8 @@ export function conserveLocalPlayerMatchMetrics(
   validateMatch(input);
   const appearances = validateAppearances(input);
   const metrics = validateMetrics(input, appearances);
-  requireConservation(input, metrics);
+  const completeMetricEvidence = validateCompleteMetricEvidence(input);
+  requireConservation(input, metrics, completeMetricEvidence);
 
   const rows = [...input.appearances]
     .sort(
@@ -271,25 +355,47 @@ export function conserveLocalPlayerMatchMetrics(
         input.matchCompletionSourceFactId,
         ...input.appearances.map(({ sourceFactId }) => sourceFactId),
       ];
-      const goals = metricValue(metrics, appearance.playerId, 'goals', [
-        ...matchEvidence,
-        input.clubGoalTotals.find(({ clubId }) => clubId === appearance.clubId)!.sourceFactId,
-        ...[...metrics.values()]
-          .filter((metric) => metric.metricCode === 'goals' && metric.clubId === appearance.clubId)
-          .map(({ sourceFactId }) => sourceFactId),
-      ]);
-      const brownlow = metricValue(metrics, appearance.playerId, 'brownlow_votes', [
-        ...matchEvidence,
-        ...[...metrics.values()]
-          .filter((metric) => metric.metricCode === 'brownlow_votes')
-          .map(({ sourceFactId }) => sourceFactId),
-      ]);
-      const coaches = metricValue(metrics, appearance.playerId, 'coaches_votes', [
-        ...matchEvidence,
-        ...[...metrics.values()]
-          .filter((metric) => metric.metricCode === 'coaches_votes')
-          .map(({ sourceFactId }) => sourceFactId),
-      ]);
+      const goals = metricValue(
+        metrics,
+        appearance.playerId,
+        'goals',
+        [
+          ...matchEvidence,
+          input.clubGoalTotals.find(({ clubId }) => clubId === appearance.clubId)!.sourceFactId,
+          ...[...metrics.values()]
+            .filter(
+              (metric) => metric.metricCode === 'goals' && metric.clubId === appearance.clubId
+            )
+            .map(({ sourceFactId }) => sourceFactId),
+        ],
+        completeMetricEvidence.get(
+          completenessKey({ metricCode: 'goals', clubId: appearance.clubId })
+        )
+      );
+      const brownlow = metricValue(
+        metrics,
+        appearance.playerId,
+        'brownlow_votes',
+        [
+          ...matchEvidence,
+          ...[...metrics.values()]
+            .filter((metric) => metric.metricCode === 'brownlow_votes')
+            .map(({ sourceFactId }) => sourceFactId),
+        ],
+        completeMetricEvidence.get(completenessKey({ metricCode: 'brownlow_votes', clubId: null }))
+      );
+      const coaches = metricValue(
+        metrics,
+        appearance.playerId,
+        'coaches_votes',
+        [
+          ...matchEvidence,
+          ...[...metrics.values()]
+            .filter((metric) => metric.metricCode === 'coaches_votes')
+            .map(({ sourceFactId }) => sourceFactId),
+        ],
+        completeMetricEvidence.get(completenessKey({ metricCode: 'coaches_votes', clubId: null }))
+      );
       return {
         matchId: input.matchId,
         seasonYear: input.seasonYear,
@@ -326,11 +432,15 @@ export function conserveLocalPlayerMatchMetrics(
         left.clubId.localeCompare(right.clubId)
       ),
     },
+    completeMetricEvidence: [...completeMetricEvidence.values()].sort((left, right) =>
+      completenessKey(left).localeCompare(completenessKey(right))
+    ),
     rows,
   };
   return {
     policyVersion: LOCAL_GENUINE_PLAYER_MATCH_CONSERVATION_POLICY_VERSION,
     conservationSha256: sha256AflTradeCanonicalJson(content),
+    completeMetricEvidence: content.completeMetricEvidence,
     rows,
   };
 }

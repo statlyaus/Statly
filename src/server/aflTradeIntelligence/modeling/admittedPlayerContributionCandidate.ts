@@ -346,11 +346,18 @@ function latestFeatureMetrics(input: {
       });
     }
   }
+  const requiredMetrics = ['brownlow_votes', 'coaches_votes', 'games', 'goals'] as const;
+  const missingMetrics = requiredMetrics.filter((metricCode) => !latest.has(metricCode));
+  if (missingMetrics.length > 0) {
+    throw new RangeError(
+      `Every scalar feature metric requires one authenticated complete or explicit-zero fact: ${missingMetrics.join(', ')}.`
+    );
+  }
   return {
-    brownlow_votes: latest.get('brownlow_votes')?.value ?? 0,
-    coaches_votes: latest.get('coaches_votes')?.value ?? 0,
-    games: latest.get('games')?.value ?? 0,
-    goals: latest.get('goals')?.value ?? 0,
+    brownlow_votes: latest.get('brownlow_votes')!.value,
+    coaches_votes: latest.get('coaches_votes')!.value,
+    games: latest.get('games')!.value,
+    goals: latest.get('goals')!.value,
   };
 }
 
@@ -430,6 +437,7 @@ export function materializeAflTradeAdmittedPlayerContributionSet(input: {
       role: row.role,
       era: row.era,
       partition: observation.partition,
+      featureKnowledgePolicy: input.observationSet.content.featureKnowledgePolicy,
       predictionCutoffAt: observation.predictionCutoffAt,
       roleKnownAt: row.roleKnownAt,
       outcomeObservedAt: observation.outcome.outcomeObservedAt,
@@ -447,6 +455,7 @@ export function materializeAflTradeAdmittedPlayerContributionSet(input: {
       schemaVersion: 'afl-trade-player-observation-set/v1',
       publicIdentityBoundary: 'source_native_no_fantasy_ownership',
       valueUnitId: input.transform.valueUnitId,
+      featureKnowledgePolicy: input.observationSet.content.featureKnowledgePolicy,
       observations,
     }),
     predictorByObservationId,
@@ -544,6 +553,8 @@ export function createAflTradeAdmittedPlayerPredictions(input: {
   coefficients: CandidateCoefficients;
   modelId: string;
 }) {
+  const retrospective =
+    input.set.content.featureKnowledgePolicy === 'retrospective_as_captured_at_dataset_creation';
   return createAflTradePlayerPredictionSet({
     schemaVersion: 'afl-trade-player-prediction-set/v1',
     publicIdentityBoundary: 'source_native_no_fantasy_ownership',
@@ -557,8 +568,12 @@ export function createAflTradeAdmittedPlayerPredictions(input: {
         ? ['train', 'calibration']
         : ['train', 'calibration', 'validation'],
     finalTestRetuning: 'prohibited',
-    featurePolicy: 'point_in_time_as_known_at_feature_cutoff',
-    gamesOnlyComparator: 'point_in_time_expected_games_only',
+    featurePolicy: retrospective
+      ? 'retrospective_as_captured_at_dataset_creation'
+      : 'point_in_time_as_known_at_feature_cutoff',
+    gamesOnlyComparator: retrospective
+      ? 'retrospective_expected_games_only_as_captured_at_dataset_creation'
+      : 'point_in_time_expected_games_only',
     predictions: input.set.content.observations
       .filter(({ partition }) => partition === input.partition)
       .map((observation) => {

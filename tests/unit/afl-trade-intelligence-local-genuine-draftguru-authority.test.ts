@@ -9,9 +9,29 @@ import {
 import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { evaluateAflTradeGate0A } from '@/server/aflTradeIntelligence/source/sourceContracts';
 
+const authorityEvidence = {
+  productOwnerAuthorizationArtifactId: `artifact:${'a'.repeat(64)}`,
+  boundedCapturePlanArtifactId: `artifact:${'b'.repeat(64)}`,
+  publicAccessReviewArtifactId: `artifact:${'c'.repeat(64)}`,
+  fieldBoundaryReviewArtifactId: `artifact:${'d'.repeat(64)}`,
+};
+
 describe('local genuine-player Draftguru authority', () => {
+  it('requires retained approval and review evidence instead of generating authority', () => {
+    expect(() =>
+      createLocalGenuinePlayerDraftguruAuthorities({
+        ...authorityEvidence,
+        productOwnerAuthorizationArtifactId: 'caller-label',
+      })
+    ).toThrow(/retained authority evidence/i);
+    const [authority] = createLocalGenuinePlayerDraftguruAuthorities(authorityEvidence);
+    expect(authority?.decision.content.authorityEvidenceIds).toEqual([
+      authorityEvidence.productOwnerAuthorizationArtifactId,
+    ]);
+  });
+
   it('creates only bounded private non-production transaction capabilities', () => {
-    const authorities = createLocalGenuinePlayerDraftguruAuthorities();
+    const authorities = createLocalGenuinePlayerDraftguruAuthorities(authorityEvidence);
 
     expect(
       authorities.map(({ sourceRights }) =>
@@ -73,7 +93,7 @@ describe('local genuine-player Draftguru authority', () => {
 
   it('covers every emitted trade-index and trade-detail claim leaf', () => {
     const byCapability = new Map(
-      createLocalGenuinePlayerDraftguruAuthorities().map((authority) => [
+      createLocalGenuinePlayerDraftguruAuthorities(authorityEvidence).map((authority) => [
         authority.capabilityId,
         authority,
       ])
@@ -136,7 +156,7 @@ describe('local genuine-player Draftguru authority', () => {
   });
 
   it('produces a mechanically eligible exact capture request for every admitted season', () => {
-    const authorities = createLocalGenuinePlayerDraftguruAuthorities();
+    const authorities = createLocalGenuinePlayerDraftguruAuthorities(authorityEvidence);
     for (const authority of authorities) {
       const request = createLocalGenuinePlayerDraftguruGateRequest(authority, 2022, {
         evaluatedAt: '2026-09-03T00:10:00.000Z',
@@ -161,7 +181,7 @@ describe('local genuine-player Draftguru authority', () => {
   });
 
   it('rejects seasons outside the explicitly approved 2020-2024 window', () => {
-    const [authority] = createLocalGenuinePlayerDraftguruAuthorities();
+    const [authority] = createLocalGenuinePlayerDraftguruAuthorities(authorityEvidence);
     expect(() =>
       createLocalGenuinePlayerDraftguruGateRequest(authority!, 2025, {
         evaluatedAt: '2026-09-03T00:10:00.000Z',
@@ -170,7 +190,8 @@ describe('local genuine-player Draftguru authority', () => {
   });
 
   it('binds exact index and detail captures to their private authority', () => {
-    const [index, detail, playerDetail] = createLocalGenuinePlayerDraftguruAuthorities();
+    const [index, detail, playerDetail] =
+      createLocalGenuinePlayerDraftguruAuthorities(authorityEvidence);
     const common = {
       capturedAt: '2026-09-03T00:10:00.000Z',
       effectiveAt: '2026-09-03T00:09:00.000Z',
@@ -204,17 +225,20 @@ describe('local genuine-player Draftguru authority', () => {
 
   it('appends the three exact authorities as one optimistic ledger batch', async () => {
     let appendInput: unknown;
-    const result = await recordLocalGenuinePlayerDraftguruAuthorities({
-      load: async () => ({ revision: 7, ledger: { proposals: [], decisions: [] } }),
-      appendBatch: async (input) => {
-        appendInput = input;
-        return {
-          revision: 10,
-          ledger: { proposals: [], decisions: [] },
-          idempotentReplays: [false, false, false],
-        };
+    const result = await recordLocalGenuinePlayerDraftguruAuthorities(
+      {
+        load: async () => ({ revision: 7, ledger: { proposals: [], decisions: [] } }),
+        appendBatch: async (input) => {
+          appendInput = input;
+          return {
+            revision: 10,
+            ledger: { proposals: [], decisions: [] },
+            idempotentReplays: [false, false, false],
+          };
+        },
       },
-    });
+      authorityEvidence
+    );
 
     expect(appendInput).toMatchObject({ expectedRevision: 7 });
     expect((appendInput as { records: unknown[] }).records).toHaveLength(3);

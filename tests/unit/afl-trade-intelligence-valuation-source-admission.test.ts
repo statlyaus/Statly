@@ -7,7 +7,7 @@ import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligenc
 import { assessAflTradeValuationSourcePolicyPreflight } from '@/server/aflTradeIntelligence/valuation/valuationSourceAdmission';
 
 describe('AFL trade valuation source admission', () => {
-  it('classifies the current five-season and official local authority as source-blocked', () => {
+  it('blocks the combined source set when the official local authority remains restricted', () => {
     const rights = [
       createLocalAflTradeFiveSeasonAflTablesAuthority(2025).capture.sourceRights,
       createLocalAflTradeOfficialAfl2026Authority().capture.sourceRights,
@@ -20,10 +20,7 @@ describe('AFL trade valuation source admission', () => {
 
     expect(admission).toMatchObject({
       state: 'blocked',
-      blockers: [
-        { code: 'source_blocked', subject: { kind: 'source' } },
-        { code: 'source_blocked', subject: { kind: 'source' } },
-      ],
+      blockers: [{ code: 'source_blocked', subject: { kind: 'source' } }],
     });
   });
 

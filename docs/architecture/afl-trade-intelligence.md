@@ -1270,6 +1270,12 @@ reconciled `Coaches.Votes` field as a private training input. Canonical promotio
 transaction/event and player asset ancestry before factual lineage, dataset admission or execution
 may proceed.
 
+The bounded Draftguru transaction capture is likewise authorized only from retained evidence supplied
+to the local authority constructor: the product-owner authorization, bounded capture plan, public-use
+review, and field-boundary review. The constructor validates and binds those artifact identifiers; it
+does not generate or label its own human approval evidence. A provisioning workflow must retain the
+corresponding bytes before recording the Gate proposal and decision.
+
 The issue 574 genuine non-production diagnostic is deliberately small and retrospective. It uses
 five genuine Draftguru player trades—Adam Saad to Carlton, Jeremy Cameron to Geelong, Jordan Dawson
 to Adelaide, Josh Dunkley to Brisbane and Brodie Grundy to Sydney—joined to genuine AFL Tables match
@@ -1665,16 +1671,21 @@ validation plan, acceptance criteria, and known limitations. Public player ident
 and carry no fantasy ownership.
 
 Replacement levels are stratified by role and era and estimated from the training partition only;
-validation or test refitting is prohibited. Role assignments, corrections, and features are available
-only as known at the prediction cutoff. Unknown and observed zero remain distinct, while target-derived
-and post-outcome features are prohibited. Realized club contribution stops at real-club departure or
-the observation boundary, and active careers are right-censored under an immutable definition.
+validation or test refitting is prohibited. The default policy admits role assignments, corrections,
+and features only as known at the prediction cutoff. A separately declared retrospective policy may
+carry later evidence only when its real capture time is no later than dataset creation; that policy is
+retained on the executable observation and prediction artifacts and may not be labelled point-in-time.
+Unknown and observed zero remain distinct, while target-derived and post-outcome features are
+prohibited. Realized club contribution stops at real-club departure or the observation boundary, and
+active careers are right-censored under an immutable definition.
 
 The executable player baseline boundary lives in `src/server/aflTradeIntelligence/modeling`. Its
 strict, content-addressed observation contract requires source-native public player-season identities,
-all four chronological partitions, point-in-time role evidence, explicit contribution availability,
-games played and available, and either completed-career or right-censored evidence. It rejects fantasy
-user, league, roster, membership, and ownership fields by construction. The deterministic fitter uses
+all four chronological partitions, policy-consistent role evidence, explicit contribution
+availability, games played and available, and either completed-career or right-censored evidence. The
+genuine scalar adapter additionally requires explicit authenticated `games`, `goals`, `brownlow_votes`,
+and `coaches_votes` inputs; an omitted metric is never interpreted as zero. It rejects fantasy user,
+league, roster, membership, and ownership fields by construction. The deterministic fitter uses
 games-played weighting to estimate the declared replacement quantile for each sufficiently supported
 training-only role/era cohort. Every input then reconciles to either an auditable season score or an
 explicit unavailable, zero-game, or unsupported-cohort result. Contribution per game, impact above
@@ -1687,7 +1698,9 @@ to the same observation set, baseline fit, and value unit, and use each observat
 cutoff. A validation candidate may be selected from train and calibration only. A final-test candidate
 may also use validation, but final-test refitting remains prohibited. The evaluator compares candidate
 and point-in-time expected-games-only predictions using MAE, RMSE, bias, absolute deltas, and declared
-relative-improvement thresholds. Missing or otherwise unscored outcomes remain visible as exclusions;
+relative-improvement thresholds. Prediction artifacts retain the declared point-in-time or
+retrospective feature/comparator label rather than overstating historical availability. Missing or
+otherwise unscored outcomes remain visible as exclusions;
 insufficient comparable observations, incomplete prediction coverage, mismatched cutoffs, or broken
 artifact lineage fail closed.
 

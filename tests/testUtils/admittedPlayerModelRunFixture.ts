@@ -302,37 +302,29 @@ function valuationDatasetFixture(
         recordedAt,
       })
     );
-    const featureMetric = spellMetricFixture({
-      environment,
-      index: index + 25,
-      season: season - 1,
-      playerId,
-      clubId,
-      spellId: `feature-spell:${index + 1}`,
-      spellVersionId: `acquisition-spell-version:${featureDigest}`,
-      metricCode: 'goals',
-      numericValue: String(index + 1),
-      recordedAt: prediction,
-    });
-    const featureGamesMetric = predictiveFeatures
-      ? spellMetricFixture({
-          environment,
-          index: index + 50,
-          season: season - 1,
-          playerId,
-          clubId,
-          spellId: `feature-games-spell:${index + 1}`,
-          spellVersionId: `acquisition-spell-version:${(index + 10).toString(16).repeat(64)}`,
-          metricCode: 'games',
-          numericValue: '1',
-          recordedAt: prediction,
-        })
-      : null;
-    spellMetrics.push(
-      featureMetric,
-      ...(featureGamesMetric ? [featureGamesMetric] : []),
-      ...rowMetrics
+    const featureSpellVersionId = `acquisition-spell-version:${featureDigest}`;
+    const featureMetrics = outcomeMetricCodes.map((metricCode, metricIndex) =>
+      spellMetricFixture({
+        environment,
+        index: index + 25 + metricIndex * 25,
+        season: season - 1,
+        playerId,
+        clubId,
+        spellId: `feature-spell:${index + 1}`,
+        spellVersionId: featureSpellVersionId,
+        metricCode,
+        numericValue:
+          metricCode === 'goals'
+            ? predictiveFeatures
+              ? String(index + 1)
+              : '0'
+            : metricCode === 'games'
+              ? '1'
+              : '0',
+        recordedAt: prediction,
+      })
     );
+    spellMetrics.push(...featureMetrics, ...rowMetrics);
     const targetInputs = rowMetrics
       .map((metric) => ({
         kind: 'acquisition_spell_metric' as const,
@@ -377,40 +369,22 @@ function valuationDatasetFixture(
         acquisitionSpellVersionId: spellVersionId,
         lineageEdgeIds: [],
       },
-      featureInputs: [
-        {
-          kind: 'acquisition_spell_metric',
-          memberId: featureMetric.spellMetricVersionId,
-          recordSha256: featureMetric.factSha256,
+      featureInputs: featureMetrics
+        .map((metric) => ({
+          kind: 'acquisition_spell_metric' as const,
+          memberId: metric.spellMetricVersionId,
+          recordSha256: metric.factSha256,
           headRevision: 1,
           effectiveFrom: `${season - 1}-01-01`,
-          effectiveThrough: featureMetric.content.effectiveThrough,
-          recordedAt: featureMetric.content.recordedAt,
-          state: 'complete',
+          effectiveThrough: metric.content.effectiveThrough,
+          recordedAt: metric.content.recordedAt,
+          state: 'complete' as const,
           playerId,
           clubId,
-          spellVersionId: featureMetric.content.spell.spellVersionId,
-          metricCode: 'goals',
-        },
-        ...(featureGamesMetric
-          ? [
-              {
-                kind: 'acquisition_spell_metric' as const,
-                memberId: featureGamesMetric.spellMetricVersionId,
-                recordSha256: featureGamesMetric.factSha256,
-                headRevision: 1,
-                effectiveFrom: `${season - 1}-01-01`,
-                effectiveThrough: featureGamesMetric.content.effectiveThrough,
-                recordedAt: featureGamesMetric.content.recordedAt,
-                state: 'complete' as const,
-                playerId,
-                clubId,
-                spellVersionId: featureGamesMetric.content.spell.spellVersionId,
-                metricCode: 'games' as const,
-              },
-            ]
-          : []),
-      ].sort((left, right) => left.memberId.localeCompare(right.memberId)),
+          spellVersionId: metric.content.spell.spellVersionId,
+          metricCode: metric.content.rule.metricCode,
+        }))
+        .sort((left, right) => left.memberId.localeCompare(right.memberId)),
       targetInputs,
     });
   });

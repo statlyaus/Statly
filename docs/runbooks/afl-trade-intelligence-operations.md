@@ -654,8 +654,17 @@ The command derives each requested round set from the current retained AFL Table
 universe, then retains one authenticated private scoped capture for each season from 2021 through
 2025 and reuses exact finalized captures on retry. It executes the content-addressed Statly patch to
 the verified fitzRoy `1.7.0` source, retains `Award.Scope=home_and_away` on every row, and reconciles
-every returned match and player before review. Completion requires all 1,017 requested matches and
-exactly 30 coaches votes per match; the current admitted evidence contains 6,655 vote rows.
+every returned match before review. Completion requires all 1,017 requested matches and exactly 30
+coaches votes per match; the scoped capture contains 6,655 vote rows. A player vote becomes a training
+fact only when its recorded name and club resolve exactly inside that reviewed match lineup or an
+exact retained identity mapping applies. Other vote recipients remain in the conserved match total
+but are retained as unresolved and receive no identity or fact approval.
+
+Six provider match exceptions require exact retained reviews: four 2023 round-five rows reverse the
+home/away order, while the Brisbane–Geelong and Gold Coast–Essendon Opening Round matches are labelled
+as rounds 4 and 25 respectively by the 2025 AFLCA source and round 1 by AFL Tables. The reconciler has
+no unordered, season-only, shifted-round, or other fallback. An unreviewed exception fails closed, and
+every supplied review must be used by retained source rows.
 
 Two 2025 vote rows are absent from the current AFL Tables player-match rows. They may resolve only
 through the retained human-reviewed mappings for historical AFL Tables player `12576` (Jack Graham)
@@ -1170,7 +1179,11 @@ Brodie Grundy/Sydney 2024 (`final_test`). Use the first five home-and-away appea
 transfer as the feature window and the remaining home-and-away appearances that season as the target
 window. Register the scalar exactly as `0.05 * games + 0.08 * goals + 0.01 * Brownlow votes + 0.01 *
 coaches votes`; verify goals conserve to match rows, Brownlow votes sum to six per match and scoped
-AFLCA votes sum to 30 per matched match. Treat the result only as a private execution/replay
+AFLCA votes sum to 30 per matched match. Every one of the four scalar feature metrics must be present
+as authenticated measured or conservation-derived evidence; omission is not zero. Where unrelated
+AFLCA recipients remain unresolved, derive a selected player's zero only from a content-addressed
+complete 30-vote match certificate that also binds the selected player's reviewed identity scope.
+Treat the result only as a private execution/replay
 diagnostic: five selected transfers and a single validation row do not support population, historical
 backtest, Gate 3, production or publication claims.
 

@@ -86,6 +86,40 @@ describe('AFL trade-intelligence player-contribution contracts', () => {
     ).toBe(false);
   });
 
+  it('carries an explicit retrospective policy while legacy sets remain point-in-time', () => {
+    const recordedAt = '2026-09-02T21:00:00.000Z';
+    const retrospective = content();
+    retrospective.featureKnowledgePolicy = 'retrospective_as_captured_at_dataset_creation';
+    retrospective.observations = retrospective.observations.map((item) => ({
+      ...item,
+      featureKnowledgePolicy: 'retrospective_as_captured_at_dataset_creation' as const,
+      roleKnownAt: recordedAt,
+      outcomeObservedAt: recordedAt,
+      career: { state: 'right_censored' as const, censoredAt: recordedAt },
+    }));
+
+    expect(createAflTradePlayerObservationSet(retrospective).content).toMatchObject({
+      featureKnowledgePolicy: 'retrospective_as_captured_at_dataset_creation',
+    });
+    expect(
+      aflTradePlayerObservationSetContentSchema.safeParse({
+        ...retrospective,
+        featureKnowledgePolicy: undefined,
+        observations: retrospective.observations.map(
+          ({ featureKnowledgePolicy: _featureKnowledgePolicy, ...item }) => item
+        ),
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradePlayerObservationSetContentSchema.safeParse({
+        ...retrospective,
+        observations: retrospective.observations.map((item, index) =>
+          index === 0 ? { ...item, featureKnowledgePolicy: undefined } : item
+        ),
+      }).success
+    ).toBe(false);
+  });
+
   it('rejects impossible availability and non-zero contribution without games', () => {
     const base = observation('train');
     expect(

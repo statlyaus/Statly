@@ -124,6 +124,12 @@ export const aflTradePlayerSeasonObservationSchema = z
     role: publicIdSchema,
     era: publicIdSchema,
     partition: z.enum(AFL_TRADE_MODEL_PARTITIONS),
+    featureKnowledgePolicy: z
+      .enum([
+        'point_in_time_as_known_at_prediction_cutoff',
+        'retrospective_as_captured_at_dataset_creation',
+      ])
+      .optional(),
     predictionCutoffAt: isoDateTimeSchema,
     roleKnownAt: isoDateTimeSchema,
     outcomeObservedAt: isoDateTimeSchema,
@@ -139,7 +145,10 @@ export const aflTradePlayerSeasonObservationSchema = z
   .superRefine((observation, context) => {
     const cutoff = Date.parse(observation.predictionCutoffAt);
     const observedAt = Date.parse(observation.outcomeObservedAt);
-    if (Date.parse(observation.roleKnownAt) > cutoff) {
+    if (
+      observation.featureKnowledgePolicy !== 'retrospective_as_captured_at_dataset_creation' &&
+      Date.parse(observation.roleKnownAt) > cutoff
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['roleKnownAt'],
@@ -194,10 +203,31 @@ export const aflTradePlayerObservationSetContentSchema = z
     schemaVersion: z.literal('afl-trade-player-observation-set/v1'),
     publicIdentityBoundary: z.literal('source_native_no_fantasy_ownership'),
     valueUnitId: publicIdSchema,
+    featureKnowledgePolicy: z
+      .enum([
+        'point_in_time_as_known_at_prediction_cutoff',
+        'retrospective_as_captured_at_dataset_creation',
+      ])
+      .optional(),
     observations: z.array(aflTradePlayerSeasonObservationSchema).min(4).max(100_000),
   })
   .strict()
   .superRefine((set, context) => {
+    const featureKnowledgePolicy =
+      set.featureKnowledgePolicy ?? 'point_in_time_as_known_at_prediction_cutoff';
+    if (
+      set.observations.some(
+        (observation) =>
+          (observation.featureKnowledgePolicy ?? 'point_in_time_as_known_at_prediction_cutoff') !==
+          featureKnowledgePolicy
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['observations'],
+        message: 'Every observation must use the set feature-knowledge policy.',
+      });
+    }
     const observationIds = set.observations.map((observation) => observation.observationId);
     if (new Set(observationIds).size !== observationIds.length) {
       context.addIssue({
@@ -227,6 +257,7 @@ export const aflTradePlayerObservationSetContentSchema = z
       }
     }
     for (let index = 1; index < AFL_TRADE_MODEL_PARTITIONS.length; index += 1) {
+      if (featureKnowledgePolicy === 'retrospective_as_captured_at_dataset_creation') break;
       const previousPartition = AFL_TRADE_MODEL_PARTITIONS[index - 1];
       const currentPartition = AFL_TRADE_MODEL_PARTITIONS[index];
       const previousOutcomes = set.observations

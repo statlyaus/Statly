@@ -10,8 +10,6 @@ authority when a document and implementation disagree; fix the document in the s
   releases, optional valuation publication, and rollback.
 - [AFL trade source-rights assessment](architecture/afl-trade-source-rights-assessment.md) — Gate 0A
   candidate findings, rejection reasons, provider evidence request, and minimum approval criteria.
-- [AFL player action-value feasibility](architecture/afl-player-equity-model-feasibility.md) — public
-  Equity-method evidence, independent event-model specification, source gates, and go/no-go boundary.
 - [Runtime and data platform](architecture/data-platform.md) — current ownership boundaries and the
   accepted production target.
 - [Realtime delivery](architecture/realtime.md) — Socket.IO, Redis, BullMQ, reconnect, and authority
