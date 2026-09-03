@@ -383,6 +383,16 @@ BEGIN
     OR authority."admission_finalized_at" IS NULL
   THEN RAISE EXCEPTION 'Admitted-player dispatch lacks one exact finalized dataset'; END IF;
 
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    authority."scope_key"||chr(31)||target_operation_key,0));
+  RETURN QUERY
+  SELECT request."request_id",request."request_json"
+    FROM "outcome_private_valuation_dispatch_request" request
+   WHERE request."scope_key"=authority."scope_key"
+     AND request."trigger_kind"='ad_hoc'
+     AND request."authority_key"=target_operation_key;
+  IF FOUND THEN RETURN; END IF;
+
   scheduled_at:=date_trunc('milliseconds',clock_timestamp());
   expected_id:="create_outcome_private_valuation_dispatch_id"(
     authority."scope_key",'ad_hoc',scheduled_at,target_operation_key);
@@ -400,9 +410,7 @@ BEGIN
   RETURN QUERY
   SELECT request."request_id",request."request_json"
     FROM "outcome_private_valuation_dispatch_request" request
-   WHERE request."scope_key"=authority."scope_key"
-     AND request."trigger_kind"='ad_hoc'
-     AND request."authority_key"=target_operation_key;
+   WHERE request."request_id"=expected_id;
 END $$;
 
 REVOKE ALL ON FUNCTION "enqueue_outcome_admitted_player_dispatch"(TEXT,TEXT,TEXT) FROM PUBLIC;

@@ -84,10 +84,7 @@ async function seedEventOnlyPromotion(input: {
     proposalContent
   );
   const receiptContent = { candidateId, proposalId, approvalDecisionId };
-  const promotionId = createAflTradeContentAddress(
-    'external-canonical-promotion',
-    receiptContent
-  );
+  const promotionId = createAflTradeContentAddress('external-canonical-promotion', receiptContent);
   const proposal = { proposalId, content: proposalContent };
   const receipt = { promotionId, content: receiptContent };
   const record = { eventVersionId: row.event_version_id };
@@ -188,6 +185,99 @@ afterAll(async () => {
 });
 
 describe.sequential('genuine admitted-player PostgreSQL tracer', () => {
+  it('pins the reviewed-training admission definer to its owning schema', async () => {
+    await expect(
+      pool.query<{ configuration: string }>(
+        `SELECT array_to_string(procedure.proconfig, ',') AS configuration
+           FROM pg_proc procedure
+           JOIN pg_namespace namespace ON namespace.oid=procedure.pronamespace
+          WHERE namespace.nspname=current_schema()
+            AND procedure.proname='admit_outcome_reviewed_training_source_capture'`
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          configuration: `search_path=${schemaName}, pg_catalog, pg_temp`,
+        },
+      ],
+    });
+  });
+
+  it('coalesces concurrent and replayed admitted-player dispatches by stable operation key', async () => {
+    const datasetId = `dataset:${'1'.repeat(64)}`;
+    const admissionId = `dataset-admission:${'2'.repeat(64)}`;
+    const scopeKey = 'AFLM:issue-574-dispatch-replay';
+    const operationKey = 'issue-574-stable-operation';
+    const retainedAt = '2026-08-12T00:00:00.000Z';
+    const connection = await pool.connect();
+    await connection.query('BEGIN');
+    try {
+      await connection.query(`SET LOCAL session_replication_role='replica'`);
+      await connection.query(
+        `INSERT INTO outcome_valuation_dataset_candidate
+          (dataset_id,environment,scope_key,competition,created_at,knowledge_cutoff_at,
+           factual_release_id,factual_candidate_id,corpus_id,lineage_id,
+           source_member_set_sha256,row_count,row_set_sha256,row_set_canonical_json,
+           artifact_count,status,dataset_canonical_json,dataset_json,finalized_at)
+         VALUES ($1,'non_production',$2,'AFLM',$3,$3,$4,$5,$6,$7,$8,1,$9,'{}',10,
+                 'finalized','{}','{}'::jsonb,$3)`,
+        [
+          datasetId,
+          scopeKey,
+          retainedAt,
+          `outcome-release:${'3'.repeat(64)}`,
+          `factual-release-candidate:${'4'.repeat(64)}`,
+          `corpus:${'5'.repeat(64)}`,
+          `corpus-factual-lineage:${'6'.repeat(64)}`,
+          '7'.repeat(64),
+          '8'.repeat(64),
+        ]
+      );
+      await connection.query(
+        `INSERT INTO outcome_valuation_dataset_admission
+          (admission_id,dataset_id,environment,admitted_at,gate2_decision_id,
+           gate_ledger_revision,analytical_authority_receipt_id,
+           operational_authorization_receipt_id,source_count,status,
+           admission_canonical_json,admission_json,finalized_at)
+         VALUES ($1,$2,'non_production',$3,$4,1,$5,$6,1,'finalized','{}','{}'::jsonb,$3)`,
+        [
+          admissionId,
+          datasetId,
+          retainedAt,
+          `gate-decision:${'9'.repeat(64)}`,
+          `architecture-operation-receipt:${'a'.repeat(64)}`,
+          `architecture-operation-receipt:${'b'.repeat(64)}`,
+        ]
+      );
+      await connection.query('COMMIT');
+    } catch (error) {
+      await connection.query('ROLLBACK');
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    const enqueue = () =>
+      restrictedPool.query<{ request_id: string; request_json: unknown }>(
+        'SELECT * FROM enqueue_outcome_admitted_player_dispatch($1,$2,$3)',
+        [datasetId, admissionId, operationKey]
+      );
+    const [first, concurrent] = await Promise.all([enqueue(), enqueue()]);
+    const replay = await enqueue();
+
+    expect(first.rows).toHaveLength(1);
+    expect(concurrent.rows).toEqual(first.rows);
+    expect(replay.rows).toEqual(first.rows);
+    await expect(
+      pool.query<{ count: number }>(
+        `SELECT count(*)::integer AS count
+           FROM outcome_private_valuation_dispatch_request
+          WHERE scope_key=$1 AND trigger_kind='ad_hoc' AND authority_key=$2`,
+        [scopeKey, operationKey]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: 1 }] });
+  });
+
   it('rejects locally fabricated rehearsal lineage before dataset admission or model execution', async () => {
     const staged = await stageAcceptedPrivateValuationCaptureFixture(
       client,

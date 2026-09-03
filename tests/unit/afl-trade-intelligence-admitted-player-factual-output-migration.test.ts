@@ -45,9 +45,9 @@ describe('admitted-player factual output migration', () => {
     expect(migration).toContain('outcome_private_factual_output_v1_candidate_key');
     expect(migration).toContain('outcome_private_factual_output_v1_release_key');
     expect(migration).toContain('enqueue_outcome_admitted_player_dispatch');
-    expect(migration).toContain(
-      `count(DISTINCT required."evaluation"->>'proposalId')`
-    );
+    expect(migration).toContain('authority."scope_key"||chr(31)||target_operation_key,0');
+    expect(migration).toContain('IF FOUND THEN RETURN; END IF;');
+    expect(migration).toContain(`count(DISTINCT required."evaluation"->>'proposalId')`);
     expect(migration).toContain(`count(DISTINCT requested."receipt_id")`);
     expect(migration).toContain('validate_outcome_valuation_model_authorization_insert');
   });

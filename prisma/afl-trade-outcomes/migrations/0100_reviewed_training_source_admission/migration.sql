@@ -373,6 +373,12 @@ BEGIN
   RETURN jsonb_build_object('state','admitted','admission',target_admission);
 END $$;
 
+DO $paths$ BEGIN
+  EXECUTE format(
+    'ALTER FUNCTION %I.admit_outcome_reviewed_training_source_capture(TEXT,TEXT) SET search_path TO %I,pg_catalog,pg_temp',
+    current_schema(),current_schema());
+END $paths$;
+
 REVOKE ALL ON "outcome_reviewed_training_source_admission" FROM PUBLIC;
 GRANT SELECT ON "outcome_reviewed_training_source_admission"
   TO afl_trade_private_valuation_scheduler_owner,afl_trade_private_evaluation_coordinator;

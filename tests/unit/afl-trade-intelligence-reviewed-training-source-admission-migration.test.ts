@@ -36,6 +36,9 @@ describe('reviewed training source admission migration', () => {
       'EXISTS (\n        SELECT 1 FROM "outcome_reviewed_training_source_admission" admission'
     );
     expect(migration).toContain('SECURITY DEFINER');
+    expect(migration).toContain(
+      'ALTER FUNCTION %I.admit_outcome_reviewed_training_source_capture(TEXT,TEXT) SET search_path TO %I,pg_catalog,pg_temp'
+    );
     expect(migration).toContain('REVOKE ALL ON FUNCTION');
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION');
   });
