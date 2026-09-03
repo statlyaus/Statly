@@ -5,7 +5,7 @@ import type {
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import { LOCAL_AFL_TRADE_FIVE_SEASON_WINDOW } from './localFiveSeasonFitzRoyOutcomeLoad';
 
-interface LocalFiveSeasonAflTablesReviewRow {
+export interface LocalFiveSeasonAflTablesReviewRow {
   capture_id: string;
   normalization_run_id: string;
   season_year: number;
@@ -32,13 +32,16 @@ export interface LocalFiveSeasonAflTablesReviewEvidence {
   appearanceCount: number;
   exactGoalsAppearanceCount: number;
   unavailableGoalsAppearanceCount: number;
+  corpusSha256: string;
   evidenceSetSha256: string;
 }
 
 const EXPECTED_APPEARANCE_COUNT = 48_769;
 export const LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 =
   '41a90da56a0e682888d50f0e95e729af838f9103708eba50bffae82f33c4523b';
-const DECIDED_AT = '2026-08-14T12:15:00.000Z';
+export const LOCAL_FIVE_SEASON_AFL_TABLES_CORPUS_SHA256 =
+  'e6581c1c98e87f69ae6ac816daa654cf585a81cf2ccb5db4d1a6f94dc00b91b8';
+const DECIDED_AT = '2026-09-03T10:02:00.000Z';
 
 const REVIEWED_ROWS_CTE = `WITH reviewed_rows AS (
   SELECT capture.capture_id,run.normalization_run_id,decoded.season_year,
@@ -110,6 +113,33 @@ function evidenceSetSha256(rows: readonly LocalFiveSeasonAflTablesReviewRow[]): 
   );
 }
 
+export function createLocalFiveSeasonAflTablesCorpusSha256(
+  rows: readonly LocalFiveSeasonAflTablesReviewRow[]
+): string {
+  return sha256AflTradeCanonicalJson(
+    rows
+      .map((row) => ({
+        season_year: row.season_year,
+        native_entity_id: row.native_entity_id,
+        recorded_name: row.recorded_name,
+        recorded_club_name: row.recorded_club_name,
+        order_independent_sha256: row.order_independent_sha256,
+        match_date_text: row.match_date_text,
+        definition_version: row.definition_version,
+        availability: row.availability,
+        numeric_value: row.numeric_value,
+        missing_reason: row.missing_reason,
+        source_field: row.source_field,
+      }))
+      .sort(
+        (left, right) =>
+          left.season_year - right.season_year ||
+          left.native_entity_id.localeCompare(right.native_entity_id) ||
+          left.order_independent_sha256.localeCompare(right.order_independent_sha256)
+      )
+  );
+}
+
 function summarizeReviewRows(
   rows: readonly LocalFiveSeasonAflTablesReviewRow[]
 ): LocalFiveSeasonAflTablesReviewEvidence {
@@ -121,12 +151,16 @@ function summarizeReviewRows(
   const unavailableGoalsAppearanceCount = rows.filter(
     ({ availability }) => availability === 'quarantined'
   ).length;
+  const semanticAppearanceKeys = rows.map(
+    (row) => `${row.season_year}\u0000${row.native_entity_id}\u0000${row.order_independent_sha256}`
+  );
   if (
     rows.length !== EXPECTED_APPEARANCE_COUNT ||
     new Set(rows.map(({ provider_decoded_row_id }) => provider_decoded_row_id)).size !==
       rows.length ||
     new Set(rows.map(({ identity_candidate_id }) => identity_candidate_id)).size !== rows.length ||
     new Set(rows.map(({ match_candidate_id }) => match_candidate_id)).size !== rows.length ||
+    new Set(semanticAppearanceKeys).size !== rows.length ||
     captures.size !== LOCAL_AFL_TRADE_FIVE_SEASON_WINDOW.length ||
     seasons.join(',') !== LOCAL_AFL_TRADE_FIVE_SEASON_WINDOW.join(',') ||
     exactGoalsAppearanceCount + unavailableGoalsAppearanceCount !== rows.length ||
@@ -150,6 +184,7 @@ function summarizeReviewRows(
     appearanceCount: rows.length,
     exactGoalsAppearanceCount,
     unavailableGoalsAppearanceCount,
+    corpusSha256: createLocalFiveSeasonAflTablesCorpusSha256(rows),
     evidenceSetSha256: evidenceSetSha256(rows),
   };
 }
@@ -178,6 +213,7 @@ async function insertIdentityReviews(
             'Approve this exact AFL Tables player-club identity only for private local evaluation.',
             jsonb_build_object(
               'evidenceSetSha256',$1::text,
+              'corpusSha256',$4::text,
               'captureId',capture_id,
               'normalizationRunId',normalization_run_id,
               'providerDecodedRowId',provider_decoded_row_id,
@@ -192,7 +228,7 @@ async function insertIdentityReviews(
          WHERE existing.decision_id=
                'local-afl-tables-review:identity:' || reviewed_rows.identity_candidate_id
       )`,
-    [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds]
+    [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds, evidenceSet.corpusSha256]
   );
 }
 
@@ -212,6 +248,7 @@ async function insertMatchReviews(
             'Approve this exact AFL Tables match candidate only for private local evaluation.',
             jsonb_build_object(
               'evidenceSetSha256',$1::text,
+              'corpusSha256',$4::text,
               'captureId',capture_id,
               'normalizationRunId',normalization_run_id,
               'providerDecodedRowId',provider_decoded_row_id,
@@ -225,7 +262,7 @@ async function insertMatchReviews(
          WHERE existing.decision_id=
                'local-afl-tables-review:match:' || reviewed_rows.match_candidate_id
       )`,
-    [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds]
+    [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds, evidenceSet.corpusSha256]
   );
 }
 
@@ -246,6 +283,7 @@ async function insertFactualReviews(
             'Reconcile one reviewed appearance and only an unambiguous goals value for private local evaluation.',
             jsonb_strip_nulls(jsonb_build_object(
               'evidenceSetSha256',$1::text,
+              'corpusSha256',$4::text,
               'identityCandidateId',identity_candidate_id,
               'matchCandidateId',match_candidate_id,
               'appearanceObserved',true,
@@ -262,7 +300,7 @@ async function insertFactualReviews(
          WHERE existing.decision_id=
                'local-afl-tables-review:fact:' || reviewed_rows.provider_decoded_row_id
       )`,
-    [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds]
+    [evidenceSet.evidenceSetSha256, DECIDED_AT, providerDecodedRowIds, evidenceSet.corpusSha256]
   );
 }
 
@@ -271,7 +309,7 @@ export async function reviewLocalFiveSeasonAflTablesEvidence(
 ): Promise<LocalFiveSeasonAflTablesReviewEvidence> {
   const rows = await loadReviewRows(client);
   const evidenceSet = summarizeReviewRows(rows);
-  if (evidenceSet.evidenceSetSha256 !== LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256) {
+  if (evidenceSet.corpusSha256 !== LOCAL_FIVE_SEASON_AFL_TABLES_CORPUS_SHA256) {
     throw new TypeError(
       'The AFL Tables 2021-2025 candidates do not match the exact reviewed evidence set.'
     );

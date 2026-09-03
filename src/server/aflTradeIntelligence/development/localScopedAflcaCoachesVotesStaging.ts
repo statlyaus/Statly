@@ -14,7 +14,7 @@ import {
 import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoyProviderIngestion';
 import { PostgresAflTradeProviderObservationRepository } from '../source/postgresProviderObservationRepository';
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
-import { LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 } from './localFiveSeasonAflTablesReview';
+import { LOCAL_FIVE_SEASON_AFL_TABLES_CORPUS_SHA256 } from './localFiveSeasonAflTablesReview';
 import { createLocalAflTradeDockerFitzRoyCaptureExecutor } from './localDockerFitzRoyCaptureExecutor';
 import { createLocalAflTradeDockerFitzRoyDecodeExecutor } from './localDockerFitzRoyDecodeExecutor';
 import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
@@ -294,6 +294,21 @@ async function ensureFieldMapReview(
 async function loadExpectedParticipants(
   client: AflOutcomeSqlClient
 ): Promise<LocalScopedAflTablesParticipant[]> {
+  const admittedReview = await client.query<{ evidence_set_sha256: string }>(
+    `SELECT decision.evidence_json->>'evidenceSetSha256' AS evidence_set_sha256
+       FROM outcome_review_decision decision
+      WHERE decision.subject_type='local_review_set'
+        AND decision.decision='approved'
+        AND decision.decided_by='local-five-season-evidence-reviewer'
+        AND decision.evidence_json->>'corpusSha256'=$1
+        AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
+                         WHERE successor.supersedes_decision_id=decision.decision_id)`,
+    [LOCAL_FIVE_SEASON_AFL_TABLES_CORPUS_SHA256]
+  );
+  const evidenceSetSha256 = admittedReview.rows[0]?.evidence_set_sha256;
+  if (admittedReview.rows.length !== 1 || evidenceSetSha256 === undefined) {
+    throw new TypeError('Scoped AFLCA staging requires one exact current AFL Tables review set.');
+  }
   const result = await client.query<ParticipantRow>(
     `SELECT DISTINCT decoded.season_year,match.round_label,match.home_club_name,
             match.away_club_name,identity.recorded_name,identity.recorded_club_name,
@@ -331,7 +346,7 @@ async function loadExpectedParticipants(
                          WHERE successor.supersedes_decision_id=match_review.decision_id)
       ORDER BY decoded.season_year,match.round_label,match.home_club_name,
                match.away_club_name,identity.recorded_club_name,identity.recorded_name`,
-    [[...LOCAL_SCOPED_AFLCA_SEASONS], LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256]
+    [[...LOCAL_SCOPED_AFLCA_SEASONS], evidenceSetSha256]
   );
   const participants = result.rows.map((row) => ({
     seasonYear: row.season_year,
