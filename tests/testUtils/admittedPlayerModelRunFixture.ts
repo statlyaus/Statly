@@ -905,10 +905,11 @@ export function admittedRunFixture(
     weights: { brownlow_votes: 2, coaches_votes: 1.5, games: 1, goals: 0.5 },
   };
   const protocolTemplate = protocolContent(environment);
-  const pointInTimeFeatures = {
-    schemaVersion: 'afl-trade-player-point-in-time-feature-set/v1' as const,
+  const featureValues = {
+    schemaVersion: 'afl-trade-player-feature-set/v2' as const,
     datasetId,
     createdAt: datasetCreatedAt,
+    featureKnowledgePolicy: protocolTemplate.featurePolicy.knowledgeJoin,
     roleTaxonomyArtifactId: protocolTemplate.footballContext.roleTaxonomyArtifact.artifactId,
     eraDefinitionArtifactId: protocolTemplate.footballContext.eraDefinitionArtifact.artifactId,
     rows: datasetCandidate.content.rows.map(({ rowId, content }) => ({
@@ -954,7 +955,7 @@ export function admittedRunFixture(
     intervalCoverageLevel: 0.8,
   };
   const scalarTransformArtifact = jsonArtifact(scalarTransform);
-  const pointInTimeFeatureValuesArtifact = jsonArtifact(pointInTimeFeatures);
+  const featureValuesArtifact = jsonArtifact(featureValues);
   const configurationArtifact = jsonArtifact(candidateConfig);
   const protocol = createAflTradePlayerContributionModelProtocolV2({
     ...protocolTemplate,
@@ -965,7 +966,7 @@ export function admittedRunFixture(
       valueUnitId: scalarTransform.valueUnitId,
     },
     scalarValueTransformArtifact: scalarTransformArtifact,
-    pointInTimeFeatureValuesArtifact,
+    featureValuesArtifact,
     datasetAdmission: {
       schemaVersion: 'afl-trade-dataset-admission/v3',
       admissionId: admission.admissionId,
@@ -1050,7 +1051,7 @@ export function admittedRunFixture(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
-    protocol.content.pointInTimeFeatureValuesArtifact!,
+    protocol.content.featureValuesArtifact!,
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,

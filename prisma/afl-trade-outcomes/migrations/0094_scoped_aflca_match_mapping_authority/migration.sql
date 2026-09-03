@@ -11,6 +11,9 @@ BEGIN
        OR NEW."canonical_record_type" IS NOT NULL
        OR NEW."canonical_record_id" IS NOT NULL
        OR NEW."subject_id" !~ '^artifact:[a-f0-9]{64}$'
+       OR NEW."subject_id" IS DISTINCT FROM
+          'artifact:'||encode(sha256(convert_to(
+            "outcome_afl_trade_canonical_json"(NEW."evidence_json"),'UTF8')),'hex')
        OR NEW."decision_id" IS DISTINCT FROM
           'local-scoped-aflca-match-mapping:'||substring(NEW."subject_id" from 10)
        OR NEW."evidence_json"->>'schemaVersion'<>'local-scoped-aflca-reviewed-match/v1'

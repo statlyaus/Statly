@@ -1271,10 +1271,11 @@ transaction/event and player asset ancestry before factual lineage, dataset admi
 may proceed.
 
 The bounded Draftguru transaction capture is likewise authorized only from retained evidence supplied
-to the local authority constructor: the product-owner authorization, bounded capture plan, public-use
-review, and field-boundary review. The constructor validates and binds those artifact identifiers; it
-does not generate or label its own human approval evidence. A provisioning workflow must retain the
-corresponding bytes before recording the Gate proposal and decision.
+to the local authority loader: the product-owner authorization, bounded capture plan, public-use
+review, and field-boundary review. Each document has an exact issue, provider, environment, scope,
+decision, author and recording-time contract. The loader recomputes its canonical reference and
+reads the exact retained bytes from private capture-metadata custody before any Gate ledger read or
+append; an identifier alone cannot create authority.
 
 The issue 574 genuine non-production diagnostic is deliberately small and retrospective. It uses
 five genuine Draftguru player trades—Adam Saad to Carlton, Jeremy Cameron to Geelong, Jordan Dawson
@@ -1289,6 +1290,13 @@ exact admission, native execution and retained replay only. Its five selected tr
 validation partition, retrospective capture in 2026, hand-selected scalar and lack of role diversity
 make it unsuitable for population inference, historical point-in-time claims, Gate 3 approval,
 production valuation or publication.
+
+The executable feature artifact is policy-neutral
+`afl-trade-player-feature-set/v2`. It retains the same knowledge policy as the model protocol and
+observation set, and the fitted model retains both that policy and the artifact identifier. The
+legacy point-in-time-only protocol field remains replay-compatible only for genuinely point-in-time
+protocols; retrospective protocols must use the neutral field and cannot parse a point-in-time-labelled
+feature document.
 
 The local execution entry point is request-bound rather than target-bound. Its public input is the
 retained dispatch request identifier plus live claim custody. Inside the coordinator database role it

@@ -1181,8 +1181,10 @@ window. Register the scalar exactly as `0.05 * games + 0.08 * goals + 0.01 * Bro
 coaches votes`; verify goals conserve to match rows, Brownlow votes sum to six per match and scoped
 AFLCA votes sum to 30 per matched match. Every one of the four scalar feature metrics must be present
 as authenticated measured or conservation-derived evidence; omission is not zero. Where unrelated
-AFLCA recipients remain unresolved, derive a selected player's zero only from a content-addressed
-complete 30-vote match certificate that also binds the selected player's reviewed identity scope.
+AFLCA recipients remain unresolved, preserve every positive source-native recipient row in the
+content-addressed conservation input. Derive a selected player's zero only after those resolved and
+unresolved positive rows exactly conserve both club goal totals, six Brownlow votes and 30 AFLCA
+votes for the match; a caller-asserted completeness certificate is not evidence.
 Treat the result only as a private execution/replay
 diagnostic: five selected transfers and a single validation row do not support population, historical
 backtest, Gate 3, production or publication claims.

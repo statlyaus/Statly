@@ -158,46 +158,17 @@ describe('local player metric conservation', () => {
     expect(conserveLocalPlayerMatchMetrics(match)).toEqual(result);
   });
 
-  it('derives a selected-player zero from complete totals without resolving other recipients', () => {
+  it('derives a selected-player zero from a conserved positive-row preimage without resolving other recipients', () => {
     const selectedPlayerId = 'afl-player:away-two';
+    const unresolvedPositiveMetrics = match.positiveMetrics.map((metric, index) => ({
+      ...metric,
+      playerId: null,
+      sourceIdentityId: `afl-tables-player-row:${index}`,
+    }));
     const result = conserveLocalPlayerMatchMetrics({
       ...match,
       appearances: match.appearances.filter(({ playerId }) => playerId === selectedPlayerId),
-      positiveMetrics: [],
-      completeMetricEvidence: [
-        {
-          metricCode: 'goals',
-          clubId: 'afl-club:home',
-          expectedTotal: 2,
-          observedTotal: 2,
-          sourceFactIds: ['local-fact:complete-home-goals'],
-          reviewedPlayerIds: [],
-        },
-        {
-          metricCode: 'goals',
-          clubId: 'afl-club:away',
-          expectedTotal: 1,
-          observedTotal: 1,
-          sourceFactIds: ['local-fact:complete-away-goals'],
-          reviewedPlayerIds: [selectedPlayerId],
-        },
-        {
-          metricCode: 'brownlow_votes',
-          clubId: null,
-          expectedTotal: 6,
-          observedTotal: 6,
-          sourceFactIds: ['local-fact:complete-brownlow'],
-          reviewedPlayerIds: [selectedPlayerId],
-        },
-        {
-          metricCode: 'coaches_votes',
-          clubId: null,
-          expectedTotal: 30,
-          observedTotal: 30,
-          sourceFactIds: ['local-fact:complete-coaches'],
-          reviewedPlayerIds: [selectedPlayerId],
-        },
-      ],
+      positiveMetrics: unresolvedPositiveMetrics,
     });
 
     expect(result.rows).toHaveLength(1);
@@ -206,28 +177,39 @@ describe('local player metric conservation', () => {
       metrics: { games: 1, goals: 0, brownlow_votes: 0, coaches_votes: 0 },
     });
     expect(result.rows[0]?.provenance.coaches_votes.sourceFactIds).toContain(
-      'local-fact:complete-coaches'
+      'local-fact:coaches-home-one'
     );
   });
 
-  it('rejects incomplete or differently scoped total evidence', () => {
+  it('rejects an incomplete unresolved positive-row preimage', () => {
     expect(() =>
       conserveLocalPlayerMatchMetrics({
         ...match,
-        completeMetricEvidence: [
-          {
-            metricCode: 'coaches_votes',
-            clubId: null,
-            expectedTotal: 30,
-            observedTotal: 29,
-            sourceFactIds: ['local-fact:incomplete-coaches'],
-            reviewedPlayerIds: match.appearances.map(({ playerId }) => playerId),
-          },
-        ],
+        appearances: match.appearances.slice(-1),
+        positiveMetrics: match.positiveMetrics
+          .filter(({ sourceFactId }) => sourceFactId !== 'local-fact:coaches-away-two')
+          .map((metric, index) => ({
+            ...metric,
+            playerId: null,
+            sourceIdentityId: `afl-tables-player-row:${index}`,
+          })),
       })
     ).toThrowError(
       expect.objectContaining<Partial<LocalPlayerMetricConservationError>>({
-        code: 'METRIC_COMPLETENESS_MISMATCH',
+        code: 'COACHES_TOTAL_MISMATCH',
+      })
+    );
+  });
+
+  it('rejects unresolved positive rows without a source-native identity', () => {
+    expect(() =>
+      conserveLocalPlayerMatchMetrics({
+        ...match,
+        positiveMetrics: [{ ...match.positiveMetrics[0]!, playerId: null }],
+      })
+    ).toThrowError(
+      expect.objectContaining<Partial<LocalPlayerMetricConservationError>>({
+        code: 'INVALID_MATCH_EVIDENCE',
       })
     );
   });

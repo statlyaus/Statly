@@ -972,6 +972,29 @@ describe('admitted AFL trade model authority contracts', () => {
     expect(protocol.content.sourceOutcomeVector).toEqual(outcomeMetricCodes);
   });
 
+  it('requires retrospective protocols to use the policy-neutral feature artifact field', () => {
+    const retrospective = {
+      ...protocolContent(),
+      featurePolicy: {
+        ...protocolContent().featurePolicy,
+        knowledgeJoin: 'retrospective_as_captured_at_dataset_creation' as const,
+      },
+    };
+    expect(() =>
+      createAflTradePlayerContributionModelProtocolV2({
+        ...retrospective,
+        pointInTimeFeatureValuesArtifact: artifact('1'),
+      })
+    ).toThrow(/may not use a point-in-time-labelled contract/i);
+
+    expect(() =>
+      createAflTradePlayerContributionModelProtocolV2({
+        ...retrospective,
+        featureValuesArtifact: artifact('1'),
+      })
+    ).not.toThrow();
+  });
+
   it('rejects protocol chronology and duplicate or unordered run-start rights evidence', () => {
     expect(() =>
       createAflTradePlayerContributionModelProtocolV2({

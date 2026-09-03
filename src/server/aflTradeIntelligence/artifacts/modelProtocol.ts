@@ -232,6 +232,9 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
     ]),
     scalarValueTransformArtifact: aflTradeArtifactRefSchema,
     scalarValueDerivation: z.literal('requires_separately_governed_value_unit_transform'),
+    featureValuesArtifact: aflTradeArtifactRefSchema.optional(),
+    featureValueBinding: z.literal('exact_admitted_feature_member_ids_and_hashes').optional(),
+    /** Legacy point-in-time-only field retained for authenticated replay of earlier v2 protocols. */
     pointInTimeFeatureValuesArtifact: aflTradeArtifactRefSchema.optional(),
     pointInTimeFeatureValueBinding: z
       .literal('exact_admitted_feature_member_ids_and_hashes')
@@ -245,6 +248,8 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
       sourceOutcomeVector: _sourceOutcomeVector,
       scalarValueTransformArtifact: _scalarValueTransformArtifact,
       scalarValueDerivation: _scalarValueDerivation,
+      featureValuesArtifact: _featureValuesArtifact,
+      featureValueBinding: _featureValueBinding,
       pointInTimeFeatureValuesArtifact: _pointInTimeFeatureValuesArtifact,
       pointInTimeFeatureValueBinding: _pointInTimeFeatureValueBinding,
       ...legacyContent
@@ -266,6 +271,17 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
       });
     }
     if (
+      (protocol.featureValuesArtifact === undefined) !==
+      (protocol.featureValueBinding === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['featureValuesArtifact'],
+        message:
+          'Governed feature values and their exact admitted-member binding must be declared together.',
+      });
+    }
+    if (
       (protocol.pointInTimeFeatureValuesArtifact === undefined) !==
       (protocol.pointInTimeFeatureValueBinding === undefined)
     ) {
@@ -274,6 +290,26 @@ export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
         path: ['pointInTimeFeatureValuesArtifact'],
         message:
           'Point-in-time feature values and their exact admitted-member binding must be declared together.',
+      });
+    }
+    if (
+      protocol.featureValuesArtifact !== undefined &&
+      protocol.pointInTimeFeatureValuesArtifact !== undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['featureValuesArtifact'],
+        message: 'A protocol may bind only one governed feature-values artifact.',
+      });
+    }
+    if (
+      protocol.featurePolicy.knowledgeJoin === 'retrospective_as_captured_at_dataset_creation' &&
+      protocol.pointInTimeFeatureValuesArtifact !== undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pointInTimeFeatureValuesArtifact'],
+        message: 'Retrospective feature evidence may not use a point-in-time-labelled contract.',
       });
     }
   });
@@ -312,6 +348,7 @@ export function createAflTradePlayerContributionModelProtocolV2(
     | 'observationGrain'
     | 'sourceOutcomeVector'
     | 'scalarValueDerivation'
+    | 'featureValueBinding'
     | 'pointInTimeFeatureValueBinding'
   >
 ): AflTradePlayerContributionModelProtocolV2 {
@@ -320,6 +357,9 @@ export function createAflTradePlayerContributionModelProtocolV2(
     observationGrain: 'player_acquisition_spell_prediction',
     sourceOutcomeVector: ['brownlow_votes', 'coaches_votes', 'games', 'goals'],
     scalarValueDerivation: 'requires_separately_governed_value_unit_transform',
+    ...(input.featureValuesArtifact === undefined
+      ? {}
+      : { featureValueBinding: 'exact_admitted_feature_member_ids_and_hashes' as const }),
     ...(input.pointInTimeFeatureValuesArtifact === undefined
       ? {}
       : {

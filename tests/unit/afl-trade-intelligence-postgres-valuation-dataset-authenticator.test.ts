@@ -19,7 +19,22 @@ vi.mock('@/server/aflTradeIntelligence/outcomes/factualReleaseCandidateContracts
   aflTradeFactualReleaseCandidateSchema: { parse: (value: unknown) => value },
 }));
 vi.mock('@/server/aflTradeIntelligence/artifacts/sourceSnapshotManifest', () => ({
-  aflTradeSourceSnapshotManifestSchema: { parse: (value: unknown) => value },
+  aflTradeSourceSnapshotManifestSchema: {
+    parse: (value: unknown) => value,
+    safeParse: (value: any) => ({
+      success: true,
+      data: {
+        snapshotId: value.snapshotId,
+        content: {
+          gate0aReceipt: { content: { request: { fieldUses: [] } } },
+          sourceRightsProposal: value.content.sourceRightsProposal,
+          gate0aDecision: value.content.gate0aDecision,
+          capturedFields: [],
+          createdAt: '2026-08-09T00:00:00.000Z',
+        },
+      },
+    }),
+  },
 }));
 vi.mock('@/server/aflTradeIntelligence/source/gate0aReceipt', () => ({
   aflTradeGate0AReceiptSchema: { parse: (value: unknown) => value },

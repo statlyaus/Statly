@@ -497,6 +497,36 @@ async function retainReviewedMatchMappings(client: AflOutcomeSqlClient): Promise
         DECIDED_AT,
       ]
     );
+    const retained = await client.query<{
+      subject_id: string;
+      decision: string;
+      canonical_record_type: string | null;
+      canonical_record_id: string | null;
+      rationale: string;
+      evidence_json: unknown;
+      decided_by: string;
+      decided_at: Date | string;
+    }>(
+      `SELECT subject_id,decision,canonical_record_type,canonical_record_id,rationale,
+              evidence_json,decided_by,decided_at
+         FROM outcome_review_decision WHERE decision_id=$1`,
+      [mapping.reviewDecisionId]
+    );
+    const row = retained.rows[0];
+    if (
+      retained.rows.length !== 1 ||
+      row === undefined ||
+      row.subject_id !== mapping.evidenceId ||
+      row.decision !== 'approved' ||
+      row.canonical_record_type !== null ||
+      row.canonical_record_id !== null ||
+      row.rationale !== mapping.reviewContent.rationale ||
+      canonicalizeAflTradeJson(row.evidence_json) !== evidenceJson ||
+      row.decided_by !== 'statly-product-owner' ||
+      new Date(row.decided_at).toISOString() !== DECIDED_AT
+    ) {
+      throw new TypeError('A retained scoped AFLCA match mapping differs from its review.');
+    }
   }
 }
 

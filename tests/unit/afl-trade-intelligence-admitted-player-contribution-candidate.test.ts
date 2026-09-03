@@ -66,7 +66,7 @@ describe('admitted player contribution candidate', () => {
   it('rejects an admitted observation that omits a scalar feature metric', () => {
     const fixture = admittedRunFixture('non_production');
     const first = fixture.observationSet.content.observations[0]!;
-    const featureArtifactId = fixture.protocol.content.pointInTimeFeatureValuesArtifact!.artifactId;
+    const featureArtifactId = fixture.protocol.content.featureValuesArtifact!.artifactId;
     const featureArtifact = fixture.evidence.executableArtifacts.find(
       ({ artifactId }) => artifactId === featureArtifactId
     )!;
@@ -161,8 +161,8 @@ describe('admitted player contribution candidate', () => {
       schemaVersion: 'afl-trade-admitted-player-candidate/v1',
       sourceObservationSetId: fixture.observationSet.observationSetId,
       scalarTransformArtifactId: fixture.protocol.content.scalarValueTransformArtifact.artifactId,
-      pointInTimeFeatureValuesArtifactId:
-        fixture.protocol.content.pointInTimeFeatureValuesArtifact?.artifactId,
+      featureValuesArtifactId: fixture.protocol.content.featureValuesArtifact?.artifactId,
+      featureKnowledgePolicy: fixture.protocol.content.featurePolicy.knowledgeJoin,
       configurationArtifactId: fixture.intent.content.configurationArtifact.artifactId,
       trainingPartition: 'train',
       finalTestRetuning: 'prohibited',
@@ -244,7 +244,7 @@ describe('admitted player contribution candidate', () => {
 
   it('rejects a hash-correct feature artifact whose value differs from its factual body', async () => {
     const fixture = admittedRunFixture('non_production');
-    const featureReference = fixture.protocol.content.pointInTimeFeatureValuesArtifact!;
+    const featureReference = fixture.protocol.content.featureValuesArtifact!;
     const featureArtifact = fixture.evidence.executableArtifacts.find(
       ({ artifactId }) => artifactId === featureReference.artifactId
     )!;
@@ -279,7 +279,7 @@ describe('admitted player contribution candidate', () => {
           ...fixture.protocol,
           content: {
             ...fixture.protocol.content,
-            pointInTimeFeatureValuesArtifact: changedReference,
+            featureValuesArtifact: changedReference,
           },
         },
         observationSet: fixture.observationSet,

@@ -682,8 +682,7 @@ function gate2IsCurrent(
     ]);
     const validFrom = dimensions.get('valid_from_season') ?? [];
     const validThrough = dimensions.get('valid_through_season') ?? [];
-    const legacyScope =
-      exactScopeKey && exactIds(dimensionNames, ['competition', 'scope']);
+    const legacyScope = exactScopeKey && exactIds(dimensionNames, ['competition', 'scope']);
     const privateFactualScope =
       exactScopeKey &&
       exactIds(dimensionNames, [
@@ -699,7 +698,9 @@ function gate2IsCurrent(
       Number(validFrom[0]) <= Number(validThrough[0]);
     return (
       decision.content.scope.scopeKey === evidence.datasetCandidate.content.scopeKey &&
-      exactIds(dimensions.get('competition') ?? [], [evidence.datasetCandidate.content.competition]) &&
+      exactIds(dimensions.get('competition') ?? [], [
+        evidence.datasetCandidate.content.competition,
+      ]) &&
       (legacyScope || privateFactualScope)
     );
   };
@@ -837,6 +838,9 @@ function executableArtifactsMatch(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.featureValuesArtifact === undefined
+      ? []
+      : [protocol.content.featureValuesArtifact]),
     ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
       ? []
       : [protocol.content.pointInTimeFeatureValuesArtifact]),

@@ -222,6 +222,9 @@ function executableReferences(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.featureValuesArtifact === undefined
+      ? []
+      : [protocol.content.featureValuesArtifact]),
     ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
       ? []
       : [protocol.content.pointInTimeFeatureValuesArtifact]),

@@ -1,7 +1,19 @@
+import { z } from 'zod';
+
 import {
+  AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE,
+  aflTradeArtifactRefSchema,
+  createAflTradeCanonicalJsonArtifactRef,
+  doAflTradeArtifactRefsExactlyMatch,
+  doesAflTradeArtifactRefMatchBytes,
+  type AflTradeArtifactRef,
+} from '../artifacts/artifactReference';
+import {
+  canonicalizeAflTradeJson,
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
+import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
 import {
   aflTradeGateDecisionProposalSchema,
   aflTradeGateDecisionRecordSchema,
@@ -69,6 +81,62 @@ type CapabilityId =
   'draftguru-trade-index' | 'draftguru-trade-detail' | 'draftguru-player-trade-detail';
 
 export interface LocalGenuinePlayerDraftguruAuthorityEvidence {
+  readonly productOwnerAuthorization: LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact;
+  readonly boundedCapturePlan: LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact;
+  readonly publicAccessReview: LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact;
+  readonly fieldBoundaryReview: LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact;
+}
+
+const evidenceKindSchema = z.enum([
+  'product_owner_authorization',
+  'bounded_capture_plan',
+  'public_access_review',
+  'field_boundary_review',
+]);
+
+const authorityEvidenceContentSchema = z
+  .object({
+    schemaVersion: z.literal('local-genuine-draftguru-authority-evidence/v1'),
+    issueNumber: z.literal(574),
+    provider: z.literal('draftguru'),
+    environment: z.literal('non_production'),
+    evidenceKind: evidenceKindSchema,
+    decision: z.literal('approved'),
+    scope: z
+      .object({
+        competition: z.literal('AFLM'),
+        seasons: z.tuple([
+          z.literal(2020),
+          z.literal(2021),
+          z.literal(2022),
+          z.literal(2023),
+          z.literal(2024),
+        ]),
+        capabilities: z.tuple([
+          z.literal('draftguru-trade-index'),
+          z.literal('draftguru-trade-detail'),
+          z.literal('draftguru-player-trade-detail'),
+        ]),
+        use: z.literal('private_non_production_evaluation_training_and_replay'),
+        publicUse: z.literal('blocked'),
+      })
+      .strict(),
+    statement: z.string().trim().min(1).max(2_000),
+    recordedBy: z.literal('statly-product-owner'),
+    recordedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export type LocalGenuinePlayerDraftguruAuthorityEvidenceContent = z.infer<
+  typeof authorityEvidenceContentSchema
+>;
+
+export interface LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact {
+  readonly artifact: AflTradeArtifactRef;
+  readonly content: LocalGenuinePlayerDraftguruAuthorityEvidenceContent;
+}
+
+interface ParsedAuthorityEvidenceIds {
   readonly productOwnerAuthorizationArtifactId: string;
   readonly boundedCapturePlanArtifactId: string;
   readonly publicAccessReviewArtifactId: string;
@@ -80,15 +148,85 @@ export const LOCAL_GENUINE_PLAYER_DRAFTGURU_PARSER_VERSION =
 export const LOCAL_GENUINE_PLAYER_DRAFTGURU_PLAYER_PARSER_VERSION =
   'local-genuine-draftguru-player-trade-html/v1' as const;
 
+const EVIDENCE_KEYS = [
+  ['productOwnerAuthorization', 'product_owner_authorization'],
+  ['boundedCapturePlan', 'bounded_capture_plan'],
+  ['publicAccessReview', 'public_access_review'],
+  ['fieldBoundaryReview', 'field_boundary_review'],
+] as const;
+
 function parseEvidence(
   input: LocalGenuinePlayerDraftguruAuthorityEvidence
-): LocalGenuinePlayerDraftguruAuthorityEvidence {
-  for (const [label, artifactId] of Object.entries(input)) {
-    if (!/^artifact:[a-f0-9]{64}$/u.test(artifactId)) {
-      throw new TypeError(`Draftguru ${label} must identify retained authority evidence.`);
+): ParsedAuthorityEvidenceIds {
+  const identifiers = new Set<string>();
+  const parsed = {} as Record<string, string>;
+  for (const [key, expectedKind] of EVIDENCE_KEYS) {
+    const evidence = input[key];
+    const content = authorityEvidenceContentSchema.parse(evidence.content);
+    const artifact = aflTradeArtifactRefSchema.parse(evidence.artifact);
+    const expectedArtifact = createAflTradeCanonicalJsonArtifactRef(content, content.recordedAt);
+    if (
+      content.evidenceKind !== expectedKind ||
+      artifact.mediaType !== AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE ||
+      !doAflTradeArtifactRefsExactlyMatch(artifact, expectedArtifact) ||
+      identifiers.has(artifact.artifactId)
+    ) {
+      throw new TypeError(
+        `Draftguru ${key} must bind one distinct canonical retained authority document.`
+      );
+    }
+    identifiers.add(artifact.artifactId);
+    parsed[`${key}ArtifactId`] = artifact.artifactId;
+  }
+  return parsed as unknown as ParsedAuthorityEvidenceIds;
+}
+
+export function createLocalGenuinePlayerDraftguruAuthorityEvidenceArtifact(
+  content: LocalGenuinePlayerDraftguruAuthorityEvidenceContent
+): LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact {
+  const parsed = authorityEvidenceContentSchema.parse(content);
+  return {
+    artifact: createAflTradeCanonicalJsonArtifactRef(parsed, parsed.recordedAt),
+    content: parsed,
+  };
+}
+
+async function authenticateEvidence(
+  repository: Pick<
+    AflTradeImmutableArtifactRepository,
+    'assurance' | 'artifactClass' | 'custodyProfile' | 'loadExact'
+  >,
+  input: LocalGenuinePlayerDraftguruAuthorityEvidence
+): Promise<ParsedAuthorityEvidenceIds> {
+  if (
+    repository.artifactClass !== 'capture_metadata' ||
+    (repository.assurance !== 'fixture_memory' &&
+      repository.assurance !== 'fixture_filesystem' &&
+      repository.assurance !== 'local_non_production_filesystem')
+  ) {
+    throw new TypeError('Draftguru authority evidence requires private capture-metadata custody.');
+  }
+  const parsed = parseEvidence(input);
+  for (const [key] of EVIDENCE_KEYS) {
+    const evidence = input[key];
+    const loaded = await repository.loadExact(evidence.artifact, 64 * 1024);
+    const expectedBytes = new TextEncoder().encode(canonicalizeAflTradeJson(evidence.content));
+    if (
+      loaded === null ||
+      !doAflTradeArtifactRefsExactlyMatch(evidence.artifact, loaded.reference) ||
+      !doesAflTradeArtifactRefMatchBytes(
+        loaded.reference,
+        loaded.bytes,
+        AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE
+      ) ||
+      new TextDecoder().decode(loaded.bytes) !== new TextDecoder().decode(expectedBytes)
+    ) {
+      throw new TypeError(
+        `Draftguru ${key} authority bytes are missing or differ from the reviewed document.`
+      );
     }
   }
-  return { ...input };
+  return parsed;
 }
 
 function sourceFieldUse(sourceField: string) {
@@ -110,7 +248,7 @@ function sourceFieldUse(sourceField: string) {
 function createAuthority(
   capabilityId: CapabilityId,
   fields: readonly string[],
-  evidence: LocalGenuinePlayerDraftguruAuthorityEvidence
+  evidence: ParsedAuthorityEvidenceIds
 ) {
   const playerProjection = capabilityId === 'draftguru-player-trade-detail';
   const rightsContent = {
@@ -325,10 +463,7 @@ function createAuthority(
   return { capabilityId, sourceRights, proposal, decision };
 }
 
-export function createLocalGenuinePlayerDraftguruAuthorities(
-  unparsedEvidence: LocalGenuinePlayerDraftguruAuthorityEvidence
-) {
-  const evidence = parseEvidence(unparsedEvidence);
+function createLocalGenuinePlayerDraftguruAuthorities(evidence: ParsedAuthorityEvidenceIds) {
   return [
     createAuthority('draftguru-trade-index', INDEX_FIELDS, evidence),
     createAuthority('draftguru-trade-detail', DETAIL_FIELDS, evidence),
@@ -336,8 +471,24 @@ export function createLocalGenuinePlayerDraftguruAuthorities(
   ] as const;
 }
 
+export type LocalGenuinePlayerDraftguruAuthority = ReturnType<
+  typeof createLocalGenuinePlayerDraftguruAuthorities
+>[number];
+
+export async function loadExactLocalGenuinePlayerDraftguruAuthorities(
+  artifactRepository: Pick<
+    AflTradeImmutableArtifactRepository,
+    'assurance' | 'artifactClass' | 'custodyProfile' | 'loadExact'
+  >,
+  evidence: LocalGenuinePlayerDraftguruAuthorityEvidence
+) {
+  return createLocalGenuinePlayerDraftguruAuthorities(
+    await authenticateEvidence(artifactRepository, evidence)
+  );
+}
+
 export function createLocalGenuinePlayerDraftguruGateRequest(
-  authority: ReturnType<typeof createLocalGenuinePlayerDraftguruAuthorities>[number],
+  authority: LocalGenuinePlayerDraftguruAuthority,
   season: number,
   input: Readonly<{ evaluatedAt: string }>
 ): AflTradeGate0ARequest {
@@ -369,7 +520,7 @@ export function createLocalGenuinePlayerDraftguruGateRequest(
 }
 
 export function createLocalGenuinePlayerDraftguruCaptureCommand(
-  authority: ReturnType<typeof createLocalGenuinePlayerDraftguruAuthorities>[number],
+  authority: LocalGenuinePlayerDraftguruAuthority,
   input: Readonly<{
     season: number;
     discoveryFromSeason?: number;
@@ -419,10 +570,17 @@ export function createLocalGenuinePlayerDraftguruCaptureCommand(
 
 export async function recordLocalGenuinePlayerDraftguruAuthorities(
   repository: Pick<AflTradeGateDecisionLedgerRepository, 'load' | 'appendBatch'>,
+  artifactRepository: Pick<
+    AflTradeImmutableArtifactRepository,
+    'assurance' | 'artifactClass' | 'custodyProfile' | 'loadExact'
+  >,
   evidence: LocalGenuinePlayerDraftguruAuthorityEvidence
 ) {
+  const authorities = await loadExactLocalGenuinePlayerDraftguruAuthorities(
+    artifactRepository,
+    evidence
+  );
   const stored = await repository.load();
-  const authorities = createLocalGenuinePlayerDraftguruAuthorities(evidence);
   return repository.appendBatch({
     expectedRevision: stored.revision,
     records: authorities.map(({ sourceRights, proposal, decision }) => ({

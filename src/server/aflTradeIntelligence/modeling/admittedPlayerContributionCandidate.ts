@@ -36,8 +36,8 @@ const publicIdSchema = z
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/u);
 const nonnegativeNumericStringSchema = z.string().regex(/^(0|[1-9]\d*)(\.\d+)?$/u);
 
-export const AFL_TRADE_PLAYER_POINT_IN_TIME_FEATURE_SET_SCHEMA_VERSION =
-  'afl-trade-player-point-in-time-feature-set/v1' as const;
+export const AFL_TRADE_PLAYER_FEATURE_SET_SCHEMA_VERSION =
+  'afl-trade-player-feature-set/v2' as const;
 export const AFL_TRADE_ADMITTED_PLAYER_CANDIDATE_CONFIG_SCHEMA_VERSION =
   'afl-trade-admitted-player-candidate-config/v1' as const;
 export const AFL_TRADE_ADMITTED_PLAYER_CANDIDATE_SCHEMA_VERSION =
@@ -74,11 +74,15 @@ const scalarTransformSchema = z
   })
   .strict();
 
-export const aflTradePlayerPointInTimeFeatureSetSchema = z
+export const aflTradePlayerFeatureSetSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_PLAYER_POINT_IN_TIME_FEATURE_SET_SCHEMA_VERSION),
+    schemaVersion: z.literal(AFL_TRADE_PLAYER_FEATURE_SET_SCHEMA_VERSION),
     datasetId: z.string().regex(/^dataset:[a-f0-9]{64}$/u),
     createdAt: z.iso.datetime({ offset: true }),
+    featureKnowledgePolicy: z.enum([
+      'point_in_time_as_known_at_prediction_cutoff',
+      'retrospective_as_captured_at_dataset_creation',
+    ]),
     roleTaxonomyArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
     eraDefinitionArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
     rows: z
@@ -113,7 +117,7 @@ export const aflTradePlayerPointInTimeFeatureSetSchema = z
               context.addIssue({
                 code: 'custom',
                 path: ['values'],
-                message: 'Point-in-time feature values must be unique and canonically ordered.',
+                message: 'Feature values must be unique and canonically ordered.',
               });
             }
             if (Date.parse(row.roleKnownAt) > Date.parse(row.featureKnownThrough)) {
@@ -135,7 +139,7 @@ export const aflTradePlayerPointInTimeFeatureSetSchema = z
       context.addIssue({
         code: 'custom',
         path: ['rows'],
-        message: 'Point-in-time feature rows must bind unique admitted dataset rows.',
+        message: 'Feature rows must bind unique admitted dataset rows.',
       });
     }
   });
@@ -165,7 +169,11 @@ export const aflTradeAdmittedPlayerCandidateSchema = z
     sourceObservationSetId: z.string().regex(/^player-observation-set:[a-f0-9]{64}$/u),
     materializedObservationSetId: z.string().regex(/^player-observation-set:[a-f0-9]{64}$/u),
     scalarTransformArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
-    pointInTimeFeatureValuesArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
+    featureValuesArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
+    featureKnowledgePolicy: z.enum([
+      'point_in_time_as_known_at_prediction_cutoff',
+      'retrospective_as_captured_at_dataset_creation',
+    ]),
     configurationArtifactId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
     baselineFitId: z.string().regex(/^player-baseline-fit:[a-f0-9]{64}$/u),
     coefficients: candidateCoefficientsSchema,
@@ -175,7 +183,7 @@ export const aflTradeAdmittedPlayerCandidateSchema = z
   .strict();
 
 type ScalarTransform = z.infer<typeof scalarTransformSchema>;
-type PointInTimeFeatureSet = z.infer<typeof aflTradePlayerPointInTimeFeatureSetSchema>;
+type PlayerFeatureSet = z.infer<typeof aflTradePlayerFeatureSetSchema>;
 export type AflTradeAdmittedPlayerExecutableArtifact = Readonly<{
   artifactId: string;
   bytes: Uint8Array;
@@ -241,19 +249,29 @@ export function loadGovernedAflTradePlayerFeatureSet(input: {
   protocol: AflTradePlayerContributionModelProtocolV2;
   executableArtifacts: readonly AflTradeAdmittedPlayerExecutableArtifact[];
   observationSet: AflTradePlayerObservationSetV2;
-}): PointInTimeFeatureSet {
-  const reference = input.protocol.content.pointInTimeFeatureValuesArtifact;
+}): PlayerFeatureSet {
+  const reference =
+    input.protocol.content.featureValuesArtifact ??
+    input.protocol.content.pointInTimeFeatureValuesArtifact;
   if (reference === undefined) {
-    throw new RangeError('The protocol has no governed point-in-time feature values artifact.');
+    throw new RangeError('The protocol has no governed feature-values artifact.');
   }
   const featureSet = parseAuthenticatedJson({
     reference,
     executableArtifacts: input.executableArtifacts,
-    schema: aflTradePlayerPointInTimeFeatureSetSchema,
-    label: 'point-in-time feature values',
+    schema: aflTradePlayerFeatureSetSchema,
+    label: 'feature values',
   });
   if (featureSet.datasetId !== input.observationSet.content.datasetId) {
     throw new RangeError('The governed feature values do not bind the admitted dataset.');
+  }
+  if (
+    featureSet.featureKnowledgePolicy !== input.protocol.content.featurePolicy.knowledgeJoin ||
+    featureSet.featureKnowledgePolicy !== input.observationSet.content.featureKnowledgePolicy
+  ) {
+    throw new RangeError(
+      'The governed feature values do not match the protocol and observation knowledge policy.'
+    );
   }
   if (
     featureSet.roleTaxonomyArtifactId !==
@@ -284,7 +302,7 @@ function groupKey(role: string, era: string): string {
 
 function latestFeatureMetrics(input: {
   observation: AflTradePlayerObservationSetV2['content']['observations'][number];
-  row: PointInTimeFeatureSet['rows'][number];
+  row: PlayerFeatureSet['rows'][number];
   spellMetricById: ReadonlyMap<string, AflTradeAcquisitionSpellMetric>;
 }) {
   const expected = [...input.observation.featureInputs].sort((left, right) =>
@@ -330,7 +348,7 @@ function latestFeatureMetrics(input: {
       fact.content.recordedAt !== feature.recordedAt
     ) {
       throw new RangeError(
-        'A point-in-time feature value does not match its exact authenticated metric fact.'
+        'A governed feature value does not match its exact authenticated metric fact.'
       );
     }
     const current = latest.get(feature.metricCode);
@@ -364,7 +382,7 @@ function latestFeatureMetrics(input: {
 export function materializeAflTradeAdmittedPlayerContributionSet(input: {
   observationSet: AflTradePlayerObservationSetV2;
   transform: ScalarTransform;
-  featureSet: PointInTimeFeatureSet;
+  featureSet: PlayerFeatureSet;
   spellMetrics: readonly AflTradeAcquisitionSpellMetric[];
 }) {
   const spellMetricById = new Map(
@@ -380,9 +398,7 @@ export function materializeAflTradeAdmittedPlayerContributionSet(input: {
       ({ datasetRowId }) => !rowsById.has(datasetRowId)
     )
   ) {
-    throw new RangeError(
-      'Point-in-time feature rows must cover the exact admitted observation set.'
-    );
+    throw new RangeError('Feature rows must cover the exact admitted observation set.');
   }
   const predictorByObservationId = new Map<
     string,
@@ -826,7 +842,9 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
             residuals.reduce((sum, row) => sum + row.absoluteCandidateError, 0) / residuals.length,
         };
       });
-      const featureReference = request.protocol.content.pointInTimeFeatureValuesArtifact!;
+      const featureReference =
+        request.protocol.content.featureValuesArtifact ??
+        request.protocol.content.pointInTimeFeatureValuesArtifact!;
       const documents = {
         modelArtifact: aflTradeAdmittedPlayerCandidateSchema.parse({
           schemaVersion: AFL_TRADE_ADMITTED_PLAYER_CANDIDATE_SCHEMA_VERSION,
@@ -835,7 +853,8 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
           materializedObservationSetId: materialized.set.observationSetId,
           scalarTransformArtifactId:
             request.protocol.content.scalarValueTransformArtifact.artifactId,
-          pointInTimeFeatureValuesArtifactId: featureReference.artifactId,
+          featureValuesArtifactId: featureReference.artifactId,
+          featureKnowledgePolicy: featureSet.featureKnowledgePolicy,
           configurationArtifactId: request.intent.content.configurationArtifact.artifactId,
           baselineFitId: baseline.baselineFitId,
           coefficients,
@@ -965,4 +984,4 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
 }
 
 export type AflTradeAdmittedPlayerCandidateConfig = z.infer<typeof candidateConfigSchema>;
-export type AflTradePlayerPointInTimeFeatureSet = PointInTimeFeatureSet;
+export type AflTradePlayerFeatureSet = PlayerFeatureSet;
