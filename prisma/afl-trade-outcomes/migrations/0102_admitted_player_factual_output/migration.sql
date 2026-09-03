@@ -252,6 +252,8 @@ EXECUTE FUNCTION "validate_outcome_admitted_player_factual_output"();
 
 -- A source-rights proposal may authorize several exact captures. Count proposal identities,
 -- not capture-level admission evaluations, when issuing one model-run authorization.
+RESET ROLE;
+
 DO $patch_model_run_multi_capture_rights$
 DECLARE
   current_definition TEXT;
@@ -297,6 +299,8 @@ BEGIN
   EXECUTE updated_definition;
 END
 $patch_model_run_multi_capture_rights$;
+
+SET ROLE afl_trade_private_valuation_scheduler_owner;
 
 CREATE OR REPLACE FUNCTION "validate_outcome_private_valuation_model_request_binding"()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
