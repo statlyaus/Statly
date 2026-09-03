@@ -5,10 +5,8 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import {
-  createAflTradeAdmittedPlayerRunStartReceipts,
-  parsePersistedAflTradeAcquisitionSpellMetric,
-} from '@/server/aflTradeIntelligence/development/localPostgresAdmittedPlayerPreparation';
+import { createAflTradeAdmittedPlayerRunStartReceipts } from '@/server/aflTradeIntelligence/development/localPostgresAdmittedPlayerPreparation';
+import { parsePersistedAflTradeAcquisitionSpellMetric } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellMetricContracts';
 import {
   createAflTradeAdmittedPlayerContributionExecutor,
   loadGovernedScalarTransform,
@@ -37,9 +35,9 @@ describe('admitted player contribution candidate', () => {
 
     expect(
       parsePersistedAflTradeAcquisitionSpellMetric({
-        id: metric.spellMetricVersionId,
-        fact_sha256: metric.factSha256,
-        document_json: metric.content,
+        spellMetricVersionId: metric.spellMetricVersionId,
+        factSha256: metric.factSha256,
+        content: metric.content,
       })
     ).toEqual(metric);
   });

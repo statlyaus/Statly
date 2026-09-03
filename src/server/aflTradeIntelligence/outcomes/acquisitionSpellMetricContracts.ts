@@ -544,6 +544,15 @@ export type AflTradeAcquisitionSpellMetricBatch = z.infer<
   typeof aflTradeAcquisitionSpellMetricBatchSchema
 >;
 
+/** Reconstruct the immutable envelope split across normalized persistence columns. */
+export function parsePersistedAflTradeAcquisitionSpellMetric(row: {
+  readonly spellMetricVersionId: string;
+  readonly factSha256: string;
+  readonly content: unknown;
+}): AflTradeAcquisitionSpellMetric {
+  return aflTradeAcquisitionSpellMetricSchema.parse(row);
+}
+
 export function createAflTradeAcquisitionSpellMetricPolicy(
   content: unknown
 ): AflTradeAcquisitionSpellMetricPolicy {

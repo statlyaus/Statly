@@ -17,7 +17,7 @@ import {
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
-import { aflTradeAcquisitionSpellMetricSchema } from '../outcomes/acquisitionSpellMetricContracts';
+import { parsePersistedAflTradeAcquisitionSpellMetric } from '../outcomes/acquisitionSpellMetricContracts';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
@@ -97,6 +97,11 @@ interface EvidenceRow extends Record<string, unknown> {
 
 interface JsonRow extends Record<string, unknown> {
   document_json: unknown;
+}
+
+interface SpellMetricRow extends JsonRow {
+  spell_metric_version_id: string;
+  fact_sha256: string;
 }
 
 interface InstantRow extends Record<string, unknown> {
@@ -563,8 +568,8 @@ export class PostgresAflTradeAdmittedModelRunAuthority
         ...outcome.metrics.map(({ spellMetricVersionId }) => spellMetricVersionId),
       ])
     );
-    const metricsResult = await this.dependencies.sql.query<JsonRow>(
-      `SELECT fact_json AS document_json
+    const metricsResult = await this.dependencies.sql.query<SpellMetricRow>(
+      `SELECT spell_metric_version_id,fact_sha256,fact_json AS document_json
          FROM outcome_acquisition_spell_metric_version
         WHERE spell_metric_version_id=ANY($1::text[])
         ORDER BY spell_metric_version_id`,
@@ -576,8 +581,12 @@ export class PostgresAflTradeAdmittedModelRunAuthority
         'Model-run authority is missing an exact acquisition-spell metric body.'
       );
     }
-    const spellMetrics = metricsResult.rows.map(({ document_json }) =>
-      aflTradeAcquisitionSpellMetricSchema.parse(document_json)
+    const spellMetrics = metricsResult.rows.map((row) =>
+      parsePersistedAflTradeAcquisitionSpellMetric({
+        spellMetricVersionId: row.spell_metric_version_id,
+        factSha256: row.fact_sha256,
+        content: row.document_json,
+      })
     );
 
     const referenceById = new Map(

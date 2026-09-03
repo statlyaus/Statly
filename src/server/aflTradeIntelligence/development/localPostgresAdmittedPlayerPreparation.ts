@@ -22,7 +22,7 @@ import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgre
 import type { AflTradeModelRunFailureRecorder } from '../modeling/admittedModelRunAuthority';
 import { createAflTradePlayerObservationSetV2 } from '../modeling/playerContributionContracts';
 import type { AflTradeAcquisitionSpellMetric } from '../outcomes/acquisitionSpellMetricContracts';
-import { aflTradeAcquisitionSpellMetricSchema } from '../outcomes/acquisitionSpellMetricContracts';
+import { parsePersistedAflTradeAcquisitionSpellMetric } from '../outcomes/acquisitionSpellMetricContracts';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { aflTradeGate0AReceiptSchema, createAflTradeGate0AReceipt } from '../source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '../source/sourceRights';
@@ -48,18 +48,10 @@ interface JsonRow {
   readonly document_json: unknown;
 }
 
-interface SpellMetricRow extends JsonRow {
+interface SpellMetricRow {
+  readonly id: string;
   readonly fact_sha256: string;
-}
-
-export function parsePersistedAflTradeAcquisitionSpellMetric(
-  row: Readonly<{ id: string; fact_sha256: string; document_json: unknown }>
-) {
-  return aflTradeAcquisitionSpellMetricSchema.parse({
-    spellMetricVersionId: row.id,
-    factSha256: row.fact_sha256,
-    content: row.document_json,
-  });
+  readonly document_json: unknown;
 }
 
 interface InstantRow {
@@ -394,7 +386,13 @@ async function loadSpellMetrics(
   ) {
     throw new TypeError('Local player preparation is missing exact admitted target metrics.');
   }
-  return result.rows.map(parsePersistedAflTradeAcquisitionSpellMetric);
+  return result.rows.map((row) =>
+    parsePersistedAflTradeAcquisitionSpellMetric({
+      spellMetricVersionId: row.id,
+      factSha256: row.fact_sha256,
+      content: row.document_json,
+    })
+  );
 }
 
 async function prepareRunStartReceipts(input: {
