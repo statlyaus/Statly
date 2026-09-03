@@ -1129,8 +1129,9 @@ function validateSourceRights(
       fieldSet.content.captureId !== captureId ||
       fieldSet.content.sourceSnapshotId !== source.sourceSnapshotId ||
       fieldSet.content.fieldSetSha256 !== source.consumedFieldSetSha256 ||
-      sha256AflTradeCanonicalJson(fieldSet.content.fields.map(({ sourceField }) => sourceField)) !==
-        sha256AflTradeCanonicalJson(sourceSnapshot.content.capturedFields) ||
+      fieldSet.content.fields.some(
+        ({ sourceField }) => !sourceSnapshot.content.capturedFields.includes(sourceField)
+      ) ||
       time(sourceSnapshot.content.createdAt) > time(fieldSet.content.createdAt) ||
       time(fieldSet.content.createdAt) > time(dataset.content.createdAt) ||
       !lineageMapping ||

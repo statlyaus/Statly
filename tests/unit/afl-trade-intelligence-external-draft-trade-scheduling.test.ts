@@ -117,6 +117,26 @@ function evaluation(): AflTradeExternalCaptureScheduleEvaluation {
 }
 
 describe('AFL external draft/trade capture scheduling', () => {
+  it('schedules the bounded player-only trade projection on an indexed trade URL', () => {
+    const base = schedule().definition;
+    const playerProjection = createAflTradeExternalCaptureSchedule({
+      ...base,
+      requestTemplate: {
+        ...base.requestTemplate,
+        capabilityId: 'draftguru-player-trade-detail',
+        parserVersion: 'draftguru-player-trade-detail/v1',
+      },
+      gateRequestTemplate: {
+        ...base.gateRequestTemplate,
+        decisionKey: 'draftguru-player-trade-detail-production',
+      },
+    });
+
+    expect(playerProjection.definition.requestTemplate.capabilityId).toBe(
+      'draftguru-player-trade-detail'
+    );
+  });
+
   it('creates one deterministic immutable schedule and aligned dispatch key', () => {
     const first = schedule();
     const repeated = schedule();

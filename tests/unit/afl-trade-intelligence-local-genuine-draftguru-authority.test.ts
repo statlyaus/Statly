@@ -97,6 +97,9 @@ describe('local genuine-player Draftguru authority', () => {
     ).toEqual(['draftguru-trade-index', 'draftguru-trade-detail', 'draftguru-player-trade-detail']);
 
     for (const authority of authorities) {
+      expect(authority.proposal.content.decisionKey).toBe(
+        `${authority.capabilityId}-non_production`
+      );
       expect(authority.sourceRights.content).toMatchObject({
         provider: 'draftguru',
         scope: {

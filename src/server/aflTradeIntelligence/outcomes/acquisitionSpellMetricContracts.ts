@@ -485,11 +485,20 @@ export const aflTradeAcquisitionSpellMetricBatchContentSchema = z
       const expectedSubjectKey = createAflTradeAcquisitionSpellMetricSubjectKey({
         environment: metric.content.environment,
         competition: metric.content.competition,
+        policyId: metric.content.policyId,
         spellVersionId: metric.content.spell.spellVersionId,
         metricCode: metric.content.rule.metricCode,
         definitionVersion: metric.content.rule.definitionVersion,
       });
-      if (advanceByVersion.get(metric.spellMetricVersionId)?.subjectKey !== expectedSubjectKey) {
+      const legacySubjectKey = createAflTradeAcquisitionSpellMetricSubjectKey({
+        environment: metric.content.environment,
+        competition: metric.content.competition,
+        spellVersionId: metric.content.spell.spellVersionId,
+        metricCode: metric.content.rule.metricCode,
+        definitionVersion: metric.content.rule.definitionVersion,
+      });
+      const actualSubjectKey = advanceByVersion.get(metric.spellMetricVersionId)?.subjectKey;
+      if (actualSubjectKey !== expectedSubjectKey && actualSubjectKey !== legacySubjectKey) {
         context.addIssue({
           code: 'custom',
           path: ['headAdvances'],
@@ -586,6 +595,7 @@ export function createAflTradeFactualReconciliationFinalization(content: {
 export function createAflTradeAcquisitionSpellMetricSubjectKey(content: {
   environment: 'test_fixture' | 'non_production' | 'production';
   competition: 'AFLM' | 'AFLW';
+  policyId?: string;
   spellVersionId: string;
   metricCode: string;
   definitionVersion: string;

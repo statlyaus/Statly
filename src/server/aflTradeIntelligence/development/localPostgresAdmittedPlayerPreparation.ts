@@ -27,7 +27,7 @@ import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepo
 import { aflTradeGate0AReceiptSchema, createAflTradeGate0AReceipt } from '../source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '../source/sourceRights';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
-import { parseAflTradePrivateValuationFactualOutput } from '../valuation/privateValuationFactualOutput';
+import { parseAflTradeAdmittedPlayerFactualOutput } from '../valuation/privateValuationFactualOutput';
 import { createGovernedValuationComponentRunManifest } from '../valuation/internal/governedValuationComponentRunManifest';
 import type { PostgresGovernedValuationComponentRunRepository } from '../valuation/internal/postgresGovernedValuationComponentRunRepository';
 import type {
@@ -310,13 +310,26 @@ async function loadAuthority(
     dataset: aflTradeValuationDatasetCandidateSchema.parse(row.dataset_json),
     admission: aflTradeValuationDatasetAdmissionReceiptSchema.parse(row.admission_json),
     protocol: aflTradePlayerContributionModelProtocolV2Schema.parse(row.protocol_json),
-    factual: parseAflTradePrivateValuationFactualOutput(row.output_json),
+    factual: parseAflTradeAdmittedPlayerFactualOutput(row.output_json),
     gateLedgerRevision: Number(row.gate_ledger_revision),
   };
+  const admittedSources = authority.admission.content.sourceRightsEvaluations
+    .map(({ captureId, sourceSnapshotId, consumedFieldSetId, consumedFieldSetSha256 }) => ({
+      captureId,
+      sourceSnapshotId,
+      consumedFieldSetId,
+      consumedFieldSetSha256,
+    }))
+    .sort((left, right) => left.captureId.localeCompare(right.captureId));
   if (
     authority.factual.content.requestId !== execution.exactInput.requestId ||
     authority.factual.outputId !== execution.exactInput.factualOutputId ||
     authority.factual.content.valuationScopeKey !== execution.operation.content.scopeKey ||
+    authority.factual.content.admittedPlayerDataset.datasetId !== authority.dataset.datasetId ||
+    authority.factual.content.admittedPlayerDataset.admissionId !==
+      authority.admission.admissionId ||
+    canonicalizeAflTradeJson(authority.factual.content.sourceCaptures) !==
+      canonicalizeAflTradeJson(admittedSources) ||
     authority.dataset.content.scopeKey !== execution.operation.content.scopeKey ||
     authority.factual.content.candidate.memberSetSha256 !==
       execution.operation.content.factualValuesSha256 ||

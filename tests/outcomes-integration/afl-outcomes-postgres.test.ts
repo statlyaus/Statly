@@ -1117,6 +1117,18 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0088_reclaimed_dispatch_pick_component_adoption',
       '0089_dispatch_bound_admitted_player_execution_role',
       '0090_admitted_player_current_promotion_provenance',
+      '0091_current_valuation_afl_tables_field_map_v2',
+      '0092_current_five_season_review_generation',
+      '0093_scoped_aflca_identity_mapping_authority',
+      '0094_scoped_aflca_match_mapping_authority',
+      '0095_draftguru_player_projection_scheduling',
+      '0096_draftguru_player_projection_historical_target',
+      '0097_draftguru_player_projection_target_constraint',
+      '0098_historical_reconciliation_observed_anchor',
+      '0099_spell_metric_head_upsert',
+      '0100_reviewed_training_source_admission',
+      '0101_scoped_provider_reviewer_authority',
+      '0102_admitted_player_factual_output',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

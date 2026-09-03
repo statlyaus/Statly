@@ -9,6 +9,8 @@ import {
 
 export const AFL_TRADE_PRIVATE_VALUATION_FACTUAL_OUTPUT_SCHEMA_VERSION =
   'afl-trade-private-valuation-factual-output/v1' as const;
+export const AFL_TRADE_ADMITTED_PLAYER_FACTUAL_OUTPUT_SCHEMA_VERSION =
+  'afl-trade-private-valuation-factual-output/v2' as const;
 export const AFL_TRADE_PRIVATE_VALUATION_FACTUAL_OUTPUT_LIMITATION =
   'Retained non-production factual preparation custody only; it grants no model-training, private-evaluation, publication, or production authority.' as const;
 
@@ -52,6 +54,14 @@ const factualReleaseSchema = immutableReferenceSchema(
   'releaseId',
   'releaseSha256'
 );
+const admittedPlayerSourceCaptureSchema = z
+  .object({
+    captureId: aflTradeContentAddressedIdSchema('source-capture'),
+    sourceSnapshotId: aflTradeContentAddressedIdSchema('source-snapshot'),
+    consumedFieldSetId: aflTradeContentAddressedIdSchema('consumed-field-set'),
+    consumedFieldSetSha256: aflTradeSha256Schema,
+  })
+  .strict();
 
 export const aflTradePrivateValuationFactualOutputContentSchema = z
   .object({
@@ -59,9 +69,7 @@ export const aflTradePrivateValuationFactualOutputContentSchema = z
     requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
     valuationScopeKey: boundedPublicIdSchema,
     captureBindingId: aflTradeContentAddressedIdSchema('private-valuation-capture-binding'),
-    sourceAdmissionId: aflTradeContentAddressedIdSchema(
-      'private-valuation-source-admission'
-    ),
+    sourceAdmissionId: aflTradeContentAddressedIdSchema('private-valuation-source-admission'),
     normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
     factBatch: factBatchSchema,
     reconciliation: z
@@ -74,8 +82,7 @@ export const aflTradePrivateValuationFactualOutputContentSchema = z
       .strict()
       .superRefine((reconciliation, context) => {
         if (
-          reconciliation.factualRunId !==
-          `factual-reconciliation-run:${reconciliation.runSha256}`
+          reconciliation.factualRunId !== `factual-reconciliation-run:${reconciliation.runSha256}`
         ) {
           context.addIssue({
             code: 'custom',
@@ -150,7 +157,9 @@ export function createAflTradePrivateValuationFactualOutput(
   const spellMetricBatches = [...input.spellMetricBatches].sort((left, right) =>
     left.batchId.localeCompare(right.batchId)
   );
-  if (new Set(spellMetricBatches.map(({ batchId }) => batchId)).size !== spellMetricBatches.length) {
+  if (
+    new Set(spellMetricBatches.map(({ batchId }) => batchId)).size !== spellMetricBatches.length
+  ) {
     throw new TypeError('Spell-metric batch references must be unique.');
   }
   const content = aflTradePrivateValuationFactualOutputContentSchema.parse({
@@ -166,6 +175,115 @@ export function createAflTradePrivateValuationFactualOutput(
     outputId: createAflTradeContentAddress('private-valuation-factual-output', content),
     content,
   });
+}
+
+export const aflTradeAdmittedPlayerFactualOutputContentSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_ADMITTED_PLAYER_FACTUAL_OUTPUT_SCHEMA_VERSION),
+    requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
+    valuationScopeKey: boundedPublicIdSchema,
+    admittedPlayerDataset: z
+      .object({
+        datasetId: aflTradeContentAddressedIdSchema('dataset'),
+        admissionId: aflTradeContentAddressedIdSchema('dataset-admission'),
+      })
+      .strict(),
+    sourceCaptures: z.array(admittedPlayerSourceCaptureSchema).min(1).max(100_000),
+    spellMetricBatches: z.array(spellMetricBatchSchema).min(1).max(100_000),
+    candidate: candidateSchema,
+    factualRelease: factualReleaseSchema,
+    preparedAt: utcInstantSchema,
+    environment: z.literal('non_production'),
+    publicationEligible: z.literal(false),
+    publicationProhibited: z.literal(true),
+    limitation: z.literal(AFL_TRADE_PRIVATE_VALUATION_FACTUAL_OUTPUT_LIMITATION),
+  })
+  .strict()
+  .superRefine((content, context) => {
+    const captureIds = content.sourceCaptures.map(({ captureId }) => captureId);
+    if (
+      new Set(captureIds).size !== captureIds.length ||
+      captureIds.some((captureId, index) => index > 0 && captureIds[index - 1]! >= captureId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sourceCaptures'],
+        message: 'Admitted-player source captures must be unique and canonically ordered.',
+      });
+    }
+    const fieldSetIds = content.sourceCaptures.map(({ consumedFieldSetId }) => consumedFieldSetId);
+    if (new Set(fieldSetIds).size !== fieldSetIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sourceCaptures'],
+        message: 'Admitted-player consumed field sets must be unique.',
+      });
+    }
+    const batchIds = content.spellMetricBatches.map(({ batchId }) => batchId);
+    if (
+      new Set(batchIds).size !== batchIds.length ||
+      batchIds.some((batchId, index) => index > 0 && batchIds[index - 1]! >= batchId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['spellMetricBatches'],
+        message: 'Spell-metric batch references must be unique and canonically ordered.',
+      });
+    }
+  });
+
+export const aflTradeAdmittedPlayerFactualOutputSchema = z
+  .object({
+    outputId: aflTradeContentAddressedIdSchema('private-valuation-factual-output'),
+    content: aflTradeAdmittedPlayerFactualOutputContentSchema,
+  })
+  .strict()
+  .superRefine((output, context) => {
+    addAflTradeContentAddressIssue(
+      'private-valuation-factual-output',
+      output.outputId,
+      output.content,
+      context,
+      ['outputId']
+    );
+  });
+
+export type AflTradeAdmittedPlayerFactualOutput = z.infer<
+  typeof aflTradeAdmittedPlayerFactualOutputSchema
+>;
+
+export type CreateAflTradeAdmittedPlayerFactualOutputInput = Omit<
+  z.input<typeof aflTradeAdmittedPlayerFactualOutputContentSchema>,
+  'schemaVersion' | 'environment' | 'publicationEligible' | 'publicationProhibited' | 'limitation'
+>;
+
+export function createAflTradeAdmittedPlayerFactualOutput(
+  input: CreateAflTradeAdmittedPlayerFactualOutputInput
+): AflTradeAdmittedPlayerFactualOutput {
+  const content = aflTradeAdmittedPlayerFactualOutputContentSchema.parse({
+    ...input,
+    schemaVersion: AFL_TRADE_ADMITTED_PLAYER_FACTUAL_OUTPUT_SCHEMA_VERSION,
+    sourceCaptures: [...input.sourceCaptures].sort((left, right) =>
+      left.captureId.localeCompare(right.captureId)
+    ),
+    spellMetricBatches: [...input.spellMetricBatches].sort((left, right) =>
+      left.batchId.localeCompare(right.batchId)
+    ),
+    environment: 'non_production',
+    publicationEligible: false,
+    publicationProhibited: true,
+    limitation: AFL_TRADE_PRIVATE_VALUATION_FACTUAL_OUTPUT_LIMITATION,
+  });
+  return aflTradeAdmittedPlayerFactualOutputSchema.parse({
+    outputId: createAflTradeContentAddress('private-valuation-factual-output', content),
+    content,
+  });
+}
+
+export function parseAflTradeAdmittedPlayerFactualOutput(
+  value: unknown
+): AflTradeAdmittedPlayerFactualOutput {
+  return aflTradeAdmittedPlayerFactualOutputSchema.parse(value);
 }
 
 export function parseAflTradePrivateValuationFactualOutput(

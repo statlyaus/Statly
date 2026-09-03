@@ -33,9 +33,14 @@ import {
   registerAflDraftTradeOutcomeRelease,
 } from '@/server/aflTradeIntelligence/outcomes/outcomeReleaseState';
 import { aflTradeGate0AReceiptSchema } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
+import { evaluateAflTradeGate0A } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
+import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 import { AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY } from '@/types/aflDraftTradeOutcomes';
 
-import { createAflDraftTradeOutcomeReleaseFixture } from '../fixtures/aflDraftTradeOutcomeReleaseFixture';
+import {
+  createAflDraftTradeOutcomeReleaseFixture,
+  createAflTradeGateDecisionFixture,
+} from '../fixtures/aflDraftTradeOutcomeReleaseFixture';
 
 function reference(prefix: string, marker: string) {
   const id = createAflTradeContentAddress(prefix, { fixture: marker });
@@ -300,17 +305,55 @@ describe('AFL trade factual release candidate v3', () => {
       { sourceField, use: 'derived_feature' as const },
       { sourceField, use: 'model_training' as const },
     ]);
+    const privateRightsContent = {
+      ...sourceRightsBinding.sourceRightsProposal.content,
+      operations: {
+        ...sourceRightsBinding.sourceRightsProposal.content.operations,
+        model_training: 'allowed' as const,
+      },
+      fields: sourceRightsBinding.sourceRightsProposal.content.fields.map((field) => ({
+        ...field,
+        uses: { ...field.uses, model_training: 'allowed' as const },
+      })),
+    };
+    const privateRights = aflTradeSourceRightsProposalSchema.parse({
+      rightsArtifactId: createAflTradeContentAddress('source-rights', privateRightsContent),
+      content: privateRightsContent,
+    });
+    const decisionKey = 'fixture-private-model-source-rights';
+    const privateGate = createAflTradeGateDecisionFixture({
+      gate: 'gate_0a_permission_to_evaluate',
+      decisionKey,
+      decidedAt: '2026-08-06T00:10:00.000Z',
+      scopeDimensions: baseFixture.rights.ledger.decisions[0]!.content.scope.dimensions.map(
+        (dimension) =>
+          dimension.name === 'source_rights_artifact'
+            ? { ...dimension, values: [privateRights.rightsArtifactId] }
+            : dimension.name === 'operation'
+              ? {
+                  ...dimension,
+                  values: ['raw_evidence_retention', 'derived_feature_creation', 'model_training'],
+                }
+              : dimension
+      ),
+      affectedArtifacts: [{ kind: 'source_rights', artifactId: privateRights.rightsArtifactId }],
+    });
+    const request = {
+      ...sourceRightsBinding.gate0aReceipt.content.request,
+      decisionKey,
+      rightsArtifactId: privateRights.rightsArtifactId,
+      operations: [
+        'raw_evidence_retention' as const,
+        'derived_feature_creation' as const,
+        'model_training' as const,
+      ],
+      fieldUses,
+    };
     const receiptContent = {
       ...sourceRightsBinding.gate0aReceipt.content,
-      request: {
-        ...sourceRightsBinding.gate0aReceipt.content.request,
-        operations: [
-          'raw_evidence_retention' as const,
-          'derived_feature_creation' as const,
-          'model_training' as const,
-        ],
-        fieldUses,
-      },
+      request,
+      result: evaluateAflTradeGate0A(privateGate.ledger, privateRights, request),
+      recordedAt: '2026-08-06T00:21:00.000Z',
     };
     const gate0aReceipt = aflTradeGate0AReceiptSchema.parse({
       receiptId: createAflTradeContentAddress('gate0a-evaluation', receiptContent),
@@ -319,6 +362,9 @@ describe('AFL trade factual release candidate v3', () => {
     const privateBinding = {
       ...sourceRightsBinding,
       sourceUseBoundary: 'private_derived_feature_and_model_training_no_public_release' as const,
+      sourceRightsArtifactId: privateRights.rightsArtifactId,
+      sourceRightsProposal: privateRights,
+      gateDecisionId: privateGate.decisionId,
       gate0aReceipt,
     };
 
@@ -352,6 +398,50 @@ describe('AFL trade factual release candidate v3', () => {
         sourceRightsBindings: [{ ...privateBinding, gate0aReceipt: narrowedReceipt }],
       })
     ).toThrow();
+
+    const candidateContent = validContent();
+    const privateMembers = {
+      ...candidateContent.members,
+      sourceCaptures: candidateContent.members.sourceCaptures.map((capture) => ({
+        ...capture,
+        gate0aDecisionId: privateGate.decisionId,
+      })),
+    };
+    const privateMemberSetSha256 = sha256AflTradeCanonicalJson(privateMembers);
+    const privateRelease = createAflDraftTradeOutcomeFactualReleaseManifest({
+      ...candidateContent.targetReleaseManifest.content,
+      sourceMemberSetSha256: privateMemberSetSha256,
+      sourceRightsBindings: [privateBinding],
+    });
+    const candidate = createAflTradeFactualReleaseCandidate({
+      ...candidateContent,
+      targetRelease: referenceFromId(privateRelease.releaseId),
+      targetReleaseManifest: privateRelease,
+      members: privateMembers,
+      memberSetSha256: privateMemberSetSha256,
+    });
+    const projection = validProjection(candidate);
+    const registered = registerAflDraftTradeOutcomeRelease(
+      createAflDraftTradeOutcomeReleaseRegistry(),
+      {
+        expectedRevision: 0,
+        manifest: privateRelease,
+        actor: 'fixture-private-model-builder',
+        evidenceId: candidate.candidateId,
+      }
+    );
+    const validated = applyAflDraftTradeOutcomeReleaseCommand(registered, {
+      action: 'validate',
+      releaseId: privateRelease.releaseId,
+      expectedRevision: registered.revision,
+      occurredAt: '2026-10-01T00:12:00.000Z',
+      actor: 'fixture-private-model-reviewer',
+      evidenceId: projection.projectionId,
+      environment: 'test_fixture',
+      projectionManifest: projection,
+      gateDecisionLedger: privateGate.ledger,
+    });
+    expect(validated.releases[privateRelease.releaseId].state).toBe('validated');
   });
 
   it('creates a deterministic typed private candidate', () => {

@@ -3935,6 +3935,7 @@ model OutcomeValuationDatasetCandidate {
   modelRunIntents                   OutcomeValuationModelRunIntent[]
   modelRunOperationalAuthorizations OutcomeValuationModelRunOperationalAuthorization[]
   governedPickModelExecutions       OutcomeGovernedPickPavModelExecution[]
+  admittedPlayerFactualOutputs      OutcomePrivateValuationFactualOutput[]         @relation("OutcomeAdmittedPlayerFactualDataset")
 
   @@index([environment, scopeKey, competition, status, createdAt], map: "outcome_valuation_dataset_candidate_scope_idx")
   @@map("outcome_valuation_dataset_candidate")
@@ -4067,6 +4068,7 @@ model OutcomeValuationDatasetAdmission {
   modelRunIntents                   OutcomeValuationModelRunIntent[]
   modelRunOperationalAuthorizations OutcomeValuationModelRunOperationalAuthorization[]
   governedPickModelExecutions       OutcomeGovernedPickPavModelExecution[]
+  admittedPlayerFactualOutputs      OutcomePrivateValuationFactualOutput[]         @relation("OutcomeAdmittedPlayerFactualAdmission")
 
   @@unique([datasetId, admittedAt], map: "outcome_valuation_dataset_admission_dataset_time_key")
   @@index([datasetId, status, admittedAt], map: "outcome_valuation_dataset_admission_dataset_idx")
@@ -5769,22 +5771,26 @@ model OutcomePrivateValuationHpnSourceAdmission {
 model OutcomePrivateValuationFactualOutput {
   outputId            String                                              @id @map("output_id") @outcomes.Text
   requestId           String                                              @unique @map("request_id") @outcomes.Text
-  captureBindingId    String                                              @unique @map("capture_binding_id") @outcomes.Text
-  sourceAdmissionId   String                                              @unique @map("source_admission_id") @outcomes.Text
-  normalizationRunId  String                                              @map("normalization_run_id") @outcomes.Text
-  factBatchId         String                                              @map("fact_batch_id") @outcomes.Text
-  factualRunId        String                                              @map("factual_run_id") @outcomes.Text
+  captureBindingId    String?                                             @unique @map("capture_binding_id") @outcomes.Text
+  sourceAdmissionId   String?                                             @unique @map("source_admission_id") @outcomes.Text
+  normalizationRunId  String?                                             @map("normalization_run_id") @outcomes.Text
+  factBatchId         String?                                             @map("fact_batch_id") @outcomes.Text
+  factualRunId        String?                                             @map("factual_run_id") @outcomes.Text
   candidateId         String                                              @unique @map("candidate_id") @outcomes.Text
   factualReleaseId    String                                              @unique @map("factual_release_id") @outcomes.Text
+  playerDatasetId     String?                                             @map("player_dataset_id") @outcomes.Text
+  playerAdmissionId   String?                                             @map("player_dataset_admission_id") @outcomes.Text
   preparedAt          DateTime                                            @map("prepared_at") @outcomes.Timestamptz(3)
   outputJson          Json                                                @map("output_json")
   request             OutcomePrivateValuationDispatchRequest             @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
-  captureBinding      OutcomePrivateValuationCaptureBinding               @relation(fields: [captureBindingId], references: [bindingId], onDelete: Restrict)
-  sourceAdmission     OutcomePrivateValuationSourceAdmission              @relation(fields: [sourceAdmissionId], references: [admissionId], onDelete: Restrict)
-  factBatch           OutcomeProviderFactBatch                            @relation(fields: [factBatchId], references: [factBatchId], onDelete: Restrict)
-  factualRun          OutcomeFactualReconciliationRun                     @relation(fields: [factualRunId], references: [factualRunId], onDelete: Restrict)
+  captureBinding      OutcomePrivateValuationCaptureBinding?              @relation(fields: [captureBindingId], references: [bindingId], onDelete: Restrict)
+  sourceAdmission     OutcomePrivateValuationSourceAdmission?             @relation(fields: [sourceAdmissionId], references: [admissionId], onDelete: Restrict)
+  factBatch           OutcomeProviderFactBatch?                           @relation(fields: [factBatchId], references: [factBatchId], onDelete: Restrict)
+  factualRun          OutcomeFactualReconciliationRun?                    @relation(fields: [factualRunId], references: [factualRunId], onDelete: Restrict)
   candidate           OutcomeFactualReleaseCandidate                      @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
   factualRelease      OutcomeReleaseManifest                              @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
+  playerDataset       OutcomeValuationDatasetCandidate?                   @relation("OutcomeAdmittedPlayerFactualDataset", fields: [playerDatasetId], references: [datasetId], onDelete: Restrict)
+  playerAdmission     OutcomeValuationDatasetAdmission?                   @relation("OutcomeAdmittedPlayerFactualAdmission", fields: [playerAdmissionId], references: [admissionId], onDelete: Restrict)
   spellMetricBatches  OutcomePrivateValuationFactualOutputSpellBatch[]
 
   @@map("outcome_private_valuation_factual_output")

@@ -191,11 +191,14 @@ const captureTargetSchema = z
       request.capabilityId === 'draftguru-year-page'
         ? `https://www.draftguru.com.au/years/${request.anchorSeasonYear}`
         : request.sourceUrl;
+    const discoveredTradeDetail = [
+      'draftguru-trade-detail',
+      'draftguru-player-trade-detail',
+    ].includes(request.capabilityId);
     if (
       request.sourceUrl !== expectedUrl ||
-      !['draftguru-trade-detail', 'draftguru-year-page'].includes(request.capabilityId) ||
-      (request.capabilityId === 'draftguru-trade-detail') !==
-        (target.content.discoveryEvidenceId !== null)
+      (!discoveredTradeDetail && request.capabilityId !== 'draftguru-year-page') ||
+      discoveredTradeDetail !== (target.content.discoveryEvidenceId !== null)
     ) {
       context.addIssue({
         code: 'custom',
@@ -234,7 +237,11 @@ const historicalPlanContentSchema = z
   .strict()
   .superRefine((plan, context) => {
     if (plan.targetCount !== plan.targets.length) {
-      context.addIssue({ code: 'custom', path: ['targetCount'], message: 'Target count mismatch.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['targetCount'],
+        message: 'Target count mismatch.',
+      });
     }
     if (
       plan.targetSetSha256 !==

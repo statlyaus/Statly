@@ -108,7 +108,7 @@ const reviewerAuthoritySchema = z
     principalRef: publicIdSchema,
     authorityEvidence: authorityEvidenceReferenceSchema,
     role: z.literal('afl_trade_identity_reviewer'),
-    scopeKey: z.literal('public-afl-draft-trade-outcomes'),
+    scopeKey: publicIdSchema,
     provider: publicIdSchema,
     capabilityId: publicIdSchema,
     competition: z.enum(['AFLM', 'AFLW']),

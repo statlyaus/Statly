@@ -372,7 +372,7 @@ function createAuthority(
     rightsArtifactId: createAflTradeContentAddress('source-rights', rightsContent),
     content: rightsContent,
   });
-  const decisionKey = `${capabilityId}-non-production`;
+  const decisionKey = `${capabilityId}-non_production`;
   const scope = {
     scopeKey: decisionKey,
     description:

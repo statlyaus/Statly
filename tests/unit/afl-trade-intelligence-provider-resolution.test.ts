@@ -214,6 +214,32 @@ describe('AFL trade provider resolution contracts', () => {
     ).toThrow(/must cover the exact provider, capability, competition, and season/);
   });
 
+  it('accepts bounded private reviewer scopes while rejecting blank scopes', () => {
+    const content = decisionBase();
+    const scopeKey = 'afl-men:genuine-player-contribution:2021-2024';
+    const decision = createAflTradeProviderResolutionDecision({
+      ...content,
+      reviewerAuthority: {
+        ...content.reviewerAuthority,
+        scopeKey,
+      },
+    });
+
+    expect(decision.content.reviewerAuthority.scopeKey).toBe(scopeKey);
+    expect(() =>
+      aflTradeProviderResolutionDecisionSchema.parse({
+        ...decision,
+        content: {
+          ...decision.content,
+          reviewerAuthority: {
+            ...decision.content.reviewerAuthority,
+            scopeKey: '   ',
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it('derives reusable player identities from a governed native-ID namespace', () => {
     expect(() =>
       playerProposal({

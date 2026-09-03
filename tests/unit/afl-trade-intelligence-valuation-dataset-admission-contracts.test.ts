@@ -1634,6 +1634,32 @@ describe('valuation dataset admission service', () => {
     expect(result.receipt.content.datasetId).toBe(fixture.dataset.datasetId);
   });
 
+  it('admits a consumed source field set that is a strict subset of retained captured fields', async () => {
+    const fixture = datasetFixture();
+    const evidence = evidenceFor(fixture);
+    const service = new AflTradeValuationDatasetAdmissionService({
+      async authenticate() {
+        return {
+          ...evidence,
+          sourceRights: evidence.sourceRights.map((source) => ({
+            ...source,
+            sourceSnapshotManifest: {
+              snapshotId: source.sourceSnapshotManifest.snapshotId,
+              content: {
+                capturedFields: ['games', 'player_name'],
+                createdAt: source.sourceSnapshotManifest.content.createdAt,
+              },
+            },
+          })),
+        };
+      },
+    });
+
+    const result = await service.admit({ dataset: fixture.dataset, admittedAt: instant(20) });
+
+    expect(result).toMatchObject({ status: 'admitted', blockers: [] });
+  });
+
   it('rejects round-grain achievements until authoritative round valid-time is represented', async () => {
     const fixture = datasetFixture({ achievementGrain: 'round', useAchievementTarget: true });
     const service = new AflTradeValuationDatasetAdmissionService({

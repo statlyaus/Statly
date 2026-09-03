@@ -244,6 +244,7 @@ export function calculateAflTradeAcquisitionSpellMetrics(
     const subjectKey = createAflTradeAcquisitionSpellMetricSubjectKey({
       environment: metric.content.environment,
       competition: metric.content.competition,
+      policyId: metric.content.policyId,
       spellVersionId: metric.content.spell.spellVersionId,
       metricCode: metric.content.rule.metricCode,
       definitionVersion: metric.content.rule.definitionVersion,

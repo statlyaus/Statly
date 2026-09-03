@@ -1020,6 +1020,7 @@ function requireSourceRights(
     ledger: AflTradeGateDecisionLedger;
     environment: AflTradeDecisionEnvironment;
     evaluatedAt: string;
+    purpose: 'validate' | 'activate';
   }
 ) {
   if (record.releaseManifest.content.schemaVersion === 'afl-draft-trade-factual-release/v3') {
@@ -1060,10 +1061,10 @@ function requireSourceRights(
     return;
   }
   for (const binding of record.releaseManifest.content.sourceRightsBindings) {
-    if (binding.sourceUseBoundary !== undefined) {
+    if (binding.sourceUseBoundary !== undefined && input.purpose === 'activate') {
       throw new AflDraftTradeOutcomeReleaseStateError(
         'INEFFECTIVE_DECISION',
-        'Private modeling source bindings cannot authorize factual release registration or activation.'
+        'Private modeling source bindings cannot authorize factual release activation.'
       );
     }
     const currentEvaluation = evaluateAflTradeGate0A(input.ledger, binding.sourceRightsProposal, {
@@ -1227,6 +1228,7 @@ function validateRelease(
     ledger: command.gateDecisionLedger,
     environment: command.environment,
     evaluatedAt: command.occurredAt,
+    purpose: 'validate',
   });
   const revision = registry.revision + 1;
   const nextRecord = appendEvent(
@@ -1316,6 +1318,7 @@ function activateRelease(
     ledger: command.sourceRightsDecisionLedger,
     environment: command.environment,
     evaluatedAt: command.occurredAt,
+    purpose: 'activate',
   });
   requireEffectiveGateDecision({
     ledger: command.factualReviewDecisionLedger,
@@ -1507,6 +1510,7 @@ export function captureAflDraftTradeOutcomeReleaseSelection(
       ledger: evaluation.sourceRightsDecisionLedger,
       environment: record.releaseManifest.content.environment,
       evaluatedAt: evaluation.evaluatedAt,
+      purpose: 'activate',
     });
   } catch (error) {
     if (

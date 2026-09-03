@@ -135,10 +135,13 @@ export class PostgresAflTradeExternalHistoricalReconciliationSource implements A
         );
       }
       const candidateSourceBatchIds = sourceBatches.map(({ batchId }) => batchId).sort();
+      const anchorSeasonYear = Math.max(
+        ...batchesResult.rows.map(({ anchor_season_year }) => anchor_season_year)
+      );
       return {
         environment: completion.content.environment,
         competition: completion.content.competition,
-        anchorSeasonYear: z.number().int().min(1897).max(2200).parse(row.through_year),
+        anchorSeasonYear: z.number().int().min(1897).max(2200).parse(anchorSeasonYear),
         sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
           schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
           kind: 'historical_plan_completion',

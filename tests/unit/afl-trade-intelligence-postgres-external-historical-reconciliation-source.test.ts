@@ -106,7 +106,7 @@ describe('Postgres historical reconciliation source', () => {
               reconciliation_eligible: true,
               plan_id: completion.content.planId,
               from_year: 2025,
-              through_year: 2025,
+              through_year: 2026,
               target_set_sha256: completion.content.targetSetSha256,
             },
           ],
