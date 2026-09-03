@@ -22,6 +22,7 @@ export default defineConfig({
     hookTimeout: 60_000,
     // Each file deploys a complete isolated migration history. Keep files serial so the
     // disposable PostgreSQL lock table is reserved for the explicit intra-test races.
+    fileParallelism: false,
     maxWorkers: 1,
     reporters: ['default'],
   },
