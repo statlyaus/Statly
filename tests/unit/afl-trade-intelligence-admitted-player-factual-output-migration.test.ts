@@ -48,6 +48,7 @@ describe('admitted-player factual output migration', () => {
     expect(migration).toContain(
       `count(DISTINCT required."evaluation"->>'proposalId')`
     );
+    expect(migration).toContain(`count(DISTINCT requested."receipt_id")`);
     expect(migration).toContain('validate_outcome_valuation_model_authorization_insert');
   });
 });

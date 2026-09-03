@@ -256,6 +256,9 @@ DO $patch_model_run_multi_capture_rights$
 DECLARE
   current_definition TEXT;
   updated_definition TEXT;
+  old_current_count TEXT := $old$  SELECT count(*) INTO current_receipt_count$old$;
+  new_current_count TEXT := $new$  SELECT count(DISTINCT requested."receipt_id")
+    INTO current_receipt_count$new$;
   old_required_count TEXT := $old$  SELECT jsonb_array_length(
     admission_row."admission_json"->'content'->'sourceRightsEvaluations'
   ) INTO required_proposal_count;$old$;
@@ -277,6 +280,11 @@ BEGIN
   SELECT pg_get_functiondef(
     'validate_outcome_valuation_model_authorization_insert()'::regprocedure
   ) INTO current_definition;
+  updated_definition:=replace(current_definition,old_current_count,new_current_count);
+  IF updated_definition=current_definition THEN
+    RAISE EXCEPTION 'Expected model-run current receipt count was not found';
+  END IF;
+  current_definition:=updated_definition;
   updated_definition:=replace(current_definition,old_required_count,new_required_count);
   IF updated_definition=current_definition THEN
     RAISE EXCEPTION 'Expected model-run required proposal count was not found';
