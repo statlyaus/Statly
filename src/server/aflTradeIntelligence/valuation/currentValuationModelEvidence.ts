@@ -182,7 +182,7 @@ export function createAflTradeCurrentValuationModelEvidenceOperationPreimage(inp
   } as const;
 }
 
-type PreparedModelEvidence =
+export type AflTradeCurrentValuationPreparedModelEvidence =
   | Readonly<{
       state: 'qualified';
       playerObservationSetId: string;
@@ -230,7 +230,7 @@ export function createAflTradeCurrentValuationModelEvidenceCoordinator(dependenc
   readonly captureCurrentModelRevision: (scopeKey: string) => Promise<number>;
   readonly prepareAndQualify: (
     input: AflTradeCurrentValuationModelEvidenceRequest & { readonly operationId: string }
-  ) => Promise<PreparedModelEvidence>;
+  ) => Promise<AflTradeCurrentValuationPreparedModelEvidence>;
   readonly clock: { readonly now: () => string };
 }) {
   return {

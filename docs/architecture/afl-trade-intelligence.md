@@ -1478,6 +1478,31 @@ run evidence and failure codes while leaving the previous current pair unchanged
 retained result, and factual or model-head drift fails closed before downstream preparation. This
 boundary remains local, private, non-production, and publication-prohibited.
 
+That model-evidence seam is now composed for one claimed private dispatch. Before model work begins,
+the PostgreSQL adapter loads the immutable evidence-orchestration result through its existing
+security-definer boundary, authenticates its exact dispatch-to-factual-operation mapping, reuses the
+current-factual authority check owned by the model-evidence repository, and fences the request with
+its live claim. It then delegates
+HPN preparation, player and pick execution, component retention, pair acceptance, and qualification
+to the existing dispatch-bound model-pair coordinator. After HPN preparation and before either
+component executes, the selected factual output's normalization run must occur in that exact private
+candidate's normalized/reconciled custody. The adapter re-authenticates the claim and factual ancestry
+when projecting terminal evidence, then re-authenticates the exact orchestration, factual authority,
+and live claim again inside the serializable model-evidence CAS transaction. Transient, deterministic,
+and stale outcomes do not enter current model-evidence custody. No second workflow or retry ledger is
+introduced.
+
+The player component accepts both retained private factual contracts at this boundary. Version 2
+continues to bind the exact admitted dataset, admission, and source captures directly. Version 1 is
+accepted only when their IDs equal the operation's exact player target, the selected finalized dataset
+and admission independently name the same factual release, factual candidate, and source-member
+digest, that digest is the operation's exact factual input, and the v1 capture binding's exact capture
+and snapshot occur in the admission's content-addressed source set. This compatibility is required because
+governed HPN preparation owns the request's
+version-1 factual output; it is not permission to select another dataset or weaken source-rights,
+dataset-admission, protocol, model-run, validation, or Gate 3 authentication. The composition is not
+yet invoked by the local dispatcher; end-to-end worker wiring remains a later boundary.
+
 ### Independent factual and valuation releases
 
 A factual-outcome release binds an exact archive dataset, source snapshot set, metric registry,

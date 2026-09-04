@@ -4,6 +4,7 @@ import {
   addAflTradeContentAddressIssue,
   aflTradeContentAddressedIdSchema,
   aflTradeSha256Schema,
+  canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
 
@@ -290,4 +291,75 @@ export function parseAflTradePrivateValuationFactualOutput(
   value: unknown
 ): AflTradePrivateValuationFactualOutput {
   return aflTradePrivateValuationFactualOutputSchema.parse(value);
+}
+
+export type AflTradePlayerModelFactualOutput =
+  | AflTradeAdmittedPlayerFactualOutput
+  | AflTradePrivateValuationFactualOutput;
+
+export function parseAflTradePlayerModelFactualOutput(
+  value: unknown
+): AflTradePlayerModelFactualOutput {
+  return z
+    .union([
+      aflTradeAdmittedPlayerFactualOutputSchema,
+      aflTradePrivateValuationFactualOutputSchema,
+    ])
+    .parse(value);
+}
+
+type FactualParent = Readonly<{
+  factualReleaseId: string;
+  factualCandidateId: string;
+  sourceMemberSetSha256: string;
+}>;
+
+export function doesAflTradePlayerModelFactualAuthorityMatch(input: {
+  readonly factual: AflTradePlayerModelFactualOutput;
+  readonly requestId: string;
+  readonly outputId: string;
+  readonly valuationScopeKey: string;
+  readonly factualValuesSha256: string;
+  readonly target: Readonly<{ datasetId: string; admissionId: string }>;
+  readonly dataset: FactualParent & Readonly<{ datasetId: string }>;
+  readonly admission: FactualParent & Readonly<{ admissionId: string }>;
+  readonly admittedSources: readonly z.infer<typeof admittedPlayerSourceCaptureSchema>[];
+  readonly legacySourceCapture?: Readonly<{
+    captureId: string;
+    sourceSnapshotId: string;
+  }>;
+}): boolean {
+  const content = input.factual.content;
+  const parentMatches = (parent: FactualParent) =>
+    parent.factualReleaseId === content.factualRelease.releaseId &&
+    parent.factualCandidateId === content.candidate.candidateId &&
+    parent.sourceMemberSetSha256 === content.candidate.memberSetSha256;
+  if (
+    content.requestId !== input.requestId ||
+    input.factual.outputId !== input.outputId ||
+    content.valuationScopeKey !== input.valuationScopeKey ||
+    content.candidate.memberSetSha256 !== input.factualValuesSha256 ||
+    input.dataset.datasetId !== input.target.datasetId ||
+    input.admission.admissionId !== input.target.admissionId ||
+    !parentMatches(input.dataset) ||
+    !parentMatches(input.admission)
+  ) {
+    return false;
+  }
+  if (content.schemaVersion === AFL_TRADE_PRIVATE_VALUATION_FACTUAL_OUTPUT_SCHEMA_VERSION) {
+    return (
+      input.legacySourceCapture !== undefined &&
+      input.admittedSources.some(
+        (source) =>
+          source.captureId === input.legacySourceCapture?.captureId &&
+          source.sourceSnapshotId === input.legacySourceCapture.sourceSnapshotId
+      )
+    );
+  }
+  return (
+    content.admittedPlayerDataset.datasetId === input.dataset.datasetId &&
+    content.admittedPlayerDataset.admissionId === input.admission.admissionId &&
+    canonicalizeAflTradeJson(content.sourceCaptures) ===
+      canonicalizeAflTradeJson(input.admittedSources)
+  );
 }
