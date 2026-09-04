@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createLocalAflTradeFactualOutcomePublication } from '@/server/aflTradeIntelligence/development/localFactualOutcomePublication';
 import { createLocalAflTradeOutcomeReleaseAuthority } from '@/server/aflTradeIntelligence/development/localOutcomeReleaseAuthority';
 
 describe('local AFL factual outcome publication', () => {
   it('publishes normalized acquisitions without inventing player outcomes', () => {
-    const legacy = createLocalAflTradeOutcomeReleaseAuthority();
-    const publication = createLocalAflTradeFactualOutcomePublication(legacy.release);
+    const publication = createLocalAflTradeOutcomeReleaseAuthority();
 
     expect(publication.release.content.schemaVersion).toBe('afl-draft-trade-outcome-release/v2');
     expect(publication.release.content.outcomeRecordCount).toBe(0);

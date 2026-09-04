@@ -26,6 +26,7 @@ describe('local private valuation worker', () => {
 
     const running = runLocalAflPrivateValuationWorker({
       env: {
+        NODE_ENV: 'test',
         AFL_OUTCOMES_DATABASE_URL: 'postgresql://local:local@127.0.0.1:55432/statly_outcomes_test',
         STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: 'a'.repeat(64),
         AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/tmp/statly-worker-test-artifacts',
@@ -70,6 +71,7 @@ describe('local private valuation worker', () => {
     await expect(
       runLocalAflPrivateValuationWorker({
         env: {
+          NODE_ENV: 'test',
           AFL_OUTCOMES_DATABASE_URL:
             'postgresql://local:local@127.0.0.1:55432/statly_outcomes_test',
           STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: 'a'.repeat(64),
@@ -111,6 +113,7 @@ describe('local private valuation worker', () => {
 
     await runLocalAflPrivateValuationWorker({
       env: {
+        NODE_ENV: 'test',
         AFL_OUTCOMES_DATABASE_URL: 'postgresql://local:local@127.0.0.1:55432/statly_outcomes_test',
         STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: 'a'.repeat(64),
         AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/tmp/statly-worker-test-artifacts',

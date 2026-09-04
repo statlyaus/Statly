@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createGenuineDispatchBoundPickPavRunner } from '@/server/aflTradeIntelligence/valuation/genuineDispatchBoundPickPav';
 import { PostgresGenuineDispatchBoundPickPavMaterializer } from '@/server/aflTradeIntelligence/valuation/postgresGenuineDispatchBoundPickPav';
 import { createAflTradeGenuineDispatchBoundGovernedPickExecutor } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationModelPair';
@@ -64,8 +68,10 @@ describe('genuine dispatch-bound pick-PAV runner', () => {
   it('fails closed before release lookup when the exact request binding is absent', async () => {
     const { input } = executionInput();
     const queries: string[] = [];
-    const client = {
-      async transaction<T>(work: (transaction: typeof client) => Promise<T>): Promise<T> {
+    const client: AflOutcomeSqlClient = {
+      async transaction<T>(
+        work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
+      ): Promise<T> {
         return work(client);
       },
       async query<Row>(sql: string) {

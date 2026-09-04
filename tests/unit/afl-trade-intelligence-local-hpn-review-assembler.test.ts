@@ -38,10 +38,7 @@ function snapshot(input: { withMethod?: boolean; withResults?: boolean } = {}) {
   const results2024 = createLocalAflTradeAflTablesResultsAuthority(2024);
   const results2025 = createLocalAflTradeAflTablesResultsAuthority(2025);
   const rights = authority2025.capture.sourceRights;
-  const rightsArtifact = createAflTradeCanonicalJsonArtifactRef(
-    rights,
-    rights.content.proposedAt
-  );
+  const rightsArtifact = createAflTradeCanonicalJsonArtifactRef(rights, rights.content.proposedAt);
   const resultsRights = results2025.capture.sourceRights;
   const resultsRightsArtifact = createAflTradeCanonicalJsonArtifactRef(
     resultsRights,
@@ -178,9 +175,7 @@ class FixtureClient implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
   readonly statements: string[] = [];
   constructor(private readonly row = snapshot()) {}
 
-  async query<Row = Record<string, unknown>>(
-    sql: string
-  ): Promise<AflOutcomeSqlQueryResult<Row>> {
+  async query<Row = Record<string, unknown>>(sql: string): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.statements.push(sql);
     return { rows: [this.row as Row], rowCount: 1 };
   }
@@ -207,9 +202,7 @@ describe('local HPN league-season review assembler', () => {
     expect(assembled.packet.content).toMatchObject({
       state: 'blocked',
       methodSelection: { state: 'missing', methodId: null },
-      blockerCounts: expect.arrayContaining([
-        { blocker: 'method_not_authenticated', count: 2 },
-      ]),
+      blockerCounts: expect.arrayContaining([{ blocker: 'method_not_authenticated', count: 2 }]),
       counts: {
         seasonCount: 2,
         eligibleSeasons: 0,
@@ -251,15 +244,15 @@ describe('local HPN league-season review assembler', () => {
     const primary = assembled.eligibilityReports[0]!.report.content.sources.find(
       ({ role }) => role === 'primary'
     )!;
-    expect(primary.selectionState).toBe('selected');
+    if (primary.selectionState !== 'selected') {
+      throw new Error('Expected a selected primary source report.');
+    }
     expect(primary.fields.every(({ state }) => state === 'blocked')).toBe(true);
     expect(primary.fields[0]!.fieldMapReview.state).toBe('missing');
     expect(primary.fields[0]!.sourceUse.state).toBe('permitted_private_calculation');
     expect(primary.fields[0]!.factualReview.state).toBe('missing');
     expect(assembled.documents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ artifactRef: assembled.packetArtifact }),
-      ])
+      expect.arrayContaining([expect.objectContaining({ artifactRef: assembled.packetArtifact })])
     );
   });
 
@@ -290,9 +283,7 @@ describe('local HPN league-season review assembler', () => {
       methodArtifact: createAflTradeCanonicalJsonArtifactRef(method, methodRegisteredAt),
     });
     expect(assembled.documents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ document: method }),
-      ])
+      expect.arrayContaining([expect.objectContaining({ document: method })])
     );
   });
 

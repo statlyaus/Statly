@@ -22,8 +22,8 @@ import {
   aflTradeHpnPavSeasonInputSetSchema,
   createAflTradeHpnPavFieldMap,
 } from '@/server/aflTradeIntelligence/modeling/hpnPavInputContracts';
+import type { AflTradeHpnPavInputError } from '@/server/aflTradeIntelligence/modeling/hpnPavInputRepository';
 import { aflTradeHpnProjectedFieldMapSchema } from '@/server/aflTradeIntelligence/modeling/hpnProjectedFieldMap';
-import { AflTradeHpnPavInputError } from '@/server/aflTradeIntelligence/modeling/hpnPavInputRepository';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
 import { PostgresAflTradeHpnProjectedFieldMapAuthority } from '@/server/aflTradeIntelligence/modeling/postgresHpnProjectedFieldMapAuthority';
@@ -127,28 +127,88 @@ function projectedMap(
   const semanticBindings =
     fieldMap.content.inputKind === 'completed_match_result'
       ? [
-          { semanticField: 'awayClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayClub } },
-          { semanticField: 'awayPoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayPoints } },
-          { semanticField: 'completionStatus', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.completionStatus } },
-          { semanticField: 'homeClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homeClub } },
-          { semanticField: 'homePoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homePoints } },
-          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
+          {
+            semanticField: 'awayClub',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayClub },
+          },
+          {
+            semanticField: 'awayPoints',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayPoints },
+          },
+          {
+            semanticField: 'completionStatus',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.completionStatus },
+          },
+          {
+            semanticField: 'homeClub',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homeClub },
+          },
+          {
+            semanticField: 'homePoints',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homePoints },
+          },
+          {
+            semanticField: 'match',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match },
+          },
         ]
       : [
-          { semanticField: 'clearances', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.clearances } },
-          { semanticField: 'club', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.club } },
-          { semanticField: 'freeKicksAgainst', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksAgainst } },
-          { semanticField: 'freeKicksFor', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksFor } },
-          { semanticField: 'goalAssists', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.goalAssists } },
-          { semanticField: 'hitOuts', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.hitOuts } },
-          { semanticField: 'inside50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.inside50s } },
-          { semanticField: 'marks', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marks } },
-          { semanticField: 'marksInside50', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marksInside50 } },
-          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
-          { semanticField: 'onePercenters', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.onePercenters } },
-          { semanticField: 'player', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.player } },
-          { semanticField: 'rebound50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.rebound50s } },
-          { semanticField: 'tackles', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.tackles } },
+          {
+            semanticField: 'clearances',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.clearances },
+          },
+          {
+            semanticField: 'club',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.club },
+          },
+          {
+            semanticField: 'freeKicksAgainst',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksAgainst },
+          },
+          {
+            semanticField: 'freeKicksFor',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksFor },
+          },
+          {
+            semanticField: 'goalAssists',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.goalAssists },
+          },
+          {
+            semanticField: 'hitOuts',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.hitOuts },
+          },
+          {
+            semanticField: 'inside50s',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.inside50s },
+          },
+          {
+            semanticField: 'marks',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marks },
+          },
+          {
+            semanticField: 'marksInside50',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marksInside50 },
+          },
+          {
+            semanticField: 'match',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match },
+          },
+          {
+            semanticField: 'onePercenters',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.onePercenters },
+          },
+          {
+            semanticField: 'player',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.player },
+          },
+          {
+            semanticField: 'rebound50s',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.rebound50s },
+          },
+          {
+            semanticField: 'tackles',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.tackles },
+          },
           { semanticField: 'totalPoints', mapping: fieldMap.content.bindings.totalPoints },
         ];
   const content = {
@@ -570,9 +630,12 @@ describe('PostgresAflTradeHpnPavInputRepository', () => {
     const repository = new PostgresAflTradeHpnPavInputRepository(client);
     const loadCurrentExact = vi
       .spyOn(PostgresAflTradeHpnProjectedFieldMapAuthority.prototype, 'loadCurrentExact')
-      .mockImplementation(async (fieldMapId) =>
-        client.maps.find((map) => map.fieldMapId === fieldMapId) ?? null
-      );
+      .mockImplementation(async (fieldMapId) => {
+        const parsed = aflTradeHpnProjectedFieldMapSchema.safeParse(
+          client.maps.find((map) => map.fieldMapId === fieldMapId)
+        );
+        return parsed.success ? parsed.data : null;
+      });
 
     try {
       const first = await repository.buildAndPersistSeasonInputSet(request(client), {
@@ -825,11 +888,13 @@ describe('PostgresAflTradeHpnPavInputRepository', () => {
   it('rejects execution in another environment before reading SQL', async () => {
     const client = new FakeHpnPavSqlClient();
     const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const expectedError = {
+      code: 'ENVIRONMENT_MISMATCH',
+    } satisfies Pick<AflTradeHpnPavInputError, 'code'>;
+
     await expect(
       repository.buildAndPersistSeasonInputSet(request(client), { environment: 'production' })
-    ).rejects.toEqual(
-      expect.objectContaining<AflTradeHpnPavInputError>({ code: 'ENVIRONMENT_MISMATCH' })
-    );
+    ).rejects.toMatchObject(expectedError);
   });
 
   it('rejects conflicting durable replay content', async () => {

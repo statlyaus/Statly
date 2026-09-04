@@ -243,7 +243,7 @@ function datasetAuthority(input: {
     playerId: 'player:dataset',
     clubId: 'club:dataset',
     spellVersionId: addressed('acquisition-spell-version', 'dataset-spell'),
-    metricCode: 'games',
+    metricCode: 'games' as const,
   };
   const row = createAflTradeValuationDatasetRow({
     schemaVersion: AFL_TRADE_VALUATION_DATASET_ROW_SCHEMA_VERSION,

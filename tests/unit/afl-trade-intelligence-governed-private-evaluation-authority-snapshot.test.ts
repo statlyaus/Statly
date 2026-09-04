@@ -176,8 +176,10 @@ describe('governed private evaluation authority snapshot', () => {
       blockers: [],
     });
     const tampered = structuredClone(retained);
-    tampered.snapshot.content.calculationAuthority.playerModelRunId =
-      `model-run:${'e'.repeat(64)}`;
+    if (!('playerModelRunId' in tampered.snapshot.content.calculationAuthority)) {
+      throw new Error('Expected synthetic-ready component-run authority.');
+    }
+    tampered.snapshot.content.calculationAuthority.playerModelRunId = `model-run:${'e'.repeat(64)}`;
     expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(tampered)).toThrow();
   });
 
@@ -262,20 +264,21 @@ describe('governed private evaluation authority snapshot', () => {
     expect(authenticateGovernedPrivateEvaluationAuthorityInspection(retained)).toEqual(retained);
 
     const tampered = structuredClone(retained);
+    if (!('privateValuationDecisionRevision' in tampered.inspection.content.calculationAuthority)) {
+      throw new Error('Expected current prepared-input authority.');
+    }
     tampered.inspection.content.calculationAuthority.privateValuationDecisionRevision = 4;
     expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(tampered)).toThrow();
   });
 
   it('rejects substituted non-production authority and non-canonical component roles', () => {
-    const retained = createReadyGovernedPrivateEvaluationAuthorityInspection(
-      readyAuthorityInput()
-    );
+    const retained = createReadyGovernedPrivateEvaluationAuthorityInspection(readyAuthorityInput());
     const substituted = structuredClone(retained);
-    substituted.inspection.content.calculationAuthority.inputTraceId =
-      `private-evaluation-input-trace:${'0'.repeat(64)}`;
-    expect(() =>
-      authenticateGovernedPrivateEvaluationAuthorityInspection(substituted)
-    ).toThrow();
+    if (!('inputTraceId' in substituted.inspection.content.calculationAuthority)) {
+      throw new Error('Expected authenticated calculation authority.');
+    }
+    substituted.inspection.content.calculationAuthority.inputTraceId = `private-evaluation-input-trace:${'0'.repeat(64)}`;
+    expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(substituted)).toThrow();
 
     const reordered = readyAuthorityInput();
     reordered.components.reverse();
@@ -290,8 +293,8 @@ describe('governed private evaluation authority snapshot', () => {
     delete (unqualified.components[1] as { qualificationId?: string }).qualificationId;
     delete (unqualified.components[1] as { qualificationPolicyVersion?: string })
       .qualificationPolicyVersion;
-    expect(() =>
-      createReadyGovernedPrivateEvaluationAuthorityInspection(unqualified)
-    ).toThrow(/qualification custody/i);
+    expect(() => createReadyGovernedPrivateEvaluationAuthorityInspection(unqualified)).toThrow(
+      /qualification custody/i
+    );
   });
 });

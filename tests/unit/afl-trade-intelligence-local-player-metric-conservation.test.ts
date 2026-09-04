@@ -246,7 +246,7 @@ describe('local player metric conservation', () => {
       }),
       code: 'COACHES_TOTAL_MISMATCH',
     },
-  ])('fails closed when $name do not conserve', ({ mutate, code }) => {
+  ] as const)('fails closed when $name do not conserve', ({ mutate, code }) => {
     expect(() => conserveLocalPlayerMatchMetrics(mutate())).toThrowError(
       expect.objectContaining<Partial<LocalPlayerMetricConservationError>>({ code })
     );

@@ -182,7 +182,7 @@ function lineage(assetId: string, assetType: 'player' | 'current_pick_entitlemen
         assetType,
         label: assetId === 'asset:player-a' ? 'Player A' : 'Pick 14',
         depth: 0,
-      effectiveFrom: '2020-10-10T00:00:00.000Z',
+        effectiveFrom: '2020-10-10T00:00:00.000Z',
         evidenceId: `evidence:${assetId}`,
       },
     ],
@@ -255,8 +255,16 @@ function input(): AflTradeCalculationNarrativeInput {
   return {
     explanation: explanation(),
     assets: [
-      { assetId: 'asset:player-a', modelEvidence: playerEvidence, lineage: lineage('asset:player-a', 'player') },
-      { assetId: 'asset:pick-14', modelEvidence: pickEvidence, lineage: lineage('asset:pick-14', 'current_pick_entitlement') },
+      {
+        assetId: 'asset:player-a',
+        modelEvidence: playerEvidence,
+        lineage: lineage('asset:player-a', 'player'),
+      },
+      {
+        assetId: 'asset:pick-14',
+        modelEvidence: pickEvidence,
+        lineage: lineage('asset:pick-14', 'current_pick_entitlement'),
+      },
     ],
   };
 }
@@ -314,6 +322,7 @@ describe('trade calculation narrative', () => {
     if (player.modelEvidence.kind !== 'player' || player.modelEvidence.state === 'unavailable') {
       throw new Error('Fixture player evidence must be numeric.');
     }
+    const modelEvidence = player.modelEvidence;
     const driftedRequest: AflTradeCalculationNarrativeInput = {
       ...request,
       assets: request.assets.map((entry) =>
@@ -321,8 +330,8 @@ describe('trade calculation narrative', () => {
           ? {
               ...entry,
               modelEvidence: {
-                ...player.modelEvidence,
-                totals: { ...player.modelEvidence.totals, contribution: 73 },
+                ...modelEvidence,
+                totals: { ...modelEvidence.totals, contribution: 73 },
               },
             }
           : entry
@@ -365,9 +374,9 @@ describe('governed private evaluation generation', () => {
       selector: materialization.generation.content.selector,
       narrativeId: narrative.narrativeId,
     });
-    expect(materialization.artifacts.map(({ bytes }) => new TextDecoder().decode(bytes)).join('')).not.toMatch(
-      /<html|__next|react/i
-    );
+    expect(
+      materialization.artifacts.map(({ bytes }) => new TextDecoder().decode(bytes)).join('')
+    ).not.toMatch(/<html|__next|react/i);
     expect(verifyGovernedPrivateEvaluationGeneration(materialization)).toBe(true);
     const detailArtifact = materialization.artifacts.find(({ kind }) => kind === 'detail')!;
     expect(decodeGovernedPrivateEvaluationDetailDocument(detailArtifact.bytes)).toMatchObject({

@@ -53,9 +53,10 @@ function governedRead(
       kind,
       artifact: {
         artifactId: `artifact:${'e'.repeat(64)}`,
+        storageUri: `memory://artifact/${'e'.repeat(64)}`,
         mediaType: 'application/json',
         byteLength: bytes.byteLength,
-        sha256: 'f'.repeat(64),
+        contentSha256: 'f'.repeat(64),
         createdAt: '2026-08-19T00:00:00.000Z',
       },
     },

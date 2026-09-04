@@ -19,6 +19,7 @@ describe('outcomes integration Prisma test CLI', () => {
       dependencies: {
         createSafeWorkingDirectory: () => '/tmp/statly-outcomes-prisma-test',
         environment: {
+          NODE_ENV: 'test',
           PATH: '/test/bin',
           CI: 'true',
           AFL_TRADE_FITZROY_EGRESS_BEARER_TOKEN: 'must-not-be-forwarded',
@@ -44,6 +45,7 @@ describe('outcomes integration Prisma test CLI', () => {
         environment: {
           PATH: '/test/bin',
           CI: 'true',
+          NODE_ENV: 'test',
           AFL_OUTCOMES_DATABASE_URL:
             'postgresql://statly_test:statly_test@127.0.0.1:49152/outcomes',
           PRISMA_HIDE_UPDATE_MESSAGE: '1',

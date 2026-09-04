@@ -13,42 +13,47 @@ const generationId = `local-private-trade-evaluation-generation:${'b'.repeat(64)
 const operationId = `private-evaluation-operation:${'d'.repeat(64)}`;
 const projectionManifestId = `private-evaluation-projection-manifest:${'e'.repeat(64)}`;
 
+type Workspace = ReturnType<typeof createGovernedPrivateEvaluationWorkspaceForInternalComposition>;
+
 function createWorkspace() {
-  const inspect = vi.fn(async () => ({
-    state: 'unavailable' as const,
-    selector,
-    inspectionId,
-    validThrough: '2026-08-19T10:05:00.000Z',
-    head: { status: 'active' as const, revision: 1, generationId },
-    blockers: [
-      {
-        code: 'model_not_approved' as const,
-        message: 'No admitted model run covers this transaction.',
-      },
-    ],
-  }));
-  const execute = vi.fn(async () => ({
-    state: 'unavailable' as const,
-    selector,
-    inspectionId,
-    operationId,
-    blockers: [
-      {
-        code: 'model_not_approved' as const,
-        message: 'No admitted model run covers this transaction.',
-      },
-    ],
-  }));
-  const read = vi.fn(async (request: {
-    selection: { kind: 'current' | 'generation' };
-    document: { kind: 'archive_summary' | 'detail' | 'reader_api' | 'json_export' };
-  }) => ({
-    state: 'unavailable' as const,
-    selector,
-    selection: request.selection,
-    document: request.document,
-    reason: 'not_found' as const,
-  }));
+  const inspect = vi.fn<(request: Parameters<Workspace['inspect']>[0]) => Promise<unknown>>(
+    async () => ({
+      state: 'unavailable' as const,
+      selector,
+      inspectionId,
+      validThrough: '2026-08-19T10:05:00.000Z',
+      head: { status: 'active' as const, revision: 1, generationId },
+      blockers: [
+        {
+          code: 'model_not_approved' as const,
+          message: 'No admitted model run covers this transaction.',
+        },
+      ],
+    })
+  );
+  const execute = vi.fn<(request: Parameters<Workspace['execute']>[0]) => Promise<unknown>>(
+    async () => ({
+      state: 'unavailable' as const,
+      selector,
+      inspectionId,
+      operationId,
+      blockers: [
+        {
+          code: 'model_not_approved' as const,
+          message: 'No admitted model run covers this transaction.',
+        },
+      ],
+    })
+  );
+  const read = vi.fn<(request: Parameters<Workspace['read']>[0]) => Promise<unknown>>(
+    async (request) => ({
+      state: 'unavailable' as const,
+      selector,
+      selection: request.selection,
+      document: request.document,
+      reason: 'not_found' as const,
+    })
+  );
 
   return {
     workspace: createGovernedPrivateEvaluationWorkspaceForInternalComposition({
@@ -64,12 +69,7 @@ describe('GovernedPrivateEvaluationWorkspace', () => {
   it('exposes only governed inspection, execution, automated staging, and reads', () => {
     const { workspace } = createWorkspace();
 
-    expect(Object.keys(workspace).sort()).toEqual([
-      'execute',
-      'inspect',
-      'read',
-      'stageAutomated',
-    ]);
+    expect(Object.keys(workspace).sort()).toEqual(['execute', 'inspect', 'read', 'stageAutomated']);
   });
 
   it('keeps the internal composition constructor out of production imports', () => {
@@ -79,7 +79,9 @@ describe('GovernedPrivateEvaluationWorkspace', () => {
     const offenders = globSync('src/**/*.{ts,tsx}')
       .filter((path) => !path.includes('/valuation/internal/') && !permitted.has(path))
       .filter((path) =>
-        readFileSync(path, 'utf8').includes('valuation/internal/createGovernedPrivateEvaluationWorkspace')
+        readFileSync(path, 'utf8').includes(
+          'valuation/internal/createGovernedPrivateEvaluationWorkspace'
+        )
       );
 
     expect(offenders).toEqual([]);

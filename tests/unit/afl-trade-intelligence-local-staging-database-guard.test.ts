@@ -11,7 +11,7 @@ const expectedRuntimeNonce = 'a'.repeat(64);
 function unauthenticatedClient() {
   const statements: string[] = [];
   const client: AflOutcomeSqlClient = {
-    async query<Row>(sql) {
+    async query<Row>(sql: string) {
       statements.push(sql);
       return { rows: [] as Row[], rowCount: 0 };
     },

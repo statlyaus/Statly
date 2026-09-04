@@ -11,6 +11,17 @@ import { deriveAflTradeStatlyGrades } from '@/server/aflTradeIntelligence/valuat
 import { aflTradeValueSummarySchema } from '@/types/aflTradeIntelligence';
 
 const PROVIDERS = ['afl_tables', 'footywire', 'fryzigg'] as const;
+type ValueSummary = ReturnType<typeof valueAflTradeDevelopmentTrade>['summaries'][keyof ReturnType<
+  typeof valueAflTradeDevelopmentTrade
+>['summaries']];
+
+function requireAvailableSummary(
+  summary: ValueSummary
+): asserts summary is Extract<ValueSummary, { availability: 'available' }> {
+  if (summary.availability !== 'available') {
+    throw new Error('Expected an available valuation summary fixture.');
+  }
+}
 
 function observedOutcome(value: number) {
   return {
@@ -52,7 +63,7 @@ function acquisition(input: {
   };
 }
 
-function dataset(extraAcquisitions: unknown[] = []) {
+function dataset(extraAcquisitions: ReturnType<typeof acquisition>[] = []) {
   const history = [
     acquisition({
       id: 'acq:h1',
@@ -218,6 +229,8 @@ describe('development AFL trade grade model', () => {
       trade: trade(),
     });
 
+    requireAvailableSummary(first.summaries.at_trade);
+    requireAvailableSummary(second.summaries.at_trade);
     expect(second.summaries.at_trade.clubValues).toEqual(first.summaries.at_trade.clubValues);
   });
 
@@ -281,6 +294,8 @@ describe('development AFL trade grade model', () => {
       trade: trade({ effectiveAt: '2025-10-15T00:00:00.000Z' }),
     });
 
+    requireAvailableSummary(result.summaries.current);
+    requireAvailableSummary(result.summaries.realized);
     expect(result.summaries.current.availability).toBe('available');
     expect(result.summaries.current.confidence.level).toBe('low');
     expect(result.summaries.realized.confidence.level).toBe('low');
@@ -349,6 +364,7 @@ describe('development AFL trade grade model', () => {
       },
     });
     const summary = result.summaries.at_trade;
+    requireAvailableSummary(summary);
     const total =
       summary.clubValues.reduce((sum, club) => sum + club.finishesAheadProbability, 0) +
       summary.practicalEquivalenceProbability;
@@ -445,6 +461,7 @@ describe('development AFL trade grade model', () => {
       },
     });
 
+    requireAvailableSummary(result.summaries.realized);
     expect(result.summaries.realized.assessment).toEqual({
       interpretation: 'balanced_within_uncertainty',
       favouredAflClubId: null,

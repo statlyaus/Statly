@@ -555,6 +555,9 @@ describe('private valuation dispatch-bound model pair', () => {
       claim,
     });
 
+    if (!('outcome' in result)) {
+      throw new Error('Expected a retained qualification result.');
+    }
     expect(result.outcome).toBe('failed');
     expect(fences).toEqual([
       {
@@ -674,11 +677,12 @@ describe('private valuation dispatch-bound model pair', () => {
   it('rejects a repository no-op instead of returning a null qualification identity', async () => {
     const fixture = coordinator();
     const bindQualification = fixture.repository.bindQualification.bind(fixture.repository);
-    fixture.repository.bindQualification = async (input) => ({
-      ...(await bindQualification(input)),
-      qualificationId: null,
-      qualificationOutcome: null,
-    });
+    fixture.repository.bindQualification = async (input) =>
+      ({
+        ...(await bindQualification(input)),
+        qualificationId: null,
+        qualificationOutcome: null,
+      }) as never;
 
     await expect(
       fixture.value.prepare({ requestId: exactInput().requestId, claim })

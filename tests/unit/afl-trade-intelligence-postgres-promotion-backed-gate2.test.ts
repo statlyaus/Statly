@@ -12,6 +12,7 @@ import { createAflTradePromotionBackedFactualLineage } from '@/server/aflTradeIn
 import { createAflTradePromotionBackedFactualRelease } from '@/server/aflTradeIntelligence/outcomes/promotionBackedFactualReleaseContracts';
 import type {
   AflOutcomeSqlClient,
+  AflOutcomeSqlQueryResult,
   AflOutcomeSqlTransaction,
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import {
@@ -20,6 +21,10 @@ import {
 } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedGate2Repository';
 
 const sha = (value: string) => value.repeat(64);
+
+function typedRows<Row>(rows: readonly unknown[]): Row[] {
+  return [...rows] as Row[];
+}
 
 function factualBundle() {
   const promotionId = `external-canonical-promotion:${sha('a')}`;
@@ -154,10 +159,10 @@ class FixtureSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
     return work(this);
   }
 
-  async query<Row extends Record<string, unknown>>(
+  async query<Row = Record<string, unknown>>(
     sql: string,
     parameters: readonly unknown[] = []
-  ): Promise<{ rows: Row[]; rowCount: number }> {
+  ): Promise<AflOutcomeSqlQueryResult<Row>> {
     if (sql.includes('FROM outcome_corpus_factual_lineage lineage')) {
       const rows =
         this.lineage === null || this.admission === null
@@ -166,25 +171,25 @@ class FixtureSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
               lineage_json: this.lineage,
               admission_json: this.admission,
             }));
-      return { rows: rows as Row[], rowCount: rows.length };
+      return { rows: typedRows<Row>(rows), rowCount: rows.length };
     }
     if (sql.includes('FROM outcome_factual_release_candidate candidate')) {
       return {
-        rows: [
+        rows: typedRows<Row>([
           {
             candidate_json: this.factual.candidate,
             manifest_json: this.factual.release,
             corpus_json: this.factual.corpus,
             status: 'approved',
             finalized_at: this.factual.candidate.content.createdAt,
-          } as Row,
-        ],
+          },
+        ]),
         rowCount: 1,
       };
     }
     if (sql.includes('SELECT lineage_json FROM outcome_corpus_factual_lineage ')) {
       return {
-        rows: this.lineage === null ? [] : ([{ lineage_json: this.lineage }] as Row[]),
+        rows: this.lineage === null ? [] : typedRows<Row>([{ lineage_json: this.lineage }]),
         rowCount: this.lineage === null ? 0 : 1,
       };
     }
@@ -195,23 +200,27 @@ class FixtureSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
       return { rows: [], rowCount: 1 };
     }
     if (sql.includes('FROM outcome_gate_ledger_head')) {
-      return { rows: [{ revision: this.ledger.decisions.length } as Row], rowCount: 1 };
+      return { rows: typedRows<Row>([{ revision: this.ledger.decisions.length }]), rowCount: 1 };
     }
     if (sql.includes('FROM outcome_gate_proposal')) {
       return {
-        rows: this.ledger.proposals.map((proposal) => ({ proposal_json: proposal }) as Row),
+        rows: typedRows<Row>(
+          this.ledger.proposals.map((proposal) => ({ proposal_json: proposal }))
+        ),
         rowCount: this.ledger.proposals.length,
       };
     }
     if (sql.includes('FROM outcome_gate_decision')) {
       return {
-        rows: this.ledger.decisions.map((decision) => ({ decision_json: decision }) as Row),
+        rows: typedRows<Row>(
+          this.ledger.decisions.map((decision) => ({ decision_json: decision }))
+        ),
         rowCount: this.ledger.decisions.length,
       };
     }
     if (sql.includes('FROM outcome_corpus_factual_lineage_admission')) {
       return {
-        rows: this.admission === null ? [] : ([{ admission_json: this.admission }] as Row[]),
+        rows: this.admission === null ? [] : typedRows<Row>([{ admission_json: this.admission }]),
         rowCount: this.admission === null ? 0 : 1,
       };
     }

@@ -21,8 +21,10 @@ import {
   type AflTradeNonproductionPlanIssue,
 } from './afl-trade-nonproduction-plan-policy';
 
+type PlanEnvironment = Readonly<Record<string, string | undefined>>;
+
 interface PlanExecutionOptions {
-  readonly environment: NodeJS.ProcessEnv;
+  readonly environment: PlanEnvironment;
   readonly signal: AbortSignal;
   readonly timeoutMs: number;
 }
@@ -224,7 +226,7 @@ function planArguments(
 function sanitizedPlanEnvironment(
   environment: NodeJS.ProcessEnv,
   snapshot: AflTradeNonproductionPlanSnapshot
-): NodeJS.ProcessEnv {
+): PlanEnvironment {
   const sanitized = Object.fromEntries(
     Object.entries(environment).filter(
       ([name, value]) =>
@@ -251,7 +253,9 @@ function executePlanRenderer(
       [...args],
       {
         encoding: 'utf8',
-        env: options.environment,
+        // Next augments ProcessEnv with an application-only required NODE_ENV, while Node's
+        // child-process boundary accepts the same optional string map used by this sanitizer.
+        env: options.environment as NodeJS.ProcessEnv,
         killSignal: 'SIGKILL',
         maxBuffer: 128 * 1024 * 1024,
         signal: options.signal,

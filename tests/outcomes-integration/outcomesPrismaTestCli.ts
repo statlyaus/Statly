@@ -69,6 +69,7 @@ function createChildEnvironment(
   databaseUrl: string
 ): NodeJS.ProcessEnv {
   const childEnvironment: NodeJS.ProcessEnv = {
+    NODE_ENV: environment.NODE_ENV ?? 'test',
     AFL_OUTCOMES_DATABASE_URL: databaseUrl,
     PRISMA_HIDE_UPDATE_MESSAGE: '1',
   };
@@ -104,12 +105,7 @@ export function runOutcomesPrismaTestCommand(
       args: [
         join(workspaceRoot, 'node_modules', 'prisma', 'build', 'index.js'),
         ...args,
-        ...(options.appendSchemaArgument === false
-          ? []
-          : [
-              '--schema',
-              schemaPath,
-            ]),
+        ...(options.appendSchemaArgument === false ? [] : ['--schema', schemaPath]),
       ],
       environment: createChildEnvironment(
         dependencies.environment ?? process.env,

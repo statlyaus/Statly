@@ -9,6 +9,7 @@ import {
   type LocalAflTradeDockerCommand,
 } from '@/server/aflTradeIntelligence/development/localDockerFitzRoyCaptureExecutor';
 import { createAflTradeFitzRoyInvocation } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
+import { aflTradeFitzRoyEgressExecutionReceiptSchema } from '@/server/aflTradeIntelligence/source/fitzRoyEgressExecutionReceipt';
 import { createAflTradeEd25519EgressExecutionVerifier } from '@/server/aflTradeIntelligence/source/fitzRoyHttpEgressExecutor';
 
 const sha = (character: string) => character.repeat(64);
@@ -104,7 +105,10 @@ describe('local non-production Docker fitzRoy capture', () => {
         .export({ type: 'spki', format: 'pem' })
         .toString(),
     });
-    await expect(verifier.verify(result.egressExecutionReceipt!)).resolves.toBe(true);
+    const receipt = aflTradeFitzRoyEgressExecutionReceiptSchema.parse(
+      result.egressExecutionReceipt
+    );
+    await expect(verifier.verify(receipt)).resolves.toBe(true);
 
     const command = fixture.runDocker.mock.calls[0]?.[0];
     expect(command?.binary).toBe('docker');

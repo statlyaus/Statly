@@ -257,8 +257,20 @@ describe('PostgreSQL valuation dataset evidence authenticator', () => {
           throw new Error('not used');
         },
       },
-      releaseRepository: { loadRegistry: vi.fn(async () => ({ revision: 3 })) },
-      gateRepository: { load: vi.fn(async () => ({ revision: 9, ledger: { decisions: [] } })) },
+      releaseRepository: {
+        loadRegistry: vi.fn(async () => ({
+          revision: 3,
+          releases: {},
+          activeByScope: {},
+          events: [],
+        })),
+      },
+      gateRepository: {
+        load: vi.fn(async () => ({
+          revision: 9,
+          ledger: { proposals: [], decisions: [] },
+        })),
+      },
       artifactRepository: { loadExactWithObservation },
     });
 
@@ -289,8 +301,20 @@ describe('PostgreSQL valuation dataset evidence authenticator', () => {
           throw new Error('not used');
         },
       },
-      releaseRepository: { loadRegistry: vi.fn(async () => ({ revision: 3 })) },
-      gateRepository: { load: vi.fn(async () => ({ revision: 9, ledger: { decisions: [] } })) },
+      releaseRepository: {
+        loadRegistry: vi.fn(async () => ({
+          revision: 3,
+          releases: {},
+          activeByScope: {},
+          events: [],
+        })),
+      },
+      gateRepository: {
+        load: vi.fn(async () => ({
+          revision: 9,
+          ledger: { proposals: [], decisions: [] },
+        })),
+      },
       artifactRepository: { loadExactWithObservation: vi.fn(async () => null) },
     });
 

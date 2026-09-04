@@ -247,7 +247,7 @@ const validationConfig = {
   evaluatedAt: '2015-01-03T00:00:00.000Z',
   minimumEligibleObservations: 3,
   minimumPartitionObservations: 1,
-  nominalIntervalCoverage: 0.8,
+  nominalIntervalCoverage: 0.8 as const,
 };
 
 describe('exact-pick PAV distribution validation', () => {

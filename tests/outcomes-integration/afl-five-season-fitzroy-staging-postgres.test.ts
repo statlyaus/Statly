@@ -8,6 +8,7 @@ import {
   assertLocalAflTradeFiveSeasonPostgresStagingCoverage,
   type LocalAflTradeFiveSeasonStagedCapture,
 } from '@/server/aflTradeIntelligence/development/localFiveSeasonFitzRoyOutcomeLoad';
+import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
@@ -250,7 +251,10 @@ describe('five-season AFL Tables PostgreSQL staging coverage', () => {
     }
 
     await expect(
-      assertLocalAflTradeFiveSeasonPostgresStagingCoverage(outcomesPool, captures)
+      assertLocalAflTradeFiveSeasonPostgresStagingCoverage(
+        createPgAflOutcomeSqlClient(outcomesPool),
+        captures
+      )
     ).resolves.toEqual({
       seasons: LOCAL_AFL_TRADE_FIVE_SEASON_WINDOW,
       captureCount: 5,

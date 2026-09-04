@@ -97,9 +97,10 @@ describe('AFL trade public read runtime', () => {
   });
 
   it('serializes only the local test-fixture pool for single-engine PostgreSQL compatibility', () => {
-    expect(
-      createAflTradePublicReadPoolOptions({ ...postgresConfig, environment: 'test_fixture' })
-    ).toEqual({ connectionString: postgresConfig.databaseUrl, max: 1 });
+    expect(createAflTradePublicReadPoolOptions(localPostgresConfig)).toEqual({
+      connectionString: localPostgresConfig.databaseUrl,
+      max: 1,
+    });
     expect(createAflTradePublicReadPoolOptions(postgresConfig)).toEqual({
       connectionString: postgresConfig.databaseUrl,
     });

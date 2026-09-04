@@ -178,7 +178,7 @@ describe('private confirmed trade valuation contracts', () => {
             ...complete.content.assets[1]!,
             state: 'observed_zero',
             evidenceRefs: [],
-          },
+          } as never,
         ],
       })
     ).toThrow();
@@ -190,13 +190,16 @@ describe('private confirmed trade valuation contracts', () => {
       plan,
       planArtifact: createAflTradeCanonicalJsonArtifactRef(plan, at),
       valueUnitId: 'hpn-pav/v1',
-      assets: plan.content.assets.map((asset, index) => ({
-        ...asset,
-        state: 'observed' as const,
-        score: index + 1,
-        calculationArtifact: evidence(`calculation-${index}`),
-        evidenceRefs: [evidence(`result-${index}`)],
-      })),
+      assets: plan.content.assets.map((asset, index) => {
+        if (asset.state !== 'ready') throw new Error('Expected a ready plan asset.');
+        return {
+          ...asset,
+          state: 'observed' as const,
+          score: index + 1,
+          calculationArtifact: evidence(`calculation-${index}`),
+          evidenceRefs: [evidence(`result-${index}`)],
+        };
+      }),
       overallGrade: {
         state: 'unavailable' as const,
         reason: 'distribution_evidence_unavailable' as const,

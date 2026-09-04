@@ -57,26 +57,29 @@ class CommitTransaction implements AflOutcomeSqlTransaction {
     }
     if (sql.includes('FROM outcome_current_governed_valuation_model_pair')) {
       return {
-        rows: [{
-          revision: this.modelRevision,
-          qualification_id: `model-qualification:${'8'.repeat(64)}`,
-          player_run_id: `model-run:${'9'.repeat(64)}`,
-          pick_run_id: `model-run:${'a'.repeat(64)}`,
-          work_id: `model-qualification-work:${'0'.repeat(64)}`,
-        }],
+        rows: [
+          {
+            revision: this.modelRevision,
+            qualification_id: `model-qualification:${'8'.repeat(64)}`,
+            player_run_id: `model-run:${'9'.repeat(64)}`,
+            pick_run_id: `model-run:${'a'.repeat(64)}`,
+            work_id: `model-qualification-work:${'0'.repeat(64)}`,
+          },
+        ],
         rowCount: 1,
       };
     }
     if (sql.includes('FROM outcome_current_prepared_valuation_input_set')) {
       return {
-        rows: [{
-          scope_key: 'afl-men:2026-trades',
-          prepared_input_set_id:
-            this.activatedPreparedInputSetId ??
-            `prepared-valuation-input-set:${'f'.repeat(64)}`,
-          revision: this.activated ? 12 : 11,
-          activated_at: '2026-08-21T09:00:00.000Z',
-        }],
+        rows: [
+          {
+            scope_key: 'afl-men:2026-trades',
+            prepared_input_set_id:
+              this.activatedPreparedInputSetId ?? `prepared-valuation-input-set:${'f'.repeat(64)}`,
+            revision: this.activated ? 12 : 11,
+            activated_at: '2026-08-21T09:00:00.000Z',
+          },
+        ],
         rowCount: 1,
       };
     }
@@ -102,7 +105,7 @@ class CommitTransaction implements AflOutcomeSqlTransaction {
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     if (sql.includes('SET TRANSACTION ISOLATION LEVEL')) return { rows: [], rowCount: 0 };
     if (sql.includes('pg_advisory_xact_lock')) {
-      return { rows: [{}], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+      return { rows: [], rowCount: 1 };
     }
     const result =
       this.operationResultQuery(sql, parameters) ??
@@ -118,7 +121,10 @@ describe('PostgreSQL current valuation cohort commit', () => {
     const fixture = createAflTradeCurrentValuationCohortFixture();
     const transaction = new CommitTransaction();
     const capture = createPostgresAflTradeCurrentValuationCohortAuthorityCapture({
-      client: { query: transaction.query.bind(transaction), transaction: async (work) => work(transaction) },
+      client: {
+        query: transaction.query.bind(transaction),
+        transaction: async (work) => work(transaction),
+      },
       factualReleaseScopeKey: fixture.context.factualReleaseScopeKey,
       loadConstructionEvidence: async () => ({
         factualReleaseArtifact: fixture.context.factualReleaseArtifact,
@@ -146,7 +152,10 @@ describe('PostgreSQL current valuation cohort commit', () => {
     const fixture = createAflTradeCurrentValuationCohortFixture();
     const transaction = new CommitTransaction();
     const commit = createPostgresAflTradeCurrentValuationCohortCommitter({
-      client: { query: transaction.query.bind(transaction), transaction: async (work) => work(transaction) },
+      client: {
+        query: transaction.query.bind(transaction),
+        transaction: async (work) => work(transaction),
+      },
       registerPreparedInputSet: async () => fixture.preparedInputSet,
     });
 

@@ -33,33 +33,31 @@ class ReconstructionSqlClient implements AflOutcomeSqlClient {
   existing: { verification_json: unknown; artifact_id: string } | null = null;
   trustedAt = verifiedAt;
 
-  async query<Row>(
-    statement: string
-  ): Promise<AflOutcomeSqlQueryResult<Row>> {
+  async query<Row>(statement: string): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.sql.push(statement);
     if (statement.includes("date_trunc('milliseconds',clock_timestamp())")) {
       return {
         rows: [{ trusted_at: new Date(this.trustedAt) }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('FROM outcome_private_evaluation_reconstruction_verification')) {
       return {
         rows: this.existing === null ? [] : [this.existing],
         rowCount: this.existing === null ? 0 : 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('FROM outcome_private_evaluation_inspection_receipt')) {
       return {
         rows: [{ inspection_id: request.inspectionId }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('FROM outcome_local_private_trade_evaluation_generation')) {
       return {
         rows: [{ generation_json: generation.generation }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('INSERT INTO outcome_private_evaluation_reconstruction_verification')) {
       return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
@@ -67,9 +65,7 @@ class ReconstructionSqlClient implements AflOutcomeSqlClient {
     throw new Error(`Unexpected SQL: ${statement}`);
   }
 
-  async transaction<T>(
-    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
   }
 }
@@ -133,7 +129,8 @@ describe('PostgreSQL governed private evaluation reconstruction repository', () 
         const result = await stored.loadExact(reference, maximumBytes);
         if (
           result === null ||
-          reference.artifactId !== generation.projectionManifest.content.documents[0]?.artifact.artifactId
+          reference.artifactId !==
+            generation.projectionManifest.content.documents[0]?.artifact.artifactId
         ) {
           return result;
         }

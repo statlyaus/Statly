@@ -998,6 +998,12 @@ describe('durable PostgreSQL model-run authority', () => {
           ]
         );
 
+      if (
+        policyOperationalAuthorization.content.authorityBoundary !==
+        'policy_owned_local_private_valuation_for_one_exact_model_run_intent'
+      ) {
+        throw new Error('Expected policy-owned private model-run authority.');
+      }
       const staleInputAuthorization =
         createAflTradePrivateValuationModelRunOperationalAuthorization({
           ...policyOperationalAuthorization.content,

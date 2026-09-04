@@ -90,10 +90,7 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
     this.calls.push({ sql, parameters });
     const { prepared } = this.fixture;
     const preparedContent = prepared.content;
-    if (
-      preparedContent.preparationAuthority !==
-      'authenticated_calculation_evidence_snapshot'
-    ) {
+    if (preparedContent.preparationAuthority !== 'authenticated_calculation_evidence_snapshot') {
       throw new Error('Expected authenticated prepared valuation input fixture.');
     }
     if (sql.includes('FROM outcome_current_prepared_valuation_input_set')) {
@@ -154,9 +151,10 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
     if (sql.includes('FROM outcome_private_evaluation_materialization_manifest')) {
       if (this.retainManifestRow) {
         const manifest = this.fixture.calculation.materializationManifest;
+        const entry = prepared.content.entries[0]!;
         const artifact =
-          prepared.content.entries[0]!.state === 'ready'
-            ? prepared.content.entries[0]!.materializationManifestArtifact
+          entry.state === 'ready' && 'materializationManifestArtifact' in entry
+            ? entry.materializationManifestArtifact
             : undefined;
         if (artifact === undefined) throw new Error('Expected ready manifest artifact.');
         return {
@@ -195,14 +193,13 @@ async function retainReadyFixtureArtifacts(
 ) {
   const { calculation, prepared } = transaction.fixture;
   const preparedContent = prepared.content;
-  if (
-    preparedContent.preparationAuthority !==
-    'authenticated_calculation_evidence_snapshot'
-  ) {
+  if (preparedContent.preparationAuthority !== 'authenticated_calculation_evidence_snapshot') {
     throw new Error('Expected authenticated prepared valuation input fixture.');
   }
   const readyEntry = prepared.content.entries[0];
-  if (readyEntry?.state !== 'ready') throw new Error('Expected ready fixture entry.');
+  if (readyEntry?.state !== 'ready' || !('materializationManifestArtifact' in readyEntry)) {
+    throw new Error('Expected ready fixture entry.');
+  }
   const documents = [
     [readyEntry.materializationManifestArtifact, calculation.materializationManifest],
     [prepared.content.factualReleaseArtifact, { fixture: 'release' }],

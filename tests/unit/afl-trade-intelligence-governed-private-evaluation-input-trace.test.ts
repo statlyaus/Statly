@@ -24,9 +24,7 @@ function artifact(character: string, createdAt = '2026-08-19T09:00:00.000Z') {
 }
 
 function component(
-  role:
-    | 'player_contribution_and_availability'
-    | 'draft_pick_and_future_pick_distribution',
+  role: 'player_contribution_and_availability' | 'draft_pick_and_future_pick_distribution',
   character: string
 ) {
   return {
@@ -271,8 +269,9 @@ describe('governed private evaluation input trace', () => {
     expect(trace.content.playerHorizons[0]?.playerObservationId).toMatch(
       /^player-pav-observation:[a-f0-9]{64}$/
     );
-    expect(trace.content.pickLineages.map(({ resolvedSelectionNumber }) => resolvedSelectionNumber))
-      .toEqual([18, null]);
+    expect(
+      trace.content.pickLineages.map(({ resolvedSelectionNumber }) => resolvedSelectionNumber)
+    ).toEqual([18, null]);
     expect(trace.content.pickLineages[0]?.custody.map(({ clubId }) => clubId)).toEqual([
       'club:fremantle',
       'club:hawthorn',
@@ -395,7 +394,7 @@ describe('governed private evaluation input trace', () => {
       ...input.pickLineages[0]!.transformations[0]!,
       kind: 'split',
       toAssetIds: ['asset:pick-18', 'asset:pick-35'],
-    };
+    } as never;
 
     expect(() => createGovernedPrivateEvaluationInputTrace(input)).toThrow(
       'Split or merged transformations require one approved economic-allocation decision.'

@@ -7,7 +7,10 @@ import {
   createLocalAflTradeAflTablesResultsAuthority,
   createLocalAflTradeFiveSeasonAflTablesAuthority,
 } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
-import { createAflTradeFitzRoyInvocation } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
+import {
+  createAflTradeFitzRoyInvocation,
+  parseAflTradeFitzRoyCaptureRequest,
+} from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
 import { evaluateAflTradeGate0A } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
 
 describe('local five-season AFL Tables authority', () => {
@@ -124,8 +127,9 @@ describe('local five-season AFL Tables authority', () => {
 
   it('keeps the earliest completed season independently authorized without broad rescraping', () => {
     const authority = createLocalAflTradeFiveSeasonAflTablesAuthority(2021);
+    const captureRequest = parseAflTradeFitzRoyCaptureRequest(authority.capture.captureRequest);
 
-    expect(authority.capture.captureRequest.parameters).toEqual({
+    expect(captureRequest.parameters).toEqual({
       season: 2021,
       rescrape: false,
       rescrapeStartSeason: null,
@@ -179,7 +183,11 @@ describe('local five-season AFL Tables authority', () => {
       authorizationSeason: 2026,
       parameters: { season: 2026, roundNumber: null },
     });
-    expect(authority.capture.sourceRights.content.acquisition.capabilities).toEqual([
+    const acquisition = authority.capture.sourceRights.content.acquisition;
+    if (acquisition.kind !== 'fitzroy') {
+      throw new Error('AFL Tables authority must retain fitzRoy acquisition capabilities.');
+    }
+    expect(acquisition.capabilities).toEqual([
       {
         capabilityId: 'afl-tables-results',
         provider: 'afl_tables',

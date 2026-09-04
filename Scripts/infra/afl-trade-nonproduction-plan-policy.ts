@@ -267,7 +267,9 @@ function configurationPolicyMatches(
   const relevantActions = new Set(expectedStatements.flatMap(({ actions }) => actions));
   const actionIsRelevant =
     isRelevantAction ?? ((action: string) => relevantActions.has(action) || action === '*');
-  const actualStatements = rawStatements.flatMap((rawStatement) => {
+  const actualStatements = rawStatements.flatMap<
+    ExpectedConfigurationStatement | { readonly invalid: true }
+  >((rawStatement) => {
     if (typeof rawStatement !== 'object' || rawStatement === null) return [];
     const statement = rawStatement as Readonly<Record<string, unknown>>;
     const actions = constantStringValues(statement.actions);
@@ -1284,16 +1286,14 @@ export function validateAflTradeNonproductionPlan(
   const loggingEncryptionRule = Array.isArray(loggingEncryption?.after.rule)
     ? loggingEncryption.after.rule[0]
     : null;
-  const loggingEncryptionDefault =
-    typeof loggingEncryptionRule === 'object' &&
-    loggingEncryptionRule !== null &&
-    Array.isArray(
-      (loggingEncryptionRule as Readonly<Record<string, unknown>>)
-        .apply_server_side_encryption_by_default
-    )
+  const loggingEncryptionDefaults =
+    typeof loggingEncryptionRule === 'object' && loggingEncryptionRule !== null
       ? (loggingEncryptionRule as Readonly<Record<string, unknown>>)
-          .apply_server_side_encryption_by_default[0]
+          .apply_server_side_encryption_by_default
       : null;
+  const loggingEncryptionDefault = Array.isArray(loggingEncryptionDefaults)
+    ? loggingEncryptionDefaults[0]
+    : null;
   const loggingControlsAreExact =
     typeof loggingOwnershipRule === 'object' &&
     loggingOwnershipRule !== null &&

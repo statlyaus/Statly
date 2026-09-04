@@ -121,7 +121,7 @@ describe('AFL trade valuation calculation input package', () => {
   });
 
   it('binds authenticated non-production kernel inputs to one exact input trace', () => {
-    const fixture = createFabricatedAflTradeValuationFixture('three_club_trade');
+    const fixture = createFabricatedAflTradeValuationFixture('three_party_exchange');
     const valuationInputBundleId = `valuation-input-bundle:${'8'.repeat(64)}`;
     const inputTraceId = `private-evaluation-input-trace:${'7'.repeat(64)}`;
     const { valuationCase, componentDrawSet, realizedContributionLedger, packagePolicy } =
@@ -152,8 +152,10 @@ describe('AFL trade valuation calculation input package', () => {
     expect(aflTradeValuationCalculationInputPackageSchema.parse(input)).toEqual(input);
 
     const tampered = structuredClone(input);
-    tampered.content.authority.inputTraceId =
-      `private-evaluation-input-trace:${'6'.repeat(64)}`;
+    if (tampered.content.authority.kind !== 'authenticated_non_production') {
+      throw new Error('Expected authenticated non-production authority.');
+    }
+    tampered.content.authority.inputTraceId = `private-evaluation-input-trace:${'6'.repeat(64)}`;
     expect(() => aflTradeValuationCalculationInputPackageSchema.parse(tampered)).toThrow();
   });
 });

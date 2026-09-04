@@ -103,22 +103,28 @@ describe('current valuation trade preparation', () => {
       fixture.materializationManifest.content.createdAt
     );
     const retainedParents = [
-      [
-        fixture.materializationManifest.content.calculationInputArtifact,
-        fixture.calculationInputPackage,
-      ],
-      [fixture.materializationManifest.content.inputTraceArtifact, fixture.trace],
-      [
-        fixture.materializationManifest.content.explanationPolicyArtifact,
-        fixture.explanationPolicy,
-      ],
-      [fixture.materializationManifest.content.lineageGraphArtifact, fixture.lineageGraph],
-      [
-        fixture.materializationManifest.content.pickBenchmarks[0]!.artifact,
-        fixture.pickBenchmarks[0],
-      ],
-    ].map(([reference, value]) => ({
-      reference: reference!,
+      {
+        reference: fixture.materializationManifest.content.calculationInputArtifact,
+        value: fixture.calculationInputPackage,
+      },
+      {
+        reference: fixture.materializationManifest.content.inputTraceArtifact,
+        value: fixture.trace,
+      },
+      {
+        reference: fixture.materializationManifest.content.explanationPolicyArtifact,
+        value: fixture.explanationPolicy,
+      },
+      {
+        reference: fixture.materializationManifest.content.lineageGraphArtifact,
+        value: fixture.lineageGraph,
+      },
+      {
+        reference: fixture.materializationManifest.content.pickBenchmarks[0]!.artifact,
+        value: fixture.pickBenchmarks[0],
+      },
+    ].map(({ reference, value }) => ({
+      reference,
       bytes: new TextEncoder().encode(canonicalizeAflTradeJson(value)),
     }));
     const retainArtifact = vi.fn(async ({ reference }) => reference);

@@ -8,8 +8,7 @@ import {
 const registeredAt = '2026-08-20T10:00:00.000Z';
 const retainedAt = '2026-08-20T09:00:00.000Z';
 const id = (kind: string, marker: string) => `${kind}:${marker.repeat(64)}`;
-const artifact = (label: string) =>
-  createAflTradeCanonicalJsonArtifactRef({ label }, retainedAt);
+const artifact = (label: string) => createAflTradeCanonicalJsonArtifactRef({ label }, retainedAt);
 
 function common() {
   return {
@@ -47,6 +46,9 @@ describe('governed valuation component run manifest', () => {
     });
 
     for (const manifest of [player, pick]) {
+      if (manifest.content.schemaVersion !== 'governed-valuation-component-run/v2') {
+        throw new Error('Expected a successor component-run manifest.');
+      }
       expect(manifest.runId).toMatch(/^model-run:[a-f0-9]{64}$/);
       expect(manifest.content).toMatchObject({
         schemaVersion: 'governed-valuation-component-run/v2',
@@ -59,10 +61,11 @@ describe('governed valuation component run manifest', () => {
     expect(player.content.nativeExecution.kind).toBe('admitted_player_model_run');
     expect(pick.content.nativeExecution.kind).toBe('governed_pick_pav_model_execution');
 
-    const {
-      qualificationState: _qualificationState,
-      ...successorWithoutQualificationState
-    } = player.content;
+    if (player.content.schemaVersion !== 'governed-valuation-component-run/v2') {
+      throw new Error('Expected a successor player component-run manifest.');
+    }
+    const { qualificationState: _qualificationState, ...successorWithoutQualificationState } =
+      player.content;
     const legacyContent = {
       ...successorWithoutQualificationState,
       schemaVersion: 'governed-valuation-component-run/v1' as const,

@@ -7,7 +7,10 @@ import {
   materializeGovernedPrivateEvaluation,
   replayGovernedPrivateEvaluationMaterialization,
 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationMaterializer';
-import { createAflTradeValuationCalculationInputPackage } from '@/server/aflTradeIntelligence/valuation/valuationCalculationInputPackage';
+import {
+  AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION,
+  createAflTradeValuationCalculationInputPackage,
+} from '@/server/aflTradeIntelligence/valuation/valuationCalculationInputPackage';
 import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
 
 describe('governed private-evaluation materializer', () => {
@@ -74,15 +77,12 @@ describe('governed private-evaluation materializer', () => {
       summary: expect.stringContaining('21.3 - 10.8 = +10.5'),
     });
     expect(
-      result.narrative.content.assets.find(({ assetId }) => assetId === 'asset:01')!
-        .contributions
+      result.narrative.content.assets.find(({ assetId }) => assetId === 'asset:01')!.contributions
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           view: 'at_trade',
-          story: expect.stringContaining(
-            '5.2 fixed_horizon_pav expected from 1 observations'
-          ),
+          story: expect.stringContaining('5.2 fixed_horizon_pav expected from 1 observations'),
         }),
         expect.objectContaining({
           view: 'current',
@@ -98,8 +98,7 @@ describe('governed private-evaluation materializer', () => {
       ...fixture.materializationManifest,
       content: {
         ...fixture.materializationManifest.content,
-        lineageGraphArtifact:
-          fixture.materializationManifest.content.explanationPolicyArtifact,
+        lineageGraphArtifact: fixture.materializationManifest.content.explanationPolicyArtifact,
       },
     };
 
@@ -120,8 +119,15 @@ describe('governed private-evaluation materializer', () => {
         index === 0 ? { ...lineage, resolvedSelectionNumber: null } : lineage
       ),
     });
+    const calculationInputContent = fixture.calculationInputPackage.content;
+    if (
+      calculationInputContent.schemaVersion !==
+      AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION
+    ) {
+      throw new Error('Expected an authenticated calculation-input fixture.');
+    }
     const calculationInputPackage = createAflTradeValuationCalculationInputPackage({
-      ...fixture.calculationInputPackage.content,
+      ...calculationInputContent,
       authority: {
         kind: 'authenticated_non_production',
         inputTraceId: trace.inputTraceId,

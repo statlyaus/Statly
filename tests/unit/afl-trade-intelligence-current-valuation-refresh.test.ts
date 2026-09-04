@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import {
   type AflTradeCurrentValuationRefreshResult,
   createAflTradeCurrentValuationRefresh,
@@ -75,23 +78,32 @@ function factualResult(): AflTradeCurrentValuationRefreshResult {
 
 function fakeClient(result: AflTradeCurrentValuationRefreshResult) {
   const statements: Array<{ readonly sql: string; readonly parameters: readonly unknown[] }> = [];
-  const query = async (sql: string, parameters: readonly unknown[] = []) => {
+  const queryRows = async (
+    sql: string,
+    parameters: readonly unknown[] = []
+  ): Promise<readonly Record<string, unknown>[]> => {
     statements.push({ sql, parameters });
-    if (sql.includes('SET LOCAL ROLE')) return { rows: [], rowCount: null };
-    if (sql.includes('retain_outcome_current_valuation_factual_source')) return { rows: [], rowCount: 1 };
-    if (sql.includes('compose_outcome_current_valuation_factual_candidate')) return { rows: [], rowCount: 1 };
+    if (sql.includes('SET LOCAL ROLE')) return [];
+    if (sql.includes('retain_outcome_current_valuation_factual_source')) return [];
+    if (sql.includes('compose_outcome_current_valuation_factual_candidate')) return [];
     if (sql.includes('refresh_outcome_current_valuation_factual')) {
-      return {
-        rows: [{ operation_id: result.operationId, operation_json: {}, result_json: result }],
-        rowCount: 1,
-      };
+      return [{ operation_id: result.operationId, operation_json: {}, result_json: result }];
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   };
+  const query: AflOutcomeSqlClient['query'] = async <Row = Record<string, unknown>>(
+    sql: string,
+    parameters?: readonly unknown[]
+  ) => {
+    const rows = await queryRows(sql, parameters);
+    return { rows: rows as readonly Row[], rowCount: rows.length };
+  };
   const client = {
     query,
-    transaction: async (work: Parameters<AflOutcomeSqlClient['transaction']>[0]) => work({ query }),
-  } as AflOutcomeSqlClient;
+    transaction: async <T>(
+      work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
+    ): Promise<T> => work({ query }),
+  } satisfies AflOutcomeSqlClient;
   return { client, statements };
 }
 
@@ -109,9 +121,18 @@ describe('current valuation refresh', () => {
       })
     ).resolves.toEqual(expected);
     expect(database.statements.filter(({ sql }) => sql.startsWith('SELECT'))).toEqual([
-      { sql: 'SELECT retain_outcome_current_valuation_factual_source($1,$2,$3)', parameters: [expected.scopeKey, trigger, expected.stableOperationKey] },
-      { sql: 'SELECT compose_outcome_current_valuation_factual_candidate($1,$2,$3)', parameters: [expected.scopeKey, trigger, expected.stableOperationKey] },
-      { sql: 'SELECT * FROM refresh_outcome_current_valuation_factual($1,$2,$3)', parameters: [expected.scopeKey, trigger, expected.stableOperationKey] },
+      {
+        sql: 'SELECT retain_outcome_current_valuation_factual_source($1,$2,$3)',
+        parameters: [expected.scopeKey, trigger, expected.stableOperationKey],
+      },
+      {
+        sql: 'SELECT compose_outcome_current_valuation_factual_candidate($1,$2,$3)',
+        parameters: [expected.scopeKey, trigger, expected.stableOperationKey],
+      },
+      {
+        sql: 'SELECT * FROM refresh_outcome_current_valuation_factual($1,$2,$3)',
+        parameters: [expected.scopeKey, trigger, expected.stableOperationKey],
+      },
     ]);
   });
 

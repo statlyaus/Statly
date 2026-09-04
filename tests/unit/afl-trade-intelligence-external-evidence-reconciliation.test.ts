@@ -737,6 +737,16 @@ describe('external draft and trade evidence reconciliation', () => {
   });
 
   it('uses official custody identity when a traded nominal pick shifts before draft night', () => {
+    const footywireSelection = footywire.content.evidence[0].content.claim;
+    const fitzroyPlayerDetail = fitzroy.content.evidence[0].content.claim;
+    const officialCustody = officialOrder.content.evidence[0].content.claim;
+    if (
+      footywireSelection.kind !== 'draft_selection' ||
+      fitzroyPlayerDetail.kind !== 'player_draft_detail' ||
+      officialCustody.kind !== 'pick_custody'
+    ) {
+      throw new Error('Shifted-pick fixtures must retain their exact source claim kinds.');
+    }
     const shiftedDraftguru = batch(
       'draftguru',
       '6',
@@ -748,22 +758,19 @@ describe('external draft and trade evidence reconciliation', () => {
     );
     const shiftedFootywire = batch('footywire', '7', [
       {
-        ...footywire.content.evidence[0].content.claim,
-        kind: 'draft_selection',
+        ...footywireSelection,
         selectionNumber: 15,
       },
     ]);
     const shiftedFitzroy = batch('fitzroy_official_afl_player_details', '8', [
       {
-        ...fitzroy.content.evidence[0].content.claim,
-        kind: 'player_draft_detail',
+        ...fitzroyPlayerDetail,
         draftPosition: 15,
       },
     ]);
     const shiftedOrder = batch('official_afl', '9', [
       {
-        ...officialOrder.content.evidence[0].content.claim,
-        kind: 'pick_custody',
+        ...officialCustody,
         recordedPickNumber: 15,
       },
     ]);
@@ -792,15 +799,17 @@ describe('external draft and trade evidence reconciliation', () => {
   });
 
   it('quarantines colliding custody identities instead of guessing a shifted pick lineage', () => {
+    const officialCustody = officialOrder.content.evidence[0].content.claim;
+    if (officialCustody.kind !== 'pick_custody') {
+      throw new Error('Official-order fixture must retain its pick-custody claim.');
+    }
     const ambiguousOrder = batch('official_afl', '0', [
       {
-        ...officialOrder.content.evidence[0].content.claim,
-        kind: 'pick_custody',
+        ...officialCustody,
         recordedPickNumber: 14,
       },
       {
-        ...officialOrder.content.evidence[0].content.claim,
-        kind: 'pick_custody',
+        ...officialCustody,
         recordedPickNumber: 15,
       },
     ]);
@@ -828,10 +837,13 @@ describe('external draft and trade evidence reconciliation', () => {
   });
 
   it('does not substitute another original club pick held by the receiving club', () => {
+    const officialCustody = officialOrder.content.evidence[0].content.claim;
+    if (officialCustody.kind !== 'pick_custody') {
+      throw new Error('Official-order fixture must retain its pick-custody claim.');
+    }
     const replacementOrder = batch('official_afl', '1', [
       {
-        ...officialOrder.content.evidence[0].content.claim,
-        kind: 'pick_custody',
+        ...officialCustody,
         originalClub: { nativeId: null, recordedName: 'Carlton' },
       },
     ]);

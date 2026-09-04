@@ -4,7 +4,10 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlQueryResult,
+} from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
@@ -15,6 +18,23 @@ import { AFL_TRADE_EXTERNAL_HISTORICAL_CAPTURE_COMPLETION_SCHEMA_VERSION } from 
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalReconciliationSource';
 
 const digest = (character: string) => character.repeat(64);
+
+function transactionalClient(
+  execute: (sql: string) => Promise<{ rows: readonly unknown[]; rowCount: number }>
+): AflOutcomeSqlClient {
+  const query = async <Row = Record<string, unknown>>(
+    sql: string
+  ): Promise<AflOutcomeSqlQueryResult<Row>> => {
+    const result = await execute(sql);
+    return { rows: result.rows as readonly Row[], rowCount: result.rowCount };
+  };
+  return {
+    query,
+    async transaction(work) {
+      return work({ query });
+    },
+  };
+}
 
 function fixture() {
   const capture = {
@@ -129,10 +149,7 @@ describe('Postgres historical reconciliation source', () => {
         rowCount: 1,
       };
     };
-    const client = {
-      transaction: async <T>(work: (transaction: { query: typeof query }) => Promise<T>) =>
-        work({ query }),
-    } as AflOutcomeSqlClient;
+    const client = transactionalClient(query);
 
     const result = await new PostgresAflTradeExternalHistoricalReconciliationSource(client).load(
       completion.completionId
@@ -166,10 +183,7 @@ describe('Postgres historical reconciliation source', () => {
             rowCount: 1,
           }
         : { rows: [], rowCount: 0 };
-    const client = {
-      transaction: async <T>(work: (transaction: { query: typeof query }) => Promise<T>) =>
-        work({ query }),
-    } as AflOutcomeSqlClient;
+    const client = transactionalClient(query);
 
     await expect(
       new PostgresAflTradeExternalHistoricalReconciliationSource(client).load(

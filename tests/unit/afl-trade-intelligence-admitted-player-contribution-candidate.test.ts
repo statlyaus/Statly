@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import type { AflTradeImmutableArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -279,7 +280,7 @@ describe('admitted player contribution candidate', () => {
         async loadExact() {
           return null;
         },
-      } as never,
+      } satisfies AflTradeImmutableArtifactRepository,
       maximumArtifactBytes: 4 * 1024 * 1024,
       now: () => '2026-08-10T00:03:01.000Z',
     });

@@ -10,6 +10,10 @@ import {
   AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION,
   createAflTradePreparedValuationInputSet,
 } from '@/server/aflTradeIntelligence/valuation/preparedValuationInputSet';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlQueryResult,
+} from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { PostgresAflTradePreparedValuationInputSetStore } from '@/server/aflTradeIntelligence/valuation/postgresPreparedValuationInputSetStore';
 
 const digest = (character: string) => character.repeat(64);
@@ -37,8 +41,7 @@ function content() {
     factualReleaseArtifact: artifact('2'),
     releaseMembershipArtifact: artifact('3'),
     preparationAuthority: 'source_policy_preflight_only' as const,
-    qualificationOperation:
-      'valuation_model_training_and_derived_feature_creation' as const,
+    qualificationOperation: 'valuation_model_training_and_derived_feature_creation' as const,
     qualificationReportId: `valuation-source-qualification:${digest('4')}`,
     qualificationReportArtifact: artifact('5'),
     sourceQualificationEvidenceRefs: [artifact('6'), artifact('8')],
@@ -111,6 +114,10 @@ function v2Content() {
 }
 
 function v3Content() {
+  const blockedEntry = v2Content().entries[1];
+  if (blockedEntry?.state !== 'blocked') {
+    throw new Error('Expected the second prepared fixture entry to be blocked.');
+  }
   return {
     ...v2Content(),
     schemaVersion: AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION,
@@ -121,17 +128,22 @@ function v3Content() {
         materializationManifestId: `private-evaluation-materialization-manifest:${digest('7')}`,
         materializationManifestArtifact: artifact('b'),
       },
-      v2Content().entries[1]!,
+      blockedEntry,
     ],
-  };
+  } satisfies Extract<
+    PreparedInput,
+    {
+      schemaVersion: typeof AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION;
+      preparationAuthority: 'authenticated_calculation_evidence_snapshot';
+    }
+  >;
 }
 
 describe('AFL trade prepared valuation input set', () => {
   it('keeps current prepared authority behind explicit CAS and coherent read methods', () => {
     const store = new PostgresAflTradePreparedValuationInputSetStore({
       query: async () => ({ rows: [], rowCount: 0 }),
-      transaction: async (work) =>
-        work({ query: async () => ({ rows: [], rowCount: 0 }) }),
+      transaction: async (work) => work({ query: async () => ({ rows: [], rowCount: 0 }) }),
     });
 
     expect(store.activateCurrent).toEqual(expect.any(Function));
@@ -142,15 +154,12 @@ describe('AFL trade prepared valuation input set', () => {
   it('rejects relational ancestry that disagrees with finalized v3 bytes', async () => {
     const prepared = createAflTradePreparedValuationInputSet(v3Content());
     const preparedContent = prepared.content;
-    if (
-      preparedContent.preparationAuthority !==
-      'authenticated_calculation_evidence_snapshot'
-    ) {
+    if (preparedContent.preparationAuthority !== 'authenticated_calculation_evidence_snapshot') {
       throw new Error('Expected authenticated prepared valuation input fixture.');
     }
     let queryIndex = 0;
-    const store = new PostgresAflTradePreparedValuationInputSetStore({
-      async query() {
+    const client: AflOutcomeSqlClient = {
+      async query<Row>() {
         queryIndex += 1;
         if (queryIndex === 1) {
           return {
@@ -176,7 +185,7 @@ describe('AFL trade prepared valuation input set', () => {
               },
             ],
             rowCount: 1,
-          };
+          } as unknown as AflOutcomeSqlQueryResult<Row>;
         }
         return {
           rows: prepared.content.entries.map((entry, index) => ({
@@ -187,12 +196,13 @@ describe('AFL trade prepared valuation input set', () => {
             entry_json: entry,
           })),
           rowCount: prepared.content.entries.length,
-        };
+        } as unknown as AflOutcomeSqlQueryResult<Row>;
       },
       async transaction(work) {
         return work(this);
       },
-    });
+    };
+    const store = new PostgresAflTradePreparedValuationInputSetStore(client);
 
     await expect(store.loadExact(prepared.preparedInputSetId)).rejects.toMatchObject({
       code: 'INTEGRITY_MISMATCH',
@@ -262,9 +272,7 @@ describe('AFL trade prepared valuation input set', () => {
 
     expect(() =>
       createAflTradePreparedValuationInputSet(invalid as unknown as PreparedInput)
-    ).toThrow(
-      'accepts only exact source-policy blockers'
-    );
+    ).toThrow('accepts only exact source-policy blockers');
   });
 
   it('v2 classifies every release trade as authenticated ready or factual blocked', () => {

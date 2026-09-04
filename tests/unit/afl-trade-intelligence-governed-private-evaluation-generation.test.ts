@@ -66,7 +66,7 @@ describe('automated governed private evaluation generation', () => {
           kind: 'automated_private_calculation_agent',
           principalId: 'system:unconfigured-agent',
         },
-      })
+      } as never)
     ).toThrow();
 
     const retained = createAutomatedGovernedPrivateEvaluationGeneration({

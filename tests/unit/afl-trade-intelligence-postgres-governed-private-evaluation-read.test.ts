@@ -53,7 +53,7 @@ class ReadSqlClient implements AflOutcomeSqlClient {
                 },
               ],
         rowCount: this.status === 'absent' ? 0 : 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('outcome_local_private_trade_evaluation_generation')) {
       return {
@@ -68,7 +68,7 @@ class ReadSqlClient implements AflOutcomeSqlClient {
           },
         ],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   }

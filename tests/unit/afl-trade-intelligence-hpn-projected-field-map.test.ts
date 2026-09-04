@@ -49,24 +49,24 @@ function sourceUseEvidence(candidate: ReturnType<typeof candidates>[number]) {
     state: 'permitted_private_calculation' as const,
     rightsArtifactId: `artifact:${'1'.repeat(64)}`,
     evidenceBundleId: 'private-reviewed-evidence:fixture',
-    fields: [...new Set(
-      candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
-    )].sort().map((sourceField) => ({
-      sourceField,
-      state: 'permitted_private_calculation' as const,
-      reasons: [],
-    })),
+    fields: [
+      ...new Set(candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
+    ]
+      .sort()
+      .map((sourceField) => ({
+        sourceField,
+        state: 'permitted_private_calculation' as const,
+        reasons: [],
+      })),
     reasons: [],
     evidenceRefs: [],
+    effectiveRestriction: null,
     evaluatedAt: candidateAt,
     publicationEligible: false as const,
     publicationProhibited: true as const,
   };
   const sourceUseAssessment = {
-    assessmentId: createAflTradeContentAddress(
-      'hpn-private-source-use-assessment',
-      content
-    ),
+    assessmentId: createAflTradeContentAddress('hpn-private-source-use-assessment', content),
     content,
   };
   return {
@@ -82,10 +82,7 @@ describe('HPN candidate-first projected field-map approval', () => {
   it.each(candidates())(
     'binds an exact approved candidate without circular map identity',
     (candidate) => {
-      const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(
-        candidate,
-        candidateAt
-      );
+      const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(candidate, candidateAt);
       const decision = createAflTradeHpnFieldMapReviewDecision({
         candidate,
         candidateArtifact,
@@ -120,10 +117,7 @@ describe('HPN candidate-first projected field-map approval', () => {
 
   it('rejects a denied decision or inexact candidate custody', () => {
     const candidate = candidates()[0]!;
-    const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(
-      candidate,
-      candidateAt
-    );
+    const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(candidate, candidateAt);
     const rejected = createAflTradeHpnFieldMapReviewDecision({
       candidate,
       candidateArtifact,

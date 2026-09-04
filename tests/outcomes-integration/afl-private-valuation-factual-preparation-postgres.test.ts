@@ -3,6 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { prepareLocalAflTradeFitzRoyFactualReleaseCandidate } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsal';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { materializeAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/internal/privateValuationFactualOutputMaterializer';
 import { PostgresAflTradePrivateFactualPreparation } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationFactualPreparation';
 import {
@@ -29,6 +33,13 @@ function scopedDatabaseUrl(): string {
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   return scoped.toString();
+}
+
+function transactionalClient(transaction: AflOutcomeSqlTransaction): AflOutcomeSqlClient {
+  return {
+    query: transaction.query.bind(transaction),
+    transaction: async (work) => work(transaction),
+  };
 }
 
 beforeAll(async () => {
@@ -129,10 +140,7 @@ describe.sequential('private valuation factual preparation in PostgreSQL', () =>
       preparation.prepare(preparationInput),
       preparation.prepare(preparationInput),
     ]);
-    expect(concurrent.map(({ state }) => state).sort()).toEqual([
-      'already_prepared',
-      'prepared',
-    ]);
+    expect(concurrent.map(({ state }) => state).sort()).toEqual(['already_prepared', 'prepared']);
     expect(sourcePreparationCalls).toBe(1);
     expect(candidatePreparationCalls).toBe(1);
     const result = concurrent.find(({ state }) => state === 'prepared');
@@ -218,7 +226,7 @@ describe.sequential('private valuation factual preparation in PostgreSQL', () =>
       expect(mutated.rowCount).toBe(1);
       await transaction.query(`SET LOCAL session_replication_role='origin'`);
       await expect(
-        materializeAflTradePrivateValuationFactualOutput(transaction, {
+        materializeAflTradePrivateValuationFactualOutput(transactionalClient(transaction), {
           requestId: staged.requestId,
           candidateId: result.output.content.candidate.candidateId,
         })
@@ -242,7 +250,7 @@ describe.sequential('private valuation factual preparation in PostgreSQL', () =>
       );
       await transaction.query(`SET LOCAL session_replication_role='origin'`);
       await expect(
-        materializeAflTradePrivateValuationFactualOutput(transaction, {
+        materializeAflTradePrivateValuationFactualOutput(transactionalClient(transaction), {
           requestId: staged.requestId,
           candidateId: result.output.content.candidate.candidateId,
         })
@@ -265,7 +273,7 @@ describe.sequential('private valuation factual preparation in PostgreSQL', () =>
       );
       await transaction.query(`SET LOCAL session_replication_role='origin'`);
       await expect(
-        materializeAflTradePrivateValuationFactualOutput(transaction, {
+        materializeAflTradePrivateValuationFactualOutput(transactionalClient(transaction), {
           requestId: staged.requestId,
           candidateId: result.output.content.candidate.candidateId,
         })

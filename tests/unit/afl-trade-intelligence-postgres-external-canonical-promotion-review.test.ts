@@ -169,8 +169,8 @@ describe('PostgresAflTradeExternalCanonicalPromotionReviewRepository', () => {
     sql.decisions.set(sql.head.decision_id, input.decision);
     const repository = new PostgresAflTradeExternalCanonicalPromotionReviewRepository(sql);
 
-    await expect(repository.persistDecision(input)).rejects.toMatchObject<
-      Partial<AflTradeExternalCanonicalPromotionReviewPersistenceError>
-    >({ code: 'STALE_REVISION' });
+    await expect(repository.persistDecision(input)).rejects.toMatchObject({
+      code: 'STALE_REVISION',
+    } satisfies Partial<AflTradeExternalCanonicalPromotionReviewPersistenceError>);
   });
 });

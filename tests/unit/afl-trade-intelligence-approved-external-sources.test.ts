@@ -109,6 +109,10 @@ class FixtureRepository implements AflTradeGateDecisionLedgerRepository {
     throw new Error('Single append is not permitted by this fixture.');
   }
 
+  async appendDecision(): Promise<never> {
+    throw new Error('Decision-only append is not permitted by this fixture.');
+  }
+
   async appendBatch(input: AflTradeGateLedgerBatchAppendInput) {
     this.batches.push(input);
     const idempotentReplays: boolean[] = [];
@@ -155,6 +159,9 @@ describe('approved external draft and trade sources', () => {
 
   it('produces mechanically eligible decisions for the exact external scope', () => {
     for (const sourceRights of createApprovedAflTradeExternalSourcePolicies(input.policy)) {
+      if (sourceRights.content.acquisition.kind !== 'provider_web') {
+        throw new Error('External page fixture requires provider-web acquisition.');
+      }
       const records = createApprovedAflTradeExternalGateRecords({
         ...input.gate,
         sourceRights,

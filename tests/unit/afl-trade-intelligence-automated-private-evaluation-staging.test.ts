@@ -4,6 +4,10 @@ import type { GovernedPrivateEvaluationGenerationMaterialization } from '@/serve
 import type { AutomatedGovernedPrivateEvaluationTransitionIntent } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
 import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
 
+type AutomatedStagingDependencies = Parameters<
+  typeof createAutomatedGovernedPrivateEvaluationStagingService
+>[0];
+
 describe('automated private evaluation staging', () => {
   it('constructs without manual scoring and resumes the same staged operation', async () => {
     const fixture = createGovernedPrivateEvaluationAuthenticatedCalculationFixture();
@@ -11,22 +15,25 @@ describe('automated private evaluation staging', () => {
       intent: AutomatedGovernedPrivateEvaluationTransitionIntent;
       materialization: GovernedPrivateEvaluationGenerationMaterialization;
     } | null = null;
-    const stage = vi.fn(async (input) => {
+    const stage = vi.fn<AutomatedStagingDependencies['stage']>(async (input) => {
       staged = input;
       return {
         transitionIntentId: input.intent.transitionIntentId,
         generationId: input.materialization.generation.generationId,
       };
     });
-    const dependencies = {
+    const dependencies: AutomatedStagingDependencies = {
       trustedNow: async () => '2026-08-21T09:00:00.000Z',
-      loadStaged: async () => staged === null ? null : ({
-        selector: staged.intent.content.selector,
-        principalId: staged.intent.content.constructionAuthority.principalId,
-        generationId: staged.materialization.generation.generationId,
-        intent: staged.intent,
-        previousTransitionId: null,
-      }),
+      loadStaged: async () =>
+        staged === null
+          ? null
+          : {
+              selector: staged.intent.content.selector,
+              principalId: staged.intent.content.constructionAuthority.principalId,
+              generationId: staged.materialization.generation.generationId,
+              intent: staged.intent,
+              previousTransitionId: null,
+            },
       captureAuthority: async ({ selector }) => ({
         state: 'ready',
         selector,
@@ -37,10 +44,11 @@ describe('automated private evaluation staging', () => {
         previousTransitionId: null,
         materializationManifestId: fixture.materializationManifest.manifestId,
       }),
-      replayMaterialization: async () => replayGovernedPrivateEvaluationMaterialization({
-        ...fixture,
-        playerObservations: [],
-      }),
+      replayMaterialization: async () =>
+        replayGovernedPrivateEvaluationMaterialization({
+          ...fixture,
+          playerObservations: [],
+        }),
       stage,
       retainArtifact: async ({ reference }) => reference,
       commit: async ({ receipt }) => ({
@@ -54,7 +62,7 @@ describe('automated private evaluation staging', () => {
       principalId: 'system:weekly-valuation-coordinator',
     };
     expect(() =>
-      createAutomatedGovernedPrivateEvaluationStagingService(legacyDependencies)
+      createAutomatedGovernedPrivateEvaluationStagingService(legacyDependencies as never)
     ).toThrow('does not accept a caller-supplied principal');
     const service = createAutomatedGovernedPrivateEvaluationStagingService(dependencies);
     const request = {
@@ -72,12 +80,13 @@ describe('automated private evaluation staging', () => {
       head: { status: 'active', revision: 1 },
     });
     expect(stage).toHaveBeenCalledTimes(1);
-    expect(staged?.intent.content).toMatchObject({
+    const stagedInput = stage.mock.calls[0]![0];
+    expect(stagedInput.intent.content).toMatchObject({
       schemaVersion: 'private-evaluation-transition-intent/v2',
       environment: 'non_production',
       constructionAuthority: { principalId: 'system:weekly-valuation-coordinator' },
     });
-    expect(staged?.materialization.generation.content).toMatchObject({
+    expect(stagedInput.materialization.generation.content).toMatchObject({
       schemaVersion: 'local-private-trade-evaluation-generation/v2',
       environment: 'non_production',
       publicationProhibited: true,
