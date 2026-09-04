@@ -27,7 +27,10 @@ import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepo
 import { aflTradeGate0AReceiptSchema, createAflTradeGate0AReceipt } from '../source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '../source/sourceRights';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
-import { parseAflTradeAdmittedPlayerFactualOutput } from '../valuation/privateValuationFactualOutput';
+import {
+  doesAflTradePlayerModelFactualAuthorityMatch,
+  parseAflTradePlayerModelFactualOutput,
+} from '../valuation/privateValuationFactualOutput';
 import { createGovernedValuationComponentRunManifest } from '../valuation/internal/governedValuationComponentRunManifest';
 import type { PostgresGovernedValuationComponentRunRepository } from '../valuation/internal/postgresGovernedValuationComponentRunRepository';
 import type {
@@ -41,6 +44,8 @@ interface AuthorityRow {
   readonly protocol_json: unknown;
   readonly gate_ledger_revision: number | string;
   readonly output_json: unknown;
+  readonly legacy_source_capture_id: string | null;
+  readonly legacy_source_snapshot_id: string | null;
 }
 
 interface JsonRow {
@@ -268,7 +273,9 @@ async function loadAuthority(
     );
     return transaction.query<AuthorityRow>(
       `SELECT dataset.dataset_json,admission.admission_json,protocol.protocol_json,
-              admission.gate_ledger_revision,factual.output_json
+              admission.gate_ledger_revision,factual.output_json,
+              legacy_binding.source_capture_id AS legacy_source_capture_id,
+              legacy_binding.source_snapshot_id AS legacy_source_snapshot_id
        FROM outcome_private_valuation_model_request_binding binding
        JOIN outcome_private_valuation_model_operation operation
          ON operation.operation_id=binding.operation_id
@@ -279,6 +286,9 @@ async function loadAuthority(
        JOIN outcome_private_valuation_factual_output factual
          ON factual.output_id=binding.factual_output_id
         AND factual.request_id=binding.request_id
+       LEFT JOIN outcome_private_valuation_capture_binding legacy_binding
+         ON legacy_binding.binding_id=factual.capture_binding_id
+        AND legacy_binding.request_id=factual.request_id
        JOIN outcome_valuation_dataset_candidate dataset
          ON dataset.dataset_id=operation.player_dataset_id
        JOIN outcome_valuation_dataset_admission admission
@@ -316,7 +326,7 @@ async function loadAuthority(
     dataset: aflTradeValuationDatasetCandidateSchema.parse(row.dataset_json),
     admission: aflTradeValuationDatasetAdmissionReceiptSchema.parse(row.admission_json),
     protocol: aflTradePlayerContributionModelProtocolV2Schema.parse(row.protocol_json),
-    factual: parseAflTradeAdmittedPlayerFactualOutput(row.output_json),
+    factual: parseAflTradePlayerModelFactualOutput(row.output_json),
     gateLedgerRevision: Number(row.gate_ledger_revision),
   };
   const admittedSources = authority.admission.content.sourceRightsEvaluations
@@ -327,30 +337,39 @@ async function loadAuthority(
       consumedFieldSetSha256,
     }))
     .sort((left, right) => left.captureId.localeCompare(right.captureId));
+  const factualAuthorityMatches = doesAflTradePlayerModelFactualAuthorityMatch({
+    factual: authority.factual,
+    requestId: execution.exactInput.requestId,
+    outputId: execution.exactInput.factualOutputId,
+    valuationScopeKey: execution.operation.content.scopeKey,
+    factualValuesSha256: execution.operation.content.factualValuesSha256,
+    target: {
+      datasetId: target.datasetId,
+      admissionId: target.datasetAdmissionId,
+    },
+    dataset: {
+      datasetId: authority.dataset.datasetId,
+      ...authority.dataset.content.factualParent,
+    },
+    admission: {
+      admissionId: authority.admission.admissionId,
+      factualReleaseId: authority.admission.content.factualReleaseId,
+      factualCandidateId: authority.admission.content.factualCandidateId,
+      sourceMemberSetSha256: authority.admission.content.sourceMemberSetSha256,
+    },
+    admittedSources,
+    ...(row.legacy_source_capture_id === null || row.legacy_source_snapshot_id === null
+      ? {}
+      : {
+          legacySourceCapture: {
+            captureId: row.legacy_source_capture_id,
+            sourceSnapshotId: row.legacy_source_snapshot_id,
+          },
+        }),
+  });
   if (
-    authority.factual.content.requestId !== execution.exactInput.requestId ||
-    authority.factual.outputId !== execution.exactInput.factualOutputId ||
-    authority.factual.content.valuationScopeKey !== execution.operation.content.scopeKey ||
-    authority.factual.content.admittedPlayerDataset.datasetId !== authority.dataset.datasetId ||
-    authority.factual.content.admittedPlayerDataset.admissionId !==
-      authority.admission.admissionId ||
-    canonicalizeAflTradeJson(authority.factual.content.sourceCaptures) !==
-      canonicalizeAflTradeJson(admittedSources) ||
+    !factualAuthorityMatches ||
     authority.dataset.content.scopeKey !== execution.operation.content.scopeKey ||
-    authority.factual.content.candidate.memberSetSha256 !==
-      execution.operation.content.factualValuesSha256 ||
-    authority.dataset.content.factualParent.factualReleaseId !==
-      authority.factual.content.factualRelease.releaseId ||
-    authority.dataset.content.factualParent.factualCandidateId !==
-      authority.factual.content.candidate.candidateId ||
-    authority.dataset.content.factualParent.sourceMemberSetSha256 !==
-      authority.factual.content.candidate.memberSetSha256 ||
-    authority.admission.content.factualReleaseId !==
-      authority.factual.content.factualRelease.releaseId ||
-    authority.admission.content.factualCandidateId !==
-      authority.factual.content.candidate.candidateId ||
-    authority.admission.content.sourceMemberSetSha256 !==
-      authority.factual.content.candidate.memberSetSha256 ||
     authority.dataset.content.environment !== 'non_production' ||
     authority.admission.content.environment !== 'non_production' ||
     authority.protocol.content.environment !== 'non_production'

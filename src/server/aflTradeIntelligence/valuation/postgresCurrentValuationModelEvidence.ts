@@ -18,6 +18,10 @@ interface RetainedRow {
 }
 
 type ModelEvidenceResult = AflTradeCurrentValuationModelEvidenceResult;
+export type AflTradeCurrentValuationModelEvidenceCommitAuthorization = (
+  transaction: AflOutcomeSqlTransaction,
+  result: ModelEvidenceResult
+) => Promise<void>;
 
 function resultsMatch(left: ModelEvidenceResult, right: ModelEvidenceResult): boolean {
   return canonicalizeAflTradeJson(left) === canonicalizeAflTradeJson(right);
@@ -49,7 +53,7 @@ async function loadRetainedResult(
 
 async function hasExactFactualAuthority(
   transaction: AflOutcomeSqlTransaction,
-  result: ModelEvidenceResult
+  result: AflTradeCurrentValuationModelEvidenceRequest
 ): Promise<boolean> {
   const factual = await transaction.query<{
     readonly candidate_id: string;
@@ -84,7 +88,7 @@ async function hasExactFactualAuthority(
 
 async function hasExactFactualOperation(
   transaction: AflOutcomeSqlTransaction,
-  result: ModelEvidenceResult
+  result: AflTradeCurrentValuationModelEvidenceRequest
 ): Promise<boolean> {
   const operation = await transaction.query<{
     readonly scope_key: string;
@@ -102,6 +106,16 @@ async function hasExactFactualOperation(
     exact?.scope_key === result.scopeKey &&
     exact.candidate_id === result.privateFactualAuthority.candidateId &&
     exact.private_factual_revision === result.privateFactualAuthority.revision
+  );
+}
+
+export async function hasExactAflTradeCurrentValuationFactualAuthority(
+  transaction: AflOutcomeSqlTransaction,
+  request: AflTradeCurrentValuationModelEvidenceRequest
+): Promise<boolean> {
+  return (
+    (await hasExactFactualAuthority(transaction, request)) &&
+    (await hasExactFactualOperation(transaction, request))
   );
 }
 
@@ -231,7 +245,8 @@ async function insertResult(
 
 async function commitResult(
   transaction: AflOutcomeSqlTransaction,
-  unparsedResult: ModelEvidenceResult
+  unparsedResult: ModelEvidenceResult,
+  authorizeCommit?: AflTradeCurrentValuationModelEvidenceCommitAuthorization
 ) {
   await transaction.query(`SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
   await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
@@ -246,10 +261,8 @@ async function commitResult(
   if (retained !== undefined) {
     return { state: 'committed' as const, result: parseMatchingReplay(retained, parsedResult) };
   }
-  if (
-    !(await hasExactFactualAuthority(transaction, parsedResult)) ||
-    !(await hasExactFactualOperation(transaction, parsedResult))
-  ) {
+  await authorizeCommit?.(transaction, parsedResult);
+  if (!(await hasExactAflTradeCurrentValuationFactualAuthority(transaction, parsedResult))) {
     return { state: 'stale_authority' as const };
   }
   const result = await reconcileModelAuthority(transaction, parsedResult);
@@ -264,7 +277,10 @@ async function commitResult(
 }
 
 export class PostgresAflTradeCurrentValuationModelEvidenceRepository implements AflTradeCurrentValuationModelEvidenceRepository {
-  constructor(private readonly client: AflOutcomeSqlClient) {}
+  constructor(
+    private readonly client: AflOutcomeSqlClient,
+    private readonly authorizeCommit?: AflTradeCurrentValuationModelEvidenceCommitAuthorization
+  ) {}
 
   async load(operationId: string): Promise<AflTradeCurrentValuationModelEvidenceResult | null> {
     const retained = await this.client.query<RetainedRow>(
@@ -291,7 +307,7 @@ export class PostgresAflTradeCurrentValuationModelEvidenceRepository implements 
   }) {
     try {
       return await this.client.transaction((transaction) =>
-        commitResult(transaction, input.result)
+        commitResult(transaction, input.result, this.authorizeCommit)
       );
     } catch (error) {
       if (
@@ -315,10 +331,14 @@ export function createPostgresAflTradeCurrentValuationModelEvidenceCoordinator(i
   readonly prepareAndQualify: Parameters<
     typeof createAflTradeCurrentValuationModelEvidenceCoordinator
   >[0]['prepareAndQualify'];
+  readonly authorizeCommit?: AflTradeCurrentValuationModelEvidenceCommitAuthorization;
   readonly clock?: { readonly now: () => string };
 }) {
   return createAflTradeCurrentValuationModelEvidenceCoordinator({
-    repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(input.client),
+    repository: new PostgresAflTradeCurrentValuationModelEvidenceRepository(
+      input.client,
+      input.authorizeCommit
+    ),
     captureCurrentModelRevision: async (scopeKey) => {
       const current = await input.client.query<{ readonly revision: number }>(
         `SELECT revision FROM outcome_current_governed_valuation_model_pair WHERE scope_key=$1`,

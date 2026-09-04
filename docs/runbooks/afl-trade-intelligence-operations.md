@@ -1042,6 +1042,30 @@ the previous model pair remains current and prepared-v3 must not run. `stale_aut
 outer refresh from current factual and model heads. A successful result records the exact two runs,
 qualification, qualification work, and Gate 3 decisions and advances current model authority once.
 
+For a claimed dispatch, the model-evidence composition first loads terminal orchestration evidence
+through `load_outcome_current_valuation_evidence` using that exact request ID and requires its
+downstream operation to be the factual operation supplied to Current Valuation Refresh. The runtime
+role must not query the orchestration table directly. It rechecks the current private factual head and
+invokes `load_outcome_private_valuation_dispatch_request_for_claim`; do not invoke the model pair from
+a factual operation alone. Governed HPN preparation supplies the exact factual output and HPN
+calculation. Before either component runs, verify that factual output's normalization run is a member
+of the exact private candidate's retained normalized/reconciled custody. The existing pair coordinator
+then owns player/pick component retention, pair acceptance,
+qualification, restart replay, and failure classification. The dispatch attempt remains the only
+retry count and is capped at three persisted transient attempts.
+
+Only `qualified`, `already_qualified`, or `qualification_failed` may be projected into the current
+model-evidence commit boundary. Projection repeats the factual-output ancestry and claim checks and
+reads the exact pair-bound qualification plus both retained native validation records. A passing
+projection must also be the current governed pair and must name its exact qualification work and both
+Gate 3 decisions. A failed projection reads its failure codes from the retained qualification and
+leaves the current pair and revision unchanged. The factual output and candidate custody are immutable;
+the serializable compare-and-set transaction repeats their mutable orchestration,
+current-factual-head, and live-claim fences before it may insert. A claim that expires after
+preparation cannot commit, while an already-retained replay remains immutable and idempotent. Treat
+missing or mismatched ancestry as unavailable authority; never rebuild terminal evidence from
+caller-provided identifiers.
+
 ### Operating automatic local private valuation
 
 The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback
@@ -1139,7 +1163,14 @@ incomplete prediction coverage must fail closed.
 
 Before a run, require one live current dispatch claim, the exact request-to-operation binding, the
 bound private factual output, and identical factual release, candidate and source-member ancestry in
-the dataset and admission. Each source-rights proposal gets one fresh run-start evaluation. Multiple
+the dataset and admission. An admitted-player factual-output v2 must additionally bind that exact
+dataset, admission, and canonical source-capture set. The HPN path's factual-output v1 has no direct
+dataset fields, so it is accepted only when the exact operation-selected dataset and admission IDs
+match the loaded candidate and its exact release, candidate, and source-member digest, and when the
+v1 capture binding's exact capture and snapshot occur in the admission's content-addressed source
+set. All other dataset, admission, source-rights,
+protocol, and run-start checks remain mandatory. Each source-rights proposal gets one fresh run-start
+evaluation. Multiple
 captures may share that proposal only when their retained Gate 0-A request ancestry is identical apart
 from evaluation time; disagreement is a deterministic failure. Never substitute a current dataset,
 protocol, public factual release, fixture, fabricated evidence, caller principal or caller execution
@@ -1150,9 +1181,10 @@ interval, subgroup, sensitivity, leakage, model-card and diagnostics artifacts, 
 governed player component with full dataset, admission, protocol and Gate-ledger ancestry. On replay,
 authenticate the component against the original immutable attempt and independently authenticate the
 replacement claimant as current. An exact retained component returns without rematerializing the
-observation set, issuing a second model-run authorization or retraining. This component is not yet
-wired into the local worker or paired with the pick component; that composition belongs to the model
-pair stage. No new player retry ledger or current pointer is part of this slice. Migration 0089 adds
+observation set, issuing a second model-run authorization or retraining. The model-evidence composition
+now pairs it with the genuine pick component through the existing model-pair coordinator, but the
+local worker does not invoke that composition until the later end-to-end wiring stage. No new player
+retry ledger or current pointer is part of this slice. Migration 0089 adds
 only the coordinator's least-privilege reads, immutable inserts and narrowly scoped row-lock/update
 permissions required by the existing append-only model-run and artifact-custody triggers.
 Migration 0102 adds the admitted-player factual-output v2 parent, exact source-capture and
