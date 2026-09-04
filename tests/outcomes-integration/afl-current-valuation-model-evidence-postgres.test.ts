@@ -311,13 +311,22 @@ function qualifiedEvidence() {
 
 function sqlClient(afterModelHeadRead?: () => Promise<void>): AflOutcomeSqlClient {
   return {
-    query: (sql, parameters) => pool.query(sql, parameters as unknown[]),
+    query: async <Row = Record<string, unknown>>(sql: string, parameters?: readonly unknown[]) => {
+      const result = await pool.query(sql, parameters as unknown[]);
+      return {
+        rows: result.rows as unknown as readonly Row[],
+        rowCount: result.rowCount,
+      };
+    },
     transaction: async (work) => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         const result = await work({
-          query: async (sql, parameters) => {
+          query: async <Row = Record<string, unknown>>(
+            sql: string,
+            parameters?: readonly unknown[]
+          ) => {
             const queryResult = await client.query(sql, parameters as unknown[]);
             if (sql.includes('FROM outcome_current_governed_valuation_model_pair')) {
               await afterModelHeadRead?.();
@@ -341,7 +350,10 @@ function sqlClient(afterModelHeadRead?: () => Promise<void>): AflOutcomeSqlClien
                 },
               ]);
             }
-            return queryResult;
+            return {
+              rows: queryResult.rows as unknown as readonly Row[],
+              rowCount: queryResult.rowCount,
+            };
           },
         });
         await client.query('COMMIT');
@@ -353,7 +365,7 @@ function sqlClient(afterModelHeadRead?: () => Promise<void>): AflOutcomeSqlClien
         client.release();
       }
     },
-  } as AflOutcomeSqlClient;
+  };
 }
 
 describe.sequential('current valuation model evidence in PostgreSQL', () => {
@@ -396,7 +408,7 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
     await pool.query(
       `INSERT INTO outcome_private_valuation_factual_output VALUES
         ($1,$2,$3,jsonb_build_object('content',jsonb_build_object(
-          'schemaVersion','afl-trade-private-valuation-factual-output/v1')))` ,
+          'schemaVersion','afl-trade-private-valuation-factual-output/v1')))`,
       [factualOutputId, dispatch.request.requestId, normalizationRunId]
     );
     await pool.query(
@@ -422,11 +434,10 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
         evidence.qualificationId,
       ]
     );
-    await pool.query(`INSERT INTO outcome_private_valuation_model_request_binding VALUES ($1,$2,$3)`, [
-      dispatch.request.requestId,
-      pairOperationId,
-      factualOutputId,
-    ]);
+    await pool.query(
+      `INSERT INTO outcome_private_valuation_model_request_binding VALUES ($1,$2,$3)`,
+      [dispatch.request.requestId, pairOperationId, factualOutputId]
+    );
     let pairExecutions = 0;
     const preparation = createPostgresAflTradeCurrentValuationModelEvidencePreparation({
       client: sqlClient(),
@@ -452,7 +463,7 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
 
     const committed = await coordinator.refresh(request());
     await expect(coordinator.refresh(request())).resolves.toEqual(committed);
-    expect(committed).toMatchObject({ state: 'qualified', ...qualifiedEvidence() });
+    expect(committed).toMatchObject(qualifiedEvidence());
     expect(pairExecutions).toBe(1);
 
     const mismatchedDispatchPreparation =
@@ -486,18 +497,12 @@ describe.sequential('current valuation model evidence in PostgreSQL', () => {
     await pool.query(
       `INSERT INTO outcome_private_valuation_model_operation
         VALUES ($1,'afl-men:2025-trades',$2,$3,clock_timestamp(),$4,'qualified',clock_timestamp())`,
-      [
-        wrongScopeOperationId,
-        evidence.playerRunId,
-        evidence.pickRunId,
-        wrongScopeQualificationId,
-      ]
+      [wrongScopeOperationId, evidence.playerRunId, evidence.pickRunId, wrongScopeQualificationId]
     );
-    await pool.query(`INSERT INTO outcome_private_valuation_model_request_binding VALUES ($1,$2,$3)`, [
-      dispatch.request.requestId,
-      wrongScopeOperationId,
-      factualOutputId,
-    ]);
+    await pool.query(
+      `INSERT INTO outcome_private_valuation_model_request_binding VALUES ($1,$2,$3)`,
+      [dispatch.request.requestId, wrongScopeOperationId, factualOutputId]
+    );
     const wrongScopePreparation = createPostgresAflTradeCurrentValuationModelEvidencePreparation({
       client: sqlClient(),
       dispatch,

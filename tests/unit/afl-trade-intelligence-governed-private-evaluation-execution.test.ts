@@ -58,7 +58,7 @@ class ExecutionSqlClient implements AflOutcomeSqlClient {
       return {
         rows: [{ from_generation_id: priorGenerationId }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('FROM outcome_private_evaluation_transition_receipt')) {
       return { rows: [], rowCount: 0 } as AflOutcomeSqlQueryResult<Row>;
@@ -67,7 +67,7 @@ class ExecutionSqlClient implements AflOutcomeSqlClient {
       return {
         rows: this.stagedIntent === undefined ? [] : [{ intent_json: this.stagedIntent }],
         rowCount: this.stagedIntent === undefined ? 0 : 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('FROM outcome_private_evaluation_inspection_receipt ir')) {
       return {
@@ -78,13 +78,13 @@ class ExecutionSqlClient implements AflOutcomeSqlClient {
           },
         ],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('transaction_timestamp()')) {
       return {
         rows: [{ trusted_at: new Date(now) }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('FROM outcome_operational_principal_authority')) {
       return {
@@ -92,14 +92,12 @@ class ExecutionSqlClient implements AflOutcomeSqlClient {
           ? [{ authority_evidence_id: `reviewer-authority-evidence:${'e'.repeat(64)}` }]
           : [],
         rowCount: this.operatorAuthorized ? 1 : 0,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   }
 
-  async transaction<T>(
-    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
   }
 }

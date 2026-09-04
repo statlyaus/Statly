@@ -1448,6 +1448,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
     expect(validateAflTradeNonproductionPlan(freshPreapplyPlan())).toEqual([]);
 
     const wrongSecret = withResourceChanges(safePlan(), (change) => {
+      if (typeof change.address !== 'string') return change;
       if (canonicalPlanAddress(change.address) !== 'aws_iam_role_policy.migration') return change;
       const current = change.change as { after: Readonly<Record<string, unknown>> };
       return resource(change.address, change.type as string, {
@@ -1758,6 +1759,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
       unsafePlan.resource_changes as ReadonlyArray<Record<string, unknown>>
     ).map((change) => {
       const address = change.address;
+      if (typeof address !== 'string') return change;
       const current = change.change as { after: Readonly<Record<string, unknown>> };
 
       if (address === 'aws_db_instance.outcomes') {
@@ -1852,6 +1854,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
       unsafePlan.resource_changes as ReadonlyArray<Record<string, unknown>>
     ).map((change) => {
       const address = change.address;
+      if (typeof address !== 'string') return change;
       const current = change.change as { after: Readonly<Record<string, unknown>> };
 
       if (address === 'aws_db_instance.outcomes') {
@@ -1997,8 +2000,10 @@ describe('AFL trade non-production infrastructure plan policy', () => {
 
   it('requires complete Allow statements rather than subsets or Deny lookalikes', () => {
     const unsafePlan = withResourceChanges(safePlan(), (change) => {
-      if (change.address === 'aws_iam_policy.capture') {
-        return resource(change.address, 'aws_iam_policy', {
+      const address = change.address;
+      if (typeof address !== 'string') return change;
+      if (address === 'aws_iam_policy.capture') {
+        return resource(address, 'aws_iam_policy', {
           policy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -2016,8 +2021,8 @@ describe('AFL trade non-production infrastructure plan policy', () => {
           }),
         });
       }
-      if (change.address === 'aws_iam_role_policy.capture_kms') {
-        return resource(change.address, 'aws_iam_role_policy', {
+      if (address === 'aws_iam_role_policy.capture_kms') {
+        return resource(address, 'aws_iam_role_policy', {
           policy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -2030,8 +2035,8 @@ describe('AFL trade non-production infrastructure plan policy', () => {
           }),
         });
       }
-      if (canonicalPlanAddress(change.address) === 'aws_iam_role_policy.migration') {
-        return resource(change.address, 'aws_iam_role_policy', {
+      if (canonicalPlanAddress(address) === 'aws_iam_role_policy.migration') {
+        return resource(address, 'aws_iam_role_policy', {
           policy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -2381,7 +2386,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
       async (
         _command: string,
         args: readonly string[],
-        options?: { readonly environment: NodeJS.ProcessEnv }
+        options?: { readonly environment: Readonly<Record<string, string | undefined>> }
       ) => {
         if (args[1] === 'init') {
           snapshotSourceDirectory = args[0]?.slice('-chdir='.length);
@@ -2422,6 +2427,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
         argv: boundedPlanArgv,
         computeConfigurationSourceDigest: async () => configurationSourceDigest,
         environment: {
+          NODE_ENV: 'test',
           AWS_CONFIG_FILE: '/tmp/review-aws-config',
           AWS_ENDPOINT_URL: 'https://attacker.invalid',
           AWS_ENDPOINT_URL_STS: 'https://attacker.invalid/sts',
@@ -2887,11 +2893,15 @@ describe('AFL trade non-production infrastructure plan policy', () => {
     ).rejects.toThrow(/requires one explicit --state path/);
 
     let failedSnapshotRoot: string | undefined;
-    const copySnapshotFile = vi.fn(async (source: string, destination: string) => {
-      failedSnapshotRoot = dirname(dirname(destination));
-      if (source.endsWith('/network.tf')) throw new Error('synthetic sequential copy failure');
-      await copyFile(source, destination);
-    });
+    const copySnapshotFile = vi.fn(
+      async (...[source, destination]: Parameters<typeof copyFile>) => {
+        failedSnapshotRoot = dirname(dirname(destination.toString()));
+        if (source.toString().endsWith('/network.tf')) {
+          throw new Error('synthetic sequential copy failure');
+        }
+        await copyFile(source, destination);
+      }
+    );
     await expect(
       runAflTradeNonproductionPlanValidationCommand({
         argv: boundedPlanArgv,
@@ -2903,13 +2913,15 @@ describe('AFL trade non-production infrastructure plan policy', () => {
 
     const controller = new AbortController();
     let cancelledSnapshotRoot: string | undefined;
-    const cancelDuringCopy = vi.fn(async (source: string, destination: string) => {
-      cancelledSnapshotRoot = dirname(dirname(destination));
-      await copyFile(source, destination);
-      if (source.endsWith('/network.tf')) {
-        controller.abort(new Error('operator cancelled during snapshot copy'));
+    const cancelDuringCopy = vi.fn(
+      async (...[source, destination]: Parameters<typeof copyFile>) => {
+        cancelledSnapshotRoot = dirname(dirname(destination.toString()));
+        await copyFile(source, destination);
+        if (source.toString().endsWith('/network.tf')) {
+          controller.abort(new Error('operator cancelled during snapshot copy'));
+        }
       }
-    });
+    );
     await expect(
       runAflTradeNonproductionPlanValidationCommand({
         argv: boundedPlanArgv,

@@ -31,39 +31,35 @@ function fixture() {
   ];
   const assessments = candidates.map((candidate) => {
     const sourceFields = [
-      ...new Set(
-        candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
-      ),
+      ...new Set(candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
     ].sort();
-    const content = {
-        schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1',
-        environment: 'non_production',
-        purpose: 'private_confirmed_realized_hpn_pav',
-        competition: 'AFLM',
-        seasonYear: 2025,
-        valuationScopeKey: 'workbook:2025',
-        evaluationDecisionId: 'private-reviewed-evaluation-decision:fixture',
-        state: 'permitted_private_calculation',
-        rightsArtifactId: `artifact:${'1'.repeat(64)}`,
-        evidenceBundleId: 'private-reviewed-evidence:fixture',
-        fields: sourceFields.map((sourceField) => ({
-          sourceField,
-          state: 'permitted_private_calculation' as const,
-          reasons: [],
-        })),
+    const content: AflTradeHpnPrivateCalculationSourceUseAssessment['content'] = {
+      schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1',
+      environment: 'non_production',
+      purpose: 'private_confirmed_realized_hpn_pav',
+      competition: 'AFLM',
+      seasonYear: 2025,
+      valuationScopeKey: 'workbook:2025',
+      evaluationDecisionId: 'private-reviewed-evaluation-decision:fixture',
+      state: 'permitted_private_calculation',
+      rightsArtifactId: `artifact:${'1'.repeat(64)}`,
+      evidenceBundleId: 'private-reviewed-evidence:fixture',
+      fields: sourceFields.map((sourceField) => ({
+        sourceField,
+        state: 'permitted_private_calculation' as const,
         reasons: [],
-        evidenceRefs: [],
-        evaluatedAt: reviewedAt,
-        publicationEligible: false,
-        publicationProhibited: true,
+      })),
+      reasons: [],
+      evidenceRefs: [],
+      effectiveRestriction: null,
+      evaluatedAt: reviewedAt,
+      publicationEligible: false,
+      publicationProhibited: true,
     };
     return {
-      assessmentId: createAflTradeContentAddress(
-        'hpn-private-source-use-assessment',
-        content
-      ),
+      assessmentId: createAflTradeContentAddress('hpn-private-source-use-assessment', content),
       content,
-    } as AflTradeHpnPrivateCalculationSourceUseAssessment;
+    };
   });
   return {
     candidates: candidates.map((candidate) => ({
@@ -103,9 +99,12 @@ describe('local HPN field-map review', () => {
       'completed_match_result',
       'player_match_stats',
     ]);
-    expect(result.every(({ decision }) =>
-      decision.content.decision === 'approved' && decision.content.publicationProhibited
-    )).toBe(true);
+    expect(
+      result.every(
+        ({ decision }) =>
+          decision.content.decision === 'approved' && decision.content.publicationProhibited
+      )
+    ).toBe(true);
   });
 
   it('rejects a source field that lacks private-calculation permission', async () => {

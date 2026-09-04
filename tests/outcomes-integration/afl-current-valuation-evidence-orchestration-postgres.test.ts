@@ -1227,7 +1227,7 @@ describe('current valuation evidence orchestration PostgreSQL authority', () => 
     });
     const claimedBundle = await client.transaction(async (transaction) => {
       const healthBypass: AflOutcomeSqlTransaction = {
-        query: async <Row extends Record<string, unknown> = Record<string, unknown>>(
+        query: async <Row = Record<string, unknown>>(
           sql: string,
           parameters?: readonly unknown[]
         ) => {

@@ -116,6 +116,10 @@ class FixtureRepository implements AflTradeGateDecisionLedgerRepository {
     };
   }
 
+  async appendDecision(): Promise<never> {
+    throw new Error('Decision-only append is not permitted by this fixture.');
+  }
+
   async appendBatch(input: AflTradeGateLedgerBatchAppendInput) {
     for (const record of input.records) {
       this.ledger = {

@@ -98,11 +98,7 @@ function observation(
     },
     featureCalculationSeasons: [predictionSeason - 1, predictionSeason],
     featureValues,
-    targetCalculationSeasons: [
-      predictionSeason + 1,
-      predictionSeason + 2,
-      predictionSeason + 3,
-    ],
+    targetCalculationSeasons: [predictionSeason + 1, predictionSeason + 2, predictionSeason + 3],
     targetValues,
     outcome: {
       state: 'mature_observed',
@@ -163,11 +159,15 @@ describe('player PAV observation contracts', () => {
 
   it('rejects substituted PAV totals and cross-spell target evidence', () => {
     const valid = observation(1, 'train', 2001);
+    const validOutcome = valid.outcome;
+    if (validOutcome.state !== 'mature_observed') {
+      throw new Error('Expected a mature observed fixture.');
+    }
 
     expect(() =>
       createAflTradePlayerPavObservation({
         ...valid,
-        outcome: { ...valid.outcome, contribution: valid.outcome.contribution + 1 },
+        outcome: { ...validOutcome, contribution: validOutcome.contribution + 1 },
       })
     ).toThrow();
     expect(() =>
@@ -277,11 +277,10 @@ describe('player PAV observation contracts', () => {
       })),
     });
 
-    expect(backfilled.featureValues.every(({ calculatedAt }) => calculatedAt.startsWith('2026')))
-      .toBe(true);
-    expect(backfilled.featureValues.at(-1)?.effectiveThrough).toBe(
-      '2001-09-30T23:59:59.000Z'
-    );
+    expect(
+      backfilled.featureValues.every(({ calculatedAt }) => calculatedAt.startsWith('2026'))
+    ).toBe(true);
+    expect(backfilled.featureValues.at(-1)?.effectiveThrough).toBe('2001-09-30T23:59:59.000Z');
   });
 
   it('preserves multiple authenticated acquisition-spell values in one feature season', () => {
@@ -292,7 +291,11 @@ describe('player PAV observation contracts', () => {
     });
     const result = createAflTradePlayerPavObservation({
       ...historical,
-      featureValues: [historical.featureValues[0]!, additionalSpellValue, historical.featureValues[1]!],
+      featureValues: [
+        historical.featureValues[0]!,
+        additionalSpellValue,
+        historical.featureValues[1]!,
+      ],
     });
 
     expect(result.featureCalculationSeasons).toEqual([2000, 2001]);

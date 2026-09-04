@@ -1,7 +1,5 @@
 import type { AflTradeArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import {
-  createAflTradeCanonicalJsonArtifactRef,
-} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -33,7 +31,7 @@ class InspectionSqlClient implements AflOutcomeSqlClient {
       return {
         rows: [{ trusted_at: new Date(capturedAt) }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('FROM outcome_local_private_trade_evaluation_head')) {
       return {
@@ -46,7 +44,7 @@ class InspectionSqlClient implements AflOutcomeSqlClient {
           },
         ],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('INSERT INTO outcome_private_evaluation_authority_snapshot')) {
       return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
@@ -57,9 +55,7 @@ class InspectionSqlClient implements AflOutcomeSqlClient {
     throw new Error(`Unexpected SQL: ${sql}`);
   }
 
-  async transaction<T>(
-    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
   }
 }
@@ -151,8 +147,7 @@ describe('PostgreSQL governed private evaluation inspection repository', () => {
       'draft_pick_and_future_pick_distribution',
     ].map((role, index) => ({
       role: role as
-        | 'player_contribution_and_availability'
-        | 'draft_pick_and_future_pick_distribution',
+        'player_contribution_and_availability' | 'draft_pick_and_future_pick_distribution',
       runId: addressed('model-run', `run-${index}`),
       protocolId: addressed('model-protocol', `protocol-${index}`),
       datasetId: addressed('dataset', `dataset-${index}`),
@@ -208,9 +203,7 @@ describe('PostgreSQL governed private evaluation inspection repository', () => {
     });
     expect(captureTransaction).toBe(client);
     expect(retained).toHaveLength(2);
-    const documents = retained.map(({ bytes }) =>
-      JSON.parse(new TextDecoder().decode(bytes))
-    );
+    const documents = retained.map(({ bytes }) => JSON.parse(new TextDecoder().decode(bytes)));
     expect(documents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

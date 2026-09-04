@@ -10,10 +10,18 @@ import {
 const reconciledAt = '2026-08-09T05:00:00.000Z';
 
 function candidate(
-  overrides: Partial<AflTradeExternalReconciliationCandidate['content']> = {}
+  overrides: Partial<
+    Omit<
+      AflTradeExternalReconciliationCandidate['content'],
+      'schemaVersion' | 'environment' | 'competition' | 'anchorSeasonYear'
+    >
+  > = {}
 ): AflTradeExternalReconciliationCandidate {
   const content: AflTradeExternalReconciliationCandidate['content'] = {
     schemaVersion: 'afl-trade-external-reconciliation/v1',
+    environment: 'test_fixture',
+    competition: 'afl-men',
+    anchorSeasonYear: 2025,
     sourceBatchIds: [],
     identityResolutionIds: [],
     transactions: [

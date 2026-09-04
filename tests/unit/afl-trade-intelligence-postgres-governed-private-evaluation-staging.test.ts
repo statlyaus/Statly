@@ -26,7 +26,7 @@ const now = '2026-08-19T10:00:00.000Z';
 
 class StagingSqlClient implements AflOutcomeSqlClient {
   readonly sql: string[] = [];
-  readonly custodyParameters: readonly unknown[][] = [];
+  readonly custodyParameters: (readonly unknown[])[] = [];
   intentParameters: readonly unknown[] | null = null;
   private readonly artifacts = new Map<string, AflTradeArtifactRef>();
   private intentRegistered = false;
@@ -54,7 +54,7 @@ class StagingSqlClient implements AflOutcomeSqlClient {
       return {
         rows: [{ trusted_at: new Date(now) }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('INSERT INTO outcome_artifact_custody')) {
       this.custodyParameters.push(parameters);
@@ -74,7 +74,7 @@ class StagingSqlClient implements AflOutcomeSqlClient {
           },
         ],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('INSERT INTO outcome_private_evaluation_transition_intent')) {
       this.intentParameters = parameters;
@@ -93,14 +93,12 @@ class StagingSqlClient implements AflOutcomeSqlClient {
           },
         ],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      } as unknown as AflOutcomeSqlQueryResult<Row>;
     }
     throw new Error(`Unexpected SQL: ${statement}`);
   }
 
-  async transaction<T>(
-    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
   }
 }
@@ -152,20 +150,12 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
     expect(
       client.sql.some((sql) => sql.includes('pg_advisory_xact_lock(hashtextextended($1,0))'))
     ).toBe(true);
-    expect(
-      client.sql.some((sql) =>
-        sql.includes('authority_snapshot_id')
-      )
-    ).toBe(true);
+    expect(client.sql.some((sql) => sql.includes('authority_snapshot_id'))).toBe(true);
     expect(client.intentParameters?.[2]).toBeNull();
     expect(client.custodyParameters[0]?.[6]).toBe(now);
 
     const receiptBytes = new TextEncoder().encode('{"receipt":true}');
-    const receiptArtifact = createAflTradeByteArtifactRef(
-      receiptBytes,
-      'application/json',
-      now
-    );
+    const receiptArtifact = createAflTradeByteArtifactRef(receiptBytes, 'application/json', now);
     client.expectArtifact(receiptArtifact);
     await expect(
       repository.retainArtifact({

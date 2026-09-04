@@ -9,6 +9,7 @@ npm run docs:check
 npm run format:check
 npm run lint:ci
 npm run typecheck
+npm run typecheck:tests
 npm run test:unit
 npm run test:int
 npm run test:e2e
@@ -95,7 +96,7 @@ normalization claims and create only seven finalized normalization runs. The tes
 after observed-capture custody and verifies that a later receipt may intentionally bind a new observed
 capture to a historical effective capture and normalization.
 
-`npm run test:all` runs lint, typecheck, unit, integration, and browser tests. Its integration stage
+`npm run test:all` runs lint, application and test typechecks, unit, integration, and browser tests. Its integration stage
 includes the persisted 12-team, 22-player-roster, 264-pick draft convergence contract. CI exposes
 these boundaries as stable merge checks so a failure identifies its owning verification stage. The
 standard browser command excludes tests tagged `@draft-worker`; CI runs those separately with the real
@@ -250,7 +251,7 @@ owned by the disposable real-PostgreSQL outcomes integration job described below
 
 The CI workflow has five explicit ownership boundaries:
 
-- root jobs own documentation, root lint, root typecheck, unit/integration/browser tests, and the
+- root jobs own documentation, root lint, application and test typechecks, unit/integration/browser tests, and the
   production build;
 - `Draft worker E2E` owns the isolated Chromium, Socket.IO, and BullMQ lifecycle against its own Redis
   service and disposable SQLite database;

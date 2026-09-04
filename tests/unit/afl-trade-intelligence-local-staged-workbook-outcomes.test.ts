@@ -52,7 +52,7 @@ describe('local staged workbook outcome projection', () => {
   it('projects positive reviewed appearances and never turns missing source coverage into zero', async () => {
     let executedSql = '';
     const client: AflOutcomeSqlClient = {
-      async query<Row>(sql, parameters) {
+      async query<Row>(sql: string, parameters?: readonly unknown[]) {
         executedSql = sql;
         expect(parameters).toHaveLength(4);
         expect(parameters?.[0]).toContain('sam flanders');
@@ -110,9 +110,7 @@ describe('local staged workbook outcome projection', () => {
     expect(executedSql).toContain("decision.subject_type='local_reconciled_player_match_fact'");
     expect(executedSql).toContain('historical_review_health AS MATERIALIZED');
     expect(executedSql).toContain('historical_review_members AS MATERIALIZED');
-    expect(executedSql).toContain(
-      "decision.evidence_json->>'evidenceSetSha256'=$2"
-    );
+    expect(executedSql).toContain("decision.evidence_json->>'evidenceSetSha256'=$2");
     expect(executedSql).toContain(
       "'local-afl-tables-review:identity:' || candidate.identity_candidate_id"
     );
@@ -129,9 +127,7 @@ describe('local staged workbook outcome projection', () => {
     expect(executedSql).toContain(
       'JOIN outcome_review_decision decision ON decision.decision_id=expected.decision_id'
     );
-    expect(executedSql).toContain(
-      "review_set.decision_id='local-official-afl-review:set:' || $4"
-    );
+    expect(executedSql).toContain("review_set.decision_id='local-official-afl-review:set:' || $4");
     expect(executedSql).toContain("decision.subject_type='local_review_set'");
     expect(outcomes.get('2025_0016')).toEqual({
       source: 'reconciled_acquisition_spell',

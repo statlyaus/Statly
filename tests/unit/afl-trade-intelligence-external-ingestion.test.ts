@@ -53,7 +53,10 @@ function dependencies(options?: { replay?: boolean }) {
   };
   const authorizeCapture = vi.fn<AflTradeExternalPageIngestionDependencies['authorizeCapture']>(
     async (request) => {
-      if (request.provider === 'fitzroy_official_afl_player_details') {
+      if (
+        request.provider === 'fitzroy_official_afl_player_details' ||
+        request.provider === 'statly_local_fixture'
+      ) {
         throw new Error('This fixture covers only the bounded external-page providers.');
       }
       return createAflTradeExternalCaptureExecutionReceipt({

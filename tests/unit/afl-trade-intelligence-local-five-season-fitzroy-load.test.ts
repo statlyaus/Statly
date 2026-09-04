@@ -83,22 +83,27 @@ describe('local five-season fitzRoy outcome load', () => {
       captureId: `source-capture:${String(season).padEnd(64, 'a')}`,
       normalizationRunId: `provider-normalization-run:${String(season).padEnd(64, 'b')}`,
     }));
-    const query = vi.fn(async () => ({
-      rows: captures.map((capture) => ({
-        capture_id: capture.captureId,
-        anchor_season_year: capture.authorizationSeason,
-        environment: 'non_production',
-        provider: 'afl_tables',
-        capability_id: 'afl-tables-player-stats',
-        normalization_run_id: capture.normalizationRunId,
-        normalization_status: 'needs_review',
-        finalized_at: new Date(
-          `2026-08-14T00:0${capture.authorizationSeason - 2021}:00.000Z`
-        ),
-        source_row_count: 100,
-        staged_seasons: [capture.authorizationSeason],
-      })),
+    const stagedRows = captures.map((capture) => ({
+      capture_id: capture.captureId,
+      anchor_season_year: capture.authorizationSeason,
+      environment: 'non_production',
+      provider: 'afl_tables',
+      capability_id: 'afl-tables-player-stats',
+      normalization_run_id: capture.normalizationRunId,
+      normalization_status: 'needs_review',
+      finalized_at: new Date(`2026-08-14T00:0${capture.authorizationSeason - 2021}:00.000Z`),
+      source_row_count: 100,
+      staged_seasons: [capture.authorizationSeason],
     }));
+    const queryRows = vi.fn(
+      async (_sql: string, _values?: readonly unknown[]) => stagedRows as readonly unknown[]
+    );
+    const query = async <T>(
+      sql: string,
+      values?: readonly unknown[]
+    ): Promise<{ rows: readonly T[] }> => ({
+      rows: (await queryRows(sql, values)) as readonly T[],
+    });
 
     await expect(
       assertLocalAflTradeFiveSeasonPostgresStagingCoverage({ query }, captures)
@@ -107,12 +112,12 @@ describe('local five-season fitzRoy outcome load', () => {
       captureCount: 5,
       rowCount: 500,
     });
-    expect(query).toHaveBeenCalledWith(
+    expect(queryRows).toHaveBeenCalledWith(
       expect.stringContaining('outcome_provider_normalization_run'),
       [captures.map(({ captureId }) => captureId)]
     );
 
-    query.mockResolvedValueOnce({ rows: [] });
+    queryRows.mockResolvedValueOnce([]);
     await expect(
       assertLocalAflTradeFiveSeasonPostgresStagingCoverage({ query }, captures)
     ).rejects.toThrow('exactly one finalized AFL Tables staging run');
@@ -127,20 +132,27 @@ describe('local five-season fitzRoy outcome load', () => {
       factBatchId: `source-fact-batch:${String(season).padEnd(64, 'c')}`,
       factualRunId: `factual-reconciliation-run:${String(season).padEnd(64, 'd')}`,
     }));
-    const query = vi.fn(async () => ({
-      rows: captures.map((capture) => ({
-        normalization_run_id: capture.normalizationRunId,
-        fact_batch_id: capture.factBatchId,
-        fact_batch_status: 'approved',
-        fact_batch_finalized_at: new Date('2026-08-14T01:00:00.000Z'),
-        season_year: capture.authorizationSeason,
-        appearance_fact_count: 100,
-        factual_run_id: capture.factualRunId,
-        factual_run_status: 'approved',
-        factual_run_finalized_at: new Date('2026-08-14T01:01:00.000Z'),
-        consumed_appearance_count: 100,
-      })),
+    const factualRows = captures.map((capture) => ({
+      normalization_run_id: capture.normalizationRunId,
+      fact_batch_id: capture.factBatchId,
+      fact_batch_status: 'approved',
+      fact_batch_finalized_at: new Date('2026-08-14T01:00:00.000Z'),
+      season_year: capture.authorizationSeason,
+      appearance_fact_count: 100,
+      factual_run_id: capture.factualRunId,
+      factual_run_status: 'approved',
+      factual_run_finalized_at: new Date('2026-08-14T01:01:00.000Z'),
+      consumed_appearance_count: 100,
     }));
+    const queryRows = vi.fn(
+      async (_sql: string, _values?: readonly unknown[]) => factualRows as readonly unknown[]
+    );
+    const query = async <T>(
+      sql: string,
+      values?: readonly unknown[]
+    ): Promise<{ rows: readonly T[] }> => ({
+      rows: (await queryRows(sql, values)) as readonly T[],
+    });
 
     await expect(
       assertLocalAflTradeFiveSeasonPostgresFactualCoverage({ query }, captures)
@@ -149,12 +161,12 @@ describe('local five-season fitzRoy outcome load', () => {
       captureCount: 5,
       appearanceFactCount: 500,
     });
-    expect(query).toHaveBeenCalledWith(
+    expect(queryRows).toHaveBeenCalledWith(
       expect.stringContaining('outcome_factual_reconciliation_appearance_input'),
       [captures.map(({ normalizationRunId }) => normalizationRunId)]
     );
 
-    query.mockResolvedValueOnce({ rows: [] });
+    queryRows.mockResolvedValueOnce([]);
     await expect(
       assertLocalAflTradeFiveSeasonPostgresFactualCoverage({ query }, captures)
     ).rejects.toThrow('appearance facts consumed by factual reconciliation');

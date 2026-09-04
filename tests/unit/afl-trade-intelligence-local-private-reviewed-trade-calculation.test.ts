@@ -216,6 +216,9 @@ describe('local private reviewed trade calculation projection', () => {
     if (player?.state !== 'calculated') throw new Error('Expected calculated player.');
     expect(player.atTrade.state).toBe('available');
     expect(player.realized.state).toBe('available');
+    if (player.realized.state !== 'available') {
+      throw new Error('Expected an available realized player view.');
+    }
     expect(player.realized.gamesPlayed).toBe(1);
     expect(player.realized.seasons).toEqual([2025]);
     expect(player.realized.components.offensivePav).toBeGreaterThan(0);
@@ -239,10 +242,7 @@ describe('local private reviewed trade calculation projection', () => {
     const ambiguous = projectLocalPrivateReviewedTradeCalculation({
       detail,
       workbookSha256: '8'.repeat(64),
-      identities: [
-        identity,
-        { ...identity, canonicalPlayerId: 'local-afl-player:other' },
-      ],
+      identities: [identity, { ...identity, canonicalPlayerId: 'local-afl-player:other' }],
       calculations: [calculation(2024, 'a')],
     });
     expect(ambiguous.assets[0]).toMatchObject({

@@ -49,7 +49,7 @@ function atomicReviewClient(options: { failAtInsert?: number } = {}) {
     async transaction(work) {
       const pending: unknown[][] = [];
       const transaction: AflOutcomeSqlTransaction = {
-        async query<Row>(sql, parameters) {
+        async query<Row>(sql: string, parameters?: readonly unknown[]) {
           if (sql.includes('pg_advisory_xact_lock')) return { rows: [] as Row[], rowCount: 1 };
           if (sql.includes('FROM outcome_provider_decoded_row decoded')) {
             return { rows: reviewedRows() as Row[], rowCount: 12 };
@@ -116,7 +116,7 @@ describe('local official AFL 2026 review', () => {
       originalTransaction((transaction) =>
         work({
           ...transaction,
-          async query<Row>(sql, parameters) {
+          async query<Row>(sql: string, parameters?: readonly unknown[]) {
             const result = await transaction.query<Row>(sql, parameters);
             if (!sql.includes('FROM outcome_provider_decoded_row decoded')) return result;
             const rows = structuredClone(result.rows) as Array<Record<string, unknown>>;

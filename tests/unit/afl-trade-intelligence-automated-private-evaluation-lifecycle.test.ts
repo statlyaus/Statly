@@ -49,10 +49,12 @@ describe('automated governed private evaluation lifecycle', () => {
       publicationProhibited: true,
     });
 
-    expect(() => createAutomatedGovernedPrivateEvaluationTransitionIntent({
-      ...intent.content,
-      action: { kind: 'withdraw', reason: 'not allowed' },
-    } as never)).toThrow();
+    expect(() =>
+      createAutomatedGovernedPrivateEvaluationTransitionIntent({
+        ...intent.content,
+        action: { kind: 'withdraw', reason: 'not allowed' },
+      } as never)
+    ).toThrow();
     expect(() =>
       createAutomatedGovernedPrivateEvaluationTransitionIntent({
         ...intent.content,
@@ -60,7 +62,7 @@ describe('automated governed private evaluation lifecycle', () => {
           kind: 'automated_private_calculation_agent',
           principalId: 'system:unconfigured-agent',
         },
-      })
+      } as never)
     ).toThrow(/weekly-valuation-coordinator/i);
   });
 });

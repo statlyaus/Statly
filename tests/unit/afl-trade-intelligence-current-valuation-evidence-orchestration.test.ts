@@ -36,6 +36,28 @@ const expected = {
     'Private local non-production evidence orchestration only; human review, public release, production activation, and publication authority are not granted.' as const,
 };
 
+function fixtureSqlClient(
+  queryFixture: (
+    sql: string,
+    parameters?: readonly unknown[]
+  ) => Promise<{ readonly rows: readonly Record<string, unknown>[]; readonly rowCount: number }>
+): AflOutcomeSqlClient {
+  const query: AflOutcomeSqlClient['query'] = async <Row = Record<string, unknown>>(
+    sql: string,
+    parameters?: readonly unknown[]
+  ) => {
+    const result = await queryFixture(sql, parameters);
+    return {
+      rows: result.rows as unknown as readonly Row[],
+      rowCount: result.rowCount,
+    };
+  };
+  return {
+    query,
+    transaction: async (work) => work({ query }),
+  };
+}
+
 describe('current valuation evidence orchestration', () => {
   it('authenticates exact retained unavailable outcomes without publication authority', () => {
     const unavailable = {
@@ -124,13 +146,15 @@ describe('current valuation evidence orchestration', () => {
       terminalResult = expected;
       return expected;
     });
-    const ensureCurrent = vi.fn(async (source: { sourceKey: string }) => ({
-      state: 'ready' as const,
-      sourceKey: source.sourceKey,
-      observedCaptureId: `observed-source-capture:${source.sourceKey}`,
-      effectiveCaptureId: `effective-source-capture:${source.sourceKey}`,
-      normalizationRunId: `provider-normalization-run:${source.sourceKey}`,
-    }));
+    const ensureCurrent = vi.fn(
+      async (source: { sourceKey: string }, _request: typeof request) => ({
+        state: 'ready' as const,
+        sourceKey: source.sourceKey,
+        observedCaptureId: `observed-source-capture:${source.sourceKey}`,
+        effectiveCaptureId: `effective-source-capture:${source.sourceKey}`,
+        normalizationRunId: `provider-normalization-run:${source.sourceKey}`,
+      })
+    );
     const assessCurrent = vi.fn(async () => ({
       state: 'unavailable' as const,
       stage: 'reviewed_authority' as const,
@@ -330,7 +354,7 @@ describe('current valuation evidence orchestration', () => {
     }));
     const resumeNormalization = vi.fn();
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
-      client: { query } as AflOutcomeSqlClient,
+      client: fixtureSqlClient(query),
       gateRepository: {
         resolveAuthorization: vi.fn(async () => ({
           revision: 1,
@@ -414,7 +438,7 @@ describe('current valuation evidence orchestration', () => {
       normalizationRunId: `provider-normalization-run:${'5'.repeat(64)}`,
     }));
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
-      client: { query } as AflOutcomeSqlClient,
+      client: fixtureSqlClient(query),
       gateRepository: {
         resolveAuthorization: vi.fn(async () => ({
           revision: 1,
@@ -579,10 +603,7 @@ describe('current valuation evidence orchestration', () => {
       throw new Error(`Unexpected SQL: ${sql}`);
     });
     const authority = createLocalAflTradeCurrentValuationReconciliationAuthority(
-      {
-        query,
-        transaction: async (callback) => callback({ query } as never),
-      } as unknown as AflOutcomeSqlClient,
+      fixtureSqlClient(query),
       { loadReviewedBundle }
     );
 
@@ -625,7 +646,7 @@ describe('current valuation evidence orchestration', () => {
       throw new Error(`Unexpected SQL: ${sql}`);
     });
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
-      client: { query } as AflOutcomeSqlClient,
+      client: fixtureSqlClient(query),
       gateRepository: {
         resolveAuthorization: vi.fn(async () => ({
           revision: 1,
@@ -688,7 +709,7 @@ describe('current valuation evidence orchestration', () => {
       throw new Error(`Unexpected SQL: ${sql}`);
     });
     const runtime = createPostgresAflTradeCurrentValuationEvidenceSourceRuntime({
-      client: { query } as AflOutcomeSqlClient,
+      client: fixtureSqlClient(query),
       gateRepository: {
         resolveAuthorization: vi.fn(async () => ({
           revision: 1,

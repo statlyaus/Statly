@@ -56,7 +56,10 @@ const encoded = (value: unknown) => new TextEncoder().encode(canonicalizeAflTrad
 const digestBytes = (value: Uint8Array) => createHash('sha256').update(value).digest('hex');
 
 type SourceAuthority = ReturnType<typeof createLocalAflTradeFiveSeasonAflTablesAuthority>;
-type FieldDescriptor = (typeof LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA)[number];
+type FieldDescriptor =
+  | (typeof LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA)[number]
+  | (typeof LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA)[number]
+  | (typeof LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA)[number];
 
 function authorityFor(source: AflTradeCurrentValuationEvidenceSource): SourceAuthority {
   if (source.capabilityId === 'official-afl-player-stats') {

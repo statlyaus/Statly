@@ -412,7 +412,11 @@ describe('AFL Draft & Trade factual release lifecycle', () => {
     const rehashedHistoricalProjection = structuredClone(registry);
     const validationGlobalEvent = rehashedHistoricalProjection.events[1];
     const validationState = validationGlobalEvent.content.affectedRecordStates[0];
-    validationState.recordState.projectionManifest!.content.documentCount += 1;
+    const projectionContent = validationState.recordState.projectionManifest?.content;
+    if (!projectionContent || !('documentCount' in projectionContent)) {
+      throw new Error('Fixture validation state must retain a document-backed projection.');
+    }
+    projectionContent.documentCount += 1;
     validationState.recordStateId = createAflTradeContentAddress(
       'outcome-release-record-state',
       validationState.recordState

@@ -18,7 +18,7 @@ import {
 } from '@/server/aflTradeIntelligence/modeling/hpnPavCalculationService';
 import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/modeling/hpnPavCore';
 import { createAflTradePickPavPolicy } from '@/server/aflTradeIntelligence/modeling/pickOutcomeContracts';
-import { AflTradePickPavObservationError } from '@/server/aflTradeIntelligence/modeling/pickPavObservationRepository';
+import type { AflTradePickPavObservationError } from '@/server/aflTradeIntelligence/modeling/pickPavObservationRepository';
 import { PostgresAflTradePickPavObservationRepository } from '@/server/aflTradeIntelligence/modeling/postgresPickPavObservationRepository';
 import type {
   AflOutcomeSqlClient,
@@ -299,14 +299,14 @@ async function createDatabase(tamperStoredGames = false) {
   }
 
   await db.exec(await readFile(migrationUrl, 'utf8'));
-  await db.query(
-    `INSERT INTO outcome_release_manifest VALUES ($1,'AFLM:test','test_fixture',$2)`,
-    [releaseId, '2014-12-31T23:59:59.000Z']
-  );
-  await db.query(
-    `INSERT INTO outcome_active_release VALUES ('AFLM:test',$1,$2,1)`,
-    [releaseId, '2015-01-01T00:00:00.000Z']
-  );
+  await db.query(`INSERT INTO outcome_release_manifest VALUES ($1,'AFLM:test','test_fixture',$2)`, [
+    releaseId,
+    '2014-12-31T23:59:59.000Z',
+  ]);
+  await db.query(`INSERT INTO outcome_active_release VALUES ('AFLM:test',$1,$2,1)`, [
+    releaseId,
+    '2015-01-01T00:00:00.000Z',
+  ]);
   for (const [ordinal, draftYear] of draftYears.entries()) {
     const number = selectionNumber(draftYear);
     const eventId = `draft:${draftYear}:national`;
@@ -316,22 +316,21 @@ async function createDatabase(tamperStoredGames = false) {
     await db.query(`INSERT INTO outcome_event VALUES ($1,'AFLM',$2,$1)`, [eventId, draftYear]);
     await db.query(
       `INSERT INTO outcome_event_version VALUES ($1,$2,'national_draft',$3,'approved',$4)`,
-      [
-        eventVersionId,
-        eventId,
-        `${draftYear}-11-20`,
-        `${draftYear}-11-21T00:00:00.000Z`,
-      ]
+      [eventVersionId, eventId, `${draftYear}-11-20`, `${draftYear}-11-21T00:00:00.000Z`]
     );
     await db.query(`INSERT INTO outcome_draft_pick VALUES ($1,$2,$3)`, [
       pickId,
       number,
       number <= 20 ? 1 : 2,
     ]);
-    await db.query(
-      `INSERT INTO outcome_draft_selection VALUES ($1,$2,$3,$4,$5,$6,'approved')`,
-      [selectionId, eventVersionId, number, pickId, `player:${draftYear}`, `club:${draftYear}`]
-    );
+    await db.query(`INSERT INTO outcome_draft_selection VALUES ($1,$2,$3,$4,$5,$6,'approved')`, [
+      selectionId,
+      eventVersionId,
+      number,
+      pickId,
+      `player:${draftYear}`,
+      `club:${draftYear}`,
+    ]);
     await db.query(`INSERT INTO outcome_release_draft_selection VALUES ($1,$2,$3)`, [
       releaseId,
       selectionId,
@@ -363,10 +362,7 @@ async function registerAuthority(
   );
   await repository.registerPolicy(reviewedPolicy, { environment: 'test_fixture' });
   for (const draftYear of draftYears) {
-    const selectionId = addressed(
-      'draft-selection',
-      `${draftYear}:${selectionNumber(draftYear)}`
-    );
+    const selectionId = addressed('draft-selection', `${draftYear}:${selectionNumber(draftYear)}`);
     const reviewedAccess = access(draftYear);
     const { decision: _decision, ...evidence } = reviewedAccess;
     await db.query(
@@ -442,9 +438,7 @@ describe('pick-PAV PostgreSQL authority', () => {
 
   it('finalizes exact HPN-v3 games evidence and freezes all durable children', async () => {
     const db = await createDatabase();
-    const repository = new PostgresAflTradePickPavObservationRepository(
-      new PgliteSqlClient(db)
-    );
+    const repository = new PostgresAflTradePickPavObservationRepository(new PgliteSqlClient(db));
     const reviewedPolicy = await registerAuthority(repository, db);
 
     const persisted = await repository.materializeAndPersist(
@@ -475,10 +469,12 @@ describe('pick-PAV PostgreSQL authority', () => {
 
   it('rolls back a self-consistent repository write when durable HPN games evidence differs', async () => {
     const db = await createDatabase(true);
-    const repository = new PostgresAflTradePickPavObservationRepository(
-      new PgliteSqlClient(db)
-    );
+    const repository = new PostgresAflTradePickPavObservationRepository(new PgliteSqlClient(db));
     const reviewedPolicy = await registerAuthority(repository, db);
+
+    const expectedError = {
+      code: 'PERSISTENCE_REJECTED',
+    } satisfies Pick<AflTradePickPavObservationError, 'code'>;
 
     await expect(
       repository.materializeAndPersist(
@@ -491,9 +487,7 @@ describe('pick-PAV PostgreSQL authority', () => {
         },
         { environment: 'test_fixture' }
       )
-    ).rejects.toMatchObject<AflTradePickPavObservationError>({
-      code: 'PERSISTENCE_REJECTED',
-    });
+    ).rejects.toMatchObject(expectedError);
     const remaining = await db.query<{ count: number }>(
       `SELECT count(*)::integer AS count FROM outcome_pick_pav_observation_set`
     );

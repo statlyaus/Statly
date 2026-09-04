@@ -9,6 +9,7 @@ import type {
   AflTradeGateLedgerAppendInput,
   AflTradeGateLedgerAppendResult,
   AflTradeGateLedgerBatchAppendInput,
+  AflTradeGateLedgerDecisionAppendInput,
 } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { recordApprovedAflTradeFitzRoySources } from '@/server/aflTradeIntelligence/governance/recordApprovedFitzRoySources';
 import { APPROVED_AFL_TRADE_FITZROY_PLAYER_STAT_CAPABILITIES } from '@/server/aflTradeIntelligence/source/approvedFitzRoySourcePolicies';
@@ -26,6 +27,30 @@ class FixtureGateRepository implements AflTradeGateDecisionLedgerRepository {
 
   async append(input: AflTradeGateLedgerAppendInput): Promise<AflTradeGateLedgerAppendResult> {
     this.appends.push(input);
+    const existing = this.ledger.decisions.find(
+      (decision) => decision.decisionId === input.decision.decisionId
+    );
+    if (existing !== undefined) {
+      return {
+        revision: this.ledger.decisions.length,
+        ledger: this.ledger,
+        idempotentReplay: true,
+      };
+    }
+    if (input.expectedRevision !== this.ledger.decisions.length) {
+      throw new Error('fixture stale revision');
+    }
+    this.ledger = appendAflTradeGateDecision(this.ledger, input.proposal, input.decision);
+    return {
+      revision: this.ledger.decisions.length,
+      ledger: this.ledger,
+      idempotentReplay: false,
+    };
+  }
+
+  async appendDecision(
+    input: AflTradeGateLedgerDecisionAppendInput
+  ): Promise<AflTradeGateLedgerAppendResult> {
     const existing = this.ledger.decisions.find(
       (decision) => decision.decisionId === input.decision.decisionId
     );

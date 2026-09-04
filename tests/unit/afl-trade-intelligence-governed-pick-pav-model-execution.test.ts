@@ -212,6 +212,9 @@ describe('governed pick-PAV model execution', () => {
       privateInput: { attemptNumber: 2 },
     });
 
+    if (execution.content.schemaVersion !== 'afl-trade-pick-pav-model-execution/v3') {
+      throw new Error('Expected a successor governed pick-PAV execution.');
+    }
     const { qualificationStatus: _qualificationStatus, ...successorWithoutQualificationStatus } =
       execution.content;
     const legacyContent = {

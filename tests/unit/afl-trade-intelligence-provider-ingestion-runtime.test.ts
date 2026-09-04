@@ -22,10 +22,12 @@ import {
 function config(
   environment: AflTradeProviderIngestionConfig['environment']
 ): AflTradeProviderIngestionConfig {
-  const publicKey = generateKeyPairSync('ed25519').publicKey.export({
+  const exportedPublicKey = generateKeyPairSync('ed25519').publicKey.export({
     type: 'spki',
     format: 'pem',
   });
+  const publicKey =
+    typeof exportedPublicKey === 'string' ? exportedPublicKey : exportedPublicKey.toString('utf8');
   return {
     environment,
     databaseUrl: 'postgresql://user:pass@localhost:5432/outcomes',

@@ -23,6 +23,7 @@ import {
   aflTradeFitzRoyInvocationSchema,
   createAflTradeFitzRoyInvocation,
   getAflTradeFitzRoyObservedScopeError,
+  type AflTradeFitzRoyCaptureDiagnostics,
 } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
 import {
   AflTradeFitzRoyCaptureError,
@@ -260,7 +261,9 @@ function governanceFixture() {
   };
 }
 
-function diagnostics(invocation: ReturnType<typeof createAflTradeFitzRoyInvocation>) {
+function diagnostics(
+  invocation: ReturnType<typeof createAflTradeFitzRoyInvocation>
+): AflTradeFitzRoyCaptureDiagnostics {
   return {
     schemaVersion: 'afl-trade-fitzroy-diagnostics/v1',
     capabilityId: invocation.capabilityId,
@@ -807,7 +810,7 @@ describe('authorized fitzRoy capture runtime', () => {
     const invocation = createAflTradeFitzRoyInvocation(
       captureRequest({ parameters: { season: 2026, roundNumber: null } })
     );
-    const officialDiagnostics = {
+    const officialDiagnostics: AflTradeFitzRoyCaptureDiagnostics = {
       ...diagnostics(invocation),
       fields: [
         ...diagnostics(invocation).fields,

@@ -473,7 +473,11 @@ describe('AFL trade-intelligence pick-outcome contracts', () => {
     expect(set.observationSetId).toMatch(/^pick-pav-observation-set:[a-f0-9]{64}$/);
     expect(reversed).toEqual(set);
 
-    const { observationId: _observationId, ...historicalContent } = pick14!;
+    if (!pick14 || pick14.selection.access.state !== 'open') {
+      throw new Error('Fixture pick 14 must have open selection access.');
+    }
+    const { observationId: _observationId, ...historicalContent } = pick14;
+    const historicalAccess = pick14.selection.access;
     const modernCustody = createAflTradePickPavObservation({
       ...historicalContent,
       outcomeObservedAt: '2026-08-10T00:00:00.000Z',
@@ -481,7 +485,7 @@ describe('AFL trade-intelligence pick-outcome contracts', () => {
         ...historicalContent.selection,
         recordedAt: '2026-08-09T00:00:00.000Z',
         access: {
-          ...historicalContent.selection.access,
+          ...historicalAccess,
           recordedAt: '2026-08-09T01:00:00.000Z',
         },
       },

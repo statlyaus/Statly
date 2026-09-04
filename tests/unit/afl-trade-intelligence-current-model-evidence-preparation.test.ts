@@ -7,8 +7,8 @@ import {
   type AflTradeCurrentValuationModelEvidenceResult,
 } from '@/server/aflTradeIntelligence/valuation/currentValuationModelEvidence';
 import {
-  AflTradeCurrentValuationModelEvidencePreparationError,
   createAflTradeCurrentValuationModelEvidencePreparation,
+  type AflTradeCurrentValuationModelEvidencePreparationError,
 } from '@/server/aflTradeIntelligence/valuation/currentValuationModelEvidencePreparation';
 import { composePostgresAflTradeCurrentValuationModelEvidenceDispatch } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationModelEvidencePreparation';
 import { AFL_TRADE_CURRENT_VALUATION_EVIDENCE_ORCHESTRATION_LIMITATION } from '@/server/aflTradeIntelligence/valuation/currentValuationEvidenceOrchestration';
@@ -147,7 +147,6 @@ describe('current valuation model-evidence preparation', () => {
     });
 
     await expect(coordinator.refresh(currentRequest)).resolves.toMatchObject({
-      state: 'qualified',
       ...preparedEvidence,
       expectedModelRevision: 0,
       modelRevision: 1,
@@ -203,17 +202,22 @@ describe('current valuation model-evidence preparation', () => {
       },
     });
 
+    const expectedError = {
+      name: 'AflTradeCurrentValuationModelEvidencePreparationError',
+      state: 'transient_failure',
+      operationId: id('private-valuation-model-operation', '1'),
+      attemptNumber: 2,
+    } satisfies Pick<
+      AflTradeCurrentValuationModelEvidencePreparationError,
+      'name' | 'state' | 'operationId' | 'attemptNumber'
+    >;
+
     await expect(
       preparation.prepareAndQualify({
         ...currentRequest,
         operationId: id('current-valuation-model-evidence-operation', '2'),
       })
-    ).rejects.toMatchObject<AflTradeCurrentValuationModelEvidencePreparationError>({
-      name: 'AflTradeCurrentValuationModelEvidencePreparationError',
-      state: 'transient_failure',
-      operationId: id('private-valuation-model-operation', '1'),
-      attemptNumber: 2,
-    });
+    ).rejects.toMatchObject(expectedError);
     expect(evidenceLoads).toBe(0);
   });
 
@@ -242,53 +246,53 @@ describe('current valuation model-evidence preparation', () => {
 
   it('rejects HPN factual work outside the exact current custody before component execution', async () => {
     let componentExecutions = 0;
-    const query: AflOutcomeSqlClient['query'] = async (sql) => {
+    const queryRows = async (sql: string): Promise<readonly Record<string, unknown>[]> => {
       if (sql.includes('FROM outcome_current_valuation_model_evidence_operation')) {
-        return { rows: [] };
+        return [];
       }
       if (sql.includes('FROM outcome_current_governed_valuation_model_pair')) {
-        return { rows: [] };
+        return [];
       }
       if (sql.includes('FROM outcome_current_private_factual_authority head')) {
-        return {
-          rows: [
-            {
-              candidate_id: factualAuthority.candidateId,
-              revision: factualAuthority.revision,
-              valuation_scope_key: factualAuthority.valuationScopeKey,
-              evidence_scope_key: factualAuthority.evidenceScopeKey,
-              evidence_bundle_id: factualAuthority.evidenceBundleId,
-              review_decision_id: factualAuthority.reviewDecisionId,
-              normalized_reconciled_custody_sha256:
-                factualAuthority.normalizedReconciledCustodySha256,
-            },
-          ],
-        };
+        return [
+          {
+            candidate_id: factualAuthority.candidateId,
+            revision: factualAuthority.revision,
+            valuation_scope_key: factualAuthority.valuationScopeKey,
+            evidence_scope_key: factualAuthority.evidenceScopeKey,
+            evidence_bundle_id: factualAuthority.evidenceBundleId,
+            review_decision_id: factualAuthority.reviewDecisionId,
+            normalized_reconciled_custody_sha256:
+              factualAuthority.normalizedReconciledCustodySha256,
+          },
+        ];
       }
       if (sql.includes('FROM outcome_current_valuation_factual_refresh_operation')) {
-        return {
-          rows: [
-            {
-              scope_key: currentRequest.scopeKey,
-              candidate_id: factualAuthority.candidateId,
-              private_factual_revision: factualAuthority.revision,
-            },
-          ],
-        };
+        return [
+          {
+            scope_key: currentRequest.scopeKey,
+            candidate_id: factualAuthority.candidateId,
+            private_factual_revision: factualAuthority.revision,
+          },
+        ];
       }
       if (sql.includes('load_outcome_current_valuation_evidence')) {
-        return {
-          rows: [{ result_json: orchestrationResult() }],
-        };
+        return [{ result_json: orchestrationResult() }];
       }
       if (sql.includes('load_outcome_private_valuation_dispatch_request_for_claim')) {
-        return { rows: [{ request_json: dispatch.request }] };
+        return [{ request_json: dispatch.request }];
       }
       if (sql.includes('FROM outcome_private_valuation_factual_output factual')) {
-        return { rows: [{ exact: false }] };
+        return [{ exact: false }];
       }
-      if (sql.startsWith('SET LOCAL ROLE')) return { rows: [] };
+      if (sql.startsWith('SET LOCAL ROLE')) return [];
       throw new Error(`Unexpected SQL in current model composition test: ${sql}`);
+    };
+    const query: AflOutcomeSqlClient['query'] = async <Row = Record<string, unknown>>(
+      sql: string
+    ) => {
+      const rows = await queryRows(sql);
+      return { rows: rows as readonly Row[], rowCount: rows.length };
     };
     const client: AflOutcomeSqlClient = {
       query,

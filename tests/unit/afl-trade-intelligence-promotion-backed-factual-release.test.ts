@@ -113,7 +113,10 @@ function create(overrides: Record<string, unknown> = {}) {
     createdAt: '2026-08-10T00:00:05.000Z',
     effectiveThrough: '2026-08-10T00:00:03.000Z',
     sourceCaptures: captures,
-    promotionSources,
+    promotionSources: promotionSources.map((source) => ({
+      ...source,
+      captureIds: [...source.captureIds],
+    })),
     canonicalMembers,
     ...overrides,
   });

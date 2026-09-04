@@ -6,6 +6,7 @@ import {
 import {
   AFL_TRADE_ACQUISITION_SPELL_METRIC_AUTHORITY_BOUNDARY,
   AFL_TRADE_ACQUISITION_SPELL_METRIC_POLICY_SCHEMA_VERSION,
+  aflTradeCurrentReconciledMemberSchema,
   createAflTradeAcquisitionSpellMetricPolicy,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellMetricContracts';
 import { calculateAflTradeAcquisitionSpellMetrics } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellMetricService';
@@ -53,11 +54,13 @@ export async function stageAcceptedPrivateValuationCaptureFixture(
   if (claim === null) {
     throw new TypeError('The factual-preparation fixture did not claim its due request.');
   }
-  const binding = await new PostgresAflTradePrivateValuationCaptureBindingRepository(client).accept({
-    request: claim.request,
-    claim: { claimId: claim.claimId, leaseToken: claim.leaseToken },
-    normalizationRunId: ingestion.staging.normalization.normalizationRunId,
-  });
+  const binding = await new PostgresAflTradePrivateValuationCaptureBindingRepository(client).accept(
+    {
+      request: claim.request,
+      claim: { claimId: claim.claimId, leaseToken: claim.leaseToken },
+      normalizationRunId: ingestion.staging.normalization.normalizationRunId,
+    }
+  );
   return { ingestion, requestId, claim, binding };
 }
 
@@ -141,7 +144,13 @@ export async function seedPrivateValuationAcquisitionSpellFixture(
       `INSERT INTO outcome_import_run
         (import_run_id,capture_id,import_kind,parser_version,started_at,completed_at,status,manifest_json)
        VALUES ($1,$2,'private_valuation_fixture',$3,$4,$4,'approved',$5::jsonb)`,
-      [importRunId, captureId, policyVersion, recordedAt, canonicalizeAflTradeJson({ captureId, fixtureKey })]
+      [
+        importRunId,
+        captureId,
+        policyVersion,
+        recordedAt,
+        canonicalizeAflTradeJson({ captureId, fixtureKey }),
+      ]
     );
     await transaction.query(
       `INSERT INTO outcome_import_row
@@ -239,7 +248,10 @@ export async function seedPrivateValuationAcquisitionSpellFixture(
       ['games', 'goals'].includes(metric)
     ).map(({ metric, metricDefinitionId }) => [
       metric,
-      { id: metricDefinitionId, sha256: metricDefinitionId.slice(metricDefinitionId.indexOf(':') + 1) },
+      {
+        id: metricDefinitionId,
+        sha256: metricDefinitionId.slice(metricDefinitionId.indexOf(':') + 1),
+      },
     ])
   ) as Record<'games' | 'goals', { id: string; sha256: string }>;
   const approval = immutableReference('acquisition-spell-metric-policy-approval', {
@@ -270,9 +282,7 @@ export async function seedPrivateValuationAcquisitionSpellFixture(
     createdAt: recordedAt,
   });
   await client.transaction(async (transaction) => {
-    await transaction.query(
-      'SET LOCAL ROLE afl_trade_nonproduction_spell_metric_policy_reviewer'
-    );
+    await transaction.query('SET LOCAL ROLE afl_trade_nonproduction_spell_metric_policy_reviewer');
     await transaction.query(
       `INSERT INTO outcome_review_decision
         (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
@@ -336,12 +346,8 @@ export async function seedPrivateValuationAcquisitionSpellFixture(
     clubId: retainedSpell.club_id,
     startEventVersionId: retainedSpell.start_event_version_id,
     startAssetVersionId: retainedSpell.start_asset_version_id,
-    startDate:
-      calendarDate(retainedSpell.start_date),
-    endDate:
-      retainedSpell.end_date === null
-        ? null
-        : calendarDate(retainedSpell.end_date),
+    startDate: calendarDate(retainedSpell.start_date),
+    endDate: retainedSpell.end_date === null ? null : calendarDate(retainedSpell.end_date),
     rule,
     status: 'approved' as const,
     recordedAt:
@@ -352,23 +358,23 @@ export async function seedPrivateValuationAcquisitionSpellFixture(
   const batch = calculateAflTradeAcquisitionSpellMetrics({
     policy,
     spell,
-    currentMembers: reconciled.rows.map((row) => ({
-      factualRunId: factualRun.factualRunId,
-      factualRunSha256: factualRun.factualRunId.slice(
-        'factual-reconciliation-run:'.length
-      ),
-      environment: 'non_production' as const,
-      finalization: factualRun.finalization,
-      finalizedAt:
-        row.finalized_at instanceof Date ? row.finalized_at.toISOString() : row.finalized_at,
-      subjectKey: row.subject_key,
-      headRevision: row.revision,
-      result: {
-        reconciledFactId: row.reconciled_fact_id,
-        factSha256: row.fact_sha256,
-        content: row.fact_json,
-      },
-    })),
+    currentMembers: reconciled.rows.map((row) =>
+      aflTradeCurrentReconciledMemberSchema.parse({
+        factualRunId: factualRun.factualRunId,
+        factualRunSha256: factualRun.factualRunId.slice('factual-reconciliation-run:'.length),
+        environment: 'non_production',
+        finalization: factualRun.finalization,
+        finalizedAt:
+          row.finalized_at instanceof Date ? row.finalized_at.toISOString() : row.finalized_at,
+        subjectKey: row.subject_key,
+        headRevision: row.revision,
+        result: {
+          reconciledFactId: row.reconciled_fact_id,
+          factSha256: row.fact_sha256,
+          content: row.fact_json,
+        },
+      })
+    ),
     currentHeadRevisions: [],
     recordedAt: '2026-08-12T00:04:45.000Z',
   });

@@ -392,7 +392,7 @@ async function qualificationFixture(
     policyArtifact: await retain(policy, evaluatedAt),
     components: {
       player: {
-        role: runs.player.content.role,
+        role: 'player_contribution_and_availability',
         runId: runs.player.runId,
         runArtifact: runs.playerArtifact,
         protocolId: runs.player.content.protocolId,
@@ -402,7 +402,7 @@ async function qualificationFixture(
         validationEvidenceArtifact: await retain(playerEvidence, evaluatedAt),
       },
       pick: {
-        role: runs.pick.content.role,
+        role: 'draft_pick_and_future_pick_distribution',
         runId: runs.pick.runId,
         runArtifact: runs.pickArtifact,
         protocolId: runs.pick.content.protocolId,
@@ -680,6 +680,9 @@ describe('governed model qualification PostgreSQL registry', () => {
     });
     const forgedComponentArtifact = await retain(forgedComponent);
     await insertComponentDirectly(forgedComponent, forgedComponentArtifact.artifactId);
+    if (runs.playerNativeExecution.content.outcome.status !== 'succeeded') {
+      throw new Error('Expected a succeeded player execution fixture.');
+    }
     await expect(
       insertPlayerNativeEvidenceDirectly({
         runId: forgedComponent.runId,
@@ -1209,6 +1212,9 @@ describe('governed model qualification PostgreSQL registry', () => {
         },
       },
     });
+    if (advanced.status !== 'advanced') {
+      throw new Error('Expected the passing qualification to advance.');
+    }
     await expect(
       insertQualificationDirectly(
         fabricatedPassingQualification,

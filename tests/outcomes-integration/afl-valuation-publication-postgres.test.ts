@@ -11,9 +11,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const { publicRuntime } = vi.hoisted(() => ({
   publicRuntime: {
-    archiveReadRepository: null as Record<string, unknown> | null,
-    valueReadService: null as Record<string, unknown> | null,
-    methodologyReadService: null as Record<string, unknown> | null,
+    archiveReadRepository: null as ReturnType<typeof createPostgresDraftTradeReadRepository> | null,
+    valueReadService: null as ReturnType<typeof createAflTradeValueReadService> | null,
+    methodologyReadService: null as ReturnType<typeof createAflTradeMethodologyReadService> | null,
   },
 }));
 
@@ -287,12 +287,12 @@ describe('local AFL valuation-publication rehearsal', () => {
       const directDetail = await valueReadService.detail({
         scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
         tradeId: factual.tradeId,
-        requestedViews: AFL_TRADE_VALUATION_VIEWS,
+        requestedViews: [...AFL_TRADE_VALUATION_VIEWS],
       });
       const syntheticDetail = await valueReadService.detail({
         scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
         tradeId: syntheticTradeId,
-        requestedViews: AFL_TRADE_VALUATION_VIEWS,
+        requestedViews: [...AFL_TRADE_VALUATION_VIEWS],
       });
       const listResponse = await getValuations(
         new NextRequest(

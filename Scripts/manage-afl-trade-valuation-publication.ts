@@ -309,7 +309,16 @@ async function connectPostgres(
           const mutation = await service.authorize(command);
           return summarize(command.action, command.publicationId, mutation);
         }
-        const mutation = await service.disposition(command);
+        if (!('evidenceId' in command) || !('reason' in command)) {
+          throw new TypeError('Disposition commands require evidence and a reason.');
+        }
+        const mutation = await service.disposition({
+          action: command.action,
+          publicationId: command.publicationId,
+          actor: command.actor,
+          evidenceId: command.evidenceId,
+          reason: command.reason,
+        });
         return summarize(command.action, command.publicationId, mutation);
       },
       async close() {

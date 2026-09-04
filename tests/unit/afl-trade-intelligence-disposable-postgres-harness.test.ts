@@ -31,6 +31,7 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
       ...harnessPaths,
       execute,
       environment: {
+        NODE_ENV: 'test',
         PATH: '/test/bin',
         UNRELATED_RUNTIME_VALUE: ['not', 'forwarded'].join('-'),
         AFL_OUTCOMES_DATABASE_URL: 'postgresql://shared.example.test/outcomes',

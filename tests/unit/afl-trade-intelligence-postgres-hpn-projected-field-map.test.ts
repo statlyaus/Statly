@@ -85,7 +85,10 @@ class PgliteSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
   }
 }
 
-function approvedProjection(input: { readonly decision: 'approved' | 'rejected'; readonly rationale: string }) {
+function approvedProjection(input: {
+  readonly decision: 'approved' | 'rejected';
+  readonly rationale: string;
+}) {
   const providerDecodeMap = createLocalAflTradeFiveSeasonAflTablesAuthority(2025).fieldMap;
   const candidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
     provider: 'afl_tables',
@@ -109,15 +112,18 @@ function approvedProjection(input: { readonly decision: 'approved' | 'rejected';
     state: 'permitted_private_calculation' as const,
     rightsArtifactId: `source-rights:${'1'.repeat(64)}`,
     evidenceBundleId: 'private-reviewed-evidence:fixture',
-    fields: [...new Set(
-      candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
-    )].sort().map((sourceField) => ({
-      sourceField,
-      state: 'permitted_private_calculation' as const,
-      reasons: [],
-    })),
+    fields: [
+      ...new Set(candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
+    ]
+      .sort()
+      .map((sourceField) => ({
+        sourceField,
+        state: 'permitted_private_calculation' as const,
+        reasons: [],
+      })),
     reasons: [],
     evidenceRefs: [],
+    effectiveRestriction: null,
     evaluatedAt: candidateAt,
     publicationEligible: false as const,
     publicationProhibited: true as const,
@@ -161,6 +167,18 @@ function approvedProjection(input: { readonly decision: 'approved' | 'rejected';
           })
         : null,
   };
+}
+
+type ProjectionFixture = ReturnType<typeof approvedProjection>;
+
+function requireApprovedProjection(
+  projection: ProjectionFixture
+): asserts projection is ProjectionFixture & {
+  projectedFieldMap: NonNullable<ProjectionFixture['projectedFieldMap']>;
+} {
+  if (projection.projectedFieldMap === null) {
+    throw new Error('Expected an approved projected field-map fixture.');
+  }
 }
 
 async function seedReviewedEvaluation(
@@ -223,6 +241,7 @@ describe('candidate-first HPN projected field-map PostgreSQL authority', () => {
       decision: 'approved',
       rationale: 'Approve the exact private projection.',
     });
+    requireApprovedProjection(projection);
     await seedReviewedEvaluation(database, projection);
 
     await expect(authority.registerApprovedProjection(projection)).resolves.toEqual(
@@ -304,6 +323,7 @@ describe('candidate-first HPN projected field-map PostgreSQL authority', () => {
       decision: 'approved',
       rationale: 'Initial exact private approval.',
     });
+    requireApprovedProjection(projection);
     await authority.registerApprovedProjection(projection);
     const rejection = approvedProjection({
       decision: 'rejected',
@@ -322,9 +342,12 @@ describe('candidate-first HPN projected field-map PostgreSQL authority', () => {
     const authority = new PostgresAflTradeHpnProjectedFieldMapAuthority(
       new PgliteSqlClient(database)
     );
-    await authority.registerApprovedProjection(
-      approvedProjection({ decision: 'approved', rationale: 'Immutable approval.' })
-    );
+    const projection = approvedProjection({
+      decision: 'approved',
+      rationale: 'Immutable approval.',
+    });
+    requireApprovedProjection(projection);
+    await authority.registerApprovedProjection(projection);
 
     await expect(
       database.exec(`UPDATE outcome_hpn_projected_field_map SET provider='other'`)
