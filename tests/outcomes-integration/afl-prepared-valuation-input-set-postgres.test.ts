@@ -7,7 +7,7 @@ import {
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
-import { createLocalAflTradeFiveSeasonAflTablesAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
+import { createLocalAflTradeAflTablesResultsAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 import { PostgresAflTradePreparedValuationInputSetStore } from '@/server/aflTradeIntelligence/valuation/postgresPreparedValuationInputSetStore';
 import { PostgresAflTradeValuationSourceQualification } from '@/server/aflTradeIntelligence/valuation/postgresValuationSourceQualification';
@@ -61,7 +61,7 @@ const canonicalMembers = [
 ];
 const sourceRights = [
   createLocalAflTradeOfficialAfl2026Authority().capture.sourceRights,
-  createLocalAflTradeFiveSeasonAflTablesAuthority(2025).capture.sourceRights,
+  createLocalAflTradeAflTablesResultsAuthority(2025).capture.sourceRights,
 ];
 const releaseManifest = {
   releaseId: `outcome-release:${digest('1')}`,

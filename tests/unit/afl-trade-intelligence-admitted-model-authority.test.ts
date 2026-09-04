@@ -28,6 +28,10 @@ import {
   type AflTradeAdmittedModelRunEvidence,
   type AflTradeModelRunAuthorizationStore,
 } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
+import {
+  aflTradeGateDecisionProposalSchema,
+  aflTradeGateDecisionRecordSchema,
+} from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createAflTradePlayerObservationSetV2 } from '@/server/aflTradeIntelligence/modeling/playerContributionContracts';
 import {
   AFL_TRADE_ACQUISITION_SPELL_METRIC_AUTHORITY_BOUNDARY,
@@ -86,7 +90,7 @@ function spellMetricFixture(input: {
   numericValue: string;
   recordedAt: string;
 }): AflTradeAcquisitionSpellMetric {
-  const marker = String.fromCharCode(97 + input.index);
+  const marker = (input.index % 16).toString(16);
   const definition = exactReference('metric-definition', marker);
   const sourceFact = exactReference('source-fact', marker);
   const result = createAflTradeReconciledFactualMetric({
@@ -243,7 +247,18 @@ function valuationDatasetFixture() {
         recordedAt,
       })
     );
-    spellMetrics.push(...rowMetrics);
+    const featureMetric = spellMetricFixture({
+      index: index + 25,
+      season: season - 1,
+      playerId,
+      clubId,
+      spellId: `feature-spell:${index + 1}`,
+      spellVersionId: `acquisition-spell-version:${String(index + 5).repeat(64)}`,
+      metricCode: 'goals',
+      numericValue: String(index + 1),
+      recordedAt: prediction,
+    });
+    spellMetrics.push(featureMetric, ...rowMetrics);
     const targetInputs = rowMetrics
       .map((metric) => ({
         kind: 'acquisition_spell_metric' as const,
@@ -291,17 +306,17 @@ function valuationDatasetFixture() {
       featureInputs: [
         {
           kind: 'acquisition_spell_metric',
-          memberId: `acquisition-spell-metric-version:${'0'.repeat(63)}${index + 1}`,
-          recordSha256: `${'0'.repeat(63)}${index + 1}`,
+          memberId: featureMetric.spellMetricVersionId,
+          recordSha256: featureMetric.factSha256,
           headRevision: 1,
           effectiveFrom: `${season - 1}-01-01`,
-          effectiveThrough: `${season - 1}-12-31`,
-          recordedAt: prediction,
+          effectiveThrough: featureMetric.content.effectiveThrough,
+          recordedAt: featureMetric.content.recordedAt,
           state: 'complete',
           playerId,
           clubId,
-          spellVersionId,
-          metricCode: 'games',
+          spellVersionId: featureMetric.content.spell.spellVersionId,
+          metricCode: 'goals',
         },
       ],
       targetInputs,
@@ -957,6 +972,29 @@ describe('admitted AFL trade model authority contracts', () => {
     expect(protocol.content.sourceOutcomeVector).toEqual(outcomeMetricCodes);
   });
 
+  it('requires retrospective protocols to use the policy-neutral feature artifact field', () => {
+    const retrospective = {
+      ...protocolContent(),
+      featurePolicy: {
+        ...protocolContent().featurePolicy,
+        knowledgeJoin: 'retrospective_as_captured_at_dataset_creation' as const,
+      },
+    };
+    expect(() =>
+      createAflTradePlayerContributionModelProtocolV2({
+        ...retrospective,
+        pointInTimeFeatureValuesArtifact: artifact('1'),
+      })
+    ).toThrow(/may not use a point-in-time-labelled contract/i);
+
+    expect(() =>
+      createAflTradePlayerContributionModelProtocolV2({
+        ...retrospective,
+        featureValuesArtifact: artifact('1'),
+      })
+    ).not.toThrow();
+  });
+
   it('rejects protocol chronology and duplicate or unordered run-start rights evidence', () => {
     expect(() =>
       createAflTradePlayerContributionModelProtocolV2({
@@ -1302,6 +1340,48 @@ describe('admitted AFL trade model authority contracts', () => {
       gate2Ledger: { ...fixture.evidence.gate2Ledger, decisions: [] },
     }).service.authorize(request);
     expect(gate2Withdrawn).toMatchObject({ status: 'blocked' });
+
+    const originalGate2Proposal = fixture.evidence.gate2Ledger.proposals[0]!;
+    const originalGate2Decision = fixture.evidence.gate2Ledger.decisions[0]!;
+    const changedSeasonScope = {
+      ...originalGate2Decision.content.scope,
+      dimensions: [
+        ...originalGate2Decision.content.scope.dimensions,
+        { name: 'valid_from_season', values: ['2027'] },
+        { name: 'valid_through_season', values: ['2027'] },
+      ],
+    };
+    const successorProposalContent = {
+      ...originalGate2Proposal.content,
+      version: 2,
+      scope: changedSeasonScope,
+      proposedAt: '2026-08-10T00:02:10.000Z',
+    };
+    const successorProposal = aflTradeGateDecisionProposalSchema.parse({
+      proposalId: createAflTradeContentAddress('gate-proposal', successorProposalContent),
+      content: successorProposalContent,
+    });
+    const successorDecisionContent = {
+      ...originalGate2Decision.content,
+      proposalId: successorProposal.proposalId,
+      version: 2,
+      scope: changedSeasonScope,
+      decidedAt: '2026-08-10T00:02:20.000Z',
+      effectiveAt: '2026-08-10T00:02:20.000Z',
+      supersedesDecisionId: originalGate2Decision.decisionId,
+    };
+    const successorDecision = aflTradeGateDecisionRecordSchema.parse({
+      decisionId: createAflTradeContentAddress('gate-decision', successorDecisionContent),
+      content: successorDecisionContent,
+    });
+    const changedSeasonSuccessor = await authorityService({
+      ...fixture.evidence,
+      gate2Ledger: {
+        proposals: [...fixture.evidence.gate2Ledger.proposals, successorProposal],
+        decisions: [...fixture.evidence.gate2Ledger.decisions, successorDecision],
+      },
+    }).service.authorize(request);
+    expect(changedSeasonSuccessor).toMatchObject({ status: 'blocked' });
 
     const substitutedArtifact = await authorityService({
       ...fixture.evidence,

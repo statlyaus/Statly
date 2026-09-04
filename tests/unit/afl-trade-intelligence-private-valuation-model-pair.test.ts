@@ -201,7 +201,10 @@ describe('private valuation dispatch-bound model pair', () => {
           return {
             status: 'completed',
             authorization: {} as never,
-            run: { runId: id('model-run', '3') } as never,
+            run: {
+              runId: id('model-run', '3'),
+              content: { outcome: { status: 'succeeded' } },
+            } as never,
             blockers: [],
           };
         },
@@ -240,6 +243,99 @@ describe('private valuation dispatch-bound model pair', () => {
         },
       },
     ]);
+  });
+
+  it('returns an exact retained player component without preparing or retraining', async () => {
+    const operation = createAflTradePrivateValuationModelOperation({
+      scopeKey: exactInput().scopeKey,
+      ...exactInput().substantive,
+    });
+    const calls: string[] = [];
+    const retainedRunId = id('model-run', '9');
+    const executor = createAflTradeDispatchBoundAdmittedPlayerExecutor({
+      loadRetainedComponent: async () => {
+        calls.push('load_retained');
+        return { runId: retainedRunId };
+      },
+      prepareRun: async () => {
+        calls.push('prepare');
+        throw new Error('retained replay must not prepare');
+      },
+      authorityPreparation: {
+        async prepare() {
+          calls.push('persist_authority');
+        },
+      },
+      admittedRunner: {
+        async run() {
+          calls.push('fit');
+          throw new Error('retained replay must not fit');
+        },
+      },
+      registerComponent: async () => {
+        calls.push('register');
+        throw new Error('retained replay must not register');
+      },
+    });
+
+    await expect(
+      executor.execute({ exactInput: exactInput(), operation, attemptNumber: 2, claim })
+    ).resolves.toEqual({ state: 'completed', runId: retainedRunId });
+    expect(calls).toEqual(['load_retained']);
+  });
+
+  it('retains but does not register a player run that fails validation', async () => {
+    const operation = createAflTradePrivateValuationModelOperation({
+      scopeKey: exactInput().scopeKey,
+      ...exactInput().substantive,
+    });
+    let registrations = 0;
+    const executor = createAflTradeDispatchBoundAdmittedPlayerExecutor({
+      authorityPreparation: { async prepare() {} },
+      prepareRun: async () =>
+        ({
+          intent: {
+            intentId: id('model-run-intent', '1'),
+            content: {
+              environment: 'non_production',
+              datasetId: exactInput().substantive.player.datasetId,
+              datasetAdmissionId: exactInput().substantive.player.datasetAdmissionId,
+              modelProtocolId: exactInput().substantive.player.protocolId,
+              observationSetId: id('player-observation-set', '2'),
+              startedAt: '2026-08-24T01:00:00.000Z',
+            },
+          },
+          protocol: { protocolId: exactInput().substantive.player.protocolId },
+          observationSet: {},
+          runStartEvaluationReceipts: [],
+          validThrough: '2026-08-24T01:00:20.000Z',
+        }) as never,
+      admittedRunner: {
+        async run() {
+          return {
+            status: 'completed',
+            authorization: {} as never,
+            run: {
+              runId: id('model-run', '3'),
+              content: { outcome: { status: 'failed' } },
+            } as never,
+            blockers: [],
+          };
+        },
+      },
+      registerComponent: async () => {
+        registrations += 1;
+        return { runId: id('model-run', '4') };
+      },
+    });
+
+    await expect(
+      executor.execute({ exactInput: exactInput(), operation, attemptNumber: 1, claim })
+    ).resolves.toEqual({
+      state: 'deterministic_failure',
+      reason: 'Player candidate run failed before it could be accepted.',
+    });
+    expect(registrations).toBe(0);
   });
 
   it('runs and retains the existing governed pick execution with exact dispatch ancestry', async () => {

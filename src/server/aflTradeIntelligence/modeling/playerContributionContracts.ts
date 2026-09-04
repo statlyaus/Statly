@@ -8,6 +8,7 @@ import {
 import {
   type AflTradeValuationDatasetCandidate,
   aflTradeValuationDatasetCandidateSchema,
+  factualInputSchema,
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import {
   type AflTradeAcquisitionSpellMetric,
@@ -118,10 +119,17 @@ export const aflTradePlayerSeasonObservationSchema = z
   .object({
     observationId: publicIdSchema,
     playerId: publicIdSchema,
+    acquisitionSpellId: publicIdSchema.optional(),
     season: z.number().int().min(1897).max(2100),
     role: publicIdSchema,
     era: publicIdSchema,
     partition: z.enum(AFL_TRADE_MODEL_PARTITIONS),
+    featureKnowledgePolicy: z
+      .enum([
+        'point_in_time_as_known_at_prediction_cutoff',
+        'retrospective_as_captured_at_dataset_creation',
+      ])
+      .optional(),
     predictionCutoffAt: isoDateTimeSchema,
     roleKnownAt: isoDateTimeSchema,
     outcomeObservedAt: isoDateTimeSchema,
@@ -137,7 +145,10 @@ export const aflTradePlayerSeasonObservationSchema = z
   .superRefine((observation, context) => {
     const cutoff = Date.parse(observation.predictionCutoffAt);
     const observedAt = Date.parse(observation.outcomeObservedAt);
-    if (Date.parse(observation.roleKnownAt) > cutoff) {
+    if (
+      observation.featureKnowledgePolicy !== 'retrospective_as_captured_at_dataset_creation' &&
+      Date.parse(observation.roleKnownAt) > cutoff
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['roleKnownAt'],
@@ -192,10 +203,31 @@ export const aflTradePlayerObservationSetContentSchema = z
     schemaVersion: z.literal('afl-trade-player-observation-set/v1'),
     publicIdentityBoundary: z.literal('source_native_no_fantasy_ownership'),
     valueUnitId: publicIdSchema,
+    featureKnowledgePolicy: z
+      .enum([
+        'point_in_time_as_known_at_prediction_cutoff',
+        'retrospective_as_captured_at_dataset_creation',
+      ])
+      .optional(),
     observations: z.array(aflTradePlayerSeasonObservationSchema).min(4).max(100_000),
   })
   .strict()
   .superRefine((set, context) => {
+    const featureKnowledgePolicy =
+      set.featureKnowledgePolicy ?? 'point_in_time_as_known_at_prediction_cutoff';
+    if (
+      set.observations.some(
+        (observation) =>
+          (observation.featureKnowledgePolicy ?? 'point_in_time_as_known_at_prediction_cutoff') !==
+          featureKnowledgePolicy
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['observations'],
+        message: 'Every observation must use the set feature-knowledge policy.',
+      });
+    }
     const observationIds = set.observations.map((observation) => observation.observationId);
     if (new Set(observationIds).size !== observationIds.length) {
       context.addIssue({
@@ -204,14 +236,15 @@ export const aflTradePlayerObservationSetContentSchema = z
         message: 'Observation identifiers must be unique.',
       });
     }
-    const playerSeasons = set.observations.map(
-      (observation) => `${observation.playerId}:${observation.season}`
+    const playerSeasonSubjects = set.observations.map(
+      (observation) =>
+        `${observation.playerId}:${observation.season}:${observation.acquisitionSpellId ?? ''}`
     );
-    if (new Set(playerSeasons).size !== playerSeasons.length) {
+    if (new Set(playerSeasonSubjects).size !== playerSeasonSubjects.length) {
       context.addIssue({
         code: 'custom',
         path: ['observations'],
-        message: 'A player may have only one observation per season.',
+        message: 'A player or acquisition spell may have only one observation per season.',
       });
     }
     for (const partition of AFL_TRADE_MODEL_PARTITIONS) {
@@ -224,6 +257,7 @@ export const aflTradePlayerObservationSetContentSchema = z
       }
     }
     for (let index = 1; index < AFL_TRADE_MODEL_PARTITIONS.length; index += 1) {
+      if (featureKnowledgePolicy === 'retrospective_as_captured_at_dataset_creation') break;
       const previousPartition = AFL_TRADE_MODEL_PARTITIONS[index - 1];
       const currentPartition = AFL_TRADE_MODEL_PARTITIONS[index];
       const previousOutcomes = set.observations
@@ -276,6 +310,7 @@ const aflTradeAdmittedPlayerObservationContentSchema = z
     featureKnownThrough: isoDateTimeSchema,
     targetFrom: isoDateTimeSchema,
     targetThrough: isoDateTimeSchema,
+    featureInputs: z.array(factualInputSchema).min(1).max(1000),
     outcome: aflTradeSourceNativePlayerOutcomeSchema,
   })
   .strict();
@@ -291,6 +326,30 @@ export const aflTradeAdmittedPlayerObservationSchema = z
     addAflTradeContentAddressIssue('player-observation', observationId, content, context, [
       'observationId',
     ]);
+    const featureIds = observation.featureInputs.map(({ memberId }) => memberId);
+    if (
+      new Set(featureIds).size !== featureIds.length ||
+      featureIds.some((memberId, index) => index > 0 && featureIds[index - 1]! >= memberId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['featureInputs'],
+        message: 'Admitted feature inputs must be unique and canonically ordered.',
+      });
+    }
+    if (
+      observation.featureInputs.some(
+        ({ recordedAt, effectiveThrough }) =>
+          Date.parse(recordedAt) > Date.parse(observation.featureKnownThrough) ||
+          Date.parse(effectiveThrough) > Date.parse(observation.predictionCutoffAt)
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['featureInputs'],
+        message: 'Admitted feature inputs must be known and valid at the prediction cutoff.',
+      });
+    }
   });
 
 export const aflTradePlayerObservationSetV2ContentSchema = z
@@ -302,6 +361,10 @@ export const aflTradePlayerObservationSetV2ContentSchema = z
     ),
     publicationEligible: z.literal(false),
     observationGrain: z.literal('player_acquisition_spell_prediction'),
+    featureKnowledgePolicy: z.enum([
+      'point_in_time_as_known_at_prediction_cutoff',
+      'retrospective_as_captured_at_dataset_creation',
+    ]),
     outcomeVector: z.tuple([
       z.literal('brownlow_votes'),
       z.literal('coaches_votes'),
@@ -337,6 +400,7 @@ export const aflTradePlayerObservationSetV2ContentSchema = z
       }
     }
     for (let index = 1; index < AFL_TRADE_MODEL_PARTITIONS.length; index += 1) {
+      if (set.featureKnowledgePolicy === 'retrospective_as_captured_at_dataset_creation') break;
       const previous = AFL_TRADE_MODEL_PARTITIONS[index - 1];
       const current = AFL_TRADE_MODEL_PARTITIONS[index];
       const previousOutcomes = set.observations
@@ -556,8 +620,8 @@ export function createAflTradePlayerObservationSetV2(input: {
   const requiredMetricIds = [
     ...new Set(
       candidate.content.rows.flatMap(({ content }) =>
-        content.targetInputs.flatMap((target) =>
-          target.kind === 'acquisition_spell_metric' ? [target.memberId] : []
+        [...content.featureInputs, ...content.targetInputs].flatMap((input) =>
+          input.kind === 'acquisition_spell_metric' ? [input.memberId] : []
         )
       )
     ),
@@ -567,12 +631,18 @@ export function createAflTradePlayerObservationSetV2(input: {
     requiredMetricIds.length !== suppliedMetricIds.length ||
     requiredMetricIds.some((metricId, index) => metricId !== suppliedMetricIds[index])
   ) {
-    throw new RangeError('Observation materialization requires the exact target metric fact set.');
+    throw new RangeError(
+      'Observation materialization requires the exact feature and target metric fact set.'
+    );
   }
   const observations = candidate.content.rows.map((row) => {
+    const featureMemberIds = new Set(row.content.featureInputs.map(({ memberId }) => memberId));
     const targets = row.content.targetInputs.flatMap((target) =>
       target.kind === 'acquisition_spell_metric' ? [target] : []
     );
+    if (targets.some(({ memberId }) => featureMemberIds.has(memberId))) {
+      throw new RangeError('A target factual member cannot be reused as an admitted feature.');
+    }
     const metricMembers = new Map(targets.map((target) => [target.memberId, target] as const));
     const metrics = targets
       .map((target) => {
@@ -639,6 +709,9 @@ export function createAflTradePlayerObservationSetV2(input: {
       featureKnownThrough: row.content.featureKnownThrough,
       targetFrom: row.content.targetFrom,
       targetThrough: row.content.targetThrough,
+      featureInputs: [...row.content.featureInputs].sort((left, right) =>
+        left.memberId.localeCompare(right.memberId)
+      ),
       outcome,
     });
     return aflTradeAdmittedPlayerObservationSchema.parse({
@@ -653,6 +726,7 @@ export function createAflTradePlayerObservationSetV2(input: {
       'deterministic_admitted_dataset_projection_no_fit_grade_publication_or_fantasy_ownership',
     publicationEligible: false,
     observationGrain: 'player_acquisition_spell_prediction',
+    featureKnowledgePolicy: candidate.content.specification.content.featurePolicy.knowledgeJoin,
     outcomeVector: ['brownlow_votes', 'coaches_votes', 'games', 'goals'],
     datasetId: candidate.datasetId,
     datasetRowSetSha256: candidate.content.rowSetSha256,

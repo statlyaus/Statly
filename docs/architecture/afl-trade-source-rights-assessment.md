@@ -38,6 +38,76 @@ Association, and every other upstream require their own source decision. Approva
 function's observed technical limitations: a season-returning function remains season-grained,
 absent data remains unknown, and suppressed upstream errors remain incomplete evidence.
 
+## Internal AFLCA coaches-vote decision
+
+On 2026-09-02 the Statly product owner approved the AFL Coaches Association lane without waiting for
+separate written provider permission. This is a recorded product risk assumption, not a claim that
+the AFLCA has granted Statly a licence or that legal uncertainty has been resolved.
+
+The decision permits `fetch_coaches_votes` through pinned fitzRoy `1.7.0` for bounded AFLM capture,
+retained private evidence, internal quality evaluation, identity and match reconciliation, derived
+features, model training, validation, calibration, and backtesting in the local non-production
+valuation environment. It does not permit public fact display, public derived output, raw-field
+redistribution, fantasy use, or production activation. Raw evidence remains private, must identify
+the AFL Coaches Association as the upstream provider, and must be deleted on withdrawal according to
+its recorded custody rule.
+
+Every season and returned field still requires exact Gate 0A and field-map records. The capture must
+retain warnings and prove requested-round coverage against the match universe. Because pinned
+fitzRoy silently removes failed per-round scrapes, an absent round or player is missing evidence,
+never zero coaches votes. Player-name equality alone cannot resolve an identity, and the AFLCA lane
+cannot be added to an existing reviewed bundle by relabelling an earlier capture.
+
+A retained local rehearsal on 2026-09-02 exposed an additional pinned-function blocker. Unpatched fitzRoy
+`1.7.0` expands a season request across both the home-and-away award and Gary Ayres finals award from
+round 19, but returns only `Season` and numeric `Round`; it drops the award-scope discriminator. The
+same implementation excludes non-finals rounds above 23, which omits the 24-round home-and-away
+seasons from 2023 onward. The five retained 2021–2025 captures therefore remain review evidence only.
+They are not eligible for player-contribution evaluation, training, factual promotion, or a #574
+positive run. Integer-looking rows after round 18 cannot be assumed to repair the missing lineage,
+and decimal text observed in the contaminated pages remains quarantined rather than coerced.
+The local staging boundary supersedes each schema-map approval with an immutable rejected decision
+after normalization, and the capture Gate request omits model training. The broader product-owner
+source policy remains available for a future corrected capability, but a downstream admission must
+authenticate current map approval and therefore cannot promote these retained normalizations.
+
+The remedy is now implemented as the separate `aflca-coaches-votes-scoped` capability. Its
+content-addressed patch adds an explicit home-and-away award scope and caller-supplied round set to
+the verified fitzRoy `1.7.0` source, while preserving fitzRoy as the retrieval boundary. The current
+2021-2025 captures reconcile all 1,017 requested home-and-away matches against the independently
+reviewed AFL Tables match universe and retain 6,655 vote rows with exactly 30 votes per match. Only
+the reconciled `Coaches.Votes` field is authorized for private local non-production model training;
+the identifying fields remain reconciliation evidence and all public use remains blocked. The older
+ambiguous captures and their rejected maps stay retained as negative evidence and cannot be promoted.
+The two 2025 players absent from the current AFL Tables match rows resolve only through explicit,
+content-addressed human reviews binding historical native IDs `12576` and `12712`; the reconciler no
+longer manufactures current player-club identities from name equality.
+
+### Issue 574 admitted evidence boundary
+
+The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five
+scoped AFLCA home-and-away captures, and the bounded Draftguru transaction evidence that establishes
+the five acquisition spells. The AFL Tables review covered 48,769 rows across 2021–2025: 15,886
+positive-goal rows entered the reviewed positive slice and 32,883 measured-zero rows were preserved
+as explicit zero evidence rather than inferred absence. The scoped AFLCA captures retained 6,655
+positive vote rows over 1,017 home-and-away matches, conserving exactly 30,510 votes. Identity
+reconciliation resolved 6,430 rows and retained 225 unresolved rows as exclusions; unresolved names
+were never converted to zero or silently joined.
+
+Gate 0A evaluates the exact fields consumed for each operation. A capture may retain additional
+identifying or reconciliation fields without pretending that model training consumes them, so the
+consumed field set may be a strict authenticated subset of the retained capture field set. This does
+not broaden rights: every consumed field must still be present in the capture and explicitly approved
+for its requested use. The model-run boundary deduplicates run-start receipts by source-rights
+proposal identity only after authenticating every capture-level admission evaluation for that
+proposal.
+
+The admitted dataset and its factual-output v2 records remain private and non-production. The
+underlying factual release may be validated as an approved private parent, but the player execution
+path rejects an active/public release and grants no raw redistribution, public factual display,
+public derived output, fantasy use, production activation, or publication authority. The successful
+diagnostic therefore changes none of the AFLCA risk assumptions above.
+
 ### Verified technical smoke baseline
 
 On 2026-08-08, an isolated fitzRoy `1.7.0` smoke run requested the complete 2024 AFLM season from all

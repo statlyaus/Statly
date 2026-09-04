@@ -303,6 +303,45 @@ describe('fitzRoy provider observation staging', () => {
     });
   });
 
+  it('parses only explicitly reviewed integer-text metrics', () => {
+    const integerTextMap = fieldMap({
+      capabilityId: 'aflca-coaches-votes',
+      mapId: 'aflca-coaches-votes-fixture-map',
+      metrics: [
+        {
+          metricCode: 'coaches_votes',
+          sourceField: 'goals',
+          definitionVersion: 'coaches-votes/v1',
+          unit: 'votes',
+          zeroSemantics: 'measured_zero',
+          sourceRepresentation: 'integer_text',
+        },
+      ],
+    });
+    const result = normalizeAflTradeFitzRoyDecodedTable({
+      table: decodedTable(
+        [
+          sourceRow({ playerId: 'p1', playerName: 'One', goals: text('7') }),
+          sourceRow({ playerId: 'p2', playerName: 'Two', goals: text('7.5') }),
+        ],
+        'aflca-coaches-votes'
+      ),
+      fieldMap: integerTextMap,
+    });
+
+    expect(result.rows[0]?.metricCandidates[0]).toMatchObject({
+      metricCode: 'coaches_votes',
+      availability: 'exact',
+      numericValue: '7',
+    });
+    expect(result.rows[1]?.metricCandidates[0]).toMatchObject({
+      metricCode: 'coaches_votes',
+      availability: 'quarantined',
+      numericValue: null,
+      missingReason: 'invalid_text',
+    });
+  });
+
   it('rejects an AFL Tables map that claims returned zeros are measured', () => {
     const table = decodedTable(
       [sourceRow({ playerId: 'p1', playerName: 'One' })],
@@ -614,18 +653,35 @@ describe('PostgreSQL provider observation staging', () => {
       completedAt: '2026-08-07T01:00:01.000Z',
     };
 
-    const first = await repository.persist(request);
-    const replay = await repository.persist({
-      ...request,
-      startedAt: '2026-08-07T02:00:00.000Z',
-      completedAt: '2026-08-07T02:00:01.000Z',
-    });
+    const transactionCallbacks: AflOutcomeSqlTransaction[] = [];
+    const callbackSqlCounts: number[] = [];
+    const afterPersist = async ({
+      transaction: callbackTransaction,
+    }: {
+      transaction: AflOutcomeSqlTransaction;
+    }) => {
+      transactionCallbacks.push(callbackTransaction);
+      callbackSqlCounts.push(executedSql.length);
+    };
+    const first = await repository.persist(request, { afterPersist });
+    const replay = await repository.persist(
+      {
+        ...request,
+        startedAt: '2026-08-07T02:00:00.000Z',
+        completedAt: '2026-08-07T02:00:01.000Z',
+      },
+      { afterPersist }
+    );
     expect(first).toMatchObject({ status: 'staged', idempotentReplay: false, rowCount: 1 });
     expect(replay).toEqual({ ...first, idempotentReplay: true });
     expect(executedSql.join('\n')).not.toMatch(
       /INSERT INTO (?:outcome_player\b|outcome_club\b|outcome_match\b|outcome_release_|outcome_projection_)/i
     );
     expect(executedSql.join('\n')).toContain('SET finalized_at');
+    expect(transactionCallbacks).toEqual([transaction, transaction]);
+    expect(callbackSqlCounts[0]).toBeGreaterThan(
+      executedSql.findIndex((sql) => sql.includes('SET finalized_at'))
+    );
     manifestSpy.mockRestore();
   });
 

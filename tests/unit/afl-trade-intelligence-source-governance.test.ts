@@ -12,6 +12,7 @@ import {
   aflTradeSourceRightsProposalContentSchema,
   aflTradeSourceRightsProposalSchema,
   evaluateAflTradeGate0A,
+  evaluateAflTradeGate0AAgainstDecision,
   type AflTradeGate0ARequest,
   type AflTradeSourceRightsProposal,
 } from '@/server/aflTradeIntelligence/source/sourceContracts';
@@ -333,6 +334,28 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
       status: 'mechanically_eligible',
       decisionId: fixture.decision.decisionId,
       rightsArtifactId: fixture.sourceRights.rightsArtifactId,
+      blockers: [],
+    });
+  });
+
+  it('authenticates a current successor decision without requiring its ancestry in a snapshot', () => {
+    const sourceRights = rights();
+    const firstProposal = gateProposal(sourceRights);
+    const firstDecision = gateDecision(firstProposal);
+    const successorProposal = gateProposal(sourceRights, 2);
+    const successorDecision = gateDecision(successorProposal, {
+      supersedesDecisionId: firstDecision.decisionId,
+    });
+
+    const result = evaluateAflTradeGate0AAgainstDecision(
+      successorDecision,
+      sourceRights,
+      request(sourceRights)
+    );
+
+    expect(result).toMatchObject({
+      status: 'mechanically_eligible',
+      decisionId: successorDecision.decisionId,
       blockers: [],
     });
   });

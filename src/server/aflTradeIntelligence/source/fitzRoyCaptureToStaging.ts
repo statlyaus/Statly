@@ -4,6 +4,7 @@ import {
   aflTradeSourceSnapshotManifestSchema,
   type AflTradeSourceSnapshotManifest,
 } from '../artifacts/sourceSnapshotManifest';
+import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   AflTradeFitzRoyDecodeError,
   decodeAflTradeFitzRoyCapture,
@@ -59,6 +60,10 @@ export interface AflTradeFitzRoyStagingDependencies {
   maximumCellBytes: number;
   maximumOutputBytes: number;
   egressExecutionVerifier?: AflTradeFitzRoyEgressExecutionVerifier;
+  afterObservationPersist?: (input: {
+    readonly transaction: AflOutcomeSqlTransaction;
+    readonly normalization: PersistedAflTradeProviderObservation;
+  }) => Promise<void>;
 }
 
 export interface AflTradeFitzRoyStagingCommand {
@@ -187,15 +192,18 @@ export async function stageAflTradeFitzRoySourceSnapshot(
       );
     }
     phase = 'persistence';
-    const normalization = await dependencies.providerObservationRepository.persist({
-      captureId: capture.captureId,
-      fieldMapId: command.fieldMapId,
-      fieldMap: command.fieldMap,
-      decodedSha256: decoded.decodedSha256,
-      batch,
-      startedAt,
-      completedAt,
-    });
+    const normalization = await dependencies.providerObservationRepository.persist(
+      {
+        captureId: capture.captureId,
+        fieldMapId: command.fieldMapId,
+        fieldMap: command.fieldMap,
+        decodedSha256: decoded.decodedSha256,
+        batch,
+        startedAt,
+        completedAt,
+      },
+      { afterPersist: dependencies.afterObservationPersist }
+    );
     return { capture, normalization };
   } catch (cause) {
     const completedAt = dependencies.clock.now();

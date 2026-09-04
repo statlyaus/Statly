@@ -38,6 +38,13 @@ export interface PersistedAflTradeProviderObservation {
   idempotentReplay: boolean;
 }
 
+export interface PersistAflTradeProviderObservationOptions {
+  readonly afterPersist?: (input: {
+    readonly transaction: AflOutcomeSqlTransaction;
+    readonly normalization: PersistedAflTradeProviderObservation;
+  }) => Promise<void>;
+}
+
 export interface RecordAflTradeProviderNormalizationFailureInput {
   captureId: string;
   fieldMapId: string | null;
@@ -503,7 +510,8 @@ export class PostgresAflTradeProviderObservationRepository {
   }
 
   async persist(
-    input: PersistAflTradeProviderObservationInput
+    input: PersistAflTradeProviderObservationInput,
+    options: PersistAflTradeProviderObservationOptions = {}
   ): Promise<PersistedAflTradeProviderObservation> {
     const startedAt = isoInstant(input.startedAt, 'startedAt');
     const completedAt = isoInstant(input.completedAt, 'completedAt');
@@ -606,7 +614,7 @@ export class PostgresAflTradeProviderObservationRepository {
             'Provider normalization idempotency key already binds different evidence.'
           );
         }
-        return {
+        const normalization: PersistedAflTradeProviderObservation = {
           normalizationRunId,
           captureId: input.captureId,
           rowCount: input.batch.rows.length,
@@ -614,6 +622,8 @@ export class PostgresAflTradeProviderObservationRepository {
           status,
           idempotentReplay: true,
         };
+        await options.afterPersist?.({ transaction, normalization });
+        return normalization;
       }
 
       await transaction.query(
@@ -664,7 +674,7 @@ export class PostgresAflTradeProviderObservationRepository {
           'Provider normalization could not complete its exact finalization transition.'
         );
       }
-      return {
+      const normalization: PersistedAflTradeProviderObservation = {
         normalizationRunId,
         captureId: input.captureId,
         rowCount: input.batch.rows.length,
@@ -672,6 +682,8 @@ export class PostgresAflTradeProviderObservationRepository {
         status,
         idempotentReplay: false,
       };
+      await options.afterPersist?.({ transaction, normalization });
+      return normalization;
     });
   }
 }

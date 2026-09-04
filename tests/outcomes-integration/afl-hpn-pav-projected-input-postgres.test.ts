@@ -21,6 +21,7 @@ import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIn
 import {
   listAflTradeHpnCandidateSourceFields,
 } from '@/server/aflTradeIntelligence/modeling/hpnFieldMapCandidate';
+import { assessAflTradeHpnPrivateCalculationSourceUse } from '@/server/aflTradeIntelligence/modeling/hpnPrivateCalculationSourceUse';
 import {
   createAflTradeHpnFieldMapReviewDecision,
   createAflTradeHpnProjectedFieldMap,
@@ -41,6 +42,7 @@ import { createAflTradePrivateValuationSourceAdmission } from '@/server/aflTrade
 import { PostgresAflTradePrivateValuationHpnPreparation } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationHpnPreparation';
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import {
+  createAflTradePrivateReviewedEvidenceEvaluationAdmission,
   createAflTradePrivateReviewedEvidenceBundle,
   createAflTradePrivateReviewedEvidenceEvaluationDecision,
 } from '@/server/aflTradeIntelligence/valuation/privateReviewedEvidenceEvaluation';
@@ -273,42 +275,21 @@ function projection(
     ...new Set(candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
   ].sort();
   const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(candidate, projectionAt);
-  const sourceUseContent = {
-    schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1' as const,
-    environment: 'non_production' as const,
-    purpose: 'private_confirmed_realized_hpn_pav' as const,
+  const sourceUseAssessment = assessAflTradeHpnPrivateCalculationSourceUse({
+    rights: lane.authority.capture.sourceRights,
+    rightsArtifact: createAflTradeCanonicalJsonArtifactRef(
+      lane.authority.capture.sourceRights,
+      lane.authority.capture.sourceRights.content.proposedAt
+    ),
+    evidenceBundle: reviewed.evidenceBundle,
+    admission: createAflTradePrivateReviewedEvidenceEvaluationAdmission(
+      reviewed.evaluationDecision
+    ),
     competition,
     seasonYear,
-    valuationScopeKey,
-    evaluationDecisionId: reviewed.evaluationDecision.decisionId,
-    state: 'permitted_private_calculation' as const,
-    rightsArtifactId: lane.authority.capture.sourceRights.rightsArtifactId,
-    evidenceBundleId: reviewed.evidenceBundle.evidenceBundleId,
-    fields: exactOrderedFields.map((sourceField) => ({
-      sourceField,
-      state: 'permitted_private_calculation' as const,
-      reasons: [],
-    })),
-    reasons: [],
-    evidenceRefs: [
-      createAflTradeCanonicalJsonArtifactRef(
-        lane.authority.capture.sourceRights,
-        projectionAt
-      ),
-      reviewed.evidenceBundleArtifact,
-    ],
-    effectiveRestriction: null,
+    sourceFields: exactOrderedFields,
     evaluatedAt: projectionAt,
-    publicationEligible: false as const,
-    publicationProhibited: true as const,
-  };
-  const sourceUseAssessment = {
-    assessmentId: createAflTradeContentAddress(
-      'hpn-private-source-use-assessment',
-      sourceUseContent
-    ),
-    content: sourceUseContent,
-  };
+  });
   const sourceUseAssessmentArtifact = createAflTradeCanonicalJsonArtifactRef(
     sourceUseAssessment,
     projectionAt

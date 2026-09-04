@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const provenance = vi.hoisted(() => ({
+  hasCurrent: vi.fn(async () => true),
+}));
+
 vi.mock('@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContracts', () => ({
   aflTradeConsumedFieldSetSchema: { parse: (value: unknown) => value },
   aflTradeDatasetOperationAuthorizationSchema: { parse: (value: unknown) => value },
@@ -36,6 +40,13 @@ vi.mock('@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContra
 vi.mock('@/server/aflTradeIntelligence/source/gate0aReceipt', () => ({
   aflTradeGate0AReceiptSchema: { parse: (value: unknown) => value },
 }));
+
+vi.mock(
+  '@/server/aflTradeIntelligence/modeling/postgresValuationDatasetFactualLineageRepository',
+  () => ({
+    hasCurrentAflTradeValuationDatasetDomainProvenance: provenance.hasCurrent,
+  })
+);
 
 import { PostgresAflTradeValuationDatasetRepository } from '@/server/aflTradeIntelligence/modeling/postgresValuationDatasetRepository';
 
@@ -258,5 +269,18 @@ describe('PostgresAflTradeValuationDatasetRepository', () => {
     expect(statements).toContain('INSERT INTO outcome_valuation_dataset_operation_authority');
     expect(statements).toContain('INSERT INTO outcome_valuation_dataset_admission_source');
     expect(sql.statements.at(-1)).toContain("SET status='finalized'");
+  });
+
+  it('rejects admission when canonical-promotion provenance is no longer current', async () => {
+    provenance.hasCurrent.mockResolvedValueOnce(false);
+    const repository = new PostgresAflTradeValuationDatasetRepository(sqlClient().client);
+
+    await expect(
+      repository.persistAdmission({
+        dataset: candidate() as never,
+        receipt: admission() as never,
+        evidence: persistenceEvidence() as never,
+      })
+    ).rejects.toThrow('Dataset admission requires current canonical-promotion provenance.');
   });
 });

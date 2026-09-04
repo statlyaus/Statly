@@ -44,19 +44,39 @@ describe('private reviewed evidence currentness migration', () => {
 
   it('rotates the historical review identity without rewriting prior migrations', () => {
     const migration = read(
-      'prisma/afl-trade-outcomes/migrations/0081_corrected_local_review_lineage/migration.sql'
+      'prisma/afl-trade-outcomes/migrations/0092_current_five_season_review_generation/migration.sql'
     );
 
     expect(LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256).toBe(
-      '7ef741add1ae94133c597581f8a2175118058bedd2ffe8a107213630e1b0fd10'
+      '41a90da56a0e682888d50f0e95e729af838f9103708eba50bffae82f33c4523b'
     );
     expect(migration).toContain(LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256);
-    expect(migration).toContain('aef663452e66a433048605a71fb4178ed1a5e1d9610c6d3ed75bfb796308b5cb');
+    expect(migration).toContain('7ef741add1ae94133c597581f8a2175118058bedd2ffe8a107213630e1b0fd10');
+    expect(migration).not.toContain(
+      '7a76a916d814f908002db3ee1d59ac907f47f430f92f19bf487aed951f7ef0c8'
+    );
+    expect(migration).not.toContain(
+      'df3d26863b282bd4b3a121da592a4029481d20cda060aa631917a2f324e33a12'
+    );
     expect(migration).toContain('pg_get_functiondef');
     expect(migration).toContain('outcome_private_reviewed_evidence_is_current()');
     expect(migration).toContain('validate_outcome_private_reviewed_evidence_bundle_insert()');
     expect(migration).toContain('outcome_private_reviewed_evidence_bundle_is_current_v1(text)');
     expect(migration).toContain('Admitted private review-set decisions are append-only');
+  });
+
+  it('makes reviewed scoped AFLCA identity mappings append-only and validates their consumers', () => {
+    const migration = read(
+      'prisma/afl-trade-outcomes/migrations/0093_scoped_aflca_identity_mapping_authority/migration.sql'
+    );
+
+    expect(migration).toContain('local_scoped_aflca_identity_mapping');
+    expect(migration).toContain('identityMappingReviewDecisionId');
+    expect(migration).toContain('identityMappingEvidenceId');
+    expect(migration).toContain('FOR KEY SHARE');
+    expect(migration).toContain('BEFORE INSERT ON "outcome_review_decision"');
+    expect(migration).toContain('BEFORE UPDATE OR DELETE ON "outcome_review_decision"');
+    expect(migration).toContain('Scoped AFLCA identity mapping reviews are append-only');
   });
 
   it('admits one complete normalized seven-capture bundle without a transitional successor', () => {

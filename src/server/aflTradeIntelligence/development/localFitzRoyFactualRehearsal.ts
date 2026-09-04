@@ -1449,6 +1449,10 @@ function createPrivateCandidate(input: {
   const consumedSourceFields = input.gate0aReceipt.content.request.fieldUses
     .map(({ sourceField }) => sourceField)
     .sort();
+  const consumedFieldSet = consumedSourceFields.map((sourceField) => ({
+    sourceField,
+    uses: ['derived_feature', 'model_training'] as const,
+  }));
   const finalization = createAflTradeFactualReconciliationFinalization({
     factualRunId: input.factual.run.factualRunId,
     runSha256: input.factual.run.runSha256,
@@ -1463,7 +1467,7 @@ function createPrivateCandidate(input: {
         captureId: input.captureId,
         sourceSnapshotId: input.sourceSnapshotId,
         gate0aDecisionId: input.gateDecisionId,
-        consumedFieldSetSha256: sha256AflTradeCanonicalJson(consumedSourceFields),
+        consumedFieldSetSha256: sha256AflTradeCanonicalJson(consumedFieldSet),
       },
     ],
     eventVersions: [

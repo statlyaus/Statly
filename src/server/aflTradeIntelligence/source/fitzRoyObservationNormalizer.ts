@@ -387,12 +387,25 @@ function makeMetricCandidate(input: {
       missingReason: 'provider_value_missing',
     };
   }
-  if (source.kind !== 'integer' && source.kind !== 'finite_number') {
+  const sourceRepresentation = input.binding.sourceRepresentation ?? 'numeric';
+  const integerText =
+    sourceRepresentation === 'integer_text' &&
+    source.kind === 'text' &&
+    /^(?:0|[1-9]\d*)$/.test(source.value)
+      ? source.value
+      : null;
+  if (
+    integerText === null &&
+    !(
+      sourceRepresentation === 'numeric' &&
+      (source.kind === 'integer' || source.kind === 'finite_number')
+    )
+  ) {
     input.issues.push({
       rowNumber: input.rowNumber,
       code: 'invalid_metric',
       field: input.binding.sourceField,
-      message: `${input.binding.metricCode} must be a finite non-negative integer.`,
+      message: `${input.binding.metricCode} must match its reviewed non-negative integer representation.`,
     });
     return {
       ...input.binding,
@@ -401,7 +414,7 @@ function makeMetricCandidate(input: {
       missingReason: `invalid_${source.kind}`,
     };
   }
-  const numeric = Number(source.value);
+  const numeric = Number(integerText ?? ('value' in source ? source.value : Number.NaN));
   if (!Number.isSafeInteger(numeric) || numeric < 0) {
     input.issues.push({
       rowNumber: input.rowNumber,

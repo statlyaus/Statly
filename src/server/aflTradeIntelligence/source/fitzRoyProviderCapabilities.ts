@@ -324,10 +324,41 @@ export const AFL_TRADE_FITZROY_CAPABILITIES = [
     requiredCaptureChecks: [
       'Build a match key from season, round/finals, and the two clubs before player resolution.',
       'Verify every requested round and distinguish a true no-vote result from a scrape failure.',
+      'Reject a full-season capture unless home-and-away and finals award rows retain an explicit award-scope discriminator.',
     ],
     knownCautions: [
       'The function scrapes the AFL Coaches Association rather than AFL, AFL Tables, or FootyWire.',
       'The pinned implementation warns that no data exists before 2006 and silently removes per-round scrape errors.',
+      'The pinned 1.7.0 implementation combines home-and-away and finals award requests from round 19, drops the finals discriminator from returned rows, and excludes non-finals rounds above 23.',
+    ],
+  },
+  {
+    capabilityId: 'aflca-coaches-votes-scoped',
+    fitzRoyVersion: AFL_TRADE_FITZROY_PINNED_VERSION,
+    provider: 'afl_coaches_association',
+    directFunction: 'fetch_coaches_votes',
+    competitions: ['AFLM'],
+    metrics: ['coaches_votes'],
+    retrievalGrain: 'match',
+    roundBehaviour: 'supported',
+    captureOrigin: 'live_upstream',
+    documentedMinimumSeason: 2006,
+    identifiers: {
+      player: 'name_and_context_only',
+      match: 'name_and_context_only',
+      club: 'name_and_context_only',
+    },
+    intendedRole: 'candidate_primary',
+    requiredCaptureChecks: [
+      'Use the exact Statly-patched fitzRoy 1.7.0 runtime image identified by the admitted capture receipt.',
+      'Request one explicit award scope and retain Award.Scope in every returned row.',
+      'Verify that the returned rounds exactly equal the requested round set, including home-and-away rounds above 23.',
+      'Reconcile every returned match with the retained factual match universe before resolving players.',
+    ],
+    knownCautions: [
+      'This capability exists only in the content-addressed Statly patch over fitzRoy 1.7.0; it is not part of the upstream release.',
+      'coaches_votes/v1 is defined from home-and-away rows only, so finals must be captured under a separately approved metric definition.',
+      'AFLCA exposes player, club, and match context without durable provider identifiers; name-only player admission remains forbidden.',
     ],
   },
   {

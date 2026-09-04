@@ -23,7 +23,12 @@ export interface DraftguruCrawlRange {
 
 export interface DraftguruParseIssue {
   code:
-    'invalid_page' | 'unsupported_asset' | 'unsupported_row' | 'unpaired_asset' | 'ambiguous_asset';
+    | 'invalid_page'
+    | 'unsupported_asset'
+    | 'unsupported_row'
+    | 'unpaired_asset'
+    | 'ambiguous_asset'
+    | 'player_projection_incomplete';
   sourceKey: string;
   detail: string;
 }
@@ -395,6 +400,69 @@ export function parseDraftguruTradeDetail(
     });
 
   return { evidence, issues };
+}
+
+export function parseDraftguruPlayerTradeDetail(
+  html: string,
+  input: {
+    capture: SourceCapture;
+    draftYear: number;
+    effectiveAt: string;
+    playerNativeId?: string;
+  }
+): DraftguruTradeParseResult {
+  const playerNativeId = input.playerNativeId?.trim();
+  if (
+    playerNativeId !== undefined &&
+    (playerNativeId.length === 0 || playerNativeId.length > 240)
+  ) {
+    throw new TypeError('Draftguru player projection requires one bounded native player ID.');
+  }
+  const parsed = parseDraftguruTradeDetail(html, input);
+  const playerTransfers = parsed.evidence.filter(({ content }) => {
+    const claim = content.claim;
+    return (
+      claim.kind === 'directed_transfer' &&
+      claim.asset.kind === 'player' &&
+      (playerNativeId === undefined || claim.asset.player.nativeId === playerNativeId)
+    );
+  });
+  const transactions = parsed.evidence.filter(
+    ({ content }) => content.claim.kind === 'transaction'
+  );
+  const parties = parsed.evidence.filter(
+    ({ content }) => content.claim.kind === 'transaction_party'
+  );
+  if (
+    parsed.issues.length !== 0 ||
+    transactions.length !== 1 ||
+    parties.length < 2 ||
+    playerTransfers.length !== 1
+  ) {
+    return {
+      evidence: [],
+      issues: [
+        ...parsed.issues,
+        {
+          code: 'player_projection_incomplete',
+          sourceKey: eventIdFromCapture(input.capture),
+          detail:
+            'Player projection requires one transaction, at least two parties, one exact native player transfer, and no parser issue.',
+        },
+      ],
+    };
+  }
+
+  return {
+    evidence: [...transactions, ...parties, ...playerTransfers].map((row, index) =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...row.content,
+        capture: input.capture,
+        sourceRow: { ...row.content.sourceRow, ordinal: index + 1 },
+      })
+    ),
+    issues: [],
+  };
 }
 
 const draftTypeByLabel: Readonly<

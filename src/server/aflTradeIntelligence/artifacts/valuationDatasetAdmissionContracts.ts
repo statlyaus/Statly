@@ -79,7 +79,10 @@ const valuationDatasetSpecificationContentSchema = z
     rowGrain: z.literal('player_acquisition_spell_prediction'),
     featurePolicy: z
       .object({
-        knowledgeJoin: z.literal('point_in_time_as_known_at_prediction_cutoff'),
+        knowledgeJoin: z.enum([
+          'point_in_time_as_known_at_prediction_cutoff',
+          'retrospective_as_captured_at_dataset_creation',
+        ]),
         correctionAvailability: z.literal('only_after_known_from'),
         unknownAndZero: z.literal('distinct'),
         targetDerivedFeatures: z.literal('prohibited'),
@@ -179,7 +182,7 @@ const factualInputBaseShape = {
   recordedAt: utcInstantSchema,
 };
 
-const factualInputSchema = z
+export const factualInputSchema = z
   .discriminatedUnion('kind', [
     z
       .object({
@@ -428,13 +431,6 @@ const valuationDatasetRowContentSchema = z
         message: 'Row cohorts must be unique and sorted.',
       });
     }
-    if (Date.parse(row.featureKnownThrough) > Date.parse(row.predictionOriginAt)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['featureKnownThrough'],
-        message: 'Feature evidence cannot be known after the prediction origin.',
-      });
-    }
     if (
       Date.parse(row.targetFrom) <= Date.parse(row.predictionOriginAt) ||
       Date.parse(row.targetThrough) < Date.parse(row.targetFrom)
@@ -644,8 +640,14 @@ const valuationDatasetCandidateContentSchema = z
     }
     const splitByLeakageGroup = new Map<string, string>();
     for (const { content: row } of candidate.rows) {
+      const retrospective =
+        specification.featurePolicy.knowledgeJoin ===
+        'retrospective_as_captured_at_dataset_creation';
       if (
         row.competition !== candidate.competition ||
+        (!retrospective &&
+          Date.parse(row.featureKnownThrough) > Date.parse(row.predictionOriginAt)) ||
+        (retrospective && Date.parse(row.featureKnownThrough) > Date.parse(candidate.createdAt)) ||
         Date.parse(row.targetThrough) >
           Date.parse(candidate.factualParent.factualEffectiveThrough) ||
         [...row.featureInputs, ...row.targetInputs].some(
@@ -703,6 +705,12 @@ const valuationDatasetCandidateContentSchema = z
     }
     const orderedRoles = splitRoleSchema.options;
     for (let index = 1; index < orderedRoles.length; index += 1) {
+      if (
+        specification.featurePolicy.knowledgeJoin ===
+        'retrospective_as_captured_at_dataset_creation'
+      ) {
+        break;
+      }
       const priorRole = orderedRoles[index - 1];
       const nextRole = orderedRoles[index];
       const priorTargetKnowledge = candidate.rows

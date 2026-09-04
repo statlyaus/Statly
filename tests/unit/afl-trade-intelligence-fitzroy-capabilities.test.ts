@@ -70,8 +70,8 @@ describe('fitzRoy provider capability contract', () => {
         competition: 'AFLM',
         metric: 'coaches_votes',
         season: 2006,
-      }).map(({ directFunction }) => directFunction)
-    ).toEqual(['fetch_coaches_votes']);
+      }).map(({ capabilityId }) => capabilityId)
+    ).toEqual(['aflca-coaches-votes', 'aflca-coaches-votes-scoped']);
   });
 
   it('keeps AFLW support provider-specific instead of inheriting wrapper claims', () => {
@@ -113,11 +113,25 @@ describe('fitzRoy provider capability contract', () => {
     const coaches = AFL_TRADE_FITZROY_CAPABILITIES.find(
       ({ capabilityId }) => capabilityId === 'aflca-coaches-votes'
     );
+    const scopedCoaches = AFL_TRADE_FITZROY_CAPABILITIES.find(
+      ({ capabilityId }) => capabilityId === 'aflca-coaches-votes-scoped'
+    );
 
     expect(aflTables?.knownCautions.join(' ')).toContain(
       'returned zero is not automatically a measured zero'
     );
     expect(coaches?.knownCautions.join(' ')).toContain('silently removes per-round scrape errors');
+    expect(coaches?.knownCautions.join(' ')).toContain(
+      'drops the finals discriminator from returned rows'
+    );
+    expect(coaches?.requiredCaptureChecks.join(' ')).toContain(
+      'explicit award-scope discriminator'
+    );
+    expect(scopedCoaches?.knownCautions.join(' ')).toContain('content-addressed Statly patch');
+    expect(scopedCoaches?.requiredCaptureChecks.join(' ')).toContain(
+      'returned rounds exactly equal the requested round set'
+    );
+    expect(scopedCoaches?.requiredCaptureChecks.join(' ')).toContain('retain Award.Scope');
     expect(
       AFL_TRADE_FITZROY_CAPABILITIES.every(
         ({ knownCautions, requiredCaptureChecks }) =>

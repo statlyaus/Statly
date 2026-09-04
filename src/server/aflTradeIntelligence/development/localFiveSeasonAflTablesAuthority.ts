@@ -165,18 +165,20 @@ function artifact(label: string): string {
   })}`;
 }
 
-function sourceFieldUse(sourceField: string) {
+function sourceFieldUse(sourceField: string, modelTraining = false) {
   return {
     sourceField,
     normalizedField: sourceField,
     uses: {
       archive_fact: 'allowed' as const,
-      model_training: 'blocked' as const,
+      model_training: modelTraining ? ('allowed' as const) : ('blocked' as const),
       derived_feature: 'allowed' as const,
       public_display: 'blocked' as const,
     },
     attributionRequired: true,
-    notes: 'Exact AFL Tables field approved for the disposable local factual-release rehearsal.',
+    notes: modelTraining
+      ? 'Exact private AFL Tables field approved for retained non-production feature construction and model training.'
+      : 'Exact AFL Tables field approved for the disposable local factual-release rehearsal.',
   };
 }
 
@@ -201,7 +203,7 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
   const captureRequest = requireCaptureRequest(season);
   const invocation = createAflTradeFitzRoyInvocation(captureRequest);
   const exactFields = LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA.map(({ name }) => name);
-  const fields = exactFields.map(sourceFieldUse);
+  const fields = exactFields.map((sourceField) => sourceFieldUse(sourceField, true));
   const approvedPolicy = createApprovedAflTradeFitzRoySourcePolicies({
     fieldSets: {
       'afl-tables-player-stats': fields,
@@ -238,13 +240,13 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
   const rightsContent = {
     ...approvedPolicy.content,
     intendedPurpose:
-      'Private identity, factual review, and derived HPN calculation for the disposable local workbook rehearsal.',
+      'Private identity, factual review, derived feature construction, and retained non-production player-model training.',
     operations: {
       bounded_evaluation_capture: 'allowed' as const,
       raw_evidence_retention: 'allowed' as const,
       metadata_hash_retention: 'allowed' as const,
       internal_quality_evaluation: 'allowed' as const,
-      model_training: 'blocked' as const,
+      model_training: 'allowed' as const,
       derived_feature_creation: 'allowed' as const,
       public_derived_output: 'blocked' as const,
       public_fact_display: 'blocked' as const,
@@ -260,7 +262,8 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
     },
     attribution: {
       ...approvedPolicy.content.attribution,
-      placement: 'Private local identity, match, and factual review only.',
+      placement:
+        'Private local identity, match, factual review, feature construction, and model training only.',
     },
     restrictions: {
       geographic: [] as string[],
@@ -308,11 +311,14 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
         'raw_evidence_retention',
         'metadata_hash_retention',
         'internal_quality_evaluation',
+        'model_training',
+        'derived_feature_creation',
       ],
-      fieldUses: exactFields.map((sourceField) => ({
-        sourceField,
-        use: 'archive_fact' as const,
-      })),
+      fieldUses: exactFields.flatMap((sourceField) => [
+        { sourceField, use: 'archive_fact' as const },
+        { sourceField, use: 'derived_feature' as const },
+        { sourceField, use: 'model_training' as const },
+      ]),
       rawRetentionDays: 365,
       metadataRetentionDays: null,
       cacheSeconds: 86_400,
@@ -321,12 +327,10 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
   };
   const fieldMap = parseAflTradeFitzRoyFieldMap({
     schemaVersion: AFL_TRADE_FITZROY_FIELD_MAP_SCHEMA_VERSION,
-    mapId: `afl-tables-player-stats-local-${season}-v1`,
+    mapId: `afl-tables-player-stats-local-${season}-v2`,
     capabilityId: 'afl-tables-player-stats',
     fitzRoyVersion: '1.7.0',
-    sourceSchemaSha256: createDecodedFieldSchemaSha256(
-      LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA
-    ),
+    sourceSchemaSha256: createDecodedFieldSchemaSha256(LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA),
     exactOrderedFields: exactFields,
     observationKind: 'player_stat',
     competition: 'AFLM',
@@ -336,17 +340,9 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
     seasonField: { sourceField: 'Season', required: true },
     roundLabelField: { sourceField: 'Round', required: true },
     observedDateField: { sourceField: 'Date', required: true },
-    naturalKeyFields: [
-      'Season',
-      'Round',
-      'Date',
-      'Home.team',
-      'Away.team',
-      'ID',
-      'Playing.for',
-    ],
-    approvedAt: '2026-08-14T00:00:03.000Z',
-    approvalDecisionId: `local-afl-tables-field-map-review-${season}`,
+    naturalKeyFields: ['Season', 'Round', 'Date', 'Home.team', 'Away.team', 'ID', 'Playing.for'],
+    approvedAt: '2026-09-02T00:00:03.000Z',
+    approvalDecisionId: `local-afl-tables-field-map-review-${season}-v2`,
     identity: {
       nativeId: { sourceField: 'ID', required: true },
       recordedName: { sourceField: 'Player', required: true },
@@ -372,6 +368,13 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
         unit: 'goals',
         zeroSemantics: 'provider_zero_may_mean_missing',
       },
+      {
+        metricCode: 'brownlow_votes',
+        sourceField: 'Brownlow.Votes',
+        definitionVersion: 'brownlow-votes/v1',
+        unit: 'votes',
+        zeroSemantics: 'provider_zero_may_mean_missing',
+      },
     ],
     achievement: null,
   });
@@ -395,6 +398,10 @@ export function createLocalAflTradeAflTablesResultsAuthority(season: number) {
     dataset: 'AFL Tables completed match results through fitzRoy',
     intendedPurpose:
       'Private completed-match universe for the non-production HPN calculation input.',
+    operations: {
+      ...playerAuthority.capture.sourceRights.content.operations,
+      model_training: 'blocked' as const,
+    },
     acquisition: {
       ...playerAuthority.capture.sourceRights.content.acquisition,
       capabilities: [
@@ -405,7 +412,7 @@ export function createLocalAflTradeAflTablesResultsAuthority(season: number) {
         },
       ],
     },
-    fields: exactFields.map(sourceFieldUse),
+    fields: exactFields.map((sourceField) => sourceFieldUse(sourceField)),
   };
   const sourceRights = aflTradeSourceRightsProposalSchema.parse({
     rightsArtifactId: createAflTradeContentAddress('source-rights', rightsContent),

@@ -481,6 +481,42 @@ describe('fitzRoy capture request contracts', () => {
     const invocation = createAflTradeFitzRoyInvocation(captureRequest());
     expect(invocation.directFunction).toBe('fetch_player_stats_afl');
     expect(invocation.arguments).toEqual({ season: 2026, round_number: 1, comp: 'AFLM' });
+    const scopedCoachesVotes = createAflTradeFitzRoyInvocation(
+      captureRequest({
+        capabilityId: 'aflca-coaches-votes-scoped',
+        authorizationSeason: 2025,
+        parameters: {
+          season: 2025,
+          roundNumbers: [1, 2, 23, 24],
+          awardScope: 'home_and_away',
+          team: null,
+        },
+      })
+    );
+    expect(scopedCoachesVotes).toMatchObject({
+      directFunction: 'fetch_coaches_votes',
+      arguments: {
+        season: 2025,
+        round_number: [1, 2, 23, 24],
+        comp: 'AFLM',
+        team: null,
+        award_scope: 'home_and_away',
+      },
+    });
+    expect(() =>
+      createAflTradeFitzRoyInvocation(
+        captureRequest({
+          capabilityId: 'aflca-coaches-votes-scoped',
+          authorizationSeason: 2025,
+          parameters: {
+            season: 2025,
+            roundNumbers: [1, 24, 24],
+            awardScope: 'home_and_away',
+            team: null,
+          },
+        })
+      )
+    ).toThrow(/strictly increasing and unique/);
     expect(() =>
       createAflTradeFitzRoyInvocation(captureRequest({ capabilityId: 'fetch_player_stats' }))
     ).toThrow();
@@ -589,6 +625,12 @@ describe('fitzRoy capture request contracts', () => {
 
   it('pins the complete R dependency lock and immutable base image', () => {
     const lockBytes = readFileSync(join(process.cwd(), 'etl/afl-trade-intelligence/renv.lock'));
+    const aflcaPatchBytes = readFileSync(
+      join(
+        process.cwd(),
+        'etl/afl-trade-intelligence/patches/fitzRoy-1.7.0-scoped-aflca-votes.patch'
+      )
+    );
     const lock = JSON.parse(lockBytes.toString('utf8')) as {
       R: { Version: string; Repositories: Array<{ URL: string }> };
       Packages: Record<string, { Version: string }>;
@@ -598,6 +640,7 @@ describe('fitzRoy capture request contracts', () => {
       'utf8'
     );
     const lockSha256 = createHash('sha256').update(lockBytes).digest('hex');
+    const aflcaPatchSha256 = createHash('sha256').update(aflcaPatchBytes).digest('hex');
     expect(lock.R.Version).toBe('4.5.1');
     expect(lock.R.Repositories[0]?.URL).toBe('https://packagemanager.posit.co/cran/2026-08-07');
     expect(lock.Packages.fitzRoy?.Version).toBe('1.7.0');
@@ -607,6 +650,11 @@ describe('fitzRoy capture request contracts', () => {
       'rocker/r-ver:4.5.1@sha256:03b023fbf7b1b24ac1bb8b2ac5fd7e15a767e67b40ff50c155e328110981c2aa'
     );
     expect(dockerfile).toContain(`ARG R_LOCK_SHA256=${lockSha256}`);
+    expect(dockerfile).toContain(
+      'ARG FITZROY_SOURCE_SHA256=296ef05e86cb3ed8473f88948a1561a05ee3db0b5e037624f2dba0acf20b5412'
+    );
+    expect(dockerfile).toContain(`ARG FITZROY_AFLCA_PATCH_SHA256=${aflcaPatchSha256}`);
+    expect(dockerfile).toContain('Rscript --vanilla test_coaches_votes_scope_contract.R');
     expect(dockerfile).not.toContain('alpine');
   });
 });

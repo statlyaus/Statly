@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  aflTradeExternalHistoricalCapturePlanSchema,
   createAflTradeExternalDiscoveryInventory,
   createAflTradeExternalHistoricalCapturePlan,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeDiscoveryContracts';
+import { createAflTradeExternalCaptureSchedule } from '@/server/aflTradeIntelligence/source/externalDraftTradeScheduling';
 
 const instant = '2026-08-10T00:00:00.000Z';
 const sha = (character: string) => character.repeat(64);
@@ -176,6 +182,77 @@ describe('AFL external trade discovery contracts', () => {
     ]);
     expect(plan.content.targetCount).toBe(4);
     expect(plan.content.publicationEligible).toBe(false);
+  });
+
+  it('admits an indexed player-only trade projection as a historical target', () => {
+    const base = createAflTradeExternalHistoricalCapturePlan({
+      inventory: inventory(),
+      plannedAt: '2026-08-10T00:01:00.000Z',
+      parserVersions: {
+        tradeDetail: 'draftguru-trade-detail/v1',
+        yearPage: 'draftguru-year-page/v1',
+      },
+      datasetVersions: { tradeDetail: 'draftguru-2026-08-10', yearPage: 'draftguru-2026-08-10' },
+      fieldManifestSha256: { tradeDetail: sha('d'), yearPage: sha('e') },
+      authorities: {
+        tradeDetail: {
+          rightsArtifactId: `source-rights:${sha('f')}`,
+          fieldUses: [{ sourceField: 'trade_id', use: 'archive_fact' }],
+          cacheSeconds: 86_400,
+          rawRetentionDays: 365,
+        },
+        yearPage: {
+          rightsArtifactId: `source-rights:${sha('a')}`,
+          fieldUses: [{ sourceField: 'selection_number', use: 'archive_fact' }],
+          cacheSeconds: 86_400,
+          rawRetentionDays: 365,
+        },
+      },
+      execution: {
+        maximumAttempts: 5,
+        leaseSeconds: 300,
+        retryBaseSeconds: 30,
+        retryMaximumSeconds: 3_600,
+        maximumLatenessSeconds: 2_592_000,
+        circuitFailureThreshold: 5,
+        circuitResetSeconds: 900,
+      },
+      maximumBytes: 2_000_000,
+    });
+    const first = base.content.targets[0]!;
+    const definition = first.content.schedule.definition;
+    const schedule = createAflTradeExternalCaptureSchedule({
+      ...definition,
+      requestTemplate: {
+        ...definition.requestTemplate,
+        capabilityId: 'draftguru-player-trade-detail',
+        parserVersion: 'draftguru-player-trade-detail/v1',
+      },
+      gateRequestTemplate: {
+        ...definition.gateRequestTemplate,
+        decisionKey: 'draftguru-player-trade-detail-test_fixture',
+      },
+    });
+    const targetContent = { ...first.content, schedule };
+    const targets = [
+      {
+        targetId: createAflTradeContentAddress('external-capture-target', targetContent),
+        content: targetContent,
+      },
+      ...base.content.targets.slice(1),
+    ];
+    const content = {
+      ...base.content,
+      targets,
+      targetSetSha256: sha256AflTradeCanonicalJson(targets.map(({ targetId }) => targetId)),
+    };
+
+    expect(() =>
+      aflTradeExternalHistoricalCapturePlanSchema.parse({
+        planId: createAflTradeContentAddress('external-historical-capture-plan', content),
+        content,
+      })
+    ).not.toThrow();
   });
 
   it('refuses an incomplete discovery inventory as a historical capture authority', () => {

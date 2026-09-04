@@ -81,7 +81,10 @@ export function validateAflTradeExternalCaptureScope(
       invalid();
     return;
   }
-  if (request.capabilityId === 'draftguru-trade-detail') {
+  if (
+    request.capabilityId === 'draftguru-trade-detail' ||
+    request.capabilityId === 'draftguru-player-trade-detail'
+  ) {
     if (
       request.provider !== 'draftguru' ||
       request.draftPathway !== null ||

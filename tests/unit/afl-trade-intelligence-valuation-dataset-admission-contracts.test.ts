@@ -1453,6 +1453,37 @@ describe('valuation dataset admission contracts', () => {
     ).toThrow(/target/i);
   });
 
+  it('keeps late-captured historical evidence explicit instead of backdating it', () => {
+    const fixture = datasetFixture();
+    const lateCapturedRow = createAflTradeValuationDatasetRow({
+      ...fixture.row.content,
+      featureKnownThrough: instant(9),
+    });
+    expect(() =>
+      createAflTradeValuationDatasetCandidate({
+        ...fixture.dataset.content,
+        rows: [lateCapturedRow],
+      } as never)
+    ).toThrow(/factual cutoff/i);
+
+    const retrospectiveSpecification = createAflTradeValuationDatasetSpecification({
+      ...fixture.dataset.content.specification.content,
+      featurePolicy: {
+        ...fixture.dataset.content.specification.content.featurePolicy,
+        knowledgeJoin: 'retrospective_as_captured_at_dataset_creation',
+      },
+    });
+    const retrospective = createAflTradeValuationDatasetCandidate({
+      ...fixture.dataset.content,
+      specification: retrospectiveSpecification,
+      rows: [lateCapturedRow],
+    } as never);
+
+    expect(retrospective.content.specification.content.featurePolicy.knowledgeJoin).toBe(
+      'retrospective_as_captured_at_dataset_creation'
+    );
+  });
+
   it('requires stable row-key order rather than a row-id fixed point', () => {
     const fixture = datasetFixture();
     const second = createAflTradeValuationDatasetRow({
@@ -1601,6 +1632,32 @@ describe('valuation dataset admission service', () => {
     if (result.status !== 'admitted') throw new Error(JSON.stringify(result.blockers));
     expect(result.receipt.content.publicationEligible).toBe(false);
     expect(result.receipt.content.datasetId).toBe(fixture.dataset.datasetId);
+  });
+
+  it('admits a consumed source field set that is a strict subset of retained captured fields', async () => {
+    const fixture = datasetFixture();
+    const evidence = evidenceFor(fixture);
+    const service = new AflTradeValuationDatasetAdmissionService({
+      async authenticate() {
+        return {
+          ...evidence,
+          sourceRights: evidence.sourceRights.map((source) => ({
+            ...source,
+            sourceSnapshotManifest: {
+              snapshotId: source.sourceSnapshotManifest.snapshotId,
+              content: {
+                capturedFields: ['games', 'player_name'],
+                createdAt: source.sourceSnapshotManifest.content.createdAt,
+              },
+            },
+          })),
+        };
+      },
+    });
+
+    const result = await service.admit({ dataset: fixture.dataset, admittedAt: instant(20) });
+
+    expect(result).toMatchObject({ status: 'admitted', blockers: [] });
   });
 
   it('rejects round-grain achievements until authoritative round valid-time is represented', async () => {

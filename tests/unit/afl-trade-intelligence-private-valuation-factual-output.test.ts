@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AFL_TRADE_PRIVATE_VALUATION_FACTUAL_OUTPUT_LIMITATION,
+  createAflTradeAdmittedPlayerFactualOutput,
   createAflTradePrivateValuationFactualOutput,
+  parseAflTradeAdmittedPlayerFactualOutput,
   parseAflTradePrivateValuationFactualOutput,
 } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
 
@@ -49,6 +51,59 @@ function createFixture() {
 }
 
 describe('private valuation factual output', () => {
+  it('content-addresses one exact multi-capture admitted-player factual result', () => {
+    const output = createAflTradeAdmittedPlayerFactualOutput({
+      requestId: `private-valuation-dispatch:${sha('1')}`,
+      valuationScopeKey: 'afl-men:genuine-player-contribution:2021-2024',
+      admittedPlayerDataset: {
+        datasetId: `dataset:${sha('2')}`,
+        admissionId: `dataset-admission:${sha('3')}`,
+      },
+      sourceCaptures: [
+        {
+          captureId: `source-capture:${sha('8')}`,
+          sourceSnapshotId: `source-snapshot:${sha('9')}`,
+          consumedFieldSetId: `consumed-field-set:${sha('a')}`,
+          consumedFieldSetSha256: sha('b'),
+        },
+        {
+          captureId: `source-capture:${sha('4')}`,
+          sourceSnapshotId: `source-snapshot:${sha('5')}`,
+          consumedFieldSetId: `consumed-field-set:${sha('6')}`,
+          consumedFieldSetSha256: sha('7'),
+        },
+      ],
+      spellMetricBatches: [
+        {
+          batchId: `acquisition-spell-metric-batch:${sha('d')}`,
+          batchSha256: sha('d'),
+        },
+      ],
+      candidate: {
+        candidateId: `factual-release-candidate:${sha('e')}`,
+        candidateSha256: sha('e'),
+        memberSetSha256: sha('f'),
+      },
+      factualRelease: {
+        releaseId: `outcome-release:${sha('0')}`,
+        releaseSha256: sha('0'),
+      },
+      preparedAt: '2026-09-03T12:30:00.000Z',
+    });
+
+    expect(parseAflTradeAdmittedPlayerFactualOutput(output)).toEqual(output);
+    expect(output.content).toMatchObject({
+      schemaVersion: 'afl-trade-private-valuation-factual-output/v2',
+      sourceCaptures: [
+        { captureId: `source-capture:${sha('4')}` },
+        { captureId: `source-capture:${sha('8')}` },
+      ],
+      environment: 'non_production',
+      publicationEligible: false,
+      publicationProhibited: true,
+    });
+  });
+
   it('content-addresses one exact non-production factual result for a dispatch', () => {
     const output = createFixture();
 
@@ -86,7 +141,10 @@ describe('private valuation factual output', () => {
     expect(() =>
       createAflTradePrivateValuationFactualOutput({
         ...output.content,
-        spellMetricBatches: [output.content.spellMetricBatches[0]!, output.content.spellMetricBatches[0]!],
+        spellMetricBatches: [
+          output.content.spellMetricBatches[0]!,
+          output.content.spellMetricBatches[0]!,
+        ],
       })
     ).toThrow('unique');
   });

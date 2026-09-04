@@ -38,10 +38,7 @@ import {
   aflTradeFactualReleaseCandidateSchema,
   type AflTradeFactualReleaseCandidate,
 } from '../outcomes/factualReleaseCandidateContracts';
-import {
-  aflTradeSourceSnapshotManifestSchema,
-  type AflTradeSourceSnapshotManifest,
-} from '../artifacts/sourceSnapshotManifest';
+import { aflTradeSourceSnapshotManifestSchema } from '../artifacts/sourceSnapshotManifest';
 import {
   authenticateAflDraftTradeOutcomeReleaseRegistry,
   type AflDraftTradeOutcomeReleaseRegistry,
@@ -200,12 +197,43 @@ interface SourceRightsEvidence {
   captureId: string;
   sourceSnapshotId: string;
   consumedFieldSetId: string;
-  sourceSnapshotManifest: AflTradeSourceSnapshotManifest;
+  sourceSnapshotManifest: z.infer<typeof modelSourceSnapshotEvidenceSchema>;
   rightsProposal: AflTradeSourceRightsProposal;
   derivationReceipt: AflTradeGate0AReceipt;
   admissionReceipt: AflTradeGate0AReceipt;
   gateLedger: AflTradeGateDecisionLedger;
 }
+
+const normalizedModelSourceSnapshotEvidenceSchema = z
+  .object({
+    snapshotId: z.string().regex(/^source-snapshot:[a-f0-9]{64}$/),
+    content: z
+      .object({
+        capturedFields: z.array(z.string().trim().min(1).max(200)).min(1).max(1000),
+        createdAt: utcInstantSchema,
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((snapshot, context) => {
+    if (
+      new Set(snapshot.content.capturedFields).size !== snapshot.content.capturedFields.length ||
+      snapshot.content.capturedFields.some(
+        (field, index) => index > 0 && snapshot.content.capturedFields[index - 1]! > field
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content', 'capturedFields'],
+        message: 'Model source snapshot fields must be unique and sorted.',
+      });
+    }
+  });
+
+const modelSourceSnapshotEvidenceSchema = z.union([
+  aflTradeSourceSnapshotManifestSchema,
+  normalizedModelSourceSnapshotEvidenceSchema,
+]);
 
 interface AuthenticatedAdmissionEvidence {
   schemaVersion: typeof AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION;
@@ -298,7 +326,7 @@ function parseAuthenticatedEvidence(value: unknown): AuthenticatedAdmissionEvide
     const rights = aflTradeSourceRightsProposalSchema.safeParse(entry.rightsProposal);
     const derivation = aflTradeGate0AReceiptSchema.safeParse(entry.derivationReceipt);
     const admission = aflTradeGate0AReceiptSchema.safeParse(entry.admissionReceipt);
-    const sourceSnapshotManifest = aflTradeSourceSnapshotManifestSchema.safeParse(
+    const sourceSnapshotManifest = modelSourceSnapshotEvidenceSchema.safeParse(
       entry.sourceSnapshotManifest
     );
     if (
@@ -661,7 +689,8 @@ function memberMatchesInputAndRow(
       spell?.spellVersionId === row.lineage.acquisitionSpellVersionId &&
       spell.playerId === row.identity.playerId &&
       spell.clubId === row.identity.clubId &&
-      spell.startDate === input.effectiveFrom
+      spell.startDate <= input.effectiveFrom &&
+      (spell.endDate === null || spell.endDate >= input.effectiveThrough)
     );
   }
   const member = candidate.content.members.reconciledAchievements.find(
@@ -1100,8 +1129,9 @@ function validateSourceRights(
       fieldSet.content.captureId !== captureId ||
       fieldSet.content.sourceSnapshotId !== source.sourceSnapshotId ||
       fieldSet.content.fieldSetSha256 !== source.consumedFieldSetSha256 ||
-      sha256AflTradeCanonicalJson(fieldSet.content.fields.map(({ sourceField }) => sourceField)) !==
-        sha256AflTradeCanonicalJson(sourceSnapshot.content.capturedFields) ||
+      fieldSet.content.fields.some(
+        ({ sourceField }) => !sourceSnapshot.content.capturedFields.includes(sourceField)
+      ) ||
       time(sourceSnapshot.content.createdAt) > time(fieldSet.content.createdAt) ||
       time(fieldSet.content.createdAt) > time(dataset.content.createdAt) ||
       !lineageMapping ||

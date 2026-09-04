@@ -1,0 +1,49 @@
+--- a/R/fetch-coaches-votes.R
++++ b/R/fetch-coaches-votes.R
+@@ -12,0 +13,2 @@
++#' @param award_scope One exact award scope: "home_and_away" or "finals". Statly requires
++#' an explicit scope and never combines the two awards in one capture.
+@@ -42 +44,2 @@
+-                                team = NULL) {
++                                team = NULL,
++                                award_scope = c("home_and_away", "finals")) {
+@@ -55 +58,7 @@
+-  if (is.null(round_number)) round_number <- 1:30
++  award_scope <- match.arg(award_scope)
++  if (is.null(round_number) || length(round_number) == 0L ||
++      anyNA(round_number) || any(round_number != as.integer(round_number))) {
++    stop("Scoped coaches-vote capture requires explicit integer rounds")
++  }
++  round_number <- as.integer(round_number)
++  finals <- identical(award_scope, "finals")
+@@ -72 +81 @@
+-    expand.grid(Season = season, Round = round_number, Finals = c(F, T)) %>%
++    expand.grid(Season = season, Round = round_number) %>%
+@@ -74,6 +82,0 @@
+-    # exclude obvious impossibilities
+-    dplyr::filter(!(
+-      (.data$Season < 2018 & .data$Finals) |
+-        (.data$Round < 19 & .data$Finals) |
+-        (.data$Round > 23 & !.data$Finals)
+-    )) %>%
+@@ -81 +83,0 @@
+-    # apply function to each round
+@@ -83 +85,9 @@
+-      try(scrape_coaches_votes(row$Season, row$Round, comp, row$Finals), silent = T)
++      scoped <- scrape_coaches_votes(row$Season, row$Round, comp, finals)
++      if (!is.data.frame(scoped) || nrow(scoped) == 0L) {
++        stop(paste0("No coaches-vote rows returned for season ", row$Season,
++                    ", round ", row$Round, ", scope ", award_scope))
++      }
++      scoped %>%
++        dplyr::mutate(Award.Scope = award_scope, .after = "Round") %>%
++        dplyr::select("Season", "Round", "Award.Scope", "Home.Team", "Away.Team",
++                      "Player.Name", "Coaches.Votes")
+@@ -86,5 +95,0 @@
+-  # remove errors
+-  all_coaches_votes[sapply(all_coaches_votes, typeof) == "character"] <- NULL
+-
+-  if (length(all_coaches_votes) == 0) stop("No matches returned")
+-
+@@ -93,0 +99 @@
++  if (nrow(all_coaches_votes) == 0L) stop("No matches returned")

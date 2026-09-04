@@ -421,6 +421,8 @@ export type AflTradeAdmittedModelRunAuthorityResult =
       intent: AflTradeModelRunIntent;
       protocol: AflTradePlayerContributionModelProtocolV2;
       observationSet: AflTradePlayerObservationSetV2;
+      spellMetrics: readonly AflTradeAcquisitionSpellMetric[];
+      executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
       blockers: readonly [];
     }
   | {
@@ -674,10 +676,32 @@ function gate2IsCurrent(
     const dimensions = new Map(
       decision.content.scope.dimensions.map(({ name, values }) => [name, values] as const)
     );
+    const dimensionNames = [...dimensions.keys()].sort();
+    const exactScopeKey = exactIds(dimensions.get('scope') ?? [], [
+      evidence.datasetCandidate.content.scopeKey,
+    ]);
+    const validFrom = dimensions.get('valid_from_season') ?? [];
+    const validThrough = dimensions.get('valid_through_season') ?? [];
+    const legacyScope = exactScopeKey && exactIds(dimensionNames, ['competition', 'scope']);
+    const privateFactualScope =
+      exactScopeKey &&
+      exactIds(dimensionNames, [
+        'competition',
+        'scope',
+        'valid_from_season',
+        'valid_through_season',
+      ]) &&
+      validFrom.length === 1 &&
+      validThrough.length === 1 &&
+      /^\d{4}$/.test(validFrom[0] ?? '') &&
+      /^\d{4}$/.test(validThrough[0] ?? '') &&
+      Number(validFrom[0]) <= Number(validThrough[0]);
     return (
       decision.content.scope.scopeKey === evidence.datasetCandidate.content.scopeKey &&
-      exactIds(dimensions.get('scope') ?? [], [evidence.datasetCandidate.content.scopeKey]) &&
-      exactIds(dimensions.get('competition') ?? [], [evidence.datasetCandidate.content.competition])
+      exactIds(dimensions.get('competition') ?? [], [
+        evidence.datasetCandidate.content.competition,
+      ]) &&
+      (legacyScope || privateFactualScope)
     );
   };
   const admittedAtResolution = resolveAflTradeGateEligibility(evidence.gate2Ledger, {
@@ -703,7 +727,9 @@ function gate2IsCurrent(
   if (
     current.status !== 'mechanically_eligible' ||
     current.decision === null ||
-    !scopeMatches(current.decision)
+    !scopeMatches(current.decision) ||
+    canonicalizeAflTradeJson(current.decision.content.scope) !==
+      canonicalizeAflTradeJson(admittedDecision.content.scope)
   ) {
     return null;
   }
@@ -812,6 +838,12 @@ function executableArtifactsMatch(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.featureValuesArtifact === undefined
+      ? []
+      : [protocol.content.featureValuesArtifact]),
+    ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
+      ? []
+      : [protocol.content.pointInTimeFeatureValuesArtifact]),
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,
@@ -989,6 +1021,8 @@ export class AflTradeAdmittedModelRunAuthorityService {
       intent: intent.data,
       protocol: protocol.data,
       observationSet: evidence.observationSet,
+      spellMetrics: evidence.spellMetrics,
+      executableArtifacts: evidence.executableArtifacts,
       blockers: [],
     };
   }
@@ -1000,6 +1034,8 @@ export interface AflTradeAuthorizedModelExecutor {
     authorization: AflTradeModelRunAuthorization;
     protocol: AflTradePlayerContributionModelProtocolV2;
     observationSet: AflTradePlayerObservationSetV2;
+    spellMetrics: readonly AflTradeAcquisitionSpellMetric[];
+    executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
   }): Promise<AflTradeAuthorizedModelRunCompletion>;
 }
 
@@ -1072,6 +1108,8 @@ export class AflTradeAdmittedModelRunner {
         authorization: authorized.authorization,
         protocol: authorized.protocol,
         observationSet: authorized.observationSet,
+        spellMetrics: authorized.spellMetrics,
+        executableArtifacts: authorized.executableArtifacts,
       });
     } catch (cause) {
       try {

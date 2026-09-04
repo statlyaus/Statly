@@ -178,6 +178,54 @@ function evaluateGateDecisionAuthorization(
   return { decision, blockers };
 }
 
+function evaluateExactGateDecisionAuthorization(
+  decision: AflTradeGateDecisionRecord,
+  rights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest,
+  evaluatedAt: number
+): { decision: AflTradeGateDecisionRecord; blockers: AflTradeGate0ABlocker[] } {
+  const blockers: AflTradeGate0ABlocker[] = [];
+  const effectiveAt =
+    decision.content.effectiveAt === null
+      ? Number.NaN
+      : Date.parse(decision.content.effectiveAt);
+  const revalidateAt =
+    decision.content.revalidateAt === null
+      ? null
+      : Date.parse(decision.content.revalidateAt);
+  if (
+    decision.content.gate !== 'gate_0a_permission_to_evaluate' ||
+    decision.content.decisionKey !== request.decisionKey ||
+    decision.content.environment !== request.environment ||
+    decision.content.state !== 'approved' ||
+    !Number.isFinite(effectiveAt) ||
+    (Number.isFinite(evaluatedAt) &&
+      (evaluatedAt < effectiveAt || (revalidateAt !== null && evaluatedAt >= revalidateAt)))
+  ) {
+    addBlocker(
+      blockers,
+      'gate_decision_blocked',
+      decision.decisionId,
+      'The embedded Gate 0A decision is not an effective approval for this exact request.'
+    );
+  }
+  if (
+    !decision.content.affectedArtifacts.some(
+      (artifact) =>
+        artifact.kind === 'source_rights' && artifact.artifactId === rights.rightsArtifactId
+    )
+  ) {
+    addBlocker(
+      blockers,
+      'decision_rights_mismatch',
+      rights.rightsArtifactId,
+      'The embedded Gate 0A decision does not pin this source-rights artifact.'
+    );
+  }
+  blockers.push(...collectDecisionScopeBlockers(decision, request));
+  return { decision, blockers };
+}
+
 function collectSourceScopeBlockers(
   rights: AflTradeSourceRightsProposal,
   request: AflTradeGate0ARequest,
@@ -414,10 +462,13 @@ function collectStorageAndConditionBlockers(
   return blockers;
 }
 
-export function evaluateAflTradeGate0A(
-  ledger: AflTradeGateDecisionLedger,
+function evaluateAflTradeGate0AWithAuthorization(
   unparsedRights: AflTradeSourceRightsProposal,
-  request: AflTradeGate0ARequest
+  request: AflTradeGate0ARequest,
+  resolveAuthorization: (
+    rights: AflTradeSourceRightsProposal,
+    evaluatedAt: number
+  ) => { decision: AflTradeGateDecisionRecord | null; blockers: AflTradeGate0ABlocker[] }
 ): AflTradeGate0AEvaluation {
   const blockers: AflTradeGate0ABlocker[] = [];
   const parsedRights = aflTradeSourceRightsProposalSchema.safeParse(unparsedRights);
@@ -457,7 +508,7 @@ export function evaluateAflTradeGate0A(
       'Gate 0A requires a valid evaluation time.'
     );
   }
-  const authorization = evaluateGateDecisionAuthorization(ledger, rights, request);
+  const authorization = resolveAuthorization(rights, evaluatedAt);
   const decision = authorization.decision;
   blockers.push(...authorization.blockers);
   blockers.push(...collectSourceScopeBlockers(rights, request, evaluatedAt));
@@ -470,4 +521,29 @@ export function evaluateAflTradeGate0A(
     rightsArtifactId: rights.rightsArtifactId,
     blockers,
   };
+}
+
+export function evaluateAflTradeGate0A(
+  ledger: AflTradeGateDecisionLedger,
+  unparsedRights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest
+): AflTradeGate0AEvaluation {
+  return evaluateAflTradeGate0AWithAuthorization(
+    unparsedRights,
+    request,
+    (rights) => evaluateGateDecisionAuthorization(ledger, rights, request)
+  );
+}
+
+export function evaluateAflTradeGate0AAgainstDecision(
+  decision: AflTradeGateDecisionRecord,
+  unparsedRights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest
+): AflTradeGate0AEvaluation {
+  return evaluateAflTradeGate0AWithAuthorization(
+    unparsedRights,
+    request,
+    (rights, evaluatedAt) =>
+      evaluateExactGateDecisionAuthorization(decision, rights, request, evaluatedAt)
+  );
 }

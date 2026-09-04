@@ -301,10 +301,12 @@ report for both blocked and eligible outcomes. Registration re-authenticates tho
 recomputes the exact policy result, finalizes atomically, and enforces exact replay and append-only
 custody. A blocked prepared-input set must reference that exact report and repeat its complete blocker
 decision; a raw rights proposal or transient positive result cannot grant dataset or model authority.
-The current local AFL Tables 2021-2025 and official-AFL 2026 policies block model training and
-derived-feature creation, so the local readiness command and admitted private workbook UI read the
-latest retained report for its still-active factual release and its bound blocker set from disposable
-PostgreSQL. If no current report exists,
+The current local AFL Tables 2021-2025 player-stat policies permit private derived-feature creation
+and model training under their exact non-production Gate 0A receipts. The separate official-AFL 2026
+and AFL Tables 2026 results policies still block model training, and every policy blocks public use.
+The local readiness command
+and admitted private workbook UI therefore read the latest retained report for its still-active
+factual release and its bound blocker set from disposable PostgreSQL. If no current report exists,
 readiness says qualification has not run; it does not reconstruct policy from code, invoke a scorer,
 infer new rights, or substitute a zero value. The workbook
 review service no longer imports or exports the legacy name/year/pick value projection: it exposes
@@ -445,9 +447,9 @@ digests, and staging outcomes remain independently attributable to their source 
 custody uses the explicit `local_non_production_filesystem` profile and confers no hosted durability,
 redistribution, production, or recurring-capture authority.
 
-Those local capture-rights artifacts permit bounded capture, raw/hash retention and internal quality
-evaluation only. Model training, derived-feature creation, public derived output, public fact display
-and raw redistribution are blocked at both field-use and operation scope. Before any staging mutation,
+Those local capture-rights artifacts permit bounded capture, raw/hash retention, internal quality
+evaluation and private derived-feature creation. Model training, public derived output, public fact
+display and raw redistribution are blocked at both field-use and operation scope. Before any staging mutation,
 the caller must authenticate the exact loopback `statly_outcomes_test` runtime nonce. Retained
 historical rows become eligible only after the exact five-season evidence digest has three current
 local receipts per admitted row and one complete-set admission decision. Retained official rows
@@ -1159,11 +1161,18 @@ inventing a new digest preimage. Round-grain achievements are ineligible until t
 round valid-time coordinate is represented explicitly. Reconciled metrics are likewise ineligible
 until factual membership distinguishes match from season grain and carries authoritative match/valid
 time; no season-start date is fabricated for either case.
-Feature knowledge must predate the row cutoff; target effective time must fall strictly after the
-prediction origin and within the factual release cutoff. Training labels must be known before the next
-partition prediction origin plus its embargo. Player, event, and acquisition-spell groups cannot cross
-model partitions. Missing, unavailable, unresolved, conflicting, quarantined, and not-applicable
-evidence remains distinct from measured zero.
+The dataset declares one knowledge-join policy. The default
+`point_in_time_as_known_by_prediction_cutoff` policy requires feature knowledge to predate the row
+cutoff and each earlier partition's labels to be known before the next partition prediction origin
+plus its embargo. The explicit
+`retrospective_as_captured_at_dataset_creation` policy instead preserves the evidence's real
+capture/recording timestamps and requires them to be no later than dataset creation. It may support a
+current retrospective diagnostic over historical effective time, but it must never be described as
+an original-vintage backtest or as evidence available at the historical prediction cutoff. Under
+either policy, target effective time must fall strictly after the prediction origin and within the
+factual release cutoff. Player, event, and acquisition-spell groups cannot cross model partitions.
+Missing, unavailable, unresolved, conflicting, quarantined, and not-applicable evidence remains
+distinct from measured zero.
 
 Public factual-display authority is insufficient for this seam. Admission derives the contributing
 source set from every source capture in the sealed factual candidate. For each source it authenticates
@@ -1217,6 +1226,120 @@ This durable authority path remains private and unmounted. It authorizes no mode
 records exist, and it does not fit coefficients, select a champion, issue Gate 3 approval, calculate a
 trade grade or publish a valuation. Real source evidence, an executable fitting implementation,
 independent numerical validation and their reviewed publication transitions remain required.
+
+The local admitted player runner now implements one named methodology,
+`afl-trade-admitted-player-candidate/v1`, behind that authority boundary. It estimates future
+acquisition-spell contribution above a role-and-era replacement baseline in the protocol's additive
+contribution unit. The target is the separately governed scalar transform of Brownlow votes,
+coaches votes, games and goals observed strictly inside the future target window. Predictors are the
+exact admitted feature members and hashes joined under the dataset's declared knowledge policy:
+expected games and prior contribution per game, with governed role and era assignments. Target
+members are never reused as predictors, and the executor rejects a protocol whose knowledge policy
+differs from its sealed observation set.
+
+The protocol binds the exact feature-value artifact, role and era definitions, scalar transform,
+partition windows and embargo. The run intent binds the exact candidate configuration artifact.
+That versioned configuration declares the role-and-era replacement-baseline policy, ridge penalty,
+interval coverage level, minimum comparable observations and required relative MAE and RMSE
+improvements. Version 1 fixes the replacement level at the games-played-weighted 25th percentile
+within each role-and-era training group, admits players with at least one game and groups with at
+least one training observation, uses ridge lambda `1`, and targets 80% interval coverage. Validation
+requires at least one comparable observation and at least 1% relative improvement over the
+games-only comparator in both MAE and RMSE; incomplete prediction coverage fails closed. Fitting uses
+`train` only; interval residuals use `calibration`; candidate selection uses `validation`;
+`final_test` is evaluated once after the candidate lock and cannot retune the candidate. The native
+execution retains the fitted coefficients, baseline, validation,
+calibration, interval-coverage, subgroup, sensitivity, leakage-audit, model-card and diagnostics
+artifacts. These records are evidence only and remain publication-ineligible.
+
+The dispatch-bound local composition accepts no caller-supplied operational principal, role,
+environment, execution mode or publication posture. Before materialization it re-authenticates the
+live claim, exact request-to-operation binding, private factual output and the factual
+release/candidate/member root shared by the dataset and admission. A different dataset, admission,
+protocol, observation set or source-rights lineage fails closed. Multiple admitted captures may
+share one rights proposal; they produce one current run-start receipt only when every retained
+receipt has identical request-to-proposal ancestry. Conflicting ancestry is rejected. The existing
+human operational-authorization branch is unchanged.
+
+The superseded restricted five-season rehearsal proposal is not a player-model training authority.
+A genuine admitted-player run must use the current AFL Tables player-stat policy through fitzRoy,
+materialized as exact non-production Gate 0A records that explicitly permit `model_training`. The
+capture must occur under that authority and retain its original receipts; an earlier rehearsal
+capture cannot be relabelled after retrieval. The scoped AFLCA lane separately permits only the
+reconciled `Coaches.Votes` field as a private training input. Canonical promotion must cover both the
+transaction/event and player asset ancestry before factual lineage, dataset admission or execution
+may proceed.
+
+The bounded Draftguru transaction capture is likewise authorized only from retained evidence supplied
+to the local authority loader: the product-owner authorization, bounded capture plan, public-use
+review, and field-boundary review. Each document has an exact issue, provider, environment, scope,
+decision, author and recording-time contract. The loader recomputes its canonical reference and
+reads the exact retained bytes from private capture-metadata custody before any Gate ledger read or
+append; an identifier alone cannot create authority.
+
+The issue 574 genuine non-production diagnostic is deliberately small and retrospective. It uses
+five genuine Draftguru player trades—Adam Saad to Carlton, Jeremy Cameron to Geelong, Jordan Dawson
+to Adelaide, Josh Dunkley to Brisbane and Brodie Grundy to Sydney—joined to genuine AFL Tables match
+statistics and the scoped AFLCA `Coaches.Votes` field. For each acquisition spell, the first five
+home-and-away appearances form the prior-contribution feature window and the remaining appearances
+in that AFL season form the target window. The registered additive scalar is
+`0.05 * games + 0.08 * goals + 0.01 * Brownlow votes + 0.01 * coaches votes`. The two 2021 rows are
+training, 2022 is calibration, 2023 is validation and 2024 is final test; player, trade-event and
+acquisition-spell identities do not cross partitions. This slice demonstrates authorized ingestion,
+exact admission, native execution and retained replay only. Its five selected transfers, one-row
+validation partition, retrospective capture in 2026, hand-selected scalar and lack of role diversity
+make it unsuitable for population inference, historical point-in-time claims, Gate 3 approval,
+production valuation or publication.
+
+The executable feature artifact is policy-neutral
+`afl-trade-player-feature-set/v2`. It retains the same knowledge policy as the model protocol and
+observation set, and the fitted model retains both that policy and the artifact identifier. The
+legacy point-in-time-only protocol field remains replay-compatible only for genuinely point-in-time
+protocols; retrospective protocols must use the neutral field and cannot parse a point-in-time-labelled
+feature document.
+
+The local execution entry point is request-bound rather than target-bound. Its public input is the
+retained dispatch request identifier plus live claim custody. Inside the coordinator database role it
+loads the request-to-operation binding and constructs the exact execution input from the immutable
+operation's factual and HPN digests, player and pick targets, and qualification policy. Request scope
+and operation scope must agree. A caller cannot supply a replacement dataset, admission, protocol,
+model version or source-rights receipt through this boundary.
+
+Successful native runs are wrapped by the existing governed component manifest with exact protocol,
+dataset, admission and Gate-ledger ancestry. Replay first authenticates a retained component against
+the original immutable dispatch attempt and the current live claimant. When it matches, the runner
+returns that component without reconstructing observations, issuing another authorization or
+retraining. No new retry ledger, current pointer or outcomes table is required for this player slice.
+
+### Issue 574 retained execution evidence
+
+The genuine non-production run on 2026-09-03 used finalized dataset
+`dataset:01948eb2e5da047017f0d862c474a40eddefa5344568989a79b8748de02ad62a` and admission
+`dataset-admission:e2d4113118567e1f3f4674eef0a6909779368b61ff4ef691f43573d2a526ca90`.
+The five rows bind 13 exact source captures and 10 finalized acquisition-spell metric batches. Its
+request-scoped factual output is
+`private-valuation-factual-output:32977091131fc3c07e9e43e3cf951f1e947c5399f8ba1577b16061094421d231`,
+and protocol `model-protocol:25e1fb6fa2edd333000aa2461fa6153068d548bdf23473331059ab16601a693e`
+binds the methodology above. Factual-output v2 therefore permits distinct dispatch requests to bind
+the same sealed candidate and release while retaining legacy v1 one-candidate/one-release uniqueness;
+each v2 output remains unique and immutable by request.
+
+Request `private-valuation-dispatch:90879942135e996b4e3f08ad1be825dd3f5dc633ccab88b03585a3cc6f8e3b7c`
+bound operation
+`private-valuation-model-operation:c71662b13d1d2682d33b8d4c65877f1087f99078423fa9903138713e0b4b8144`
+and executed clean commit `43bb49e57f9120d77b7b36a6df92fefbf195dd9e` with seed 574. Native run
+`model-run:fafb4db94aa683924aa6f9ff3efc4bcbaee4d537861e3a7e925c0c0aedbdb2c5` succeeded and was
+registered as player component
+`model-run:02c9bdd6b41a00028f41d0831adfe5606f97767a0bac3a7263fadcaeb1f56033`.
+Validation used one comparable row: candidate MAE/RMSE was `0.0916872346` versus `0.4050700280`
+for the games-only comparator, a `77.3651%` relative improvement in both measures. The single final
+test row produced candidate MAE/RMSE `0.0292086916` versus `0.3229271709`, a `90.9550%`
+improvement, and fell inside the calibrated 80% interval. These one-row results prove executable
+plumbing and deterministic evidence, not statistical adequacy.
+
+The immediate replay returned the same component with exactly one native run and one component row.
+HPN and pick components were deliberately marked `not_executed`, and no qualification, pair
+selection, Gate 3 decision, activation or publication was created or claimed.
 
 ## Temporal contract
 
@@ -1586,16 +1709,21 @@ validation plan, acceptance criteria, and known limitations. Public player ident
 and carry no fantasy ownership.
 
 Replacement levels are stratified by role and era and estimated from the training partition only;
-validation or test refitting is prohibited. Role assignments, corrections, and features are available
-only as known at the prediction cutoff. Unknown and observed zero remain distinct, while target-derived
-and post-outcome features are prohibited. Realized club contribution stops at real-club departure or
-the observation boundary, and active careers are right-censored under an immutable definition.
+validation or test refitting is prohibited. The default policy admits role assignments, corrections,
+and features only as known at the prediction cutoff. A separately declared retrospective policy may
+carry later evidence only when its real capture time is no later than dataset creation; that policy is
+retained on the executable observation and prediction artifacts and may not be labelled point-in-time.
+Unknown and observed zero remain distinct, while target-derived and post-outcome features are
+prohibited. Realized club contribution stops at real-club departure or the observation boundary, and
+active careers are right-censored under an immutable definition.
 
 The executable player baseline boundary lives in `src/server/aflTradeIntelligence/modeling`. Its
 strict, content-addressed observation contract requires source-native public player-season identities,
-all four chronological partitions, point-in-time role evidence, explicit contribution availability,
-games played and available, and either completed-career or right-censored evidence. It rejects fantasy
-user, league, roster, membership, and ownership fields by construction. The deterministic fitter uses
+all four chronological partitions, policy-consistent role evidence, explicit contribution
+availability, games played and available, and either completed-career or right-censored evidence. The
+genuine scalar adapter additionally requires explicit authenticated `games`, `goals`, `brownlow_votes`,
+and `coaches_votes` inputs; an omitted metric is never interpreted as zero. It rejects fantasy user,
+league, roster, membership, and ownership fields by construction. The deterministic fitter uses
 games-played weighting to estimate the declared replacement quantile for each sufficiently supported
 training-only role/era cohort. Every input then reconciles to either an auditable season score or an
 explicit unavailable, zero-game, or unsupported-cohort result. Contribution per game, impact above
@@ -1608,7 +1736,9 @@ to the same observation set, baseline fit, and value unit, and use each observat
 cutoff. A validation candidate may be selected from train and calibration only. A final-test candidate
 may also use validation, but final-test refitting remains prohibited. The evaluator compares candidate
 and point-in-time expected-games-only predictions using MAE, RMSE, bias, absolute deltas, and declared
-relative-improvement thresholds. Missing or otherwise unscored outcomes remain visible as exclusions;
+relative-improvement thresholds. Prediction artifacts retain the declared point-in-time or
+retrospective feature/comparator label rather than overstating historical availability. Missing or
+otherwise unscored outcomes remain visible as exclusions;
 insufficient comparable observations, incomplete prediction coverage, mismatched cutoffs, or broken
 artifact lineage fail closed.
 

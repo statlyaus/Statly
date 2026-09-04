@@ -27,6 +27,7 @@ describe('local five-season AFL Tables authority', () => {
         'Home.team',
         'Away.team',
         'Goals',
+        'Brownlow.Votes',
       ])
     );
     expect(authority.capture.captureRequest).toMatchObject({
@@ -40,7 +41,7 @@ describe('local five-season AFL Tables authority', () => {
         provider: 'afl_tables',
         operations: {
           internal_quality_evaluation: 'allowed',
-          model_training: 'blocked',
+          model_training: 'allowed',
           derived_feature_creation: 'allowed',
           public_derived_output: 'blocked',
           public_fact_display: 'blocked',
@@ -64,13 +65,22 @@ describe('local five-season AFL Tables authority', () => {
         'raw_evidence_retention',
         'metadata_hash_retention',
         'internal_quality_evaluation',
+        'model_training',
+        'derived_feature_creation',
       ],
     });
     expect(authority.capture.gateRequest.fieldUses).toEqual(
-      expect.arrayContaining([{ sourceField: 'Goals', use: 'archive_fact' }])
+      expect.arrayContaining([
+        { sourceField: 'Goals', use: 'archive_fact' },
+        { sourceField: 'Goals', use: 'derived_feature' },
+        { sourceField: 'Goals', use: 'model_training' },
+      ])
     );
-    expect(authority.capture.gateRequest.fieldUses).toHaveLength(81);
+    expect(authority.capture.gateRequest.fieldUses).toHaveLength(243);
     expect(authority.fieldMap).toMatchObject({
+      mapId: 'afl-tables-player-stats-local-2025-v2',
+      approvedAt: '2026-09-02T00:00:03.000Z',
+      approvalDecisionId: 'local-afl-tables-field-map-review-2025-v2',
       capabilityId: 'afl-tables-player-stats',
       competition: 'AFLM',
       validFromSeason: 2025,
@@ -99,6 +109,13 @@ describe('local five-season AFL Tables authority', () => {
           sourceField: 'Goals',
           definitionVersion: 'goals/v1',
           unit: 'goals',
+          zeroSemantics: 'provider_zero_may_mean_missing',
+        },
+        {
+          metricCode: 'brownlow_votes',
+          sourceField: 'Brownlow.Votes',
+          definitionVersion: 'brownlow-votes/v1',
+          unit: 'votes',
           zeroSemantics: 'provider_zero_may_mean_missing',
         },
       ],

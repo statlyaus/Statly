@@ -634,6 +634,64 @@ no network or live source, creates no hosted or billable resource, grants no rev
 authority, and does not satisfy real-source custody, hosted durability or hosted backup/restore,
 alerting, scheduling, deployment, or production-activation requirements.
 
+### Retaining private AFLCA coaches-vote evidence
+
+This optional local command performs live upstream retrieval. Run it only after the product-owner
+source decision is current, against the authenticated disposable loopback outcomes database, with the
+pinned fitzRoy image and private artifact root:
+
+```sh
+export AFL_OUTCOMES_DATABASE_URL='postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_outcomes_test?sslmode=disable'
+npm run dev:outcomes:authenticate
+
+IFS= read -r STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE < .statly-local/afl-trade-outcomes-runtime-nonce
+export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
+
+npm run dev:outcomes:stage-scoped-aflca-coaches-votes
+```
+
+The command derives each requested round set from the current retained AFL Tables home-and-away match
+universe, then retains one authenticated private scoped capture for each season from 2021 through
+2025 and reuses exact finalized captures on retry. It executes the content-addressed Statly patch to
+the verified fitzRoy `1.7.0` source, retains `Award.Scope=home_and_away` on every row, and reconciles
+every returned match before review. Completion requires all 1,017 requested matches and exactly 30
+coaches votes per match; the scoped capture contains 6,655 vote rows. A player vote becomes a training
+fact only when its recorded name and club resolve exactly inside that reviewed match lineup or an
+exact retained identity mapping applies. Other vote recipients remain in the conserved match total
+but are retained as unresolved and receive no identity or fact approval.
+
+Six provider match exceptions require exact retained reviews: four 2023 round-five rows reverse the
+home/away order, while the Brisbane–Geelong and Gold Coast–Essendon Opening Round matches are labelled
+as rounds 4 and 25 respectively by the 2025 AFLCA source and round 1 by AFL Tables. The reconciler has
+no unordered, season-only, shifted-round, or other fallback. An unreviewed exception fails closed, and
+every supplied review must be used by retained source rows.
+
+Two 2025 vote rows are absent from the current AFL Tables player-match rows. They may resolve only
+through the retained human-reviewed mappings for historical AFL Tables player `12576` (Jack Graham)
+and `12712` (Jack Ross). The mapping decision, historical seasons, recorded names, recorded clubs and
+target AFLCA identity are content-addressed into each affected identity review. The reconciler does
+not infer a new club identity from display-name equality, and any unreviewed or unused mapping fails
+closed.
+
+The scoped source policy permits the reconciled `Coaches.Votes` field for private local
+non-production feature construction and model training. Season, round, club and player-name fields
+remain reconciliation evidence rather than model features. The command does not promote transaction
+facts, admit a model dataset, execute a model, or grant publication authority; those remain separate
+governed boundaries. Public display, public derived output, redistribution, production activation
+and fantasy use remain prohibited.
+
+The retained 2026-09-02 rehearsal contained 6,854 rows. Normalization quarantined 6, 12, 16, 32, and
+48 rows in seasons 2021 through 2025 respectively. Those row counts are diagnostic evidence, not a
+completeness threshold. The deeper stop condition is structural: the upstream function combines the
+home-and-away and finals award requests from round 19 without retaining award scope, and excludes
+non-finals rounds above 23. Some ambiguous rows still contain integer-looking values, so filtering
+only decimal text is prohibited. Do not use these normalizations for #574, even after identity review.
+
+The older `dev:outcomes:stage-aflca-coaches-votes` command remains a negative-evidence rehearsal. Its
+ambiguous normalizations and superseding map rejections must remain retained and must never be
+relabeled. Only the new scoped capability, field map, Gate receipts and reconciliation evidence may
+feed the #574 training path.
+
 ### Inspecting the governed five-season workbook evaluation
 
 Migration `0081_corrected_local_review_lineage` is an intentional one-time boundary for this
@@ -1062,6 +1120,117 @@ dispatch attempt ledger to retry only transient PostgreSQL, artifact-custody or 
 failures. This boundary remains local, private, non-production and publication-prohibited and does
 not by itself qualify a model pair, prepare a valuation cohort or activate a batch.
 
+The admitted player-contribution component is available to the same local, private coordinator for
+the later model-pair composition. Its fixed methodology is
+`afl-trade-admitted-player-candidate/v1` under
+`afl-trade-player-contribution-model-protocol/v2`. It fits a ridge candidate against the governed
+role-and-era replacement baseline from the exact finalized dataset, admission, feature members joined
+under its declared knowledge policy, and target spell metrics selected by the operation. The protocol
+owns the scalar value unit,
+feature definitions, partition windows and embargo. The candidate configuration owns the baseline,
+ridge penalty, validation thresholds and interval coverage level. Neither the dispatch caller nor an
+operator may override those values at execution time.
+
+For candidate version 1, verify the retained configuration uses a games-played-weighted 25th
+percentile replacement level per role and era, minimum one game, minimum one training observation per
+group, ridge lambda `1`, 80% interval coverage, and minimum one comparable validation observation.
+Both relative MAE and relative RMSE must improve by at least 1% over the games-only comparator, and
+incomplete prediction coverage must fail closed.
+
+Before a run, require one live current dispatch claim, the exact request-to-operation binding, the
+bound private factual output, and identical factual release, candidate and source-member ancestry in
+the dataset and admission. Each source-rights proposal gets one fresh run-start evaluation. Multiple
+captures may share that proposal only when their retained Gate 0-A request ancestry is identical apart
+from evaluation time; disagreement is a deterministic failure. Never substitute a current dataset,
+protocol, public factual release, fixture, fabricated evidence, caller principal or caller execution
+mode. The existing human authorization workflow remains separate and unchanged.
+
+A successful native run retains its fitted model, baseline comparison, validation, calibration,
+interval, subgroup, sensitivity, leakage, model-card and diagnostics artifacts, then registers the
+governed player component with full dataset, admission, protocol and Gate-ledger ancestry. On replay,
+authenticate the component against the original immutable attempt and independently authenticate the
+replacement claimant as current. An exact retained component returns without rematerializing the
+observation set, issuing a second model-run authorization or retraining. This component is not yet
+wired into the local worker or paired with the pick component; that composition belongs to the model
+pair stage. No new player retry ledger or current pointer is part of this slice. Migration 0089 adds
+only the coordinator's least-privilege reads, immutable inserts and narrowly scoped row-lock/update
+permissions required by the existing append-only model-run and artifact-custody triggers.
+Migration 0102 adds the admitted-player factual-output v2 parent, exact source-capture and
+spell-batch authentication, and request-scoped replay semantics. It preserves legacy v1
+candidate/release uniqueness with partial indexes, while allowing a later dispatch request to bind
+the same sealed v2 candidate and release through its own immutable output. Its model-run guard counts
+distinct run receipts and distinct proposal identities, not capture rows, after authenticating every
+capture-level admission evaluation.
+
+The genuine local player adapter measures execution ancestry at run start. It derives the Git root
+from the executing module, resolves the exact commit, requires a clean checkout including untracked
+files, hashes the actual dependency lock and Node executable, and retains the fixed candidate
+configuration plus a generated digest manifest of every tracked application source file captured
+when the candidate process loaded. Container identity is recorded as unverified unless a separately
+authenticated boundary supplies it; the adapter does not infer non-containerization. It does not accept an
+operator-authored checkout, commit, artifact set or clean-worktree claim. It rechecks the same commit,
+clean status, lock hash and loaded source hashes after retention; a dirty checkout, changed lock,
+stale loaded process or unstable file fails before model-run authorization.
+
+The genuine player request adapter accepts only a request ID and its current claim. It loads the
+already-bound model operation from PostgreSQL and derives the player dataset, admission, protocol,
+factual output and HPN calculation from that immutable record. There is no CLI argument for selecting
+or overriding those targets.
+
+For the issue 574 genuine diagnostic, preserve the real 2026 capture/recording timestamps and select
+`retrospective_as_captured_at_dataset_creation`; do not backdate evidence to make the historical rows
+look point-in-time. The exact five rows are Adam Saad/Carlton 2021 and Jeremy Cameron/Geelong 2021
+(`train`), Jordan Dawson/Adelaide 2022 (`calibration`), Josh Dunkley/Brisbane 2023 (`validation`), and
+Brodie Grundy/Sydney 2024 (`final_test`). Use the first five home-and-away appearances after the
+transfer as the feature window and the remaining home-and-away appearances that season as the target
+window. Register the scalar exactly as `0.05 * games + 0.08 * goals + 0.01 * Brownlow votes + 0.01 *
+coaches votes`; verify goals conserve to match rows, Brownlow votes sum to six per match and scoped
+AFLCA votes sum to 30 per matched match. Every one of the four scalar feature metrics must be present
+as authenticated measured or conservation-derived evidence; omission is not zero. Where unrelated
+AFLCA recipients remain unresolved, preserve every positive source-native recipient row in the
+content-addressed conservation input. Derive a selected player's zero only after those resolved and
+unresolved positive rows exactly conserve both club goal totals, six Brownlow votes and 30 AFLCA
+votes for the match; a caller-asserted completeness certificate is not evidence.
+Treat the result only as a private execution/replay
+diagnostic: five selected transfers and a single validation row do not support population, historical
+backtest, Gate 3, production or publication claims.
+
+Run the positive migrated tracer only against a disposable loopback `statly_outcomes_test` database
+that already contains the genuine bound operation. Supply its active claim custody through the
+`AFL_GENUINE_ADMITTED_PLAYER_DATABASE_URL`, `AFL_GENUINE_ADMITTED_PLAYER_REQUEST_ID`,
+`AFL_GENUINE_ADMITTED_PLAYER_CLAIM_ID`, `AFL_GENUINE_ADMITTED_PLAYER_LEASE_TOKEN` and
+`AFL_GENUINE_ADMITTED_PLAYER_ARTIFACT_ROOT` environment variables, then run:
+
+```sh
+npx vitest run --config vitest.config.outcomes-int.ts \
+  tests/outcomes-integration/afl-genuine-admitted-player-provisioned-postgres.test.ts \
+  --coverage.enabled=false
+```
+
+Obtain the claim values from the running local coordinator that owns a fresh request with no retained
+player component; do not recover or copy lease tokens from database or log files. The tracer fails
+closed unless migration `0090` is present, executes the component once, repeats the same request, and
+proves the second result is the same retained run without a second native execution. With none of the
+provisioned values it is skipped; a partial configuration fails, and neither case is replaced by
+fixture data.
+
+The retained issue 574 proof used request
+`private-valuation-dispatch:90879942135e996b4e3f08ad1be825dd3f5dc633ccab88b03585a3cc6f8e3b7c`,
+operation
+`private-valuation-model-operation:c71662b13d1d2682d33b8d4c65877f1087f99078423fa9903138713e0b4b8144`,
+dataset `dataset:01948eb2e5da047017f0d862c474a40eddefa5344568989a79b8748de02ad62a`,
+admission
+`dataset-admission:e2d4113118567e1f3f4674eef0a6909779368b61ff4ef691f43573d2a526ca90`
+and protocol `model-protocol:25e1fb6fa2edd333000aa2461fa6153068d548bdf23473331059ab16601a693e`.
+Clean commit `43bb49e57f9120d77b7b36a6df92fefbf195dd9e`, Node runtime attestation and seed 574 produced native
+run `model-run:fafb4db94aa683924aa6f9ff3efc4bcbaee4d537861e3a7e925c0c0aedbdb2c5` and player component
+`model-run:02c9bdd6b41a00028f41d0831adfe5606f97767a0bac3a7263fadcaeb1f56033`.
+The tracer then observed exactly one native run and one component after replay. Validation improved
+both MAE and RMSE by 77.3651% on its one comparable validation row; final test improved both by
+90.9550% on its one row, which was inside the calibrated 80% interval. Record these values as a
+bounded execution diagnostic, not as model-quality or population evidence. HPN and pick remained
+`not_executed`; qualification, pair selection, Gate 3, activation and publication remained absent.
+
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:
 
@@ -1482,11 +1651,14 @@ This procedure creates private model-input evidence only. It cannot publish a va
 2. Resolve the governed corpus-to-factual-candidate lineage commitment, then require a current Gate 2
    decision that pins the exact corpus, lineage commitment, factual release and factual candidate. Gate
    2 must not name the future dataset. Do not infer ancestry from dates, counts, names or provider labels.
-3. Pre-register the dataset-v4/player-row-v3 point-in-time specification: stable
-   player/acquisition-spell row grain, prediction cutoff, target horizon and maturity, value unit,
-   role/era/censoring policies, chronological train/calibration/validation/final-test windows, embargo,
-   and exact player/event/acquisition-spell leakage groups. Dataset v4/row v3 does not admit
-   draft-pick rows.
+3. Pre-register the dataset-v4/player-row-v3 specification: stable player/acquisition-spell row
+   grain, prediction cutoff, target horizon and maturity, value unit, role/era/censoring policies,
+   chronological train/calibration/validation/final-test windows, embargo, exact
+   player/event/acquisition-spell leakage groups, and one knowledge-join policy. Use
+   `point_in_time_as_known_by_prediction_cutoff` for an original-vintage backtest. Use
+   `retrospective_as_captured_at_dataset_creation` only for an explicitly labelled current
+   retrospective diagnostic; retain the real late knowledge timestamps and never claim historical
+   availability. Dataset v4/row v3 does not admit draft-pick rows.
 4. Under the evidence authenticator's transactionally consistent read, load every exact typed factual
    member, current player/club identity assignment, event/acquisition-spell/lineage version, and retained
    dataset, exclusion, extractor, configuration, feature, target, value-unit, role, era, censoring and
@@ -1502,12 +1674,15 @@ This procedure creates private model-input evidence only. It cannot publish a va
    evidence. Exclude round-grain achievements and reconciled metrics until their exact grain and
    match/valid time are represented.
 5. Materialize rows in unique stable-row-key order with contiguous ordinals. Carry effective-from/
-   through time separately from recorded-at knowledge time. Reject a feature known after its cutoff, a
-   feature reused as its own target, a target outside the future valid-time window, a leakage group in
-   multiple partitions, or prior-partition labels not known before the next prediction origin plus
-   embargo. The three leakage values must equal the row's stable acquisition-spell subject, stable
-   event subject, and player IDs; exact spell/event version IDs remain provenance and must not split
-   revisions of one subject across partitions. Never accept producer-defined aliases.
+   through time separately from recorded-at knowledge time. Under the point-in-time policy, reject a
+   feature known after its cutoff or prior-partition labels not known before the next prediction origin
+   plus embargo. Under the retrospective policy, require all feature knowledge no later than the
+   canonical dataset creation instant and retain the late timestamps unchanged. Under either policy,
+   reject a feature reused as its own target, a target outside the future valid-time window, or a
+   leakage group in multiple partitions. The three leakage values must equal the row's stable
+   acquisition-spell subject, stable event subject, and player IDs; exact spell/event version IDs
+   remain provenance and must not split revisions of one subject across partitions. Never accept
+   producer-defined aliases.
 6. For every source capture in the sealed factual candidate, authenticate its unique content-addressed
    consumed-field set and exact corpus source mapping. Recompute the field-set root and require the Gate
    0A requests to equal the complete field/use preimage. Load the exact retained source-snapshot manifest

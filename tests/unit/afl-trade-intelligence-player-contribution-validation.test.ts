@@ -181,6 +181,24 @@ describe('AFL trade-intelligence player-contribution validation', () => {
     expect(report.content.evidenceLimitation).toContain('not_source_approval');
   });
 
+  it('requires the comparator label to preserve retrospective knowledge semantics', () => {
+    const { set, fit } = fixture();
+    const pointInTime = predictionContent(set.observationSetId, fit.baselineFitId);
+    expect(
+      aflTradePlayerPredictionSetContentSchema.safeParse({
+        ...pointInTime,
+        featurePolicy: 'retrospective_as_captured_at_dataset_creation',
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradePlayerPredictionSetContentSchema.safeParse({
+        ...pointInTime,
+        featurePolicy: 'retrospective_as_captured_at_dataset_creation',
+        gamesOnlyComparator: 'retrospective_expected_games_only_as_captured_at_dataset_creation',
+      }).success
+    ).toBe(true);
+  });
+
   it('seals final-test candidate selection to train, calibration, and validation partitions', () => {
     const { set, fit } = fixture();
     const base = predictionContent(set.observationSetId, fit.baselineFitId);

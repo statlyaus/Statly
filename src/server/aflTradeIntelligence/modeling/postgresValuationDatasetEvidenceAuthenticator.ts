@@ -6,7 +6,6 @@ import {
   type AflTradeCorpusFactualLineage,
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
-import { aflTradeSourceSnapshotManifestSchema } from '../artifacts/sourceSnapshotManifest';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { aflTradeFactualReleaseCandidateSchema } from '../outcomes/factualReleaseCandidateContracts';
 import type { AflDraftTradeOutcomeReleaseRepository } from '../outcomes/outcomeReleaseRepository';
@@ -17,6 +16,7 @@ import {
   AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
   type AflTradeValuationDatasetAdmissionEvidenceAuthenticator,
 } from './valuationDatasetAdmission';
+import { parseAflTradeModelSourceSnapshotRecord } from './postgresValuationDatasetFactualLineageRepository';
 
 const MAXIMUM_DATASET_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
@@ -28,6 +28,8 @@ interface ExactArtifactLoader {
 }
 
 interface FactualCandidateRow extends Record<string, unknown> {
+  candidate_id: string;
+  candidate_sha256: string;
   candidate_json: unknown;
   finalized_at: Date | string | null;
 }
@@ -43,6 +45,7 @@ interface FieldSetRow extends Record<string, unknown> {
 
 interface CaptureRow extends Record<string, unknown> {
   capture_id: string;
+  source_snapshot_id: string;
   manifest_json: unknown;
 }
 
@@ -111,21 +114,41 @@ async function loadFactualParents(
   lineageId: string
 ) {
   const candidateResult = await sql.query<FactualCandidateRow>(
-    `SELECT candidate_json,finalized_at
+    `SELECT candidate_id,candidate_sha256,candidate_json,finalized_at
        FROM outcome_factual_release_candidate
       WHERE candidate_id=$1 AND status='approved' AND finalized_at IS NOT NULL`,
     [factualCandidateId]
   );
   const candidateRow = requireOne(candidateResult.rows, 'finalized factual candidate');
-  const factualCandidate = aflTradeFactualReleaseCandidateSchema.parse(candidateRow.candidate_json);
+  const factualCandidate = aflTradeFactualReleaseCandidateSchema.parse({
+    candidateId: candidateRow.candidate_id,
+    candidateSha256: candidateRow.candidate_sha256,
+    content: candidateRow.candidate_json,
+  });
   const lineageResult = await sql.query<LineageRow>(
     `SELECT lineage.lineage_json,decision.decision_key AS gate2_decision_key
+       FROM outcome_valuation_dataset_factual_lineage lineage
+       JOIN outcome_valuation_dataset_factual_lineage_admission admission
+         ON admission.lineage_id=lineage.lineage_id
+       JOIN outcome_gate_decision decision
+         ON decision.decision_id=admission.gate_decision_id
+      WHERE lineage.lineage_id=$1
+        AND decision.state='approved'
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_gate_decision successor
+           WHERE successor.supersedes_decision_id=decision.decision_id)
+      UNION ALL
+     SELECT lineage.lineage_json,decision.decision_key AS gate2_decision_key
        FROM outcome_corpus_factual_lineage lineage
        JOIN outcome_corpus_factual_lineage_admission admission
          ON admission.lineage_id=lineage.lineage_id
        JOIN outcome_gate_decision decision
          ON decision.decision_id=admission.gate_decision_id
-      WHERE lineage.lineage_id=$1`,
+      WHERE lineage.lineage_id=$1
+        AND decision.state='approved'
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_gate_decision successor
+           WHERE successor.supersedes_decision_id=decision.decision_id)`,
     [lineageId]
   );
   const lineageRow = requireOne(lineageResult.rows, 'corpus-to-factual lineage');
@@ -161,7 +184,7 @@ async function loadSourceAuthority(
     throw new Error('Valuation dataset authentication is missing a consumed field set.');
   }
   const capturesResult = await sql.query<CaptureRow>(
-    `SELECT capture_id,manifest_json
+    `SELECT capture_id,source_snapshot_id,manifest_json
        FROM outcome_source_capture
       WHERE capture_id=ANY($1::text[])
       ORDER BY capture_id`,
@@ -171,10 +194,22 @@ async function loadSourceAuthority(
     throw new Error('Valuation dataset authentication is missing a contributing source capture.');
   }
   const captures = new Map(
-    capturesResult.rows.map((row) => [
-      row.capture_id,
-      aflTradeSourceSnapshotManifestSchema.parse(row.manifest_json),
-    ])
+    capturesResult.rows.map((row) => {
+      const snapshot = parseAflTradeModelSourceSnapshotRecord(row);
+      return [
+        row.capture_id,
+        {
+          ...snapshot,
+          sourceSnapshotManifest: {
+            snapshotId: snapshot.snapshotId,
+            content: {
+              capturedFields: [...snapshot.capturedFields],
+              createdAt: snapshot.createdAt,
+            },
+          },
+        },
+      ] as const;
+    })
   );
   const sourceRights = [];
   for (const mapping of mappings) {
@@ -182,7 +217,7 @@ async function loadSourceAuthority(
     if (!snapshot || snapshot.snapshotId !== mapping.sourceSnapshotId) {
       throw new Error('Valuation dataset source capture and lineage do not match.');
     }
-    const rightsArtifactId = snapshot.content.sourceRightsProposal.rightsArtifactId;
+    const rightsArtifactId = snapshot.rightsProposal.rightsArtifactId;
     const evaluations = await sql.query<EvaluationRow>(
       `SELECT operation_kind,receipt_json
          FROM outcome_valuation_dataset_gate0_evaluation
@@ -191,12 +226,7 @@ async function loadSourceAuthority(
           AND ((operation_kind='derived_feature_creation' AND evaluated_at<=$3)
             OR (operation_kind='model_training' AND evaluated_at=$4))
         ORDER BY operation_kind,evaluated_at DESC`,
-      [
-        rightsArtifactId,
-        snapshot.content.gate0aDecision.content.environment,
-        datasetCreatedAt,
-        admittedAt,
-      ]
+      [rightsArtifactId, snapshot.environment, datasetCreatedAt, admittedAt]
     );
     const derivationRows = evaluations.rows.filter(
       ({ operation_kind }) => operation_kind === 'derived_feature_creation'
@@ -217,8 +247,8 @@ async function loadSourceAuthority(
       captureId: mapping.captureId,
       sourceSnapshotId: mapping.sourceSnapshotId,
       consumedFieldSetId: mapping.consumedFieldSetId,
-      sourceSnapshotManifest: snapshot,
-      rightsProposal: snapshot.content.sourceRightsProposal,
+      sourceSnapshotManifest: snapshot.sourceSnapshotManifest,
+      rightsProposal: snapshot.rightsProposal,
       derivationReceipt,
       admissionReceipt,
       gateLedger,

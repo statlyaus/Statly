@@ -29,6 +29,7 @@ capabilities <- list(
   list(id = "afl-tables-player-details", function_name = "fetch_player_details_afltables", round = "not_applicable"),
   list(id = "footywire-player-details", function_name = "fetch_player_details_footywire", round = "not_applicable"),
   list(id = "aflca-coaches-votes", function_name = "fetch_coaches_votes", round = "supported"),
+  list(id = "aflca-coaches-votes-scoped", function_name = "fetch_coaches_votes", round = "supported"),
   list(id = "footywire-brownlow-awards", function_name = "fetch_awards_brownlow", round = "not_applicable"),
   list(id = "footywire-all-australian", function_name = "fetch_awards_allaustralian", round = "not_applicable"),
   list(id = "footywire-rising-star", function_name = "fetch_rising_star", round = "supported")
@@ -180,6 +181,10 @@ result <- withCallingHandlers(
     "aflca-coaches-votes" = fitzRoy::fetch_coaches_votes(
       season = call_args$season, round_number = call_args$round_number,
       comp = call_args$comp, team = call_args$team
+    ),
+    "aflca-coaches-votes-scoped" = fitzRoy::fetch_coaches_votes(
+      season = call_args$season, round_number = call_args$round_number,
+      comp = call_args$comp, team = call_args$team, award_scope = call_args$award_scope
     ),
     "footywire-brownlow-awards" = fitzRoy::fetch_awards_brownlow(
       season = call_args$season, type = call_args$type

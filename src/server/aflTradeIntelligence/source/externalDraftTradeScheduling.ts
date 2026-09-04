@@ -35,6 +35,7 @@ const requestTemplateSchema = z
     capabilityId: z.enum([
       'draftguru-trade-index',
       'draftguru-trade-detail',
+      'draftguru-player-trade-detail',
       'draftguru-year-page',
       'footywire-draft-results',
       'official-afl-indicative-draft-order',

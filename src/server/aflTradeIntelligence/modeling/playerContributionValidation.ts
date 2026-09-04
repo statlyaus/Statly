@@ -43,12 +43,30 @@ export const aflTradePlayerPredictionSetContentSchema = z
     candidateModelId: publicIdSchema,
     candidateSelectionPartitions: z.array(z.enum(['train', 'calibration', 'validation'])),
     finalTestRetuning: z.literal('prohibited'),
-    featurePolicy: z.literal('point_in_time_as_known_at_feature_cutoff'),
-    gamesOnlyComparator: z.literal('point_in_time_expected_games_only'),
+    featurePolicy: z.enum([
+      'point_in_time_as_known_at_feature_cutoff',
+      'retrospective_as_captured_at_dataset_creation',
+    ]),
+    gamesOnlyComparator: z.enum([
+      'point_in_time_expected_games_only',
+      'retrospective_expected_games_only_as_captured_at_dataset_creation',
+    ]),
     predictions: z.array(playerPredictionSchema).min(1).max(100_000),
   })
   .strict()
   .superRefine((set, context) => {
+    const retrospective = set.featurePolicy === 'retrospective_as_captured_at_dataset_creation';
+    if (
+      retrospective !==
+      (set.gamesOnlyComparator ===
+        'retrospective_expected_games_only_as_captured_at_dataset_creation')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['gamesOnlyComparator'],
+        message: 'The comparator must use the prediction set feature-knowledge policy.',
+      });
+    }
     const expectedSelectionPartitions =
       set.evaluatedPartition === 'validation'
         ? ['train', 'calibration']

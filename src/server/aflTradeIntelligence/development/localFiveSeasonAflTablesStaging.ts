@@ -14,9 +14,7 @@ import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoy
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
 import { createLocalAflTradeDockerFitzRoyCaptureExecutor } from './localDockerFitzRoyCaptureExecutor';
 import { createLocalAflTradeDockerFitzRoyDecodeExecutor } from './localDockerFitzRoyDecodeExecutor';
-import {
-  createLocalAflTradeNonProductionArtifactRepository,
-} from './localFileConditionalObjectStore';
+import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
 import { createLocalAflTradeFiveSeasonAflTablesAuthority } from './localFiveSeasonAflTablesAuthority';
 import {
   assertLocalAflTradeOutcomesRuntimeIdentity,
@@ -120,7 +118,8 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
        non_negative,definition_json,status)
      VALUES
        ('goals','goals/v1','Goals','numeric','goals',true,'{}'::jsonb,'approved'),
-       ('games','games/v1','Games','numeric','games',true,'{}'::jsonb,'approved')
+       ('games','games/v1','Games','numeric','games',true,'{}'::jsonb,'approved'),
+       ('brownlow_votes','brownlow-votes/v1','Brownlow votes','numeric','votes',true,'{}'::jsonb,'approved')
      ON CONFLICT DO NOTHING`
   );
   const artifactRootDirectory = resolve(options.artifactRootDirectory);
@@ -191,6 +190,9 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
         AND capture.anchor_season_year=ANY($1::smallint[])
         AND capture.status='staged'
         AND run.status='needs_review'
+        AND run.finalized_at IS NOT NULL
+        AND run.field_map_id=
+            'afl-tables-player-stats-local-' || capture.anchor_season_year::text || '-v2'
       GROUP BY capture.capture_id,run.normalization_run_id,capture.anchor_season_year,
                capture.captured_at
       ORDER BY capture.anchor_season_year,capture.captured_at DESC`,

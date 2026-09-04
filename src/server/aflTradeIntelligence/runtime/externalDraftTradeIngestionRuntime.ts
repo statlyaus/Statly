@@ -14,6 +14,7 @@ import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import { parseOfficialAflIndicativeDraftOrder } from '../source/draftCorroborationAdapter';
 import {
   captureDraftguruSource,
+  parseDraftguruPlayerTradeDetail,
   parseDraftguruTradeDetail,
   parseDraftguruTradeIndexEvidence,
   parseDraftguruYearSelections,
@@ -229,6 +230,12 @@ export function createAflTradeExternalIngestionRuntime(
             });
           case 'draftguru-trade-detail':
             return parseDraftguruTradeDetail(html, {
+              capture,
+              draftYear: command.request.anchorSeasonYear,
+              effectiveAt: command.request.effectiveAt,
+            });
+          case 'draftguru-player-trade-detail':
+            return parseDraftguruPlayerTradeDetail(html, {
               capture,
               draftYear: command.request.anchorSeasonYear,
               effectiveAt: command.request.effectiveAt,

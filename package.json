@@ -25,6 +25,8 @@
     "dev:firebase": "npx --yes --package=firebase-tools@15.25.0 firebase emulators:start --only auth,firestore",
     "dev:outcomes-db": "tsx Scripts/dev/start-local-afl-trade-outcomes-db.ts",
     "dev:outcomes:authenticate": "tsx Scripts/dev/authenticate-local-afl-trade-outcomes-db.ts",
+    "dev:outcomes:stage-aflca-coaches-votes": "tsx Scripts/dev/stage-local-aflca-coaches-votes.ts",
+    "dev:outcomes:stage-scoped-aflca-coaches-votes": "tsx Scripts/dev/stage-local-scoped-aflca-coaches-votes.ts",
     "dev:outcomes:review-afl-tables-2021-2025": "tsx Scripts/dev/review-local-five-season-afl-tables.ts",
     "dev:outcomes:review-official-2026": "tsx Scripts/dev/review-local-official-afl-2026.ts",
     "dev:outcomes:seed": "tsx Scripts/dev/seed-local-afl-trade-outcomes.ts",

@@ -187,6 +187,7 @@ const metricBindingSchema = z
     definitionVersion: z.string().min(1).max(120),
     unit: z.string().min(1).max(60),
     zeroSemantics: z.enum(['measured_zero', 'provider_zero_may_mean_missing']),
+    sourceRepresentation: z.enum(['numeric', 'integer_text']).optional(),
   })
   .strict();
 

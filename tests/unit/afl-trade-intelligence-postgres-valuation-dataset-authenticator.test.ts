@@ -19,7 +19,22 @@ vi.mock('@/server/aflTradeIntelligence/outcomes/factualReleaseCandidateContracts
   aflTradeFactualReleaseCandidateSchema: { parse: (value: unknown) => value },
 }));
 vi.mock('@/server/aflTradeIntelligence/artifacts/sourceSnapshotManifest', () => ({
-  aflTradeSourceSnapshotManifestSchema: { parse: (value: unknown) => value },
+  aflTradeSourceSnapshotManifestSchema: {
+    parse: (value: unknown) => value,
+    safeParse: (value: any) => ({
+      success: true,
+      data: {
+        snapshotId: value.snapshotId,
+        content: {
+          gate0aReceipt: { content: { request: { fieldUses: [] } } },
+          sourceRightsProposal: value.content.sourceRightsProposal,
+          gate0aDecision: value.content.gate0aDecision,
+          capturedFields: [],
+          createdAt: '2026-08-09T00:00:00.000Z',
+        },
+      },
+    }),
+  },
 }));
 vi.mock('@/server/aflTradeIntelligence/source/gate0aReceipt', () => ({
   aflTradeGate0AReceiptSchema: { parse: (value: unknown) => value },
@@ -123,7 +138,14 @@ const dataset = {
 
 function rowFor(sql: string) {
   if (sql.includes('outcome_factual_release_candidate'))
-    return [{ candidate_json: factualCandidate, finalized_at: createdAt }];
+    return [
+      {
+        candidate_id: factualCandidate.candidateId,
+        candidate_sha256: digest('1'),
+        candidate_json: factualCandidate.content,
+        finalized_at: createdAt,
+      },
+    ];
   if (sql.includes('outcome_corpus_factual_lineage'))
     return [{ lineage_json: corpusLineage, gate2_decision_key: 'gate2-lineage' }];
   if (sql.includes('outcome_valuation_dataset_consumed_field_set'))
@@ -139,12 +161,10 @@ function rowFor(sql: string) {
     return [
       {
         capture_id: 'capture-1',
+        source_snapshot_id: id('source-snapshot', '2'),
         manifest_json: {
-          snapshotId: id('source-snapshot', '2'),
-          content: {
-            sourceRightsProposal: { rightsArtifactId: id('source-rights', 'f') },
-            gate0aDecision: { content: { environment: 'test_fixture' } },
-          },
+          sourceRightsProposal: { rightsArtifactId: id('source-rights', 'f') },
+          gate0aDecision: { content: { environment: 'test_fixture' } },
         },
       },
     ];

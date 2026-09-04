@@ -15,6 +15,7 @@ import type {
   AflOutcomeSqlTransaction,
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import { aflTradeGate0AReceiptSchema, type AflTradeGate0AReceipt } from '../source/gate0aReceipt';
+import { hasCurrentAflTradeValuationDatasetDomainProvenance } from './postgresValuationDatasetFactualLineageRepository';
 
 export type AflTradeValuationDatasetPersistenceErrorCode =
   'INVALID_INPUT' | 'CONFLICTING_REPLAY' | 'INCOMPLETE_WRITE';
@@ -176,7 +177,7 @@ async function persistCandidateArtifacts(
   }
 }
 
-async function requireOrInsertFieldSet(
+export async function requireOrInsertAflTradeValuationDatasetFieldSet(
   transaction: AflOutcomeSqlTransaction,
   fieldSet: AflTradeConsumedFieldSet
 ) {
@@ -330,7 +331,7 @@ async function persistEvidenceRecords(
   evidence: ReturnType<typeof parsePersistenceEvidence>
 ) {
   for (const fieldSet of evidence.consumedFieldSets) {
-    await requireOrInsertFieldSet(transaction, fieldSet);
+    await requireOrInsertAflTradeValuationDatasetFieldSet(transaction, fieldSet);
   }
   for (const source of evidence.sourceRights) {
     await requireOrInsertGate0Receipt(
@@ -477,6 +478,16 @@ export class PostgresAflTradeValuationDatasetRepository {
         `valuation-evidence:${evidence.operationalAuthorization.receiptId}`,
       ];
       await lock(transaction, evidenceKeys);
+      if (
+        !(await hasCurrentAflTradeValuationDatasetDomainProvenance(transaction, {
+          factualCandidateId: dataset.content.factualParent.factualCandidateId,
+          lineageId: dataset.content.factualParent.corpusToCandidateLineageId,
+        }))
+      ) {
+        throw invalidInput(
+          'Dataset admission requires current canonical-promotion provenance.'
+        );
+      }
       if (await admissionReplay(transaction, receipt)) {
         return { admissionId: receipt.admissionId, idempotentReplay: true } as const;
       }

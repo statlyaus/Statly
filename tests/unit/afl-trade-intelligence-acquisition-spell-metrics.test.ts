@@ -344,6 +344,36 @@ describe('AFL trade acquisition-spell metrics', () => {
     ).toBe(true);
   });
 
+  it('keeps independently approved aggregation policies on distinct current heads', () => {
+    const featurePolicy = createAflTradeAcquisitionSpellMetricPolicy(policyContent());
+    const targetPolicy = createAflTradeAcquisitionSpellMetricPolicy({
+      ...policyContent(),
+      policyVersion: 'spell-metrics-target/v1',
+      approval: reference('acquisition-spell-metric-policy-approval', 'target-v1'),
+    });
+    const members = [
+      currentMember(gamesResult('round-1'), 'games'),
+      currentMember(goalsResult('a', '2'), 'goals'),
+    ];
+    const calculate = (policy: typeof featurePolicy) =>
+      calculateAflTradeAcquisitionSpellMetrics({
+        policy,
+        spell: spell(),
+        currentMembers: members,
+        currentHeadRevisions: [],
+        recordedAt: '2026-10-01T00:00:00.000Z',
+      });
+
+    const featureHeads = new Set(
+      calculate(featurePolicy).content.headAdvances.map(({ subjectKey }) => subjectKey)
+    );
+    const targetHeads = calculate(targetPolicy).content.headAdvances.map(
+      ({ subjectKey }) => subjectKey
+    );
+
+    expect(targetHeads.every((subjectKey) => !featureHeads.has(subjectKey))).toBe(true);
+  });
+
   it('preserves a reconciled conflict and withholds the spell total', () => {
     const policy = createAflTradeAcquisitionSpellMetricPolicy(policyContent());
     const conflict = currentMember(

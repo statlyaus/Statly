@@ -1,5 +1,6 @@
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
 import type { AflTradeDurableObjectArtifactRepository } from '../artifacts/durableObjectArtifactRepository';
+import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
 import {
   type AflTradeModelRunIntent,
   type AflTradeModelRunManifestV3,
@@ -16,7 +17,7 @@ import {
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
-import { aflTradeAcquisitionSpellMetricSchema } from '../outcomes/acquisitionSpellMetricContracts';
+import { parsePersistedAflTradeAcquisitionSpellMetric } from '../outcomes/acquisitionSpellMetricContracts';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
@@ -27,6 +28,7 @@ import {
   type AflTradePlayerObservationSetV2,
   aflTradePlayerObservationSetV2Schema,
 } from './playerContributionContracts';
+import { hasCurrentAflTradeValuationDatasetDomainProvenance } from './postgresValuationDatasetFactualLineageRepository';
 import {
   type AflTradeAdmittedModelRunEvidence,
   type AflTradeAdmittedModelRunEvidenceAuthenticator,
@@ -41,6 +43,20 @@ import {
 } from './admittedModelRunAuthority';
 
 const MAXIMUM_EXECUTABLE_ARTIFACT_BYTES = 128 * 1024 * 1024;
+
+type AflTradeExactExecutableArtifactReader =
+  | Pick<AflTradeDurableObjectArtifactRepository, 'loadExactWithObservation'>
+  | Pick<AflTradeImmutableArtifactRepository, 'loadExact'>;
+
+async function loadExactExecutableArtifact(
+  repository: AflTradeExactExecutableArtifactReader,
+  reference: AflTradeArtifactRef,
+  maximumBytes: number
+) {
+  return 'loadExactWithObservation' in repository
+    ? repository.loadExactWithObservation(reference, maximumBytes)
+    : repository.loadExact(reference, maximumBytes);
+}
 
 export type AflTradeModelRunPersistenceErrorCode =
   'INVALID_INPUT' | 'MISSING_EVIDENCE' | 'CONFLICTING_REPLAY' | 'INCOMPLETE_WRITE';
@@ -83,8 +99,18 @@ interface JsonRow extends Record<string, unknown> {
   document_json: unknown;
 }
 
+interface SpellMetricRow extends JsonRow {
+  spell_metric_version_id: string;
+  fact_sha256: string;
+}
+
 interface InstantRow extends Record<string, unknown> {
   instant: Date | string;
+}
+
+interface DatasetProvenanceRow extends Record<string, unknown> {
+  factual_candidate_id: string;
+  lineage_id: string;
 }
 
 function exactInstant(value: Date | string): string {
@@ -111,6 +137,31 @@ function requireOne<Row>(rows: readonly Row[], description: string): Row {
     );
   }
   return rows[0]!;
+}
+
+async function hasCurrentDomainProvenanceForIntent(
+  transaction: AflOutcomeSqlTransaction,
+  intentId: string
+): Promise<boolean> {
+  const result = await transaction.query<DatasetProvenanceRow>(
+    `SELECT dataset.factual_candidate_id,dataset.lineage_id
+       FROM outcome_valuation_model_run_intent intent
+       JOIN outcome_valuation_dataset_candidate dataset
+         ON dataset.dataset_id=intent.dataset_id
+      WHERE intent.intent_id=$1
+        AND dataset.status='finalized' AND dataset.finalized_at IS NOT NULL
+      FOR SHARE OF intent,dataset`,
+    [intentId]
+  );
+  const row = result.rows[0];
+  return (
+    result.rows.length === 1 &&
+    row !== undefined &&
+    (await hasCurrentAflTradeValuationDatasetDomainProvenance(transaction, {
+      factualCandidateId: row.factual_candidate_id,
+      lineageId: row.lineage_id,
+    }))
+  );
 }
 
 function requireMapValue<Key, Value>(
@@ -176,6 +227,12 @@ function executableReferences(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.featureValuesArtifact === undefined
+      ? []
+      : [protocol.content.featureValuesArtifact]),
+    ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
+      ? []
+      : [protocol.content.pointInTimeFeatureValuesArtifact]),
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,
@@ -233,7 +290,7 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     private readonly dependencies: {
       sql: AflOutcomeSqlClient;
       gateDecisionLedgerRepository: AflTradeGateDecisionLedgerRepository;
-      artifactRepository: Pick<AflTradeDurableObjectArtifactRepository, 'loadExactWithObservation'>;
+      artifactRepository: AflTradeExactExecutableArtifactReader;
       maximumArtifactBytes?: number;
     }
   ) {}
@@ -445,6 +502,17 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     const operationalAuthorization = aflTradeModelRunOperationalAuthorizationSchema.parse(
       row.operational_authorization_json
     );
+    if (
+      !(await hasCurrentAflTradeValuationDatasetDomainProvenance(this.dependencies.sql, {
+        factualCandidateId: datasetCandidate.content.factualParent.factualCandidateId,
+        lineageId: datasetCandidate.content.factualParent.corpusToCandidateLineageId,
+      }))
+    ) {
+      throw new AflTradeModelRunPersistenceError(
+        'MISSING_EVIDENCE',
+        'Model-run authority requires current canonical-promotion provenance.'
+      );
+    }
 
     const admissionReceiptIds = admission.content.sourceRightsEvaluations
       .map(({ admissionEvaluationReceiptId }) => admissionEvaluationReceiptId)
@@ -493,12 +561,15 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     );
 
     const spellMetricIds = unique(
-      observationSet.content.observations.flatMap(({ outcome }) =>
-        outcome.metrics.map(({ spellMetricVersionId }) => spellMetricVersionId)
-      )
+      observationSet.content.observations.flatMap(({ featureInputs, outcome }) => [
+        ...featureInputs.flatMap((feature) =>
+          feature.kind === 'acquisition_spell_metric' ? [feature.memberId] : []
+        ),
+        ...outcome.metrics.map(({ spellMetricVersionId }) => spellMetricVersionId),
+      ])
     );
-    const metricsResult = await this.dependencies.sql.query<JsonRow>(
-      `SELECT fact_json AS document_json
+    const metricsResult = await this.dependencies.sql.query<SpellMetricRow>(
+      `SELECT spell_metric_version_id,fact_sha256,fact_json AS document_json
          FROM outcome_acquisition_spell_metric_version
         WHERE spell_metric_version_id=ANY($1::text[])
         ORDER BY spell_metric_version_id`,
@@ -510,8 +581,12 @@ export class PostgresAflTradeAdmittedModelRunAuthority
         'Model-run authority is missing an exact acquisition-spell metric body.'
       );
     }
-    const spellMetrics = metricsResult.rows.map(({ document_json }) =>
-      aflTradeAcquisitionSpellMetricSchema.parse(document_json)
+    const spellMetrics = metricsResult.rows.map((row) =>
+      parsePersistedAflTradeAcquisitionSpellMetric({
+        spellMetricVersionId: row.spell_metric_version_id,
+        factSha256: row.fact_sha256,
+        content: row.document_json,
+      })
     );
 
     const referenceById = new Map(
@@ -524,7 +599,8 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     for (const reference of [...referenceById.values()].sort((left, right) =>
       left.artifactId.localeCompare(right.artifactId)
     )) {
-      const loaded = await this.dependencies.artifactRepository.loadExactWithObservation(
+      const loaded = await loadExactExecutableArtifact(
+        this.dependencies.artifactRepository,
         reference,
         Math.min(
           this.dependencies.maximumArtifactBytes ?? MAXIMUM_EXECUTABLE_ARTIFACT_BYTES,
@@ -579,6 +655,7 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     if (authorization.content.runIntentId !== intent.intentId) return false;
     return this.dependencies.sql.transaction(async (transaction) => {
       await lock(transaction, [`valuation-model-intent:${intent.intentId}`]);
+      if (!(await hasCurrentDomainProvenanceForIntent(transaction, intent.intentId))) return false;
       const gateHead = await transaction.query<{ revision: number }>(
         `SELECT revision FROM outcome_gate_ledger_head
           WHERE singleton_id=1 FOR SHARE`
@@ -615,15 +692,19 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     intentId: string;
     consumedAt: string;
   }): Promise<boolean> {
-    const result = await this.dependencies.sql.query(
-      `UPDATE outcome_valuation_model_run_authorization
-          SET consumed_at=$3
-        WHERE authorization_id=$1 AND intent_id=$2 AND consumed_at IS NULL
-          AND clock_timestamp()>=authorized_at AND clock_timestamp()<valid_through
-      RETURNING authorization_id`,
-      [input.authorizationId, input.intentId, input.consumedAt]
-    );
-    return result.rowCount === 1;
+    return this.dependencies.sql.transaction(async (transaction) => {
+      await lock(transaction, [`valuation-model-intent:${input.intentId}`]);
+      if (!(await hasCurrentDomainProvenanceForIntent(transaction, input.intentId))) return false;
+      const result = await transaction.query(
+        `UPDATE outcome_valuation_model_run_authorization
+            SET consumed_at=$3
+          WHERE authorization_id=$1 AND intent_id=$2 AND consumed_at IS NULL
+            AND clock_timestamp()>=authorized_at AND clock_timestamp()<valid_through
+        RETURNING authorization_id`,
+        [input.authorizationId, input.intentId, input.consumedAt]
+      );
+      return result.rowCount === 1;
+    });
   }
 
   async persistCompletedRun(unparsed: AflTradeModelRunManifestV3): Promise<boolean> {
@@ -634,12 +715,12 @@ export class PostgresAflTradeAdmittedModelRunAuthority
         intent_json: unknown;
         authorization_json: unknown;
       }>(
-        `SELECT intent.intent_json, authorization.authorization_json
+        `SELECT intent.intent_json,run_authorization.authorization_json
            FROM outcome_valuation_model_run_intent intent
-           JOIN outcome_valuation_model_run_authorization authorization
-             ON authorization.intent_id=intent.intent_id
-          WHERE intent.intent_id=$1 AND authorization.authorization_id=$2
-          FOR SHARE OF intent,authorization`,
+           JOIN outcome_valuation_model_run_authorization run_authorization
+             ON run_authorization.intent_id=intent.intent_id
+          WHERE intent.intent_id=$1 AND run_authorization.authorization_id=$2
+          FOR SHARE OF intent,run_authorization`,
         [run.content.runIntentId, run.content.runAuthorizationId]
       );
       const ancestryRow = ancestry.rows[0];
