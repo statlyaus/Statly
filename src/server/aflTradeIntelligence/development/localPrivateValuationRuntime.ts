@@ -274,7 +274,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
         return runner.runPrivate({ request, claim });
       },
       repairCurrent: (scopeKey, reason, repairOperationId) =>
-        runner.repairCurrent(scopeKey, reason, repairOperationId),
+        runner.repairPrivateCurrent(scopeKey, reason, repairOperationId),
     },
     workerId: input.workerId,
   });

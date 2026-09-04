@@ -1135,13 +1135,15 @@ stale authority and leaves the prior batch head readable; do not update the batc
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
 current HPN preparation implementation admits only `afl-men:2026-trades`, while the required 2025 HPN
-review covers the 2021–2025 evidence window. In addition, a clean database cannot discover its first
-weekly or ad-hoc scope without an existing prepared head, and the genuine factual, HPN, model-target,
-qualification, valuation-bundle, and trade-construction adapters are not composed by the worker.
+review covers the 2021–2025 evidence window. On a clean database, weekly startup catch-up discovers
+scopes only from existing prepared heads. The ad-hoc command can enqueue an explicit caller-supplied
+scope without such a head, but the worker cannot construct the missing first prepared-v3 head. The
+request-bound factual-output, HPN, model-target, qualification/model-evidence,
+valuation-bundle/trade-construction, and private prepared-v3 adapters are not composed by the worker.
 
-Before closing the rehearsal issue, reconcile the governed 2025 source/season policy, allow the
-existing scheduler to discover an authority-admitted scope before its first prepared head, and wire
-the shipped factual, HPN, genuine player, genuine pick, model-evidence, private prepared-v3, and
+Before closing the rehearsal issue, reconcile the governed 2025 source/season policy, allow weekly
+startup catch-up to discover an authority-admitted scope before its first prepared head, and wire the
+shipped factual, HPN, genuine player, genuine pick, model-evidence, private prepared-v3, and
 claim-fenced batch boundaries through the one existing dispatcher. Then run the command against a
 fresh loopback PostgreSQL 16 database named `statly_outcomes_test`, an isolated artifact root, and
 genuinely admitted local source authority. Prove restart/reclaim at every retained boundary, exact

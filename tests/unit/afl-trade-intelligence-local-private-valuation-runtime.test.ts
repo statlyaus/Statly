@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const runtime = vi.hoisted(() => ({
   refreshCurrent: vi.fn(),
   runPrivate: vi.fn(),
+  repairCurrent: vi.fn(),
+  repairPrivateCurrent: vi.fn(),
   dispatchRun: undefined as
     | ((input: {
         request: { requestId: string; scopeKey: string; trigger: 'ad_hoc' };
         claim: { claimId: string; leaseToken: string };
       }) => Promise<unknown>)
     | undefined,
+  dispatchRepair: undefined as
+    ((scopeKey: string, reason: string, repairOperationId: string) => Promise<unknown>) | undefined,
 }));
 
 vi.mock('@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient', () => ({
@@ -45,9 +49,12 @@ vi.mock('@/server/aflTradeIntelligence/development/localDockerFitzRoyDecodeExecu
 vi.mock('@/server/aflTradeIntelligence/development/localDockerFitzRoyCaptureExecutor', () => ({
   createLocalAflTradeDockerFitzRoyCaptureExecutor: () => ({}),
 }));
-vi.mock('@/server/aflTradeIntelligence/development/localCurrentValuationReconciliationAuthority', () => ({
-  createLocalAflTradeCurrentValuationReconciliationAuthority: () => ({}),
-}));
+vi.mock(
+  '@/server/aflTradeIntelligence/development/localCurrentValuationReconciliationAuthority',
+  () => ({
+    createLocalAflTradeCurrentValuationReconciliationAuthority: () => ({}),
+  })
+);
 vi.mock('@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesStaging', () => ({
   LOCAL_AFL_TRADE_FITZROY_RUNTIME: {
     dependencyLockSha256: 'a'.repeat(64),
@@ -84,7 +91,8 @@ vi.mock(
 vi.mock('@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner', () => ({
   createPostgresAflTradePrivateEvaluationCohortRunner: () => ({
     runPrivate: runtime.runPrivate,
-    repairCurrent: vi.fn(),
+    repairCurrent: runtime.repairCurrent,
+    repairPrivateCurrent: runtime.repairPrivateCurrent,
   }),
 }));
 vi.mock(
@@ -94,10 +102,14 @@ vi.mock(
 vi.mock('@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling', () => ({
   PostgresAflTradePrivateValuationScheduleRepository: class {},
   createPostgresAflTradePrivateValuationDispatcher: (input: {
-    runner: { run: typeof runtime.dispatchRun };
+    runner: {
+      run: typeof runtime.dispatchRun;
+      repairCurrent: NonNullable<typeof runtime.dispatchRepair>;
+    };
   }) => {
     runtime.dispatchRun = input.runner.run;
-    return {};
+    runtime.dispatchRepair = input.runner.repairCurrent;
+    return { repairCurrent: runtime.dispatchRepair };
   },
 }));
 
@@ -119,7 +131,10 @@ describe('local private valuation runtime dispatch continuation', () => {
   beforeEach(() => {
     runtime.refreshCurrent.mockReset();
     runtime.runPrivate.mockReset();
+    runtime.repairCurrent.mockReset();
+    runtime.repairPrivateCurrent.mockReset();
     runtime.dispatchRun = undefined;
+    runtime.dispatchRepair = undefined;
     createLocalAflTradePrivateValuationRuntime({
       pool: {} as never,
       artifactRoot: '/tmp/statly-local-private-valuation-runtime-test',
@@ -146,5 +161,25 @@ describe('local private valuation runtime dispatch continuation', () => {
       state: 'exhausted',
     });
     expect(runtime.runPrivate).not.toHaveBeenCalled();
+  });
+
+  it('routes repairs through exact current private dispatch authority', async () => {
+    const repairOperationId = `cohort-execution-repair:${'c'.repeat(64)}`;
+    runtime.repairPrivateCurrent.mockResolvedValue({ cycleId: 'private-repair-cycle' });
+
+    await expect(
+      runtime.dispatchRepair!(
+        request.scopeKey,
+        'Corrected retained private source outage.',
+        repairOperationId
+      )
+    ).resolves.toEqual({ cycleId: 'private-repair-cycle' });
+
+    expect(runtime.repairPrivateCurrent).toHaveBeenCalledWith(
+      request.scopeKey,
+      'Corrected retained private source outage.',
+      repairOperationId
+    );
+    expect(runtime.repairCurrent).not.toHaveBeenCalled();
   });
 });

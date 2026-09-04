@@ -31,6 +31,7 @@ import {
   PostgresAflTradePrivateEvaluationCohortExecutionRepository,
   createAflTradePrivateEvaluationExecutionOperationId,
 } from './postgresPrivateEvaluationCohortExecutionRepository';
+import { capturePostgresAflTradePrivateEvaluationCohortRepairAuthority } from './internal/postgresPrivateEvaluationCohortRepairAuthority';
 
 interface CaptureRow {
   readonly prepared_input_set_id: string;
@@ -133,11 +134,18 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
   readonly batchRepository: PostgresGovernedPrivateEvaluationBatchRepository;
   readonly executionRepository?: PostgresAflTradePrivateEvaluationCohortExecutionRepository;
   readonly workerId?: string;
+  readonly heartbeatMilliseconds?: number;
 }) {
   const executionRepository =
     dependencies.executionRepository ??
     new PostgresAflTradePrivateEvaluationCohortExecutionRepository(dependencies.client);
   const workerId = dependencies.workerId ?? 'system:weekly-valuation-coordinator';
+  const heartbeatMilliseconds =
+    dependencies.heartbeatMilliseconds ??
+    AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY.heartbeatSeconds * 1_000;
+  if (!Number.isSafeInteger(heartbeatMilliseconds) || heartbeatMilliseconds < 1) {
+    throw new TypeError('Private evaluation execution heartbeat must be a positive integer.');
+  }
   const captureCurrent = async (scopeKey: string) =>
     dependencies.client.transaction(async (transaction) => {
       await transaction.query(`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
@@ -661,11 +669,14 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
             .catch((error: unknown) => {
               heartbeatFailure = error;
             });
-        }, AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY.heartbeatSeconds * 1_000);
+        }, heartbeatMilliseconds);
         heartbeatTimer.unref?.();
-        const stopHeartbeat = async () => {
+        const drainHeartbeat = async () => {
           clearInterval(heartbeatTimer);
           await heartbeatInFlight;
+        };
+        const stopHeartbeat = async () => {
+          await drainHeartbeat();
           if (heartbeatFailure !== null) throw heartbeatFailure;
         };
         let completing = false;
@@ -679,8 +690,8 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
           });
           if (heartbeatFailure !== null) throw heartbeatFailure;
           if (staged.state === 'stale_authority') {
-            completing = true;
             await stopHeartbeat();
+            completing = true;
             await executionRepository.complete({
               claim,
               outcome: 'permanent_failure',
@@ -696,8 +707,8 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
           }
           if (staged.state === 'unavailable') {
             const result = { state: 'unavailable' as const, blockers: staged.blockers };
-            completing = true;
             await stopHeartbeat();
+            completing = true;
             await executionRepository.complete({
               claim,
               outcome: 'unavailable',
@@ -738,8 +749,8 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
             generationId: staged.generationId,
             generatedAt: generation.content.generatedAt,
           };
-          completing = true;
           await stopHeartbeat();
+          completing = true;
           await executionRepository.complete({
             claim,
             outcome: 'succeeded',
@@ -750,6 +761,7 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
           return result;
         } catch (error) {
           if (completing) throw error;
+          await drainHeartbeat();
           const transientCause = classifyAflTradePrivateEvaluationExecutionError(error);
           const cause =
             transientCause ??
@@ -758,7 +770,6 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
               message: boundedExecutionMessage(error instanceof Error ? error.message : error),
               retryable: false,
             } as const);
-          await stopHeartbeat();
           const status = await executionRepository.complete({
             claim,
             outcome: cause.retryable ? 'transient_failure' : 'permanent_failure',
@@ -912,6 +923,17 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
     }
   }
 
+  async function loadRepairReplay(scopeKey: string, reason: string, repairOperationId: string) {
+    const replay = await executionRepository.loadRepair(repairOperationId);
+    if (
+      replay !== null &&
+      (replay.content.authority.scopeKey !== scopeKey || replay.content.repairReason !== reason)
+    ) {
+      throw new TypeError('Explicit repair replay conflicts with retained custody.');
+    }
+    return replay;
+  }
+
   return {
     async runCurrent(scopeKey: string) {
       const captured = await captureOrStale(() => captureCurrent(scopeKey));
@@ -936,16 +958,8 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
       });
     },
     async repairCurrent(scopeKey: string, reason: string, repairOperationId: string) {
-      const replay = await executionRepository.loadRepair(repairOperationId);
-      if (replay !== null) {
-        if (
-          replay.content.authority.scopeKey !== scopeKey ||
-          replay.content.repairReason !== reason
-        ) {
-          throw new TypeError('Explicit repair replay conflicts with retained custody.');
-        }
-        return replay;
-      }
+      const replay = await loadRepairReplay(scopeKey, reason, repairOperationId);
+      if (replay !== null) return replay;
       const captured = await captureCurrent(scopeKey);
       return executionRepository.openRepair({
         authority: {
@@ -959,6 +973,20 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
         readyTradeIds: captured.capture.entries
           .filter((entry) => entry.state === 'ready')
           .map(({ tradeId }) => tradeId),
+        repairOperationId,
+        reason,
+      });
+    },
+    async repairPrivateCurrent(scopeKey: string, reason: string, repairOperationId: string) {
+      const replay = await loadRepairReplay(scopeKey, reason, repairOperationId);
+      if (replay !== null) return replay;
+      const captured = await capturePostgresAflTradePrivateEvaluationCohortRepairAuthority(
+        dependencies.client,
+        scopeKey
+      );
+      return executionRepository.openRepair({
+        authority: captured.authority,
+        readyTradeIds: captured.readyTradeIds,
         repairOperationId,
         reason,
       });

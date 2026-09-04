@@ -2795,6 +2795,73 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(finalClaimId);
     expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(finalLeaseToken);
 
+    const repairOperationId = addressed(
+      'cohort-execution-repair',
+      'dispatch-bound-private-batch-repair'
+    );
+    const repairReason = 'Corrected retained private calculation outage.';
+    const retainedPrepared = concurrentPrepared[0];
+    if (
+      retainedPrepared.state === 'stale_authority' ||
+      retainedPrepared.preparedInputSet.content.preparationAuthority !==
+        'qualified_current_model_evidence' ||
+      retainedCurrent.state !== 'qualified'
+    ) {
+      throw new Error('The private repair tracer requires retained qualified prepared authority.');
+    }
+    const repaired = await privateBatchRunner.repairPrivateCurrent(
+      operation.content.scopeKey,
+      repairReason,
+      repairOperationId
+    );
+    expect(repaired).toMatchObject({
+      content: {
+        repairSequence: 1,
+        repairOperationId,
+        repairReason,
+        authority: {
+          scopeKey: operation.content.scopeKey,
+          preparedInputSetId: retainedPrepared.preparedInputSet.preparedInputSetId,
+          preparedInputSetRevision: 1,
+          preparationOperationId: retainedPrepared.preparedInputSet.content.preparationOperationId,
+          currentModelEvidenceOperationId: retainedCurrent.operationId,
+          dispatchAuthority: {
+            requestId,
+            factualOutputId,
+            hpnCalculationId,
+            modelOperationId: operation.operationId,
+          },
+          modelQualificationWorkId: qualificationWorkId,
+          modelPairRevision: retainedCurrent.modelRevision,
+        },
+      },
+    });
+    expect(repaired.content.authority).not.toHaveProperty('factualReleaseRevision');
+    await expect(
+      outcomesPool.query(
+        `SELECT trade_id FROM outcome_private_evaluation_execution_work
+          WHERE cycle_id=$1 ORDER BY trade_id`,
+        [repaired.cycleId]
+      )
+    ).resolves.toMatchObject({ rows: [{ trade_id: releaseTradeId }] });
+    await mutateFixture(
+      `UPDATE outcome_private_reviewed_evaluation_head
+          SET status='withdrawn' WHERE valuation_scope_key=$1 AND evidence_scope_key=$2`,
+      [privateAuthority.valuationScopeKey, privateAuthority.evidenceScopeKey]
+    );
+    await expect(
+      privateBatchRunner.repairPrivateCurrent(
+        operation.content.scopeKey,
+        repairReason,
+        repairOperationId
+      )
+    ).resolves.toEqual(repaired);
+    await mutateFixture(
+      `UPDATE outcome_private_reviewed_evaluation_head
+          SET status='authorized' WHERE valuation_scope_key=$1 AND evidence_scope_key=$2`,
+      [privateAuthority.valuationScopeKey, privateAuthority.evidenceScopeKey]
+    );
+
     await expect(
       client.transaction(async (transaction) => {
         await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
