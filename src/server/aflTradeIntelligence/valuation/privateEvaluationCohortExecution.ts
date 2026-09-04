@@ -5,18 +5,45 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { aflTradePrivatePreparedValuationDispatchAuthoritySchema } from './preparedValuationInputSet';
 
 const idSchema = z.string().trim().min(1).max(400);
-const authoritySchema = z
+const commonAuthorityShape = {
+  scopeKey: idSchema,
+  preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
+  preparedInputSetRevision: z.number().int().positive(),
+  modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
+  modelPairRevision: z.number().int().positive(),
+} as const;
+
+const publicAuthoritySchema = z
   .object({
-    scopeKey: idSchema,
-    preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
-    preparedInputSetRevision: z.number().int().positive(),
+    ...commonAuthorityShape,
     factualReleaseRevision: z.number().int().positive(),
-    modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
-    modelPairRevision: z.number().int().positive(),
   })
   .strict();
+
+const privateAuthoritySchema = z
+  .object({
+    ...commonAuthorityShape,
+    preparationOperationId: aflTradeContentAddressedIdSchema(
+      'valuation-cohort-preparation-operation'
+    ),
+    currentModelEvidenceOperationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-model-evidence-operation'
+    ),
+    dispatchAuthority: aflTradePrivatePreparedValuationDispatchAuthoritySchema,
+  })
+  .strict();
+
+export const aflTradePrivateEvaluationCohortExecutionAuthoritySchema = z.union([
+  publicAuthoritySchema,
+  privateAuthoritySchema,
+]);
+
+export type AflTradePrivateEvaluationCohortExecutionAuthority = z.infer<
+  typeof aflTradePrivateEvaluationCohortExecutionAuthoritySchema
+>;
 
 export const AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY = {
   schemaVersion: 'private-evaluation-cohort-execution-policy/v1',
@@ -34,7 +61,7 @@ const cycleContentSchema = z
     schemaVersion: z.literal('private-evaluation-cohort-execution-cycle/v1'),
     environment: z.literal('non_production'),
     inputFingerprint: aflTradeContentAddressedIdSchema('cohort-execution-input'),
-    authority: authoritySchema,
+    authority: aflTradePrivateEvaluationCohortExecutionAuthoritySchema,
     repairSequence: z.number().int().nonnegative(),
     openingCause: z.enum(['authenticated_inputs_changed', 'explicit_repair']),
     openingPrincipalId: z.literal('system:weekly-valuation-coordinator'),
@@ -208,19 +235,22 @@ export function classifyAflTradePrivateEvaluationExecutionError(
 }
 
 export function createAflTradePrivateEvaluationCohortInputFingerprint(
-  input: z.input<typeof authoritySchema>
+  input: z.input<typeof aflTradePrivateEvaluationCohortExecutionAuthoritySchema>
 ): string {
-  return createAflTradeContentAddress('cohort-execution-input', authoritySchema.parse(input));
+  return createAflTradeContentAddress(
+    'cohort-execution-input',
+    aflTradePrivateEvaluationCohortExecutionAuthoritySchema.parse(input)
+  );
 }
 
 export function createAflTradePrivateEvaluationCohortExecutionCycle(input: {
-  readonly authority: z.input<typeof authoritySchema>;
+  readonly authority: z.input<typeof aflTradePrivateEvaluationCohortExecutionAuthoritySchema>;
   readonly repairSequence: number;
   readonly openedAt: string;
   readonly repairOperationId?: string;
   readonly repairReason?: string;
 }): AflTradePrivateEvaluationCohortExecutionCycle {
-  const authority = authoritySchema.parse(input.authority);
+  const authority = aflTradePrivateEvaluationCohortExecutionAuthoritySchema.parse(input.authority);
   const repairSequence = z.number().int().nonnegative().parse(input.repairSequence);
   const inputFingerprint = createAflTradePrivateEvaluationCohortInputFingerprint(authority);
   const content = {

@@ -34,6 +34,70 @@ class InactiveFactualAuthorityTransaction implements AflOutcomeSqlTransaction {
 }
 
 describe('PostgreSQL governed current calculation authority', () => {
+  it('uses private prepared-v3 authority instead of the public factual registry', async () => {
+    const calls: string[] = [];
+    const transaction: AflOutcomeSqlTransaction = {
+      async query<Row>(sql: string): Promise<AflOutcomeSqlQueryResult<Row>> {
+        calls.push(sql);
+        if (sql.includes('SET LOCAL ROLE') || sql.includes('RESET ROLE')) {
+          return { rows: [], rowCount: null };
+        }
+        if (sql.includes('load_outcome_private_prepared_v3_authority')) {
+          return { rows: [], rowCount: 0 };
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
+      },
+    };
+
+    await expect(
+      capturePostgresGovernedPrivateEvaluationCurrentAuthority({
+        transaction,
+        selector: {
+          valuationScopeKey: 'afl-men:2026-trades',
+          tradeId: 'trade:fixture',
+        },
+        capturedAt: '2026-08-20T10:00:00.000Z',
+        prepared: {
+          preparationAuthority: 'qualified_current_model_evidence',
+          factualReleaseScopeKey: 'private-afl-draft-trade-outcomes',
+          factualReleaseId: `outcome-release:${'1'.repeat(64)}`,
+          factualReleaseArtifact: {} as never,
+          releaseMembershipArtifact: {} as never,
+          preparationOperationId: `valuation-cohort-preparation-operation:${'2'.repeat(64)}`,
+          modelEvidence: {
+            operationId: `current-valuation-model-evidence-operation:${'3'.repeat(64)}`,
+          } as never,
+          dispatchAuthority: {
+            requestId: `private-valuation-dispatch:${'4'.repeat(64)}`,
+            factualOutputId: `private-valuation-factual-output:${'5'.repeat(64)}`,
+            hpnCalculationId: `hpn-pav-season:${'6'.repeat(64)}`,
+            modelOperationId: `private-valuation-model-operation:${'7'.repeat(64)}`,
+          },
+        },
+        trace: {} as never,
+        materializationManifestId: `private-evaluation-materialization-manifest:${'8'.repeat(64)}`,
+        materializationManifestArtifact: {} as never,
+        valuationInputBundleId: `valuation-input-bundle:${'9'.repeat(64)}`,
+        valuationInputBundleArtifact: {} as never,
+        preparedInputHeadRevision: 1,
+        preparedInputSetId: `prepared-valuation-input-set:${'a'.repeat(64)}`,
+        artifactRepository: createAflTradeFixtureArtifactRepository({
+          artifactClass: 'derived_private',
+        }),
+        maximumArtifactBytes: 1024 * 1024,
+      })
+    ).resolves.toEqual({
+      state: 'unavailable',
+      blockers: [
+        {
+          code: 'source_blocked',
+          message: 'The exact private prepared authority is no longer current.',
+        },
+      ],
+    });
+    expect(calls.some((sql) => sql.includes('FROM outcome_registry_head'))).toBe(false);
+  });
+
   it('fails closed when the prepared factual release is no longer active', async () => {
     await expect(
       capturePostgresGovernedPrivateEvaluationCurrentAuthority({
@@ -44,6 +108,7 @@ describe('PostgreSQL governed current calculation authority', () => {
         },
         capturedAt: '2026-08-20T10:00:00.000Z',
         prepared: {
+          preparationAuthority: 'authenticated_calculation_evidence_snapshot',
           factualReleaseScopeKey: 'public-afl-draft-trade-outcomes',
           factualReleaseId: `outcome-release:${'1'.repeat(64)}`,
           factualReleaseArtifact: {} as never,
@@ -97,7 +162,8 @@ describe('PostgreSQL governed current calculation authority', () => {
       blockers: [
         {
           code: 'source_blocked',
-          message: 'No current authorized private derived-calculation decision covers this release.',
+          message:
+            'No current authorized private derived-calculation decision covers this release.',
         },
       ],
     });

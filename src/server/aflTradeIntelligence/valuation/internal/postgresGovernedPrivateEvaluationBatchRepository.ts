@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   canonicalizeAflTradeJson,
   sha256AflTradeCanonicalJson,
@@ -51,6 +53,7 @@ function isAuthorityConflict(error: unknown): boolean {
       'Private evaluation batch transition is stale, cross-scope, or unauthenticated',
       'Current private evaluation batch head target is not backed by its exact transition',
       'Private evaluation cohort final authority is stale',
+      'Private valuation dispatch request lookup lost its live claim fence',
     ].some((message) => error.message.includes(message))
   );
 }
@@ -271,6 +274,9 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     readonly action: 'activate';
     readonly cohortOperationId?: string;
   }): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
+    if ('dispatchClaim' in input) {
+      throw new TypeError('Public private-batch activation rejects dispatch claim authority.');
+    }
     if (
       input.operationId !==
       createGovernedPrivateEvaluationBatchOperationId({
@@ -302,6 +308,68 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
             input.action,
             AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
             ...(captured ? [input.cohortOperationId!] : []),
+          ]
+        );
+        if (result.rows.length !== 1) {
+          throw new TypeError('Private evaluation batch transition returned no exact result.');
+        }
+        return transitionResult(input.scopeKey, result.rows[0]!);
+      });
+    } catch (error) {
+      if (isAuthorityConflict(error)) {
+        throw new GovernedPrivateEvaluationBatchConflictError(
+          'Private evaluation batch transition lost current authority.',
+          { cause: error }
+        );
+      }
+      throw error;
+    }
+  }
+
+  async advanceFromDispatchClaim(input: {
+    readonly scopeKey: string;
+    readonly batchId: string;
+    readonly expectedRevision: number;
+    readonly operationId: string;
+    readonly action: 'activate';
+    readonly cohortOperationId: string;
+    readonly dispatchClaim: {
+      readonly requestId: string;
+      readonly claimId: string;
+      readonly leaseToken: string;
+    };
+  }): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
+    if (
+      input.operationId !==
+      createGovernedPrivateEvaluationBatchOperationId({
+        scopeKey: input.scopeKey,
+        batchId: input.batchId,
+        expectedRevision: input.expectedRevision,
+        action: input.action,
+      })
+    ) {
+      throw new TypeError('Private evaluation batch operation identity is not exact.');
+    }
+    try {
+      return await this.client.transaction(async (transaction) => {
+        await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
+        await transaction.query(`SET LOCAL ROLE afl_trade_private_evaluation_coordinator`);
+        const result = await transaction.query<TransitionRow>(
+          `SELECT batch_id,revision,transition_id,activated_at
+             FROM advance_outcome_current_private_evaluation_batch_from_dispatch_claim(
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+             )`,
+          [
+            input.scopeKey,
+            input.batchId,
+            input.expectedRevision,
+            input.operationId,
+            input.action,
+            AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+            input.cohortOperationId,
+            input.dispatchClaim.requestId,
+            input.dispatchClaim.claimId,
+            createHash('sha256').update(input.dispatchClaim.leaseToken, 'utf8').digest('hex'),
           ]
         );
         if (result.rows.length !== 1) {

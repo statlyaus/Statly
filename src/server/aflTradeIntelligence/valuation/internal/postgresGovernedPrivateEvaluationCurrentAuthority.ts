@@ -9,6 +9,7 @@ import {
   type AflDraftTradeOutcomeReleaseRegistry,
 } from '../../outcomes/outcomeReleaseState';
 import type { AflOutcomeSqlTransaction } from '../../outcomes/postgresOutcomeReleaseRepository';
+import { aflTradeQualifiedCurrentValuationModelEvidenceResultSchema } from '../currentValuationModelEvidence';
 import {
   parseAflTradePrivateValuationEvaluationDecision,
   type AflTradePrivateValuationEvaluationDecision,
@@ -45,13 +46,30 @@ type CurrentAuthorityInput = Readonly<{
   transaction: AflOutcomeSqlTransaction;
   selector: { valuationScopeKey: string; tradeId: string };
   capturedAt: string;
-  prepared: {
-    factualReleaseScopeKey: string;
-    factualReleaseId: string;
-    factualReleaseArtifact: AflTradeArtifactRef;
-    releaseMembershipArtifact: AflTradeArtifactRef;
-    sourceQualificationEvidenceRefs: readonly AflTradeArtifactRef[];
-  };
+  prepared:
+    | {
+        preparationAuthority: 'authenticated_calculation_evidence_snapshot';
+        factualReleaseScopeKey: string;
+        factualReleaseId: string;
+        factualReleaseArtifact: AflTradeArtifactRef;
+        releaseMembershipArtifact: AflTradeArtifactRef;
+        sourceQualificationEvidenceRefs: readonly AflTradeArtifactRef[];
+      }
+    | {
+        preparationAuthority: 'qualified_current_model_evidence';
+        factualReleaseScopeKey: string;
+        factualReleaseId: string;
+        factualReleaseArtifact: AflTradeArtifactRef;
+        releaseMembershipArtifact: AflTradeArtifactRef;
+        preparationOperationId: string;
+        modelEvidence: unknown;
+        dispatchAuthority: {
+          requestId: string;
+          factualOutputId: string;
+          hpnCalculationId: string;
+          modelOperationId: string;
+        };
+      };
   trace: GovernedPrivateEvaluationInputTrace;
   materializationManifestId: string;
   materializationManifestArtifact: AflTradeArtifactRef;
@@ -77,9 +95,14 @@ function authenticateRegistry(value: unknown): AflDraftTradeOutcomeReleaseRegist
   );
 }
 
-type PreparedFactualAuthority = CurrentAuthorityInput['prepared'] & {
+type PreparedFactualAuthority = Readonly<{
   readonly valuationScopeKey: string;
-};
+  readonly factualReleaseScopeKey: string;
+  readonly factualReleaseId: string;
+  readonly factualReleaseArtifact: AflTradeArtifactRef;
+  readonly releaseMembershipArtifact: AflTradeArtifactRef;
+  readonly sourceQualificationEvidenceRefs: readonly AflTradeArtifactRef[];
+}>;
 
 export async function loadCurrentPrivateValuationDecision(
   transaction: AflOutcomeSqlTransaction,
@@ -106,7 +129,8 @@ export async function loadCurrentPrivateValuationDecision(
       blockers: [
         {
           code: 'source_blocked',
-          message: 'No current authorized private derived-calculation decision covers this release.',
+          message:
+            'No current authorized private derived-calculation decision covers this release.',
         },
       ],
     };
@@ -150,7 +174,8 @@ export async function loadCurrentPrivateValuationDecision(
       blockers: [
         {
           code: 'source_blocked',
-          message: 'No current authorized private derived-calculation decision covers this release.',
+          message:
+            'No current authorized private derived-calculation decision covers this release.',
         },
       ],
     };
@@ -161,6 +186,75 @@ export async function loadCurrentPrivateValuationDecision(
 export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
   input: CurrentAuthorityInput
 ): Promise<GovernedPrivateEvaluationCapturedCalculationAuthority> {
+  if (input.prepared.preparationAuthority === 'qualified_current_model_evidence') {
+    await input.transaction.query(`SET LOCAL ROLE afl_trade_private_evaluation_coordinator`);
+    const result = await input.transaction.query<{
+      readonly scope_key: string;
+      readonly factual_release_id: string;
+      readonly factual_output_id: string;
+      readonly hpn_calculation_id: string;
+      readonly model_operation_id: string;
+      readonly model_evidence_json: unknown;
+    }>(
+      `SELECT scope_key,factual_release_id,factual_output_id,hpn_calculation_id,
+              model_operation_id,model_evidence_json
+         FROM load_outcome_private_prepared_v3_authority($1)`,
+      [input.prepared.dispatchAuthority.requestId]
+    );
+    await input.transaction.query(`RESET ROLE`);
+    if (result.rows.length === 0) {
+      return {
+        state: 'unavailable',
+        blockers: [
+          {
+            code: 'source_blocked',
+            message: 'The exact private prepared authority is no longer current.',
+          },
+        ],
+      };
+    }
+    const row = result.rows[0];
+    if (result.rows.length !== 1 || row === undefined) {
+      throw new TypeError('The private prepared authority is unavailable or ambiguous.');
+    }
+    const modelEvidence = aflTradeQualifiedCurrentValuationModelEvidenceResultSchema.parse(
+      input.prepared.modelEvidence
+    );
+    if (
+      row.scope_key !== input.selector.valuationScopeKey ||
+      row.factual_release_id !== input.prepared.factualReleaseId ||
+      row.factual_output_id !== input.prepared.dispatchAuthority.factualOutputId ||
+      row.hpn_calculation_id !== input.prepared.dispatchAuthority.hpnCalculationId ||
+      row.model_operation_id !== input.prepared.dispatchAuthority.modelOperationId ||
+      canonicalizeAflTradeJson(row.model_evidence_json) !== canonicalizeAflTradeJson(modelEvidence)
+    ) {
+      throw new TypeError('The private prepared head disagrees with exact model evidence.');
+    }
+    const componentAuthority = await loadCurrentGovernedComponentAuthority({
+      transaction: input.transaction,
+      trace: input.trace,
+      capturedAt: input.capturedAt,
+      artifactRepository: input.artifactRepository,
+      maximumArtifactBytes: input.maximumArtifactBytes,
+    });
+    if (componentAuthority.state === 'unavailable') return componentAuthority;
+    return {
+      state: 'ready',
+      preparedInputHeadRevision: input.preparedInputHeadRevision,
+      preparedInputSetId: input.preparedInputSetId,
+      preparationAuthority: input.prepared.preparationAuthority,
+      preparationOperationId: input.prepared.preparationOperationId,
+      currentModelEvidenceOperationId: modelEvidence.operationId,
+      dispatchAuthority: input.prepared.dispatchAuthority,
+      factualReleaseId: input.prepared.factualReleaseId,
+      materializationManifestId: input.materializationManifestId,
+      materializationManifestArtifact: input.materializationManifestArtifact,
+      valuationInputBundleId: input.valuationInputBundleId,
+      valuationInputBundleArtifact: input.valuationInputBundleArtifact,
+      gateLedgerRevision: componentAuthority.gateLedgerRevision,
+      components: componentAuthority.components,
+    };
+  }
   const result = await input.transaction.query<FactualHeadRow>(
     `SELECT head.revision,head.last_event_id,head.registry_json,
        active.release_id AS active_release_id,active.revision AS active_revision,

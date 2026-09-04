@@ -249,6 +249,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     artifactRepository: artifacts,
     maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
     principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+    enableAutomatedPrivateCalculation: true,
     authorizeReader: async () => false,
   });
   const runner = createPostgresAflTradePrivateEvaluationCohortRunner({
@@ -263,14 +264,14 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
   return createPostgresAflTradePrivateValuationDispatcher({
     repository: new PostgresAflTradePrivateValuationScheduleRepository(client),
     runner: {
-      run: async ({ request }) => {
+      run: async ({ request, claim }) => {
         const result = await evidence.refreshCurrent({
           scopeKey: request.scopeKey,
           trigger: request.trigger,
           stableOperationKey: createAflTradePrivateValuationDispatchEvidenceKey(request),
         });
         if (result.state === 'unavailable') return { state: 'exhausted' as const };
-        return runner.runCurrent(request.scopeKey);
+        return runner.runPrivate({ request, claim });
       },
       repairCurrent: (scopeKey, reason, repairOperationId) =>
         runner.repairCurrent(scopeKey, reason, repairOperationId),

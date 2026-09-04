@@ -1078,10 +1078,12 @@ and may advance only the private factual head. An unavailable evidence result co
 as exhausted rather than retrying it as a transient failure. After qualified current-model evidence
 exists, the private prepared-v3 coordinator can authenticate that retained evidence and the exact
 dispatch ancestry, construct the existing valuation-input bundle and trade manifests, register one
-immutable prepared generation, and compare-and-swap the private prepared head. The deployed worker
-does not yet invoke this coordinator and does not yet run the downstream exhaustive cohort; do not
-describe the repository as automatic raw-data-to-recalculation until those remaining stages are
-composed.
+immutable prepared generation, and compare-and-swap the private prepared head. When that exact private
+prepared head already exists, the deployed worker now carries the same live dispatch claim into the
+exhaustive cohort and final atomic batch activation. The worker still does not compose factual-output,
+HPN, model-evidence, and prepared-v3 construction in its production runtime. Do not describe the
+repository as automatic raw-data-to-recalculation until those upstream adapters are composed and the
+genuine clean-checkout rehearsal below passes.
 
 Run private preparation only while holding the request's current live claim. The operation validates
 the current private factual head, reviewed evidence decision and bundle, normalized/reconciled
@@ -1119,6 +1121,33 @@ row means capture did not commit; an operation without a result is resumable ret
 authority mismatch or expired/reclaimed claim must fail closed and leave the prior prepared head
 current. Do not manually insert a result or update append-only operation history. Private preparation
 must leave `outcome_active_release` and all public model/valuation publication pointers unchanged.
+
+The exhaustive cohort capture retains preparation, current-model-evidence, dispatch, factual-output,
+HPN-calculation, model-operation, qualification-work, and model-pair ancestry, but never the claim ID
+or lease token. A replacement live claim for the same request can therefore resume the same durable
+cycle. Final activation calls only the dispatch-fenced database wrapper, which authenticates the
+current claim both before and after compare-and-swap. The older public/release-backed activation path
+rejects private prepared-v3 targets. An expired, reclaimed, mismatched, or superseded claim returns
+stale authority and leaves the prior batch head readable; do not update the batch head directly.
+
+### Clean-checkout genuine rehearsal blocker
+
+The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
+command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
+current HPN preparation implementation admits only `afl-men:2026-trades`, while the required 2025 HPN
+review covers the 2021–2025 evidence window. In addition, a clean database cannot discover its first
+weekly or ad-hoc scope without an existing prepared head, and the genuine factual, HPN, model-target,
+qualification, valuation-bundle, and trade-construction adapters are not composed by the worker.
+
+Before closing the rehearsal issue, reconcile the governed 2025 source/season policy, allow the
+existing scheduler to discover an authority-admitted scope before its first prepared head, and wire
+the shipped factual, HPN, genuine player, genuine pick, model-evidence, private prepared-v3, and
+claim-fenced batch boundaries through the one existing dispatcher. Then run the command against a
+fresh loopback PostgreSQL 16 database named `statly_outcomes_test`, an isolated artifact root, and
+genuinely admitted local source authority. Prove restart/reclaim at every retained boundary, exact
+no-change replay, stale/superseded authority rejection, one genuinely unavailable cohort member,
+complete batch visibility only after commit, and byte-identical public heads. Any fixture, fabricated
+qualification, public-release fallback, or missing/expired rights authority invalidates the proof.
 
 The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
 It accepts an exact retained dispatch plus its live claim, requires the exact immutable factual output

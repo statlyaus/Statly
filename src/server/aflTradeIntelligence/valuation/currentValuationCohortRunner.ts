@@ -15,6 +15,7 @@ import type {
   GovernedPrivateEvaluationBatchHead,
   GovernedPrivateEvaluationBatchTransitionResult,
 } from './internal/postgresGovernedPrivateEvaluationBatchRepository';
+import { aflTradePrivatePreparedValuationDispatchAuthoritySchema } from './preparedValuationInputSet';
 
 const idSchema = z.string().trim().min(1).max(400);
 const blockerCodeSchema = z.enum([
@@ -55,34 +56,71 @@ const capturedEntrySchema = z.discriminatedUnion('state', [
     .strict(),
 ]);
 
-const capturedSchema = z
+const capturedCommonShape = {
+  scopeKey: idSchema,
+  preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
+  preparedInputSetRevision: z.number().int().positive(),
+  factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+  modelQualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
+  modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
+  modelPairRevision: z.number().int().positive(),
+  expectedBatchRevision: z.number().int().nonnegative(),
+  entries: z.array(capturedEntrySchema).min(1).max(10_000),
+  capturedAt: z.iso.datetime({ offset: true }),
+} as const;
+
+function refineCapturedEntries(
+  capture: { readonly entries: readonly z.infer<typeof capturedEntrySchema>[] },
+  context: z.RefinementCtx
+): void {
+  const ids = capture.entries.map(({ tradeId }) => tradeId);
+  if (
+    new Set(ids).size !== ids.length ||
+    ids.some((id, index) => index > 0 && ids[index - 1]! > id)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['entries'],
+      message: 'Cohort trades must be unique and ordered.',
+    });
+  }
+}
+
+const publicCapturedSchema = z
   .object({
-    scopeKey: idSchema,
-    preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
-    preparedInputSetRevision: z.number().int().positive(),
-    factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+    ...capturedCommonShape,
     factualReleaseRevision: z.number().int().positive(),
-    modelQualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
-    modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
-    modelPairRevision: z.number().int().positive(),
-    expectedBatchRevision: z.number().int().nonnegative(),
-    entries: z.array(capturedEntrySchema).min(1).max(10_000),
-    capturedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine(refineCapturedEntries);
+
+const privateCapturedSchema = z
+  .object({
+    ...capturedCommonShape,
+    preparationOperationId: aflTradeContentAddressedIdSchema(
+      'valuation-cohort-preparation-operation'
+    ),
+    currentModelEvidenceOperationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-model-evidence-operation'
+    ),
+    dispatchAuthority: aflTradePrivatePreparedValuationDispatchAuthoritySchema,
   })
   .strict()
   .superRefine((capture, context) => {
-    const ids = capture.entries.map(({ tradeId }) => tradeId);
+    refineCapturedEntries(capture, context);
     if (
-      new Set(ids).size !== ids.length ||
-      ids.some((id, index) => index > 0 && ids[index - 1]! > id)
+      capture.dispatchAuthority.requestId === '' ||
+      capture.dispatchAuthority.factualOutputId === ''
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['entries'],
-        message: 'Cohort trades must be unique and ordered.',
+        path: ['dispatchAuthority'],
+        message: 'Private cohort dispatch authority must be complete.',
       });
     }
   });
+
+const capturedSchema = z.union([publicCapturedSchema, privateCapturedSchema]);
 
 type Request = z.infer<typeof requestSchema>;
 type Capture = z.infer<typeof capturedSchema>;
@@ -119,10 +157,17 @@ function boundedDiagnosticField(value: unknown, fallback: string, maximumLength:
 type CurrentBatch = Readonly<{
   batch: GovernedPrivateEvaluationBatch;
   head: GovernedPrivateEvaluationBatchHead;
-  authority: Readonly<{
-    factualReleaseRevision: number;
-    modelPairRevision: number;
-  }> | null;
+  authority:
+    | Readonly<{ factualReleaseRevision: number; modelPairRevision: number }>
+    | Readonly<{
+        preparationOperationId: string;
+        currentModelEvidenceOperationId: string;
+        dispatchAuthority: z.infer<
+          typeof aflTradePrivatePreparedValuationDispatchAuthoritySchema
+        >;
+        modelPairRevision: number;
+      }>
+    | null;
 }>;
 
 interface Dependencies {
@@ -166,24 +211,59 @@ interface Dependencies {
   }) => Promise<GovernedPrivateEvaluationBatchTransitionResult>;
 }
 
-export function createAflTradePrivateEvaluationCohortRunOperationId(input: {
-  readonly scopeKey: string;
-  readonly preparedInputSetId: string;
-  readonly preparedInputSetRevision: number;
-  readonly modelQualificationWorkId: string;
-  readonly factualReleaseRevision: number;
-  readonly modelPairRevision: number;
-  readonly expectedBatchRevision: number;
-}): string {
+export function createAflTradePrivateEvaluationCohortRunOperationId(
+  input:
+    | {
+        readonly scopeKey: string;
+        readonly preparedInputSetId: string;
+        readonly preparedInputSetRevision: number;
+        readonly modelQualificationWorkId: string;
+        readonly factualReleaseRevision: number;
+        readonly modelPairRevision: number;
+        readonly expectedBatchRevision: number;
+      }
+    | {
+        readonly scopeKey: string;
+        readonly preparedInputSetId: string;
+        readonly preparedInputSetRevision: number;
+        readonly preparationOperationId: string;
+        readonly currentModelEvidenceOperationId: string;
+        readonly dispatchAuthority: z.input<
+          typeof aflTradePrivatePreparedValuationDispatchAuthoritySchema
+        >;
+        readonly modelQualificationWorkId: string;
+        readonly modelPairRevision: number;
+        readonly expectedBatchRevision: number;
+      }
+): string {
   return createAflTradeContentAddress('private-evaluation-cohort-run', input);
 }
 
 function isAlreadyCurrent(capture: Capture, current: CurrentBatch | null): current is CurrentBatch {
+  const exactAuthority =
+    'dispatchAuthority' in capture
+      ? current !== null &&
+        current.authority !== null &&
+        'dispatchAuthority' in current.authority &&
+        current.authority.preparationOperationId === capture.preparationOperationId &&
+        current.authority.currentModelEvidenceOperationId ===
+          capture.currentModelEvidenceOperationId &&
+        current.authority.dispatchAuthority.requestId === capture.dispatchAuthority.requestId &&
+        current.authority.dispatchAuthority.factualOutputId ===
+          capture.dispatchAuthority.factualOutputId &&
+        current.authority.dispatchAuthority.hpnCalculationId ===
+          capture.dispatchAuthority.hpnCalculationId &&
+        current.authority.dispatchAuthority.modelOperationId ===
+          capture.dispatchAuthority.modelOperationId
+      : current !== null &&
+        current.authority !== null &&
+        'factualReleaseRevision' in current.authority &&
+        current.authority.factualReleaseRevision === capture.factualReleaseRevision;
   return (
     current !== null &&
     current.head.revision === capture.expectedBatchRevision &&
     current.authority !== null &&
-    current.authority.factualReleaseRevision === capture.factualReleaseRevision &&
+    exactAuthority &&
     current.authority.modelPairRevision === capture.modelPairRevision &&
     current.batch.content.scopeKey === capture.scopeKey &&
     current.batch.content.preparedInputSetId === capture.preparedInputSetId &&
@@ -215,9 +295,19 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
         scopeKey: capture.scopeKey,
         preparedInputSetId: capture.preparedInputSetId,
         preparedInputSetRevision: capture.preparedInputSetRevision,
-        modelQualificationWorkId: capture.modelQualificationWorkId,
-        factualReleaseRevision: capture.factualReleaseRevision,
-        modelPairRevision: capture.modelPairRevision,
+        ...('dispatchAuthority' in capture
+          ? {
+              preparationOperationId: capture.preparationOperationId,
+              currentModelEvidenceOperationId: capture.currentModelEvidenceOperationId,
+              dispatchAuthority: capture.dispatchAuthority,
+              modelQualificationWorkId: capture.modelQualificationWorkId,
+              modelPairRevision: capture.modelPairRevision,
+            }
+          : {
+              modelQualificationWorkId: capture.modelQualificationWorkId,
+              factualReleaseRevision: capture.factualReleaseRevision,
+              modelPairRevision: capture.modelPairRevision,
+            }),
         expectedBatchRevision: capture.expectedBatchRevision,
       });
       if (request.operationId !== expectedOperationId) {

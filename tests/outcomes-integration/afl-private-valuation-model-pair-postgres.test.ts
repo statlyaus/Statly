@@ -14,12 +14,16 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { aflTradeModelRunManifestV3Schema } from '@/server/aflTradeIntelligence/artifacts/modelRunManifest';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import {
   AFL_TRADE_HPN_PAV_FINALIZED_CALCULATION_SCHEMA_VERSION,
   aflTradeFinalizedHpnPavCalculationSchema,
 } from '@/server/aflTradeIntelligence/modeling/hpnPavCalculationService';
 import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/modeling/hpnPavCore';
+import { createAflTradeAdmittedPlayerContributionExecutor } from '@/server/aflTradeIntelligence/modeling/admittedPlayerContributionCandidate';
+import { aflTradeModelRunAuthorizationSchema } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
+import { createGovernedAflTradePickPavModelExecution } from '@/server/aflTradeIntelligence/modeling/governedPickPavModelExecution';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   createAflTradeDispatchBoundAdmittedPlayerExecutor,
@@ -43,9 +47,30 @@ import {
   createPostgresAflTradePrivateCurrentValuationCohortCoordinator,
 } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortPreparation';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
+import { createPostgresGovernedPrivateEvaluationWorkspace } from '@/server/aflTradeIntelligence/valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
+import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
+import { createPostgresAflTradePrivateEvaluationCohortRunner } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner';
+import { createGovernedValuationComponentRunManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationComponentRunManifest';
+import { createGovernedPrivateEvaluationInputTrace } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationInputTrace';
+import { createGovernedPrivateEvaluationMaterializationManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationMaterializationManifest';
+import { createAflTradeValuationCalculationInputPackage } from '@/server/aflTradeIntelligence/valuation/valuationCalculationInputPackage';
+import {
+  createGovernedValuationModelQualification,
+  createGovernedValuationModelQualificationGateRecords,
+  createGovernedValuationModelQualificationPolicy,
+  deriveGovernedPickModelQualificationEvidence,
+  deriveGovernedPlayerModelQualificationEvidence,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedValuationModelQualification';
+import { appendNewAflTradeGateDecisionsWithinTransaction } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
+import { aflTradePlayerValidationReportSchema } from '@/server/aflTradeIntelligence/modeling/playerContributionValidation';
 
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import {
+  admittedRunFixture,
+  runContent as admittedPlayerRunContent,
+} from '../testUtils/admittedPlayerModelRunFixture';
 import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
+import { createGovernedPickPavModelExecutionFixture } from '../testUtils/governedPickPavModelExecutionFixture';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -166,21 +191,73 @@ function loaderCalculation(factualRunId: string, custodyKey: string) {
   });
 }
 
-const modelPairTargets = {
+const admittedPlayer = admittedRunFixture('non_production', undefined, {
+  predictiveFeatures: true,
+});
+const governedPickFixture = createGovernedPickPavModelExecutionFixture();
+const governedPick = {
+  ...governedPickFixture,
+  execution: createGovernedAflTradePickPavModelExecution({
+    outputs: {
+      observationSet: governedPickFixture.execution.content.observationSet,
+      benchmarkConfig: governedPickFixture.execution.content.benchmarkConfig,
+      validationConfig: governedPickFixture.execution.content.validationConfig,
+      benchmark: governedPickFixture.execution.content.benchmark,
+      validationReport: governedPickFixture.execution.content.validationReport,
+    },
+    completedAt: governedPickFixture.execution.content.completedAt,
+    authority: {
+      datasetId: governedPickFixture.execution.content.datasetId,
+      datasetArtifact: governedPickFixture.execution.content.datasetArtifact,
+      datasetAdmissionId: governedPickFixture.execution.content.datasetAdmissionId,
+      datasetAdmissionArtifact: governedPickFixture.execution.content.datasetAdmissionArtifact,
+      datasetAdmissionGateLedgerRevision: 1,
+      protocolId: governedPickFixture.execution.content.protocolId,
+      protocolArtifact: governedPickFixture.execution.content.protocolArtifact,
+    },
+  }),
+};
+const qualificationPolicy = createGovernedValuationModelQualificationPolicy({
   player: {
-    modelId: addressed('development-grade-model', 'player-model'),
-    modelVersion: 'player-model-v1',
-    protocolId: addressed('model-protocol', 'player-protocol'),
-    datasetId: addressed('dataset', 'player-dataset'),
-    datasetAdmissionId: addressed('dataset-admission', 'player-admission'),
+    schemaVersion: 'governed-player-model-qualification-criteria/v1',
+    minimumComparableObservations: 100,
+    minimumRelativeMaeImprovement: 0.05,
+    minimumRelativeRmseImprovement: 0.05,
+    requiredAcceptanceOutcome: 'meets_declared_predictive_thresholds',
   },
   pick: {
-    protocolId: addressed('model-protocol', 'pick-protocol'),
-    datasetId: addressed('dataset', 'pick-dataset'),
-    datasetAdmissionId: addressed('dataset-admission', 'pick-admission'),
-    policyId: addressed('pick-pav-policy', 'pick-policy'),
+    schemaVersion: 'governed-pick-model-qualification-criteria/v1',
+    evaluatedScope: 'final_test',
+    minimumObservations: 1,
+    maximumMulticlassBrierScore: 0.7,
+    maximumMulticlassLogLoss: 2,
+    maximumRankedProbabilityScore: 0.35,
+    maximumContributionCrps: 25,
+    maximumMeanAbsoluteContributionError: 30,
+    maximumRootMeanSquaredContributionError: 40,
+    maximumMeanAbsoluteGamesError: 35,
+    maximumRootMeanSquaredGamesError: 45,
+    minimumEmpiricalP10P90Coverage: 0.7,
+    maximumEmpiricalP10P90Coverage: 1,
+    maximumMeanEmpiricalIntervalWidth: 80,
+    maximumZeroProbabilityObservationCount: 0,
   },
-  qualificationPolicyId: addressed('model-qualification-policy', 'qualification-policy'),
+});
+const modelPairTargets = {
+  player: {
+    modelId: admittedPlayer.intent.content.modelId,
+    modelVersion: admittedPlayer.intent.content.modelVersion,
+    protocolId: admittedPlayer.protocol.protocolId,
+    datasetId: admittedPlayer.datasetCandidate.datasetId,
+    datasetAdmissionId: admittedPlayer.admission.admissionId,
+  },
+  pick: {
+    protocolId: governedPick.execution.content.protocolId,
+    datasetId: governedPick.execution.content.datasetId,
+    datasetAdmissionId: governedPick.execution.content.datasetAdmissionId,
+    policyId: governedPick.execution.content.policyId,
+  },
+  qualificationPolicyId: qualificationPolicy.policyVersion,
 } as const;
 
 function loaderFactualOutput(requestId: string, custodyKey: string, factualRunId: string) {
@@ -276,11 +353,6 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     const leaseToken = digest('restart-proof-lease-token');
     const requestId = addressed('private-valuation-dispatch', 'request');
     const claimId = addressed('private-valuation-dispatch-claim', 'claim');
-    const playerRunId = addressed('model-run', 'player-component');
-    const pickRunId = addressed('model-run', 'pick-component');
-    const playerNativeRunId = addressed('model-run', 'player-native');
-    const pickNativeExecutionId = addressed('pick-pav-model-execution', 'pick-native');
-    const qualificationId = addressed('model-qualification', 'qualification');
     const factualRunId = addressed('factual-reconciliation-run', 'factual-run');
     const factualOutput = loaderFactualOutput(requestId, 'restart-proof', factualRunId);
     const factualOutputId = factualOutput.outputId;
@@ -304,6 +376,281 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       hpnMethodId: hpnCalculation.content.methodId,
       ...modelPairTargets,
     });
+    const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: artifactRootDirectory,
+      repositoryId: 'issue-577-private-prepared-v3-integration',
+      maximumObjectBytes: 16 * 1024 * 1024,
+    });
+    const retainPhysical = async (document: unknown, createdAt: string) => {
+      const retained = canonicalArtifact(document, createdAt);
+      await artifactRepository.putIfAbsent(retained.reference, retained.bytes);
+      return retained.reference;
+    };
+    const playerExecutionTimes = [
+      '2026-08-10T00:03:01.000Z',
+      '2026-08-10T00:03:02.000Z',
+      '2026-08-10T00:03:03.000Z',
+    ];
+    const playerRunAuthorizationContent = {
+      schemaVersion: 'afl-trade-model-run-authorization/v1' as const,
+      authorityBoundary:
+        'model_run_start_authority_no_grade_publication_or_fantasy_ownership' as const,
+      publicationEligible: false as const,
+      environment: 'non_production' as const,
+      runIntentId: admittedPlayer.intent.intentId,
+      datasetId: admittedPlayer.datasetCandidate.datasetId,
+      datasetAdmissionId: admittedPlayer.admission.admissionId,
+      datasetRowSetSha256: admittedPlayer.datasetCandidate.content.rowSetSha256,
+      modelProtocolId: admittedPlayer.protocol.protocolId,
+      observationSetId: admittedPlayer.observationSet.observationSetId,
+      operationalAuthorizationReceiptId: admittedPlayer.operationalAuthorization.receiptId,
+      gate2DecisionId: addressed('gate-decision', 'genuine-player-gate-2'),
+      gateLedgerRevision: admittedPlayer.evidence.gateLedgerRevision,
+      authorizedAt: '2026-08-10T00:03:00.000Z',
+      validThrough: '2026-08-10T00:03:30.000Z',
+      modelTrainingEvaluationReceiptIds:
+        admittedPlayer.intent.content.modelTrainingEvaluationReceiptIds,
+    };
+    const playerRunAuthorization = aflTradeModelRunAuthorizationSchema.parse({
+      authorizationId: createAflTradeContentAddress(
+        'model-run-authorization',
+        playerRunAuthorizationContent
+      ),
+      content: playerRunAuthorizationContent,
+    });
+    const playerExecution = await createAflTradeAdmittedPlayerContributionExecutor({
+      artifactRepository,
+      maximumArtifactBytes: 16 * 1024 * 1024,
+      now: () => playerExecutionTimes.shift()!,
+    }).execute({
+      intent: admittedPlayer.intent,
+      authorization: playerRunAuthorization,
+      protocol: admittedPlayer.protocol,
+      observationSet: admittedPlayer.observationSet,
+      spellMetrics: admittedPlayer.evidence.spellMetrics,
+      executableArtifacts: admittedPlayer.evidence.executableArtifacts,
+    });
+    if (playerExecution.outcome.status !== 'succeeded') {
+      throw new Error('Genuine player fixture did not produce an admitted execution.');
+    }
+    const playerValidationContent = {
+      schemaVersion: 'afl-trade-player-validation-report/v1' as const,
+      publicIdentityBoundary: 'source_native_no_fantasy_ownership' as const,
+      observationSetId: admittedPlayer.observationSet.observationSetId,
+      baselineFitId: addressed('player-baseline-fit', 'accepted-player-baseline'),
+      predictionSetId: addressed('player-prediction-set', 'accepted-player-predictions'),
+      valueUnitId: 'player-contribution-above-replacement',
+      evaluatedPartition: 'final_test' as const,
+      candidateModelId: admittedPlayer.intent.content.modelId,
+      config: {
+        schemaVersion: 'afl-trade-player-validation-config/v1' as const,
+        minimumComparableObservations: 100,
+        acceptanceRule: 'candidate_improves_both_mae_and_rmse' as const,
+        minimumRelativeMaeImprovement: 0.05,
+        minimumRelativeRmseImprovement: 0.05,
+        incompletePredictionCoverage: 'fail_closed' as const,
+        governanceEffect: 'evidence_only_no_gate_or_source_approval' as const,
+      },
+      comparableObservationIds: Array.from(
+        { length: 120 },
+        (_, index) => `player-observation-${index + 1}`
+      ),
+      excludedObservations: [],
+      metrics: {
+        candidate: { meanAbsoluteError: 9.2, rootMeanSquaredError: 9.3, meanError: 0 },
+        gamesOnly: { meanAbsoluteError: 10, rootMeanSquaredError: 10, meanError: 0 },
+        candidateMinusGamesOnly: { meanAbsoluteError: -0.8, rootMeanSquaredError: -0.7 },
+        relativeImprovement: { meanAbsoluteError: 0.08, rootMeanSquaredError: 0.07 },
+      },
+      acceptanceOutcome: 'meets_declared_predictive_thresholds' as const,
+      evidenceLimitation:
+        'report_is_reproducible_evidence_not_source_approval_gate_approval_or_production_readiness' as const,
+    };
+    const playerValidation = aflTradePlayerValidationReportSchema.parse({
+      validationReportId: createAflTradeContentAddress(
+        'player-validation-report',
+        playerValidationContent
+      ),
+      content: playerValidationContent,
+    });
+    const playerValidationArtifact = await retainPhysical(
+      playerValidation,
+      '2026-08-10T00:03:02.000Z'
+    );
+    const playerExecutionOutcome = {
+      ...playerExecution.outcome,
+      validationReportArtifact: playerValidationArtifact,
+    };
+    const playerNativeContent = {
+      ...admittedPlayerRunContent(admittedPlayer.protocol),
+      environment: 'non_production' as const,
+      modelId: admittedPlayer.intent.content.modelId,
+      modelVersion: admittedPlayer.intent.content.modelVersion,
+      datasetId: admittedPlayer.datasetCandidate.datasetId,
+      datasetAdmissionId: admittedPlayer.admission.admissionId,
+      modelProtocolId: admittedPlayer.protocol.protocolId,
+      runIntentId: admittedPlayer.intent.intentId,
+      runAuthorizationId: addressed('model-run-authorization', 'authorization'),
+      observationSetId: admittedPlayer.observationSet.observationSetId,
+      candidateLockedAt: playerExecution.candidateLockedAt,
+      finalTestEvaluatedAt: playerExecution.finalTestEvaluatedAt,
+      finishedAt: playerExecution.finishedAt,
+      outcome: playerExecutionOutcome,
+    };
+    const playerNativeRun = aflTradeModelRunManifestV3Schema.parse({
+      runId: createAflTradeContentAddress('model-run', playerNativeContent),
+      content: playerNativeContent,
+    });
+    const playerNativeArtifact = await retainPhysical(
+      playerNativeRun,
+      playerNativeRun.content.finishedAt
+    );
+    const playerProtocolArtifact = await retainPhysical(
+      admittedPlayer.protocol,
+      admittedPlayer.protocol.content.preparedAt
+    );
+    const playerDatasetArtifact = await retainPhysical(
+      admittedPlayer.datasetCandidate,
+      admittedPlayer.datasetCandidate.content.createdAt
+    );
+    const playerAdmissionArtifact = await retainPhysical(
+      admittedPlayer.admission,
+      admittedPlayer.admission.content.admittedAt
+    );
+    const playerComponent = createGovernedValuationComponentRunManifest({
+      environment: 'non_production',
+      role: 'player_contribution_and_availability',
+      nativeExecution: {
+        kind: 'admitted_player_model_run',
+        executionId: playerNativeRun.runId,
+        artifact: playerNativeArtifact,
+      },
+      protocolId: admittedPlayer.protocol.protocolId,
+      protocolArtifact: playerProtocolArtifact,
+      datasetId: admittedPlayer.datasetCandidate.datasetId,
+      datasetArtifact: playerDatasetArtifact,
+      datasetAdmissionId: admittedPlayer.admission.admissionId,
+      datasetAdmissionArtifact: playerAdmissionArtifact,
+      datasetAdmissionGateLedgerRevision: admittedPlayer.evidence.gateLedgerRevision,
+      registeredAt: playerNativeRun.content.finishedAt,
+    });
+    const pickNativeRun = governedPick.execution;
+    const pickNativeArtifact = await retainPhysical(
+      pickNativeRun,
+      pickNativeRun.content.completedAt
+    );
+    for (const [document, reference] of [
+      [governedPick.authorityDocuments[0], pickNativeRun.content.datasetArtifact],
+      [governedPick.authorityDocuments[1], pickNativeRun.content.datasetAdmissionArtifact],
+      [governedPick.authorityDocuments[2], pickNativeRun.content.protocolArtifact],
+    ] as const) {
+      await artifactRepository.putIfAbsent(
+        reference,
+        new TextEncoder().encode(canonicalizeAflTradeJson(document))
+      );
+    }
+    const pickComponent = createGovernedValuationComponentRunManifest({
+      environment: 'non_production',
+      role: 'draft_pick_and_future_pick_distribution',
+      nativeExecution: {
+        kind: 'governed_pick_pav_model_execution',
+        executionId: pickNativeRun.executionId,
+        artifact: pickNativeArtifact,
+      },
+      protocolId: pickNativeRun.content.protocolId,
+      protocolArtifact: pickNativeRun.content.protocolArtifact,
+      datasetId: pickNativeRun.content.datasetId,
+      datasetArtifact: pickNativeRun.content.datasetArtifact,
+      datasetAdmissionId: pickNativeRun.content.datasetAdmissionId,
+      datasetAdmissionArtifact: pickNativeRun.content.datasetAdmissionArtifact,
+      datasetAdmissionGateLedgerRevision: pickNativeRun.content.datasetAdmissionGateLedgerRevision,
+      registeredAt: pickNativeRun.content.completedAt,
+    });
+    const playerRunId = playerComponent.runId;
+    const pickRunId = pickComponent.runId;
+    const playerNativeRunId = playerNativeRun.runId;
+    const pickNativeExecutionId = pickNativeRun.executionId;
+    const pickValidation = pickNativeRun.content.validationReport;
+    const qualificationEvaluatedAt = '2026-08-24T00:00:01.000Z';
+    const qualificationPolicyArtifact = await retainPhysical(
+      qualificationPolicy,
+      qualificationEvaluatedAt
+    );
+    const playerCriteriaArtifact = await retainPhysical(
+      qualificationPolicy.player,
+      qualificationEvaluatedAt
+    );
+    const pickCriteriaArtifact = await retainPhysical(
+      qualificationPolicy.pick,
+      qualificationEvaluatedAt
+    );
+    const playerValidationEvidence =
+      deriveGovernedPlayerModelQualificationEvidence(playerValidation);
+    const pickValidationEvidence = deriveGovernedPickModelQualificationEvidence(pickValidation);
+    const playerValidationEvidenceArtifact = await retainPhysical(
+      playerValidationEvidence,
+      qualificationEvaluatedAt
+    );
+    const pickValidationEvidenceArtifact = await retainPhysical(
+      pickValidationEvidence,
+      qualificationEvaluatedAt
+    );
+    const playerComponentArtifact = await retainPhysical(
+      playerComponent,
+      playerComponent.content.registeredAt
+    );
+    const pickComponentArtifact = await retainPhysical(
+      pickComponent,
+      pickComponent.content.registeredAt
+    );
+    const qualification = createGovernedValuationModelQualification({
+      environment: 'non_production',
+      scopeKey: operation.content.scopeKey,
+      evaluatedAt: qualificationEvaluatedAt,
+      policy: qualificationPolicy,
+      policyArtifact: qualificationPolicyArtifact,
+      components: {
+        player: {
+          role: 'player_contribution_and_availability',
+          runId: playerRunId,
+          runArtifact: playerComponentArtifact,
+          protocolId: playerComponent.content.protocolId,
+          protocolArtifact: playerComponent.content.protocolArtifact,
+          criteriaArtifact: playerCriteriaArtifact,
+          validationEvidence: playerValidationEvidence,
+          validationEvidenceArtifact: playerValidationEvidenceArtifact,
+        },
+        pick: {
+          role: 'draft_pick_and_future_pick_distribution',
+          runId: pickRunId,
+          runArtifact: pickComponentArtifact,
+          protocolId: pickComponent.content.protocolId,
+          protocolArtifact: pickComponent.content.protocolArtifact,
+          criteriaArtifact: pickCriteriaArtifact,
+          validationEvidence: pickValidationEvidence,
+          validationEvidenceArtifact: pickValidationEvidenceArtifact,
+        },
+      },
+    });
+    if (qualification.content.outcome !== 'qualified') {
+      throw new Error(
+        `Genuine component evidence did not qualify the model pair: ${qualification.content.failureCodes.join(', ')}.`
+      );
+    }
+    const qualificationArtifact = await retainPhysical(qualification, qualificationEvaluatedAt);
+    const gateRecords = createGovernedValuationModelQualificationGateRecords({
+      qualification,
+      qualificationArtifact,
+      decidedAt: qualificationEvaluatedAt,
+      automationPrincipal: 'statly-model-qualification-agent',
+      accountableOwner: 'statly-model-owner',
+      versions: { player: 1, pick: 1 },
+      supersedes: { player: null, pick: null },
+    });
+    for (const { decision } of gateRecords) {
+      await retainPhysical(decision, decision.content.decidedAt!);
+    }
+    const qualificationId = qualification.qualificationId;
     const exactInput: AflTradePrivateValuationModelPairExactInput = {
       requestId,
       scopeKey: operation.content.scopeKey,
@@ -1076,8 +1423,99 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         ]
       );
     }
-    const playerGate3DecisionId = addressed('gate-decision', 'composed-current-player');
-    const pickGate3DecisionId = addressed('gate-decision', 'composed-current-pick');
+    const staging = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client,
+      artifactRepository,
+      maximumArtifactBytes: 16 * 1024 * 1024,
+    });
+    for (const retained of [
+      canonicalArtifact(playerComponent, playerComponent.content.registeredAt),
+      canonicalArtifact(pickComponent, pickComponent.content.registeredAt),
+      canonicalArtifact(qualificationPolicy, qualificationEvaluatedAt),
+      canonicalArtifact(qualificationPolicy.player, qualificationEvaluatedAt),
+      canonicalArtifact(qualificationPolicy.pick, qualificationEvaluatedAt),
+      canonicalArtifact(playerValidationEvidence, qualificationEvaluatedAt),
+      canonicalArtifact(pickValidationEvidence, qualificationEvaluatedAt),
+      canonicalArtifact(qualification, qualificationEvaluatedAt),
+    ]) {
+      await staging.retainArtifact(retained);
+    }
+    for (const component of [
+      { manifest: playerComponent, artifact: playerComponentArtifact },
+      { manifest: pickComponent, artifact: pickComponentArtifact },
+    ]) {
+      const content = component.manifest.content;
+      await mutateFixture(
+        `UPDATE outcome_governed_valuation_component_run SET
+           role=$2,native_execution_kind=$3,native_execution_id=$4,artifact_id=$5,
+           native_execution_artifact_id=$6,protocol_id=$7,protocol_artifact_id=$8,
+           dataset_id=$9,dataset_artifact_id=$10,dataset_admission_id=$11,
+           dataset_admission_artifact_id=$12,dataset_admission_gate_ledger_revision=$13,
+           registered_at=$14,content_sha256=$15,content_canonical_json=$16,
+           manifest_json=$17::jsonb
+         WHERE run_id=$1`,
+        [
+          component.manifest.runId,
+          content.role,
+          content.nativeExecution.kind,
+          content.nativeExecution.executionId,
+          component.artifact.artifactId,
+          content.nativeExecution.artifact.artifactId,
+          content.protocolId,
+          content.protocolArtifact.artifactId,
+          content.datasetId,
+          content.datasetArtifact.artifactId,
+          content.datasetAdmissionId,
+          content.datasetAdmissionArtifact.artifactId,
+          content.datasetAdmissionGateLedgerRevision,
+          content.registeredAt,
+          component.manifest.runId.slice('model-run:'.length),
+          canonicalizeAflTradeJson(content),
+          canonicalizeAflTradeJson(component.manifest),
+        ]
+      );
+    }
+    await mutateFixture(
+      `UPDATE outcome_governed_valuation_model_qualification SET
+         scope_key=$2,outcome=$3,artifact_id=$4,player_run_id=$5,pick_run_id=$6,
+         policy_artifact_id=$7,player_criteria_artifact_id=$8,pick_criteria_artifact_id=$9,
+         player_evidence_artifact_id=$10,pick_evidence_artifact_id=$11,evaluated_at=$12,
+         content_sha256=$13,content_canonical_json=$14,qualification_json=$15::jsonb
+       WHERE qualification_id=$1`,
+      [
+        qualificationId,
+        qualification.content.scopeKey,
+        qualification.content.outcome,
+        qualificationArtifact.artifactId,
+        playerRunId,
+        pickRunId,
+        qualificationPolicyArtifact.artifactId,
+        playerCriteriaArtifact.artifactId,
+        pickCriteriaArtifact.artifactId,
+        playerValidationEvidenceArtifact.artifactId,
+        pickValidationEvidenceArtifact.artifactId,
+        qualificationEvaluatedAt,
+        qualificationId.slice('model-qualification:'.length),
+        canonicalizeAflTradeJson(qualification.content),
+        canonicalizeAflTradeJson(qualification),
+      ]
+    );
+    await client.transaction((transaction) =>
+      appendNewAflTradeGateDecisionsWithinTransaction(transaction, {
+        expectedRevision: 0,
+        scopeKey: operation.content.scopeKey,
+        qualificationId,
+        qualificationArtifactId: qualificationArtifact.artifactId,
+        playerRunId,
+        pickRunId,
+        records: gateRecords,
+        updatedAt: qualificationEvaluatedAt,
+      })
+    );
+    const playerGate3DecisionId = gateRecords[0].decision.decisionId;
+    const pickGate3DecisionId = gateRecords[1].decision.decisionId;
+    const playerGate3LockKey = `afl-trade-gate:gate_3_model_validity:non_production:${gateRecords[0].decision.content.decisionKey}`;
+    const pickGate3LockKey = `afl-trade-gate:gate_3_model_validity:non_production:${gateRecords[1].decision.content.decisionKey}`;
     const qualificationWorkId = addressed(
       'model-qualification-work',
       'composed-current-qualification'
@@ -1098,19 +1536,6 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         capturedAt,
       ]
     );
-    for (const [gateId, decisionKey] of [
-      [playerGate3DecisionId, 'private-prepared-player-gate'],
-      [pickGate3DecisionId, 'private-prepared-pick-gate'],
-    ] as const) {
-      await mutateFixture(
-        `INSERT INTO outcome_gate_decision
-          (decision_id,proposal_id,gate,decision_key,version,environment,state,
-           decided_at,effective_at,decision_json)
-         VALUES ($1,$2,'gate_3_model_validity',$3,1,'non_production','approved',
-           $4,$4,'{"content":{"authorityKind":"automated_validation_record"}}'::jsonb)`,
-        [gateId, addressed('gate-proposal', decisionKey), decisionKey, capturedAt]
-      );
-    }
     await mutateFixture(
       `INSERT INTO outcome_governed_model_qualification_work
         (work_id,scope_key,qualification_id,player_gate3_decision_id,
@@ -1189,7 +1614,11 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     );
 
     const releaseTradeId = 'trade:authenticated-three-club';
-    const canonicalMembers = [{ recordKind: 'transaction', canonicalRecordId: releaseTradeId }];
+    const unavailableTradeId = 'trade:unavailable-private-member';
+    const canonicalMembers = [
+      { recordKind: 'transaction', canonicalRecordId: releaseTradeId },
+      { recordKind: 'transaction', canonicalRecordId: unavailableTradeId },
+    ];
     const releaseManifest = {
       releaseId: factualOutput.content.factualRelease.releaseId,
       content: { canonicalMembers },
@@ -1296,16 +1725,6 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     );
     const releaseArtifact = canonicalArtifact(releaseManifest, releaseCreatedAt);
     const releaseMembershipArtifact = canonicalArtifact(canonicalMembers, releaseCreatedAt);
-    const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
-      rootDirectory: artifactRootDirectory,
-      repositoryId: 'issue-577-private-prepared-v3-integration',
-      maximumObjectBytes: 16 * 1024 * 1024,
-    });
-    const staging = createPostgresGovernedPrivateEvaluationStagingRepository({
-      client,
-      artifactRepository,
-      maximumArtifactBytes: 16 * 1024 * 1024,
-    });
     for (const retained of [
       ...bundleParents,
       valuationInputBundleArtifact,
@@ -1336,7 +1755,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       return {
         factualReleaseArtifact: releaseArtifact.reference,
         releaseMembershipArtifact: releaseMembershipArtifact.reference,
-        releaseTradeIds: [releaseTradeId],
+        releaseTradeIds: [releaseTradeId, unavailableTradeId],
         valuationInputBundleId: valuationInputBundle.valuationInputBundleId,
         valuationInputBundleArtifact: valuationInputBundleArtifact.reference,
         valuationInputBundle,
@@ -1465,10 +1884,83 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         },
       ],
     });
+    const governedTrace = createGovernedPrivateEvaluationInputTrace({
+      ...materialization.trace.content,
+      derivedAt: capturedAt,
+      components: materialization.trace.content.components.map((component) => {
+        const authority =
+          component.role === 'player_contribution_and_availability'
+            ? {
+                manifest: playerComponent,
+                artifact: playerComponentArtifact,
+                gate: gateRecords[0].decision,
+              }
+            : {
+                manifest: pickComponent,
+                artifact: pickComponentArtifact,
+                gate: gateRecords[1].decision,
+              };
+        return {
+          ...component,
+          evidence: {
+            ...component.evidence,
+            runManifest: authority.artifact,
+            protocol: authority.manifest.content.protocolArtifact,
+            datasetAdmission: authority.manifest.content.datasetAdmissionArtifact,
+            gate3Decision: createAflTradeCanonicalJsonArtifactRef(
+              authority.gate,
+              authority.gate.content.decidedAt!
+            ),
+          },
+        };
+      }),
+    });
+    const baseCalculationInput = materialization.calculationInputPackage.content;
+    if (baseCalculationInput.schemaVersion !== 'afl-trade-valuation-calculation-input-package/v2') {
+      throw new Error('Authenticated calculation fixture did not produce v2 inputs.');
+    }
+    const governedCalculationInput = createAflTradeValuationCalculationInputPackage({
+      ...baseCalculationInput,
+      createdAt: capturedAt,
+      authority: {
+        kind: 'authenticated_non_production',
+        inputTraceId: governedTrace.inputTraceId,
+        publicationProhibited: true,
+      },
+    });
+    const governedMaterializationManifest = createGovernedPrivateEvaluationMaterializationManifest({
+      ...materialization.materializationManifest.content,
+      createdAt: capturedAt,
+      calculationInputPackageId: governedCalculationInput.calculationInputPackageId,
+      calculationInputArtifact: createAflTradeCanonicalJsonArtifactRef(
+        governedCalculationInput,
+        governedCalculationInput.content.createdAt
+      ),
+      inputTraceId: governedTrace.inputTraceId,
+      inputTraceArtifact: createAflTradeCanonicalJsonArtifactRef(
+        governedTrace,
+        governedCalculationInput.content.createdAt
+      ),
+    });
     let tradeConstructionCalls = 0;
-    const constructTrade = async () => {
+    const constructTrade = async ({ tradeId }: { readonly tradeId: string }) => {
       tradeConstructionCalls += 1;
-      const manifest = materialization.materializationManifest;
+      if (tradeId === unavailableTradeId) {
+        return {
+          state: 'blocked' as const,
+          blockers: [
+            {
+              code: 'insufficient_data' as const,
+              subject: { kind: 'trade' as const, id: unavailableTradeId },
+              evidenceRefs: [valuationInputBundleArtifact.reference],
+            },
+          ],
+        };
+      }
+      if (tradeId !== releaseTradeId) {
+        throw new TypeError('Fixture received an unknown private cohort member.');
+      }
+      const manifest = governedMaterializationManifest;
       return {
         state: 'ready' as const,
         manifest,
@@ -1479,13 +1971,11 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         retainedParents: [
           {
             reference: manifest.content.calculationInputArtifact,
-            bytes: new TextEncoder().encode(
-              canonicalizeAflTradeJson(materialization.calculationInputPackage)
-            ),
+            bytes: new TextEncoder().encode(canonicalizeAflTradeJson(governedCalculationInput)),
           },
           {
             reference: manifest.content.inputTraceArtifact,
-            bytes: new TextEncoder().encode(canonicalizeAflTradeJson(materialization.trace)),
+            bytes: new TextEncoder().encode(canonicalizeAflTradeJson(governedTrace)),
           },
           {
             reference: manifest.content.explanationPolicyArtifact,
@@ -1718,8 +2208,8 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
           pg_try_advisory_xact_lock(hashtextextended($4,0)) AS capture_lock_available`,
         [
           `governed-model-pair:${operation.content.scopeKey}`,
-          'afl-trade-gate:gate_3_model_validity:non_production:private-prepared-player-gate',
-          'afl-trade-gate:gate_3_model_validity:non_production:private-prepared-pick-gate',
+          playerGate3LockKey,
+          pickGate3LockKey,
           `outcome-capture-scope:${privateCaptureId}`,
         ]
       );
@@ -1751,7 +2241,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       await qualificationWriter.query('BEGIN');
       await qualificationWriter.query(`SET LOCAL statement_timeout='2s'`);
       await qualificationWriter.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
-        'afl-trade-gate:gate_3_model_validity:non_production:private-prepared-player-gate',
+        playerGate3LockKey,
       ]);
       await qualificationLoader.query('BEGIN');
       await qualificationLoader.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
@@ -1764,14 +2254,17 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       );
       await waitUntilAdvisoryBlocked(qualificationLoaderPid.rows[0]!.pid);
       await qualificationWriter.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
-        'afl-trade-gate:gate_3_model_validity:non_production:private-prepared-pick-gate',
+        pickGate3LockKey,
       ]);
       await qualificationWriter.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
         `governed-model-pair:${operation.content.scopeKey}`,
       ]);
       await qualificationWriter.query('SET LOCAL session_replication_role = replica');
       await qualificationWriter.query(
-        `UPDATE outcome_gate_decision SET state='withdrawn' WHERE decision_id=$1`,
+        `UPDATE outcome_gate_decision
+            SET state='withdrawn',
+                decision_json=jsonb_set(decision_json,'{content,state}','"withdrawn"')
+          WHERE decision_id=$1`,
         [playerGate3DecisionId]
       );
       await qualificationWriter.query('COMMIT');
@@ -1786,9 +2279,13 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       qualificationWriter.release();
       qualificationLoader.release();
     }
-    await mutateFixture(`UPDATE outcome_gate_decision SET state='approved' WHERE decision_id=$1`, [
-      playerGate3DecisionId,
-    ]);
+    await mutateFixture(
+      `UPDATE outcome_gate_decision
+          SET state='approved',
+              decision_json=jsonb_set(decision_json,'{content,state}','"approved"')
+        WHERE decision_id=$1`,
+      [playerGate3DecisionId]
+    );
     const factualWriter = await outcomesPool.connect();
     const factualLoader = await outcomesPool.connect();
     let factualLoad: ReturnType<typeof factualLoader.query> | undefined;
@@ -1855,13 +2352,16 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
             hpnCalculationId,
             modelOperationId: operation.operationId,
           },
-          entries: [{ tradeId: releaseTradeId, state: 'ready' }],
+          entries: [
+            { tradeId: releaseTradeId, state: 'ready' },
+            { tradeId: unavailableTradeId, state: 'blocked' },
+          ],
         },
       },
       head: { revision: 1 },
     });
-    expect(tradeConstructionCalls).toBeGreaterThanOrEqual(1);
-    expect(tradeConstructionCalls).toBeLessThanOrEqual(2);
+    expect(tradeConstructionCalls).toBeGreaterThanOrEqual(2);
+    expect(tradeConstructionCalls).toBeLessThanOrEqual(4);
 
     const noChange = createPostgresAflTradePrivateCurrentValuationCohortCoordinator({
       client,
@@ -1927,13 +2427,21 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
           SET status='completed' WHERE work_id=$1`,
       [qualificationWorkId]
     );
-    await mutateFixture(`UPDATE outcome_gate_decision SET state='withdrawn' WHERE decision_id=$1`, [
-      playerGate3DecisionId,
-    ]);
+    await mutateFixture(
+      `UPDATE outcome_gate_decision
+          SET state='withdrawn',
+              decision_json=jsonb_set(decision_json,'{content,state}','"withdrawn"')
+        WHERE decision_id=$1`,
+      [playerGate3DecisionId]
+    );
     await expectStalePreparedAuthority();
-    await mutateFixture(`UPDATE outcome_gate_decision SET state='approved' WHERE decision_id=$1`, [
-      playerGate3DecisionId,
-    ]);
+    await mutateFixture(
+      `UPDATE outcome_gate_decision
+          SET state='approved',
+              decision_json=jsonb_set(decision_json,'{content,state}','"approved"')
+        WHERE decision_id=$1`,
+      [playerGate3DecisionId]
+    );
     await mutateFixture(
       `UPDATE outcome_current_private_factual_authority
           SET revision=revision+1 WHERE valuation_scope_key=$1`,
@@ -2070,6 +2578,223 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     expect(JSON.stringify(privatePreparedCustody.rows[0])).not.toContain(claimId);
     expect(JSON.stringify(privatePreparedCustody.rows[0])).not.toContain(replacementClaimId);
 
+    const privateBatchWorkspace = createPostgresGovernedPrivateEvaluationWorkspace({
+      client,
+      artifactRepository,
+      maximumArtifactBytes: 16 * 1024 * 1024,
+      principalId: 'system:weekly-valuation-coordinator',
+      enableAutomatedPrivateCalculation: true,
+      authorizeReader: async () => false,
+    });
+    let releaseReadyStage: () => void = () => undefined;
+    const readyStageRelease = new Promise<void>((resolve) => {
+      releaseReadyStage = resolve;
+    });
+    let reportReadyStageEntered: () => void = () => undefined;
+    const readyStageEntered = new Promise<void>((resolve) => {
+      reportReadyStageEntered = resolve;
+    });
+    const privateBatchRunner = createPostgresAflTradePrivateEvaluationCohortRunner({
+      client,
+      workspace: {
+        ...privateBatchWorkspace,
+        stageAutomated: async (input) => {
+          reportReadyStageEntered();
+          await readyStageRelease;
+          return privateBatchWorkspace.stageAutomated(input);
+        },
+      },
+      batchRepository: new PostgresGovernedPrivateEvaluationBatchRepository(
+        client,
+        async () => false
+      ),
+      workerId: 'system:private-batch-tracer',
+    });
+    const replacementDispatchClaim = {
+      claimId: replacementClaimId,
+      leaseToken: replacementLeaseToken,
+    };
+    const activation = privateBatchRunner.runPrivate({
+      request: { requestId, scopeKey: operation.content.scopeKey },
+      claim: replacementDispatchClaim,
+    });
+    await readyStageEntered;
+    try {
+      await expect(
+        outcomesPool.query(
+          `SELECT
+             (SELECT count(*)::int FROM outcome_private_evaluation_batch
+               WHERE scope_key=$1) AS retained_batch_count,
+             (SELECT count(*)::int FROM outcome_current_private_evaluation_batch
+               WHERE scope_key=$1) AS visible_head_count`,
+          [operation.content.scopeKey]
+        )
+      ).resolves.toMatchObject({
+        rows: [{ retained_batch_count: 0, visible_head_count: 0 }],
+      });
+    } finally {
+      releaseReadyStage();
+    }
+    const activatedBatch = await activation;
+    if (activatedBatch.state === 'unexpected_failure') {
+      throw new Error(JSON.stringify(activatedBatch.diagnostics));
+    }
+    if (activatedBatch.state === 'activated' && activatedBatch.batch.content.readyCount !== 1) {
+      throw new Error(JSON.stringify(activatedBatch.batch.content.entries));
+    }
+    expect(activatedBatch).toMatchObject({
+      state: 'activated',
+      batch: {
+        content: {
+          scopeKey: operation.content.scopeKey,
+          tradeCount: 2,
+          readyCount: 1,
+          unavailableCount: 1,
+          entries: [
+            {
+              tradeId: releaseTradeId,
+              state: 'ready',
+              generationId: expect.stringMatching(
+                /^local-private-trade-evaluation-generation:[a-f0-9]{64}$/u
+              ),
+            },
+            { tradeId: unavailableTradeId, state: 'unavailable' },
+          ],
+        },
+      },
+      transition: { revision: 1 },
+    });
+    const loadPrivateBatchRowCounts = () =>
+      outcomesPool.query<{
+        capture_count: number;
+        cycle_count: number;
+        work_count: number;
+        attempt_count: number;
+        generation_count: number;
+        batch_count: number;
+        entry_count: number;
+        binding_count: number;
+        transition_count: number;
+        head_count: number;
+      }>(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_private_evaluation_cohort_capture
+             WHERE scope_key=$1) AS capture_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_cycle
+             WHERE scope_key=$1) AS cycle_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_work work
+             JOIN outcome_private_evaluation_execution_cycle cycle USING (cycle_id)
+            WHERE cycle.scope_key=$1) AS work_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_execution_attempt attempt
+             JOIN outcome_private_evaluation_execution_cycle cycle USING (cycle_id)
+            WHERE cycle.scope_key=$1) AS attempt_count,
+           (SELECT count(*)::int FROM outcome_local_private_trade_evaluation_generation
+             WHERE valuation_scope_key=$1) AS generation_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_batch
+             WHERE scope_key=$1) AS batch_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_batch_entry entry
+             JOIN outcome_private_evaluation_batch batch USING (batch_id)
+            WHERE batch.scope_key=$1) AS entry_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_cohort_batch binding
+             JOIN outcome_private_evaluation_cohort_capture capture USING (operation_id)
+            WHERE capture.scope_key=$1) AS binding_count,
+           (SELECT count(*)::int FROM outcome_private_evaluation_batch_transition
+             WHERE scope_key=$1) AS transition_count,
+           (SELECT count(*)::int FROM outcome_current_private_evaluation_batch
+             WHERE scope_key=$1) AS head_count`,
+        [operation.content.scopeKey]
+      );
+    const rowCountsAfterActivation = await loadPrivateBatchRowCounts();
+    expect(rowCountsAfterActivation.rows).toEqual([
+      {
+        capture_count: 1,
+        cycle_count: 1,
+        work_count: 1,
+        attempt_count: 1,
+        generation_count: 1,
+        batch_count: 1,
+        entry_count: 2,
+        binding_count: 1,
+        transition_count: 1,
+        head_count: 1,
+      },
+    ]);
+    await expect(
+      privateBatchRunner.runPrivate({
+        request: { requestId, scopeKey: operation.content.scopeKey },
+        claim: replacementDispatchClaim,
+      })
+    ).resolves.toMatchObject({ state: 'already_current', head: { revision: 1 } });
+
+    await mutateFixture(
+      `UPDATE outcome_private_valuation_dispatch_request
+          SET lease_expires_at=clock_timestamp()-interval '1 millisecond'
+        WHERE request_id=$1`,
+      [requestId]
+    );
+    await mutateFixture(
+      `UPDATE outcome_private_valuation_dispatch_attempt
+          SET lease_expires_at=clock_timestamp()-interval '1 millisecond'
+        WHERE claim_id=$1`,
+      [replacementClaimId]
+    );
+    const finalLeaseToken = digest('private-batch-final-replacement-lease');
+    const finalClaim = await outcomesPool.query<{ claim_id: string }>(
+      `SELECT claim_id FROM claim_outcome_private_valuation_dispatch($1,$2,300,$3)`,
+      ['system:private-batch-final-restart-tracer', digest(finalLeaseToken), requestId]
+    );
+    expect(finalClaim.rows).toHaveLength(1);
+    const finalClaimId = finalClaim.rows[0]!.claim_id;
+    await expect(
+      privateBatchRunner.runPrivate({
+        request: { requestId, scopeKey: operation.content.scopeKey },
+        claim: replacementDispatchClaim,
+      })
+    ).resolves.toEqual({ state: 'stale_authority' });
+    await expect(
+      privateBatchRunner.runPrivate({
+        request: { requestId, scopeKey: operation.content.scopeKey },
+        claim: { claimId: finalClaimId, leaseToken: finalLeaseToken },
+      })
+    ).resolves.toMatchObject({ state: 'already_current', head: { revision: 1 } });
+    const rowCountsAfterReplays = await loadPrivateBatchRowCounts();
+    expect(rowCountsAfterReplays.rows).toEqual([
+      {
+        capture_count: 2,
+        cycle_count: 1,
+        work_count: 1,
+        attempt_count: 1,
+        generation_count: 1,
+        batch_count: 1,
+        entry_count: 2,
+        binding_count: 1,
+        transition_count: 1,
+        head_count: 1,
+      },
+    ]);
+    const privateBatchCustody = await outcomesPool.query<{
+      capture_json: unknown;
+      cycle_json: unknown;
+      batch_json: unknown;
+    }>(
+      `SELECT to_jsonb(capture) AS capture_json,cycle.cycle_json,batch.batch_json
+         FROM outcome_current_private_evaluation_batch head
+         JOIN outcome_private_evaluation_batch batch ON batch.batch_id=head.batch_id
+         JOIN outcome_private_evaluation_cohort_batch binding ON binding.batch_id=batch.batch_id
+         JOIN outcome_private_evaluation_cohort_capture capture
+           ON capture.operation_id=binding.operation_id
+         JOIN outcome_private_evaluation_execution_cycle cycle
+           ON cycle.prepared_input_set_id=capture.prepared_input_set_id
+          AND cycle.prepared_input_set_revision=capture.prepared_input_set_revision
+        WHERE head.scope_key=$1`,
+      [operation.content.scopeKey]
+    );
+    expect(privateBatchCustody.rows).toHaveLength(1);
+    expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(replacementClaimId);
+    expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(replacementLeaseToken);
+    expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(finalClaimId);
+    expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(finalLeaseToken);
+
     await expect(
       client.transaction(async (transaction) => {
         await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
@@ -2084,7 +2809,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     ).rejects.toThrow('immutable after acceptance');
     await outcomesPool.query(
       `SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`,
-      [replacementClaimId, digest(replacementLeaseToken), JSON.stringify({ state: 'activated' })]
+      [finalClaimId, digest(finalLeaseToken), JSON.stringify({ state: 'activated' })]
     );
   });
 
