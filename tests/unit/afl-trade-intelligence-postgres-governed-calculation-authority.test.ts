@@ -89,6 +89,13 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.calls.push({ sql, parameters });
     const { prepared } = this.fixture;
+    const preparedContent = prepared.content;
+    if (
+      preparedContent.preparationAuthority !==
+      'authenticated_calculation_evidence_snapshot'
+    ) {
+      throw new Error('Expected authenticated prepared valuation input fixture.');
+    }
     if (sql.includes('FROM outcome_current_prepared_valuation_input_set')) {
       return {
         rows: [
@@ -112,7 +119,7 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
             scope_key: prepared.content.scopeKey,
             factual_release_scope_key: prepared.content.factualReleaseScopeKey,
             factual_release_id: prepared.content.factualReleaseId,
-            qualification_report_id: prepared.content.qualificationReportId,
+            qualification_report_id: preparedContent.qualificationReportId,
             prepared_at: prepared.content.preparedAt,
             prepared_set_json: prepared,
             content_canonical_json: canonicalizeAflTradeJson(prepared.content),
@@ -187,15 +194,22 @@ async function retainReadyFixtureArtifacts(
   repository: ReturnType<typeof createAflTradeFixtureArtifactRepository>
 ) {
   const { calculation, prepared } = transaction.fixture;
+  const preparedContent = prepared.content;
+  if (
+    preparedContent.preparationAuthority !==
+    'authenticated_calculation_evidence_snapshot'
+  ) {
+    throw new Error('Expected authenticated prepared valuation input fixture.');
+  }
   const readyEntry = prepared.content.entries[0];
   if (readyEntry?.state !== 'ready') throw new Error('Expected ready fixture entry.');
   const documents = [
     [readyEntry.materializationManifestArtifact, calculation.materializationManifest],
     [prepared.content.factualReleaseArtifact, { fixture: 'release' }],
     [prepared.content.releaseMembershipArtifact, { fixture: 'membership' }],
-    [prepared.content.qualificationReportArtifact, { fixture: 'qualification' }],
-    [prepared.content.sourceQualificationEvidenceRefs[0]!, { fixture: 'source' }],
-    [prepared.content.valuationInputBundleArtifact, { fixture: 'valuation-input-bundle' }],
+    [preparedContent.qualificationReportArtifact, { fixture: 'qualification' }],
+    [preparedContent.sourceQualificationEvidenceRefs[0]!, { fixture: 'source' }],
+    [preparedContent.valuationInputBundleArtifact, { fixture: 'valuation-input-bundle' }],
     [
       calculation.materializationManifest.content.calculationInputArtifact,
       calculation.calculationInputPackage,

@@ -315,7 +315,9 @@ async function seedInspection(
            prepared_set_canonical_json,prepared_set_json,finalized_at)
          VALUES ($1,$2,'afl-trade-prepared-valuation-input-set/v3','non_production',$3,
                  'fixture-release-scope',$5,$6,1,1,0,$4,
-                 '{}','{}','{}'::jsonb,$4)
+                 '{}','{}',jsonb_build_object('content',jsonb_build_object(
+                   'preparationAuthority','authenticated_calculation_evidence_snapshot'
+                 )),$4)
          ON CONFLICT DO NOTHING`,
         [authority.preparedInputSetId, authority.preparedInputSetId.slice(
           'prepared-valuation-input-set:'.length

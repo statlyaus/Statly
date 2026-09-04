@@ -1657,6 +1657,7 @@ model OutcomeHpnPavCalculation {
   pickPavSetMembers        OutcomePickPavCalculationMember[]      @relation("OutcomePickPavSetCalculation")
   pickPavObservationLinks  OutcomePickPavObservationCalculation[] @relation("OutcomePickPavObservationCalculation")
   currentHead              OutcomeHpnPavCalculationHead?
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@unique([inputSetId, methodId, schemaVersion], map: "outcome_hpn_pav_calculation_scope_key")
   @@index([environment, competition, seasonYear, finalizedAt], map: "outcome_hpn_pav_calculation_scope_idx")
@@ -4454,7 +4455,7 @@ model OutcomePreparedValuationInputSet {
   scopeKey                     String                                        @map("scope_key")
   factualReleaseScopeKey       String                                        @map("factual_release_scope_key")
   factualReleaseId             String                                        @map("factual_release_id")
-  qualificationReportId        String                                        @map("qualification_report_id")
+  qualificationReportId        String?                                       @map("qualification_report_id")
   tradeCount                   Int                                           @map("trade_count")
   readyCount                   Int                                           @map("ready_count")
   blockedCount                 Int                                           @map("blocked_count")
@@ -4466,7 +4467,7 @@ model OutcomePreparedValuationInputSet {
   registeredAt                 DateTime                                      @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy                 String                                        @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   factualRelease               OutcomeReleaseManifest                        @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
-  qualificationReport          OutcomeValuationSourceQualificationReport     @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
+  qualificationReport          OutcomeValuationSourceQualificationReport?    @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
   entries                      OutcomePreparedValuationInputEntry[]
   currentHeads                 OutcomeCurrentPreparedValuationInputSet[]
   currentValuationCohortResult OutcomeCurrentValuationCohortOperationResult?
@@ -5099,7 +5100,7 @@ model OutcomeCurrentValuationCohortOperation {
   operationId                   String                                        @id @map("operation_id") @outcomes.Text
   scopeKey                      String                                        @map("scope_key") @outcomes.Text
   factualReleaseId              String                                        @map("factual_release_id") @outcomes.Text
-  factualReleaseRevision        Int                                           @map("factual_release_revision")
+  factualReleaseRevision        Int?                                          @map("factual_release_revision")
   modelQualificationId          String                                        @map("model_qualification_id") @outcomes.Text
   modelQualificationWorkId      String                                        @map("model_qualification_work_id") @outcomes.Text
   modelQualificationRevision    Int                                           @map("model_qualification_revision")
@@ -5108,9 +5109,21 @@ model OutcomeCurrentValuationCohortOperation {
   contextSha256                 String                                        @map("context_sha256") @outcomes.Char(64)
   contextCanonicalJson          String                                        @map("context_canonical_json") @outcomes.Text
   contextJson                   Json                                          @map("context_json")
+  preparationAuthority          String                                        @default("authenticated_calculation_evidence_snapshot") @map("preparation_authority") @outcomes.Text
+  currentModelEvidenceOperationId String?                                     @map("current_model_evidence_operation_id") @outcomes.Text
+  dispatchRequestId             String?                                       @map("dispatch_request_id") @outcomes.Text
+  factualOutputId               String?                                       @map("factual_output_id") @outcomes.Text
+  hpnCalculationId              String?                                       @map("hpn_calculation_id") @outcomes.Text
+  modelOperationId              String?                                       @map("model_operation_id") @outcomes.Text
+  valuationInputBundleId        String?                                       @map("valuation_input_bundle_id") @outcomes.Text
   factualRelease                OutcomeReleaseManifest                        @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_release_fkey")
   modelQualification            OutcomeGovernedValuationModelQualification    @relation(fields: [modelQualificationId], references: [qualificationId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_qualification_fkey")
   modelQualificationWork        OutcomeGovernedModelQualificationWork         @relation(fields: [modelQualificationWorkId], references: [workId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_work_fkey")
+  currentModelEvidenceOperation OutcomeCurrentValuationModelEvidenceOperation? @relation(fields: [currentModelEvidenceOperationId], references: [operationId], onDelete: Restrict, map: "outcome_current_cohort_model_evidence_fkey")
+  dispatchRequest               OutcomePrivateValuationDispatchRequest?       @relation(fields: [dispatchRequestId], references: [requestId], onDelete: Restrict, map: "outcome_current_cohort_dispatch_request_fkey")
+  factualOutput                 OutcomePrivateValuationFactualOutput?          @relation(fields: [factualOutputId], references: [outputId], onDelete: Restrict, map: "outcome_current_cohort_factual_output_fkey")
+  hpnCalculation                OutcomeHpnPavCalculation?                      @relation(fields: [hpnCalculationId], references: [calculationId], onDelete: Restrict, map: "outcome_current_cohort_hpn_calculation_fkey")
+  modelOperation                OutcomePrivateValuationModelOperation?         @relation(fields: [modelOperationId], references: [operationId], onDelete: Restrict, map: "outcome_current_cohort_model_operation_fkey")
   result                        OutcomeCurrentValuationCohortOperationResult?
 
   @@map("outcome_current_valuation_cohort_operation")
@@ -5466,6 +5479,7 @@ model OutcomePrivateValuationDispatchRequest {
   sourceAdmission       OutcomePrivateValuationSourceAdmission?
   hpnSourceAdmissions OutcomePrivateValuationHpnSourceAdmission[]
   factualOutput         OutcomePrivateValuationFactualOutput?
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@index([status, availableAt, scopeKey], map: "outcome_private_valuation_dispatch_due_idx")
   @@map("outcome_private_valuation_dispatch_request")
@@ -5568,6 +5582,7 @@ model OutcomeCurrentValuationModelEvidenceOperation {
   recordedAt           DateTime                                      @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
   factualOperation     OutcomeCurrentValuationFactualRefreshOperation @relation(fields: [factualOperationId], references: [operationId], onDelete: Restrict, map: "outcome_current_model_evidence_factual_operation_fkey")
   factualCandidate     OutcomePrivateFactualCandidate                @relation(fields: [factualCandidateId], references: [candidateId], onDelete: Restrict, map: "outcome_current_model_evidence_factual_candidate_fkey")
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@index([scopeKey, completedAt], map: "outcome_current_model_evidence_scope_idx")
   @@map("outcome_current_valuation_model_evidence_operation")
@@ -5688,6 +5703,7 @@ model OutcomePrivateValuationModelOperation {
   qualificationBoundAt  DateTime? @map("qualification_bound_at") @outcomes.Timestamptz(3)
   createdAt              DateTime  @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
   requestBindings        OutcomePrivateValuationModelRequestBinding[]
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@map("outcome_private_valuation_model_operation")
 }
@@ -5806,6 +5822,7 @@ model OutcomePrivateValuationFactualOutput {
   playerDataset       OutcomeValuationDatasetCandidate?                   @relation("OutcomeAdmittedPlayerFactualDataset", fields: [playerDatasetId], references: [datasetId], onDelete: Restrict)
   playerAdmission     OutcomeValuationDatasetAdmission?                   @relation("OutcomeAdmittedPlayerFactualAdmission", fields: [playerAdmissionId], references: [admissionId], onDelete: Restrict)
   spellMetricBatches  OutcomePrivateValuationFactualOutputSpellBatch[]
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@index([candidateId], map: "outcome_private_factual_output_candidate_idx")
   @@index([factualReleaseId], map: "outcome_private_factual_output_release_idx")

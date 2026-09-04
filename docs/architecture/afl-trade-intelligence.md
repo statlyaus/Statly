@@ -2189,10 +2189,33 @@ calculation. Deterministic authority, materialization and validation failures re
 storage or runtime failures may return through the dispatch attempt ledger. No new retry ledger,
 component store, public pointer or pick methodology is introduced.
 
-This is still not a complete new-game-data pipeline. The deployed weekly runner continues to consume
-whatever exact prepared-v3 head is current. Observation rebuild and prepared-v3 activation still need
-to be composed around this dispatch-bound model-pair coordinator before the worker can run raw data
-through to recalculation without manual orchestration.
+The private preparation boundary can now construct and activate that exact prepared-v3 head without
+re-running HPN preparation or either model component. Given a live dispatch claim, it loads one
+retained qualified current-model-evidence result and authenticates its factual refresh, current
+private factual head, reviewed evidence bundle and decision, normalized/reconciled custody, factual
+output, finalized HPN calculation, native player and pick validations, governed runs, qualification
+work, distinct current Gate 3 decisions, and current model revision. Those checks are performed by a
+narrow PostgreSQL authority loader rather than by trusting identifiers supplied by the caller.
+
+Private preparation reuses the existing valuation-input bundle, per-trade materialization, prepared
+input store, cohort-operation history, and current-head compare-and-swap. Its content-addressed
+operation identity includes the exact qualified evidence, dispatch ancestry, valuation bundle, and
+expected prepared revision. Equivalent concurrent callers therefore converge on one immutable
+operation, prepared generation, result, and head transition. Capture and final commit both require
+the current live claim; commit repeats mutable-head, selected valuation-input-bundle, and exact-lineage
+authentication. A lightweight bundle selector reads only the current content-addressed bundle ID, so
+exact replay under a current replacement claim can authenticate and return the retained prepared
+custody without HPN/model execution, bundle reconstruction, trade reconstruction, or another
+activation. A different selected bundle cannot reuse that custody: it changes both the replay key and
+operation identity and requires a new construction generation. Dispatch claim IDs and lease tokens
+are live fences only and are not copied into durable prepared custody.
+
+This remains local, private, non-production, publication-ineligible, and publication-prohibited. It
+does not read or change the active public factual release or model/valuation publication pointers,
+and it does not grant prepared-input authority to the current-model-evidence result itself. The
+separate retained preparation operation supplies that authority. Exhaustive private cohort capture,
+calculation-cycle and batch activation remain downstream work; the weekly worker is not yet composed
+through this preparation boundary.
 
 ### Current valuation refresh trace
 

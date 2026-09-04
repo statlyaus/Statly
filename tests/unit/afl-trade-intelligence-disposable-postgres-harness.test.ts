@@ -61,7 +61,7 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
         '--publish',
         '127.0.0.1::5432',
         '--tmpfs',
-        '/var/lib/postgresql/data:rw,noexec,nosuid,size=512m',
+        '/var/lib/postgresql/data:rw,noexec,nosuid,size=1g',
         '--env',
         'POSTGRES_DB=statly_outcomes_test',
         '--env',

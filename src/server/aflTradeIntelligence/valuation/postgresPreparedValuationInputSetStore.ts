@@ -16,7 +16,7 @@ interface PreparedSetRow {
   scope_key: string;
   factual_release_scope_key: string;
   factual_release_id: string;
-  qualification_report_id: string;
+  qualification_report_id: string | null;
   prepared_at: Date | string;
   prepared_set_json: unknown;
   content_canonical_json: string;
@@ -147,6 +147,8 @@ async function loadExactFromClient(
     row.prepared_at instanceof Date
       ? row.prepared_at.toISOString()
       : new Date(row.prepared_at).toISOString();
+  const qualificationReportId =
+    'qualificationReportId' in prepared.content ? prepared.content.qualificationReportId : null;
   if (
     prepared.preparedInputSetId !== preparedInputSetId ||
     row.content_sha256 !== digestFromId(preparedInputSetId, 'prepared-valuation-input-set') ||
@@ -155,7 +157,7 @@ async function loadExactFromClient(
     row.scope_key !== prepared.content.scopeKey ||
     row.factual_release_scope_key !== prepared.content.factualReleaseScopeKey ||
     row.factual_release_id !== prepared.content.factualReleaseId ||
-    row.qualification_report_id !== prepared.content.qualificationReportId ||
+    row.qualification_report_id !== qualificationReportId ||
     preparedAt !== prepared.content.preparedAt ||
     !row.finalized_at ||
     row.content_canonical_json !== canonicalizeAflTradeJson(prepared.content) ||
@@ -369,7 +371,9 @@ export class PostgresAflTradePreparedValuationInputSetStore implements AflTradeP
           prepared.content.scopeKey,
           prepared.content.factualReleaseScopeKey,
           prepared.content.factualReleaseId,
-          prepared.content.qualificationReportId,
+          'qualificationReportId' in prepared.content
+            ? prepared.content.qualificationReportId
+            : null,
           prepared.content.tradeCount,
           prepared.content.readyCount,
           prepared.content.blockedCount,

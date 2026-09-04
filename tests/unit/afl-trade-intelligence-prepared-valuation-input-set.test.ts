@@ -141,6 +141,13 @@ describe('AFL trade prepared valuation input set', () => {
 
   it('rejects relational ancestry that disagrees with finalized v3 bytes', async () => {
     const prepared = createAflTradePreparedValuationInputSet(v3Content());
+    const preparedContent = prepared.content;
+    if (
+      preparedContent.preparationAuthority !==
+      'authenticated_calculation_evidence_snapshot'
+    ) {
+      throw new Error('Expected authenticated prepared valuation input fixture.');
+    }
     let queryIndex = 0;
     const store = new PostgresAflTradePreparedValuationInputSetStore({
       async query() {
@@ -154,7 +161,7 @@ describe('AFL trade prepared valuation input set', () => {
                 scope_key: prepared.content.scopeKey,
                 factual_release_scope_key: prepared.content.factualReleaseScopeKey,
                 factual_release_id: prepared.content.factualReleaseId,
-                qualification_report_id: prepared.content.qualificationReportId,
+                qualification_report_id: preparedContent.qualificationReportId,
                 prepared_at: prepared.content.preparedAt,
                 prepared_set_json: prepared,
                 content_canonical_json: canonicalizeAflTradeJson(prepared.content),

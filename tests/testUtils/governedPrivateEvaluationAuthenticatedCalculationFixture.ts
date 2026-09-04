@@ -179,7 +179,29 @@ function createPickBenchmark() {
   });
 }
 
-export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture() {
+export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture(input?: {
+  readonly scopeKey?: string;
+  readonly factualReleaseId?: string;
+  readonly valuationInputBundleId?: string;
+  readonly components?: readonly [
+    Readonly<{
+      role: 'player_contribution_and_availability';
+      runId: string;
+      protocolId: string;
+      datasetId: string;
+      datasetAdmissionId: string;
+      gate3DecisionId: string;
+    }>,
+    Readonly<{
+      role: 'draft_pick_and_future_pick_distribution';
+      runId: string;
+      protocolId: string;
+      datasetId: string;
+      datasetAdmissionId: string;
+      gate3DecisionId: string;
+    }>,
+  ];
+}) {
   const definition = {
     schemaVersion: 'local-synthetic-trade-definition/v1' as const,
     basis: { kind: 'private_workbook' as const, basisId: 'authenticated-contract-fixture' },
@@ -237,11 +259,28 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     scenario: 'baseline',
     assessedAt: CREATED_AT,
   });
-  const valuationInputBundleId = addressed('valuation-input-bundle', 'authenticated-calculation');
+  const valuationInputBundleId =
+    input?.valuationInputBundleId ??
+    addressed('valuation-input-bundle', 'authenticated-calculation');
+  const componentAuthority = new Map(
+    input?.components?.map((component) => [component.role, component]) ?? []
+  );
   const componentDrawSet = createAflTradeComponentDrawSet({
     ...scenario.componentDrawSet.content,
     valuationInputBundleId,
     valueUnitId: 'fixed_horizon_pav',
+    components: scenario.componentDrawSet.content.components.map((component) => {
+      const authority = componentAuthority.get(component.role);
+      return authority === undefined
+        ? component
+        : {
+            ...component,
+            runId: authority.runId,
+            protocolId: authority.protocolId,
+            datasetId: authority.datasetId,
+            gate3DecisionId: authority.gate3DecisionId,
+          };
+    }),
   });
   const realizedContributionLedger = createAflTradeRealizedContributionLedger({
     ...scenario.realizedContributionLedger.content,
@@ -266,7 +305,9 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     runId: component.runId,
     protocolId: component.protocolId,
     datasetId: component.datasetId,
-    datasetAdmissionId: addressed('dataset-admission', `component-${index}`),
+    datasetAdmissionId:
+      componentAuthority.get(component.role)?.datasetAdmissionId ??
+      addressed('dataset-admission', `component-${index}`),
     gate3DecisionId: component.gate3DecisionId,
     evidence: {
       runManifest: artifact(`run-${index}`),
@@ -276,10 +317,7 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     },
   }));
   const pickBenchmark = createPickBenchmark();
-  const pickBenchmarkArtifact = createAflTradeCanonicalJsonArtifactRef(
-    pickBenchmark,
-    CREATED_AT
-  );
+  const pickBenchmarkArtifact = createAflTradeCanonicalJsonArtifactRef(pickBenchmark, CREATED_AT);
   const selectionByAssetId = new Map([
     ['asset:01', 25],
     ['asset:02', 14],
@@ -292,8 +330,9 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
       return definition.transfers.find((transfer) => transfer.assetId === rootAssetId)!
         .displayLabel;
     }
-    const assetType = scenario.lineageGraph.assets.find((asset) => asset.assetId === assetId)!
-      .assetType;
+    const assetType = scenario.lineageGraph.assets.find(
+      (asset) => asset.assetId === assetId
+    )!.assetType;
     if (assetType === 'current_pick_entitlement') return `Pick ${selectionNumber}`;
     if (assetType === 'draft_selection') return `Pick ${selectionNumber} draft selection`;
     return `Player selected with Pick ${selectionNumber}`;
@@ -332,10 +371,11 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     schemaVersion: 'private-evaluation-input-trace/v1',
     environment: 'non_production',
     selector: {
-      valuationScopeKey: 'afl-men:authenticated-contract-fixture',
+      valuationScopeKey: input?.scopeKey ?? 'afl-men:authenticated-contract-fixture',
       tradeId: definition.tradeId,
     },
-    factualReleaseId: addressed('outcome-release', 'authenticated-calculation'),
+    factualReleaseId:
+      input?.factualReleaseId ?? addressed('outcome-release', 'authenticated-calculation'),
     valuationInputBundleId,
     components: traceComponents,
     transaction: {
@@ -460,13 +500,8 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
       CREATED_AT
     ),
     lineageGraphId: createAflTradeLineageGraphId(scenario.lineageGraph),
-    lineageGraphArtifact: createAflTradeCanonicalJsonArtifactRef(
-      scenario.lineageGraph,
-      DERIVED_AT
-    ),
-    pickBenchmarks: [
-      { benchmarkId: pickBenchmark.benchmarkId, artifact: pickBenchmarkArtifact },
-    ],
+    lineageGraphArtifact: createAflTradeCanonicalJsonArtifactRef(scenario.lineageGraph, DERIVED_AT),
+    pickBenchmarks: [{ benchmarkId: pickBenchmark.benchmarkId, artifact: pickBenchmarkArtifact }],
     playerObservations: [],
     createdAt: DERIVED_AT,
     publicationEligible: false,
