@@ -404,6 +404,13 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       createPgAflOutcomeSqlClient(pool)
     );
     const first = preparedSetV3();
+    const firstContent = first.content;
+    if (
+      firstContent.preparationAuthority !==
+      'authenticated_calculation_evidence_snapshot'
+    ) {
+      throw new Error('Expected authenticated prepared valuation input fixture.');
+    }
     await expect(store.register(first)).resolves.toEqual(first);
 
     await expect(
@@ -572,9 +579,9 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
           factualReleaseArtifact: first.content.factualReleaseArtifact,
           releaseMembershipArtifact: first.content.releaseMembershipArtifact,
           releaseTradeIds: first.content.releaseTradeIds,
-          sourceQualificationReportId: first.content.qualificationReportId,
-          sourceQualificationReportArtifact: first.content.qualificationReportArtifact,
-          sourceQualificationEvidenceRefs: first.content.sourceQualificationEvidenceRefs,
+          sourceQualificationReportId: firstContent.qualificationReportId,
+          sourceQualificationReportArtifact: firstContent.qualificationReportArtifact,
+          sourceQualificationEvidenceRefs: firstContent.sourceQualificationEvidenceRefs,
           ...valuationBundle,
         }),
       }),

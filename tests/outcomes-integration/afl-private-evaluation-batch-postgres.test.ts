@@ -119,7 +119,10 @@ beforeAll(async () => {
          ready_count,blocked_count,prepared_at,content_canonical_json,
          prepared_set_canonical_json,prepared_set_json,finalized_at)
        VALUES ($1,$2,'afl-trade-prepared-valuation-input-set/v3','non_production',$3,
-               'fixture-release-scope',$4,$5,2,0,2,$6,'{}','{}','{}'::jsonb,$6)`,
+               'fixture-release-scope',$4,$5,2,0,2,$6,'{}','{}',
+               jsonb_build_object('content',jsonb_build_object(
+                 'preparationAuthority','authenticated_calculation_evidence_snapshot'
+               )),$6)`,
       [
         preparedInputSetId,
         '1'.repeat(64),

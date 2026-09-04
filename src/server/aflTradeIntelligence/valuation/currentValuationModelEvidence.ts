@@ -75,26 +75,30 @@ const componentEvidenceShape = {
   qualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
 } as const;
 
+const qualifiedCurrentValuationModelEvidenceResultShapeSchema = z
+  .object({
+    ...evidenceBaseShape,
+    ...componentEvidenceShape,
+    state: z.literal('qualified'),
+    qualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
+    playerGate3DecisionId: idSchema,
+    pickGate3DecisionId: idSchema,
+  })
+  .strict();
+
+const failedCurrentValuationModelEvidenceResultShapeSchema = z
+  .object({
+    ...evidenceBaseShape,
+    ...componentEvidenceShape,
+    state: z.literal('qualification_failed'),
+    failureCodes: z.array(idSchema).min(1).max(100),
+  })
+  .strict();
+
 export const aflTradeCurrentValuationModelEvidenceResultSchema = z
   .discriminatedUnion('state', [
-    z
-      .object({
-        ...evidenceBaseShape,
-        ...componentEvidenceShape,
-        state: z.literal('qualified'),
-        qualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
-        playerGate3DecisionId: idSchema,
-        pickGate3DecisionId: idSchema,
-      })
-      .strict(),
-    z
-      .object({
-        ...evidenceBaseShape,
-        ...componentEvidenceShape,
-        state: z.literal('qualification_failed'),
-        failureCodes: z.array(idSchema).min(1).max(100),
-      })
-      .strict(),
+    qualifiedCurrentValuationModelEvidenceResultShapeSchema,
+    failedCurrentValuationModelEvidenceResultShapeSchema,
   ])
   .superRefine((result, context) => {
     if (result.scopeKey !== result.privateFactualAuthority.valuationScopeKey) {
@@ -116,7 +120,9 @@ export const aflTradeCurrentValuationModelEvidenceResultSchema = z
       });
     }
     const expectedRevision =
-      result.state === 'qualified' ? result.expectedModelRevision + 1 : result.expectedModelRevision;
+      result.state === 'qualified'
+        ? result.expectedModelRevision + 1
+        : result.expectedModelRevision;
     if (result.modelRevision !== expectedRevision) {
       context.addIssue({
         code: 'custom',
@@ -162,6 +168,11 @@ export const aflTradeCurrentValuationModelEvidenceResultSchema = z
       });
     }
   });
+
+export const aflTradeQualifiedCurrentValuationModelEvidenceResultSchema = z.intersection(
+  aflTradeCurrentValuationModelEvidenceResultSchema,
+  z.object({ state: z.literal('qualified') }).passthrough()
+);
 
 export type AflTradeCurrentValuationModelEvidenceRequest = z.infer<
   typeof aflTradeCurrentValuationModelEvidenceRequestSchema

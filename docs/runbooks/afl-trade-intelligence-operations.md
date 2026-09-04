@@ -1075,10 +1075,50 @@ occurrence rather than a 604800-second interval, so daylight-saving changes do n
 Startup coalesces missed weeks to the latest occurrence. A newly committed qualified model pair also
 enqueues immediate work. Each claimed dispatch first runs the seven-lane current-evidence coordinator
 and may advance only the private factual head. An unavailable evidence result completes that dispatch
-as exhausted rather than retrying it as a transient failure. A complete factual handoff then enters
-the existing cohort runner, which still requires the exact current authenticated prepared-v3 head.
-The coordinator does not rebuild or activate prepared-v3 evidence, so newly admitted facts cannot
-reach recalculation until that remaining downstream #550 stage is composed.
+as exhausted rather than retrying it as a transient failure. After qualified current-model evidence
+exists, the private prepared-v3 coordinator can authenticate that retained evidence and the exact
+dispatch ancestry, construct the existing valuation-input bundle and trade manifests, register one
+immutable prepared generation, and compare-and-swap the private prepared head. The deployed worker
+does not yet invoke this coordinator and does not yet run the downstream exhaustive cohort; do not
+describe the repository as automatic raw-data-to-recalculation until those remaining stages are
+composed.
+
+Run private preparation only while holding the request's current live claim. The operation validates
+the current private factual head, reviewed evidence decision and bundle, normalized/reconciled
+custody, factual output, finalized HPN calculation, native player/pick validation evidence, governed
+runs, qualification work, distinct Gate 3 decisions, current model revision, valuation bundle, and
+expected prepared revision. Do not reconstruct that authority from caller-provided IDs, query raw
+reviewed evidence from the runtime role, or substitute the public active release. Claim IDs and lease
+tokens are transient fences and must not appear in the retained operation or prepared set.
+
+The replay check must call the lightweight valuation-input-bundle selector and match its exact
+content-addressed ID against retained operation custody. It must not load or reconstruct the bundle
+artifact on an unchanged replay. A different selected ID is a changed input: construct a new
+generation and require its full bundle evidence to match the selected ID before registration.
+
+After an acknowledged loss, reclaim the same dispatch through the existing dispatch ledger and call
+private preparation again. A valid replacement claim returns the exact retained `already_current`
+generation without running HPN/model preparation or reconstructing trades. Inspect retained custody
+with:
+
+```sql
+SELECT operation.operation_id,operation.dispatch_request_id,
+       operation.current_model_evidence_operation_id,
+       operation.valuation_input_bundle_id,
+       operation.expected_prepared_input_revision,
+       result.prepared_input_set_id,result.head_revision
+  FROM outcome_current_valuation_cohort_operation operation
+  LEFT JOIN outcome_current_valuation_cohort_operation_result result
+    ON result.operation_id=operation.operation_id
+ WHERE operation.preparation_authority='qualified_current_model_evidence'
+   AND operation.dispatch_request_id='<private-valuation-dispatch:64-hex>';
+```
+
+One successful request and prepared revision must resolve to one operation and one result. A missing
+row means capture did not commit; an operation without a result is resumable retained capture; an
+authority mismatch or expired/reclaimed claim must fail closed and leave the prior prepared head
+current. Do not manually insert a result or update append-only operation history. Private preparation
+must leave `outcome_active_release` and all public model/valuation publication pointers unchanged.
 
 The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
 It accepts an exact retained dispatch plus its live claim, requires the exact immutable factual output

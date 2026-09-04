@@ -6,6 +6,7 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { aflTradeQualifiedCurrentValuationModelEvidenceResultSchema } from './currentValuationModelEvidence';
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const publicIdSchema = z
@@ -409,32 +410,125 @@ const aflTradePreparedValuationInputSetContentV2Schema = z
     }
   });
 
-const aflTradePreparedValuationInputSetContentV3Schema = z
+const preparedValuationInputSetV3CommonShape = {
+  schemaVersion: z.literal(AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION),
+  environment: z.literal('non_production'),
+  scopeKey: publicIdSchema,
+  factualReleaseScopeKey: publicIdSchema,
+  factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+  factualReleaseArtifact: aflTradeArtifactRefSchema,
+  releaseMembershipArtifact: aflTradeArtifactRefSchema,
+  qualificationOperation: z.literal('valuation_model_training_and_derived_feature_creation'),
+  valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
+  valuationInputBundleArtifact: aflTradeArtifactRefSchema,
+  releaseTradeIds: z.array(publicIdSchema).min(1).max(10_000),
+  entries: z.array(aflTradePreparedValuationInputEntryV3Schema).min(1).max(10_000),
+  tradeCount: z.number().int().positive().max(10_000),
+  readyCount: z.number().int().nonnegative().max(10_000),
+  blockedCount: z.number().int().nonnegative().max(10_000),
+  preparedAt: isoDateTimeSchema,
+  publicationEligible: z.literal(false),
+  limitation: z.literal(
+    'Private preparation evidence only; not a valuation result, publication approval, or activation authority.'
+  ),
+} as const;
+
+type PreparedValuationInputSetV3Common = z.infer<
+  z.ZodObject<typeof preparedValuationInputSetV3CommonShape>
+>;
+
+function refinePreparedValuationInputSetV3(
+  content: PreparedValuationInputSetV3Common,
+  context: z.RefinementCtx,
+  authorityArtifacts: readonly z.infer<typeof aflTradeArtifactRefSchema>[]
+): void {
+  if (
+    new Set(content.releaseTradeIds).size !== content.releaseTradeIds.length ||
+    content.releaseTradeIds.some(
+      (tradeId, index) => index > 0 && content.releaseTradeIds[index - 1]! > tradeId
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['releaseTradeIds'],
+      message: 'Factual-release trade IDs must be unique and use canonical order.',
+    });
+  }
+  const entryTradeIds = content.entries.map(({ tradeId }) => tradeId);
+  if (
+    entryTradeIds.length !== content.releaseTradeIds.length ||
+    entryTradeIds.some((tradeId, index) => tradeId !== content.releaseTradeIds[index])
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['entries'],
+      message: 'Prepared entries must classify the exact factual-release trade set.',
+    });
+  }
+  const readyEntries = content.entries.filter(
+    (entry): entry is z.infer<typeof readyEntryV3Schema> => entry.state === 'ready'
+  );
+  if (
+    content.tradeCount !== content.entries.length ||
+    content.readyCount !== readyEntries.length ||
+    content.blockedCount !== content.entries.length - readyEntries.length
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Prepared input-set counts must match the exact entry classifications.',
+    });
+  }
+  const manifestIds = readyEntries.map(
+    ({ materializationManifestId }) => materializationManifestId
+  );
+  if (new Set(manifestIds).size !== manifestIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['entries'],
+      message: 'Ready prepared entries require unique materialization manifest identities.',
+    });
+  }
+  const readyArtifacts = readyEntries.map(
+    ({ materializationManifestArtifact }) => materializationManifestArtifact
+  );
+  const artifactIds = [
+    content.valuationInputBundleArtifact.artifactId,
+    ...readyArtifacts.map(({ artifactId }) => artifactId),
+  ];
+  if (new Set(artifactIds).size !== artifactIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['entries'],
+      message: 'Each ready manifest and valuation bundle must retain distinct bytes.',
+    });
+  }
+  const entryArtifacts = content.entries.flatMap((entry) =>
+    entry.state === 'ready'
+      ? [entry.materializationManifestArtifact]
+      : entry.blockers.flatMap(({ evidenceRefs }) => evidenceRefs)
+  );
+  const parents = [
+    content.factualReleaseArtifact,
+    content.releaseMembershipArtifact,
+    content.valuationInputBundleArtifact,
+    ...authorityArtifacts,
+    ...entryArtifacts,
+  ];
+  if (parents.some(({ createdAt }) => Date.parse(createdAt) > Date.parse(content.preparedAt))) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Every prepared input-set artifact must exist before preparation completes.',
+    });
+  }
+}
+
+const publicPreparedValuationInputSetContentV3Schema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION),
-    environment: z.literal('non_production'),
-    scopeKey: publicIdSchema,
-    factualReleaseScopeKey: publicIdSchema,
-    factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
-    factualReleaseArtifact: aflTradeArtifactRefSchema,
-    releaseMembershipArtifact: aflTradeArtifactRefSchema,
+    ...preparedValuationInputSetV3CommonShape,
     preparationAuthority: z.literal('authenticated_calculation_evidence_snapshot'),
-    qualificationOperation: z.literal('valuation_model_training_and_derived_feature_creation'),
     qualificationReportId: aflTradeContentAddressedIdSchema('valuation-source-qualification'),
     qualificationReportArtifact: aflTradeArtifactRefSchema,
     sourceQualificationEvidenceRefs: z.array(aflTradeArtifactRefSchema).min(1).max(1_000),
-    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
-    valuationInputBundleArtifact: aflTradeArtifactRefSchema,
-    releaseTradeIds: z.array(publicIdSchema).min(1).max(10_000),
-    entries: z.array(aflTradePreparedValuationInputEntryV3Schema).min(1).max(10_000),
-    tradeCount: z.number().int().positive().max(10_000),
-    readyCount: z.number().int().nonnegative().max(10_000),
-    blockedCount: z.number().int().nonnegative().max(10_000),
-    preparedAt: isoDateTimeSchema,
-    publicationEligible: z.literal(false),
-    limitation: z.literal(
-      'Private preparation evidence only; not a valuation result, publication approval, or activation authority.'
-    ),
   })
   .strict()
   .superRefine((content, context) => {
@@ -453,95 +547,60 @@ const aflTradePreparedValuationInputSetContentV3Schema = z
         message: 'Source qualification evidence must be unique and canonically ordered.',
       });
     }
-    if (
-      new Set(content.releaseTradeIds).size !== content.releaseTradeIds.length ||
-      content.releaseTradeIds.some(
-        (tradeId, index) => index > 0 && content.releaseTradeIds[index - 1]! > tradeId
-      )
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['releaseTradeIds'],
-        message: 'Factual-release trade IDs must be unique and use canonical order.',
-      });
-    }
-    const entryTradeIds = content.entries.map(({ tradeId }) => tradeId);
-    if (
-      entryTradeIds.length !== content.releaseTradeIds.length ||
-      entryTradeIds.some((tradeId, index) => tradeId !== content.releaseTradeIds[index])
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['entries'],
-        message: 'Prepared entries must classify the exact factual-release trade set.',
-      });
-    }
-    const readyEntries = content.entries.filter(
-      (entry): entry is z.infer<typeof readyEntryV3Schema> => entry.state === 'ready'
-    );
-    if (
-      content.tradeCount !== content.entries.length ||
-      content.readyCount !== readyEntries.length ||
-      content.blockedCount !== content.entries.length - readyEntries.length
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Prepared input-set counts must match the exact entry classifications.',
-      });
-    }
-    const manifestIds = readyEntries.map(
-      ({ materializationManifestId }) => materializationManifestId
-    );
-    if (new Set(manifestIds).size !== manifestIds.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['entries'],
-        message: 'Ready prepared entries require unique materialization manifest identities.',
-      });
-    }
-    const readyArtifacts = readyEntries.map(
-      ({ materializationManifestArtifact }) => materializationManifestArtifact
-    );
-    const artifactIds = [
-      content.valuationInputBundleArtifact.artifactId,
-      ...readyArtifacts.map(({ artifactId }) => artifactId),
-    ];
-    if (new Set(artifactIds).size !== artifactIds.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['entries'],
-        message: 'Each ready manifest and valuation bundle must retain distinct bytes.',
-      });
-    }
-    const entryArtifacts = content.entries.flatMap((entry) =>
-      entry.state === 'ready'
-        ? [entry.materializationManifestArtifact]
-        : entry.blockers.flatMap(({ evidenceRefs }) => evidenceRefs)
-    );
-    const parents = [
-      content.factualReleaseArtifact,
-      content.releaseMembershipArtifact,
+    refinePreparedValuationInputSetV3(content, context, [
       content.qualificationReportArtifact,
-      content.valuationInputBundleArtifact,
       ...content.sourceQualificationEvidenceRefs,
-      ...entryArtifacts,
-    ];
-    if (parents.some(({ createdAt }) => Date.parse(createdAt) > Date.parse(content.preparedAt))) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Every prepared input-set artifact must exist before preparation completes.',
-      });
-    }
+    ]);
   });
 
-export const aflTradePreparedValuationInputSetContentSchema = z.discriminatedUnion(
-  'schemaVersion',
-  [
-    aflTradePreparedValuationInputSetContentV1Schema,
-    aflTradePreparedValuationInputSetContentV2Schema,
-    aflTradePreparedValuationInputSetContentV3Schema,
-  ]
+export const aflTradePrivatePreparedValuationDispatchAuthoritySchema = z
+  .object({
+    requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
+    factualOutputId: aflTradeContentAddressedIdSchema('private-valuation-factual-output'),
+    hpnCalculationId: aflTradeContentAddressedIdSchema('hpn-pav-season'),
+    modelOperationId: aflTradeContentAddressedIdSchema('private-valuation-model-operation'),
+  })
+  .strict();
+
+const privatePreparedValuationInputSetContentV3Schema = z
+  .object({
+    ...preparedValuationInputSetV3CommonShape,
+    preparationAuthority: z.literal('qualified_current_model_evidence'),
+    preparationOperationId: aflTradeContentAddressedIdSchema(
+      'valuation-cohort-preparation-operation'
+    ),
+    modelEvidence: aflTradeQualifiedCurrentValuationModelEvidenceResultSchema,
+    dispatchAuthority: aflTradePrivatePreparedValuationDispatchAuthoritySchema,
+  })
+  .strict()
+  .superRefine((content, context) => {
+    if (content.scopeKey !== content.modelEvidence.scopeKey) {
+      context.addIssue({
+        code: 'custom',
+        path: ['modelEvidence', 'scopeKey'],
+        message: 'Private prepared model evidence must remain in the prepared valuation scope.',
+      });
+    }
+    if (Date.parse(content.preparedAt) < Date.parse(content.modelEvidence.completedAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['preparedAt'],
+        message: 'Private prepared inputs cannot predate their qualified model evidence.',
+      });
+    }
+    refinePreparedValuationInputSetV3(content, context, []);
+  });
+
+const aflTradePreparedValuationInputSetContentV3Schema = z.discriminatedUnion(
+  'preparationAuthority',
+  [publicPreparedValuationInputSetContentV3Schema, privatePreparedValuationInputSetContentV3Schema]
 );
+
+export const aflTradePreparedValuationInputSetContentSchema = z.union([
+  aflTradePreparedValuationInputSetContentV1Schema,
+  aflTradePreparedValuationInputSetContentV2Schema,
+  aflTradePreparedValuationInputSetContentV3Schema,
+]);
 
 export const aflTradePreparedValuationInputSetSchema = z
   .object({
