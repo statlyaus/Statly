@@ -95,6 +95,10 @@ describe('PostgreSQL governed current calculation authority', () => {
         },
       ],
     });
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).toContain('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
+    expect(calls[1]).toContain('FROM load_outcome_private_prepared_v3_authority');
+    expect(calls[2]).toContain('RESET ROLE');
     expect(calls.some((sql) => sql.includes('FROM outcome_registry_head'))).toBe(false);
   });
 

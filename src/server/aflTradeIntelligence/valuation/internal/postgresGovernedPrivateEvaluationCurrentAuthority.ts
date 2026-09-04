@@ -183,78 +183,93 @@ export async function loadCurrentPrivateValuationDecision(
   return { state: 'ready', decision };
 }
 
-export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
-  input: CurrentAuthorityInput
+type QualifiedCurrentModelEvidencePrepared = Extract<
+  CurrentAuthorityInput['prepared'],
+  { preparationAuthority: 'qualified_current_model_evidence' }
+>;
+
+type AuthenticatedCalculationEvidencePrepared = Extract<
+  CurrentAuthorityInput['prepared'],
+  { preparationAuthority: 'authenticated_calculation_evidence_snapshot' }
+>;
+
+async function captureQualifiedCurrentModelEvidenceAuthority(
+  input: CurrentAuthorityInput,
+  prepared: QualifiedCurrentModelEvidencePrepared
 ): Promise<GovernedPrivateEvaluationCapturedCalculationAuthority> {
-  if (input.prepared.preparationAuthority === 'qualified_current_model_evidence') {
-    await input.transaction.query(`SET LOCAL ROLE afl_trade_private_evaluation_coordinator`);
-    const result = await input.transaction.query<{
-      readonly scope_key: string;
-      readonly factual_release_id: string;
-      readonly factual_output_id: string;
-      readonly hpn_calculation_id: string;
-      readonly model_operation_id: string;
-      readonly model_evidence_json: unknown;
-    }>(
-      `SELECT scope_key,factual_release_id,factual_output_id,hpn_calculation_id,
+  await input.transaction.query(`SET LOCAL ROLE afl_trade_private_evaluation_coordinator`);
+  const result = await input.transaction.query<{
+    readonly scope_key: string;
+    readonly factual_release_id: string;
+    readonly factual_output_id: string;
+    readonly hpn_calculation_id: string;
+    readonly model_operation_id: string;
+    readonly model_evidence_json: unknown;
+  }>(
+    `SELECT scope_key,factual_release_id,factual_output_id,hpn_calculation_id,
               model_operation_id,model_evidence_json
          FROM load_outcome_private_prepared_v3_authority($1)`,
-      [input.prepared.dispatchAuthority.requestId]
-    );
-    await input.transaction.query(`RESET ROLE`);
-    if (result.rows.length === 0) {
-      return {
-        state: 'unavailable',
-        blockers: [
-          {
-            code: 'source_blocked',
-            message: 'The exact private prepared authority is no longer current.',
-          },
-        ],
-      };
-    }
-    const row = result.rows[0];
-    if (result.rows.length !== 1 || row === undefined) {
-      throw new TypeError('The private prepared authority is unavailable or ambiguous.');
-    }
-    const modelEvidence = aflTradeQualifiedCurrentValuationModelEvidenceResultSchema.parse(
-      input.prepared.modelEvidence
-    );
-    if (
-      row.scope_key !== input.selector.valuationScopeKey ||
-      row.factual_release_id !== input.prepared.factualReleaseId ||
-      row.factual_output_id !== input.prepared.dispatchAuthority.factualOutputId ||
-      row.hpn_calculation_id !== input.prepared.dispatchAuthority.hpnCalculationId ||
-      row.model_operation_id !== input.prepared.dispatchAuthority.modelOperationId ||
-      canonicalizeAflTradeJson(row.model_evidence_json) !== canonicalizeAflTradeJson(modelEvidence)
-    ) {
-      throw new TypeError('The private prepared head disagrees with exact model evidence.');
-    }
-    const componentAuthority = await loadCurrentGovernedComponentAuthority({
-      transaction: input.transaction,
-      trace: input.trace,
-      capturedAt: input.capturedAt,
-      artifactRepository: input.artifactRepository,
-      maximumArtifactBytes: input.maximumArtifactBytes,
-    });
-    if (componentAuthority.state === 'unavailable') return componentAuthority;
+    [prepared.dispatchAuthority.requestId]
+  );
+  await input.transaction.query(`RESET ROLE`);
+  if (result.rows.length === 0) {
     return {
-      state: 'ready',
-      preparedInputHeadRevision: input.preparedInputHeadRevision,
-      preparedInputSetId: input.preparedInputSetId,
-      preparationAuthority: input.prepared.preparationAuthority,
-      preparationOperationId: input.prepared.preparationOperationId,
-      currentModelEvidenceOperationId: modelEvidence.operationId,
-      dispatchAuthority: input.prepared.dispatchAuthority,
-      factualReleaseId: input.prepared.factualReleaseId,
-      materializationManifestId: input.materializationManifestId,
-      materializationManifestArtifact: input.materializationManifestArtifact,
-      valuationInputBundleId: input.valuationInputBundleId,
-      valuationInputBundleArtifact: input.valuationInputBundleArtifact,
-      gateLedgerRevision: componentAuthority.gateLedgerRevision,
-      components: componentAuthority.components,
+      state: 'unavailable',
+      blockers: [
+        {
+          code: 'source_blocked',
+          message: 'The exact private prepared authority is no longer current.',
+        },
+      ],
     };
   }
+  const row = result.rows[0];
+  if (result.rows.length !== 1 || row === undefined) {
+    throw new TypeError('The private prepared authority is unavailable or ambiguous.');
+  }
+  const modelEvidence = aflTradeQualifiedCurrentValuationModelEvidenceResultSchema.parse(
+    prepared.modelEvidence
+  );
+  if (
+    row.scope_key !== input.selector.valuationScopeKey ||
+    row.factual_release_id !== prepared.factualReleaseId ||
+    row.factual_output_id !== prepared.dispatchAuthority.factualOutputId ||
+    row.hpn_calculation_id !== prepared.dispatchAuthority.hpnCalculationId ||
+    row.model_operation_id !== prepared.dispatchAuthority.modelOperationId ||
+    canonicalizeAflTradeJson(row.model_evidence_json) !== canonicalizeAflTradeJson(modelEvidence)
+  ) {
+    throw new TypeError('The private prepared head disagrees with exact model evidence.');
+  }
+  const componentAuthority = await loadCurrentGovernedComponentAuthority({
+    transaction: input.transaction,
+    trace: input.trace,
+    capturedAt: input.capturedAt,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
+  if (componentAuthority.state === 'unavailable') return componentAuthority;
+  return {
+    state: 'ready',
+    preparedInputHeadRevision: input.preparedInputHeadRevision,
+    preparedInputSetId: input.preparedInputSetId,
+    preparationAuthority: prepared.preparationAuthority,
+    preparationOperationId: prepared.preparationOperationId,
+    currentModelEvidenceOperationId: modelEvidence.operationId,
+    dispatchAuthority: prepared.dispatchAuthority,
+    factualReleaseId: prepared.factualReleaseId,
+    materializationManifestId: input.materializationManifestId,
+    materializationManifestArtifact: input.materializationManifestArtifact,
+    valuationInputBundleId: input.valuationInputBundleId,
+    valuationInputBundleArtifact: input.valuationInputBundleArtifact,
+    gateLedgerRevision: componentAuthority.gateLedgerRevision,
+    components: componentAuthority.components,
+  };
+}
+
+async function captureAuthenticatedCalculationEvidenceAuthority(
+  input: CurrentAuthorityInput,
+  prepared: AuthenticatedCalculationEvidencePrepared
+): Promise<GovernedPrivateEvaluationCapturedCalculationAuthority> {
   const result = await input.transaction.query<FactualHeadRow>(
     `SELECT head.revision,head.last_event_id,head.registry_json,
        active.release_id AS active_release_id,active.revision AS active_revision,
@@ -262,7 +277,7 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
        FROM outcome_registry_head head
        LEFT JOIN outcome_active_release active ON active.scope_key=$1
       WHERE head.singleton_id=1`,
-    [input.prepared.factualReleaseScopeKey]
+    [prepared.factualReleaseScopeKey]
   );
   const row = result.rows[0];
   if (result.rows.length !== 1 || row === undefined) {
@@ -278,7 +293,7 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
   ) {
     throw new TypeError('The factual registry head disagrees with its authenticated bytes.');
   }
-  const pointer = registry.activeByScope[input.prepared.factualReleaseScopeKey];
+  const pointer = registry.activeByScope[prepared.factualReleaseScopeKey];
   if (pointer === undefined) {
     if (
       row.active_release_id !== null ||
@@ -306,7 +321,7 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
   ) {
     throw new TypeError('The active factual projection disagrees with the registry head.');
   }
-  if (pointer.releaseId !== input.prepared.factualReleaseId) {
+  if (pointer.releaseId !== prepared.factualReleaseId) {
     return {
       state: 'unavailable',
       blockers: [
@@ -318,7 +333,7 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
     };
   }
   const privateAuthority = await loadCurrentPrivateValuationDecision(input.transaction, {
-    ...input.prepared,
+    ...prepared,
     valuationScopeKey: input.selector.valuationScopeKey,
   });
   if (privateAuthority.state === 'unavailable') return privateAuthority;
@@ -335,7 +350,7 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
     preparedInputHeadRevision: input.preparedInputHeadRevision,
     preparedInputSetId: input.preparedInputSetId,
     factualRegistryRevision: revision,
-    factualReleaseId: input.prepared.factualReleaseId,
+    factualReleaseId: prepared.factualReleaseId,
     activeFactualReleaseRevision: pointer.revision,
     privateValuationDecisionId: privateAuthority.decision.decisionId,
     privateValuationDecisionRevision: privateAuthority.decision.content.revision,
@@ -346,4 +361,13 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
     gateLedgerRevision: componentAuthority.gateLedgerRevision,
     components: componentAuthority.components,
   };
+}
+
+export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
+  input: CurrentAuthorityInput
+): Promise<GovernedPrivateEvaluationCapturedCalculationAuthority> {
+  const prepared = input.prepared;
+  return prepared.preparationAuthority === 'qualified_current_model_evidence'
+    ? captureQualifiedCurrentModelEvidenceAuthority(input, prepared)
+    : captureAuthenticatedCalculationEvidenceAuthority(input, prepared);
 }
