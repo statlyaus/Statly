@@ -127,11 +127,6 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
     if (prepared.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v3') {
       throw new TypeError('Current calculation authority is not an authenticated v3 prepared set.');
     }
-    if (prepared.preparationAuthority !== 'authenticated_calculation_evidence_snapshot') {
-      throw new TypeError(
-        'Private current-model prepared inputs require dispatch-fenced cohort execution.'
-      );
-    }
     const entry = aflTradePreparedValuationInputEntryV3Schema.parse(current.entry);
     if (entry.state === 'blocked') {
       return {
@@ -164,11 +159,14 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
       dependencies.maximumArtifactBytes
     );
     const manifest = materialization.manifest.content;
+    const preparationArtifacts =
+      prepared.preparationAuthority === 'authenticated_calculation_evidence_snapshot'
+        ? [prepared.qualificationReportArtifact, ...prepared.sourceQualificationEvidenceRefs]
+        : [];
     const parentArtifacts = [
       prepared.factualReleaseArtifact,
       prepared.releaseMembershipArtifact,
-      prepared.qualificationReportArtifact,
-      ...prepared.sourceQualificationEvidenceRefs,
+      ...preparationArtifacts,
       prepared.valuationInputBundleArtifact,
       manifest.calculationInputArtifact,
       manifest.inputTraceArtifact,

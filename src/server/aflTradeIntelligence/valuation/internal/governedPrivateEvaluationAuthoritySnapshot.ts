@@ -11,6 +11,7 @@ import {
   governedPrivateEvaluationInspectResultSchema,
   governedPrivateEvaluationSelectorSchema,
 } from './governedPrivateEvaluationWorkspaceContracts';
+import { aflTradePrivatePreparedValuationDispatchAuthoritySchema } from '../preparedValuationInputSet';
 
 const LIMITATION =
   'Private test-fixture inspection only; unavailable calculation authority permits no construction, grade, production use, or publication.' as const;
@@ -24,9 +25,7 @@ const instantSchema = z.iso.datetime({ offset: true });
 const generationIdSchema = aflTradeContentAddressedIdSchema(
   'local-private-trade-evaluation-generation'
 );
-const transitionIdSchema = aflTradeContentAddressedIdSchema(
-  'private-evaluation-transition'
-);
+const transitionIdSchema = aflTradeContentAddressedIdSchema('private-evaluation-transition');
 const modelRunIdSchema = aflTradeContentAddressedIdSchema('model-run');
 const componentRoles = [
   'player_contribution_and_availability',
@@ -151,20 +150,18 @@ const readyComponentSchema = z
     }
   });
 
-const qualifiedReadyComponentSchema = readyComponentSchema.superRefine(
-  (component, context) => {
-    if (
-      component.qualificationId === undefined ||
-      component.qualificationPolicyVersion === undefined
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['qualificationId'],
-        message: 'New ready authority requires exact model-pair qualification custody.',
-      });
-    }
+const qualifiedReadyComponentSchema = readyComponentSchema.superRefine((component, context) => {
+  if (
+    component.qualificationId === undefined ||
+    component.qualificationPolicyVersion === undefined
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['qualificationId'],
+      message: 'New ready authority requires exact model-pair qualification custody.',
+    });
   }
-);
+});
 
 const qualifiedReadyComponentsSchema = z
   .array(qualifiedReadyComponentSchema)
@@ -195,9 +192,7 @@ const readyCalculationAuthoritySchema = z
     factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
     valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
     valuationInputBundleArtifact: aflTradeArtifactRefSchema,
-    calculationInputPackageId: aflTradeContentAddressedIdSchema(
-      'valuation-calculation-input'
-    ),
+    calculationInputPackageId: aflTradeContentAddressedIdSchema('valuation-calculation-input'),
     calculationInputArtifact: aflTradeArtifactRefSchema,
     inputTraceId: aflTradeContentAddressedIdSchema('private-evaluation-input-trace'),
     inputTraceArtifact: aflTradeArtifactRefSchema,
@@ -332,6 +327,81 @@ const readyCalculationAuthorityV3Schema = z
     }
   });
 
+const readyPrivateCalculationAuthorityV3Schema = z
+  .object({
+    state: z.literal('ready'),
+    preparedInputHeadRevision: z.number().int().positive(),
+    preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
+    preparationAuthority: z.literal('qualified_current_model_evidence'),
+    preparationOperationId: aflTradeContentAddressedIdSchema(
+      'valuation-cohort-preparation-operation'
+    ),
+    currentModelEvidenceOperationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-model-evidence-operation'
+    ),
+    dispatchAuthority: aflTradePrivatePreparedValuationDispatchAuthoritySchema,
+    factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+    materializationManifestId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-materialization-manifest'
+    ),
+    materializationManifestArtifact: aflTradeArtifactRefSchema,
+    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
+    valuationInputBundleArtifact: aflTradeArtifactRefSchema,
+    gateLedgerRevision: z.number().int().positive(),
+    components: z.array(readyComponentSchema).length(componentRoles.length),
+  })
+  .strict()
+  .superRefine((authority, context) => {
+    refineSharedReadyQualification(authority.components, context);
+    if (
+      canonicalizeAflTradeJson(authority.components.map(({ role }) => role)) !==
+      canonicalizeAflTradeJson(componentRoles)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['components'],
+        message: 'Calculation-authority components must use canonical roles.',
+      });
+    }
+    for (const field of [
+      'runId',
+      'protocolId',
+      'datasetId',
+      'datasetAdmissionId',
+      'gate3DecisionId',
+    ] as const) {
+      if (new Set(authority.components.map((component) => component[field])).size !== 2) {
+        context.addIssue({
+          code: 'custom',
+          path: ['components'],
+          message: `Calculation-authority component ${field} values must be distinct.`,
+        });
+      }
+    }
+    if (
+      authority.components.some(
+        ({ datasetAdmissionGateLedgerRevision }) =>
+          datasetAdmissionGateLedgerRevision > authority.gateLedgerRevision
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['gateLedgerRevision'],
+        message: 'Gate ledger head cannot predate an admitted component.',
+      });
+    }
+    if (
+      authority.materializationManifestArtifact.artifactId ===
+      authority.valuationInputBundleArtifact.artifactId
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['materializationManifestArtifact'],
+        message: 'Calculation-authority documents require distinct retained bytes.',
+      });
+    }
+  });
+
 const readyNonProductionAuthorityContent = {
   ...lifecycleCommonBase,
   environment: z.literal('non_production'),
@@ -343,7 +413,10 @@ const readyNonProductionAuthorityContent = {
 const readyNonProductionAuthorityV3Content = {
   ...lifecycleCommonBase,
   environment: z.literal('non_production'),
-  calculationAuthority: readyCalculationAuthorityV3Schema,
+  calculationAuthority: z.union([
+    readyCalculationAuthorityV3Schema,
+    readyPrivateCalculationAuthorityV3Schema,
+  ]),
   blockers: z.tuple([]),
   limitation: z.literal(READY_NON_PRODUCTION_LIMITATION),
 };
@@ -374,7 +447,8 @@ function addAuthorityIssues(
     });
   }
   const sorted = [...value.blockers].sort(
-    (left, right) => left.code.localeCompare(right.code) || left.message.localeCompare(right.message)
+    (left, right) =>
+      left.code.localeCompare(right.code) || left.message.localeCompare(right.message)
   );
   if (canonicalizeAflTradeJson(sorted) !== canonicalizeAflTradeJson(value.blockers)) {
     context.addIssue({
@@ -587,12 +661,20 @@ const retainedSchema = z
   .object({ snapshot: snapshotSchema, inspection: inspectionSchema })
   .strict()
   .superRefine((retained, context) => {
-    const { snapshotId: _snapshotId, schemaVersion: _snapshotVersion, ...snapshotCommon } = {
+    const {
+      snapshotId: _snapshotId,
+      schemaVersion: _snapshotVersion,
+      ...snapshotCommon
+    } = {
       snapshotId: retained.snapshot.snapshotId,
       ...retained.snapshot.content,
     };
-    const { snapshotId, state: _state, schemaVersion: _inspectionVersion, ...inspectionCommon } =
-      retained.inspection.content;
+    const {
+      snapshotId,
+      state: _state,
+      schemaVersion: _inspectionVersion,
+      ...inspectionCommon
+    } = retained.inspection.content;
     if (
       snapshotId !== retained.snapshot.snapshotId ||
       canonicalizeAflTradeJson(snapshotCommon) !== canonicalizeAflTradeJson(inspectionCommon)
@@ -643,7 +725,7 @@ type ReadyCreationInput = Readonly<{
   components: readonly z.input<typeof qualifiedReadyComponentSchema>[];
 }>;
 
-type ReadyV3CreationInput = Readonly<{
+type ReadyV3CommonCreationInput = Readonly<{
   selector: z.input<typeof governedPrivateEvaluationSelectorSchema>;
   capturedAt: string;
   validThrough: string;
@@ -651,11 +733,7 @@ type ReadyV3CreationInput = Readonly<{
   lastTransitionId: string | null;
   preparedInputHeadRevision: number;
   preparedInputSetId: string;
-  factualRegistryRevision: number;
   factualReleaseId: string;
-  activeFactualReleaseRevision: number;
-  privateValuationDecisionId: string;
-  privateValuationDecisionRevision: number;
   materializationManifestId: string;
   materializationManifestArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   valuationInputBundleId: string;
@@ -663,6 +741,22 @@ type ReadyV3CreationInput = Readonly<{
   gateLedgerRevision: number;
   components: readonly z.input<typeof qualifiedReadyComponentSchema>[];
 }>;
+
+type ReadyV3CreationInput = ReadyV3CommonCreationInput &
+  (
+    | Readonly<{
+        factualRegistryRevision: number;
+        activeFactualReleaseRevision: number;
+        privateValuationDecisionId: string;
+        privateValuationDecisionRevision: number;
+      }>
+    | Readonly<{
+        preparationAuthority: 'qualified_current_model_evidence';
+        preparationOperationId: string;
+        currentModelEvidenceOperationId: string;
+        dispatchAuthority: z.input<typeof aflTradePrivatePreparedValuationDispatchAuthoritySchema>;
+      }>
+  );
 
 function resultOf(retained: z.output<typeof retainedSchema>) {
   return governedPrivateEvaluationInspectResultSchema.parse({
@@ -675,9 +769,7 @@ function resultOf(retained: z.output<typeof retainedSchema>) {
   });
 }
 
-export function authenticateGovernedPrivateEvaluationAuthorityInspection(
-  input: unknown
-) {
+export function authenticateGovernedPrivateEvaluationAuthorityInspection(input: unknown) {
   const retainedInput = input as { snapshot?: unknown; inspection?: unknown };
   const retained = retainedSchema.parse({
     snapshot: retainedInput?.snapshot,
@@ -703,7 +795,8 @@ export function createUnavailableGovernedPrivateEvaluationAuthorityInspection(
       pickModelRunId: null,
     },
     blockers: [...input.blockers].sort(
-      (left, right) => left.code.localeCompare(right.code) || left.message.localeCompare(right.message)
+      (left, right) =>
+        left.code.localeCompare(right.code) || left.message.localeCompare(right.message)
     ),
     limitation: LIMITATION,
   };
@@ -725,10 +818,7 @@ export function createUnavailableGovernedPrivateEvaluationAuthorityInspection(
     ...common,
   });
   const inspection = inspectionSchema.parse({
-    inspectionId: createAflTradeContentAddress(
-      'private-evaluation-inspection',
-      inspectionContent
-    ),
+    inspectionId: createAflTradeContentAddress('private-evaluation-inspection', inspectionContent),
     content: inspectionContent,
   });
   return authenticateGovernedPrivateEvaluationAuthorityInspection({ snapshot, inspection });
@@ -751,7 +841,8 @@ export function createUnavailableNonProductionGovernedPrivateEvaluationAuthority
       pickModelRunId: null,
     },
     blockers: [...input.blockers].sort(
-      (left, right) => left.code.localeCompare(right.code) || left.message.localeCompare(right.message)
+      (left, right) =>
+        left.code.localeCompare(right.code) || left.message.localeCompare(right.message)
     ),
     limitation: UNAVAILABLE_NON_PRODUCTION_LIMITATION,
   };
@@ -773,10 +864,7 @@ export function createUnavailableNonProductionGovernedPrivateEvaluationAuthority
     ...common,
   });
   const inspection = inspectionSchema.parse({
-    inspectionId: createAflTradeContentAddress(
-      'private-evaluation-inspection',
-      inspectionContent
-    ),
+    inspectionId: createAflTradeContentAddress('private-evaluation-inspection', inspectionContent),
     content: inspectionContent,
   });
   return authenticateGovernedPrivateEvaluationAuthorityInspection({ snapshot, inspection });
@@ -819,18 +907,13 @@ export function createReadyFixtureGovernedPrivateEvaluationAuthorityInspection(
     ...common,
   });
   const inspection = inspectionSchema.parse({
-    inspectionId: createAflTradeContentAddress(
-      'private-evaluation-inspection',
-      inspectionContent
-    ),
+    inspectionId: createAflTradeContentAddress('private-evaluation-inspection', inspectionContent),
     content: inspectionContent,
   });
   return authenticateGovernedPrivateEvaluationAuthorityInspection({ snapshot, inspection });
 }
 
-export function createReadyGovernedPrivateEvaluationAuthorityInspection(
-  input: ReadyCreationInput
-) {
+export function createReadyGovernedPrivateEvaluationAuthorityInspection(input: ReadyCreationInput) {
   const components = qualifiedReadyComponentsSchema.parse(input.components);
   const common = {
     environment: 'non_production' as const,
@@ -875,10 +958,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspection(
     ...common,
   });
   const inspection = inspectionSchema.parse({
-    inspectionId: createAflTradeContentAddress(
-      'private-evaluation-inspection',
-      inspectionContent
-    ),
+    inspectionId: createAflTradeContentAddress('private-evaluation-inspection', inspectionContent),
     content: inspectionContent,
   });
   return authenticateGovernedPrivateEvaluationAuthorityInspection({ snapshot, inspection });
@@ -888,6 +968,20 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
   input: ReadyV3CreationInput
 ) {
   const components = qualifiedReadyComponentsSchema.parse(input.components);
+  const preparedAuthority =
+    'preparationAuthority' in input
+      ? {
+          preparationAuthority: input.preparationAuthority,
+          preparationOperationId: input.preparationOperationId,
+          currentModelEvidenceOperationId: input.currentModelEvidenceOperationId,
+          dispatchAuthority: input.dispatchAuthority,
+        }
+      : {
+          factualRegistryRevision: input.factualRegistryRevision,
+          activeFactualReleaseRevision: input.activeFactualReleaseRevision,
+          privateValuationDecisionId: input.privateValuationDecisionId,
+          privateValuationDecisionRevision: input.privateValuationDecisionRevision,
+        };
   const common = {
     environment: 'non_production' as const,
     publicationProhibited: true as const,
@@ -900,11 +994,8 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
       state: 'ready' as const,
       preparedInputHeadRevision: input.preparedInputHeadRevision,
       preparedInputSetId: input.preparedInputSetId,
-      factualRegistryRevision: input.factualRegistryRevision,
       factualReleaseId: input.factualReleaseId,
-      activeFactualReleaseRevision: input.activeFactualReleaseRevision,
-      privateValuationDecisionId: input.privateValuationDecisionId,
-      privateValuationDecisionRevision: input.privateValuationDecisionRevision,
+      ...preparedAuthority,
       materializationManifestId: input.materializationManifestId,
       materializationManifestArtifact: input.materializationManifestArtifact,
       valuationInputBundleId: input.valuationInputBundleId,
@@ -933,10 +1024,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
     ...common,
   });
   const inspection = inspectionSchema.parse({
-    inspectionId: createAflTradeContentAddress(
-      'private-evaluation-inspection',
-      inspectionContent
-    ),
+    inspectionId: createAflTradeContentAddress('private-evaluation-inspection', inspectionContent),
     content: inspectionContent,
   });
   return authenticateGovernedPrivateEvaluationAuthorityInspection({ snapshot, inspection });

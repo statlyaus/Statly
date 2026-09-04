@@ -230,4 +230,95 @@ describe('PostgreSQL governed private evaluation inspection repository', () => {
     );
     expect(inspectionInsert?.parameters).toContain('ready');
   });
+
+  it('retains private prepared-v3 authority without persisting its live claim', async () => {
+    const client = new InspectionSqlClient();
+    const retained: { reference: AflTradeArtifactRef; bytes: Uint8Array }[] = [];
+    const addressed = (prefix: string, label: string) =>
+      createAflTradeContentAddress(prefix, { fixture: label });
+    const qualificationId = addressed('model-qualification', 'private-qualification');
+    const qualificationPolicyVersion = addressed(
+      'model-qualification-policy',
+      'private-qualification-policy'
+    );
+    const components = [
+      'player_contribution_and_availability',
+      'draft_pick_and_future_pick_distribution',
+    ].map((role, index) => ({
+      role: role as
+        'player_contribution_and_availability' | 'draft_pick_and_future_pick_distribution',
+      runId: addressed('model-run', `private-run-${index}`),
+      protocolId: addressed('model-protocol', `private-protocol-${index}`),
+      datasetId: addressed('dataset', `private-dataset-${index}`),
+      datasetAdmissionId: addressed('dataset-admission', `private-admission-${index}`),
+      datasetAdmissionGateLedgerRevision: 10 + index,
+      gate3DecisionId: addressed('gate-decision', `private-gate-${index}`),
+      gate3DecisionVersion: 2,
+      qualificationId,
+      qualificationPolicyVersion,
+    }));
+    const repository = createPostgresGovernedPrivateEvaluationInspectionRepository({
+      client,
+      retainArtifact: async (artifact) => {
+        retained.push(artifact);
+        return artifact.reference;
+      },
+      captureCalculationAuthority: async () => ({
+        state: 'ready' as const,
+        preparedInputHeadRevision: 5,
+        preparedInputSetId: addressed('prepared-valuation-input-set', 'private-prepared'),
+        preparationAuthority: 'qualified_current_model_evidence' as const,
+        preparationOperationId: addressed(
+          'valuation-cohort-preparation-operation',
+          'private-preparation'
+        ),
+        currentModelEvidenceOperationId: addressed(
+          'current-valuation-model-evidence-operation',
+          'private-model-evidence'
+        ),
+        dispatchAuthority: {
+          requestId: addressed('private-valuation-dispatch', 'private-request'),
+          factualOutputId: addressed('private-valuation-factual-output', 'private-factual'),
+          hpnCalculationId: addressed('hpn-pav-season', 'private-hpn'),
+          modelOperationId: addressed('private-valuation-model-operation', 'private-model'),
+        },
+        factualReleaseId: addressed('outcome-release', 'private-release'),
+        materializationManifestId: addressed(
+          'private-evaluation-materialization-manifest',
+          'private-manifest'
+        ),
+        materializationManifestArtifact: createAflTradeCanonicalJsonArtifactRef(
+          { kind: 'private-materialization-manifest' },
+          '2026-08-19T09:00:00.000Z'
+        ),
+        valuationInputBundleId: addressed('valuation-input-bundle', 'private-bundle'),
+        valuationInputBundleArtifact: createAflTradeCanonicalJsonArtifactRef(
+          { kind: 'private-valuation-input-bundle' },
+          '2026-08-19T09:00:00.000Z'
+        ),
+        gateLedgerRevision: 24,
+        components,
+      }),
+      validityMilliseconds: 5 * 60 * 1_000,
+    });
+
+    await expect(repository.inspect(selector)).resolves.toMatchObject({ state: 'ready' });
+    const documents = retained.map(({ bytes }) => JSON.parse(new TextDecoder().decode(bytes)));
+    expect(documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: expect.objectContaining({
+            calculationAuthority: expect.objectContaining({
+              preparationAuthority: 'qualified_current_model_evidence',
+              dispatchAuthority: expect.objectContaining({
+                requestId: expect.stringMatching(/^private-valuation-dispatch:/),
+              }),
+            }),
+          }),
+        }),
+      ])
+    );
+    expect(JSON.stringify(documents)).not.toContain('leaseToken');
+    expect(JSON.stringify(documents)).not.toContain('claimId');
+  });
 });

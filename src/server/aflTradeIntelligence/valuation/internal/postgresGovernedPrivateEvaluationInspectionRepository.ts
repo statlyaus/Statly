@@ -13,6 +13,7 @@ import {
   createUnavailableNonProductionGovernedPrivateEvaluationAuthorityInspection,
 } from './governedPrivateEvaluationAuthoritySnapshot';
 import type { GovernedReadyComponentAuthority } from './governedReadyComponentAuthority';
+import type { AflTradePreparedValuationInputSetContent } from '../preparedValuationInputSet';
 import {
   governedPrivateEvaluationInspectRequestSchema,
   type GovernedPrivateEvaluationInspectRequest,
@@ -64,12 +65,29 @@ export type GovernedPrivateEvaluationCapturedCalculationAuthority =
       valuationInputBundleArtifact: AflTradeArtifactRef;
       gateLedgerRevision: number;
       components: readonly GovernedReadyComponentAuthority[];
+    }>
+  | Readonly<{
+      state: 'ready';
+      preparedInputHeadRevision: number;
+      preparedInputSetId: string;
+      preparationAuthority: 'qualified_current_model_evidence';
+      preparationOperationId: string;
+      currentModelEvidenceOperationId: string;
+      dispatchAuthority: Extract<
+        AflTradePreparedValuationInputSetContent,
+        { preparationAuthority: 'qualified_current_model_evidence' }
+      >['dispatchAuthority'];
+      factualReleaseId: string;
+      materializationManifestId: string;
+      materializationManifestArtifact: AflTradeArtifactRef;
+      valuationInputBundleId: string;
+      valuationInputBundleArtifact: AflTradeArtifactRef;
+      gateLedgerRevision: number;
+      components: readonly GovernedReadyComponentAuthority[];
     }>;
 
 type RetainedInspection =
-  | ReturnType<
-      typeof createUnavailableNonProductionGovernedPrivateEvaluationAuthorityInspection
-    >
+  | ReturnType<typeof createUnavailableNonProductionGovernedPrivateEvaluationAuthorityInspection>
   | ReturnType<typeof createReadyGovernedPrivateEvaluationAuthorityInspectionV3>;
 
 function parseTime(value: Date | string): string {
@@ -260,10 +278,7 @@ export function createPostgresGovernedPrivateEvaluationInspectionRepository(depe
       const artifacts = [retained.snapshot, retained.inspection].map((document) => ({
         document,
         bytes: new TextEncoder().encode(canonicalizeAflTradeJson(document)),
-        reference: createAflTradeCanonicalJsonArtifactRef(
-          document,
-          capturedState.capturedAt
-        ),
+        reference: createAflTradeCanonicalJsonArtifactRef(document, capturedState.capturedAt),
       }));
       for (const artifact of artifacts) {
         const retainedReference = await dependencies.retainArtifact({

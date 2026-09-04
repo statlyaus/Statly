@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Pool } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
@@ -19,6 +19,7 @@ import type {
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/automatedPrivateEvaluationPolicy';
 import type { GovernedPrivateEvaluationWorkspace } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationWorkspace';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner';
+import { PostgresAflTradePrivateEvaluationCohortExecutionRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateEvaluationCohortExecutionRepository';
 import { createAutomatedGovernedPrivateEvaluationStagingService } from '@/server/aflTradeIntelligence/valuation/internal/automatedGovernedPrivateEvaluationStagingService';
 import { createReadyGovernedPrivateEvaluationAuthorityInspectionV3 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationAuthoritySnapshot';
 import { createPostgresGovernedPrivateEvaluationLifecycleRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationLifecycleRepository';
@@ -1262,6 +1263,130 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(
       repairRunner.repairCurrent(scopeKey, repairReason, repairOperationId)
     ).resolves.toEqual(repaired);
+  });
+
+  it('durably reschedules work when an in-flight heartbeat fails during terminal staging', async () => {
+    const manifestDigest = '7'.repeat(64);
+    const readyEntry = {
+      tradeId: 'trade-a',
+      state: 'ready' as const,
+      materializationManifestId: `private-evaluation-materialization-manifest:${manifestDigest}`,
+      materializationManifestArtifact: artifactRef('7', createdAt),
+    };
+    const blockedEntry = {
+      tradeId: 'trade-b',
+      state: 'blocked' as const,
+      blockers: [
+        {
+          code: 'component_output_unavailable' as const,
+          subject: { kind: 'trade' as const, id: 'trade-b' },
+          evidenceRefs: [artifactRef('9', createdAt)],
+        },
+      ],
+    };
+    const setup = await pool.connect();
+    let preparedRevision = 0;
+    try {
+      await setup.query('BEGIN');
+      await setup.query(`SET LOCAL session_replication_role='replica'`);
+      await setup.query(
+        `UPDATE outcome_prepared_valuation_input_entry
+            SET state='ready',entry_canonical_json=$2::text,entry_json=$2::jsonb
+          WHERE prepared_input_set_id=$1 AND trade_id='trade-a'`,
+        [preparedInputSetId, canonicalizeAflTradeJson(readyEntry)]
+      );
+      await setup.query(
+        `UPDATE outcome_prepared_valuation_input_entry
+            SET state='blocked',entry_canonical_json=$2::text,entry_json=$2::jsonb
+          WHERE prepared_input_set_id=$1 AND trade_id='trade-b'`,
+        [preparedInputSetId, canonicalizeAflTradeJson(blockedEntry)]
+      );
+      const revision = await setup.query<{ readonly revision: number }>(
+        `UPDATE outcome_current_prepared_valuation_input_set
+            SET revision=revision+1 WHERE scope_key=$1 RETURNING revision`,
+        [scopeKey]
+      );
+      preparedRevision = revision.rows[0]!.revision;
+      await setup.query('COMMIT');
+    } finally {
+      setup.release();
+    }
+    const executionRepository = new PostgresAflTradePrivateEvaluationCohortExecutionRepository(
+      createPgAflOutcomeSqlClient(pool)
+    );
+    const heartbeatFailure = Object.assign(new Error('heartbeat serialization conflict'), {
+      code: '40001',
+    });
+    let rejectHeartbeat: (reason: unknown) => void = () => undefined;
+    const heartbeat = vi.spyOn(executionRepository, 'heartbeat').mockImplementationOnce(
+      () =>
+        new Promise<string>((_resolve, reject) => {
+          rejectHeartbeat = reject;
+        })
+    );
+    const runner = createPostgresAflTradePrivateEvaluationCohortRunner({
+      client: createPgAflOutcomeSqlClient(pool),
+      batchRepository: new PostgresGovernedPrivateEvaluationBatchRepository(
+        createPgAflOutcomeSqlClient(pool),
+        async () => true
+      ),
+      executionRepository,
+      heartbeatMilliseconds: 5,
+      workspace: {
+        stageAutomated: async ({ selector, operationId }) => {
+          await vi.waitFor(() => expect(heartbeat).toHaveBeenCalledOnce());
+          setTimeout(() => rejectHeartbeat(heartbeatFailure), 0);
+          return {
+            state: 'unavailable' as const,
+            selector,
+            operationId,
+            blockers: [{ code: 'insufficient_data', message: 'Not reached after heartbeat loss.' }],
+          };
+        },
+        inspect: async () => {
+          throw new Error('Not used by the cohort runner.');
+        },
+        execute: async () => {
+          throw new Error('Not used by the cohort runner.');
+        },
+        read: async () => {
+          throw new Error('Not used by the cohort runner.');
+        },
+      },
+    });
+
+    await expect(runner.runCurrent(scopeKey)).resolves.toEqual({
+      state: 'retry_pending',
+      pendingTradeIds: ['trade-a'],
+    });
+    await expect(
+      pool.query(
+        `SELECT work.status,attempt.outcome,attempt.cause_json
+           FROM outcome_private_evaluation_execution_cycle cycle
+           JOIN outcome_private_evaluation_execution_work work USING (cycle_id)
+           JOIN outcome_private_evaluation_execution_attempt attempt USING (cycle_id,trade_id)
+          WHERE cycle.prepared_input_set_revision=$1 AND work.trade_id='trade-a'`,
+        [preparedRevision]
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          status: 'retry_wait',
+          outcome: 'transient_failure',
+          cause_json: { code: 'postgres_40001', retryable: true },
+        },
+      ],
+    });
+    await expect(
+      pool.query(
+        `SELECT count(*)::int AS count FROM outcome_private_evaluation_cohort_failure
+          WHERE operation_id IN (
+            SELECT operation_id FROM outcome_private_evaluation_cohort_capture
+             WHERE prepared_input_set_revision=$1
+          )`,
+        [preparedRevision]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 
   it.each(['factual release', 'model pair'] as const)(

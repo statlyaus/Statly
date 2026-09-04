@@ -2213,9 +2213,12 @@ are live fences only and are not copied into durable prepared custody.
 This remains local, private, non-production, publication-ineligible, and publication-prohibited. It
 does not read or change the active public factual release or model/valuation publication pointers,
 and it does not grant prepared-input authority to the current-model-evidence result itself. The
-separate retained preparation operation supplies that authority. Exhaustive private cohort capture,
-calculation-cycle and batch activation remain downstream work; the weekly worker is not yet composed
-through this preparation boundary.
+separate retained preparation operation supplies that authority. For a dispatch whose exact private
+prepared-v3 head already exists, the local dispatcher now carries the same live claim into exhaustive
+cohort capture, durable calculation-cycle execution, and one atomic batch-head activation. It still
+does not invoke the upstream factual-output, HPN, model-evidence, valuation-bundle/trade-construction,
+or private prepared-v3 coordinators needed to create that head, so this is not yet a clean-checkout
+raw-data-to-recalculation pipeline.
 
 ### Current valuation refresh trace
 

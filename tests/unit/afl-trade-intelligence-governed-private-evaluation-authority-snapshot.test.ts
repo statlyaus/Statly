@@ -271,6 +271,55 @@ describe('governed private evaluation authority snapshot', () => {
     expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(tampered)).toThrow();
   });
 
+  it('pins private ready v3 authority to the exact dispatch and model-evidence ancestry', () => {
+    const legacy = readyAuthorityInput();
+    const retained = createReadyGovernedPrivateEvaluationAuthorityInspectionV3({
+      selector: legacy.selector,
+      capturedAt: legacy.capturedAt,
+      validThrough: legacy.validThrough,
+      head: legacy.head,
+      lastTransitionId: legacy.lastTransitionId,
+      preparedInputHeadRevision: 5,
+      preparedInputSetId: legacy.preparedInputSetId,
+      preparationAuthority: 'qualified_current_model_evidence',
+      preparationOperationId: `valuation-cohort-preparation-operation:${'1'.repeat(64)}`,
+      currentModelEvidenceOperationId: `current-valuation-model-evidence-operation:${'2'.repeat(64)}`,
+      dispatchAuthority: {
+        requestId: `private-valuation-dispatch:${'3'.repeat(64)}`,
+        factualOutputId: `private-valuation-factual-output:${'4'.repeat(64)}`,
+        hpnCalculationId: `hpn-pav-season:${'5'.repeat(64)}`,
+        modelOperationId: `private-valuation-model-operation:${'6'.repeat(64)}`,
+      },
+      factualReleaseId: legacy.factualReleaseId,
+      materializationManifestId: `private-evaluation-materialization-manifest:${'0'.repeat(64)}`,
+      materializationManifestArtifact: artifact('private-materialization-manifest'),
+      valuationInputBundleId: legacy.valuationInputBundleId,
+      valuationInputBundleArtifact: legacy.valuationInputBundleArtifact,
+      gateLedgerRevision: legacy.gateLedgerRevision,
+      components: legacy.components,
+    });
+
+    expect(retained.snapshot.content.calculationAuthority).toMatchObject({
+      state: 'ready',
+      preparationAuthority: 'qualified_current_model_evidence',
+      preparationOperationId: expect.stringMatching(/^valuation-cohort-preparation-operation:/),
+      currentModelEvidenceOperationId: expect.stringMatching(
+        /^current-valuation-model-evidence-operation:/
+      ),
+      dispatchAuthority: expect.objectContaining({
+        requestId: expect.stringMatching(/^private-valuation-dispatch:/),
+      }),
+    });
+    expect(authenticateGovernedPrivateEvaluationAuthorityInspection(retained)).toEqual(retained);
+
+    const tampered = structuredClone(retained);
+    if (!('dispatchAuthority' in tampered.inspection.content.calculationAuthority)) {
+      throw new Error('Expected private dispatch-fenced authority.');
+    }
+    tampered.inspection.content.calculationAuthority.dispatchAuthority.requestId = `private-valuation-dispatch:${'9'.repeat(64)}`;
+    expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(tampered)).toThrow();
+  });
+
   it('rejects substituted non-production authority and non-canonical component roles', () => {
     const retained = createReadyGovernedPrivateEvaluationAuthorityInspection(readyAuthorityInput());
     const substituted = structuredClone(retained);

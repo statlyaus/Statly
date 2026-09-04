@@ -1658,6 +1658,8 @@ model OutcomeHpnPavCalculation {
   pickPavObservationLinks  OutcomePickPavObservationCalculation[] @relation("OutcomePickPavObservationCalculation")
   currentHead              OutcomeHpnPavCalculationHead?
   currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
+  privateEvaluationCohortCaptures OutcomePrivateEvaluationCohortCapture[] @relation("PrivateEvaluationCaptureHpnCalculation")
+  privateEvaluationExecutionCycles OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateEvaluationCycleHpnCalculation")
 
   @@unique([inputSetId, methodId, schemaVersion], map: "outcome_hpn_pav_calculation_scope_key")
   @@index([environment, competition, seasonYear, finalizedAt], map: "outcome_hpn_pav_calculation_scope_idx")
@@ -5125,6 +5127,8 @@ model OutcomeCurrentValuationCohortOperation {
   hpnCalculation                OutcomeHpnPavCalculation?                      @relation(fields: [hpnCalculationId], references: [calculationId], onDelete: Restrict, map: "outcome_current_cohort_hpn_calculation_fkey")
   modelOperation                OutcomePrivateValuationModelOperation?         @relation(fields: [modelOperationId], references: [operationId], onDelete: Restrict, map: "outcome_current_cohort_model_operation_fkey")
   result                        OutcomeCurrentValuationCohortOperationResult?
+  privateEvaluationCohortCaptures OutcomePrivateEvaluationCohortCapture[]      @relation("PrivateEvaluationCapturePreparationOperation")
+  privateEvaluationExecutionCycles OutcomePrivateEvaluationExecutionCycle[]    @relation("PrivateEvaluationCyclePreparationOperation")
 
   @@map("outcome_current_valuation_cohort_operation")
 }
@@ -5348,17 +5352,30 @@ model OutcomePrivateEvaluationBatchWithdrawal {
 }
 
 model OutcomePrivateEvaluationCohortCapture {
-  operationId               String   @id @map("operation_id") @outcomes.Text
-  scopeKey                  String   @map("scope_key") @outcomes.Text
-  preparedInputSetId        String   @map("prepared_input_set_id") @outcomes.Text
-  preparedInputSetRevision  Int      @map("prepared_input_set_revision")
-  modelQualificationWorkId String   @map("model_qualification_work_id") @outcomes.Text
-  factualReleaseRevision   Int      @map("factual_release_revision")
-  modelPairRevision        Int      @map("model_pair_revision")
-  expectedBatchRevision     Int      @map("expected_batch_revision")
-  capturedAt                DateTime @map("captured_at") @outcomes.Timestamptz(3)
-  failure                   OutcomePrivateEvaluationCohortFailure?
-  batchBinding              OutcomePrivateEvaluationCohortBatch?
+  operationId                     String                                         @id @map("operation_id") @outcomes.Text
+  scopeKey                        String                                         @map("scope_key") @outcomes.Text
+  preparedInputSetId              String                                         @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision        Int                                            @map("prepared_input_set_revision")
+  modelQualificationWorkId        String                                         @map("model_qualification_work_id") @outcomes.Text
+  factualReleaseRevision          Int?                                           @map("factual_release_revision")
+  modelPairRevision               Int                                            @map("model_pair_revision")
+  expectedBatchRevision           Int                                            @map("expected_batch_revision")
+  capturedAt                      DateTime                                       @map("captured_at") @outcomes.Timestamptz(3)
+  preparationAuthority            String                                         @default("authenticated_calculation_evidence_snapshot") @map("preparation_authority") @outcomes.Text
+  preparationOperationId          String?                                        @map("preparation_operation_id") @outcomes.Text
+  currentModelEvidenceOperationId String?                                        @map("current_model_evidence_operation_id") @outcomes.Text
+  dispatchRequestId               String?                                        @map("dispatch_request_id") @outcomes.Text
+  factualOutputId                 String?                                        @map("factual_output_id") @outcomes.Text
+  hpnCalculationId                String?                                        @map("hpn_calculation_id") @outcomes.Text
+  modelOperationId                String?                                        @map("model_operation_id") @outcomes.Text
+  preparationOperation            OutcomeCurrentValuationCohortOperation?        @relation("PrivateEvaluationCapturePreparationOperation", fields: [preparationOperationId], references: [operationId], onDelete: Restrict, map: "outcome_private_evaluation_capture_preparation_fkey")
+  currentModelEvidenceOperation   OutcomeCurrentValuationModelEvidenceOperation? @relation("PrivateEvaluationCaptureModelEvidence", fields: [currentModelEvidenceOperationId], references: [operationId], onDelete: Restrict, map: "outcome_private_evaluation_capture_model_evidence_fkey")
+  dispatchRequest                 OutcomePrivateValuationDispatchRequest?        @relation("PrivateEvaluationCaptureDispatchRequest", fields: [dispatchRequestId], references: [requestId], onDelete: Restrict, map: "outcome_private_evaluation_capture_dispatch_fkey")
+  factualOutput                   OutcomePrivateValuationFactualOutput?           @relation("PrivateEvaluationCaptureFactualOutput", fields: [factualOutputId], references: [outputId], onDelete: Restrict, map: "outcome_private_evaluation_capture_factual_output_fkey")
+  hpnCalculation                  OutcomeHpnPavCalculation?                       @relation("PrivateEvaluationCaptureHpnCalculation", fields: [hpnCalculationId], references: [calculationId], onDelete: Restrict, map: "outcome_private_evaluation_capture_hpn_calculation_fkey")
+  modelOperation                  OutcomePrivateValuationModelOperation?          @relation("PrivateEvaluationCaptureModelOperation", fields: [modelOperationId], references: [operationId], onDelete: Restrict, map: "outcome_private_evaluation_capture_model_operation_fkey")
+  failure                         OutcomePrivateEvaluationCohortFailure?
+  batchBinding                    OutcomePrivateEvaluationCohortBatch?
 
   @@map("outcome_private_evaluation_cohort_capture")
 }
@@ -5388,28 +5405,41 @@ model OutcomePrivateEvaluationCohortFailure {
 }
 
 model OutcomePrivateEvaluationExecutionCycle {
-  cycleId                  String                                   @id @map("cycle_id") @outcomes.Text
-  inputFingerprint         String                                   @map("input_fingerprint") @outcomes.Text
-  scopeKey                 String                                   @map("scope_key") @outcomes.Text
-  preparedInputSetId       String                                   @map("prepared_input_set_id") @outcomes.Text
-  preparedInputSetRevision Int                                      @map("prepared_input_set_revision")
-  factualReleaseRevision   Int                                      @map("factual_release_revision")
-  modelQualificationWorkId String                                   @map("model_qualification_work_id") @outcomes.Text
-  modelPairRevision        Int                                      @map("model_pair_revision")
-  repairSequence           Int                                      @map("repair_sequence")
-  openingCause             String                                   @map("opening_cause") @outcomes.Text
-  openingPrincipalId       String                                   @map("opening_principal_id") @outcomes.Text
-  repairOperationId        String?                                  @unique @map("repair_operation_id") @outcomes.Text
-  repairReason             String?                                  @map("repair_reason") @outcomes.Text
-  repairsCycleId           String?                                  @map("repairs_cycle_id") @outcomes.Text
-  maximumAttempts          Int                                      @map("maximum_attempts")
-  openedAt                 DateTime                                 @map("opened_at") @outcomes.Timestamptz(3)
-  cycleJson                Json                                     @map("cycle_json")
-  preparedInputSet         OutcomePreparedValuationInputSet         @relation(fields: [preparedInputSetId], references: [preparedInputSetId], onDelete: Restrict)
-  modelQualificationWork   OutcomeGovernedModelQualificationWork    @relation(fields: [modelQualificationWorkId], references: [workId], onDelete: Restrict)
-  repairsCycle             OutcomePrivateEvaluationExecutionCycle?  @relation("PrivateExecutionCycleRepair", fields: [repairsCycleId], references: [cycleId], onDelete: Restrict)
-  repairCycles             OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateExecutionCycleRepair")
-  work                     OutcomePrivateEvaluationExecutionWork[]
+  cycleId                         String                                         @id @map("cycle_id") @outcomes.Text
+  inputFingerprint                String                                         @map("input_fingerprint") @outcomes.Text
+  scopeKey                        String                                         @map("scope_key") @outcomes.Text
+  preparedInputSetId              String                                         @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision        Int                                            @map("prepared_input_set_revision")
+  factualReleaseRevision          Int?                                           @map("factual_release_revision")
+  modelQualificationWorkId        String                                         @map("model_qualification_work_id") @outcomes.Text
+  modelPairRevision               Int                                            @map("model_pair_revision")
+  preparationAuthority            String                                         @default("authenticated_calculation_evidence_snapshot") @map("preparation_authority") @outcomes.Text
+  preparationOperationId          String?                                        @map("preparation_operation_id") @outcomes.Text
+  currentModelEvidenceOperationId String?                                        @map("current_model_evidence_operation_id") @outcomes.Text
+  dispatchRequestId               String?                                        @map("dispatch_request_id") @outcomes.Text
+  factualOutputId                 String?                                        @map("factual_output_id") @outcomes.Text
+  hpnCalculationId                String?                                        @map("hpn_calculation_id") @outcomes.Text
+  modelOperationId                String?                                        @map("model_operation_id") @outcomes.Text
+  repairSequence                  Int                                            @map("repair_sequence")
+  openingCause                    String                                         @map("opening_cause") @outcomes.Text
+  openingPrincipalId              String                                         @map("opening_principal_id") @outcomes.Text
+  repairOperationId               String?                                        @unique @map("repair_operation_id") @outcomes.Text
+  repairReason                    String?                                        @map("repair_reason") @outcomes.Text
+  repairsCycleId                  String?                                        @map("repairs_cycle_id") @outcomes.Text
+  maximumAttempts                 Int                                            @map("maximum_attempts")
+  openedAt                        DateTime                                       @map("opened_at") @outcomes.Timestamptz(3)
+  cycleJson                       Json                                           @map("cycle_json")
+  preparedInputSet                OutcomePreparedValuationInputSet               @relation(fields: [preparedInputSetId], references: [preparedInputSetId], onDelete: Restrict)
+  modelQualificationWork          OutcomeGovernedModelQualificationWork          @relation(fields: [modelQualificationWorkId], references: [workId], onDelete: Restrict)
+  preparationOperation            OutcomeCurrentValuationCohortOperation?        @relation("PrivateEvaluationCyclePreparationOperation", fields: [preparationOperationId], references: [operationId], onDelete: Restrict, map: "outcome_private_evaluation_cycle_preparation_fkey")
+  currentModelEvidenceOperation   OutcomeCurrentValuationModelEvidenceOperation? @relation("PrivateEvaluationCycleModelEvidence", fields: [currentModelEvidenceOperationId], references: [operationId], onDelete: Restrict, map: "outcome_private_evaluation_cycle_model_evidence_fkey")
+  dispatchRequest                 OutcomePrivateValuationDispatchRequest?        @relation("PrivateEvaluationCycleDispatchRequest", fields: [dispatchRequestId], references: [requestId], onDelete: Restrict, map: "outcome_private_evaluation_cycle_dispatch_fkey")
+  factualOutput                   OutcomePrivateValuationFactualOutput?           @relation("PrivateEvaluationCycleFactualOutput", fields: [factualOutputId], references: [outputId], onDelete: Restrict, map: "outcome_private_evaluation_cycle_factual_output_fkey")
+  hpnCalculation                  OutcomeHpnPavCalculation?                       @relation("PrivateEvaluationCycleHpnCalculation", fields: [hpnCalculationId], references: [calculationId], onDelete: Restrict, map: "outcome_private_evaluation_cycle_hpn_calculation_fkey")
+  modelOperation                  OutcomePrivateValuationModelOperation?          @relation("PrivateEvaluationCycleModelOperation", fields: [modelOperationId], references: [operationId], onDelete: Restrict, map: "outcome_private_evaluation_cycle_model_operation_fkey")
+  repairsCycle                    OutcomePrivateEvaluationExecutionCycle?        @relation("PrivateExecutionCycleRepair", fields: [repairsCycleId], references: [cycleId], onDelete: Restrict)
+  repairCycles                    OutcomePrivateEvaluationExecutionCycle[]       @relation("PrivateExecutionCycleRepair")
+  work                            OutcomePrivateEvaluationExecutionWork[]
 
   @@unique([inputFingerprint, repairSequence], map: "outcome_private_evaluation_execution_cycle_identity")
   @@map("outcome_private_evaluation_execution_cycle")
@@ -5480,6 +5510,8 @@ model OutcomePrivateValuationDispatchRequest {
   hpnSourceAdmissions OutcomePrivateValuationHpnSourceAdmission[]
   factualOutput         OutcomePrivateValuationFactualOutput?
   currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
+  privateEvaluationCohortCaptures OutcomePrivateEvaluationCohortCapture[] @relation("PrivateEvaluationCaptureDispatchRequest")
+  privateEvaluationExecutionCycles OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateEvaluationCycleDispatchRequest")
 
   @@index([status, availableAt, scopeKey], map: "outcome_private_valuation_dispatch_due_idx")
   @@map("outcome_private_valuation_dispatch_request")
@@ -5583,6 +5615,8 @@ model OutcomeCurrentValuationModelEvidenceOperation {
   factualOperation     OutcomeCurrentValuationFactualRefreshOperation @relation(fields: [factualOperationId], references: [operationId], onDelete: Restrict, map: "outcome_current_model_evidence_factual_operation_fkey")
   factualCandidate     OutcomePrivateFactualCandidate                @relation(fields: [factualCandidateId], references: [candidateId], onDelete: Restrict, map: "outcome_current_model_evidence_factual_candidate_fkey")
   currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
+  privateEvaluationCohortCaptures OutcomePrivateEvaluationCohortCapture[] @relation("PrivateEvaluationCaptureModelEvidence")
+  privateEvaluationExecutionCycles OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateEvaluationCycleModelEvidence")
 
   @@index([scopeKey, completedAt], map: "outcome_current_model_evidence_scope_idx")
   @@map("outcome_current_valuation_model_evidence_operation")
@@ -5704,6 +5738,8 @@ model OutcomePrivateValuationModelOperation {
   createdAt              DateTime  @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
   requestBindings        OutcomePrivateValuationModelRequestBinding[]
   currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
+  privateEvaluationCohortCaptures OutcomePrivateEvaluationCohortCapture[] @relation("PrivateEvaluationCaptureModelOperation")
+  privateEvaluationExecutionCycles OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateEvaluationCycleModelOperation")
 
   @@map("outcome_private_valuation_model_operation")
 }
@@ -5823,6 +5859,8 @@ model OutcomePrivateValuationFactualOutput {
   playerAdmission     OutcomeValuationDatasetAdmission?                   @relation("OutcomeAdmittedPlayerFactualAdmission", fields: [playerAdmissionId], references: [admissionId], onDelete: Restrict)
   spellMetricBatches  OutcomePrivateValuationFactualOutputSpellBatch[]
   currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
+  privateEvaluationCohortCaptures OutcomePrivateEvaluationCohortCapture[] @relation("PrivateEvaluationCaptureFactualOutput")
+  privateEvaluationExecutionCycles OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateEvaluationCycleFactualOutput")
 
   @@index([candidateId], map: "outcome_private_factual_output_candidate_idx")
   @@index([factualReleaseId], map: "outcome_private_factual_output_release_idx")
