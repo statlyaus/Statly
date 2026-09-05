@@ -28,16 +28,17 @@ describe('exact 2025 AFL private valuation rehearsal preflight', () => {
     expect(query.mock.calls[0]?.[1]).toEqual(['afl-men:2025-trades']);
     expect(query.mock.calls[0]?.[0]).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/iu);
     expect(report).toEqual({
-      schemaVersion: 'afl-private-valuation-rehearsal-preflight/v1',
+      schemaVersion: 'afl-private-valuation-rehearsal-preflight/v2',
       scopeKey: 'afl-men:2025-trades',
       competitionCode: 'AFLM',
       season: 2025,
       inspectionMode: 'read_only',
-      state: 'blocked',
+      state: 'inconclusive',
+      authorityAssessment: 'inventory_only',
       publicationEligible: false,
       sourceAuthority: {
-        genuineDraftTrade: 'not_locally_admitted',
-        genuineHpnCorroboration: 'not_locally_admitted',
+        genuineDraftTrade: 'not_inspected',
+        genuineHpnCorroboration: 'not_inspected',
       },
       retainedAuthority: {
         privateFactualHead: { present: true, revision: 2 },
@@ -51,9 +52,11 @@ describe('exact 2025 AFL private valuation rehearsal preflight', () => {
           unavailableCount: 1,
         },
       },
-      blockerCodes: [
-        'genuine_draft_trade_authority_not_locally_admitted',
-        'genuine_hpn_corroborating_authority_not_locally_admitted',
+      blockerCodes: [],
+      limitationCodes: [
+        'source_authority_authentication_not_performed',
+        'retained_artifact_replay_not_performed',
+        'complete_private_loop_not_executed',
       ],
     });
   });
@@ -87,12 +90,11 @@ describe('exact 2025 AFL private valuation rehearsal preflight', () => {
       unavailableCount: null,
     });
     expect(report.blockerCodes).toEqual([
-      'genuine_draft_trade_authority_not_locally_admitted',
-      'genuine_hpn_corroborating_authority_not_locally_admitted',
       'current_private_factual_head_missing',
       'qualified_model_evidence_missing',
       'prepared_v3_head_missing',
       'exhaustive_private_batch_head_missing',
     ]);
+    expect(report.state).toBe('blocked');
   });
 });

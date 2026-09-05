@@ -49,7 +49,7 @@ afterAll(async () => {
 });
 
 describe('exact 2025 private valuation rehearsal preflight on PostgreSQL', () => {
-  it('reads a fully linked retained chain while preserving the genuine-source blockers', async () => {
+  it('reads a linked retained chain without claiming source absence or rehearsal readiness', async () => {
     const scopeKey = 'afl-men:2025-trades';
     await pool.query(
       `INSERT INTO outcome_current_private_factual_authority VALUES ($1,'candidate-1',2)`,
@@ -104,9 +104,11 @@ describe('exact 2025 private valuation rehearsal preflight on PostgreSQL', () =>
         unavailableCount: 1,
       },
     });
-    expect(report.blockerCodes).toEqual([
-      'genuine_draft_trade_authority_not_locally_admitted',
-      'genuine_hpn_corroborating_authority_not_locally_admitted',
-    ]);
+    expect(report.blockerCodes).toEqual([]);
+    expect(report.state).toBe('inconclusive');
+    expect(report.sourceAuthority).toEqual({
+      genuineDraftTrade: 'not_inspected',
+      genuineHpnCorroboration: 'not_inspected',
+    });
   });
 });

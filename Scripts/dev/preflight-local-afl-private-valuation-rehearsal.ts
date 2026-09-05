@@ -78,7 +78,20 @@ async function runPreflight(): Promise<void> {
     ) {
       throw new TypeError('The clean rehearsal checkout changed during preflight.');
     }
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          purpose: 'empty_database_bootstrap_smoke',
+          databaseOrigin: 'new_disposable_database',
+          codeCommitSha: checkout.codeCommitSha,
+          bootstrapState: 'passed',
+          rehearsalExecuted: false,
+          inventory: report,
+        },
+        null,
+        2
+      )}\n`
+    );
     process.exitCode = 2;
   } catch (error) {
     failure = error;

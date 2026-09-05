@@ -25,16 +25,17 @@ export interface LocalPrivateValuationPreflightQueryClient {
 type RetainedHead = Readonly<{ present: boolean; revision: number | null }>;
 
 export interface Exact2025AflPrivateValuationRehearsalPreflight {
-  readonly schemaVersion: 'afl-private-valuation-rehearsal-preflight/v1';
+  readonly schemaVersion: 'afl-private-valuation-rehearsal-preflight/v2';
   readonly scopeKey: typeof SCOPE_KEY;
   readonly competitionCode: 'AFLM';
   readonly season: 2025;
   readonly inspectionMode: 'read_only';
-  readonly state: 'blocked';
+  readonly state: 'blocked' | 'inconclusive';
+  readonly authorityAssessment: 'inventory_only';
   readonly publicationEligible: false;
   readonly sourceAuthority: {
-    readonly genuineDraftTrade: 'not_locally_admitted';
-    readonly genuineHpnCorroboration: 'not_locally_admitted';
+    readonly genuineDraftTrade: 'not_inspected';
+    readonly genuineHpnCorroboration: 'not_inspected';
   };
   readonly retainedAuthority: {
     readonly privateFactualHead: RetainedHead;
@@ -47,12 +48,14 @@ export interface Exact2025AflPrivateValuationRehearsalPreflight {
     };
   };
   readonly blockerCodes: readonly string[];
+  readonly limitationCodes: readonly string[];
 }
 
 /**
  * Inventories the exact retained 2025 private-valuation chain without dispatching work or changing
- * any authority head. Existing private factual custody is player-match evidence, so it is reported
- * separately from the two genuine source authorities that the clean-checkout rehearsal still lacks.
+ * any authority head. Linked retained rows establish inventory, not authenticated source rights or
+ * replay. This query does not inspect source admission, so it cannot establish source absence or
+ * declare the complete rehearsal ready even when every retained stage is present.
  */
 export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
   client: LocalPrivateValuationPreflightQueryClient
@@ -121,8 +124,6 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
   }
   const row = inventoryRowSchema.parse(result.rows[0]);
   const blockerCodes = [
-    'genuine_draft_trade_authority_not_locally_admitted',
-    'genuine_hpn_corroborating_authority_not_locally_admitted',
     ...(row.private_factual_present ? [] : ['current_private_factual_head_missing']),
     ...(row.qualified_model_present ? [] : ['qualified_model_evidence_missing']),
     ...(row.prepared_v3_present ? [] : ['prepared_v3_head_missing']),
@@ -130,16 +131,17 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
   ];
 
   return {
-    schemaVersion: 'afl-private-valuation-rehearsal-preflight/v1',
+    schemaVersion: 'afl-private-valuation-rehearsal-preflight/v2',
     scopeKey: SCOPE_KEY,
     competitionCode: 'AFLM',
     season: 2025,
     inspectionMode: 'read_only',
-    state: 'blocked',
+    state: blockerCodes.length > 0 ? 'blocked' : 'inconclusive',
+    authorityAssessment: 'inventory_only',
     publicationEligible: false,
     sourceAuthority: {
-      genuineDraftTrade: 'not_locally_admitted',
-      genuineHpnCorroboration: 'not_locally_admitted',
+      genuineDraftTrade: 'not_inspected',
+      genuineHpnCorroboration: 'not_inspected',
     },
     retainedAuthority: {
       privateFactualHead: {
@@ -163,5 +165,10 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
       },
     },
     blockerCodes,
+    limitationCodes: [
+      'source_authority_authentication_not_performed',
+      'retained_artifact_replay_not_performed',
+      'complete_private_loop_not_executed',
+    ],
   };
 }
