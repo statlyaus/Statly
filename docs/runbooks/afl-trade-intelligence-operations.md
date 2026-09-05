@@ -1072,10 +1072,12 @@ The local full-stack launcher starts one backend valuation worker. It authentica
 `statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and then polls
 durable dispatch work. The schedule is Monday 19:00 in `Australia/Melbourne`, calculated as a calendar
 occurrence rather than a 604800-second interval, so daylight-saving changes do not move the local time.
-Startup coalesces missed weeks to the latest occurrence. A newly committed qualified model pair also
-enqueues immediate work. Each claimed dispatch first runs the seven-lane current-evidence coordinator
-and may advance only the private factual head. An unavailable evidence result completes that dispatch
-as exhausted rather than retrying it as a transient failure. After qualified current-model evidence
+Startup discovers only scopes with an exact current private factual head or current prepared-v3 head,
+unions duplicate scopes, and coalesces missed weeks to the latest occurrence. It does not accept an
+arbitrary scope. A newly committed qualified model pair also enqueues immediate work. Each claimed
+dispatch first runs the seven-lane current-evidence coordinator and may advance only the private factual
+head. An unavailable evidence result completes that dispatch as exhausted rather than retrying it as a
+transient failure. After qualified current-model evidence
 exists, the private prepared-v3 coordinator can authenticate that retained evidence and the exact
 dispatch ancestry, construct the existing valuation-input bundle and trade manifests, register one
 immutable prepared generation, and compare-and-swap the private prepared head. When that exact private
@@ -1135,14 +1137,13 @@ stale authority and leaves the prior batch head readable; do not update the batc
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
 current HPN preparation implementation admits only `afl-men:2026-trades`, while the required 2025 HPN
-review covers the 2021–2025 evidence window. On a clean database, weekly startup catch-up discovers
-scopes only from existing prepared heads. The ad-hoc command can enqueue an explicit caller-supplied
-scope without such a head, but the worker cannot construct the missing first prepared-v3 head. The
+review covers the 2021–2025 evidence window. On a clean database, weekly startup catch-up can discover
+a scope from its exact current private factual head before a prepared-v3 head exists. The worker still
+cannot construct that missing first prepared-v3 head. The
 request-bound factual-output, HPN, model-target, qualification/model-evidence,
 valuation-bundle/trade-construction, and private prepared-v3 adapters are not composed by the worker.
 
-Before closing the rehearsal issue, reconcile the governed 2025 source/season policy, allow weekly
-startup catch-up to discover an authority-admitted scope before its first prepared head, and wire the
+Before closing the rehearsal issue, reconcile the governed 2025 source/season policy and wire the
 shipped factual, HPN, genuine player, genuine pick, model-evidence, private prepared-v3, and
 claim-fenced batch boundaries through the one existing dispatcher. Then run the command against a
 fresh loopback PostgreSQL 16 database named `statly_outcomes_test`, an isolated artifact root, and

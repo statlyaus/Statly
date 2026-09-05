@@ -68,6 +68,10 @@ beforeAll(async () => {
   await pool.query(`CREATE TABLE outcome_current_prepared_valuation_input_set (
     scope_key text PRIMARY KEY,prepared_input_set_id text NOT NULL,revision integer NOT NULL
   )`);
+  await pool.query(`CREATE TABLE outcome_current_private_factual_authority (
+    valuation_scope_key text PRIMARY KEY,candidate_id text NOT NULL UNIQUE,
+    revision integer NOT NULL,advanced_at timestamptz NOT NULL
+  )`);
   await pool.query(`CREATE TABLE outcome_current_governed_valuation_model_pair (
     scope_key text PRIMARY KEY,qualification_id text NOT NULL,work_id text NOT NULL,revision integer NOT NULL
   )`);
@@ -88,6 +92,19 @@ beforeAll(async () => {
       ),
       'utf8'
     )
+  );
+  await pool.query(
+    readFileSync(
+      join(
+        process.cwd(),
+        'prisma/afl-trade-outcomes/migrations/0106_private_valuation_first_generation_schedule/migration.sql'
+      ),
+      'utf8'
+    )
+  );
+  await pool.query(
+    `GRANT SELECT ON outcome_current_private_factual_authority
+       TO afl_trade_private_evaluation_coordinator`
   );
   const scopeSerializedClaim = readFileSync(
     join(
@@ -113,7 +130,8 @@ afterAll(async () => {
 beforeEach(async () => {
   await pool.query(`TRUNCATE outcome_private_valuation_dispatch_attempt,
     outcome_private_valuation_dispatch_request,
-    outcome_current_prepared_valuation_input_set,outcome_current_governed_valuation_model_pair`);
+    outcome_current_prepared_valuation_input_set,outcome_current_private_factual_authority,
+    outcome_current_governed_valuation_model_pair`);
   await pool.query(
     `INSERT INTO outcome_current_prepared_valuation_input_set VALUES
       ('afl-men:2026-trades','prepared:test',1)`
@@ -121,6 +139,35 @@ beforeEach(async () => {
 });
 
 describe('private valuation scheduling PostgreSQL boundary', () => {
+  it('discovers first-generation factual authority alongside existing prepared scopes', async () => {
+    await pool.query(
+      `INSERT INTO outcome_current_private_factual_authority VALUES
+        ('afl-men:2025-trades','private-factual-candidate:${'1'.repeat(64)}',1,
+         '2026-07-22T02:59:00.000Z'),
+        ('afl-men:2026-trades','private-factual-candidate:${'2'.repeat(64)}',1,
+         '2026-07-22T02:59:00.000Z')`
+    );
+
+    const first = await repository.enqueueStartupCatchUp('2026-07-22T03:00:00.000Z');
+    const replay = await repository.enqueueStartupCatchUp('2026-07-22T03:00:00.000Z');
+
+    expect(first).toHaveLength(2);
+    expect(replay).toEqual([]);
+    await expect(
+      pool.query(
+        `SELECT scope_key,count(*)::integer AS request_count
+           FROM outcome_private_valuation_dispatch_request
+          WHERE trigger_kind='weekly'
+          GROUP BY scope_key ORDER BY scope_key`
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        { scope_key: 'afl-men:2025-trades', request_count: 1 },
+        { scope_key: 'afl-men:2026-trades', request_count: 1 },
+      ],
+    });
+  });
+
   it('coalesces startup catch-up and retains newly-qualified immediate work after commit', async () => {
     await expect(
       repository.enqueueStartupCatchUp('2026-06-03T03:00:00.000Z')

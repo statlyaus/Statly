@@ -51,9 +51,15 @@ export class PostgresAflTradePrivateValuationScheduleRepository {
         readonly scope_key: string;
         readonly last_scheduled_for: Date | string | null;
       }>(
-        `SELECT current.scope_key,max(request.scheduled_for) FILTER (
+        `WITH current_scope AS (
+           SELECT scope_key FROM outcome_current_prepared_valuation_input_set
+           UNION
+           SELECT valuation_scope_key AS scope_key
+             FROM outcome_current_private_factual_authority
+         )
+         SELECT current.scope_key,max(request.scheduled_for) FILTER (
                   WHERE request.trigger_kind='weekly') AS last_scheduled_for
-           FROM outcome_current_prepared_valuation_input_set current
+           FROM current_scope current
            LEFT JOIN outcome_private_valuation_dispatch_request request
              ON request.scope_key=current.scope_key
           GROUP BY current.scope_key ORDER BY current.scope_key`
