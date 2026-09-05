@@ -1,4 +1,5 @@
 import { aflTradePrivateValuationDispatchRequestSchema } from './privateValuationScheduling';
+import { AflTradeCurrentValuationModelEvidencePreparationError } from './currentValuationModelEvidencePreparation';
 
 export type AflTradePrivateRecalculationDispatch = Readonly<{
   request: ReturnType<typeof aflTradePrivateValuationDispatchRequestSchema.parse>;
@@ -63,10 +64,19 @@ export function createAflTradePrivateRecalculationCoordinator(dependencies: {
         return dependencies.batch.runPrivate(dispatch);
       }
 
-      const model = await dependencies.modelEvidence.refresh({
-        dispatch,
-        factual: factual.currentValuationRefresh,
-      });
+      let model: ModelEvidenceResult;
+      try {
+        model = await dependencies.modelEvidence.refresh({
+          dispatch,
+          factual: factual.currentValuationRefresh,
+        });
+      } catch (error) {
+        if (!(error instanceof AflTradeCurrentValuationModelEvidencePreparationError)) throw error;
+        return {
+          state:
+            error.state === 'deterministic_failure' ? ('unexpected_failure' as const) : error.state,
+        };
+      }
       if (model.state === 'stale_authority') return { state: 'stale_authority' as const };
       if (model.state === 'qualification_failed') {
         return { state: 'unexpected_failure' as const };

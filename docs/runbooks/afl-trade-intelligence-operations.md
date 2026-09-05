@@ -1136,16 +1136,49 @@ stale authority and leaves the prior batch head readable; do not update the batc
 
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
-current HPN preparation implementation admits only `afl-men:2026-trades`, while the required 2025 HPN
-review covers the 2021–2025 evidence window. On a clean database, weekly startup catch-up can discover
-a scope from its exact current private factual head before a prepared-v3 head exists. The worker still
-cannot construct that missing first prepared-v3 head. The
-request-bound factual-output, HPN, model-target, qualification/model-evidence,
-valuation-bundle/trade-construction, and private prepared-v3 adapters are not composed by the worker.
+current HPN preparation implementation admits both `afl-men:2025-trades` and
+`afl-men:2026-trades` through an exact scope-to-season policy. The default local 2025 source resolver
+still fails closed until a genuinely reviewed independent corroborating player-stat source, its
+retained capture and rights authority, and its reviewed HPN projection are available. On a clean
+database, weekly startup catch-up can discover a scope from its exact current private factual head
+before a prepared-v3 head exists. The worker still cannot construct that missing first prepared-v3
+head because the #571 player-match authority is not a draft-trade factual release: it contains no
+genuinely admitted transaction, draft-selection, pick-custody, or pick-realization membership. The
+request-bound factual handoff must authenticate that player-match authority together with an
+independent genuinely admitted draft-trade release before the shipped HPN, genuine player, genuine
+pick, qualification/model-evidence, valuation-bundle/trade-construction, and private prepared-v3
+adapters can be composed by the worker.
 
-Before closing the rehearsal issue, reconcile the governed 2025 source/season policy and wire the
-shipped factual, HPN, genuine player, genuine pick, model-evidence, private prepared-v3, and
-claim-fenced batch boundaries through the one existing dispatcher. Then run the command against a
+There is also an unresolved contract mismatch in that composition. The admitted-player factual output
+uses v2 with multiple admitted captures and a dataset/admission parent. HPN preparation, model-pair
+input selection, and current-model-evidence ancestry still require v1's single normalization and
+reconciliation run. A v3 that merely adds a pick release to v1 does not connect the admitted-player
+path. Resolve the multi-capture player and independent HPN ancestry together, then bind the separate
+dormant promotion-backed draft-trade release for pick observations and cohort membership. Reuse the
+existing corpus and dormant-release repositories; finalized player membership cannot be extended
+with pick records. The sequencing module is tested but is not yet installed in the local worker.
+
+Run the non-mutating clean-checkout preflight with:
+
+```sh
+npm run outcomes:valuation:preflight-genuine-local
+```
+
+The command requires an exact clean Git checkout, creates a loopback-only disposable PostgreSQL 16
+container and temporary working directory, applies the outcomes migrations, and performs a read-only
+inventory for exactly `afl-men:2025-trades`. It never imports source data, dispatches work, or changes
+public or private authority heads. This command is an empty-database bootstrap smoke check: it has no
+source provisioning step. The expected result is exit status `2` with a JSON report identifying the
+clean checkout commit and missing retained factual, qualified-model-evidence, prepared-v3, and
+exhaustive-batch heads. Source authorities are reported as `not_inspected`; their absence is not
+inferred from missing heads. The inventory alone cannot certify readiness even when heads exist.
+Exit status `1` means the preflight itself failed. The report is not the genuine rehearsal proof and
+must not be converted to success with fixtures, fabricated rows, or a public-release fallback.
+
+Before closing the rehearsal issue, provide those two exact 2025 source authorities, retain the
+private factual handoff without advancing a public release pointer, and wire the shipped factual,
+HPN, genuine player, genuine pick, model-evidence, private prepared-v3, and claim-fenced batch
+boundaries through the one existing dispatcher. Then run the command against a
 fresh loopback PostgreSQL 16 database named `statly_outcomes_test`, an isolated artifact root, and
 genuinely admitted local source authority. Prove restart/reclaim at every retained boundary, exact
 no-change replay, stale/superseded authority rejection, one genuinely unavailable cohort member,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createAflTradePrivateRecalculationCoordinator } from '@/server/aflTradeIntelligence/valuation/privateRecalculationCoordinator';
+import { AflTradeCurrentValuationModelEvidencePreparationError } from '@/server/aflTradeIntelligence/valuation/currentValuationModelEvidencePreparation';
 
 const dispatch = {
   request: {
@@ -39,6 +40,39 @@ function factualResult() {
 }
 
 describe('private recalculation coordinator', () => {
+  it.each([
+    ['transient_failure', 'transient_failure'],
+    ['stale_authority', 'stale_authority'],
+    ['deterministic_failure', 'unexpected_failure'],
+  ] as const)(
+    'preserves the dispatch outcome for %s model preparation',
+    async (state, expected) => {
+      const coordinator = createAflTradePrivateRecalculationCoordinator({
+        evidence: { refreshCurrent: async () => factualResult() },
+        modelEvidence: {
+          refresh: async () => {
+            throw new AflTradeCurrentValuationModelEvidencePreparationError(
+              state,
+              `private-valuation-model-operation:${'9'.repeat(64)}`,
+              1,
+              'Preparation failed.'
+            );
+          },
+        },
+        prepared: {
+          prepare: async () => {
+            throw new Error('Must not prepare after failure.');
+          },
+        },
+        batch: {
+          runPrivate: async () => {
+            throw new Error('Must not activate after failure.');
+          },
+        },
+      });
+      await expect(coordinator.run(dispatch)).resolves.toEqual({ state: expected });
+    }
+  );
   it('sequences existing authority owners under one exact dispatch claim', async () => {
     const calls: string[] = [];
     const coordinator = createAflTradePrivateRecalculationCoordinator({
