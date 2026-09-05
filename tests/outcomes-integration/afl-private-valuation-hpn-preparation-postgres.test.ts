@@ -84,9 +84,7 @@ describe.sequential('private valuation HPN preparation in PostgreSQL', () => {
     const client = createPgAflOutcomeSqlClient(outcomesPool);
     const schedule = new PostgresAflTradePrivateValuationScheduleRepository(client);
     const requestId = await client.transaction(async (transaction) => {
-      await transaction.query(
-        'SET LOCAL ROLE afl_trade_private_valuation_scheduler_owner'
-      );
+      await transaction.query('SET LOCAL ROLE afl_trade_private_valuation_scheduler_owner');
       const retained = await transaction.query<{ readonly request_id: string }>(
         `SELECT enqueue_outcome_private_valuation_dispatch(
            'afl-men:2026-trades','ad_hoc','2026-08-12T00:00:00.000Z'::timestamptz,
@@ -94,10 +92,7 @@ describe.sequential('private valuation HPN preparation in PostgreSQL', () => {
       );
       return retained.rows[0]!.request_id;
     });
-    const retainedClaim = await schedule.claim(
-      'system:weekly-valuation-coordinator',
-      requestId
-    );
+    const retainedClaim = await schedule.claim('system:weekly-valuation-coordinator', requestId);
     expect(retainedClaim).not.toBeNull();
     const prepareFactual = vi.fn(async () => {
       throw new Error('Stage 2 sentinel.');
@@ -137,6 +132,67 @@ describe.sequential('private valuation HPN preparation in PostgreSQL', () => {
         },
       })
     ).rejects.toThrow(/lost its live claim fence/i);
+    expect(prepareFactual).toHaveBeenCalledTimes(1);
+  });
+
+  it('admits the exact governed 2025 scope while unsupported scopes fail before Stage 2', async () => {
+    const client = createPgAflOutcomeSqlClient(outcomesPool);
+    const schedule = new PostgresAflTradePrivateValuationScheduleRepository(client);
+    const enqueue = async (scopeKey: string, stableOperationKey: string) =>
+      client.transaction(async (transaction) => {
+        await transaction.query('SET LOCAL ROLE afl_trade_private_valuation_scheduler_owner');
+        const retained = await transaction.query<{ readonly request_id: string }>(
+          `SELECT enqueue_outcome_private_valuation_dispatch(
+             $1,'ad_hoc','2026-08-12T00:00:00.000Z'::timestamptz,$2) AS request_id`,
+          [scopeKey, stableOperationKey]
+        );
+        return retained.rows[0]!.request_id;
+      });
+    const prepareFactual = vi.fn(async () => {
+      throw new Error('2025 Stage 2 sentinel.');
+    });
+    const preparation = new PostgresAflTradePrivateValuationHpnPreparation(client, {
+      factualPreparation: { prepare: prepareFactual },
+      methodId: `hpn-pav-method:${'7'.repeat(64)}`,
+      methodAuthority: { loadExact: vi.fn() },
+      captureSource: vi.fn(),
+    });
+
+    const supportedRequestId = await enqueue('afl-men:2025-trades', 'hpn-preparation-2025-scope');
+    const supportedClaim = await schedule.claim(
+      'system:weekly-valuation-coordinator',
+      supportedRequestId
+    );
+    expect(supportedClaim).not.toBeNull();
+    await expect(
+      preparation.prepare({
+        requestId: supportedRequestId,
+        claim: {
+          claimId: supportedClaim!.claimId,
+          leaseToken: supportedClaim!.leaseToken,
+        },
+      })
+    ).rejects.toThrow('2025 Stage 2 sentinel.');
+    expect(prepareFactual).toHaveBeenCalledTimes(1);
+
+    const unsupportedRequestId = await enqueue(
+      'afl-men:2024-trades',
+      'hpn-preparation-unsupported-scope'
+    );
+    const unsupportedClaim = await schedule.claim(
+      'system:weekly-valuation-coordinator',
+      unsupportedRequestId
+    );
+    expect(unsupportedClaim).not.toBeNull();
+    await expect(
+      preparation.prepare({
+        requestId: unsupportedRequestId,
+        claim: {
+          claimId: unsupportedClaim!.claimId,
+          leaseToken: unsupportedClaim!.leaseToken,
+        },
+      })
+    ).rejects.toThrow(/HPN preparation does not support afl-men:2024-trades/i);
     expect(prepareFactual).toHaveBeenCalledTimes(1);
   });
 });

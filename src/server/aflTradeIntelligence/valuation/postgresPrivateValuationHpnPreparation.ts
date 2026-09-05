@@ -27,9 +27,9 @@ import { aflTradePrivateValuationDispatchRequestSchema } from './privateValuatio
 import type { AflTradePrivateValuationFactualPreparationResult } from './postgresPrivateValuationFactualPreparation';
 import { PostgresAflTradePrivateValuationCaptureBindingRepository } from './postgresPrivateValuationCaptureBindingRepository';
 import { PostgresAflTradePrivateValuationScheduleRepository } from './postgresPrivateValuationScheduling';
+import { requireAflTradePrivateValuationHpnScopePolicy } from './privateValuationHpnScopePolicy';
 
 const EXECUTION_DATABASE_ROLE = 'afl_trade_private_evaluation_coordinator';
-const SUPPORTED_VALUATION_SCOPE_KEY = 'afl-men:2026-trades';
 const requestIdSchema = z.string().regex(/^private-valuation-dispatch:[a-f0-9]{64}$/u);
 const claimSchema = z
   .object({
@@ -39,7 +39,7 @@ const claimSchema = z
   .strict();
 const methodIdSchema = z.string().regex(/^hpn-pav-method:[a-f0-9]{64}$/u);
 
-type SourceAuthority = Readonly<{
+export type AflTradePrivateValuationHpnSourceAuthority = Readonly<{
   capture: AflTradeFitzRoyCaptureCommand;
   fieldMap: AflTradeFitzRoyFieldMap;
 }>;
@@ -48,7 +48,7 @@ type SourceLane = Readonly<{
   sourceRole: Exclude<AflTradePrivateValuationCaptureSourceRole, 'factual_input'>;
   inputKind: 'completed_match_result' | 'player_match_stats';
   role: 'primary' | 'corroborating' | null;
-  authority: SourceAuthority;
+  authority: AflTradePrivateValuationHpnSourceAuthority;
 }>;
 
 export type AflTradePrivateValuationHpnPreparationResult = Readonly<{
@@ -78,27 +78,57 @@ export interface AflTradePrivateValuationHpnPreparationDependencies {
     readonly capture: AflTradeFitzRoyCaptureCommand;
     readonly fieldMap: AflTradeFitzRoyFieldMap;
   }) => Promise<{ readonly normalizationRunId: string }>;
+  readonly resolveSourceAuthority?: (input: {
+    readonly scopeKey: 'afl-men:2025-trades' | 'afl-men:2026-trades';
+    readonly seasonYear: 2025 | 2026;
+    readonly sourceRole: Exclude<AflTradePrivateValuationCaptureSourceRole, 'factual_input'>;
+  }) => AflTradePrivateValuationHpnSourceAuthority;
 }
 
-function sourceLanes(seasonYear: number): readonly SourceLane[] {
+function defaultSourceAuthority(input: {
+  readonly seasonYear: 2025 | 2026;
+  readonly sourceRole: Exclude<AflTradePrivateValuationCaptureSourceRole, 'factual_input'>;
+}): AflTradePrivateValuationHpnSourceAuthority {
+  if (input.sourceRole === 'hpn_completed_results') {
+    return createLocalAflTradeAflTablesResultsAuthority(input.seasonYear);
+  }
+  if (input.sourceRole === 'hpn_primary_player_stats') {
+    return createLocalAflTradeFiveSeasonAflTablesAuthority(input.seasonYear);
+  }
+  if (input.seasonYear === 2026) return createLocalAflTradeOfficialAfl2026Authority();
+  throw new TypeError(
+    'No exact reviewed corroborating player-stat authority is configured for afl-men:2025-trades.'
+  );
+}
+
+function sourceLanes(
+  scopeKey: 'afl-men:2025-trades' | 'afl-men:2026-trades',
+  seasonYear: 2025 | 2026,
+  resolveSourceAuthority: NonNullable<
+    AflTradePrivateValuationHpnPreparationDependencies['resolveSourceAuthority']
+  >
+): readonly SourceLane[] {
+  const authority = (
+    sourceRole: Exclude<AflTradePrivateValuationCaptureSourceRole, 'factual_input'>
+  ) => resolveSourceAuthority({ scopeKey, seasonYear, sourceRole });
   return [
     {
       sourceRole: 'hpn_completed_results',
       inputKind: 'completed_match_result',
       role: null,
-      authority: createLocalAflTradeAflTablesResultsAuthority(seasonYear),
+      authority: authority('hpn_completed_results'),
     },
     {
       sourceRole: 'hpn_primary_player_stats',
       inputKind: 'player_match_stats',
       role: 'primary',
-      authority: createLocalAflTradeFiveSeasonAflTablesAuthority(seasonYear),
+      authority: authority('hpn_primary_player_stats'),
     },
     {
       sourceRole: 'hpn_corroborating_player_stats',
       inputKind: 'player_match_stats',
       role: 'corroborating',
-      authority: createLocalAflTradeOfficialAfl2026Authority(),
+      authority: authority('hpn_corroborating_player_stats'),
     },
   ];
 }
@@ -119,10 +149,7 @@ function requireExactLaneBinding(
   binding: AflTradePrivateValuationCaptureBinding,
   seasonYear: number
 ): void {
-  if (
-    binding.content.schemaVersion !==
-    'afl-trade-private-valuation-capture-binding/v2'
-  ) {
+  if (binding.content.schemaVersion !== 'afl-trade-private-valuation-capture-binding/v2') {
     throw new TypeError(`Accepted source custody does not match ${lane.sourceRole}.`);
   }
   const source = binding.content.sourcePlan;
@@ -145,10 +172,7 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     private readonly dependencies: AflTradePrivateValuationHpnPreparationDependencies
   ) {}
 
-  private async loadRequest(
-    requestId: string,
-    claim: z.infer<typeof claimSchema>
-  ) {
+  private async loadRequest(requestId: string, claim: z.infer<typeof claimSchema>) {
     const result = await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
       return transaction.query<{ readonly request_json: unknown }>(
@@ -175,9 +199,7 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     lane: SourceLane
   ): Promise<AflTradePrivateValuationCaptureBinding> {
     const coordinator = createAflTradePrivateValuationRawDataCoordinator({
-      captureBindings: new PostgresAflTradePrivateValuationCaptureBindingRepository(
-        this.client
-      ),
+      captureBindings: new PostgresAflTradePrivateValuationCaptureBindingRepository(this.client),
       sourceRole: lane.sourceRole,
       capture: async () =>
         this.dependencies.captureSource({
@@ -228,14 +250,10 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
   }): Promise<AflTradePrivateValuationHpnPreparationResult> {
     const requestId = requestIdSchema.parse(input.requestId);
     const claim = claimSchema.parse(input.claim);
-    const seasonYear = 2026;
     const methodId = methodIdSchema.parse(this.dependencies.methodId);
     const request = await this.loadRequest(requestId, claim);
-    if (request.scopeKey !== SUPPORTED_VALUATION_SCOPE_KEY) {
-      throw new TypeError(
-        `HPN preparation supports only ${SUPPORTED_VALUATION_SCOPE_KEY}.`
-      );
-    }
+    const scope = requireAflTradePrivateValuationHpnScopePolicy(request.scopeKey);
+    const { seasonYear } = scope;
     const factual = await this.dependencies.factualPreparation.prepare({ requestId, claim });
     if (
       factual.output.content.requestId !== requestId ||
@@ -244,7 +262,11 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
       throw new TypeError('HPN preparation received factual output from another dispatch scope.');
     }
 
-    const lanes = sourceLanes(seasonYear);
+    const lanes = sourceLanes(
+      scope.scopeKey,
+      seasonYear,
+      this.dependencies.resolveSourceAuthority ?? defaultSourceAuthority
+    );
     const bindings: AflTradePrivateValuationCaptureBinding[] = [];
     for (const lane of lanes) {
       const binding = await this.captureLane(request, claim, lane);
@@ -253,8 +275,9 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     }
 
     const fieldMapAuthority = new PostgresAflTradeHpnProjectedFieldMapAuthority(this.client);
-    const captureBindingRepository =
-      new PostgresAflTradePrivateValuationCaptureBindingRepository(this.client);
+    const captureBindingRepository = new PostgresAflTradePrivateValuationCaptureBindingRepository(
+      this.client
+    );
     const sources: AflTradeHpnPavSeasonInputRequest['sources'] = [];
     const sourceAdmissions = [];
     for (let index = 0; index < lanes.length; index += 1) {
@@ -296,41 +319,39 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     const effectiveThrough = await this.loadEffectiveThrough(
       bindings.map(({ content }) => content.normalizationRunId)
     );
-    const { inputSet, calculation } = await this.client.transaction(
-      async (transaction) => {
-        await this.renewClaimInTransaction(transaction, claim);
-        const claimFencedClient = transactionClient(transaction);
-        const inputSet = await new PostgresAflTradeHpnPavInputRepository(
-          claimFencedClient
-        ).buildAndPersistSeasonInputSet(
-          {
-            environment: 'non_production',
-            competition: 'AFLM',
-            seasonYear,
-            methodId,
-            factualRunId: factual.output.content.reconciliation.factualRunId,
-            effectiveThrough,
-            sources,
-          },
-          { environment: 'non_production' }
-        );
-        const calculation = await new PostgresAflTradeHpnPavCalculationRepository(
-          claimFencedClient,
-          this.dependencies.methodAuthority
-        ).calculateAndPersist(
-          {
-            inputSetId: inputSet.inputSet.inputSetId,
-            environment: 'non_production',
-            competition: 'AFLM',
-            seasonYear,
-            methodId,
-          },
-          { environment: 'non_production' }
-        );
-        await this.renewClaimInTransaction(transaction, claim);
-        return { inputSet, calculation };
-      }
-    );
+    const { inputSet, calculation } = await this.client.transaction(async (transaction) => {
+      await this.renewClaimInTransaction(transaction, claim);
+      const claimFencedClient = transactionClient(transaction);
+      const inputSet = await new PostgresAflTradeHpnPavInputRepository(
+        claimFencedClient
+      ).buildAndPersistSeasonInputSet(
+        {
+          environment: 'non_production',
+          competition: 'AFLM',
+          seasonYear,
+          methodId,
+          factualRunId: factual.output.content.reconciliation.factualRunId,
+          effectiveThrough,
+          sources,
+        },
+        { environment: 'non_production' }
+      );
+      const calculation = await new PostgresAflTradeHpnPavCalculationRepository(
+        claimFencedClient,
+        this.dependencies.methodAuthority
+      ).calculateAndPersist(
+        {
+          inputSetId: inputSet.inputSet.inputSetId,
+          environment: 'non_production',
+          competition: 'AFLM',
+          seasonYear,
+          methodId,
+        },
+        { environment: 'non_production' }
+      );
+      await this.renewClaimInTransaction(transaction, claim);
+      return { inputSet, calculation };
+    });
 
     return {
       state:
@@ -345,9 +366,7 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
       inputSetId: inputSet.inputSet.inputSetId,
       calculationId: calculation.calculation.calculationId,
       captureBindingIds: bindings.map(({ bindingId }) => bindingId),
-      sourceAdmissionIds: sourceAdmissions.map(
-        ({ admission }) => admission.admissionId
-      ),
+      sourceAdmissionIds: sourceAdmissions.map(({ admission }) => admission.admissionId),
       publicationEligible: false,
     };
   }
