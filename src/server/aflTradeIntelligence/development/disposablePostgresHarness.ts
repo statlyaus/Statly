@@ -35,6 +35,15 @@ export interface DisposableAflTradeOutcomesTestOptions {
   signal?: AbortSignal;
 }
 
+export interface DisposableAflTradeOutcomesRuntime {
+  containerId: string;
+  databaseUrl: string;
+  environment: NodeJS.ProcessEnv;
+  safeWorkingDirectory: string;
+  schemaPath: string;
+  workspaceRoot: string;
+}
+
 const POSTGRES_IMAGE = 'postgres:16-alpine';
 const POSTGRES_DATABASE = 'statly_outcomes_test';
 const POSTGRES_USER = 'statly_test';
@@ -155,12 +164,12 @@ async function waitForPostgres(options: {
   }
 }
 
-export async function runDisposableAflTradeOutcomesTests(
-  options: DisposableAflTradeOutcomesTestOptions
-): Promise<void> {
+export async function withDisposableAflTradeOutcomesPostgres<Result>(
+  options: DisposableAflTradeOutcomesTestOptions,
+  workflow: (runtime: DisposableAflTradeOutcomesRuntime) => Promise<Result>
+): Promise<Result> {
   const environment = options.environment ?? process.env;
   const processId = options.processId ?? process.pid;
-  const nodeExecutable = options.nodeExecutable ?? process.execPath;
   const randomId = options.randomId?.() ?? randomBytes(6).toString('hex');
   const sleep =
     options.sleep ??
@@ -170,6 +179,7 @@ export async function runDisposableAflTradeOutcomesTests(
   const ownershipLabel = `com.statly.afl-outcomes-harness=${containerName}`;
   let containerId: string | undefined;
   let failure: unknown;
+  let result: Result | undefined;
 
   try {
     options.signal?.throwIfAborted();
@@ -272,46 +282,14 @@ export async function runDisposableAflTradeOutcomesTests(
     const testEnvironment = createTestEnvironment(environment, databaseUrl, containerId);
     const schemaPath = resolve(options.workspaceRoot, 'prisma/afl-trade-outcomes/schema.prisma');
     assertNoSchemaAdjacentPrismaEnvironmentFile(schemaPath, options.schemaEnvironmentFileExists);
-    const commands = [
-      {
-        args: [
-          resolve(options.workspaceRoot, 'node_modules/prisma/build/index.js'),
-          'validate',
-          '--schema',
-          schemaPath,
-        ],
-        workingDirectory: options.safeWorkingDirectory,
-      },
-      {
-        args: [
-          resolve(options.workspaceRoot, 'node_modules/prisma/build/index.js'),
-          'generate',
-          '--schema',
-          schemaPath,
-        ],
-        workingDirectory: options.safeWorkingDirectory,
-      },
-      {
-        args: [
-          resolve(options.workspaceRoot, 'node_modules/vitest/vitest.mjs'),
-          'run',
-          '--config',
-          resolve(options.workspaceRoot, 'vitest.config.outcomes-int.ts'),
-        ],
-        workingDirectory: options.workspaceRoot,
-      },
-    ];
-    for (const command of commands) {
-      options.signal?.throwIfAborted();
-      await options.execute({
-        command: nodeExecutable,
-        args: command.args,
-        environment: testEnvironment,
-        output: 'inherit',
-        workingDirectory: command.workingDirectory,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      });
-    }
+    result = await workflow({
+      containerId,
+      databaseUrl,
+      environment: testEnvironment,
+      safeWorkingDirectory: options.safeWorkingDirectory,
+      schemaPath,
+      workspaceRoot: options.workspaceRoot,
+    });
   } catch (error) {
     failure = error;
   }
@@ -339,4 +317,53 @@ export async function runDisposableAflTradeOutcomesTests(
   if (cleanupFailure !== undefined) throw cleanupFailure;
   if (failure !== undefined) throw failure;
   options.signal?.throwIfAborted();
+  return result as Result;
+}
+
+export async function runDisposableAflTradeOutcomesTests(
+  options: DisposableAflTradeOutcomesTestOptions
+): Promise<void> {
+  const nodeExecutable = options.nodeExecutable ?? process.execPath;
+  await withDisposableAflTradeOutcomesPostgres(options, async (runtime) => {
+    const commands = [
+      {
+        args: [
+          resolve(runtime.workspaceRoot, 'node_modules/prisma/build/index.js'),
+          'validate',
+          '--schema',
+          runtime.schemaPath,
+        ],
+        workingDirectory: runtime.safeWorkingDirectory,
+      },
+      {
+        args: [
+          resolve(runtime.workspaceRoot, 'node_modules/prisma/build/index.js'),
+          'generate',
+          '--schema',
+          runtime.schemaPath,
+        ],
+        workingDirectory: runtime.safeWorkingDirectory,
+      },
+      {
+        args: [
+          resolve(runtime.workspaceRoot, 'node_modules/vitest/vitest.mjs'),
+          'run',
+          '--config',
+          resolve(runtime.workspaceRoot, 'vitest.config.outcomes-int.ts'),
+        ],
+        workingDirectory: runtime.workspaceRoot,
+      },
+    ];
+    for (const command of commands) {
+      options.signal?.throwIfAborted();
+      await options.execute({
+        command: nodeExecutable,
+        args: command.args,
+        environment: runtime.environment,
+        output: 'inherit',
+        workingDirectory: command.workingDirectory,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+    }
+  });
 }

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   runDisposableAflTradeOutcomesTests,
+  withDisposableAflTradeOutcomesPostgres,
   type AflTradeOutcomesHarnessCommand,
+  type DisposableAflTradeOutcomesRuntime,
 } from '@/server/aflTradeIntelligence/development/disposablePostgresHarness';
 
 const firstContainerId = 'a'.repeat(64);
@@ -14,6 +16,60 @@ const harnessPaths = {
 };
 
 describe('disposable AFL outcomes PostgreSQL harness', () => {
+  it('exposes the isolated runtime to one workflow and removes the exact container afterward', async () => {
+    const commands: AflTradeOutcomesHarnessCommand[] = [];
+    const execute = vi.fn(async (command: AflTradeOutcomesHarnessCommand) => {
+      commands.push(command);
+      if (command.command === 'docker' && command.args[0] === 'run') {
+        return { stdout: `${firstContainerId}\n` };
+      }
+      if (command.command === 'docker' && command.args[0] === 'port') {
+        return { stdout: '127.0.0.1:49151\n' };
+      }
+      return { stdout: '' };
+    });
+    const workflow = vi.fn(async (_runtime: DisposableAflTradeOutcomesRuntime) =>
+      Promise.resolve('inventory-complete')
+    );
+
+    const result = await withDisposableAflTradeOutcomesPostgres(
+      {
+        ...harnessPaths,
+        execute,
+        environment: {
+          NODE_ENV: 'test',
+          PATH: '/test/bin',
+          UNRELATED_RUNTIME_VALUE: 'not-forwarded',
+        },
+        processId: 4141,
+        randomId: () => '123456abcdef',
+        sleep: async () => undefined,
+      },
+      workflow
+    );
+
+    expect(result).toBe('inventory-complete');
+    expect(workflow).toHaveBeenCalledOnce();
+    expect(workflow).toHaveBeenCalledWith({
+      containerId: firstContainerId,
+      databaseUrl: 'postgresql://statly_test:statly_test@127.0.0.1:49151/statly_outcomes_test',
+      environment: expect.objectContaining({
+        PATH: '/test/bin',
+        AFL_OUTCOMES_TEST_CONTAINER_ID: firstContainerId,
+      }),
+      safeWorkingDirectory: '/tmp/statly-afl-outcomes-test',
+      schemaPath: '/workspace/prisma/afl-trade-outcomes/schema.prisma',
+      workspaceRoot: '/workspace',
+    });
+    expect(workflow.mock.calls[0]?.[0].environment).not.toHaveProperty('UNRELATED_RUNTIME_VALUE');
+    expect(commands.at(-1)).toEqual({
+      command: 'docker',
+      args: ['rm', '--force', firstContainerId],
+      output: 'pipe',
+      timeoutMs: 15_000,
+    });
+  });
+
   it('runs the outcomes checks against a loopback-only temporary PostgreSQL container', async () => {
     const commands: AflTradeOutcomesHarnessCommand[] = [];
     const execute = vi.fn(async (command: AflTradeOutcomesHarnessCommand) => {
