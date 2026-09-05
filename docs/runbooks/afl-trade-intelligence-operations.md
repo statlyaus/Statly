@@ -1158,6 +1158,23 @@ dormant promotion-backed draft-trade release for pick observations and cohort me
 existing corpus and dormant-release repositories; finalized player membership cannot be extended
 with pick records. The sequencing module is tested but is not yet installed in the local worker.
 
+`PostgresAflTradeAdmittedPlayerFactualPreparation.prepare` materializes the existing v2 output for an
+already retained dispatch and exact finalized dataset/admission. It uses a claim-gated parent loader
+and the existing output-retention validator; replay rechecks the parent and returns the original
+content-addressed bytes. It does not enqueue a second request, import sources, admit a dataset, grant
+model execution, or publish a release. This adapter is available for composition but is not wired
+into the local worker.
+
+The #571 normalized/reconciled custody contains source captures, normalization runs, review sets, and
+rights references. Its review sets are not approved factual reconciliation runs. HPN requires a
+separately retained, approved, finalized, conflict-free run with exact competition/season and complete
+match/appearance input membership. Bind that run and its input/calculation ancestry explicitly to the
+reviewed authority; selecting a run only by season is insufficient. The existing v2 model-request
+validator checks the player dataset/admission but does not establish this independent HPN ancestry.
+Both player and pick dataset/admission IDs already bind their own immutable release, candidate, and
+member digest. Preserve those separate parents and authenticate exact ancestry on replay, even when
+substantively unchanged inputs permit reuse of a retained model operation.
+
 Run the non-mutating clean-checkout preflight with:
 
 ```sh

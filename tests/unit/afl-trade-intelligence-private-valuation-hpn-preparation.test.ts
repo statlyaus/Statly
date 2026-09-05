@@ -405,7 +405,7 @@ describe('private valuation HPN preparation', () => {
 
     await expect(
       preparation.prepare({ requestId: unsupportedRequest.requestId, claim })
-    ).rejects.toThrow(/supports only afl-men:2026-trades/i);
+    ).rejects.toThrow('HPN preparation does not support aflw:2026-trades.');
     expect(prepareFactual).not.toHaveBeenCalled();
     expect(captureSource).not.toHaveBeenCalled();
   });

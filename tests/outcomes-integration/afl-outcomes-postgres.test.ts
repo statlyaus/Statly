@@ -1131,6 +1131,9 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0102_admitted_player_factual_output',
       '0103_private_prepared_v3_from_current_model_evidence',
       '0104_dispatch_bound_private_evaluation_batch',
+      '0105_governed_hpn_scope_policy',
+      '0106_private_valuation_first_generation_schedule',
+      '0107_admitted_player_factual_preparation',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
