@@ -37,9 +37,13 @@ The build context is this directory:
 
 ```sh
 docker build --tag statly-afl-trade-capture:review -f Dockerfile .
-docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+docker run --rm --network=none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --env STATLY_CAPTURE_RENV_PROJECT= \
   statly-afl-trade-capture:review --verify-runtime
 ```
+
+This local smoke command matches the existing local executor's bootstrap override and uses the
+image-installed packages; it does not run a writable `renv::load()` against the read-only filesystem.
 
 After publishing, resolve the immutable image digest. All real captures must start the image by that
 digest and inject the same value as `STATLY_CAPTURE_IMAGE_DIGEST`. The Node coordinator also checks the
@@ -49,6 +53,76 @@ Ordinary repository tests only parse the R script, compare its allowlist with th
 and use a dependency-injected fake process. They make no network calls.
 
 ## Authorization and failure policy
+
+### Local FootyWire request pacing
+
+The image also applies the hash-pinned `patches/fitzRoy-1.7.0-footywire-pacing.patch` to the
+existing fitzRoy source. Within one R process, the FootyWire player-stat season function routes its
+match-list, basic-stat and advanced-stat HTML requests through one shared pacer. Each next request
+waits at least three seconds after the preceding request completes, including transport failures.
+Requests use the exact reviewed HTTPS endpoints; automatic redirects are disabled and every non-200
+response fails closed. Even same-origin redirects require review rather than being followed.
+
+This transport-only patch leaves the statistical parser and GitHub cache branch unchanged. The
+separate identity patch below replaces the positional basic/advanced merge. Pacing does not establish
+correct player-row alignment or
+complete season coverage. GitHub cache downloads retain their existing behavior and are not covered
+by the FootyWire HTML pacer. A fully uncached season can exceed the existing three-minute capture
+timeout; no timeout or retry bound is increased by this patch.
+
+`test_footywire_pacing_contract.R` exercises the public season function using synthetic HTTP responses
+and the real monotonic elapsed clock. It verifies consecutive matches, rejected redirects, HTTP and
+transport failures, subsequent-call spacing, unchanged parsed statistics and cached returns. Run it
+in the built image with `--network=none --entrypoint=Rscript` and arguments
+`--vanilla /opt/statly/capture/test_footywire_pacing_contract.R`.
+
+The patch is a **single-process local acquisition control**, not a provider-wide distributed limiter
+or a network-egress sandbox. Concurrent capture processes are outside its assurance. Existing local
+receipts must still report `capture_admission_only`; the patch does not upgrade them to deployed
+egress attestations. Review must bind the exact new image and patch identities, retain the control
+evidence, and ensure a single bounded capture before this control can support a local source decision.
+Existing runtime image references are not automatically advanced by a build. Source/Gate approval,
+normalization review and data admission remain separate requirements.
+
+### FootyWire profile-link join
+
+The additional hash-pinned `patches/fitzRoy-1.7.0-footywire-identity.patch` preserves a `PlayerLink`
+column on freshly parsed match rows. It retains the `pp-…` path segment, following the existing
+FootyWire draft adapter convention. The parser accepts relative profile paths, `/afl/footy/` paths,
+and exact HTTPS FootyWire profile URLs; missing/multiple links, other origins, query strings,
+fragments and unsupported path formats fail closed. This is a source-link identifier, not proof of
+a permanent provider namespace or a canonical Statly player assignment.
+
+Basic and advanced rows must have a unique, identical set of `(Match_id, Team, PlayerLink)` keys.
+The join uses those keys and preserves basic-table names and ordering, so abbreviated names and
+reordered advanced rows cannot swap player statistics. Missing cells remain missing; no calculation
+exclusion policy or zero-fill is introduced. `test_footywire_identity_contract.R` exercises the public
+season-fetch interface with offline HTTP fixtures, including reordered Chad/Corey Warner rows,
+invalid/ambiguous links and missing observations. Both identity and pacing contracts run at build.
+
+The GitHub cache branch is unchanged. Cache-only returns can still lack `PlayerLink`; mixed returns
+have missing links for older cached rows. Neither is retroactively link-verified, and the retained
+2025 capture remains unchanged. Fresh output adds a field and changes the schema fingerprint: an
+exact field-map and image review is required before capture/admission. Existing canonical identity
+resolution remains the downstream boundary; this patch does not create or approve assignments.
+
+### Local capture deadlines and cleanup
+
+The existing local Docker capture executor starts each attempt with `--init` and a unique container
+name. Its execution deadline kills the attached Docker client with `SIGKILL`; an elapsed-deadline
+check also rejects late successful exits. Killing the client is not treated as proof that the
+daemon-owned container stopped: the executor force-removes only that attempt's exact container name
+before accepting output or propagating failure. Cleanup has a separate ten-second bound and cannot
+turn a failed capture into success. A cleanup failure identifies the container and reports termination
+as unconfirmed; investigate that exact container before another attempt. No broad prune is used.
+
+The configured capture timeout and retry policy are unchanged. Cleanup time is separate from the
+capture deadline, not additional authorized acquisition time. The regression tests exercise the real
+Node process boundary with a fake external Docker CLI that ignores `SIGTERM`, and verify rejection,
+exact cleanup targeting, successful output handling, and fail-closed cleanup errors. These lifecycle
+controls do not grant source approval, distributed concurrency, or a deployed egress attestation.
+
+### Governed capture requirements
 
 The AFL Tables, Footywire, and Fryzigg player-stat capabilities are approved for their exact reviewed
 fields and governed uses. Do not execute an external capture until the corresponding current

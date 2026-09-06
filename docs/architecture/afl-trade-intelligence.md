@@ -592,6 +592,41 @@ values with zero; FootyWire may combine cached matches with newly scraped matche
 complete remote RDS object before filtering. Capture records must preserve those origins, and Statly
 must never infer a measured zero solely from the normalized returned cell.
 
+The pinned fitzRoy `1.7.0` source (commit `18097367c8c57ec333b1715ea10c7724871711e6`)
+distinguishes FootyWire match identifiers from player display names. Its
+[season fetcher](https://github.com/jimmyday12/fitzRoy/blob/18097367c8c57ec333b1715ea10c7724871711e6/R/fetch-player-stats.R#L298-L383)
+extracts `Match_id` from match links, while the
+[fresh match parser](https://github.com/jimmyday12/fitzRoy/blob/18097367c8c57ec333b1715ea10c7724871711e6/R/helpers-footywire.R#L65-L146)
+returns `Player` text with team/opposition and match context, without extracting a native player ID.
+Classify player identity as name-and-context-only; keep `identity.nativeId` null unless retained
+source evidence establishes an identifier. Reuse the existing reviewed player, match, and club
+identity assignments, not automatic name matching. This finding applies to the player-stat
+capability, not the separate player-details function.
+
+The local capture image now layers a separately hash-pinned FootyWire identity patch over that
+upstream parser. Freshly parsed rows retain `PlayerLink` (the `pp-…` profile-link path segment, as
+already used by the FootyWire draft adapter). Basic and advanced tables are joined only after their
+match/team/profile-link keys are unique and match exactly; display initials and row position are not
+identity keys. Invalid or absent profile links fail closed. The source link still requires reviewed
+namespace and canonical-player resolution; it does not authorize an automatic identity assignment.
+Cached rows remain governed by the name-and-context-only finding above: cache-only output may lack
+the added field, mixed output may have null links, and historical retained captures are not changed
+or retrospectively verified. The new image and added-field schema require their own exact review
+before acquisition or admission. See the [capture runtime](../../etl/afl-trade-intelligence/README.md#footywire-profile-link-join)
+for the offline contract and cache limitations.
+
+Reuse the governed `etl/afl-trade-intelligence/capture_fitzroy.R` capture path and the generic
+`createAflTradeHpnFieldMapCandidate` builder with explicit bindings to an exact retained decode map;
+do not add a parallel FootyWire mapper or reuse the reduced legacy live-stat export for HPN. The
+[basic/advanced table parser](https://github.com/jimmyday12/fitzRoy/blob/18097367c8c57ec333b1715ea10c7724871711e6/R/helpers-footywire.R#L156-L221)
+derives columns from upstream HTML, so source inspection alone does not establish the complete HPN
+field set or 2025 coverage. A retained capture still needs schema and null checks, reviewed identity
+assignments, home/away interpretation, and reconciliation against the complete match universe. A
+different retrieval host also does not prove independent underlying statistical provenance. Fryzigg's
+[remote-object reader](https://github.com/jimmyday12/fitzRoy/blob/18097367c8c57ec333b1715ea10c7724871711e6/R/fetch-player-stats.R#L250-L295)
+does not itself establish a fixed history floor or complete 2025 coverage. These technical findings
+create neither a reviewed corroborating-source authority nor a model-method approval.
+
 ## Proposed target architecture
 
 This is the architecture proposed for Gate 1 review, not evidence that its infrastructure is ready or

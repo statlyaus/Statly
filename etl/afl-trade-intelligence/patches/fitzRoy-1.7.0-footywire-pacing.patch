@@ -1,0 +1,71 @@
+diff --git a/R/helpers-footywire.R b/R/helpers-footywire.R
+index f42f6563..438f8b9b 100644
+--- a/R/helpers-footywire.R
++++ b/R/helpers-footywire.R
+@@ -153,9 +153,34 @@ footywire_html <- function(x, id) {
+ #'
+ #' @keywords internal
+ #' @noRd
++footywire_read_html <- local({
++  last_completed <- -Inf
++  function(url) {
++    # Statly local control: one sequential FootyWire request, no implicit redirects or retries.
++    allowed <- "^https://www\\.footywire\\.com/afl/footy/(ft_match_list\\?year=[0-9]{4}|ft_match_statistics\\?mid=[0-9]+(&advv=Y)?)$"
++    if (!is.character(url) || length(url) != 1L || is.na(url) || !grepl(allowed, url)) {
++      stop("FootyWire request URL is outside the reviewed endpoints.")
++    }
++    remaining <- 3 - (unname(proc.time()[["elapsed"]]) - last_completed)
++    while (remaining > 0) {
++      Sys.sleep(remaining)
++      remaining <- 3 - (unname(proc.time()[["elapsed"]]) - last_completed)
++    }
++    # Update even when transport fails: a later call must not become an immediate retry.
++    on.exit(last_completed <<- unname(proc.time()[["elapsed"]]), add = TRUE)
++    response <- curl::curl_fetch_memory(url, handle = curl::new_handle(
++      followlocation = FALSE, connecttimeout = 10, timeout = 30
++    ))
++    if (response$status_code != 200L) {
++      stop("FootyWire HTTP request failed; redirects and retries are not followed.")
++    }
++    xml2::read_html(response$content)
++  }
++})
++
+ get_match_data <- function(id) {
+   # Create URL
+-  default_url <- "http://www.footywire.com/afl/footy/ft_match_statistics?mid="
++  default_url <- "https://www.footywire.com/afl/footy/ft_match_statistics?mid="
+   basic_url <- paste(default_url, id, sep = "")
+   advanced_url <- paste(default_url, id, "&advv=Y", sep = "")
+ 
+@@ -163,7 +188,7 @@ get_match_data <- function(id) {
+ 
+   # Check if URL exists
+   footywire_basic <- tryCatch(
+-    xml2::read_html(basic_url),
++    footywire_read_html(basic_url),
+     error = function(e) FALSE
+   )
+ 
+@@ -191,7 +216,7 @@ get_match_data <- function(id) {
+ 
+       # Check if Advanced URL exists
+       footywire_advanced <- tryCatch(
+-        xml2::read_html(advanced_url),
++        footywire_read_html(advanced_url),
+         error = function(e) FALSE
+       )
+ 
+diff --git a/R/fetch-player-stats.R b/R/fetch-player-stats.R
+index 3d49efc8..637b13c9 100644
+--- a/R/fetch-player-stats.R
++++ b/R/fetch-player-stats.R
+@@ -317,7 +317,7 @@ fetch_player_stats_footywire <- function(season = NULL, round_number = NULL, che
+   fw_ids <- start_year:end_year %>%
+     purrr::map(~ paste0("https://www.footywire.com/afl/footy/ft_match_list?year=", .)) %>%
+     # nolint
+-    purrr::map(xml2::read_html) %>%
++    purrr::map(footywire_read_html) %>%
+     purrr::map(~ rvest::html_nodes(., ".data:nth-child(5) a")) %>%
+     purrr::map(~ rvest::html_attr(., "href")) %>%
+     purrr::map(~ stringr::str_extract(., "\\d+")) %>%

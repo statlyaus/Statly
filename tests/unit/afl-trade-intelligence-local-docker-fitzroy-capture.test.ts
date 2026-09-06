@@ -1,5 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { realpath, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -24,7 +26,7 @@ const invocation = createAflTradeFitzRoyInvocation({
   parameters: { season: 2026, rescrape: true, rescrapeStartSeason: 2026 },
 });
 
-function localExecutorFixture() {
+function localExecutorFixture(dockerBinary?: string) {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const baseTime = Date.parse('2026-08-14T00:00:00.000Z');
   const nowMs = vi
@@ -64,14 +66,99 @@ function localExecutorFixture() {
       keyId: 'local-rehearsal-2026-08-14',
       privateKey,
     },
-    nowMs,
     sleep,
-    runDocker,
+    ...(dockerBinary === undefined ? { nowMs, runDocker } : { dockerBinary }),
   });
   return { executor, publicKey, runDocker, sleep };
 }
 
 describe('local non-production Docker fitzRoy capture', () => {
+  it('rejects a timed-out CLI that ignores termination and cleans only its owned container', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'statly-docker-timeout-test-'));
+    const binary = join(directory, 'docker');
+    try {
+      // Fake only the external Docker CLI; exercise the real executor and process deadline.
+      await writeFile(
+        binary,
+        `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(__filename + '.calls', JSON.stringify(args) + '\\n');
+if (args[0] === 'run') {
+  process.on('SIGTERM', () => {});
+  const mount = args.find(value => value.endsWith(',dst=/statly/output'));
+  const output = mount.split('src=')[1].split(',dst=')[0];
+  setTimeout(() => {
+    fs.writeFileSync(output + '/source.rds', 'RDS!');
+    fs.writeFileSync(output + '/diagnostics.json', '{"rowCount":1}');
+  }, 2500);
+}
+`,
+        { mode: 0o700 }
+      );
+      const fixture = localExecutorFixture(binary);
+      await expect(
+        fixture.executor.execute(invocation, {
+          timeoutMs: 1000,
+          maximumSourceBytes: 1024,
+          maximumDiagnosticsBytes: 4096,
+        })
+      ).rejects.toThrow(/timeout|timed out|deadline/i);
+      const calls = (await readFile(`${binary}.calls`, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as string[]);
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toContain('--init');
+      expect(calls[0]).not.toContain('--rm');
+      const name = calls[0]?.find((arg) => arg.startsWith('--name='))?.slice(7);
+      expect(name).toMatch(/^statly-fitzroy-capture-[a-f0-9-]{36}$/);
+      expect(calls[1]).toEqual(['rm', '--force', name]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0, 1])(
+    'returns valid output only after confirmed cleanup (cleanup exit %i)',
+    async (cleanupExitCode) => {
+      const directory = await mkdtemp(join(tmpdir(), 'statly-docker-cleanup-test-'));
+      const binary = join(directory, 'docker');
+      try {
+        await writeFile(
+          binary,
+          `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === 'rm') process.exit(${cleanupExitCode});
+const mount = args.find(value => value.endsWith(',dst=/statly/output'));
+const output = mount.split('src=')[1].split(',dst=')[0];
+fs.writeFileSync(output + '/source.rds', 'RDS!');
+fs.writeFileSync(output + '/diagnostics.json', '{"rowCount":1}');
+`,
+          { mode: 0o700 }
+        );
+        const result = localExecutorFixture(binary).executor.execute(invocation, {
+          timeoutMs: 3000,
+          maximumSourceBytes: 1024,
+          maximumDiagnosticsBytes: 4096,
+        });
+        if (cleanupExitCode === 0) {
+          await expect(result).resolves.toMatchObject({
+            diagnostics: { rowCount: 1 },
+            egressExecutionReceipt: { content: { status: 'succeeded' } },
+          });
+        } else {
+          await expect(result).rejects.toThrow(
+            /cleanup failed.*statly-fitzroy-capture-.*termination is unconfirmed/
+          );
+        }
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  );
+
   it('runs the immutable image with a constrained process boundary and signs exact local evidence', async () => {
     const fixture = localExecutorFixture();
 
@@ -115,7 +202,7 @@ describe('local non-production Docker fitzRoy capture', () => {
     expect(command?.args).toEqual(
       expect.arrayContaining([
         'run',
-        '--rm',
+        '--init',
         '--read-only',
         '--cap-drop=ALL',
         '--security-opt=no-new-privileges',
