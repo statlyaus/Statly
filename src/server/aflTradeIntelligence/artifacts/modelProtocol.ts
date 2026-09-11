@@ -330,6 +330,103 @@ export const aflTradePlayerContributionModelProtocolV2Schema = z
     );
   });
 
+/** Native PAV proposal only; execution must authenticate its exact retained parents and approvals. */
+export const aflTradePlayerPavModelProtocolContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-model-protocol/v3'),
+    environment: z.enum(['test_fixture', 'non_production']),
+    protocolKey: publicIdSchema,
+    version: z.number().int().positive(),
+    modelKind: z.literal('player_contribution_and_availability'),
+    datasetId: aflTradeContentAddressedIdSchema('dataset'),
+    datasetAdmission: admittedDatasetBindingSchema,
+    preparedAt: isoDateTimeSchema,
+    preparedBy: publicIdSchema,
+    proposalOrigin: z.enum(['human_authored', 'agent_assisted']),
+    publicIdentityBoundary: z.literal('source_native_no_fantasy_ownership'),
+    observationGrain: z.literal('player_acquisition_spell_prediction'),
+    sourceObservationSet: z
+      .object({
+        observationSetId: aflTradeContentAddressedIdSchema('player-pav-observation-set'),
+        artifact: aflTradeArtifactRefSchema,
+      })
+      .strict(),
+    pavPolicy: z
+      .object({
+        policyId: aflTradeContentAddressedIdSchema('player-pav-policy'),
+        artifact: aflTradeArtifactRefSchema,
+      })
+      .strict(),
+    hpnMethod: z
+      .object({
+        methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+        artifact: aflTradeArtifactRefSchema,
+      })
+      .strict(),
+    target: z
+      .object({
+        fixedHorizonSeasons: z.literal(3),
+        annualValueUnit: z.literal('season_pav'),
+        aggregation: z.literal('sum'),
+        valueUnit: z.literal('fixed_horizon_pav'),
+      })
+      .strict(),
+    featureDefinitionArtifact: aflTradeArtifactRefSchema,
+    featurePolicy: aflTradePlayerContributionModelProtocolContentSchema.shape.featurePolicy,
+    windows: modelWindowsSchema,
+    modelSelectionPolicy:
+      aflTradePlayerContributionModelProtocolContentSchema.shape.modelSelectionPolicy,
+    validationPlan: aflTradePlayerContributionModelProtocolContentSchema.shape.validationPlan,
+    limitations: z.array(boundedTextSchema).min(1).max(100),
+  })
+  .strict()
+  .superRefine((protocol, context) => {
+    addModelWindowIssues(protocol.windows, context);
+    const dimensions = protocol.validationPlan.subgroupDimensions;
+    if (new Set(dimensions).size !== AFL_TRADE_PLAYER_MODEL_SUBGROUPS.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['validationPlan', 'subgroupDimensions'],
+        message: 'Validation must cover every required player-model subgroup exactly once.',
+      });
+    }
+    if (Date.parse(protocol.preparedAt) < Date.parse(protocol.datasetAdmission.admittedAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['preparedAt'],
+        message: 'An admitted model protocol cannot predate its dataset admission.',
+      });
+    }
+  });
+
+export const aflTradePlayerPavModelProtocolSchema = z
+  .object({
+    protocolId: aflTradeContentAddressedIdSchema('model-protocol'),
+    content: aflTradePlayerPavModelProtocolContentSchema,
+  })
+  .strict()
+  .superRefine((protocol, context) => {
+    addAflTradeContentAddressIssue(
+      'model-protocol',
+      protocol.protocolId,
+      protocol.content,
+      context,
+      ['protocolId']
+    );
+  });
+
+export type AflTradePlayerPavModelProtocol = z.infer<typeof aflTradePlayerPavModelProtocolSchema>;
+
+export function createAflTradePlayerPavModelProtocol(
+  input: z.input<typeof aflTradePlayerPavModelProtocolContentSchema>
+): AflTradePlayerPavModelProtocol {
+  const content = aflTradePlayerPavModelProtocolContentSchema.parse(input);
+  return aflTradePlayerPavModelProtocolSchema.parse({
+    protocolId: createAflTradeContentAddress('model-protocol', content),
+    content,
+  });
+}
+
 export const aflTradeAnyPlayerContributionModelProtocolSchema = z.union([
   aflTradePlayerContributionModelProtocolSchema,
   aflTradePlayerContributionModelProtocolV2Schema,

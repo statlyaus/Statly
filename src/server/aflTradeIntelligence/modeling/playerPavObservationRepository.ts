@@ -77,6 +77,12 @@ export interface AflTradePlayerPavObservationRepository {
     request: unknown,
     execution: AflTradePlayerPavExecutionContext
   ): Promise<AflTradePlayerPavObservationSet>;
+
+  /** Read retained private custody under its current dispatch authority; never materialize. */
+  loadFinalizedPrivate(request: {
+    requestId: string;
+    observationSetId: string;
+  }): Promise<AflTradePlayerPavObservationSet>;
 }
 
 export function parseAflTradePlayerPavPolicy(input: unknown): AflTradePlayerPavPolicy {

@@ -1,4 +1,6 @@
 import {
+  AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY,
+  aflTradePlayerPavPolicySchema,
   createAflTradePlayerPavObservation,
   createAflTradePlayerPavObservationSet,
   type AflTradePlayerPavObservation,
@@ -57,6 +59,7 @@ function spellEndSeason(spell: AcquisitionSpell): number | null {
 }
 
 function assertRequest(request: AflTradePlayerPavMaterializationRequest): void {
+  aflTradePlayerPavPolicySchema.parse(request.policy);
   if (
     request.environment !== request.policy.content.environment ||
     request.competition !== request.policy.content.competition ||
@@ -77,7 +80,12 @@ function assertRequest(request: AflTradePlayerPavMaterializationRequest): void {
       ({ releaseId, partition, predictionSeason, acquisitionSpell }) =>
         releaseId !== request.releaseId ||
         partition !== partitionFor(request.policy, predictionSeason) ||
-        Date.parse(acquisitionSpell.recordedAt) > Date.parse(seasonEnd(predictionSeason)) ||
+        Date.parse(acquisitionSpell.recordedAt) >
+          Date.parse(
+            request.policy.content.schemaVersion === 'afl-trade-player-pav-policy/v2'
+              ? request.knowledgeCutoffAt
+              : seasonEnd(predictionSeason)
+          ) ||
         Date.parse(acquisitionSpell.effectiveFrom) > Date.parse(`${predictionSeason}-12-31`) ||
         (acquisitionSpell.effectiveThrough !== null &&
           Date.parse(acquisitionSpell.effectiveThrough) < Date.parse(`${predictionSeason}-12-31`))
@@ -218,6 +226,14 @@ export function materializeAflTradePlayerPavObservationSet(
       }
 
       return createAflTradePlayerPavObservation({
+        ...(request.policy.content.schemaVersion === 'afl-trade-player-pav-policy/v2'
+          ? {
+              knowledgeBinding: {
+                policy: AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY,
+                knowledgeCutoffAt: request.knowledgeCutoffAt,
+              },
+            }
+          : {}),
         ordinal: index + 1,
         partition: prediction.partition,
         predictionSeason: prediction.predictionSeason,
@@ -247,7 +263,15 @@ export function materializeAflTradePlayerPavObservationSet(
     .filter(({ calculationId }) => referencedCalculationIds.has(calculationId));
 
   return createAflTradePlayerPavObservationSet({
-    schemaVersion: 'afl-trade-player-pav-observation-set/v1',
+    schemaVersion:
+      request.policy.content.schemaVersion === 'afl-trade-player-pav-policy/v2'
+        ? 'afl-trade-player-pav-observation-set/v2'
+        : 'afl-trade-player-pav-observation-set/v1',
+    ...(request.policy.content.schemaVersion === 'afl-trade-player-pav-policy/v2'
+      ? {
+          knowledgePolicy: AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY,
+        }
+      : {}),
     authorityBoundary:
       'private_released_acquisition_spell_exact_finalized_hpn_pav_no_grade_publication_or_fantasy_ownership',
     publicationEligible: false,
