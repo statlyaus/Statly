@@ -23,7 +23,7 @@ export default defineConfig({
       'src/app/dashboard/**/*.test.tsx',
       'src/app/api/draft-trades/**/*.test.ts',
     ],
-    exclude: ['node_modules'],
+    exclude: ['**/node_modules/**', '**/tmp/**'],
     globals: true,
     clearMocks: true,
     // Replay, canonicalization, and hostile-size contract tests run under full V8 coverage in CI.
