@@ -39,6 +39,30 @@ beforeAll(async () => {
   await pool.query(`CREATE TABLE outcome_current_private_evaluation_batch (
     scope_key text PRIMARY KEY,batch_id text NOT NULL,revision integer NOT NULL
   )`);
+  await pool.query(`CREATE TABLE outcome_private_valuation_cohort_binding (
+    request_id text PRIMARY KEY,lineage_admission_id text NOT NULL,binding_json jsonb NOT NULL
+  )`);
+  await pool.query(`CREATE TABLE outcome_event (
+    event_id text PRIMARY KEY,competition text NOT NULL,season_year integer NOT NULL
+  )`);
+  await pool.query(`CREATE TABLE outcome_event_version (
+    event_version_id text PRIMARY KEY,event_id text NOT NULL
+  )`);
+  await pool.query(`CREATE TABLE outcome_acquisition_spell_version (
+    spell_version_id text PRIMARY KEY,start_event_version_id text NOT NULL,status text NOT NULL,
+    registration_canonical_json text,registration_approval_decision_id text,
+    registered_at timestamptz,supersedes_spell_version_id text
+  )`);
+  await pool.query(`CREATE TABLE outcome_hpn_pav_input_set (
+    input_set_id text PRIMARY KEY,environment text NOT NULL,competition text NOT NULL,
+    season_year integer NOT NULL,status text NOT NULL,finalized_at timestamptz,
+    corroborating_player_row_count integer NOT NULL
+  )`);
+  await pool.query(`CREATE TABLE outcome_hpn_pav_calculation (
+    calculation_id text PRIMARY KEY,input_set_id text NOT NULL,environment text NOT NULL,
+    competition text NOT NULL,season_year integer NOT NULL,status text NOT NULL,
+    finalized_at timestamptz
+  )`);
   await pool.query(`CREATE FUNCTION validate_outcome_private_evaluation_batch_complete(text,text)
     RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT TRUE $$`);
 });
@@ -89,6 +113,25 @@ describe('exact 2025 private valuation rehearsal preflight on PostgreSQL', () =>
       `INSERT INTO outcome_current_private_evaluation_batch VALUES ($1,'batch-1',5)`,
       [scopeKey]
     );
+    await pool.query(
+      `INSERT INTO outcome_private_valuation_cohort_binding VALUES
+       ('request-1','admission-1',$1::jsonb)`,
+      [JSON.stringify({ cohortScopeKey: scopeKey, cohortTradeIds: ['trade-1', 'trade-2'] })]
+    );
+    await pool.query(`INSERT INTO outcome_event VALUES ('event-1','AFLM',2025)`);
+    await pool.query(`INSERT INTO outcome_event_version VALUES ('event-version-1','event-1')`);
+    await pool.query(
+      `INSERT INTO outcome_acquisition_spell_version VALUES
+       ('spell-version-1','event-version-1','approved','{}','decision-1',now(),NULL)`
+    );
+    await pool.query(
+      `INSERT INTO outcome_hpn_pav_input_set VALUES
+       ('input-1','non_production','AFLM',2025,'finalized',now(),4200)`
+    );
+    await pool.query(
+      `INSERT INTO outcome_hpn_pav_calculation VALUES
+       ('calculation-1','input-1','non_production','AFLM',2025,'finalized',now())`
+    );
 
     const report = await inspectExact2025AflPrivateValuationRehearsalPreflight(pool);
 
@@ -106,6 +149,15 @@ describe('exact 2025 private valuation rehearsal preflight on PostgreSQL', () =>
     });
     expect(report.blockerCodes).toEqual([]);
     expect(report.state).toBe('inconclusive');
+    expect(report.retainedSourceInventory).toEqual({
+      cohortCandidates: { admissionCount: 1, tradeCount: 2 },
+      measurementEvidence: {
+        currentRegisteredAcquisitionSpellCount: 1,
+        finalizedHpnInputSetCount: 1,
+        finalizedHpnCalculationCount: 1,
+        maxFinalizedHpnCorroboratingPlayerRowCount: 4200,
+      },
+    });
     expect(report.sourceAuthority).toEqual({
       genuineDraftTrade: 'not_inspected',
       genuineHpnCorroboration: 'not_inspected',

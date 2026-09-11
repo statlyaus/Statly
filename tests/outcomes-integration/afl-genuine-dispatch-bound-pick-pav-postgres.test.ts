@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createAflTradeByteArtifactRef,
@@ -36,7 +36,10 @@ import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/model
 import { createAflTradePickPavPolicy } from '@/server/aflTradeIntelligence/modeling/pickOutcomeContracts';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createAflTradePrivateValuationModelOperation } from '@/server/aflTradeIntelligence/valuation/privateValuationModelPair';
-import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
+import {
+  createAflTradePrivateValuationFactualOutput,
+  createAflTradeAdmittedPlayerFactualOutput,
+} from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
 import {
   createPostgresGenuineDispatchBoundPickPavExecutor,
   PostgresGenuineDispatchBoundPickPavMaterializer,
@@ -504,7 +507,7 @@ function datasetAuthority(input: {
   return { dataset, admission, protocol };
 }
 
-beforeAll(async () => {
+beforeEach(async () => {
   artifactRoot = await mkdtemp(join(tmpdir(), 'statly-genuine-pick-pav-'));
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedDatabaseUrl() });
@@ -520,17 +523,20 @@ beforeAll(async () => {
   await adminPool.query(`GRANT afl_trade_private_evaluation_coordinator TO "${runtimeRoleName}"`);
 });
 
-afterAll(async () => {
+afterEach(async () => {
   await restrictedPool?.end();
-  await pool.end();
+  restrictedPool = undefined;
   await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
   await adminPool.query(`DROP ROLE IF EXISTS "${runtimeRoleName}"`);
-  await adminPool.end();
   await rm(artifactRoot, { recursive: true, force: true });
+});
+afterAll(async () => {
+  await pool.end();
+  await adminPool.end();
 });
 
 describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
-  it('materializes, fits, validates, retains, and fences one exact component run', async () => {
+  it.each(['v1', 'v2'] as const)('fits, retains and replays %s pick custody', async (version) => {
     const requestId = addressed('private-valuation-dispatch', 'pick-request');
     const claimId = addressed('private-valuation-dispatch-claim', 'pick-claim');
     const leaseToken = digest('pick-lease-token');
@@ -538,7 +544,7 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
     const memberSetSha256 = digest('pick-factual-members');
     const factualCandidateId = addressed('factual-release-candidate', 'pick-candidate');
     const factualReleaseId = addressed('outcome-release', 'pick-release');
-    const factual = createAflTradePrivateValuationFactualOutput({
+    const legacyFactual = createAflTradePrivateValuationFactualOutput({
       requestId,
       valuationScopeKey: 'afl-men:2025-trades',
       captureBindingId: addressed('private-valuation-capture-binding', 'capture'),
@@ -571,6 +577,36 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       },
       preparedAt: retainedAt,
     });
+    const factual =
+      version === 'v1'
+        ? legacyFactual
+        : createAflTradeAdmittedPlayerFactualOutput({
+            requestId,
+            valuationScopeKey: 'afl-men:2025-trades',
+            admittedPlayerDataset: {
+              datasetId: addressed('dataset', 'player'),
+              admissionId: addressed('dataset-admission', 'player'),
+            },
+            sourceCaptures: [
+              {
+                captureId: addressed('source-capture', 'player'),
+                sourceSnapshotId: addressed('source-snapshot', 'player'),
+                consumedFieldSetId: addressed('consumed-field-set', 'player'),
+                consumedFieldSetSha256: digest('player'),
+              },
+            ],
+            spellMetricBatches: legacyFactual.content.spellMetricBatches,
+            candidate: {
+              candidateId: addressed('factual-release-candidate', 'independent-player'),
+              candidateSha256: digest('independent-player'),
+              memberSetSha256: digest('independent-player-members'),
+            },
+            factualRelease: {
+              releaseId: addressed('outcome-release', 'independent-player'),
+              releaseSha256: digest('independent-player'),
+            },
+            preparedAt: retainedAt,
+          });
     const methodId = addressed('hpn-pav-method', 'pick-method');
     const calculations = years.map((year) => calculation(year, methodId, factualRunId));
     const reviewedPolicy = policy(methodId);
@@ -583,7 +619,7 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
     const hpnValuesSha256 = substantiveHpnValuesSha256(exactCalculation);
     const operation = createAflTradePrivateValuationModelOperation({
       scopeKey: 'afl-men:2025-trades',
-      factualValuesSha256: memberSetSha256,
+      factualValuesSha256: factual.content.candidate.memberSetSha256,
       hpnValuesSha256,
       hpnMethodId: methodId,
       player: {
@@ -607,7 +643,7 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       factualOutputId: factual.outputId,
       hpnCalculationId: exactCalculation.calculationId,
       substantive: {
-        factualValuesSha256: memberSetSha256,
+        factualValuesSha256: factual.content.candidate.memberSetSha256,
         hpnValuesSha256,
         hpnMethodId: methodId,
         player: operation.content.player,
@@ -644,20 +680,23 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       await seed.query(
         `INSERT INTO outcome_private_valuation_factual_output
           (output_id,request_id,capture_binding_id,source_admission_id,normalization_run_id,
-           fact_batch_id,factual_run_id,candidate_id,factual_release_id,prepared_at,output_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+           fact_batch_id,factual_run_id,candidate_id,factual_release_id,prepared_at,output_json,
+           player_dataset_id,player_dataset_admission_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)`,
         [
           factual.outputId,
           requestId,
-          factual.content.captureBindingId,
-          factual.content.sourceAdmissionId,
-          factual.content.normalizationRunId,
-          factual.content.factBatch.batchId,
-          factualRunId,
-          factualCandidateId,
-          factualReleaseId,
+          version === 'v1' ? legacyFactual.content.captureBindingId : null,
+          version === 'v1' ? legacyFactual.content.sourceAdmissionId : null,
+          version === 'v1' ? legacyFactual.content.normalizationRunId : null,
+          version === 'v1' ? legacyFactual.content.factBatch.batchId : null,
+          version === 'v1' ? factualRunId : null,
+          factual.content.candidate.candidateId,
+          factual.content.factualRelease.releaseId,
           factual.content.preparedAt,
           canonicalizeAflTradeJson(factual),
+          version === 'v2' ? operation.content.player.datasetId : null,
+          version === 'v2' ? operation.content.player.datasetAdmissionId : null,
         ]
       );
       await seed.query(
@@ -916,6 +955,44 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
           canonicalizeAflTradeJson(authority.protocol),
         ]
       );
+      if (version === 'v2') {
+        // This downstream-only fixture isolates the authenticated HPN getter. Its
+        // independent current-source/claim validation is covered by the 0108 tracer.
+        // Real pick finalization and execution validators remain enabled below.
+        const binding = {
+          requestId,
+          factualOutputId: factual.outputId,
+          factualOperationId: addressed('current-valuation-factual-refresh-operation', 'player'),
+          privateFactualCandidateId: addressed('private-factual-candidate', 'player'),
+          privateFactualRevision: 1,
+          hpnFactualRunId: factualRunId,
+          hpnInputSetSha256: digest('hpn-input'),
+          hpnFinalizedAt: retainedAt,
+        };
+        await seed.query(`CREATE OR REPLACE FUNCTION load_outcome_private_valuation_hpn_factual_input(target_request_id TEXT,target_output_id TEXT)
+          RETURNS JSONB LANGUAGE SQL AS $fixture$ SELECT '${canonicalizeAflTradeJson(binding).replaceAll("'", "''")}'::jsonb $fixture$`);
+        await seed.query(
+          `INSERT INTO outcome_factual_release_candidate
+          (candidate_id,candidate_sha256,target_release_id,environment,scope_key,competition,
+           valid_from_season,valid_through_season,effective_through,member_set_sha256,status,
+           member_counts_json,candidate_json,created_at,finalized_at,source_member_set_sha256)
+          VALUES ($1,$2,$3,'non_production','afl-men:2025-trades','AFLM',2000,2025,$4,$5,
+            'approved','{}','{}',$6,$6,$5)`,
+          [
+            factualCandidateId,
+            digest('pick-candidate'),
+            factualReleaseId,
+            '2013-12-31T23:59:59.000Z',
+            memberSetSha256,
+            retainedAt,
+          ]
+        );
+        await seed.query(
+          `INSERT INTO outcome_record_state_commitment
+          (event_revision,release_id,record_state_id,record_state_json) VALUES (1,$1,$2,'{"state":"approved"}')`,
+          [factualReleaseId, addressed('outcome-release-record-state', 'pick')]
+        );
+      }
       await seed.query('COMMIT');
     } catch (error) {
       await seed.query('ROLLBACK');
@@ -932,6 +1009,34 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       max: 1,
     });
     const restrictedClient = createPgAflOutcomeSqlClient(restrictedPool);
+    if (version === 'v2') {
+      await restrictedClient.transaction(async (transaction) => {
+        await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
+        await expect(
+          transaction.query(
+            'SELECT outcome_private_valuation_pick_parent_is_current($1,$2,$3,$4,$5) AS current',
+            [
+              requestId,
+              factual.outputId,
+              operation.content.pick.datasetId,
+              operation.content.pick.datasetAdmissionId,
+              factualReleaseId,
+            ]
+          )
+        ).resolves.toMatchObject({ rows: [{ current: true }] });
+        // Registry withdrawal takes this same membership lock on another connection.
+        await expect(
+          pool.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired', [
+            `outcome-release-membership:${factualReleaseId}`,
+          ])
+        ).resolves.toMatchObject({ rows: [{ acquired: false }] });
+      });
+      await expect(
+        pool.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired', [
+          `outcome-release-membership:${factualReleaseId}`,
+        ])
+      ).resolves.toMatchObject({ rows: [{ acquired: true }] });
+    }
     const restrictedMaterializer = new PostgresGenuineDispatchBoundPickPavMaterializer(
       restrictedClient
     );
@@ -1128,7 +1233,9 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
     await expect(
       pairRepository.bindInput({ exactInput, claim: reclaimedExecution.claim })
     ).resolves.toMatchObject({ pickRunId: null });
-    await expect(executor.execute(execution)).resolves.toMatchObject({ state: 'stale_authority' });
+    await expect(executor.execute(execution)).resolves.toMatchObject({
+      state: 'stale_authority',
+    });
 
     const successfulWorkRetentionsBeforeReclaimedReplay = successfulWorkRetentions;
     const reclaimedReplay = await executor.execute(reclaimedExecution);
@@ -1157,5 +1264,22 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
            (SELECT count(*)::integer FROM outcome_governed_valuation_component_run) AS component_count`
       )
     ).resolves.toMatchObject({ rows: [{ execution_count: 1, component_count: 1 }] });
+    if (version === 'v2') {
+      await setClaimLease(`clock_timestamp()+interval '5 minutes'`, reclaimedClaimId);
+      await client.transaction(async (transaction) => {
+        await transaction.query(`SET LOCAL session_replication_role='replica'`);
+        await transaction.query(
+          `INSERT INTO outcome_record_state_commitment
+            (event_revision,release_id,record_state_id,record_state_json)
+           VALUES (2,$1,$2,'{"state":"withdrawn"}')`,
+          [factualReleaseId, addressed('outcome-release-record-state', 'withdrawn-pick')]
+        );
+      });
+      const retainedBeforeWithdrawalReplay = successfulWorkRetentions;
+      await expect(executor.execute(reclaimedExecution)).resolves.toMatchObject({
+        state: 'deterministic_failure',
+      });
+      expect(successfulWorkRetentions).toBe(retainedBeforeWithdrawalReplay);
+    }
   });
 });

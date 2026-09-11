@@ -8,6 +8,7 @@ import type {
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createGenuineDispatchBoundPickPavRunner } from '@/server/aflTradeIntelligence/valuation/genuineDispatchBoundPickPav';
 import { PostgresGenuineDispatchBoundPickPavMaterializer } from '@/server/aflTradeIntelligence/valuation/postgresGenuineDispatchBoundPickPav';
+import { createAflTradeAdmittedPlayerFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
 import { createAflTradeGenuineDispatchBoundGovernedPickExecutor } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationModelPair';
 import {
   createAflTradePrivateValuationModelOperation,
@@ -65,6 +66,51 @@ function executionInput() {
 }
 
 describe('genuine dispatch-bound pick-PAV runner', () => {
+  it('rejects an admitted-player output without independently authenticated HPN ancestry', async () => {
+    const { input } = executionInput();
+    const factual = createAflTradeAdmittedPlayerFactualOutput({
+      requestId: input.exactInput.requestId,
+      valuationScopeKey: input.exactInput.scopeKey,
+      admittedPlayerDataset: {
+        datasetId: input.operation.content.player.datasetId,
+        admissionId: input.operation.content.player.datasetAdmissionId,
+      },
+      sourceCaptures: [
+        {
+          captureId: `source-capture:${sha('a')}`,
+          sourceSnapshotId: `source-snapshot:${sha('a')}`,
+          consumedFieldSetId: `consumed-field-set:${sha('a')}`,
+          consumedFieldSetSha256: sha('a'),
+        },
+      ],
+      spellMetricBatches: [
+        { batchId: `acquisition-spell-metric-batch:${sha('b')}`, batchSha256: sha('b') },
+      ],
+      candidate: {
+        candidateId: `factual-release-candidate:${sha('c')}`,
+        candidateSha256: sha('c'),
+        memberSetSha256: sha('1'),
+      },
+      factualRelease: { releaseId: `outcome-release:${sha('d')}`, releaseSha256: sha('d') },
+      preparedAt: '2026-08-23T00:00:00.000Z',
+    });
+    const client: AflOutcomeSqlClient = {
+      transaction: async (work) => work(client),
+      query: async <Row>(sql: string) => ({
+        rows: (sql.includes('SELECT factual.output_json')
+          ? [{ output_json: factual }]
+          : [{ binding_json: null }]) as Row[],
+        rowCount: 1,
+      }),
+    };
+    await expect(
+      new PostgresGenuineDispatchBoundPickPavMaterializer(client).materialize({
+        ...input,
+        exactInput: { ...input.exactInput, factualOutputId: factual.outputId },
+      })
+    ).rejects.toThrow('Current admitted-player HPN factual binding is unavailable.');
+  });
+
   it('fails closed before release lookup when the exact request binding is absent', async () => {
     const { input } = executionInput();
     const queries: string[] = [];

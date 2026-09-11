@@ -65,6 +65,70 @@ afterEach(async () => {
 });
 
 describe('local AFL trade conditional object store', () => {
+  it('refuses configured raw-object overflow before publishing any envelope', async () => {
+    const root = await temporaryRoot();
+    const input = request();
+    const store = createLocalAflTradeFileConditionalObjectStore({
+      rootDirectory: root,
+      maximumObjectBytes: input.bytes.byteLength - 1,
+    });
+    await expect(store.createIfAbsent(input)).rejects.toMatchObject({ code: 'OBJECT_TOO_LARGE' });
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('supports an exact configured raw bound while refusing a smaller reader bound', async () => {
+    const root = await temporaryRoot();
+    const input = request();
+    const writer = createLocalAflTradeFileConditionalObjectStore({
+      rootDirectory: root,
+      maximumObjectBytes: input.bytes.byteLength,
+    });
+    const identity = await writer.createIfAbsent(input);
+    await expect(writer.headExact({ objectKey: input.objectKey })).resolves.toEqual(identity);
+    const loaded = await writer.readExactBounded({
+      objectKey: input.objectKey,
+      versionId: identity.versionId,
+      eTag: identity.eTag,
+      expectedByteLength: input.bytes.byteLength,
+      expectedMediaType: input.mediaType,
+      expectedChecksumSha256: input.checksumSha256,
+      expectedMetadata: input.metadata,
+      maximumBytes: input.bytes.byteLength,
+    });
+    expect([...loaded.bytes]).toEqual([...input.bytes]);
+    await expect(writer.createIfAbsent(input)).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
+    const reader = createLocalAflTradeFileConditionalObjectStore({
+      rootDirectory: root,
+      maximumObjectBytes: input.bytes.byteLength - 1,
+    });
+    await expect(reader.headExact({ objectKey: input.objectKey })).rejects.toMatchObject({
+      code: 'OBJECT_TOO_LARGE',
+    });
+  });
+
+  it('refuses envelope overhead exceeding the configured allowance before publication', async () => {
+    const root = await temporaryRoot();
+    const input = { ...request(), mediaType: 'x'.repeat(1024 * 1024 + 1) };
+    const store = createLocalAflTradeFileConditionalObjectStore({
+      rootDirectory: root,
+      maximumObjectBytes: input.bytes.byteLength,
+    });
+    await expect(store.createIfAbsent(input).then(() => undefined)).rejects.toMatchObject({
+      code: 'OBJECT_TOO_LARGE',
+    });
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER])(
+    'rejects an invalid or overflowing configured raw bound %s',
+    async (maximumObjectBytes) => {
+      const root = await temporaryRoot();
+      expect(() =>
+        createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root, maximumObjectBytes })
+      ).toThrow(AflTradeConditionalObjectStoreError);
+    }
+  );
+
   it('persists one immutable object for exact bounded reads across store instances', async () => {
     const root = await temporaryRoot();
     const input = request();

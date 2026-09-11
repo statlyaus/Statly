@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
+  aflTradePlayerPavObservationSetSchema,
+  createAflTradePlayerPavObservation,
+  createAflTradePlayerPavObservationSet,
   createAflTradePlayerPavPolicy,
   type AflTradePlayerPavObservation,
 } from '@/server/aflTradeIntelligence/modeling/playerPavObservationContracts';
@@ -144,6 +147,119 @@ function fixture() {
 }
 
 describe('player-PAV observation materialization', () => {
+  it('materializes explicitly retrospective historical spells without backdating their recording', () => {
+    const { predictions, calculations } = fixture();
+    const request = {
+      environment: 'test_fixture' as const,
+      competition: 'AFLM' as const,
+      createdAt: '2026-08-11T00:00:00.000Z',
+      knowledgeCutoffAt: '2026-08-10T23:59:59.999Z',
+      releaseId,
+      policy: createAflTradePlayerPavPolicy({
+        ...policy().content,
+        schemaVersion: 'afl-trade-player-pav-policy/v2',
+        knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation',
+      }),
+      predictions: predictions.map((row) => ({
+        ...row,
+        acquisitionSpell: { ...row.acquisitionSpell, recordedAt: '2026-08-10T00:00:00.000Z' },
+      })),
+      calculations,
+    };
+    const result = materializeAflTradePlayerPavObservationSet(request);
+    expect(result.content.schemaVersion).toBe('afl-trade-player-pav-observation-set/v2');
+    expect(result.content.observations[0]).toMatchObject({
+      predictionCutoffAt: '2000-12-31T23:59:59.999Z',
+      acquisitionSpell: { recordedAt: '2026-08-10T00:00:00.000Z' },
+      knowledgeBinding: {
+        policy: 'retrospective_as_recorded_by_dataset_creation',
+        knowledgeCutoffAt: request.knowledgeCutoffAt,
+      },
+      outcome: { state: 'mature_observed', contribution: 6 },
+    });
+    expect(materializeAflTradePlayerPavObservationSet(request)).toEqual(result);
+    expect(() =>
+      materializeAflTradePlayerPavObservationSet({ ...request, policy: policy() })
+    ).toThrow(/release membership/i);
+  });
+
+  it.each([
+    [
+      'future spell recording',
+      (request: ReturnType<typeof retrospectiveRequest>) => {
+        request.predictions[0]!.acquisitionSpell.recordedAt = '2026-08-11T00:00:00.000Z';
+      },
+    ],
+    [
+      'future knowledge cutoff',
+      (request: ReturnType<typeof retrospectiveRequest>) => {
+        request.knowledgeCutoffAt = '2026-08-12T00:00:00.000Z';
+      },
+    ],
+    [
+      'changed policy content address',
+      (request: ReturnType<typeof retrospectiveRequest>) => {
+        request.policy.content.fixedHorizonSeasons = 2;
+      },
+    ],
+  ] as const)('rejects %s for retrospective materialization', (_label, change) => {
+    const request = retrospectiveRequest();
+    change(request);
+    expect(() => materializeAflTradePlayerPavObservationSet(request)).toThrow();
+  });
+
+  it.each([
+    [
+      'v1 set',
+      (content: ReturnType<typeof materializeAflTradePlayerPavObservationSet>['content']) => {
+        content.schemaVersion = 'afl-trade-player-pav-observation-set/v1';
+      },
+    ],
+    [
+      'missing set knowledge policy',
+      (content: ReturnType<typeof materializeAflTradePlayerPavObservationSet>['content']) => {
+        delete content.knowledgePolicy;
+      },
+    ],
+    [
+      'mixed row cutoff',
+      (content: ReturnType<typeof materializeAflTradePlayerPavObservationSet>['content']) => {
+        content.observations[0]!.knowledgeBinding!.knowledgeCutoffAt = '2026-08-10T12:00:00.000Z';
+      },
+    ],
+    [
+      'missing row binding',
+      (content: ReturnType<typeof materializeAflTradePlayerPavObservationSet>['content']) => {
+        delete content.observations[0]!.knowledgeBinding;
+      },
+    ],
+  ] as const)('rejects retained retrospective %s substitution', (_label, change) => {
+    const set = materializeAflTradePlayerPavObservationSet(retrospectiveRequest());
+    change(set.content);
+    expect(aflTradePlayerPavObservationSetSchema.safeParse(set).success).toBe(false);
+    expect(() =>
+      createAflTradePlayerPavObservationSet({
+        ...set.content,
+        observations: set.content.observations.map(createAflTradePlayerPavObservation),
+      })
+    ).toThrow();
+  });
+
+  it('still purges retrospective labels across partition prediction cutoffs', () => {
+    const set = materializeAflTradePlayerPavObservationSet(retrospectiveRequest());
+    const observations = set.content.observations.map((row, index) =>
+      index === 0
+        ? createAflTradePlayerPavObservation({
+            ...row,
+            outcomeObservedAt: '2004-12-31T23:59:59.999Z',
+          })
+        : row
+    );
+    expect(() => createAflTradePlayerPavObservationSet({ ...set.content, observations })).toThrow(
+      /label-purged/i
+    );
+  });
+
   it('derives exact spell-year outcomes, preserving feature spells and departure zero', () => {
     const { predictions, calculations } = fixture();
     const result = materializeAflTradePlayerPavObservationSet({
@@ -191,3 +307,24 @@ describe('player-PAV observation materialization', () => {
     ).toThrow(/release membership/i);
   });
 });
+
+function retrospectiveRequest() {
+  const { predictions, calculations } = fixture();
+  return {
+    environment: 'test_fixture' as const,
+    competition: 'AFLM' as const,
+    createdAt: '2026-08-11T00:00:00.000Z',
+    knowledgeCutoffAt: '2026-08-10T23:59:59.999Z',
+    releaseId,
+    policy: createAflTradePlayerPavPolicy({
+      ...policy().content,
+      schemaVersion: 'afl-trade-player-pav-policy/v2',
+      knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation',
+    }),
+    predictions: predictions.map((row) => ({
+      ...row,
+      acquisitionSpell: { ...row.acquisitionSpell, recordedAt: '2026-08-10T00:00:00.000Z' },
+    })),
+    calculations,
+  };
+}

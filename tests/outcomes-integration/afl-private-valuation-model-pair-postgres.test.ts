@@ -16,6 +16,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { aflTradeModelRunManifestV3Schema } from '@/server/aflTradeIntelligence/artifacts/modelRunManifest';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
+import { createLocalAflTradePrivateValuationRuntime } from '@/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 import {
   AFL_TRADE_HPN_PAV_FINALIZED_CALCULATION_SCHEMA_VERSION,
   aflTradeFinalizedHpnPavCalculationSchema,
@@ -40,11 +41,16 @@ import {
 import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
 import { composePostgresAflTradeCurrentValuationModelEvidenceDispatch } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationModelEvidencePreparation';
 import { AFL_TRADE_CURRENT_VALUATION_EVIDENCE_ORCHESTRATION_LIMITATION } from '@/server/aflTradeIntelligence/valuation/currentValuationEvidenceOrchestration';
-import { AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_LIMITATION } from '@/server/aflTradeIntelligence/valuation/currentValuationRefresh';
+import { createAflTradeCurrentValuationRefresh } from '@/server/aflTradeIntelligence/valuation/currentValuationRefresh';
+import { aflTradeCurrentValuationModelEvidenceRequestSchema } from '@/server/aflTradeIntelligence/valuation/currentValuationModelEvidence';
+import { PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationEvidenceOrchestration';
+import { createAflTradePrivateRecalculationCoordinator } from '@/server/aflTradeIntelligence/valuation/privateRecalculationCoordinator';
+import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import { createAflTradePrivateCurrentValuationCohortPreparationOperationId } from '@/server/aflTradeIntelligence/valuation/currentValuationCohortPreparation';
 import {
   createPostgresAflTradePrivateCurrentValuationCohortAuthorityCapture,
   createPostgresAflTradePrivateCurrentValuationCohortCoordinator,
+  type AflTradePrivateCurrentValuationInputBundleSelector,
 } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortPreparation';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
 import { createPostgresGovernedPrivateEvaluationWorkspace } from '@/server/aflTradeIntelligence/valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
@@ -54,6 +60,11 @@ import { createGovernedValuationComponentRunManifest } from '@/server/aflTradeIn
 import { createGovernedPrivateEvaluationInputTrace } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationInputTrace';
 import { createGovernedPrivateEvaluationMaterializationManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationMaterializationManifest';
 import { createAflTradeValuationCalculationInputPackage } from '@/server/aflTradeIntelligence/valuation/valuationCalculationInputPackage';
+import {
+  createPostgresAflTradeRetainedValuationInputBundleConstructor,
+  createPostgresAflTradeRetainedValuationInputBundleSelector,
+} from '@/server/aflTradeIntelligence/valuation/retainedValuationInputBundleConstruction';
+import { createAflTradeValuationInputBundleConstructionSpecification } from '@/server/aflTradeIntelligence/valuation/valuationInputBundleConstructionSpecification';
 import {
   createGovernedValuationModelQualification,
   createGovernedValuationModelQualificationGateRecords,
@@ -305,7 +316,7 @@ beforeAll(async () => {
     CREATE FUNCTION outcome_private_prepared_v3_fixture_bundle_is_current(target_id text)
     RETURNS boolean LANGUAGE sql STABLE AS $$
       SELECT coalesce((SELECT
-        bundle.evidence_scope_key='reviewed-five-season-and-current-evidence'
+        bundle.evidence_scope_key='afl-player-match-reviewed-2021-2026'
         AND bundle.bundle_json#>>'{content,fixtureCurrent}'='true'
         FROM outcome_private_reviewed_evidence_bundle bundle
         WHERE bundle.evidence_bundle_id=target_id),false)
@@ -349,7 +360,7 @@ afterAll(async () => {
 });
 
 describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
-  it('reconstructs after each retained component, pair acceptance, and qualification', async () => {
+  it('reconstructs retained stages and requires new dispatch custody after unchanged factual refresh', async () => {
     const leaseToken = digest('restart-proof-lease-token');
     const requestId = addressed('private-valuation-dispatch', 'request');
     const claimId = addressed('private-valuation-dispatch-claim', 'claim');
@@ -378,7 +389,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     });
     const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
       rootDirectory: artifactRootDirectory,
-      repositoryId: 'issue-577-private-prepared-v3-integration',
+      repositoryId: 'governed-private-evaluation',
       maximumObjectBytes: 16 * 1024 * 1024,
     });
     const retainPhysical = async (document: unknown, createdAt: string) => {
@@ -1202,64 +1213,17 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       reviewSets: [{ reviewSetId: digest('composed-current-review-set') }],
       sourceRightsEvidenceRefs: [{ artifactId: addressed('artifact', 'composed-current-rights') }],
     } as const;
-    const privateAuthority = {
+    const reviewedAuthority = {
       valuationScopeKey: operation.content.scopeKey,
-      candidateId: addressed('private-factual-candidate', 'composed-current-candidate'),
-      evidenceScopeKey: 'reviewed-five-season-and-current-evidence',
+      evidenceScopeKey: 'afl-player-match-reviewed-2021-2026',
       evidenceBundleId: addressed('private-reviewed-evidence-bundle', 'composed-current-bundle'),
       reviewDecisionId: addressed(
         'private-reviewed-evidence-evaluation-decision',
         'composed-current-review'
       ),
-      normalizedReconciledCustodySha256: digest(canonicalizeAflTradeJson(privateFactualCustody)),
-      revision: 1,
     } as const;
-    const factualRefreshOperationId = addressed(
-      'current-valuation-factual-refresh-operation',
-      'composed-current-factual-refresh'
-    );
     const factualStableOperationKey = 'composed-current-factual-stable-key';
     const dispatchRequest = retainedDispatchRequest;
-    const factualRefresh = {
-      schemaVersion: 'afl-current-valuation-refresh-result-v2',
-      operationId: factualRefreshOperationId,
-      scopeKey: operation.content.scopeKey,
-      trigger: dispatchRequest.trigger,
-      stableOperationKey: factualStableOperationKey,
-      state: 'factual_refresh_complete',
-      factualStage: 'advanced',
-      privateFactualAuthority: privateAuthority,
-      capturedAt,
-      completedAt: capturedAt,
-      executionLocation: 'local',
-      visibility: 'private',
-      environment: 'non_production',
-      publicationEligible: false,
-      publicationProhibited: true,
-      limitation: AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_LIMITATION,
-    } as const;
-    const orchestrationOperationId = addressed(
-      'current-valuation-evidence-orchestration-operation',
-      'composed-current-orchestration'
-    );
-    const orchestrationResult = {
-      schemaVersion: 'afl-current-valuation-evidence-orchestration-result-v1',
-      operationId: orchestrationOperationId,
-      scopeKey: operation.content.scopeKey,
-      trigger: dispatchRequest.trigger,
-      stableOperationKey: requestId,
-      state: 'complete',
-      stage: 'private_factual_authority',
-      currentValuationRefresh: factualRefresh,
-      capturedAt,
-      completedAt: capturedAt,
-      executionLocation: 'local',
-      visibility: 'private',
-      environment: 'non_production',
-      publicationEligible: false,
-      publicationProhibited: true,
-      limitation: AFL_TRADE_CURRENT_VALUATION_EVIDENCE_ORCHESTRATION_LIMITATION,
-    } as const;
     await mutateFixture(
       `INSERT INTO outcome_provider_normalization_run
         (normalization_run_id,capture_id,field_map_id,decoder_version,normalizer_version,
@@ -1281,39 +1245,16 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       ]
     );
     await mutateFixture(
-      `INSERT INTO outcome_private_factual_candidate
-        (candidate_id,valuation_scope_key,evidence_scope_key,evidence_bundle_id,
-         review_decision_id,normalized_reconciled_custody_sha256,candidate_json,composed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)`,
-      [
-        privateAuthority.candidateId,
-        privateAuthority.valuationScopeKey,
-        privateAuthority.evidenceScopeKey,
-        privateAuthority.evidenceBundleId,
-        privateAuthority.reviewDecisionId,
-        privateAuthority.normalizedReconciledCustodySha256,
-        JSON.stringify({
-          content: {
-            reviewedEvidenceContentSha256: privateAuthority.evidenceBundleId.slice(
-              'private-reviewed-evidence-bundle:'.length
-            ),
-            normalizedReconciledCustody: privateFactualCustody,
-          },
-        }),
-        capturedAt,
-      ]
-    );
-    await mutateFixture(
       `INSERT INTO outcome_private_reviewed_evidence_bundle
         (evidence_bundle_id,evidence_scope_key,candidate_count,decision_count,
          source_capture_count,source_rights_count,created_at,bundle_sha256,
          bundle_content_canonical_json,bundle_json)
        VALUES ($1,$2,1,1,1,1,$3,$4,'{}',$5::jsonb)`,
       [
-        privateAuthority.evidenceBundleId,
-        privateAuthority.evidenceScopeKey,
+        reviewedAuthority.evidenceBundleId,
+        reviewedAuthority.evidenceScopeKey,
         capturedAt,
-        privateAuthority.evidenceBundleId.slice('private-reviewed-evidence-bundle:'.length),
+        reviewedAuthority.evidenceBundleId.slice('private-reviewed-evidence-bundle:'.length),
         JSON.stringify({
           content: {
             fixtureCurrent: true,
@@ -1331,11 +1272,11 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
          decision_json)
        VALUES ($1,$2,$3,'authorized',1,'fixture-reviewer',$4,$5,'{}','{}'::jsonb)`,
       [
-        privateAuthority.reviewDecisionId,
-        privateAuthority.valuationScopeKey,
-        privateAuthority.evidenceBundleId,
+        reviewedAuthority.reviewDecisionId,
+        reviewedAuthority.valuationScopeKey,
+        reviewedAuthority.evidenceBundleId,
         capturedAt,
-        privateAuthority.reviewDecisionId.slice(
+        reviewedAuthority.reviewDecisionId.slice(
           'private-reviewed-evidence-evaluation-decision:'.length
         ),
       ]
@@ -1346,40 +1287,75 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
          evidence_bundle_id,status,updated_at)
        VALUES ($1,$2,1,$3,$4,'authorized',$5)`,
       [
-        privateAuthority.valuationScopeKey,
-        privateAuthority.evidenceScopeKey,
-        privateAuthority.reviewDecisionId,
-        privateAuthority.evidenceBundleId,
+        reviewedAuthority.valuationScopeKey,
+        reviewedAuthority.evidenceScopeKey,
+        reviewedAuthority.reviewDecisionId,
+        reviewedAuthority.evidenceBundleId,
         capturedAt,
       ]
     );
-    await mutateFixture(
-      `INSERT INTO outcome_current_private_factual_authority
-        (valuation_scope_key,candidate_id,revision,advanced_at)
-       VALUES ($1,$2,$3,$4)`,
-      [
-        operation.content.scopeKey,
-        privateAuthority.candidateId,
-        privateAuthority.revision,
-        capturedAt,
-      ]
+    const factualRequest = {
+      scopeKey: operation.content.scopeKey,
+      trigger: dispatchRequest.trigger,
+      stableOperationKey: factualStableOperationKey,
+    };
+    const factualRefresh = await createAflTradeCurrentValuationRefresh({ client }).refreshCurrent(
+      factualRequest
     );
-    await mutateFixture(
-      `INSERT INTO outcome_current_valuation_factual_refresh_operation
-        (operation_id,scope_key,trigger_kind,stable_operation_key,state,factual_stage,
-         candidate_id,private_factual_revision,captured_at,completed_at,operation_json,result_json)
-       VALUES ($1,$2,$3,$4,'factual_refresh_complete','advanced',$5,$6,$7,$7,'{}'::jsonb,$8::jsonb)`,
-      [
-        factualRefreshOperationId,
-        operation.content.scopeKey,
-        dispatchRequest.trigger,
-        factualStableOperationKey,
-        privateAuthority.candidateId,
-        privateAuthority.revision,
-        capturedAt,
-        JSON.stringify(factualRefresh),
-      ]
+    expect(factualRefresh).toMatchObject({
+      state: 'factual_refresh_complete',
+      factualStage: 'advanced',
+      privateFactualAuthority: { ...reviewedAuthority, revision: 1 },
+    });
+    if (factualRefresh.state !== 'factual_refresh_complete') {
+      throw new Error('The private restart tracer requires completed factual authority.');
+    }
+    const privateAuthority = factualRefresh.privateFactualAuthority;
+    const factualRefreshOperationId = factualRefresh.operationId;
+    const loadFactualRowCounts = () =>
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_private_factual_candidate
+             WHERE valuation_scope_key=$1) AS candidate_count,
+           (SELECT count(*)::int FROM outcome_current_valuation_factual_refresh_operation
+             WHERE scope_key=$1) AS operation_count,
+           (SELECT count(*)::int FROM outcome_current_valuation_factual_refresh_stage_receipt
+             WHERE scope_key=$1) AS receipt_count,
+           (SELECT revision FROM outcome_current_private_factual_authority
+             WHERE valuation_scope_key=$1) AS head_revision`,
+        [operation.content.scopeKey]
+      );
+    const factualCountsAfterRefresh = await loadFactualRowCounts();
+    expect(factualCountsAfterRefresh.rows).toEqual([
+      { candidate_count: 1, operation_count: 1, receipt_count: 2, head_revision: 1 },
+    ]);
+    await expect(
+      createAflTradeCurrentValuationRefresh({ client }).refreshCurrent(factualRequest)
+    ).resolves.toEqual(factualRefresh);
+    expect((await loadFactualRowCounts()).rows).toEqual(factualCountsAfterRefresh.rows);
+
+    const orchestrationOperationId = addressed(
+      'current-valuation-evidence-orchestration-operation',
+      'composed-current-orchestration'
     );
+    const orchestrationResult = {
+      schemaVersion: 'afl-current-valuation-evidence-orchestration-result-v1',
+      operationId: orchestrationOperationId,
+      scopeKey: operation.content.scopeKey,
+      trigger: dispatchRequest.trigger,
+      stableOperationKey: requestId,
+      state: 'complete',
+      stage: 'private_factual_authority',
+      currentValuationRefresh: factualRefresh,
+      capturedAt: factualRefresh.completedAt,
+      completedAt: factualRefresh.completedAt,
+      executionLocation: 'local',
+      visibility: 'private',
+      environment: 'non_production',
+      publicationEligible: false,
+      publicationProhibited: true,
+      limitation: AFL_TRADE_CURRENT_VALUATION_EVIDENCE_ORCHESTRATION_LIMITATION,
+    } as const;
     await mutateFixture(
       `INSERT INTO outcome_current_valuation_evidence_orchestration_operation
         (operation_id,scope_key,trigger_kind,stable_operation_key,state,stage,
@@ -1391,7 +1367,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         dispatchRequest.trigger,
         requestId,
         factualRefreshOperationId,
-        capturedAt,
+        factualRefresh.completedAt,
         JSON.stringify(orchestrationResult),
       ]
     );
@@ -1564,25 +1540,111 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       player: genuinePlayerAdapterCalls,
       pick: genuinePickAdapterCalls,
     };
-    const currentCoordinator = composePostgresAflTradeCurrentValuationModelEvidenceDispatch({
-      client,
-      dispatch: { request: dispatchRequest, claim },
-      modelPair: {
-        hpnPreparation: { prepare: async () => prepared },
-        targets: modelPairTargets,
-        playerExecutor: genuinePlayerExecutor,
-        pickExecutor: genuinePickExecutor,
-        qualificationRegistrar: {
-          register: async () => Promise.reject(new Error('must replay qualification')),
+    const createCurrentCoordinator = (currentClaim: typeof claim) =>
+      composePostgresAflTradeCurrentValuationModelEvidenceDispatch({
+        client,
+        dispatch: { request: dispatchRequest, claim: currentClaim },
+        modelPair: {
+          hpnPreparation: { prepare: async () => prepared },
+          targets: modelPairTargets,
+          playerExecutor: genuinePlayerExecutor,
+          pickExecutor: genuinePickExecutor,
+          qualificationRegistrar: {
+            register: async () => Promise.reject(new Error('must replay qualification')),
+          },
         },
-      },
-      clock: { now: () => capturedAt },
-    });
+        clock: { now: () => factualRefresh.completedAt },
+      });
+    const currentCoordinator = createCurrentCoordinator(claim);
     const currentRequest = {
       scopeKey: operation.content.scopeKey,
       factualOperationId: factualRefreshOperationId,
       privateFactualAuthority: privateAuthority,
     };
+    // This fixture tracer exercises durable stage continuation, not genuine-data acceptance.
+    const retainedEvidence = {
+      refreshCurrent: async (request: typeof factualRequest) => {
+        const retained = await new PostgresAflTradeCurrentValuationEvidenceOrchestrationRepository(
+          client
+        ).loadOperation(request);
+        const result = retained.terminalResult;
+        if (
+          result?.state !== 'complete' ||
+          result.currentValuationRefresh.state !== 'factual_refresh_complete'
+        ) {
+          throw new Error('Restart tracer requires retained factual completion.');
+        }
+        return { ...result, currentValuationRefresh: result.currentValuationRefresh };
+      },
+    };
+    const modelEvidenceForCoordinator = {
+      refresh: async ({
+        dispatch,
+        factual,
+      }: Parameters<
+        Parameters<
+          typeof createAflTradePrivateRecalculationCoordinator
+        >[0]['modelEvidence']['refresh']
+      >[0]) => {
+        const request = aflTradeCurrentValuationModelEvidenceRequestSchema.parse({
+          scopeKey: factual.scopeKey,
+          factualOperationId: factual.operationId,
+          privateFactualAuthority: factual.privateFactualAuthority,
+        });
+        return createCurrentCoordinator(dispatch.claim).refresh(request);
+      },
+    };
+    await expect(
+      outcomesPool.query(
+        `SELECT count(*)::int AS evidence_count
+           FROM outcome_current_valuation_model_evidence_operation
+          WHERE factual_operation_id=$1`,
+        [factualRefreshOperationId]
+      )
+    ).resolves.toMatchObject({ rows: [{ evidence_count: 0 }] });
+    const interruptedRecalculation = createAflTradePrivateRecalculationCoordinator({
+      evidence: retainedEvidence,
+      modelEvidence: modelEvidenceForCoordinator,
+      prepared: {
+        prepare: async () => {
+          throw new Error('simulated restart before prepared cohort');
+        },
+      },
+      batch: {
+        runPrivate: async () => {
+          throw new Error('batch must not run before prepared cohort');
+        },
+      },
+    });
+    await expect(interruptedRecalculation.run({ request: dispatchRequest, claim })).rejects.toThrow(
+      'simulated restart before prepared cohort'
+    );
+    // Read without refreshing: a direct refresh here could repair a skipped model stage.
+    const modelEvidenceAfterInterruption = await outcomesPool.query(
+      `SELECT scope_key,result_state,result_json
+         FROM outcome_current_valuation_model_evidence_operation
+        WHERE factual_operation_id=$1`,
+      [factualRefreshOperationId]
+    );
+    expect(modelEvidenceAfterInterruption.rows).toEqual([
+      {
+        scope_key: operation.content.scopeKey,
+        result_state: 'qualified',
+        result_json: expect.objectContaining({
+          state: 'qualified',
+          scopeKey: operation.content.scopeKey,
+          factualOperationId: factualRefreshOperationId,
+          privateFactualAuthority: privateAuthority,
+          qualificationId,
+          playerRunId,
+          pickRunId,
+          qualificationWorkId,
+          playerGate3DecisionId,
+          pickGate3DecisionId,
+        }),
+      },
+    ]);
+    expect((await loadFactualRowCounts()).rows).toEqual(factualCountsAfterRefresh.rows);
     const retainedCurrent = await currentCoordinator.refresh(currentRequest);
     await expect(currentCoordinator.refresh(currentRequest)).resolves.toEqual(retainedCurrent);
     expect(retainedCurrent).toMatchObject({
@@ -1594,6 +1656,9 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       playerGate3DecisionId,
       pickGate3DecisionId,
     });
+    if (retainedCurrent.state !== 'qualified') {
+      throw new Error('Retained bundle selector requires qualified current model evidence.');
+    }
     expect(genuinePlayerAdapterCalls).toBe(adapterCallsBeforeCurrentReplay.player);
     expect(genuinePickAdapterCalls).toBe(adapterCallsBeforeCurrentReplay.pick);
     const ignoredFailedEvidenceOperationId = addressed(
@@ -1647,78 +1712,80 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       bundleParent('practical-equivalence-definition'),
       bundleParent('explanation-policy'),
     ] as const;
-    const valuationInputBundleContent = {
-      schemaVersion: 'afl-trade-valuation-input-bundle/v1' as const,
-      publicAssetBoundary: 'source_native_afl_assets_no_user_or_fantasy_ownership' as const,
-      environment: 'non_production' as const,
+    const constructionSpecification = createAflTradeValuationInputBundleConstructionSpecification({
       scopeKey: operation.content.scopeKey,
       valueUnitId: 'contribution-above-replacement-v1',
       createdAt: '2026-08-20T08:30:00.000Z',
-      components: [
-        {
-          role: 'player_contribution_and_availability' as const,
-          modelKind: 'player_contribution_and_availability' as const,
-          protocolId: operation.content.player.protocolId,
-          runId: playerRunId,
-          datasetId: operation.content.player.datasetId,
-          gate3DecisionId: playerGate3DecisionId,
-        },
-        {
-          role: 'draft_pick_and_future_pick_distribution' as const,
-          modelKind: 'draft_pick_and_future_pick_distribution' as const,
-          protocolId: operation.content.pick.protocolId,
-          runId: pickRunId,
-          datasetId: operation.content.pick.datasetId,
-          gate3DecisionId: pickGate3DecisionId,
-        },
-      ],
-      viewPolicy: {
-        atTrade: {
-          modelVintage: 'historical_restatement' as const,
-          knowledgeCutoff: 'transaction_effective_at_exclusive' as const,
-        },
-        current: {
-          modelVintage: 'current' as const,
-          effectiveAt: '2026-08-21T07:00:00.000Z',
-          knowledgeCutoffAt: '2026-08-21T07:00:00.000Z',
-          valuationAsOf: '2026-08-21T08:00:00.000Z',
-        },
-        currentViewsShareOneTemporalContext: true as const,
+      currentView: {
+        effectiveAt: '2026-08-21T07:00:00.000Z',
+        knowledgeCutoffAt: '2026-08-21T07:00:00.000Z',
+        valuationAsOf: '2026-08-21T08:00:00.000Z',
       },
-      packagePolicy: {
-        calculationUnit: 'complete_multi_party_trade' as const,
-        attribution: 'lineage_frontier_exactly_once' as const,
-        aggregation: 'joint_simulation_not_independent_point_sum' as const,
-        currentOutcomeIdentity: 'realized_club_value_plus_remaining_asset_value' as const,
-        unresolvedAssetTreatment: 'exclude_with_explicit_reason_no_fallback_value' as const,
-        listSpotPolicyArtifact: bundleParents[0].reference,
-        scarcityPolicyArtifact: bundleParents[1].reference,
-        roleCongestionPolicyArtifact: bundleParents[2].reference,
+      policies: {
+        listSpot: bundleParents[0].reference,
+        scarcity: bundleParents[1].reference,
+        roleCongestion: bundleParents[2].reference,
+        lowReturn: bundleParents[3].reference,
+        eliteOutcome: bundleParents[4].reference,
+        practicalEquivalence: bundleParents[5].reference,
+        explanation: bundleParents[6].reference,
       },
       simulation: {
-        mode: 'deterministic_counter_sample' as const,
         draws: 10_000,
         seed: 'private-prepared-v3-integration',
-        samplingAlgorithmVersion: 'counter_sha256_rejection_v1' as const,
-        centralIntervalLevel: 0.8 as const,
-        downsideQuantile: 0.1 as const,
-        upsideQuantile: 0.9 as const,
-        lowReturnDefinitionArtifact: bundleParents[3].reference,
-        eliteOutcomeDefinitionArtifact: bundleParents[4].reference,
-        practicalEquivalenceDefinitionArtifact: bundleParents[5].reference,
+        samplingAlgorithmVersion: 'counter_sha256_rejection_v1',
       },
-      explanationPolicyArtifact: bundleParents[6].reference,
-      publicationEligible: false as const,
-      limitation:
-        'Approved calculation inputs only; not execution evidence, numerical validity, publication approval, or activation authority.' as const,
-    };
-    const valuationInputBundle = {
-      valuationInputBundleId: createAflTradeContentAddress(
-        'valuation-input-bundle',
-        valuationInputBundleContent
-      ),
-      content: valuationInputBundleContent,
-    };
+    });
+    const constructionSpecificationArtifact = canonicalArtifact(
+      constructionSpecification,
+      constructionSpecification.content.createdAt
+    );
+    for (const retained of [...bundleParents, constructionSpecificationArtifact]) {
+      await staging.retainArtifact(retained);
+    }
+    const constructRetainedBundle = createPostgresAflTradeRetainedValuationInputBundleConstructor({
+      client,
+      artifactRepository,
+      maximumArtifactBytes: 16 * 1024 * 1024,
+    });
+    const constructedBundles = await Promise.all([
+      constructRetainedBundle({
+        modelEvidenceOperationId: retainedCurrent.operationId,
+        scopeKey: operation.content.scopeKey,
+        specificationArtifact: constructionSpecificationArtifact.reference,
+      }),
+      constructRetainedBundle({
+        modelEvidenceOperationId: retainedCurrent.operationId,
+        scopeKey: operation.content.scopeKey,
+        specificationArtifact: constructionSpecificationArtifact.reference,
+      }),
+    ]);
+    expect(constructedBundles[1]).toEqual(constructedBundles[0]);
+    expect(constructedBundles[0].valuationInputBundle.content.createdAt).not.toBe(
+      constructionSpecification.content.createdAt
+    );
+    const retainedConstruction = await outcomesPool.query<{ readonly count: string }>(
+      `SELECT count(*)::text AS count
+         FROM ${schemaName}.outcome_valuation_input_bundle_construction_operation
+        WHERE operation_id=$1`,
+      [constructedBundles[0].operationId]
+    );
+    expect(retainedConstruction.rows[0]?.count).toBe('1');
+    await expect(
+      outcomesPool.query(
+        `INSERT INTO ${schemaName}.outcome_valuation_input_bundle_construction_operation
+         SELECT operation_id,scope_key,
+                model_evidence_operation_id,specification_id,specification_json,specification_artifact_json,
+                factual_revision+1,model_revision,player_run_id,pick_run_id,constructed_at,
+                valuation_input_bundle_id,valuation_input_bundle_json,
+                valuation_input_bundle_artifact_json,result_json
+           FROM ${schemaName}.outcome_valuation_input_bundle_construction_operation
+          WHERE operation_id=$1`,
+        [constructedBundles[0].operationId]
+      )
+    ).rejects.toThrow('Valuation input bundle construction operation failed exact admission');
+    const valuationInputBundle = constructedBundles[0].valuationInputBundle;
+    const valuationInputBundleContent = valuationInputBundle.content;
     const valuationInputBundleArtifact = canonicalArtifact(
       valuationInputBundle,
       valuationInputBundleContent.createdAt
@@ -1734,8 +1801,9 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       await staging.retainArtifact(retained);
     }
 
-    const publicAuthorityBefore = await outcomesPool.query<{ snapshot: unknown }>(
-      `SELECT jsonb_build_object(
+    const loadPublicAuthority = () =>
+      outcomesPool.query<{ snapshot: unknown }>(
+        `SELECT jsonb_build_object(
         'activeReleases',coalesce((SELECT jsonb_agg(to_jsonb(active_release)
           ORDER BY active_release.scope_key) FROM outcome_active_release active_release),'[]'::jsonb),
         'currentModelPairs',coalesce((SELECT jsonb_agg(to_jsonb(model_pair)
@@ -1745,10 +1813,22 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         'activePublications',coalesce((SELECT jsonb_agg(to_jsonb(publication)
           ORDER BY publication.scope_key) FROM outcome_valuation_active_publication publication),'[]'::jsonb)
       ) AS snapshot`
-    );
+      );
+    const publicAuthorityBefore = await loadPublicAuthority();
 
-    let selectedValuationInputBundleId = valuationInputBundle.valuationInputBundleId;
-    const selectValuationInputBundleId = async () => selectedValuationInputBundleId;
+    const selectorConfiguration = {
+      specificationId: constructionSpecification.specificationId,
+      specificationArtifact: constructionSpecificationArtifact.reference,
+    };
+    const retainedBundleSelector =
+      createPostgresAflTradeRetainedValuationInputBundleSelector(selectorConfiguration);
+    let selectedBundleOverride: string | null = null;
+    const selectValuationInputBundleId: AflTradePrivateCurrentValuationInputBundleSelector = (
+      input
+    ) =>
+      selectedBundleOverride === null
+        ? retainedBundleSelector(input)
+        : Promise.resolve(selectedBundleOverride);
     let constructionEvidenceCalls = 0;
     const loadConstructionEvidence = async () => {
       constructionEvidenceCalls += 1;
@@ -1766,11 +1846,62 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       selectValuationInputBundleId,
       loadConstructionEvidence,
     });
+    const unavailableSelectors: AflTradePrivateCurrentValuationInputBundleSelector[] = [
+      createPostgresAflTradeRetainedValuationInputBundleSelector({
+        ...selectorConfiguration,
+        specificationId: addressed('valuation-input-bundle-construction-specification', 'absent'),
+      }),
+      createPostgresAflTradeRetainedValuationInputBundleSelector({
+        ...selectorConfiguration,
+        specificationArtifact: bundleParents[0].reference,
+      }),
+      ...[
+        { operationId: addressed('current-valuation-model-evidence-operation', 'absent') },
+        { scopeKey: 'afl-men:2025-trades' },
+        { modelRevision: retainedCurrent.modelRevision + 1 },
+        { playerRunId: addressed('model-run', 'substituted-player') },
+        { pickRunId: addressed('model-run', 'substituted-pick') },
+        {
+          privateFactualAuthority: {
+            ...retainedCurrent.privateFactualAuthority,
+            revision: retainedCurrent.privateFactualAuthority.revision + 1,
+          },
+        },
+      ].map(
+        (replacement): AflTradePrivateCurrentValuationInputBundleSelector =>
+          (input) =>
+            selectValuationInputBundleId({
+              ...input,
+              modelEvidence: { ...input.modelEvidence, ...replacement },
+            })
+      ),
+    ];
+    for (const unavailableSelector of unavailableSelectors) {
+      const captureUnavailable =
+        createPostgresAflTradePrivateCurrentValuationCohortAuthorityCapture({
+          client,
+          selectValuationInputBundleId: unavailableSelector,
+          loadConstructionEvidence,
+        });
+      await expect(captureUnavailable({ requestId, claim })).rejects.toThrow(
+        /exact retained valuation input bundle is unavailable/i
+      );
+    }
+    expect(constructionEvidenceCalls).toBe(0);
     const capturedContexts = await Promise.all([
       capturePrivate({ requestId, claim }),
       capturePrivate({ requestId, claim }),
     ]);
     expect(capturedContexts[1]).toEqual(capturedContexts[0]);
+    expect(constructionEvidenceCalls).toBe(1);
+    const reconstructedCapture =
+      createPostgresAflTradePrivateCurrentValuationCohortAuthorityCapture({
+        client,
+        selectValuationInputBundleId:
+          createPostgresAflTradeRetainedValuationInputBundleSelector(selectorConfiguration),
+        loadConstructionEvidence,
+      });
+    await expect(reconstructedCapture({ requestId, claim })).resolves.toEqual(capturedContexts[0]);
     expect(constructionEvidenceCalls).toBe(1);
 
     const crossScopeKey = 'afl-men:2025-trades';
@@ -1886,7 +2017,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     });
     const governedTrace = createGovernedPrivateEvaluationInputTrace({
       ...materialization.trace.content,
-      derivedAt: capturedAt,
+      derivedAt: captured.capturedAt,
       components: materialization.trace.content.components.map((component) => {
         const authority =
           component.role === 'player_contribution_and_availability'
@@ -1921,7 +2052,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     }
     const governedCalculationInput = createAflTradeValuationCalculationInputPackage({
       ...baseCalculationInput,
-      createdAt: capturedAt,
+      createdAt: captured.capturedAt,
       authority: {
         kind: 'authenticated_non_production',
         inputTraceId: governedTrace.inputTraceId,
@@ -1930,7 +2061,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     });
     const governedMaterializationManifest = createGovernedPrivateEvaluationMaterializationManifest({
       ...materialization.materializationManifest.content,
-      createdAt: capturedAt,
+      createdAt: captured.capturedAt,
       calculationInputPackageId: governedCalculationInput.calculationInputPackageId,
       calculationInputArtifact: createAflTradeCanonicalJsonArtifactRef(
         governedCalculationInput,
@@ -2333,10 +2464,52 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         WHERE valuation_scope_key=$1`,
       [privateAuthority.valuationScopeKey, privateAuthority.revision]
     );
-    const concurrentPrepared = await Promise.all([
-      privateCoordinator.prepare({ requestId, claim }),
-      privateCoordinator.prepare({ requestId, claim }),
+    const loadPreparedRowCounts = () =>
+      outcomesPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_current_valuation_cohort_operation_result result
+             JOIN outcome_current_valuation_cohort_operation operation
+               ON operation.operation_id=result.operation_id
+             WHERE operation.dispatch_request_id=$1) AS result_count,
+           (SELECT count(*)::int FROM outcome_current_prepared_valuation_input_set
+             WHERE scope_key=$2) AS head_count`,
+        [requestId, operation.content.scopeKey]
+      );
+    await expect(loadPreparedRowCounts()).resolves.toMatchObject({
+      rows: [{ result_count: 0, head_count: 0 }],
+    });
+    const concurrentPrepared: Awaited<ReturnType<typeof privateCoordinator.prepare>>[] = [];
+    const reconstructThroughPrepared = () =>
+      createAflTradePrivateRecalculationCoordinator({
+        evidence: retainedEvidence,
+        modelEvidence: modelEvidenceForCoordinator,
+        prepared: {
+          prepare: async ({ request, claim: currentClaim }) => {
+            const result = await privateCoordinator.prepare({
+              requestId: request.requestId,
+              claim: currentClaim,
+            });
+            concurrentPrepared.push(result);
+            return result;
+          },
+        },
+        batch: {
+          runPrivate: async () => {
+            throw new Error('simulated restart after prepared cohort');
+          },
+        },
+      });
+    await Promise.all([
+      expect(reconstructThroughPrepared().run({ request: dispatchRequest, claim })).rejects.toThrow(
+        'simulated restart after prepared cohort'
+      ),
+      expect(reconstructThroughPrepared().run({ request: dispatchRequest, claim })).rejects.toThrow(
+        'simulated restart after prepared cohort'
+      ),
     ]);
+    await expect(loadPreparedRowCounts()).resolves.toMatchObject({
+      rows: [{ result_count: 1, head_count: 1 }],
+    });
     expect(concurrentPrepared.map(({ state }) => state).sort()).toEqual([
       'advanced',
       'already_current',
@@ -2379,12 +2552,12 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       state: 'already_current',
       head: { revision: 1 },
     });
-    selectedValuationInputBundleId = `valuation-input-bundle:${'f'.repeat(64)}`;
+    selectedBundleOverride = `valuation-input-bundle:${'f'.repeat(64)}`;
     await expect(privateCoordinator.prepare({ requestId, claim })).rejects.toThrow(
       'Private cohort construction evidence does not match the selected valuation input bundle.'
     );
     expect(constructionEvidenceCalls).toBe(2);
-    selectedValuationInputBundleId = valuationInputBundle.valuationInputBundleId;
+    selectedBundleOverride = null;
     await expect(noChange.prepare({ requestId, claim })).resolves.toMatchObject({
       state: 'already_current',
       head: { revision: 1 },
@@ -2614,11 +2787,35 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       claimId: replacementClaimId,
       leaseToken: replacementLeaseToken,
     };
-    const activation = privateBatchRunner.runPrivate({
-      request: { requestId, scopeKey: operation.content.scopeKey },
+    const coordinatorBatchResults: Awaited<ReturnType<typeof privateBatchRunner.runPrivate>>[] = [];
+    const restartedRecalculation = createAflTradePrivateRecalculationCoordinator({
+      evidence: retainedEvidence,
+      modelEvidence: modelEvidenceForCoordinator,
+      prepared: {
+        prepare: async ({ request, claim: currentClaim }) => {
+          return privateCoordinator.prepare({ requestId: request.requestId, claim: currentClaim });
+        },
+      },
+      batch: {
+        runPrivate: async (input) => {
+          const result = await privateBatchRunner.runPrivate(input);
+          coordinatorBatchResults.push(result);
+          return result;
+        },
+      },
+    });
+    const activation = restartedRecalculation.run({
+      request: dispatchRequest,
       claim: replacementDispatchClaim,
     });
-    await readyStageEntered;
+    await Promise.race([
+      readyStageEntered,
+      activation.then(() => {
+        throw new Error(
+          'The reconstructed coordinator completed without entering the ready stage.'
+        );
+      }),
+    ]);
     try {
       await expect(
         outcomesPool.query(
@@ -2635,7 +2832,13 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     } finally {
       releaseReadyStage();
     }
-    const activatedBatch = await activation;
+    const coordinatorResult = await activation;
+    const activatedBatch = coordinatorBatchResults[0];
+    if (activatedBatch === undefined) {
+      throw new Error('The reconstructed coordinator did not reach the real private batch runner.');
+    }
+    expect(coordinatorResult).toEqual(activatedBatch);
+    expect((await loadFactualRowCounts()).rows).toEqual(factualCountsAfterRefresh.rows);
     if (activatedBatch.state === 'unexpected_failure') {
       throw new Error(JSON.stringify(activatedBatch.diagnostics));
     }
@@ -2738,12 +2941,77 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         WHERE claim_id=$1`,
       [replacementClaimId]
     );
-    const finalLeaseToken = digest('private-batch-final-replacement-lease');
-    const finalClaim = await outcomesPool.query<{ claim_id: string }>(
-      `SELECT claim_id FROM claim_outcome_private_valuation_dispatch($1,$2,300,$3)`,
-      ['system:private-batch-final-restart-tracer', digest(finalLeaseToken), requestId]
+    // Actual local-runtime entry over the same disposable database and exact artifact store.
+    // This extends the synthetic-authority restart tracer, not genuine-source acceptance.
+    const runtimeQueries: string[] = [];
+    const runtimePool = {
+      async query(statement: string, parameters?: readonly unknown[]) {
+        runtimeQueries.push(statement);
+        return outcomesPool.query(
+          statement,
+          parameters === undefined ? undefined : [...parameters]
+        );
+      },
+      async connect() {
+        const connection = await outcomesPool.connect();
+        return {
+          async query(statement: string, parameters?: readonly unknown[]) {
+            runtimeQueries.push(statement);
+            return connection.query(
+              statement,
+              parameters === undefined ? undefined : [...parameters]
+            );
+          },
+          release() {
+            connection.release();
+          },
+        };
+      },
+    };
+    const runtimeInput = {
+      pool: runtimePool,
+      artifactRoot: artifactRootDirectory,
+      workerId: 'system:private-batch-final-restart-tracer',
+      construction: {
+        modelPair: {
+          hpnPreparation: { prepare: async () => prepared },
+          targets: modelPairTargets,
+          playerExecutor: genuinePlayerExecutor,
+          pickExecutor: genuinePickExecutor,
+          qualificationRegistrar: {
+            register: async () => Promise.reject(new Error('Runtime must replay qualification')),
+          },
+        },
+        cohort: { selectValuationInputBundleId, loadConstructionEvidence, constructTrade },
+      },
+    };
+    const localRuntime = createLocalAflTradePrivateValuationRuntime(runtimeInput);
+    await expect(localRuntime.dispatchRequest(requestId)).resolves.toMatchObject({
+      state: 'completed',
+      requestId,
+      result: { state: 'already_current', head: { revision: 1 } },
+    });
+    const factualLoadIndex = runtimeQueries.findIndex((statement) =>
+      statement.includes('load_outcome_current_valuation_evidence(')
     );
-    expect(finalClaim.rows).toHaveLength(1);
+    const modelLoadIndex = runtimeQueries.findIndex((statement) =>
+      statement.includes('FROM outcome_current_valuation_model_evidence_operation')
+    );
+    const preparedLoadIndex = runtimeQueries.findIndex((statement) =>
+      statement.includes('SELECT prepared.prepared_set_json')
+    );
+    const batchLoadIndex = runtimeQueries.findIndex((statement) =>
+      statement.includes('load_outcome_private_evaluation_cohort_capture(')
+    );
+    expect(factualLoadIndex).toBeGreaterThan(-1);
+    expect(modelLoadIndex).toBeGreaterThan(factualLoadIndex);
+    expect(preparedLoadIndex).toBeGreaterThan(modelLoadIndex);
+    expect(batchLoadIndex).toBeGreaterThan(preparedLoadIndex);
+    const finalClaim = await outcomesPool.query<{ claim_id: string }>(
+      `SELECT claim_id FROM outcome_private_valuation_dispatch_attempt
+        WHERE request_id=$1 ORDER BY attempt_number DESC LIMIT 1`,
+      [requestId]
+    );
     const finalClaimId = finalClaim.rows[0]!.claim_id;
     await expect(
       privateBatchRunner.runPrivate({
@@ -2751,12 +3019,6 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         claim: replacementDispatchClaim,
       })
     ).resolves.toEqual({ state: 'stale_authority' });
-    await expect(
-      privateBatchRunner.runPrivate({
-        request: { requestId, scopeKey: operation.content.scopeKey },
-        claim: { claimId: finalClaimId, leaseToken: finalLeaseToken },
-      })
-    ).resolves.toMatchObject({ state: 'already_current', head: { revision: 1 } });
     const rowCountsAfterReplays = await loadPrivateBatchRowCounts();
     expect(rowCountsAfterReplays.rows).toEqual([
       {
@@ -2793,7 +3055,6 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
     expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(replacementClaimId);
     expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(replacementLeaseToken);
     expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(finalClaimId);
-    expect(JSON.stringify(privateBatchCustody.rows[0])).not.toContain(finalLeaseToken);
 
     const repairOperationId = addressed(
       'cohort-execution-repair',
@@ -2874,10 +3135,60 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         );
       })
     ).rejects.toThrow('immutable after acceptance');
-    await outcomesPool.query(
-      `SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`,
-      [finalClaimId, digest(finalLeaseToken), JSON.stringify({ state: 'activated' })]
+    await expect(loadPublicAuthority()).resolves.toEqual(publicAuthorityBefore);
+
+    const schedule = new PostgresAflTradePrivateValuationScheduleRepository(client);
+    const nextRequestId = await schedule.enqueueAdHoc({
+      scopeKey: operation.content.scopeKey,
+      operationKey: 'unchanged-facts-after-private-batch',
+    });
+    expect(nextRequestId).not.toBe(requestId);
+    const nextDispatch = await schedule.claim(
+      'system:unchanged-factual-restart-tracer',
+      nextRequestId
     );
+    if (nextDispatch === null) {
+      throw new Error('The next unchanged-facts dispatch must be claimable.');
+    }
+    const nextFactualRequest = {
+      scopeKey: nextDispatch.request.scopeKey,
+      trigger: nextDispatch.request.trigger,
+      stableOperationKey: nextDispatch.request.requestId,
+    };
+    const nextFactualRefresh = await createAflTradeCurrentValuationRefresh({
+      client,
+    }).refreshCurrent(nextFactualRequest);
+    expect(nextFactualRefresh).toMatchObject({
+      state: 'factual_refresh_complete',
+      factualStage: 'already_current',
+      privateFactualAuthority: privateAuthority,
+    });
+    expect(nextFactualRefresh.operationId).not.toBe(factualRefreshOperationId);
+    await expect(
+      createAflTradeCurrentValuationRefresh({ client }).refreshCurrent(nextFactualRequest)
+    ).resolves.toEqual(nextFactualRefresh);
+    expect((await loadFactualRowCounts()).rows).toEqual([
+      { candidate_count: 1, operation_count: 2, receipt_count: 4, head_revision: 1 },
+    ]);
+    const batchCountsBeforeNextDispatch = await loadPrivateBatchRowCounts();
+    // Unchanged factual evidence does not grant the next dispatch its predecessor's prepared custody.
+    await expect(
+      privateBatchRunner.runPrivate({
+        request: nextDispatch.request,
+        claim: { claimId: nextDispatch.claimId, leaseToken: nextDispatch.leaseToken },
+      })
+    ).resolves.toEqual({ state: 'stale_authority' });
+    expect((await loadPrivateBatchRowCounts()).rows).toEqual(batchCountsBeforeNextDispatch.rows);
+    await expect(loadPublicAuthority()).resolves.toEqual(publicAuthorityBefore);
+    await schedule.reschedule({
+      claimId: nextDispatch.claimId,
+      leaseToken: nextDispatch.leaseToken,
+      state: 'stale_authority',
+    });
+    await expect(schedule.load(nextRequestId)).resolves.toEqual({
+      status: 'pending',
+      result: null,
+    });
   });
 
   it('loads only the exact retained private factual and finalized HPN input', async () => {

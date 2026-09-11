@@ -110,6 +110,55 @@ function observation(
 }
 
 describe('player PAV observation contracts', () => {
+  it.each([
+    { schemaVersion: 'afl-trade-player-pav-policy/v2' as const },
+    {
+      schemaVersion: 'afl-trade-player-pav-policy/v1' as const,
+      knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation' as const,
+    },
+    {
+      schemaVersion: 'afl-trade-player-pav-policy/v2' as const,
+      knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation' as const,
+      environment: 'production' as const,
+    },
+  ])('rejects unbound or production retrospective policy $schemaVersion', (change) => {
+    expect(() => createAflTradePlayerPavPolicy({ ...policy().content, ...change })).toThrow();
+  });
+
+  it('requires retrospective calculation custody by the explicit recording cutoff', () => {
+    const historical = observation(1, 'train', 2001);
+    const content = {
+      ...historical,
+      knowledgeBinding: {
+        policy: 'retrospective_as_recorded_by_dataset_creation' as const,
+        knowledgeCutoffAt: '2026-08-10T23:59:59.999Z',
+      },
+      acquisitionSpell: { ...historical.acquisitionSpell, recordedAt: '2026-08-10T00:00:00.000Z' },
+    };
+    expect(createAflTradePlayerPavObservation(content).acquisitionSpell.recordedAt).toBe(
+      '2026-08-10T00:00:00.000Z'
+    );
+    expect(() =>
+      createAflTradePlayerPavObservation({
+        ...content,
+        featureValues: content.featureValues.map((value) => ({
+          ...value,
+          calculatedAt: '2026-08-11T00:00:00.000Z',
+        })),
+      })
+    ).toThrow(/knowledge cutoff/i);
+    expect(() =>
+      createAflTradePlayerPavObservation({
+        ...content,
+        featureValues: content.featureValues.map((value) => ({
+          ...value,
+          effectiveThrough: `${value.seasonYear}-12-31T23:59:59.999Z`,
+        })),
+        predictionCutoffAt: '2001-10-01T00:00:00.000Z',
+      })
+    ).toThrow();
+  });
+
   it('seals exact acquisition-spell HPN histories and a label-purged four-partition set', () => {
     const observations = [
       observation(1, 'train', 2001),

@@ -33,7 +33,9 @@ const aflTablesBindings: Record<string, string> = {
   tackles: 'Tackles',
 };
 
-function decodeMap(fields = [...new Set([...Object.values(aflTablesBindings), 'Goals', 'Behinds'])]) {
+function decodeMap(
+  fields = [...new Set([...Object.values(aflTablesBindings), 'Goals', 'Behinds'])]
+) {
   return {
     mapId: 'afl-tables-player-stats-local-2025-v1',
     capabilityId: 'afl-tables-player-stats',
@@ -43,21 +45,21 @@ function decodeMap(fields = [...new Set([...Object.values(aflTablesBindings), 'G
 }
 
 function bindings(): AflTradeHpnSemanticBindingCandidate[] {
-  return listAflTradeHpnRequiredSemanticFields('player_match_stats').map(
-    (semanticField) => ({
-      semanticField,
-      mapping:
-        semanticField === 'totalPoints'
-          ? { kind: 'goals_plus_behinds' as const, goals: 'Goals', behinds: 'Behinds' }
-          : { kind: 'direct' as const, sourceField: aflTablesBindings[semanticField]! },
-    })
-  );
+  return listAflTradeHpnRequiredSemanticFields('player_match_stats').map((semanticField) => ({
+    semanticField,
+    mapping:
+      semanticField === 'totalPoints'
+        ? { kind: 'goals_plus_behinds' as const, goals: 'Goals', behinds: 'Behinds' }
+        : { kind: 'direct' as const, sourceField: aflTablesBindings[semanticField]! },
+  }));
 }
 
-function candidate(overrides: {
-  semanticBindings?: readonly AflTradeHpnSemanticBindingCandidate[];
-  decodeMap?: ReturnType<typeof decodeMap>;
-} = {}) {
+function candidate(
+  overrides: {
+    semanticBindings?: readonly AflTradeHpnSemanticBindingCandidate[];
+    decodeMap?: ReturnType<typeof decodeMap>;
+  } = {}
+) {
   const providerDecodeMap = overrides.decodeMap ?? decodeMap();
   return createAflTradeHpnFieldMapCandidate({
     environment: 'non_production',
@@ -69,10 +71,7 @@ function candidate(overrides: {
     validFromSeason: 2021,
     validThroughSeason: 2025,
     providerDecodeMap,
-    providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
-      providerDecodeMap,
-      createdAt
-    ),
+    providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(providerDecodeMap, createdAt),
     semanticBindings: overrides.semanticBindings ?? bindings(),
     createdAt,
   });
@@ -149,20 +148,14 @@ describe('HPN field-map review candidate', () => {
       provider: 'afl_tables',
       seasonYear: 2025,
       providerDecodeMap: aflTables,
-      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
-        aflTables,
-        createdAt
-      ),
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(aflTables, createdAt),
       createdAt,
     });
     const officialCandidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
       provider: 'official_afl',
       seasonYear: 2026,
       providerDecodeMap: official,
-      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
-        official,
-        createdAt
-      ),
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(official, createdAt),
       createdAt,
     });
 
@@ -190,6 +183,230 @@ describe('HPN field-map review candidate', () => {
     });
     expect(aflTablesCandidate.content.reviewState).toBe('requires_review');
     expect(officialCandidate.content.reviewState).toBe('requires_review');
+  });
+
+  it('builds an exact unapproved FootyWire candidate from the retained cache schema', () => {
+    const providerDecodeMap = {
+      mapId: 'footywire-player-stats-local-2025-v1',
+      capabilityId: 'footywire-player-stats',
+      sourceSchemaSha256,
+      exactOrderedFields: [
+        'Date',
+        'Season',
+        'Round',
+        'Venue',
+        'Player',
+        'Team',
+        'Opposition',
+        'Status',
+        'Match_id',
+        'GA',
+        'CP',
+        'UP',
+        'ED',
+        'DE',
+        'CM',
+        'MI5',
+        'One.Percenters',
+        'BO',
+        'TOG',
+        'K',
+        'HB',
+        'D',
+        'M',
+        'G',
+        'B',
+        'T',
+        'HO',
+        'I50',
+        'CL',
+        'CG',
+        'R50',
+        'FF',
+        'FA',
+        'AF',
+        'SC',
+        'CCL',
+        'SCL',
+        'SI',
+        'MG',
+        'TO',
+        'ITC',
+        'T5',
+      ],
+    };
+    const candidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
+      provider: 'footywire',
+      seasonYear: 2025,
+      providerDecodeMap,
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+        providerDecodeMap,
+        createdAt
+      ),
+      createdAt,
+    });
+
+    expect(candidate.content).toMatchObject({
+      provider: 'footywire',
+      capabilityId: 'footywire-player-stats',
+      sourceSchemaSha256,
+      validFromSeason: 2025,
+      validThroughSeason: 2025,
+      reviewState: 'requires_review',
+      publicationEligible: false,
+      publicationProhibited: true,
+    });
+    expect(candidate.content.semanticBindings).toHaveLength(15);
+    expect(candidate.content.semanticBindings).toEqual(
+      expect.arrayContaining([
+        { semanticField: 'player', mapping: { kind: 'direct', sourceField: 'Player' } },
+        { semanticField: 'match', mapping: { kind: 'direct', sourceField: 'Match_id' } },
+        { semanticField: 'club', mapping: { kind: 'direct', sourceField: 'Team' } },
+        { semanticField: 'hitOuts', mapping: { kind: 'direct', sourceField: 'HO' } },
+        { semanticField: 'goalAssists', mapping: { kind: 'direct', sourceField: 'GA' } },
+        { semanticField: 'inside50s', mapping: { kind: 'direct', sourceField: 'I50' } },
+        { semanticField: 'marks', mapping: { kind: 'direct', sourceField: 'M' } },
+        { semanticField: 'marksInside50', mapping: { kind: 'direct', sourceField: 'MI5' } },
+        { semanticField: 'freeKicksFor', mapping: { kind: 'direct', sourceField: 'FF' } },
+        { semanticField: 'freeKicksAgainst', mapping: { kind: 'direct', sourceField: 'FA' } },
+        { semanticField: 'rebound50s', mapping: { kind: 'direct', sourceField: 'R50' } },
+        {
+          semanticField: 'onePercenters',
+          mapping: { kind: 'direct', sourceField: 'One.Percenters' },
+        },
+        { semanticField: 'clearances', mapping: { kind: 'direct', sourceField: 'CL' } },
+        { semanticField: 'tackles', mapping: { kind: 'direct', sourceField: 'T' } },
+        {
+          semanticField: 'totalPoints',
+          mapping: { kind: 'goals_plus_behinds', goals: 'G', behinds: 'B' },
+        },
+      ])
+    );
+  });
+
+  it('keeps future FootyWire profile links outside the reviewed HPN identity binding', () => {
+    const providerDecodeMap = {
+      mapId: 'footywire-player-stats-local-2025-with-links-v1',
+      capabilityId: 'footywire-player-stats',
+      sourceSchemaSha256,
+      exactOrderedFields: [
+        'Player',
+        'PlayerLink',
+        'Team',
+        'Match_id',
+        'GA',
+        'M',
+        'G',
+        'B',
+        'T',
+        'HO',
+        'I50',
+        'CL',
+        'R50',
+        'FF',
+        'FA',
+        'MI5',
+        'One.Percenters',
+      ],
+    };
+    const candidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
+      provider: 'footywire',
+      seasonYear: 2025,
+      providerDecodeMap,
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+        providerDecodeMap,
+        createdAt
+      ),
+      createdAt,
+    });
+
+    expect(
+      candidate.content.semanticBindings.find(({ semanticField }) => semanticField === 'player')
+    ).toEqual({
+      semanticField: 'player',
+      mapping: { kind: 'direct', sourceField: 'Player' },
+    });
+    expect(candidate.content.semanticBindings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mapping: expect.objectContaining({ sourceField: 'PlayerLink' }),
+        }),
+      ])
+    );
+  });
+
+  it('fails closed for inexact FootyWire capability or required fields', () => {
+    const exactOrderedFields = [
+      'Player',
+      'Team',
+      'Match_id',
+      'GA',
+      'M',
+      'G',
+      'B',
+      'T',
+      'HO',
+      'I50',
+      'CL',
+      'R50',
+      'FF',
+      'FA',
+      'MI5',
+      'One.Percenters',
+    ];
+    const create = (providerDecodeMap: {
+      mapId: string;
+      capabilityId: string;
+      sourceSchemaSha256: string;
+      exactOrderedFields: string[];
+    }) =>
+      createLocalAflTradeHpnPlayerFieldMapCandidate({
+        provider: 'footywire',
+        seasonYear: 2025,
+        providerDecodeMap,
+        providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+          providerDecodeMap,
+          createdAt
+        ),
+        createdAt,
+      });
+
+    expect(() =>
+      create({
+        mapId: 'wrong-capability',
+        capabilityId: 'afl-tables-player-stats',
+        sourceSchemaSha256,
+        exactOrderedFields,
+      })
+    ).toThrow(/wrong HPN capability/i);
+    for (const missingField of ['HO', 'Player']) {
+      expect(() =>
+        create({
+          mapId: `missing-${missingField}`,
+          capabilityId: 'footywire-player-stats',
+          sourceSchemaSha256,
+          exactOrderedFields: exactOrderedFields.filter((field) => field !== missingField),
+        })
+      ).toThrow(/must exist in the exact provider decode map/i);
+    }
+    const retainedDecodeMap = {
+      mapId: 'footywire-player-stats-retained',
+      capabilityId: 'footywire-player-stats',
+      sourceSchemaSha256,
+      exactOrderedFields,
+    };
+    expect(() =>
+      createLocalAflTradeHpnPlayerFieldMapCandidate({
+        provider: 'footywire',
+        seasonYear: 2025,
+        providerDecodeMap: { ...retainedDecodeMap, sourceSchemaSha256: 'b'.repeat(64) },
+        providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+          retainedDecodeMap,
+          createdAt
+        ),
+        createdAt,
+      })
+    ).toThrow(/exact provider decode-map artifact/i);
   });
 
   it('proposes an explicit reviewed final-score projection instead of inventing a status field', () => {

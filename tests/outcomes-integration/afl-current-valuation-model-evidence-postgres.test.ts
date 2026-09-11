@@ -112,6 +112,20 @@ beforeAll(async () => {
       END IF;
       RETURN retained_request;
     END $function$;
+    CREATE FUNCTION load_outcome_private_valuation_hpn_factual_input(
+      target_request_id text,target_output_id text
+    ) RETURNS jsonb LANGUAGE sql SECURITY DEFINER
+      SET search_path TO "${schemaName}",pg_catalog,pg_temp AS $function$
+      SELECT jsonb_build_object(
+        'factualOperationId',operation.operation_id,
+        'privateFactualCandidateId',operation.candidate_id,
+        'privateFactualRevision',operation.private_factual_revision
+      )
+      FROM outcome_private_valuation_factual_output factual
+      JOIN outcome_current_valuation_factual_refresh_operation operation
+        ON operation.operation_id=factual.output_json#>>'{content,factualOperationId}'
+      WHERE factual.request_id=target_request_id AND factual.output_id=target_output_id
+    $function$;
     CREATE FUNCTION load_outcome_current_valuation_evidence(
       target_scope_key text,target_trigger text,target_stable_operation_key text
     ) RETURNS TABLE(result_json jsonb,retained_source_keys text[])
@@ -132,6 +146,8 @@ beforeAll(async () => {
       outcome_private_valuation_factual_output
       TO afl_trade_private_evaluation_coordinator;
     GRANT EXECUTE ON FUNCTION load_outcome_private_valuation_dispatch_request_for_claim(text,text,text)
+      TO afl_trade_private_evaluation_coordinator;
+    GRANT EXECUTE ON FUNCTION load_outcome_private_valuation_hpn_factual_input(text,text)
       TO afl_trade_private_evaluation_coordinator;
     GRANT EXECUTE ON FUNCTION load_outcome_current_valuation_evidence(text,text,text)
       TO afl_trade_private_evaluation_coordinator;

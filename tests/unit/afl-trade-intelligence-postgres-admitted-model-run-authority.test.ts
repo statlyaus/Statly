@@ -28,7 +28,8 @@ function authorization(
 ): AflTradeModelRunAuthorization {
   const content = {
     schemaVersion: 'afl-trade-model-run-authorization/v1' as const,
-    authorityBoundary: 'model_run_start_authority_no_grade_publication_or_fantasy_ownership' as const,
+    authorityBoundary:
+      'model_run_start_authority_no_grade_publication_or_fantasy_ownership' as const,
     publicationEligible: false as const,
     environment: fixture.intent.content.environment,
     runIntentId: fixture.intent.intentId,
@@ -41,9 +42,7 @@ function authorization(
     gate2DecisionId: `gate-decision:${digest('f')}`,
     gateLedgerRevision: fixture.evidence.gateLedgerRevision,
     authorizedAt: fixture.intent.content.startedAt,
-    validThrough: new Date(
-      Date.parse(fixture.intent.content.startedAt) + 60_000
-    ).toISOString(),
+    validThrough: new Date(Date.parse(fixture.intent.content.startedAt) + 60_000).toISOString(),
     modelTrainingEvaluationReceiptIds: fixture.intent.content.modelTrainingEvaluationReceiptIds,
   };
   return aflTradeModelRunAuthorizationSchema.parse({
@@ -102,8 +101,11 @@ describe('PostgresAflTradeAdmittedModelRunAuthority current provenance', () => {
             {
               factual_candidate_id:
                 fixture.datasetCandidate.content.factualParent.factualCandidateId,
-              lineage_id:
-                fixture.datasetCandidate.content.factualParent.corpusToCandidateLineageId,
+              lineage_id: fixture.datasetCandidate.content.factualParent.corpusToCandidateLineageId,
+              protocol_json: fixture.protocol,
+              observation_json: fixture.observationSet,
+              dataset_json: fixture.datasetCandidate,
+              admission_json: fixture.admission,
             },
           ],
           rowCount: 1,

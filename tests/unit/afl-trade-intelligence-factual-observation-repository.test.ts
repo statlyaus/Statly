@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canonicalizeAflTradeJson,
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
@@ -208,6 +209,7 @@ function validBatch() {
 
 class FixtureSqlClient implements AflOutcomeSqlClient {
   readonly calls: { sql: string; parameters: readonly unknown[] }[] = [];
+  constructor(readonly replayRow?: Record<string, unknown>) {}
 
   async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
@@ -224,7 +226,10 @@ class FixtureSqlClient implements AflOutcomeSqlClient {
       return { rows: [{ finalized_at: '2026-03-23T08:00:00.000Z' }] as Row[], rowCount: 1 };
     }
     if (sql.includes('FROM outcome_provider_fact_batch WHERE fact_batch_id')) {
-      return { rows: [], rowCount: 0 };
+      return {
+        rows: (this.replayRow ? [this.replayRow] : []) as Row[],
+        rowCount: this.replayRow ? 1 : 0,
+      };
     }
     if (sql.includes('FROM outcome_provider_normalization_run r')) {
       return {
@@ -275,6 +280,93 @@ class FixtureSqlClient implements AflOutcomeSqlClient {
 }
 
 describe('Postgres AFL trade factual observation repository', () => {
+  it.each(['text', 'legacy'] as const)(
+    'replays an exact finalized %s receipt without rewriting facts',
+    async (representation) => {
+      const batch = validBatch();
+      const client = new FixtureSqlClient({
+        receipt_json: representation === 'legacy' ? batch : null,
+        receipt_representation_valid: true,
+        receipt_text_matches: representation === 'text',
+        receipt_is_text: representation === 'text',
+        status: 'approved',
+        finalized_at: batch.content.createdAt,
+      });
+      await expect(
+        new PostgresAflTradeFactualObservationRepository(client).persistBatch(batch, {
+          environment: 'test_fixture',
+        })
+      ).resolves.toMatchObject({ idempotentReplay: true });
+      expect(client.calls.some(({ sql }) => /INSERT|UPDATE/.test(sql))).toBe(false);
+    }
+  );
+
+  it.each([
+    { receipt_representation_valid: false },
+    { receipt_text_matches: false },
+    { status: 'staged' },
+    { finalized_at: null },
+    { receipt_is_text: false, receipt_json: { different: true } },
+  ])('rejects conflicting or unfinished replay custody %j', async (change) => {
+    const batch = validBatch();
+    const client = new FixtureSqlClient({
+      receipt_json: null,
+      receipt_is_text: true,
+      receipt_representation_valid: true,
+      receipt_text_matches: true,
+      status: 'approved',
+      finalized_at: batch.content.createdAt,
+      ...change,
+    });
+    await expect(
+      new PostgresAflTradeFactualObservationRepository(client).persistBatch(batch, {
+        environment: 'test_fixture',
+      })
+    ).rejects.toMatchObject({ code: 'REPLAY_CONFLICT' });
+  });
+
+  it.each([{ status: 'staged' }, { finalized_at: null }, { receipt_representation_valid: false }])(
+    'does not replay matching legacy content with invalid custody %j',
+    async (change) => {
+      const batch = validBatch();
+      const client = new FixtureSqlClient({
+        receipt_json: batch,
+        receipt_is_text: false,
+        receipt_representation_valid: true,
+        receipt_text_matches: false,
+        status: 'approved',
+        finalized_at: batch.content.createdAt,
+        ...change,
+      });
+      await expect(
+        new PostgresAflTradeFactualObservationRepository(client).persistBatch(batch, {
+          environment: 'test_fixture',
+        })
+      ).rejects.toMatchObject({ code: 'REPLAY_CONFLICT' });
+    }
+  );
+
+  it('retains the complete canonical receipt once without resending it at finalization', async () => {
+    const client = new FixtureSqlClient();
+    const batch = validBatch();
+    await new PostgresAflTradeFactualObservationRepository(client).persistBatch(batch, {
+      environment: 'test_fixture',
+    });
+    const insert = client.calls.find(({ sql }) =>
+      sql.includes('INSERT INTO outcome_provider_fact_batch')
+    )!;
+    expect(insert.sql).toContain('receipt_canonical_json, receipt_canonical_sha256');
+    expect(insert.sql).toContain('NULL,$26::text,$27');
+    expect(insert.parameters[25]).toBe(canonicalizeAflTradeJson(batch));
+    expect(insert.parameters[26]).toBe(sha256AflTradeCanonicalJson(batch));
+    expect(insert.parameters[26]).not.toBe(batch.batchSha256);
+    const finalize = client.calls.find(({ sql }) =>
+      sql.includes('UPDATE outcome_provider_fact_batch')
+    )!;
+    expect(finalize.sql).not.toContain('receipt_');
+    expect(finalize.parameters).toEqual([batch.batchId, batch.content.createdAt]);
+  });
+
   it('persists an exhaustive source batch atomically without a public or fantasy write', async () => {
     const client = new FixtureSqlClient();
     const repository = new PostgresAflTradeFactualObservationRepository(client);

@@ -247,6 +247,12 @@ function projectedMap(
 }
 
 interface FakeOptions {
+  unusedSubstitutes?: boolean;
+  nonparticipantReviewRevoked?: boolean;
+  nonparticipantReviewSourceDrift?: boolean;
+  candidateOnlyPlayer?: boolean;
+  legacyMapSuperseded?: boolean;
+  capturedAt?: string;
   omitLastRow?: boolean;
   resultStatus?: string;
   factualStatus?: string;
@@ -254,6 +260,11 @@ interface FakeOptions {
   membershipDrift?: boolean;
   sourceMembershipDrift?: boolean;
   projectedMaps?: boolean;
+  payloadEnvelope?: boolean;
+  payloadTransform?: (payload: unknown) => unknown;
+  captureStatus?: string;
+  sourceFirstExact?: boolean;
+  sourceBindingExact?: boolean;
 }
 
 class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
@@ -263,6 +274,8 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
   readonly corroboratingRunId = addressed('provider-normalization-run', 'corroborating-run');
   readonly factualRunId = addressed('factual-reconciliation-run', 'factual-run');
   storedInput: unknown | null = null;
+  storedExcludedRows: readonly unknown[] = [];
+  storedSourceRowCount = 0;
   finalizedAt: string | null = null;
   storedMethod: unknown | null = null;
   storedMethodEnvironment: 'test_fixture' | 'non_production' | 'production' | null = null;
@@ -292,6 +305,62 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
     parameters: readonly unknown[] = []
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     if (sql.includes('pg_advisory_xact_lock')) return this.result([]);
+    if (sql.includes("subject_type='hpn_source_nonparticipant'")) {
+      if (!this.options.unusedSubstitutes || this.options.nonparticipantReviewRevoked)
+        return this.result([]);
+      const resolved = (entityKind: string, value: ReturnType<typeof resolution>) => ({
+        entityKind,
+        canonicalId: value.canonicalId,
+        revision: value.revision,
+        status: 'current_approved',
+        resolutionDecision: { id: value.decisionId, sha256: value.decisionId.split(':')[1] },
+        assignmentDecision: {
+          id: value.assignmentDecisionId,
+          sha256: value.assignmentDecisionId.split(':')[1],
+        },
+      });
+      return this.result(
+        this.decodedRows()
+          .filter((row) => row.provider_decoded_row_id.startsWith('provider-row:unused-'))
+          .map((row) => {
+            const sourceValues = Object.fromEntries(
+              Object.entries(row.typed_payload).map(([field, value]) => [
+                field,
+                value.kind === 'missing' ? null : 'value' in value ? value.value : null,
+              ])
+            );
+            return {
+              decision_id: addressed('review-decision', row.provider_decoded_row_id),
+              decided_at: '2026-08-09T00:00:00.000Z',
+              evidence_json: {
+                disposition: {
+                  reason: 'reviewed_nonparticipant',
+                  source: {
+                    normalizationRunId: row.normalization_run_id,
+                    providerDecodedRowId: row.provider_decoded_row_id,
+                    sourceRowSha256: this.options.nonparticipantReviewSourceDrift
+                      ? sha('substituted-source')
+                      : row.source_row_sha256,
+                    typedPayloadSha256: sha256AflTradeCanonicalJson(row.typed_payload),
+                    sourceFields: Object.keys(sourceValues).sort(),
+                    sourceValues,
+                  },
+                  player: resolved(
+                    'player',
+                    resolution(`player:${row.provider_decoded_row_id}`, row.provider_decoded_row_id)
+                  ),
+                  match: resolved('match', row.match_resolution),
+                  club: resolved('club', row.home_club_resolutions[0]!),
+                  evidenceArtifact: createAflTradeCanonicalJsonArtifactRef(
+                    { syntheticReport: row.provider_decoded_row_id },
+                    '2026-08-08T00:00:00.000Z'
+                  ),
+                },
+              },
+            };
+          })
+      );
+    }
     if (sql.includes('SELECT transaction_timestamp() AS created_at')) {
       const day = 10 + this.transactionTimestampReads;
       this.transactionTimestampReads += 1;
@@ -437,11 +506,12 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
           season_year: inputSet.content.seasonYear,
           method_id: inputSet.content.methodId,
           source_run_count: inputSet.content.sourceRuns.length,
-          source_row_count: inputSet.content.rows.length,
+          source_row_count: this.storedSourceRowCount,
           completed_match_count: inputSet.content.completedMatches.length,
           actual_source_run_count:
             inputSet.content.sourceRuns.length + (this.options.sourceMembershipDrift ? 1 : 0),
           actual_source_row_count: inputSet.content.rows.length,
+          actual_excluded_source_row_count: this.storedExcludedRows.length,
           actual_completed_match_count: inputSet.content.completedMatches.length,
           factual_match_count: factualMatchCount,
           factual_appearance_count: factualAppearanceCount + (this.options.membershipDrift ? 1 : 0),
@@ -466,7 +536,13 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
       return this.result(
         requested.map((source) => {
           const map = this.maps.find(({ fieldMapId }) => fieldMapId === source.fieldMapId)!;
-          const rowCount = source.normalizationRunId === this.resultRunId ? 1 : 4;
+          const rowCount =
+            source.normalizationRunId === this.resultRunId
+              ? 1
+              : this.options.unusedSubstitutes &&
+                  source.normalizationRunId === this.corroboratingRunId
+                ? 9
+                : 4;
           return {
             normalization_run_id: source.normalizationRunId,
             capture_id: `capture:${map.content.provider}:2025`,
@@ -475,8 +551,8 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
             capture_environment: this.options.projectedMaps ? 'non_production' : 'test_fixture',
             capture_provider: map.content.provider,
             capture_capability_id: map.content.capabilityId,
-            capture_status: 'approved',
-            captured_at: '2025-09-27T00:00:00.000Z',
+            capture_status: this.options.captureStatus ?? 'approved',
+            captured_at: this.options.capturedAt ?? '2025-09-27T00:00:00.000Z',
             finalized_at: '2026-08-09T00:00:00.000Z',
             staging_sha256: sha(`staging:${map.content.provider}`),
             source_row_count: rowCount,
@@ -497,16 +573,51 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
         {
           legacy_map_json:
             map?.content.schemaVersion === 'afl-trade-hpn-pav-field-map/v1' ? map : null,
+          current_approval: !this.options.legacyMapSuperseded,
         },
       ]);
     }
+    if (sql.includes('AS staged_source_authority'))
+      return this.result([
+        {
+          staged_source_authority:
+            this.options.sourceFirstExact === true && this.options.sourceBindingExact === true,
+        },
+      ]);
     if (sql.includes('SELECT candidate.candidate_json')) return this.result([]);
     if (sql.includes('FROM outcome_provider_decoded_row decoded')) {
-      const rows = this.decodedRows();
-      return this.result(this.options.omitLastRow ? rows.slice(0, -1) : rows);
+      const rows = this.decodedRows().map((row) =>
+        this.options.payloadEnvelope
+          ? {
+              ...row,
+              typed_payload: {
+                values: row.typed_payload,
+                observedSeasonText: '2025',
+                observedDateText: '2025-09-27',
+                roundLabel: 'Grand Final',
+                appearanceCandidate: true,
+                semanticNaturalKeySha256: 'a'.repeat(64),
+              },
+            }
+          : row
+      );
+      const selected = this.options.omitLastRow ? rows.slice(0, -1) : rows;
+      return this.result(
+        selected.map((row) => ({
+          ...row,
+          typed_payload: this.options.payloadTransform
+            ? this.options.payloadTransform(row.typed_payload)
+            : row.typed_payload,
+        }))
+      );
     }
     if (sql.includes('INSERT INTO outcome_hpn_pav_input_set')) {
       this.storedInput = JSON.parse(String(parameters.at(-1)));
+      this.storedSourceRowCount = Number(parameters[12]);
+      return this.result([]);
+    }
+    if (sql.includes('INSERT INTO outcome_hpn_pav_input_excluded_source_row')) {
+      this.storedExcludedRows = JSON.parse(String(parameters[0]));
       return this.result([]);
     }
     if (sql.includes("UPDATE outcome_hpn_pav_input_set SET status='finalized'")) {
@@ -565,7 +676,14 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
             provider_decoded_row_id: `provider-row:${providerIndex}:${player}`,
             normalization_run_id: runId,
             source_row_sha256: sha(`row:${providerIndex}:${player}`),
-            player_resolution: resolution(`player:${player}`, `player:${player}`),
+            player_resolution: this.options.candidateOnlyPlayer
+              ? {
+                  ...resolution(`player:${player}`, `player:${player}`),
+                  resolutionScope: 'candidate_only',
+                  assignmentDecisionId: null,
+                  assignmentStatus: null,
+                }
+              : resolution(`player:${player}`, `player:${player}`),
             typed_payload: {
               player_id: scalar(`native:${player}`),
               match_id: scalar('provider-match-1'),
@@ -587,7 +705,31 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
           };
         })
     );
-    return [result, ...playerRows];
+    const unused = this.options.unusedSubstitutes
+      ? Array.from({ length: 5 }, (_, index) => {
+          const id = `provider-row:unused-${index}`;
+          return {
+            ...common,
+            provider_decoded_row_id: id,
+            normalization_run_id: this.corroboratingRunId,
+            source_row_sha256: sha(id),
+            player_resolution: resolution(`player:${id}`, id),
+            typed_payload: Object.fromEntries(
+              Object.keys(playerRows[0]!.typed_payload).map((field) => [
+                field,
+                field === 'player_id'
+                  ? scalar(id)
+                  : field === 'team'
+                    ? scalar('HOME')
+                    : field === 'match_id'
+                      ? scalar('provider-match-1')
+                      : { kind: 'missing' as const },
+              ])
+            ),
+          };
+        })
+      : [];
+    return [result, ...playerRows, ...unused];
   }
 }
 
@@ -625,6 +767,169 @@ function request(client: FakeHpnPavSqlClient) {
 }
 
 describe('PostgresAflTradeHpnPavInputRepository', () => {
+  it('retains reviewed unused source rows without entering numeric extraction', async () => {
+    const options: FakeOptions = { unusedSubstitutes: true };
+    const client = new FakeHpnPavSqlClient(options);
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const result = await repository.buildAndPersistSeasonInputSet(
+      {
+        ...request(client),
+        knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+        knowledgeCutoffAt: '2026-08-10T00:00:00.000Z',
+        reviewedNonparticipantDecisions: Array.from({ length: 5 }, (_, index) =>
+          addressed('review-decision', `provider-row:unused-${index}`)
+        ),
+      },
+      { environment: 'test_fixture' }
+    );
+    expect(result.inputSet.content.schemaVersion).toBe('afl-trade-hpn-pav-input-set/v4');
+    expect(result.inputSet.content.rows).toHaveLength(9);
+    expect(
+      'excludedSourceRows' in result.inputSet.content && result.inputSet.content.excludedSourceRows
+    ).toHaveLength(5);
+    const retainedRequest = { ...request(client), inputSetId: result.inputSet.inputSetId };
+    const scoped = {
+      inputSetId: retainedRequest.inputSetId,
+      environment: retainedRequest.environment,
+      competition: retainedRequest.competition,
+      seasonYear: retainedRequest.seasonYear,
+      methodId: retainedRequest.methodId,
+    };
+    expect(
+      await repository.loadCurrentFinalizedSeasonInputSet(scoped, { environment: 'test_fixture' })
+    ).toEqual(result.inputSet);
+    options.nonparticipantReviewRevoked = true;
+    await expect(
+      repository.loadCurrentFinalizedSeasonInputSet(scoped, { environment: 'test_fixture' })
+    ).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+    expect(
+      await repository.loadFinalizedSeasonInputSet(scoped, { environment: 'test_fixture' })
+    ).toEqual(result.inputSet);
+    options.nonparticipantReviewRevoked = false;
+    options.nonparticipantReviewSourceDrift = true;
+    await expect(
+      repository.loadCurrentFinalizedSeasonInputSet(scoped, { environment: 'test_fixture' })
+    ).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+  });
+  it('rejects missing reviewed nonparticipant authority before persisting an input', async () => {
+    const client = new FakeHpnPavSqlClient();
+    await expect(
+      new PostgresAflTradeHpnPavInputRepository(client).buildAndPersistSeasonInputSet(
+        {
+          ...request(client),
+          knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+          knowledgeCutoffAt: '2026-08-10T00:00:00.000Z',
+          reviewedNonparticipantDecisions: [addressed('review-decision', 'missing-nonparticipant')],
+        },
+        { environment: 'test_fixture' }
+      )
+    ).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+    expect(client.storedInput).toBeNull();
+  });
+  it('builds candidate-only player inputs without a reusable assignment', async () => {
+    const client = new FakeHpnPavSqlClient({ candidateOnlyPlayer: true });
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const { inputSet } = await repository.buildAndPersistSeasonInputSet(request(client), {
+      environment: 'test_fixture',
+    });
+    expect(
+      inputSet.content.rows
+        .filter((row) => row.kind === 'player_match_stats')
+        .every((row) => row.player.assignmentDecision === null)
+    ).toBe(true);
+  });
+  it('rejects superseded legacy map approval on current reads but preserves historical reads', async () => {
+    const options: FakeOptions = {};
+    const client = new FakeHpnPavSqlClient(options);
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const { inputSet } = await repository.buildAndPersistSeasonInputSet(request(client), {
+      environment: 'test_fixture',
+    });
+    const read = {
+      inputSetId: inputSet.inputSetId,
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      seasonYear: 2025,
+      methodId: method.methodId,
+    };
+    options.legacyMapSuperseded = true;
+    await expect(
+      repository.loadFinalizedSeasonInputSet(read, { environment: 'test_fixture' })
+    ).resolves.toEqual(inputSet);
+    await expect(
+      repository.loadCurrentFinalizedSeasonInputSet(read, { environment: 'test_fixture' })
+    ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
+  });
+
+  it('reauthenticates retained input authority without rematerializing the input', async () => {
+    const options: FakeOptions = {};
+    const client = new FakeHpnPavSqlClient(options);
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const { inputSet } = await repository.buildAndPersistSeasonInputSet(request(client), {
+      environment: 'test_fixture',
+    });
+    const read = {
+      inputSetId: inputSet.inputSetId,
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      seasonYear: 2025,
+      methodId: method.methodId,
+    };
+    const query = client.query.bind(client);
+    vi.spyOn(client, 'query').mockImplementation((sql, parameters) => {
+      if (/\b(?:INSERT|UPDATE|DELETE)\b/.test(sql))
+        throw new Error('Current input read attempted a write');
+      return query(sql, parameters);
+    });
+    expect(
+      await repository.loadCurrentFinalizedSeasonInputSet(read, { environment: 'test_fixture' })
+    ).toEqual(inputSet);
+    options.factualStatus = 'rejected';
+    await expect(
+      repository.loadCurrentFinalizedSeasonInputSet(read, { environment: 'test_fixture' })
+    ).rejects.toMatchObject({ code: 'FACTUAL_UNIVERSE_MISMATCH' });
+    options.factualStatus = undefined;
+    options.capturedAt = '2025-09-26T00:00:00.000Z';
+    await expect(
+      repository.loadCurrentFinalizedSeasonInputSet(read, { environment: 'test_fixture' })
+    ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
+  });
+
+  it('persists retrospective captures without changing historical event dates or replay custody', async () => {
+    const client = new FakeHpnPavSqlClient({ capturedAt: '2026-08-08T00:00:00.000Z' });
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const selected = {
+      ...request(client),
+      knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+      knowledgeCutoffAt: '2026-08-10T00:00:00.000Z',
+    };
+    const first = await repository.buildAndPersistSeasonInputSet(selected, {
+      environment: 'test_fixture',
+    });
+    expect(first.inputSet.content).toMatchObject({
+      schemaVersion: 'afl-trade-hpn-pav-input-set/v3',
+      effectiveThrough: '2025-09-27T23:59:59.000Z',
+      knowledgeCutoffAt: selected.knowledgeCutoffAt,
+    });
+    expect(
+      first.inputSet.content.sourceRuns.every(
+        (run) => run.capturedAt === '2026-08-08T00:00:00.000Z'
+      )
+    ).toBe(true);
+    expect(
+      await repository.buildAndPersistSeasonInputSet(selected, { environment: 'test_fixture' })
+    ).toEqual({ ...first, idempotentReplay: true });
+    await expect(
+      repository.buildAndPersistSeasonInputSet(
+        { ...selected, knowledgeCutoffAt: '2026-08-11T00:00:00.000Z' },
+        { environment: 'test_fixture' }
+      )
+    ).rejects.toMatchObject({ code: 'REPLAY_CONFLICT' });
+    await expect(
+      repository.buildAndPersistSeasonInputSet(request(client), { environment: 'test_fixture' })
+    ).rejects.toMatchObject({ code: 'REPLAY_CONFLICT' });
+  });
+
   it('builds and replays through the existing seam from approved projected maps', async () => {
     const client = new FakeHpnPavSqlClient({ projectedMaps: true });
     const repository = new PostgresAflTradeHpnPavInputRepository(client);
@@ -651,10 +956,80 @@ describe('PostgresAflTradeHpnPavInputRepository', () => {
       expect(first.inputSet.content.fieldMaps).toEqual(
         [...client.maps].sort((left, right) => left.fieldMapId.localeCompare(right.fieldMapId))
       );
-      expect(loadCurrentExact).toHaveBeenCalledTimes(3);
+      expect(loadCurrentExact).toHaveBeenCalledTimes(6);
+      loadCurrentExact.mockResolvedValue(null);
+      await expect(
+        repository.buildAndPersistSeasonInputSet(request(client), { environment: 'non_production' })
+      ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
     } finally {
       loadCurrentExact.mockRestore();
     }
+  });
+
+  it('requires exact source-first staged capture authority on creation and current reads', async () => {
+    const options: FakeOptions = {
+      projectedMaps: true,
+      payloadEnvelope: true,
+      captureStatus: 'staged',
+      sourceFirstExact: true,
+      sourceBindingExact: true,
+    };
+    const client = new FakeHpnPavSqlClient(options);
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const projected = vi
+      .spyOn(PostgresAflTradeHpnProjectedFieldMapAuthority.prototype, 'loadCurrentExact')
+      .mockImplementation(async (fieldMapId) => {
+        const parsed = aflTradeHpnProjectedFieldMapSchema.safeParse(
+          client.maps.find((map) => map.fieldMapId === fieldMapId)
+        );
+        return parsed.success ? parsed.data : null;
+      });
+    try {
+      const first = await repository.buildAndPersistSeasonInputSet(request(client), {
+        environment: 'non_production',
+      });
+      const read = {
+        inputSetId: first.inputSet.inputSetId,
+        environment: 'non_production',
+        competition: 'AFLM',
+        seasonYear: 2025,
+        methodId: method.methodId,
+      };
+      expect(
+        await repository.loadCurrentFinalizedSeasonInputSet(read, {
+          environment: 'non_production',
+        })
+      ).toEqual(first.inputSet);
+      for (const missing of ['sourceFirstExact', 'sourceBindingExact'] as const) {
+        options[missing] = false;
+        await expect(
+          repository.loadCurrentFinalizedSeasonInputSet(read, {
+            environment: 'non_production',
+          })
+        ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
+        const fresh = new FakeHpnPavSqlClient(options);
+        await expect(
+          new PostgresAflTradeHpnPavInputRepository(fresh).buildAndPersistSeasonInputSet(
+            request(fresh),
+            { environment: 'non_production' }
+          )
+        ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
+        options[missing] = true;
+      }
+    } finally {
+      projected.mockRestore();
+    }
+    const legacy = new FakeHpnPavSqlClient({
+      captureStatus: 'staged',
+      sourceFirstExact: true,
+      sourceBindingExact: true,
+    });
+    await expect(
+      new PostgresAflTradeHpnPavInputRepository(legacy).buildAndPersistSeasonInputSet(
+        request(legacy),
+        { environment: 'test_fixture' }
+      )
+    ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
   });
 
   it('derives, persists, and exactly replays a complete cross-provider season input set', async () => {
@@ -685,6 +1060,86 @@ describe('PostgresAflTradeHpnPavInputRepository', () => {
       awayPoints: 80,
     });
   });
+
+  it('builds, replays, and reads genuine envelope payloads without changing their hashes', async () => {
+    const client = new FakeHpnPavSqlClient({ payloadEnvelope: true });
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const first = await repository.buildAndPersistSeasonInputSet(request(client), {
+      environment: 'test_fixture',
+    });
+    const replay = await repository.buildAndPersistSeasonInputSet(request(client), {
+      environment: 'test_fixture',
+    });
+    expect(replay.inputSet).toEqual(first.inputSet);
+    expect(replay.idempotentReplay).toBe(true);
+    expect(
+      first.inputSet.content.rows.find((row) => row.kind === 'completed_match_result')
+    ).toMatchObject({ homePoints: 100, awayPoints: 80 });
+    const flat = await new PostgresAflTradeHpnPavInputRepository(
+      new FakeHpnPavSqlClient()
+    ).buildAndPersistSeasonInputSet(request(client), { environment: 'test_fixture' });
+    expect(first.inputSet.inputSetId).not.toBe(flat.inputSet.inputSetId);
+    expect(
+      await repository.loadCurrentFinalizedSeasonInputSet(
+        {
+          inputSetId: first.inputSet.inputSetId,
+          environment: 'test_fixture',
+          competition: 'AFLM',
+          seasonYear: 2025,
+          methodId: method.methodId,
+        },
+        { environment: 'test_fixture' }
+      )
+    ).toEqual(first.inputSet);
+  });
+
+  it.each([
+    ['empty numeric', { kind: 'integer', value: '' }],
+    ['fractional integer', { kind: 'integer', value: '1.5' }],
+    ['boolean numeric', { kind: 'integer', value: false }],
+    ['malformed missing', { kind: 'missing', value: 1 }],
+  ])('rejects %s instead of silently converting it', async (_name, cell) => {
+    const client = new FakeHpnPavSqlClient({
+      payloadEnvelope: true,
+      payloadTransform: (payload) => {
+        const row = payload as { values: Record<string, unknown> };
+        return Object.hasOwn(row.values, 'away_points')
+          ? { ...row, values: { ...row.values, away_points: cell } }
+          : row;
+      },
+    });
+    await expect(
+      new PostgresAflTradeHpnPavInputRepository(client).buildAndPersistSeasonInputSet(
+        request(client),
+        { environment: 'test_fixture' }
+      )
+    ).rejects.toBeInstanceOf(Error);
+    expect(client.storedInput).toBeNull();
+  });
+
+  it.each(['absent', 'ambiguous', 'malformed'])(
+    'rejects an %s envelope without flat fallback',
+    async (mode) => {
+      const client = new FakeHpnPavSqlClient({
+        payloadEnvelope: true,
+        payloadTransform: (payload) => {
+          const row = payload as { values: Record<string, unknown> };
+          if (!Object.hasOwn(row.values, 'away_points')) return row;
+          const { away_points, ...remaining } = row.values;
+          return mode === 'malformed'
+            ? { ...row, values: null }
+            : { ...row, values: mode === 'absent' ? remaining : row.values, away_points };
+        },
+      });
+      await expect(
+        new PostgresAflTradeHpnPavInputRepository(client).buildAndPersistSeasonInputSet(
+          request(client),
+          { environment: 'test_fixture' }
+        )
+      ).rejects.toBeInstanceOf(Error);
+      expect(client.storedInput).toBeNull();
+    }
+  );
 
   it('rejects a strict subset of finalized source rows', async () => {
     const client = new FakeHpnPavSqlClient({ omitLastRow: true });

@@ -25,6 +25,7 @@ import {
   createAflTradeValuationDatasetCandidate,
   createAflTradeValuationDatasetRow,
   createAflTradeValuationDatasetSpecification,
+  factualInputSchema,
   parseAflTradeAnyDatasetManifest,
 } from '@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContracts';
 import type { AflTradeGateDecisionLedger } from '@/server/aflTradeIntelligence/governance/gateDecisionLedger';
@@ -1616,6 +1617,93 @@ describe('valuation dataset admission contracts', () => {
 });
 
 describe('valuation dataset admission service', () => {
+  it('represents a finalized PAV measurement without inventing a scalar metric', () => {
+    const measurement = {
+      kind: 'hpn_pav_measurement',
+      state: 'finalized',
+      memberId: reference('hpn-pav-measurement', 'measurement').id,
+      recordSha256: digest('a'),
+      headRevision: 2,
+      effectiveFrom: '2020-01-01',
+      effectiveThrough: '2020-09-30T00:00:00.000Z',
+      recordedAt: instant(4),
+      playerId: 'player:fixture',
+      clubId: 'club:fixture',
+      spellVersionId: reference('acquisition-spell-version', 'spell').id,
+      calculationId: reference('hpn-pav-season', 'calculation').id,
+      inputSetId: reference('hpn-pav-input-set', 'input').id,
+      methodId: reference('hpn-pav-method', 'method').id,
+      seasonYear: 2020,
+    };
+    expect(factualInputSchema.parse(measurement)).toEqual(measurement);
+    const fixture = datasetFixture();
+    const row = createAflTradeValuationDatasetRow({
+      ...fixture.row.content,
+      schemaVersion: 'afl-trade-valuation-dataset-row/v4',
+      pavObservationId: reference('player-pav-observation', 'original').id,
+      featureInputs: [measurement],
+      targetInputs: [
+        {
+          ...measurement,
+          memberId: reference('hpn-pav-measurement', 'target').id,
+          effectiveFrom: fixture.row.content.targetFrom,
+          effectiveThrough: fixture.row.content.targetThrough,
+        },
+      ],
+      featureKnownThrough: instant(5),
+    } as Parameters<typeof createAflTradeValuationDatasetRow>[0]);
+    expect(row.content.schemaVersion).toBe('afl-trade-valuation-dataset-row/v4');
+    expect(
+      createAflTradeValuationDatasetRow({ ...row.content, targetInputs: [] }).content.targetInputs
+    ).toEqual([]);
+    const candidate = createAflTradeValuationDatasetCandidate({
+      ...fixture.dataset.content,
+      schemaVersion: 'afl-trade-valuation-dataset/v5',
+      specification: createAflTradeValuationDatasetSpecification({
+        ...fixture.dataset.content.specification.content,
+        featurePolicy: {
+          ...fixture.dataset.content.specification.content.featurePolicy,
+          knowledgeJoin: 'retrospective_as_captured_at_dataset_creation',
+        },
+      }),
+      rows: [row],
+      datasetArtifact: artifact([row], 10),
+      pavObservationSet: {
+        requestId: reference('private-valuation-dispatch', 'private-request').id,
+        observationSetId: reference('player-pav-observation-set', 'original-set').id,
+        artifact: artifact({ retainedPavSet: 'fixture' }, 5),
+      },
+    } as Parameters<typeof createAflTradeValuationDatasetCandidate>[0]);
+    expect(candidate.content.schemaVersion).toBe('afl-trade-valuation-dataset/v5');
+    expect(() =>
+      createAflTradeValuationDatasetCandidate({
+        ...candidate.content,
+        pavObservationSet: {
+          ...candidate.content.pavObservationSet!,
+          artifact: { ...candidate.content.pavObservationSet!.artifact, mediaType: 'text/plain' },
+        },
+      })
+    ).toThrow();
+    expect(() =>
+      createAflTradeValuationDatasetCandidate({
+        ...candidate.content,
+        schemaVersion: 'afl-trade-valuation-dataset/v4',
+      })
+    ).toThrow();
+  });
+
+  it('rejects PAV measurement evidence attached to an unversioned scalar dataset', async () => {
+    const fixture = datasetFixture();
+    const evidence = evidenceFor(fixture);
+    const service = new AflTradeValuationDatasetAdmissionService({
+      async authenticate() {
+        return { ...evidence, pavMeasurements: [] };
+      },
+    });
+    const result = await service.admit({ dataset: fixture.dataset, admittedAt: instant(20) });
+    expect(result.status).toBe('blocked');
+  });
+
   it('admits a canonical approved release with byte-backed evidence and no fitting or grading', async () => {
     const fixture = datasetFixture();
     const evidence = evidenceFor(fixture);
@@ -1837,6 +1925,207 @@ describe('valuation dataset admission service', () => {
       status: 'blocked',
       blockers: [expect.objectContaining({ code: 'AUTHENTICATOR_UNAVAILABLE' })],
     });
+  });
+
+  it('admits an unchanged alias through an explicit same-target confirmation chain', async () => {
+    const fixture = datasetFixture({ clubAuthorityOptions: { temporalAlias: true } });
+    const evidence = evidenceFor(fixture);
+    const origin = fixture.clubAuthority.decision;
+    const originalProposal = origin.content.proposal.content;
+    if (originalProposal.subjectType !== 'provider_club_candidate') throw new Error('Club fixture');
+    const occurrence = {
+      source: 'player_affiliation' as const,
+      identityCandidateId: createAflTradeContentAddress('provider-identity-candidate', {
+        later: true,
+      }),
+    };
+    const confirmation = createAflTradeProviderResolutionDecision({
+      ...origin.content,
+      proposal: createAflTradeProviderResolutionProposal({
+        ...originalProposal,
+        occurrence,
+        resolutionCaseId: createAflTradeContentAddress('provider-resolution-case', {
+          subjectType: 'provider_club_candidate',
+          occurrence,
+        }),
+        proposedAt: instant(10),
+      }),
+      assignmentRevision: {
+        ...origin.content.assignmentRevision!,
+        expectedRevision: 1,
+        supersedesDecisionId: origin.decisionId,
+      },
+      effectiveAt: instant(11),
+      decidedAt: instant(11),
+    });
+    const authority = {
+      ...fixture.clubAuthority,
+      authenticatedAt: instant(20),
+      assignmentHead: {
+        ...fixture.clubAuthority.assignmentHead,
+        decisionId: confirmation.decisionId,
+        revision: 2,
+        updatedAt: instant(11),
+      },
+      assignmentContinuity: {
+        schemaVersion: 'afl-trade-provider-assignment-continuity/v1',
+        confirmations: [confirmation],
+      },
+    };
+    const service = new AflTradeValuationDatasetAdmissionService({
+      async authenticate() {
+        return { ...evidence, identityAuthorities: [authority, fixture.playerAuthority] };
+      },
+    });
+    const result = await service.admit({ dataset: fixture.dataset, admittedAt: instant(20) });
+    expect(result.status, JSON.stringify(result)).toBe('admitted');
+    const confirmationProposal = confirmation.content.proposal.content;
+    const chainContent = {
+      schemaVersion: 'afl-trade-provider-assignment-chain/v1',
+      assignmentCaseId: authority.assignmentHead.assignmentCaseId,
+      decisions: [origin, confirmation],
+    };
+    const chain = {
+      chainId: createAflTradeContentAddress('provider-assignment-chain', chainContent),
+      content: chainContent,
+    };
+    const { assignmentContinuity: _legacyContinuity, ...sharedAuthority } = authority;
+    const sharedService = new AflTradeValuationDatasetAdmissionService({
+      async authenticate() {
+        return {
+          ...evidence,
+          assignmentContinuities: [chain],
+          identityAuthorities: [
+            { ...sharedAuthority, assignmentContinuityId: chain.chainId },
+            fixture.playerAuthority,
+          ],
+        };
+      },
+    });
+    expect(
+      (await sharedService.admit({ dataset: fixture.dataset, admittedAt: instant(20) })).status
+    ).toBe('admitted');
+    const suffixContent = { ...chainContent, decisions: [confirmation] };
+    const suffixChain = {
+      chainId: createAflTradeContentAddress('provider-assignment-chain', suffixContent),
+      content: suffixContent,
+    };
+    const repeatedAssignment = new AflTradeValuationDatasetAdmissionService({
+      async authenticate() {
+        return {
+          ...evidence,
+          assignmentContinuities: [chain, suffixChain],
+          identityAuthorities: [
+            { ...sharedAuthority, assignmentContinuityId: chain.chainId },
+            {
+              ...sharedAuthority,
+              decision: confirmation,
+              assignmentContinuityId: suffixChain.chainId,
+            },
+            fixture.playerAuthority,
+          ],
+        };
+      },
+    });
+    // Both separately addressed chains are referenced and individually continuous.
+    // Assert the chain invariant specifically, independently of row-closure rejection.
+    expect(
+      await repeatedAssignment.admit({ dataset: fixture.dataset, admittedAt: instant(20) })
+    ).toMatchObject({
+      status: 'blocked',
+      blockers: expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Assignment continuity must contain each exact referenced valid chain once.',
+        }),
+      ]),
+    });
+    for (const changedChain of [
+      { ...chain, content: { ...chain.content, decisions: [origin] } },
+      {
+        ...chain,
+        chainId: createAflTradeContentAddress('provider-assignment-chain', { wrong: true }),
+      },
+    ]) {
+      const invalidShared = new AflTradeValuationDatasetAdmissionService({
+        async authenticate() {
+          return {
+            ...evidence,
+            assignmentContinuities: [changedChain],
+            identityAuthorities: [
+              { ...sharedAuthority, assignmentContinuityId: chain.chainId },
+              fixture.playerAuthority,
+            ],
+          };
+        },
+      });
+      expect(
+        (await invalidShared.admit({ dataset: fixture.dataset, admittedAt: instant(20) })).status
+      ).toBe('blocked');
+    }
+    if (
+      confirmationProposal.subjectType !== 'provider_club_candidate' ||
+      !confirmationProposal.proposedTarget
+    )
+      throw new Error('Club confirmation fixture');
+    const retarget = createAflTradeProviderResolutionDecision({
+      ...confirmation.content,
+      proposal: createAflTradeProviderResolutionProposal({
+        ...confirmationProposal,
+        proposedTarget: { ...confirmationProposal.proposedTarget, clubId: 'club:different-target' },
+      }),
+    });
+    const restored = createAflTradeProviderResolutionDecision({
+      ...confirmation.content,
+      assignmentRevision: {
+        ...confirmation.content.assignmentRevision!,
+        expectedRevision: 2,
+        supersedesDecisionId: retarget.decisionId,
+      },
+    });
+    for (const confirmations of [[], [retarget], [retarget, restored], [restored]]) {
+      const last = confirmations.at(-1) ?? confirmation;
+      const changed = {
+        ...authority,
+        assignmentHead: {
+          ...authority.assignmentHead,
+          decisionId: last.decisionId,
+          revision: last.content.assignmentRevision!.expectedRevision + 1,
+        },
+        assignmentContinuity:
+          confirmations.length === 0
+            ? undefined
+            : { ...authority.assignmentContinuity, confirmations },
+      };
+      const invalid = new AflTradeValuationDatasetAdmissionService({
+        async authenticate() {
+          return { ...evidence, identityAuthorities: [changed, fixture.playerAuthority] };
+        },
+      });
+      await expect(
+        invalid.admit({ dataset: fixture.dataset, admittedAt: instant(20) })
+      ).resolves.toMatchObject({ status: 'blocked' });
+      const invalidChainContent = { ...chainContent, decisions: [origin, ...confirmations] };
+      const invalidChain = {
+        chainId: createAflTradeContentAddress('provider-assignment-chain', invalidChainContent),
+        content: invalidChainContent,
+      };
+      const sharedInvalid = new AflTradeValuationDatasetAdmissionService({
+        async authenticate() {
+          const { assignmentContinuity: _legacy, ...headAuthority } = changed;
+          return {
+            ...evidence,
+            assignmentContinuities: [invalidChain],
+            identityAuthorities: [
+              { ...headAuthority, assignmentContinuityId: invalidChain.chainId },
+              fixture.playerAuthority,
+            ],
+          };
+        },
+      });
+      await expect(
+        sharedInvalid.admit({ dataset: fixture.dataset, admittedAt: instant(20) })
+      ).resolves.toMatchObject({ status: 'blocked' });
+    }
   });
 
   it('rejects stale identity heads, row re-keying, and unrelated dataset bytes', async () => {

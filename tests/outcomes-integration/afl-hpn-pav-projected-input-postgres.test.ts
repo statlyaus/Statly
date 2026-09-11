@@ -27,6 +27,11 @@ import {
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import { PostgresAflTradeHpnProjectedFieldMapAuthority } from '@/server/aflTradeIntelligence/modeling/postgresHpnProjectedFieldMapAuthority';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
+import {
+  aflTradeHpnPavSeasonInputSetSchema,
+  aflTradeHpnPavFieldMapSchema,
+  AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY,
+} from '@/server/aflTradeIntelligence/modeling/hpnPavInputContracts';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_LIMITATION,
@@ -831,12 +836,11 @@ async function seedSourceAndFactualAuthority(
         finalizedAt,
         sha256('match-candidate'),
         sha256('match-fact'),
+        // The factual repository stores fact.content directly, not the fact wrapper.
         canonicalizeAflTradeJson({
-          content: {
-            match: {
-              homeClub: { clubId: homeClubId },
-              awayClub: { clubId: awayClubId },
-            },
+          match: {
+            homeClub: { clubId: homeClubId },
+            awayClub: { clubId: awayClubId },
           },
         }),
       ]
@@ -1034,11 +1038,20 @@ async function seedResolution(
 ): Promise<void> {
   void unused;
   const entity = kind === 'player' ? 'player' : kind === 'match' ? 'match' : 'club';
-  const resolutionId = id(`provider-${entity}-resolution`, `${kind}:${suffix}`);
   const resolutionCaseId = id(`provider-${entity}-resolution-case`, `${kind}:${suffix}`);
   const decisionId = id('provider-resolution-decision', `${kind}:${suffix}`);
+  const resolutionId = decisionId;
   const assignmentCaseId = id('provider-identity-assignment-case', `${kind}:${suffix}`);
   const assignmentIdentityId = `${entity}-identity:${kind}:${suffix}`;
+  // Synthetic upstream review custody must agree with the typed resolution.
+  // The current HPN resolution predicates remain enabled and authenticate it.
+  await transaction.query(
+    `INSERT INTO outcome_review_decision
+      (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+     VALUES ($1,'provider_resolution_case',$2,'approved',
+       'Synthetic projected HPN resolution review','{}'::jsonb,'fixture',$3)`,
+    [decisionId, resolutionCaseId, fixtureAt]
+  );
   await transaction.query(
     `INSERT INTO outcome_provider_identity_assignment_head
       (assignment_case_id,entity_kind,identity_id,revision,decision_id,status,updated_at)
@@ -2047,6 +2060,25 @@ describe.sequential(
         publicationEligible: false,
       });
       expect(replay).toEqual({ ...first, state: 'already_prepared' });
+      const retainedInput = await new PostgresAflTradeHpnPavInputRepository(
+        client
+      ).loadCurrentFinalizedSeasonInputSet(
+        {
+          inputSetId: first.inputSetId,
+          environment: 'non_production',
+          competition,
+          seasonYear,
+          methodId: method.methodId,
+        },
+        { environment: 'non_production' }
+      );
+      expect(retainedInput.content.factualUniverse.completedMatchFacts).toHaveLength(1);
+      expect(retainedInput.content.factualUniverse.completedMatchFacts[0]!.homeClubId).toBe(
+        'club:home'
+      );
+      expect(retainedInput.content.factualUniverse.completedMatchFacts[0]!.awayClubId).toBe(
+        'club:away'
+      );
       retainedBackdatedAdmissionFixture = {
         requestId,
         originalClaimId: claim.claimId,
@@ -2177,6 +2209,1030 @@ describe.sequential(
               FROM outcome_valuation_active_publication active_publication) AS active_publication`
         )
       ).resolves.toEqual(publicPointersBefore);
+    });
+
+    it('consumes candidate-only player decisions with no assignment and rejects stale or transplanted authority', async () => {
+      const rollback = new Error('Rollback candidate-only synthetic upstream fixture');
+      await expect(
+        client.transaction(async (transaction) => {
+          const retained = await transaction.query<{ input_set_json: unknown }>(
+            `SELECT input_set_json FROM outcome_hpn_pav_input_set WHERE status='finalized' LIMIT 1`
+          );
+          const original = aflTradeHpnPavSeasonInputSetSchema.parse(
+            retained.rows[0]!.input_set_json
+          );
+          // Synthetic upstream setup only; no target HPN validator or function is overridden.
+          await transaction.query(`SET LOCAL session_replication_role='replica'`);
+          await transaction.query(`UPDATE outcome_provider_player_resolution resolution SET
+          resolution_scope='candidate_only',assignment_case_id=NULL,assignment_entity_kind=NULL,
+          assignment_identity_id=NULL,assignment_revision=NULL,assignment_status=NULL,
+          player_identity_id=NULL,decision_json=jsonb_build_object('content',jsonb_build_object(
+            'proposal',jsonb_build_object('content',jsonb_build_object(
+              'identityCandidateId',candidate.identity_candidate_id,
+              'staging',jsonb_build_object('providerDecodedRowId',candidate.provider_decoded_row_id),
+              'proposedTarget',jsonb_build_object('scope','candidate_only','playerId',resolution.player_id)))))
+          FROM outcome_provider_identity_candidate candidate
+          WHERE candidate.identity_candidate_id=resolution.identity_candidate_id`);
+          await transaction.query(`SET LOCAL session_replication_role='origin'`);
+          const repository = new PostgresAflTradeHpnPavInputRepository({
+            query: transaction.query.bind(transaction),
+            transaction: async (work) => work(transaction),
+          });
+          const sources = original.content.sourceRuns.map((source) => {
+            const row = original.content.rows.find(
+              (row) => row.source.normalizationRunId === source.normalizationRunId
+            )!;
+            return {
+              normalizationRunId: source.normalizationRunId,
+              fieldMapId: source.fieldMapId,
+              inputKind: row.kind,
+              role: row.kind === 'player_match_stats' ? row.role : null,
+            };
+          });
+          const request = {
+            environment: 'non_production' as const,
+            competition: 'AFLM' as const,
+            seasonYear,
+            methodId: original.content.methodId,
+            factualRunId: original.content.factualUniverse.factualRunId,
+            effectiveThrough: '2026-08-18T23:59:59.999Z',
+            sources,
+          };
+          const { inputSet } = await repository.buildAndPersistSeasonInputSet(request, {
+            environment: 'non_production',
+          });
+          expect(inputSet.content.factualUniverse.completedMatchFacts).toHaveLength(1);
+          expect(inputSet.content.factualUniverse.completedMatchFacts[0]!.homeClubId).toBe(
+            'club:home'
+          );
+          expect(inputSet.content.factualUniverse.completedMatchFacts[0]!.awayClubId).toBe(
+            'club:away'
+          );
+          const players = inputSet.content.rows.filter((row) => row.kind === 'player_match_stats');
+          expect(players.every((row) => row.player.assignmentDecision === null)).toBe(true);
+          const selected = players[0]!;
+          const another = players.find(
+            (row) => row.player.canonicalId !== selected.player.canonicalId
+          )!;
+          const guard = await transaction.query<{ exact: boolean; transplanted: boolean }>(
+            `SELECT outcome_hpn_pav_player_resolution_current($1,$2::jsonb) exact,
+            outcome_hpn_pav_player_resolution_current($3,$2::jsonb) transplanted`,
+            [
+              selected.source.providerDecodedRowId,
+              canonicalizeAflTradeJson(selected.player),
+              another.source.providerDecodedRowId,
+            ]
+          );
+          expect(guard.rows).toEqual([{ exact: true, transplanted: false }]);
+          const current = {
+            inputSetId: inputSet.inputSetId,
+            environment: request.environment,
+            competition: request.competition,
+            seasonYear,
+            methodId: request.methodId,
+          };
+          await expect(
+            repository.loadCurrentFinalizedSeasonInputSet(current, {
+              environment: 'non_production',
+            })
+          ).resolves.toEqual(inputSet);
+          // Upstream review successor is synthetic like the seeded resolutions above.
+          // Restore all guards before exercising the public current-authority reader.
+          await transaction.query(`SET LOCAL session_replication_role='replica'`);
+          await transaction.query(
+            `INSERT INTO outcome_review_decision
+          (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+          VALUES ($1,'provider_resolution_case',$2,'approved','Synthetic original resolution review','{}'::jsonb,'fixture',$3)
+          ON CONFLICT (decision_id) DO NOTHING`,
+            [selected.player.resolutionDecision.id, 'candidate-only-fixture', fixtureAt]
+          );
+          await transaction.query(
+            `INSERT INTO outcome_review_decision
+          (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+          VALUES ($1,'provider_resolution_case',$2,'rejected',$3,'Synthetic stale resolution review','{}'::jsonb,'fixture',clock_timestamp())`,
+            [
+              id('review-decision', 'candidate-only-stale'),
+              'candidate-only-fixture',
+              selected.player.resolutionDecision.id,
+            ]
+          );
+          await transaction.query(`SET LOCAL session_replication_role='origin'`);
+          await expect(
+            repository.loadCurrentFinalizedSeasonInputSet(current, {
+              environment: 'non_production',
+            })
+          ).rejects.toThrow();
+          throw rollback;
+        })
+      ).rejects.toBe(rollback);
+    });
+
+    it.each(['flat', 'envelope'])(
+      'retains five reviewed nonparticipants with %s payloads and real v4 guards and rejects revoked or transplanted review custody',
+      async (payloadShape) => {
+        const rollback = new Error('Rollback synthetic nonparticipant source parents');
+        await expect(
+          client.transaction(async (transaction) => {
+            const retained = await transaction.query<{ input_set_json: unknown }>(
+              `SELECT input_set_json FROM outcome_hpn_pav_input_set WHERE status='finalized' LIMIT 1`
+            );
+            const original = aflTradeHpnPavSeasonInputSetSchema.parse(
+              retained.rows[0]!.input_set_json
+            );
+            const template = original.content.rows.find(
+              (row) => row.kind === 'player_match_stats' && row.role === 'corroborating'
+            );
+            if (!template || template.kind !== 'player_match_stats')
+              throw new Error('Missing synthetic player source');
+            const clock = await transaction.query<{ now: Date }>(
+              `SELECT transaction_timestamp() AS now`
+            );
+            const now = clock.rows[0]!.now.toISOString();
+            const ids: string[] = [];
+            const addressed = (prefix: string, key: string) => `${prefix}:${sha256(key)}`;
+            // Only synthetic upstream records are seeded below. All HPN v4 functions and triggers remain enabled.
+            const clone = async (
+              table: string,
+              column: string,
+              key: string,
+              patch: Record<string, unknown>
+            ) => {
+              await transaction.query(
+                `INSERT INTO ${table} SELECT (jsonb_populate_record(NULL::${table},to_jsonb(source)||$2::jsonb)).*
+            FROM ${table} source WHERE ${column}=$1`,
+                [key, canonicalizeAflTradeJson(patch)]
+              );
+            };
+            await transaction.query(`SET LOCAL session_replication_role='replica'`);
+            const parent = await transaction.query<{
+              typed_payload: Record<string, unknown>;
+              identity_candidate_id: string;
+              match_candidate_id: string;
+            }>(
+              `SELECT decoded.typed_payload,identity.identity_candidate_id,match.match_candidate_id
+           FROM outcome_provider_decoded_row decoded JOIN outcome_provider_identity_candidate identity USING(provider_decoded_row_id)
+           JOIN outcome_provider_match_candidate match USING(provider_decoded_row_id) WHERE provider_decoded_row_id=$1`,
+              [template.source.providerDecodedRowId]
+            );
+            const sourceParent = parent.rows[0]!;
+            const identityFields = new Set(
+              original.content.fieldMaps.flatMap((map) =>
+                map.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1'
+                  ? map.content.semanticBindings
+                      .filter((binding) =>
+                        ['player', 'match', 'club'].includes(binding.semanticField)
+                      )
+                      .flatMap((binding) =>
+                        binding.mapping.kind === 'direct' ? [binding.mapping.sourceField] : []
+                      )
+                  : []
+              )
+            );
+            const map = original.content.fieldMaps.find(
+              (map) =>
+                map.fieldMapId ===
+                original.content.sourceRuns.find(
+                  (run) => run.normalizationRunId === template.source.normalizationRunId
+                )?.fieldMapId
+            );
+            const playerBinding =
+              map?.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1'
+                ? map.content.semanticBindings.find((binding) => binding.semanticField === 'player')
+                    ?.mapping
+                : undefined;
+            if (playerBinding?.kind !== 'direct')
+              throw new Error('Synthetic source needs direct player binding');
+            const reports: Array<{ id: string; rowId: string; evidence: Record<string, unknown> }> =
+              [];
+            for (let index = 0; index < 5; index += 1) {
+              const rowId = `fixture-unused-row:${index}`;
+              const sourceValues = Object.fromEntries(
+                Object.entries(template.source.sourceValues).map(([field, value]) => [
+                  field,
+                  field === playerBinding.sourceField
+                    ? `Synthetic unused ${index}`
+                    : identityFields.has(field)
+                      ? value
+                      : null,
+                ])
+              );
+              const cells = Object.fromEntries(
+                Object.entries(sourceParent.typed_payload).map(([field, value]) => [
+                  field,
+                  field === playerBinding.sourceField
+                    ? { kind: 'text', value: `Synthetic unused ${index}` }
+                    : field in sourceValues && !identityFields.has(field)
+                      ? { kind: 'missing' }
+                      : value,
+                ])
+              );
+              const payload =
+                payloadShape === 'envelope'
+                  ? {
+                      values: cells,
+                      observedSeasonText: String(seasonYear),
+                      observedDateText: '2026-08-01',
+                      roundLabel: 'Synthetic round',
+                      appearanceCandidate: false,
+                      semanticNaturalKeySha256: 'a'.repeat(64),
+                    }
+                  : cells;
+              const identityDocument = {
+                kind: 'player',
+                suffix: `unused:${index}`,
+                providerDecodedRowId: rowId,
+              };
+              const matchDocument = {
+                kind: 'match',
+                suffix: `unused:${index}`,
+                providerDecodedRowId: rowId,
+              };
+              const identityId = addressed(
+                'provider-identity-candidate',
+                canonicalizeAflTradeJson(identityDocument)
+              );
+              const matchCandidateId = addressed(
+                'provider-match-candidate',
+                canonicalizeAflTradeJson(matchDocument)
+              );
+              const playerId = `fixture-unused-player:${index}`;
+              await clone('outcome_player', 'player_id', template.player.canonicalId, {
+                player_id: playerId,
+                display_name: `Synthetic unused ${index}`,
+              });
+              await clone(
+                'outcome_provider_decoded_row',
+                'provider_decoded_row_id',
+                template.source.providerDecodedRowId,
+                {
+                  provider_decoded_row_id: rowId,
+                  source_row_number: 10000 + index,
+                  source_row_sha256: sha256(canonicalizeAflTradeJson(payload)),
+                  typed_payload: payload,
+                }
+              );
+              await clone(
+                'outcome_provider_identity_candidate',
+                'identity_candidate_id',
+                sourceParent.identity_candidate_id,
+                {
+                  identity_candidate_id: identityId,
+                  provider_decoded_row_id: rowId,
+                  native_entity_id: null,
+                  recorded_name: `Synthetic unused ${index}`,
+                  locator_sha256: sha256(`locator:${rowId}`),
+                  candidate_sha256: sha256(canonicalizeAflTradeJson(identityDocument)),
+                  candidate_canonical_json: canonicalizeAflTradeJson(identityDocument),
+                  candidate_json: identityDocument,
+                }
+              );
+              await clone(
+                'outcome_provider_match_candidate',
+                'match_candidate_id',
+                sourceParent.match_candidate_id,
+                {
+                  match_candidate_id: matchCandidateId,
+                  provider_decoded_row_id: rowId,
+                  candidate_sha256: sha256(canonicalizeAflTradeJson(matchDocument)),
+                  candidate_canonical_json: canonicalizeAflTradeJson(matchDocument),
+                  candidate_json: matchDocument,
+                }
+              );
+              const resolutionRefs: Record<string, unknown> = {};
+              for (const kind of ['player', 'match', 'club'] as const) {
+                const reference = template[kind];
+                const old = await transaction.query<{
+                  resolution_id: string;
+                  resolution_case_id: string;
+                  assignment_case_id: string;
+                }>(
+                  `SELECT resolution_id,resolution_case_id,assignment_case_id FROM outcome_provider_${kind}_resolution WHERE decision_id=$1`,
+                  [reference.resolutionDecision.id]
+                );
+                const oldRow = old.rows[0]!;
+                const decisionId = addressed('provider-resolution-decision', `${kind}:${rowId}`);
+                const resolutionId = decisionId;
+                const caseId = addressed('provider-resolution-case', `${kind}:${rowId}`);
+                await transaction.query(
+                  `INSERT INTO outcome_review_decision
+                  (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+                 VALUES ($1,'provider_resolution_case',$2,'approved',
+                   'Synthetic unused-player resolution review','{}'::jsonb,'fixture',$3)`,
+                  [decisionId, caseId, fixtureAt]
+                );
+                const assignmentCase = addressed(
+                  'provider-identity-assignment-case',
+                  `${kind}:${rowId}`
+                );
+                if (kind !== 'player')
+                  await clone(
+                    'outcome_provider_identity_assignment_head',
+                    'assignment_case_id',
+                    oldRow.assignment_case_id,
+                    {
+                      assignment_case_id: assignmentCase,
+                      identity_id: `fixture-unused-${kind}-identity:${index}`,
+                      decision_id: decisionId,
+                    }
+                  );
+                await clone(
+                  `outcome_provider_${kind}_resolution`,
+                  'resolution_id',
+                  oldRow.resolution_id,
+                  {
+                    resolution_id: resolutionId,
+                    resolution_case_id: caseId,
+                    decision_id: decisionId,
+                    resolution_sha256: sha256(`${kind}:${rowId}`),
+                    supersedes_resolution_id: null,
+                    ...(kind === 'player'
+                      ? {
+                          identity_candidate_id: identityId,
+                          player_id: playerId,
+                          player_identity_id: null,
+                          resolution_scope: 'candidate_only',
+                          assignment_case_id: null,
+                          assignment_entity_kind: null,
+                          assignment_identity_id: null,
+                          assignment_revision: null,
+                          assignment_status: null,
+                          decision_json: {
+                            content: {
+                              proposal: {
+                                content: {
+                                  identityCandidateId: identityId,
+                                  staging: { providerDecodedRowId: rowId },
+                                  proposedTarget: { scope: 'candidate_only', playerId },
+                                },
+                              },
+                            },
+                          },
+                        }
+                      : {
+                          match_candidate_id: matchCandidateId,
+                          assignment_case_id: assignmentCase,
+                          assignment_identity_id: `fixture-unused-${kind}-identity:${index}`,
+                          [`${kind}_identity_id`]: `fixture-unused-${kind}-identity:${index}`,
+                        }),
+                  }
+                );
+                await clone(
+                  `outcome_provider_${kind}_resolution_head`,
+                  'resolution_case_id',
+                  oldRow.resolution_case_id,
+                  {
+                    resolution_case_id: caseId,
+                    resolution_id: resolutionId,
+                    ...(kind === 'player'
+                      ? { identity_candidate_id: identityId }
+                      : kind === 'match'
+                        ? { match_candidate_id: matchCandidateId }
+                        : {}),
+                  }
+                );
+                const ref = { id: decisionId, sha256: sha256(`${kind}:${rowId}`) };
+                if (kind !== 'player') {
+                  const continuity = await transaction.query<{
+                    current: boolean;
+                    identity_matches: boolean;
+                  }>(
+                    `SELECT outcome_provider_assignment_continuity_current(resolution.decision_id) AS current,
+                    resolution.assignment_identity_id=head.identity_id AS identity_matches
+                   FROM outcome_provider_${kind}_resolution resolution
+                   JOIN outcome_provider_identity_assignment_head head USING(assignment_case_id)
+                   WHERE resolution.decision_id=$1`,
+                    [decisionId]
+                  );
+                  expect(continuity.rows, `${kind} synthetic assignment continuity`).toEqual([
+                    { current: true, identity_matches: true },
+                  ]);
+                }
+                resolutionRefs[kind] = {
+                  ...reference,
+                  resolutionDecision: ref,
+                  ...(kind === 'player'
+                    ? {
+                        canonicalId: playerId,
+                        resolutionScope: 'candidate_only',
+                        assignmentDecision: null,
+                      }
+                    : { assignmentDecision: ref }),
+                };
+              }
+              const report = createAflTradeCanonicalJsonArtifactRef(
+                { syntheticNonparticipantReport: rowId },
+                '2026-08-01T00:00:00.000Z'
+              );
+              const artifact = await transaction.query<{ artifact_id: string }>(
+                `SELECT artifact_id FROM outcome_artifact_custody LIMIT 1`
+              );
+              await clone(
+                'outcome_artifact_custody',
+                'artifact_id',
+                artifact.rows[0]!.artifact_id,
+                {
+                  artifact_id: report.artifactId,
+                  content_sha256: report.contentSha256,
+                  storage_uri: report.storageUri,
+                  media_type: report.mediaType,
+                  byte_length: report.byteLength,
+                  environment: 'non_production',
+                  created_at: report.createdAt,
+                  verified_at: report.createdAt,
+                }
+              );
+              const evidence = {
+                schemaVersion: 'afl-trade-hpn-source-nonparticipant-review/v1',
+                environment: 'non_production',
+                competition: 'AFLM',
+                seasonYear,
+                factualRunId: original.content.factualUniverse.factualRunId,
+                disposition: {
+                  reason: 'reviewed_nonparticipant',
+                  source: {
+                    ...template.source,
+                    providerDecodedRowId: rowId,
+                    sourceRowSha256: sha256(canonicalizeAflTradeJson(payload)),
+                    typedPayloadSha256: sha256(canonicalizeAflTradeJson(payload)),
+                    sourceValues,
+                  },
+                  ...resolutionRefs,
+                  evidenceArtifact: report,
+                },
+              };
+              const id = addressed('review-decision', canonicalizeAflTradeJson(evidence));
+              ids.push(id);
+              reports.push({ id, rowId, evidence });
+            }
+            await transaction.query(
+              `UPDATE outcome_provider_normalization_run SET source_row_count=source_row_count+5,accepted_row_count=accepted_row_count+5 WHERE normalization_run_id=$1`,
+              [template.source.normalizationRunId]
+            );
+            await transaction.query(`SET LOCAL session_replication_role='origin'`);
+            for (const report of reports)
+              await transaction.query(
+                `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+            VALUES($1,'hpn_source_nonparticipant',$2,'approved','Synthetic upstream nonparticipant review for target guard testing',$3::jsonb,'fixture-reviewer',$4)`,
+                [report.id, report.rowId, canonicalizeAflTradeJson(report.evidence), now]
+              );
+            const repository = new PostgresAflTradeHpnPavInputRepository({
+              query: transaction.query.bind(transaction),
+              transaction: async (work) => work(transaction),
+            });
+            const requested = {
+              environment: 'non_production' as const,
+              competition: 'AFLM' as const,
+              seasonYear,
+              methodId: original.content.methodId,
+              factualRunId: original.content.factualUniverse.factualRunId,
+              effectiveThrough: '2026-08-19T23:59:59.999Z',
+              knowledgePolicy: 'retrospective_as_recorded_by_input_creation' as const,
+              knowledgeCutoffAt: now,
+              reviewedNonparticipantDecisions: ids,
+              sources: original.content.sourceRuns.map((run) => {
+                const row = original.content.rows.find(
+                  (row) => row.source.normalizationRunId === run.normalizationRunId
+                )!;
+                return {
+                  normalizationRunId: run.normalizationRunId,
+                  fieldMapId: run.fieldMapId,
+                  inputKind: row.kind,
+                  role: row.kind === 'player_match_stats' ? row.role : null,
+                };
+              }),
+            };
+            const { inputSet } = await repository.buildAndPersistSeasonInputSet(requested, {
+              environment: 'non_production',
+            });
+            expect(inputSet.content.schemaVersion).toBe('afl-trade-hpn-pav-input-set/v4');
+            expect(
+              'excludedSourceRows' in inputSet.content && inputSet.content.excludedSourceRows
+            ).toHaveLength(5);
+            expect(inputSet.content.rows).toHaveLength(original.content.rows.length);
+            if (!('excludedSourceRows' in inputSet.content)) throw new Error('Expected v4 custody');
+            for (const excluded of inputSet.content.excludedSourceRows) {
+              const retained = await transaction.query<{ typed_payload: Record<string, unknown> }>(
+                'SELECT typed_payload FROM outcome_provider_decoded_row WHERE provider_decoded_row_id=$1',
+                [excluded.source.providerDecodedRowId]
+              );
+              const payload = retained.rows[0]!.typed_payload;
+              expect(excluded.source.typedPayloadSha256).toBe(
+                sha256(canonicalizeAflTradeJson(payload))
+              );
+              if (payloadShape === 'envelope') {
+                expect(payload.observedSeasonText).toBe(String(seasonYear));
+                expect(excluded.source.typedPayloadSha256).not.toBe(
+                  sha256(canonicalizeAflTradeJson(payload.values))
+                );
+              }
+            }
+
+            const read = {
+              inputSetId: inputSet.inputSetId,
+              environment: 'non_production' as const,
+              competition: 'AFLM' as const,
+              seasonYear,
+              methodId: original.content.methodId,
+            };
+            expect(
+              await repository.loadCurrentFinalizedSeasonInputSet(read, {
+                environment: 'non_production',
+              })
+            ).toEqual(inputSet);
+            expect(
+              (
+                await repository.buildAndPersistSeasonInputSet(requested, {
+                  environment: 'non_production',
+                })
+              ).idempotentReplay
+            ).toBe(true);
+            if (!('excludedSourceRows' in inputSet.content)) throw new Error('Expected v4 fixture');
+            await transaction.query('SAVEPOINT missing_exclusion');
+            const incompleteContent = {
+              ...inputSet.content,
+              effectiveThrough: '2026-08-20T23:59:59.999Z',
+              excludedSourceRows: inputSet.content.excludedSourceRows.slice(0, 4),
+            };
+            const incompleteId = createAflTradeContentAddress(
+              'hpn-pav-input-set',
+              incompleteContent
+            );
+            await clone('outcome_hpn_pav_input_set', 'input_set_id', inputSet.inputSetId, {
+              input_set_id: incompleteId,
+              status: 'building',
+              finalized_at: null,
+              effective_through: incompleteContent.effectiveThrough,
+              source_row_count: inputSet.content.rows.length + 4,
+              excluded_source_row_count: 4,
+              input_set_sha256: sha256(canonicalizeAflTradeJson(incompleteContent)),
+              input_set_canonical_json: canonicalizeAflTradeJson(incompleteContent),
+              input_set_json: { inputSetId: incompleteId, content: incompleteContent },
+            });
+            for (const table of [
+              'outcome_hpn_pav_input_run',
+              'outcome_hpn_pav_input_row',
+              'outcome_hpn_pav_input_match',
+              'outcome_hpn_pav_input_factual_match_member',
+              'outcome_hpn_pav_input_factual_appearance_member',
+            ]) {
+              await clone(table, 'input_set_id', inputSet.inputSetId, {
+                input_set_id: incompleteId,
+              });
+            }
+            await transaction.query(
+              `INSERT INTO outcome_hpn_pav_input_excluded_source_row
+          SELECT (jsonb_populate_record(NULL::outcome_hpn_pav_input_excluded_source_row,to_jsonb(source)||jsonb_build_object('input_set_id',$2::text))).*
+          FROM outcome_hpn_pav_input_excluded_source_row source WHERE input_set_id=$1 AND ordinal<4`,
+              [inputSet.inputSetId, incompleteId]
+            );
+            await expect(
+              transaction.query(
+                `UPDATE outcome_hpn_pav_input_set SET status='finalized',finalized_at=created_at WHERE input_set_id=$1`,
+                [incompleteId]
+              )
+            ).rejects.toThrow(/exactly conserve finalized decoded rows/i);
+            await transaction.query('ROLLBACK TO SAVEPOINT missing_exclusion');
+            const actualEvidence = {
+              ...reports[0]!.evidence,
+              disposition: {
+                reason: 'reviewed_nonparticipant',
+                source: template.source,
+                player: template.player,
+                match: template.match,
+                club: template.club,
+                evidenceArtifact: inputSet.content.excludedSourceRows[0]!.review.evidenceArtifact,
+              },
+            };
+            const actualDecision = addressed(
+              'review-decision',
+              canonicalizeAflTradeJson(actualEvidence)
+            );
+            await transaction.query(
+              `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+          VALUES($1,'hpn_source_nonparticipant',$2,'approved','Synthetic incorrect actual-appearance review',$3::jsonb,'fixture-reviewer',$4)`,
+              [
+                actualDecision,
+                template.source.providerDecodedRowId,
+                canonicalizeAflTradeJson(actualEvidence),
+                now,
+              ]
+            );
+            expect(
+              (
+                await transaction.query<{ current: boolean }>(
+                  `SELECT outcome_hpn_pav_nonparticipant_review_current($1,'non_production','AFLM',$2,$3,$4) AS current`,
+                  [actualDecision, seasonYear, original.content.factualUniverse.factualRunId, now]
+                )
+              ).rows[0]!.current
+            ).toBe(false);
+            const badOriginal = inputSet.content.excludedSourceRows[1]!;
+            const badEvidence = {
+              ...reports[1]!.evidence,
+              disposition: {
+                reason: 'reviewed_nonparticipant',
+                source: { ...badOriginal.source, sourceRowSha256: sha256('transplanted-source') },
+                player: badOriginal.player,
+                match: badOriginal.match,
+                club: badOriginal.club,
+                evidenceArtifact: badOriginal.review.evidenceArtifact,
+              },
+            };
+            const badDecision = addressed('review-decision', canonicalizeAflTradeJson(badEvidence));
+            await transaction.query(
+              `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+          VALUES($1,'hpn_source_nonparticipant',$2,'approved',$3,'Synthetic transplanted source review',$4::jsonb,'fixture-reviewer',$5)`,
+              [
+                badDecision,
+                badOriginal.source.providerDecodedRowId,
+                badOriginal.review.decision.id,
+                canonicalizeAflTradeJson(badEvidence),
+                now,
+              ]
+            );
+            expect(
+              (
+                await transaction.query<{ current: boolean }>(
+                  `SELECT outcome_hpn_pav_nonparticipant_review_current($1,'non_production','AFLM',$2,$3,$4) AS current`,
+                  [badDecision, seasonYear, original.content.factualUniverse.factualRunId, now]
+                )
+              ).rows[0]!.current
+            ).toBe(false);
+            await transaction.query(
+              `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+          VALUES($1,'hpn_source_nonparticipant',$2,'rejected',$3,'Synthetic review revocation','{}','fixture-reviewer',$4)`,
+              [addressed('review-decision', 'revoked-unused'), reports[0]!.rowId, ids[0], now]
+            );
+            await expect(
+              repository.loadCurrentFinalizedSeasonInputSet(read, { environment: 'non_production' })
+            ).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+            expect(
+              await repository.loadFinalizedSeasonInputSet(read, { environment: 'non_production' })
+            ).toEqual(inputSet);
+            throw rollback;
+          })
+        ).rejects.toBe(rollback);
+      }
+    );
+
+    it('retains later capture dates for historical events only with explicit retrospective custody and replays exactly', async () => {
+      const rollback = new Error('Rollback retrospective synthetic fixture');
+      await expect(
+        client.transaction(async (transaction) => {
+          const retained = await transaction.query<{ input_set_json: unknown }>(
+            `SELECT input_set_json FROM outcome_hpn_pav_input_set WHERE status='finalized' LIMIT 1`
+          );
+          const original = aflTradeHpnPavSeasonInputSetSchema.parse(
+            retained.rows[0]!.input_set_json
+          );
+          const sources = original.content.sourceRuns.map((source) => {
+            const row = original.content.rows.find(
+              (row) => row.source.normalizationRunId === source.normalizationRunId
+            );
+            return {
+              normalizationRunId: source.normalizationRunId,
+              fieldMapId: source.fieldMapId,
+              inputKind: original.content.fieldMaps.find(
+                (map) => map.fieldMapId === source.fieldMapId
+              )!.content.inputKind,
+              role: row?.kind === 'player_match_stats' ? row.role : null,
+            };
+          });
+          // Synthetic setup only: represent evidence captured after the event period, without backdating it.
+          await transaction.query(`SET LOCAL session_replication_role='replica'`);
+          await transaction.query(
+            `UPDATE outcome_source_capture SET captured_at=$1::timestamptz WHERE capture_id=ANY($2::text[])`,
+            [
+              '2026-08-10T00:00:00.000Z',
+              original.content.sourceRuns.map((source) => source.captureId),
+            ]
+          );
+          await transaction.query(
+            `UPDATE outcome_provider_normalization_run SET finalized_at=$1::timestamptz,completed_at=$1::timestamptz WHERE normalization_run_id=ANY($2::text[])`,
+            ['2026-08-10T02:00:00.000Z', sources.map((source) => source.normalizationRunId)]
+          );
+          await transaction.query(
+            `UPDATE outcome_factual_reconciliation_run SET finalized_at=$1::timestamptz WHERE factual_run_id=$2`,
+            ['2026-08-11T00:00:00.000Z', original.content.factualUniverse.factualRunId]
+          );
+          await transaction.query(
+            `UPDATE outcome_acquisition_spell_version SET recorded_at=$1::timestamptz WHERE player_id=ANY($2::text[])`,
+            ['2026-08-12T00:00:00.000Z', [...playerIds]]
+          );
+          await transaction.query(`SET LOCAL session_replication_role='origin'`);
+          const repository = new PostgresAflTradeHpnPavInputRepository({
+            query: transaction.query.bind(transaction),
+            transaction: async (work) => work(transaction),
+          });
+          const request = {
+            environment: 'non_production' as const,
+            competition: 'AFLM' as const,
+            seasonYear,
+            methodId: original.content.methodId,
+            factualRunId: original.content.factualUniverse.factualRunId,
+            effectiveThrough: '2026-08-09T23:59:59.999Z',
+            sources,
+            knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+            knowledgeCutoffAt: '2026-08-16T00:00:00.000Z',
+          };
+          const first = await repository.buildAndPersistSeasonInputSet(request, {
+            environment: 'non_production',
+          });
+          expect(first.idempotentReplay).toBe(false);
+          expect(first.inputSet.content).toMatchObject({
+            schemaVersion: 'afl-trade-hpn-pav-input-set/v3',
+            fieldMapAuthority: 'projected',
+            knowledgePolicy: request.knowledgePolicy,
+            knowledgeCutoffAt: request.knowledgeCutoffAt,
+            effectiveThrough: request.effectiveThrough,
+          });
+          expect(first.inputSet.content.sourceRuns.map((source) => source.capturedAt)).toEqual([
+            '2026-08-10T00:00:00.000Z',
+            '2026-08-10T00:00:00.000Z',
+            '2026-08-10T00:00:00.000Z',
+          ]);
+          const replay = await repository.buildAndPersistSeasonInputSet(request, {
+            environment: 'non_production',
+          });
+          expect(replay).toEqual({ inputSet: first.inputSet, idempotentReplay: true });
+          const loaded = await repository.loadFinalizedSeasonInputSet(
+            {
+              inputSetId: first.inputSet.inputSetId,
+              environment: request.environment,
+              competition: request.competition,
+              seasonYear,
+              methodId: request.methodId,
+            },
+            { environment: 'non_production' }
+          );
+          expect(loaded).toEqual(first.inputSet);
+          const currentInputRequest = {
+            inputSetId: first.inputSet.inputSetId,
+            environment: request.environment,
+            competition: request.competition,
+            seasonYear,
+            methodId: request.methodId,
+          };
+          await expect(
+            repository.loadCurrentFinalizedSeasonInputSet(currentInputRequest, {
+              environment: 'non_production',
+            })
+          ).resolves.toEqual(first.inputSet);
+          await transaction.query('SAVEPOINT retained_hpn_source_drift');
+          try {
+            await transaction.query(`SET LOCAL session_replication_role='replica'`);
+            await transaction.query(
+              `UPDATE outcome_source_capture SET captured_at='2026-08-10T01:00:00Z'
+                WHERE capture_id=$1`,
+              [first.inputSet.content.sourceRuns[0]!.captureId]
+            );
+            await transaction.query(`SET LOCAL session_replication_role='origin'`);
+            await expect(
+              repository.loadCurrentFinalizedSeasonInputSet(currentInputRequest, {
+                environment: 'non_production',
+              })
+            ).rejects.toMatchObject({ code: 'SOURCE_AUTHORITY_MISMATCH' });
+          } finally {
+            await transaction.query('ROLLBACK TO SAVEPOINT retained_hpn_source_drift');
+            await transaction.query('RELEASE SAVEPOINT retained_hpn_source_drift');
+          }
+          // Direct SQL cannot bypass version, private-environment or cutoff validation.
+          for (const malformed of [
+            { knowledgePolicy: null },
+            { knowledgeCutoffAt: '2026-08-08T00:00:00.000Z' },
+            { knowledgeCutoffAt: '2200-01-01T00:00:00.000Z' },
+            { fieldMapAuthority: 'legacy' },
+            { environment: 'production' },
+            { schemaVersion: 'afl-trade-hpn-pav-input-set/v2' },
+          ]) {
+            const content = { ...first.inputSet.content, ...malformed };
+            const canonical = canonicalizeAflTradeJson(content);
+            const contentSha = sha256(canonical);
+            const inputSetId = `hpn-pav-input-set:${contentSha}`;
+            await transaction.query('SAVEPOINT malformed_hpn_input');
+            try {
+              await expect(
+                transaction.query(
+                  `INSERT INTO outcome_hpn_pav_input_set
+                 SELECT (jsonb_populate_record(NULL::outcome_hpn_pav_input_set,
+                   to_jsonb(original) || $2::jsonb)).*
+                   FROM outcome_hpn_pav_input_set original WHERE input_set_id=$1`,
+                  [
+                    first.inputSet.inputSetId,
+                    canonicalizeAflTradeJson({
+                      input_set_id: inputSetId,
+                      input_set_sha256: contentSha,
+                      input_set_canonical_json: canonical,
+                      input_set_json: { inputSetId, content },
+                      environment: content.environment,
+                      status: 'building',
+                      finalized_at: null,
+                    }),
+                  ]
+                )
+              ).rejects.toThrow(/retrospective|legacy/i);
+            } finally {
+              await transaction.query('ROLLBACK TO SAVEPOINT malformed_hpn_input');
+              await transaction.query('RELEASE SAVEPOINT malformed_hpn_input');
+            }
+          }
+          // The same finalizer authenticates durable custody, not just caller-supplied JSON dates.
+          for (const [tamperSql, expected] of [
+            [
+              `UPDATE outcome_source_capture SET captured_at='2026-08-17T00:00:00Z'
+                WHERE capture_id=ANY($1::text[])`,
+              /source run/i,
+            ],
+            [
+              `UPDATE outcome_provider_normalization_run
+                SET finalized_at='2026-08-17T00:00:00Z',completed_at='2026-08-17T00:00:00Z'
+                WHERE capture_id=ANY($1::text[])`,
+              /source run/i,
+            ],
+            [
+              `UPDATE outcome_factual_reconciliation_run SET finalized_at='2026-08-17T00:00:00Z'
+                WHERE factual_run_id IN (SELECT factual_run_id FROM outcome_hpn_pav_input_set
+                  WHERE input_set_json#>'{content,sourceRuns}' @> jsonb_build_array(jsonb_build_object('captureId',($1::text[])[1])))`,
+              /factual universe/i,
+            ],
+            [
+              `UPDATE outcome_acquisition_spell_version SET recorded_at='2026-08-17T00:00:00Z'
+                WHERE player_id IN (SELECT row_json#>>'{player,canonicalId}' FROM outcome_hpn_pav_input_row
+                  WHERE row_kind='player_match_stats') AND cardinality($1::text[])>0`,
+              /acquisition spell/i,
+            ],
+          ] as const) {
+            await transaction.query('SAVEPOINT late_hpn_custody');
+            try {
+              await transaction.query(`SET LOCAL session_replication_role='replica'`);
+              await transaction.query(
+                `UPDATE outcome_hpn_pav_input_set SET status='building',finalized_at=NULL WHERE input_set_id=$1`,
+                [first.inputSet.inputSetId]
+              );
+              await transaction.query(tamperSql, [
+                first.inputSet.content.sourceRuns.map((source) => source.captureId),
+              ]);
+              await transaction.query(`SET LOCAL session_replication_role='origin'`);
+              await expect(
+                transaction.query(
+                  `UPDATE outcome_hpn_pav_input_set SET status='finalized',finalized_at=created_at WHERE input_set_id=$1`,
+                  [first.inputSet.inputSetId]
+                )
+              ).rejects.toThrow(expected);
+            } finally {
+              await transaction.query('ROLLBACK TO SAVEPOINT late_hpn_custody');
+              await transaction.query('RELEASE SAVEPOINT late_hpn_custody');
+            }
+          }
+          throw rollback;
+        })
+      ).rejects.toBe(rollback);
+    });
+
+    it('materializes legacy retrospective input and rejects a superseded map only at the current-authority reader', async () => {
+      const rollback = new Error('Rollback synthetic legacy HPN authority');
+      await expect(
+        client.transaction(async (transaction) => {
+          const stored = await transaction.query<{ input_set_json: unknown }>(
+            `SELECT input_set_json FROM outcome_hpn_pav_input_set WHERE status='finalized' LIMIT 1`
+          );
+          const original = aflTradeHpnPavSeasonInputSetSchema.parse(stored.rows[0]!.input_set_json);
+          const repository = new PostgresAflTradeHpnPavInputRepository({
+            query: transaction.query.bind(transaction),
+            transaction: async (work) => work(transaction),
+          });
+          const maps = lanes.map((lane) => {
+            const candidate = projection(lane).candidate;
+            const bindings: Record<string, unknown> = {};
+            for (const binding of candidate.content.semanticBindings) {
+              const mapping = binding.mapping;
+              bindings[binding.semanticField] =
+                mapping.kind === 'direct'
+                  ? mapping.sourceField
+                  : mapping.kind === 'goals_plus_behinds'
+                    ? mapping
+                    : mapping.kind === 'composite_key'
+                      ? 'legacy_match_id'
+                      : 'legacy_completion_status';
+            }
+            if (lane.inputKind === 'completed_match_result')
+              bindings.completedValues = ['completed'];
+            const approvalId = id('review-decision', `legacy-hpn-map:${lane.suffix}`);
+            const content = {
+              schemaVersion: 'afl-trade-hpn-pav-field-map/v1',
+              authorityBoundary: AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY,
+              publicationEligible: false,
+              environment: 'non_production',
+              competition,
+              provider: candidate.content.provider,
+              capabilityId: candidate.content.capabilityId,
+              inputKind: lane.inputKind,
+              sourceSchemaSha256: sha256(`synthetic-legacy-schema:${lane.suffix}`),
+              validFromSeason: seasonYear,
+              validThroughSeason: seasonYear,
+              approvalDecision: { id: approvalId, sha256: approvalId.split(':')[1]! },
+              bindings,
+            };
+            return aflTradeHpnPavFieldMapSchema.parse({
+              fieldMapId: createAflTradeContentAddress('hpn-pav-field-map', content),
+              content,
+            });
+          });
+          // Only upstream synthetic fixture setup bypasses triggers; all target owners remain enabled.
+          await transaction.query(`SET LOCAL session_replication_role='replica'`);
+          for (const [index, lane] of lanes.entries()) {
+            await transaction.query(
+              `UPDATE outcome_provider_decoded_row SET typed_payload=typed_payload || $2::jsonb
+             WHERE normalization_run_id=$1`,
+              [
+                id('provider-normalization-run', lane.suffix),
+                canonicalizeAflTradeJson({
+                  legacy_match_id: scalar('provider-match-1'),
+                  legacy_completion_status: scalar('completed'),
+                }),
+              ]
+            );
+            await transaction.query(
+              `UPDATE outcome_provider_field_map SET source_schema_sha256=$2::text,
+               map_json=jsonb_set(map_json,'{sourceSchemaSha256}',to_jsonb($2::text),false)
+             WHERE field_map_id=$1`,
+              [lane.authority.fieldMap.mapId, maps[index]!.content.sourceSchemaSha256]
+            );
+          }
+          await transaction.query(`SET LOCAL session_replication_role='origin'`);
+          for (const map of maps) {
+            await transaction.query(
+              `INSERT INTO outcome_review_decision
+             (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+             VALUES ($1,'provider_field_map',$2,'approved','Synthetic legacy field-map test review',$3::jsonb,
+                     'legacy-hpn-fixture-reviewer',$4)`,
+              [
+                map.content.approvalDecision.id,
+                map.fieldMapId,
+                canonicalizeAflTradeJson(map),
+                projectionAt,
+              ]
+            );
+            await repository.registerFieldMap(map, { environment: 'non_production' });
+          }
+          const request = {
+            environment: 'non_production' as const,
+            competition,
+            seasonYear,
+            methodId: original.content.methodId,
+            factualRunId: original.content.factualUniverse.factualRunId,
+            effectiveThrough: '2026-08-09T23:59:59.999Z',
+            knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+            knowledgeCutoffAt: '2026-08-16T00:00:00.000Z',
+            sources: lanes.map((lane, index) => ({
+              normalizationRunId: id('provider-normalization-run', lane.suffix),
+              fieldMapId: maps[index]!.fieldMapId,
+              inputKind: lane.inputKind,
+              role: lane.role,
+            })),
+          };
+          const built = await repository.buildAndPersistSeasonInputSet(request, {
+            environment: 'non_production',
+          });
+          expect(built.inputSet.content).toMatchObject({
+            schemaVersion: 'afl-trade-hpn-pav-input-set/v3',
+            fieldMapAuthority: 'legacy',
+          });
+          const loadRequest = {
+            inputSetId: built.inputSet.inputSetId,
+            environment: request.environment,
+            competition,
+            seasonYear,
+            methodId: request.methodId,
+          };
+          await expect(
+            repository.loadCurrentFinalizedSeasonInputSet(loadRequest, {
+              environment: 'non_production',
+            })
+          ).resolves.toEqual(built.inputSet);
+          const revoked = maps[0]!;
+          await transaction.query(
+            `INSERT INTO outcome_review_decision
+           (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+           VALUES ($1,'provider_field_map',$2,'rejected',$3,'Synthetic legacy field-map supersession',$4::jsonb,
+                   'legacy-hpn-fixture-reviewer','2026-08-17T00:00:00Z')`,
+            [
+              id('review-decision', 'legacy-map-successor'),
+              revoked.fieldMapId,
+              revoked.content.approvalDecision.id,
+              canonicalizeAflTradeJson({ fixture: 'superseded legacy approval' }),
+            ]
+          );
+          await expect(
+            repository.loadCurrentFinalizedSeasonInputSet(loadRequest, {
+              environment: 'non_production',
+            })
+          ).rejects.toThrow(/legacy.*approval.*superseded|source.*current/i);
+          await expect(
+            repository.loadFinalizedSeasonInputSet(loadRequest, { environment: 'non_production' })
+          ).resolves.toEqual(built.inputSet);
+          throw rollback;
+        })
+      ).rejects.toBe(rollback);
     });
 
     it('rejects a reviewed-evidence successor with duplicated members behind claimed 7/3 counts', async () => {

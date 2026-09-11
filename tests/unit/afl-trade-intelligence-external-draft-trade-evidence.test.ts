@@ -41,6 +41,57 @@ function transactionEnvelope() {
 }
 
 describe('external AFL draft and trade evidence contracts', () => {
+  it('retains bounded Official AFL session facts without turning them into whole-session claims', () => {
+    const officialCapture = {
+      ...capture,
+      sourceUrl: 'https://www.afl.com.au/news/99499/draft-talking-points-racing-royalty-and-bluebloods',
+    };
+    const claims = [
+      {
+        kind: 'draft_session_date' as const,
+        draftYear: 2018,
+        draftType: 'national' as const,
+        sessionOrdinal: 2,
+        eventDate: '2018-11-23',
+      },
+      {
+        kind: 'draft_session_completion' as const,
+        draftYear: 2018,
+        draftType: 'national' as const,
+        sessionOrdinal: 2,
+      },
+      {
+        kind: 'draft_session_boundary' as const,
+        draftYear: 2018,
+        draftType: 'national' as const,
+        sessionOrdinal: 2,
+        boundary: 'last' as const,
+        selectionNumber: 78,
+        player: { nativeId: null, recordedName: 'Will Hayes' },
+        selectedByClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+      },
+      {
+        kind: 'draft_completed_total' as const,
+        draftYear: 2018,
+        draftType: 'national' as const,
+        selectionCount: 78,
+      },
+    ];
+
+    expect(
+      claims.map((claim, index) =>
+        createAflTradeExternalEvidenceEnvelope({
+          schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+          provider: 'official_afl',
+          capture: officialCapture,
+          sourceRow: { ordinal: index + 1, sourceKey: `2018-session-fact:${index + 1}` },
+          claim,
+          publicationEligible: false,
+        })
+      )
+    ).toHaveLength(4);
+  });
+
   it('content-addresses provider-native transaction and directed-transfer claims', () => {
     const transaction = transactionEnvelope();
     const transfer = createAflTradeExternalEvidenceEnvelope({

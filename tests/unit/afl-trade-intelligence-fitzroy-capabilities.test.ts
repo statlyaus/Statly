@@ -74,6 +74,20 @@ describe('fitzRoy provider capability contract', () => {
     ).toEqual(['aflca-coaches-votes', 'aflca-coaches-votes-scoped']);
   });
 
+  it('distinguishes FootyWire player names from source-local match identifiers', () => {
+    const footywire = listAflTradeFitzRoyCapabilities({
+      competition: 'AFLM',
+      metric: 'advanced_player_stats',
+      season: 2025,
+    }).find(({ capabilityId }) => capabilityId === 'footywire-player-stats');
+
+    expect(footywire?.identifiers).toEqual({
+      player: 'name_and_context_only',
+      match: 'source_local_identifier',
+      club: 'name_and_context_only',
+    });
+  });
+
   it('keeps AFLW support provider-specific instead of inheriting wrapper claims', () => {
     const aflWStats = listAflTradeFitzRoyCapabilities({
       competition: 'AFLW',
