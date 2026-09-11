@@ -582,6 +582,19 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         `outcome-external-canonical-promotion:${input.candidateId}`,
       ]);
       const candidate = await loadCandidate(transaction, input.candidateId);
+      await transaction.query(
+        `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
+      );
+      const sourceAuthority = await transaction.query<{ current: boolean }>(
+        `SELECT outcome_external_candidate_retained_sources_current($1,clock_timestamp()) AS current`,
+        [candidate.candidateId]
+      );
+      if (sourceAuthority.rows[0]?.current !== true) {
+        throw new AflTradeExternalCanonicalPromotionError(
+          'INVALID_INPUT',
+          'Canonical promotion requires current retained source authority, including replay.'
+        );
+      }
       const approval = await loadApproval(transaction, input.candidateId, input.approvalDecisionId);
       const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
         candidate,
@@ -734,7 +747,10 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       for (const [index, capture] of evidence.captures.entries()) {
         await transaction.query(
           `INSERT INTO outcome_source_capture_season (capture_id,competition,season_year)
-           VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+           SELECT $1,$2,$3 WHERE NOT EXISTS (
+             SELECT 1 FROM outcome_source_capture_season
+             WHERE capture_id=$1 AND competition=$2 AND season_year=$3
+           ) ON CONFLICT DO NOTHING`,
           [capture.capture_id, content.competition, Number(capture.anchor_season_year)]
         );
         const importRunId = createAflTradeContentAddress('external-canonical-import', {
@@ -744,10 +760,10 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         importRunByCapture.set(capture.capture_id, importRunId);
         await transaction.query(
           `INSERT INTO outcome_import_run
-            (import_run_id,capture_id,import_kind,parser_version,started_at,completed_at,status,manifest_json)
+            (import_run_id,capture_id,import_kind,parser_version,started_at,completed_at,status,manifest_json,idempotency_scope)
            VALUES ($1,$2,'external_canonical_promotion','external-promotion/v1',$3,$3,
-                   'approved'::"OutcomeRecordStatus",$4::jsonb)`,
-          [importRunId, capture.capture_id, approval.promotedAt, receiptCanonical]
+                   'approved'::"OutcomeRecordStatus",$4::jsonb,$5)`,
+          [importRunId, capture.capture_id, approval.promotedAt, receiptCanonical, request.promotionId]
         );
         await transaction.query(
           `INSERT INTO outcome_external_canonical_promotion_import_run
@@ -1011,11 +1027,16 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       for (const coverage of approval.proposal.content.draftEventCoverage) {
         const selections = content.draftSelections
           .filter(
-            ({ draftYear, draftType }) =>
-              draftYear === coverage.draftYear && draftType === coverage.draftType
+            ({ draftYear, draftType, selectionId }) =>
+              draftYear === coverage.draftYear &&
+              draftType === coverage.draftType &&
+              coverage.selectionIds.includes(selectionId)
           )
           .sort((left, right) => left.selectionNumber - right.selectionNumber);
-        const evidenceIds = sortedUnique(selections.flatMap(({ evidenceIds }) => evidenceIds));
+        const evidenceIds = sortedUnique([
+          ...selections.flatMap(({ evidenceIds }) => evidenceIds),
+          ...('evidenceIds' in coverage ? coverage.evidenceIds : []),
+        ]);
         const coverageId = createAflTradeContentAddress('draft-event-coverage', coverage);
         const eventRow = await sourceRow({
           key: `draft-event:${coverageId}`,
@@ -1029,12 +1050,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           competition: content.competition,
           draftYear: coverage.draftYear,
           draftType: coverage.draftType,
+          ...('sessionOrdinal' in coverage ? { sessionOrdinal: coverage.sessionOrdinal } : {}),
         });
         await ensureEventRoot(transaction, {
           eventId,
           competition: content.competition,
           seasonYear: coverage.draftYear,
-          stableKey: `external-draft:${content.competition}:${coverage.draftYear}:${coverage.draftType}`,
+          stableKey: `external-draft:${content.competition}:${coverage.draftYear}:${coverage.draftType}${'sessionOrdinal' in coverage ? `:session:${coverage.sessionOrdinal}` : ''}`,
         });
         const predecessor = await currentEventVersion(transaction, eventId);
         if (predecessor && predecessor.recordedAt > approval.promotedAt) {

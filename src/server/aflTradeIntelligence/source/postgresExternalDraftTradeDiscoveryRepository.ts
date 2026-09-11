@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
 import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -6,6 +8,8 @@ import type {
 import {
   aflTradeExternalDiscoveryInventorySchema,
   aflTradeExternalHistoricalCapturePlanSchema,
+  aflTradeRetainedExternalCapturePlanSchema,
+  type AflTradeRetainedExternalCapturePlan,
   createAflTradeExternalDiscoveryInventory,
   type AflTradeExternalDiscoveryInventory,
   type AflTradeExternalHistoricalCapturePlan,
@@ -158,6 +162,113 @@ function planReplay(row: PlanRow, plan: AflTradeExternalHistoricalCapturePlan): 
 
 export class PostgresAflTradeExternalDiscoveryRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
+
+  async persistRetainedPlan(
+    input: AflTradeRetainedExternalCapturePlan,
+    artifacts: { read(reference: AflTradeArtifactRef): Promise<Uint8Array> }
+  ): Promise<PersistedAflTradeExternalHistoricalCapturePlan> {
+    const plan = aflTradeRetainedExternalCapturePlanSchema.parse(input);
+    // Replays must authenticate retained bytes too, before accepting a durable receipt.
+    for (const reference of [
+      ...plan.content.scopeEvidence,
+      ...plan.content.targets.map((target) => target.content.sourceArtifact),
+    ]) {
+      const bytes = await artifacts.read(reference);
+      if (
+        bytes.byteLength !== reference.byteLength ||
+        createHash('sha256').update(bytes).digest('hex') !== reference.contentSha256
+      ) {
+        throw new AflTradeExternalDiscoveryPersistenceError(
+          'INVALID_RECORD',
+          'Retained capture plan requires exact source and scope evidence bytes.'
+        );
+      }
+    }
+    return this.client.transaction(async (transaction) => {
+      await lock(transaction, `external-historical-capture-plan:${plan.planId}`);
+      await transaction.query(
+        `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
+      );
+      const valid = await transaction.query<{ valid: boolean }>(
+        `SELECT outcome_external_retained_plan_is_current($1::jsonb,clock_timestamp()) AS valid`,
+        [canonicalizeAflTradeJson(plan)]
+      );
+      if (valid.rows[0]?.valid !== true) {
+        throw new AflTradeExternalDiscoveryPersistenceError(
+          'INVALID_RECORD',
+          'Retained plan lacks exact current capture, custody or source authority.'
+        );
+      }
+      const prior = await storedPlan(transaction, plan.planId);
+      if (prior) {
+        if (
+          canonicalizeAflTradeJson(prior.plan_json) !== canonicalizeAflTradeJson(plan) ||
+          exactInstant(prior.finalized_at) !== plan.content.plannedAt ||
+          prior.target_count !== plan.content.targetCount
+        ) {
+          throw new AflTradeExternalDiscoveryPersistenceError(
+            'PLAN_CONFLICT',
+            'Stored retained plan conflicts with the exact finalized request.'
+          );
+        }
+        return {
+          planId: plan.planId,
+          targetCount: plan.content.targetCount,
+          idempotentReplay: true,
+        };
+      }
+      await transaction.query(
+        `INSERT INTO outcome_external_historical_capture_plan
+        (plan_id,inventory_id,environment,competition,from_year,through_year,target_count,
+         target_set_sha256,planned_at,finalized_at,plan_json)
+        VALUES($1,NULL,$2,$3,$4,$5,$6,$7,$8,NULL,$9::jsonb)`,
+        [
+          plan.planId,
+          plan.content.environment,
+          plan.content.competition,
+          plan.content.fromYear,
+          plan.content.throughYear,
+          plan.content.targetCount,
+          plan.content.targetSetSha256,
+          plan.content.plannedAt,
+          canonicalizeAflTradeJson(plan),
+        ]
+      );
+      for (const target of plan.content.targets) {
+        const request = target.content.request;
+        await transaction.query(
+          `INSERT INTO outcome_external_historical_capture_target
+          (plan_id,ordinal,target_id,schedule_id,discovery_evidence_id,capability_id,
+           anchor_season_year,source_url,target_json)
+          VALUES($1,$2,$3,NULL,NULL,$4,$5,$6,$7::jsonb)`,
+          [
+            plan.planId,
+            target.content.ordinal,
+            target.targetId,
+            request.capabilityId,
+            request.anchorSeasonYear,
+            request.sourceUrl,
+            canonicalizeAflTradeJson(target),
+          ]
+        );
+      }
+      const finalized = await transaction.query(
+        `UPDATE outcome_external_historical_capture_plan
+        SET finalized_at=$2 WHERE plan_id=$1 AND finalized_at IS NULL`,
+        [plan.planId, plan.content.plannedAt]
+      );
+      if (finalized.rowCount !== 1)
+        throw new AflTradeExternalDiscoveryPersistenceError(
+          'PLAN_CONFLICT',
+          'Retained capture plan did not finalize exactly once.'
+        );
+      return {
+        planId: plan.planId,
+        targetCount: plan.content.targetCount,
+        idempotentReplay: false,
+      };
+    });
+  }
 
   async findLatestFinalizedIndexBatch(input: {
     environment: 'test_fixture' | 'non_production' | 'production';

@@ -6,6 +6,8 @@ import type { AflTradeResolvedGateAuthorization } from '../governance/postgresGa
 import type { AflTradeGate0ARequest } from './gate0aEvaluation';
 import { evaluateAflTradeGate0A } from './gate0aEvaluation';
 import { createAflTradeGate0AReceipt } from './gate0aReceipt';
+import { isReviewedOfficialAflDraftSessionUrl } from './officialAflDraftSessionAdapter';
+import { reviewedOfficialAflDraft2016EffectiveYear } from './officialAflDraft2016SessionFacts';
 import type {
   AflTradeExternalCaptureAdmission,
   AflTradeExternalCaptureAdmissionPolicy,
@@ -90,17 +92,21 @@ export function validateAflTradeExternalCaptureScope(
       request.draftPathway !== null ||
       request.discoveryFromSeasonYear != null ||
       url.hostname !== 'www.draftguru.com.au' ||
-      !new RegExp(`^/trades/${request.anchorSeasonYear}-[a-z0-9-]+$`).test(url.pathname) ||
+      !new RegExp(`^/trades/${request.anchorSeasonYear}-[a-z0-9_-]+$`).test(url.pathname) ||
       url.search ||
       url.hash
     )
       invalid();
     return;
   }
-  if (request.capabilityId === 'draftguru-year-page') {
+  if (
+    request.capabilityId === 'draftguru-year-page' ||
+    request.capabilityId === 'draftguru-national-year-page'
+  ) {
     if (
       request.provider !== 'draftguru' ||
-      request.draftPathway !== null ||
+      request.draftPathway !==
+        (request.capabilityId === 'draftguru-national-year-page' ? 'national' : null) ||
       request.discoveryFromSeasonYear != null ||
       url.hostname !== 'www.draftguru.com.au' ||
       url.pathname !== `/years/${request.anchorSeasonYear}` ||
@@ -135,6 +141,22 @@ export function validateAflTradeExternalCaptureScope(
       url.search ||
       url.hash ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'official-afl-completed-draft-session') {
+    const reviewed2016EffectiveYear =
+      request.anchorSeasonYear === 2016
+        ? reviewedOfficialAflDraft2016EffectiveYear(request.sourceUrl)
+        : null;
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== 'national' ||
+      request.discoveryFromSeasonYear != null ||
+      !isReviewedOfficialAflDraftSessionUrl(request.sourceUrl, request.anchorSeasonYear) ||
+      new Date(request.effectiveAt).getUTCFullYear() !==
+        (reviewed2016EffectiveYear ?? request.anchorSeasonYear)
     )
       invalid();
     return;

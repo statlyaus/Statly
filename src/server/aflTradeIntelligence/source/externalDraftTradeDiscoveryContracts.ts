@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
+import { parseIngestAflTradeExternalPageRequest } from './externalDraftTradeIngestion';
+import { validateAflTradeExternalCaptureScope } from './externalDraftTradeProviderIngestion';
 
 import {
   addAflTradeContentAddressIssue,
@@ -457,6 +460,169 @@ export function createAflTradeExternalHistoricalCapturePlan(input: {
     publicationEligible: false,
   });
   return aflTradeExternalHistoricalCapturePlanSchema.parse({
+    planId: createAflTradeContentAddress('external-historical-capture-plan', content),
+    content,
+  });
+}
+
+function retainedYearBounds(years: readonly number[]) {
+  return years.reduce(
+    (bounds, year) => ({
+      fromYear: Math.min(bounds.fromYear, year),
+      throughYear: Math.max(bounds.throughYear, year),
+    }),
+    { fromYear: 2200, throughYear: 1897 }
+  );
+}
+
+// A retrospective plan binds actual capture custody. It does not claim that a scheduler ran.
+const retainedRequestSchema = z.unknown().transform((value, context) => {
+  try {
+    const request = parseIngestAflTradeExternalPageRequest(value);
+    validateAflTradeExternalCaptureScope(request);
+    return request;
+  } catch {
+    context.addIssue({
+      code: 'custom',
+      message: 'Retained target requires an exact supported capture request.',
+    });
+    return z.NEVER;
+  }
+});
+const retainedTargetContentSchema = z
+  .object({
+    ordinal: z.number().int().positive().max(200_000),
+    captureId: aflTradeContentAddressedIdSchema('source-capture'),
+    evidenceBatchId: aflTradeContentAddressedIdSchema('external-evidence-batch'),
+    executionReceiptId: aflTradeContentAddressedIdSchema('external-capture-execution'),
+    rightsArtifactId: aflTradeContentAddressedIdSchema('source-rights'),
+    gateDecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
+    sourceArtifact: aflTradeArtifactRefSchema,
+    request: retainedRequestSchema,
+  })
+  .strict();
+const retainedTargetSchema = z
+  .object({
+    targetId: aflTradeContentAddressedIdSchema('external-capture-target'),
+    content: retainedTargetContentSchema,
+  })
+  .strict()
+  .superRefine((target, context) => {
+    addAflTradeContentAddressIssue(
+      'external-capture-target',
+      target.targetId,
+      target.content,
+      context,
+      ['targetId']
+    );
+  });
+const retainedPlanContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-external-historical-capture-plan/v2'),
+    environment: z.enum(['test_fixture', 'non_production']),
+    competition: z.literal('AFLM'),
+    fromYear: yearSchema,
+    throughYear: yearSchema,
+    plannedAt: instantSchema,
+    scopeEvidence: z.array(aflTradeArtifactRefSchema).min(1).max(1000),
+    targets: z.array(retainedTargetSchema).min(1).max(200_000),
+    targetCount: z.number().int().positive().max(200_000),
+    targetSetSha256: sha256Schema,
+    publicationEligible: z.literal(false),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    const issue = (message: string) => context.addIssue({ code: 'custom', message });
+    const years = plan.targets.map((t) => t.content.request.anchorSeasonYear);
+    const bounds = retainedYearBounds(years);
+    if (
+      plan.fromYear !== bounds.fromYear ||
+      plan.throughYear !== bounds.throughYear ||
+      plan.throughYear > plan.fromYear + 100
+    )
+      issue('Retained plan years must equal its bounded source years.');
+    if (
+      plan.targetCount !== plan.targets.length ||
+      plan.targetSetSha256 !== sha256AflTradeCanonicalJson(plan.targets.map((t) => t.targetId))
+    )
+      issue('Retained target count or membership digest differs.');
+    for (const key of ['captureId', 'evidenceBatchId'] as const)
+      if (new Set(plan.targets.map((t) => t.content[key])).size !== plan.targets.length)
+        issue('Retained captures and batches must be unique.');
+    const scopeIds = plan.scopeEvidence.map((a) => a.artifactId);
+    if (
+      new Set(scopeIds).size !== scopeIds.length ||
+      scopeIds.some((id, index) => index > 0 && id <= scopeIds[index - 1]!)
+    )
+      issue('Scope evidence must be unique and canonically ordered.');
+    if (plan.scopeEvidence.some((a) => Date.parse(a.createdAt) > Date.parse(plan.plannedAt)))
+      issue('Scope evidence must already exist when the retained plan is created.');
+    plan.targets.forEach(({ content: target }, index) => {
+      if (
+        target.ordinal !== index + 1 ||
+        target.request.environment !== plan.environment ||
+        target.request.competition !== plan.competition
+      )
+        issue('Retained target ordinal or environment/competition scope differs.');
+      if (
+        Date.parse(target.request.capturedAt) > Date.parse(plan.plannedAt) ||
+        Date.parse(target.sourceArtifact.createdAt) > Date.parse(plan.plannedAt)
+      )
+        issue('A retained plan cannot predate its source capture or artifact.');
+      if (target.sourceArtifact.byteLength > target.request.maximumBytes)
+        issue('Retained source exceeds the approved request byte limit.');
+    });
+  });
+export const aflTradeRetainedExternalCapturePlanSchema = z
+  .object({
+    planId: aflTradeContentAddressedIdSchema('external-historical-capture-plan'),
+    content: retainedPlanContentSchema,
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    addAflTradeContentAddressIssue(
+      'external-historical-capture-plan',
+      plan.planId,
+      plan.content,
+      context,
+      ['planId']
+    );
+  });
+export const aflTradeAnyExternalHistoricalCapturePlanSchema = z.union([
+  aflTradeExternalHistoricalCapturePlanSchema,
+  aflTradeRetainedExternalCapturePlanSchema,
+]);
+export type AflTradeRetainedExternalCapturePlan = z.infer<
+  typeof aflTradeRetainedExternalCapturePlanSchema
+>;
+export type AflTradeRetainedExternalCaptureTarget = z.infer<typeof retainedTargetSchema>;
+export function createAflTradeRetainedExternalCapturePlan(input: {
+  environment: AflTradeRetainedExternalCapturePlan['content']['environment'];
+  competition: 'AFLM';
+  plannedAt: string;
+  scopeEvidence: AflTradeRetainedExternalCapturePlan['content']['scopeEvidence'];
+  targets: readonly Omit<z.infer<typeof retainedTargetContentSchema>, 'ordinal'>[];
+}): AflTradeRetainedExternalCapturePlan {
+  const targets = input.targets.map((target, index) => {
+    const content = retainedTargetContentSchema.parse({ ...target, ordinal: index + 1 });
+    return { targetId: createAflTradeContentAddress('external-capture-target', content), content };
+  });
+  const years = targets.map((t) => t.content.request.anchorSeasonYear);
+  const content = retainedPlanContentSchema.parse({
+    schemaVersion: 'afl-trade-external-historical-capture-plan/v2',
+    environment: input.environment,
+    competition: input.competition,
+    plannedAt: input.plannedAt,
+    scopeEvidence: [...input.scopeEvidence].sort((a, b) =>
+      a.artifactId.localeCompare(b.artifactId)
+    ),
+    ...retainedYearBounds(years),
+    targets,
+    targetCount: targets.length,
+    targetSetSha256: sha256AflTradeCanonicalJson(targets.map((t) => t.targetId)),
+    publicationEligible: false,
+  });
+  return aflTradeRetainedExternalCapturePlanSchema.parse({
     planId: createAflTradeContentAddress('external-historical-capture-plan', content),
     content,
   });

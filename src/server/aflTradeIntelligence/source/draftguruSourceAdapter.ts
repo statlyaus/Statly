@@ -538,6 +538,80 @@ export function parseDraftguruYearSelections(
   return { evidence: rows, issues };
 }
 
+/** A separate reviewed capability; other known pathways are counted, never recast as national picks. */
+export function parseDraftguruNationalYearSelections(
+  html: string,
+  input: { capture: SourceCapture; draftYear: number }
+): DraftguruTradeParseResult & {
+  scopeSummary: {
+    observedRows: number;
+    includedRows: number;
+    excludedByPathway: Record<string, number>;
+  };
+} {
+  const $ = load(html);
+  const tables = $('table.big-pick-movements');
+  const summary = {
+    observedRows: 0,
+    includedRows: 0,
+    excludedByPathway: {} as Record<string, number>,
+  };
+  const issues: DraftguruParseIssue[] = [];
+  const excludedLabels = new Set([
+    'Free Agency',
+    'Trade',
+    'Pre-Draft',
+    'Pre-Season',
+    'Rookie',
+    'Post-Draft',
+    'Mid-Season',
+  ]);
+  if (tables.length !== 1)
+    issues.push({
+      code: 'unsupported_row',
+      sourceKey: 'year-table',
+      detail: 'Expected exactly one reviewed year table.',
+    });
+  tables.find('tbody tr').each((index, row) => {
+    summary.observedRows++;
+    const label = normalizeText($(row).find('td.draft').text());
+    if (label === 'National') {
+      summary.includedRows++;
+      const numberCells = $(row).find('td.number');
+      const numberText = normalizeText(numberCells.text());
+      if (
+        numberCells.length !== 1 ||
+        !/^[1-9]\d*$/.test(numberText) ||
+        !Number.isSafeInteger(Number(numberText))
+      ) {
+        issues.push({
+          code: 'unsupported_row',
+          sourceKey: `year-row:${index + 1}`,
+          detail: 'National selection number must be one complete positive integer.',
+        });
+      }
+      return;
+    }
+    if (!excludedLabels.has(label)) {
+      issues.push({
+        code: 'unsupported_row',
+        sourceKey: `year-row:${index + 1}`,
+        detail: 'Unreviewed pathway label in national-only capture.',
+      });
+    } else summary.excludedByPathway[label] = (summary.excludedByPathway[label] ?? 0) + 1;
+    $(row).remove();
+  });
+  if (issues.length) return { evidence: [], issues, scopeSummary: summary };
+  const result = parseDraftguruYearSelections($.html(), input);
+  if (!summary.includedRows)
+    result.issues.push({
+      code: 'unsupported_row',
+      sourceKey: 'year-table',
+      detail: 'No national draft selections were present.',
+    });
+  return { ...result, scopeSummary: summary };
+}
+
 export interface DraftguruCaptureInput {
   url: string;
   fetchImpl: typeof fetch;

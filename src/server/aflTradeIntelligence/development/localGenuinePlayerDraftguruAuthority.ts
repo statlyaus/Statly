@@ -94,7 +94,7 @@ const evidenceKindSchema = z.enum([
   'field_boundary_review',
 ]);
 
-const authorityEvidenceContentSchema = z
+const legacyAuthorityEvidenceContentSchema = z
   .object({
     schemaVersion: z.literal('local-genuine-draftguru-authority-evidence/v1'),
     issueNumber: z.literal(574),
@@ -127,6 +127,68 @@ const authorityEvidenceContentSchema = z
   })
   .strict();
 
+const currentAuthorityEvidenceContentSchema = legacyAuthorityEvidenceContentSchema
+  .extend({
+    schemaVersion: z.literal('local-genuine-draftguru-authority-evidence/v2'),
+    issueNumber: z.literal(579),
+    scope: legacyAuthorityEvidenceContentSchema.shape.scope.extend({
+      seasons: z
+        .array(z.number().int().min(1897).max(2025))
+        .min(1)
+        .max(129)
+        .refine(
+          (seasons) =>
+            seasons.at(-1) === 2025 &&
+            seasons.every((season, index) => index === 0 || season === seasons[index - 1]! + 1),
+          'Issue 579 requires explicit contiguous unique seasons ending in 2025.'
+        ),
+    }),
+    decisionTiming: z
+      .object({
+        termsEffectiveAt: z.iso.datetime({ offset: true }),
+        rightsProposedAt: z.iso.datetime({ offset: true }),
+        proposalProposedAt: z.iso.datetime({ offset: true }),
+        decidedAt: z.iso.datetime({ offset: true }),
+        effectiveAt: z.iso.datetime({ offset: true }),
+        termsExpireAt: z.iso.datetime({ offset: true }),
+        revalidateAt: z.iso.datetime({ offset: true }),
+      })
+      .strict(),
+  })
+  .superRefine((content, context) => {
+    const timing = content.decisionTiming;
+    const chronology = [
+      content.recordedAt,
+      timing.termsEffectiveAt,
+      timing.rightsProposedAt,
+      timing.proposalProposedAt,
+      timing.decidedAt,
+      timing.effectiveAt,
+    ].map(Date.parse);
+    const expiry = Date.parse(timing.termsExpireAt);
+    const revalidation = Date.parse(timing.revalidateAt);
+    const oneYear = 365 * 24 * 60 * 60 * 1000;
+    if (
+      chronology.some((instant, index) => index > 0 && instant < chronology[index - 1]!) ||
+      expiry <= chronology[5]! ||
+      expiry - chronology[1]! > oneYear ||
+      revalidation <= chronology[5]! ||
+      revalidation > expiry ||
+      revalidation - chronology[5]! > oneYear
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Draftguru authority timing must follow document recording and expire/revalidate within one year.',
+      });
+    }
+  });
+
+const authorityEvidenceContentSchema = z.union([
+  legacyAuthorityEvidenceContentSchema,
+  currentAuthorityEvidenceContentSchema,
+]);
+
 export type LocalGenuinePlayerDraftguruAuthorityEvidenceContent = z.infer<
   typeof authorityEvidenceContentSchema
 >;
@@ -137,6 +199,7 @@ export interface LocalGenuinePlayerDraftguruAuthorityEvidenceArtifact {
 }
 
 interface ParsedAuthorityEvidenceIds {
+  readonly currentContent?: z.infer<typeof currentAuthorityEvidenceContentSchema>;
   readonly productOwnerAuthorizationArtifactId: string;
   readonly boundedCapturePlanArtifactId: string;
   readonly publicAccessReviewArtifactId: string;
@@ -160,9 +223,24 @@ function parseEvidence(
 ): ParsedAuthorityEvidenceIds {
   const identifiers = new Set<string>();
   const parsed = {} as Record<string, string>;
+  let packageScope: string | undefined;
+  let currentContent: z.infer<typeof currentAuthorityEvidenceContentSchema> | undefined;
   for (const [key, expectedKind] of EVIDENCE_KEYS) {
     const evidence = input[key];
     const content = authorityEvidenceContentSchema.parse(evidence.content);
+    const scope = canonicalizeAflTradeJson({
+      version: content.schemaVersion,
+      scope: content.scope,
+      timing: 'decisionTiming' in content ? content.decisionTiming : null,
+    });
+    if (packageScope !== undefined && scope !== packageScope) {
+      throw new TypeError(
+        'Draftguru authority documents must share the exact version, scope and decision timing.'
+      );
+    }
+    packageScope = scope;
+    if (content.schemaVersion === 'local-genuine-draftguru-authority-evidence/v2')
+      currentContent = content;
     const artifact = aflTradeArtifactRefSchema.parse(evidence.artifact);
     const expectedArtifact = createAflTradeCanonicalJsonArtifactRef(content, content.recordedAt);
     if (
@@ -178,7 +256,10 @@ function parseEvidence(
     identifiers.add(artifact.artifactId);
     parsed[`${key}ArtifactId`] = artifact.artifactId;
   }
-  return parsed as unknown as ParsedAuthorityEvidenceIds;
+  return {
+    ...parsed,
+    ...(currentContent ? { currentContent } : {}),
+  } as unknown as ParsedAuthorityEvidenceIds;
 }
 
 export function createLocalGenuinePlayerDraftguruAuthorityEvidenceArtifact(
@@ -229,7 +310,7 @@ async function authenticateEvidence(
   return parsed;
 }
 
-function sourceFieldUse(sourceField: string) {
+function sourceFieldUse(sourceField: string, issue = 574) {
   return {
     sourceField,
     normalizedField: sourceField,
@@ -240,8 +321,7 @@ function sourceFieldUse(sourceField: string) {
       public_display: 'blocked' as const,
     },
     attributionRequired: true,
-    notes:
-      'Approved only for private non-production issue-574 evidence, lineage, model training, and replay; public use and redistribution remain blocked.',
+    notes: `Approved only for private non-production issue-${issue} evidence, lineage, model training, and replay; public use and redistribution remain blocked.`,
   };
 }
 
@@ -251,9 +331,16 @@ function createAuthority(
   evidence: ParsedAuthorityEvidenceIds
 ) {
   const playerProjection = capabilityId === 'draftguru-player-trade-detail';
+  const current = evidence.currentContent;
+  const issue = current?.issueNumber ?? 574;
+  const seasons = current?.scope.seasons ?? [2020, 2021, 2022, 2023, 2024];
+  const from = seasons[0]!;
+  const to = seasons.at(-1)!;
+  const timing = current?.decisionTiming;
+  const date = timing?.termsEffectiveAt.slice(0, 10) ?? '2026-09-03';
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
-    registerId: `${capabilityId}-internal-2026-09-03`,
+    registerId: `${capabilityId}-internal-${current ? `issue-${issue}-` : ''}${date}`,
     provider: 'draftguru',
     dataset:
       capabilityId === 'draftguru-trade-index'
@@ -261,12 +348,11 @@ function createAuthority(
         : playerProjection
           ? 'Draftguru AFL player trade detail projection'
           : 'Draftguru AFL trade detail',
-    datasetVersion: 'live-web-2026-09-03',
-    intendedPurpose:
-      'Private non-production acquisition lineage for the genuine admitted player-contribution issue-574 run and deterministic replay.',
+    datasetVersion: `live-web-${date}`,
+    intendedPurpose: `Private non-production acquisition lineage for the genuine admitted player-contribution issue-${issue} run and deterministic replay.`,
     scope: {
       competitions: ['AFLM'],
-      seasonRanges: [{ from: 2020, to: 2024 }],
+      seasonRanges: [{ from, to }],
       accessMechanism: 'automated_web' as const,
     },
     acquisition: {
@@ -290,8 +376,7 @@ function createAuthority(
     },
     automatedAccess: {
       permitted: true,
-      identification:
-        'Statly private local non-production issue-574 evaluation with bounded sequential requests.',
+      identification: `Statly private local non-production issue-${issue} evaluation with bounded sequential requests.`,
       rateLimit: { requests: 1, perSeconds: 3, burst: 1 },
       cache: { permitted: true, maximumSeconds: 86_400 },
     },
@@ -300,7 +385,7 @@ function createAuthority(
         disposition: 'retained' as const,
         maximumDays: 365,
         deleteOnWithdrawal: true,
-        basis: 'Retain private source bytes only for exact issue-574 reproducibility and audit.',
+        basis: `Retain private source bytes only for exact issue-${issue} reproducibility and audit.`,
       },
       hashesAndMetadata: {
         disposition: 'retained' as const,
@@ -312,7 +397,7 @@ function createAuthority(
         disposition: 'retained' as const,
         maximumDays: 365,
         deleteOnWithdrawal: true,
-        basis: 'Retain private derived evidence only for issue-574 evaluation and rollback.',
+        basis: `Retain private derived evidence only for issue-${issue} evaluation and rollback.`,
       },
     },
     redistribution: { rawFieldsPermitted: false, publicDerivedOutputPermitted: false },
@@ -326,12 +411,11 @@ function createAuthority(
       commercial: ['internal-evaluation'],
       audience: ['internal'],
     },
-    fields: fields.map(sourceFieldUse),
+    fields: fields.map((field) => sourceFieldUse(field, issue)),
     conditions: [
       {
         conditionId: 'provider-egress-control',
-        description:
-          'Capture only the approved 2020-2024 trade index and linked trade-detail pages with sequential provider egress.',
+        description: `Capture only the approved ${from}-${to} trade index and linked trade-detail pages with sequential provider egress.`,
         appliesToOperations: ['bounded_evaluation_capture' as const],
         verificationEvidenceIds: [evidence.boundedCapturePlanArtifactId],
       },
@@ -353,8 +437,8 @@ function createAuthority(
       evidence.publicAccessReviewArtifactId,
       evidence.fieldBoundaryReviewArtifactId,
     ],
-    termsEffectiveAt: '2026-09-02T20:00:00.000Z',
-    termsExpireAt: '2027-09-03T00:00:00.000Z',
+    termsEffectiveAt: timing?.termsEffectiveAt ?? '2026-09-02T20:00:00.000Z',
+    termsExpireAt: timing?.termsExpireAt ?? '2027-09-03T00:00:00.000Z',
     withdrawalDuties: {
       stopCollection: true,
       stopNewDerivedWork: true,
@@ -364,7 +448,7 @@ function createAuthority(
       retainableAuditMaterial:
         'Retain only permitted hashes, decision history, provenance metadata, and rollback evidence.',
     },
-    proposedAt: '2026-09-02T20:00:01.000Z',
+    proposedAt: timing?.rightsProposedAt ?? '2026-09-02T20:00:01.000Z',
     proposedBy: 'statly-product-owner',
     proposalOrigin: 'human_authored' as const,
   };
@@ -372,15 +456,14 @@ function createAuthority(
     rightsArtifactId: createAflTradeContentAddress('source-rights', rightsContent),
     content: rightsContent,
   });
-  const decisionKey = `${capabilityId}-non_production`;
+  const decisionKey = `${capabilityId}-${current ? `issue-${issue}-` : ''}non_production`;
   const scope = {
     scopeKey: decisionKey,
-    description:
-      'Private non-production Draftguru authority for the exact issue-574 acquisition lineage.',
+    description: `Private non-production Draftguru authority for the exact issue-${issue} acquisition lineage.`,
     dimensions: [
       { name: 'source_rights_artifact', values: [sourceRights.rightsArtifactId] },
       { name: 'competition', values: ['AFLM'] },
-      { name: 'season', values: ['2020', '2021', '2022', '2023', '2024'] },
+      { name: 'season', values: seasons.map(String) },
       { name: 'access_mechanism', values: ['automated_web'] },
       { name: 'geography', values: ['global'] },
       { name: 'commercial_context', values: ['internal-evaluation'] },
@@ -390,7 +473,7 @@ function createAuthority(
     exclusions: [
       'Production activation or deployment.',
       'Public fact display, public derived output, raw redistribution, or publication.',
-      'Any season outside 2020 through 2024 or any Draftguru capability outside this exact authority.',
+      `Any season outside ${from} through ${to} or any Draftguru capability outside this exact authority.`,
     ],
   };
   const proposalContent = {
@@ -400,8 +483,7 @@ function createAuthority(
     version: 1,
     environment: 'non_production' as const,
     scope,
-    proposal:
-      'Approve this exact private issue-574 Draftguru capture, factual archive, feature construction, model training, and replay boundary.',
+    proposal: `Approve this exact private issue-${issue} Draftguru capture, factual archive, feature construction, model training, and replay boundary.`,
     alternativesConsidered: [
       'Leave genuine draft-transaction acquisition lineage unmaterialized and keep the run blocked.',
     ],
@@ -418,7 +500,7 @@ function createAuthority(
     affectedArtifacts: [
       { kind: 'source_rights' as const, artifactId: sourceRights.rightsArtifactId },
     ],
-    proposedAt: '2026-09-02T20:00:02.000Z',
+    proposedAt: timing?.proposalProposedAt ?? '2026-09-02T20:00:02.000Z',
     proposedBy: 'statly-product-owner',
     proposalOrigin: 'human_authored' as const,
   };
@@ -444,14 +526,14 @@ function createAuthority(
       conditionId: condition.conditionId,
       status: 'satisfied' as const,
       evidenceIds: condition.verificationEvidenceIds,
-      explanation: 'The product owner approved the exact bounded private issue-574 use.',
+      explanation: `The product owner approved the exact bounded private issue-${issue} use.`,
     })),
     rationale:
       'The product owner explicitly approved this bounded private non-production evidence lineage and model run.',
     limitations: [...scope.exclusions],
-    decidedAt: '2026-09-02T20:00:03.000Z',
-    effectiveAt: '2026-09-02T20:00:03.000Z',
-    revalidateAt: '2027-09-02T00:00:00.000Z',
+    decidedAt: timing?.decidedAt ?? '2026-09-02T20:00:03.000Z',
+    effectiveAt: timing?.effectiveAt ?? '2026-09-02T20:00:03.000Z',
+    revalidateAt: timing?.revalidateAt ?? '2027-09-02T00:00:00.000Z',
     supersedesDecisionId: null,
     affectedArtifacts: proposalContent.affectedArtifacts,
     withdrawalActions: [] as string[],
@@ -492,8 +574,11 @@ export function createLocalGenuinePlayerDraftguruGateRequest(
   season: number,
   input: Readonly<{ evaluatedAt: string }>
 ): AflTradeGate0ARequest {
-  if (!Number.isSafeInteger(season) || season < 2020 || season > 2024) {
-    throw new TypeError('The local Draftguru authority is limited to seasons 2020 through 2024.');
+  const range = authority.sourceRights.content.scope.seasonRanges[0]!;
+  if (!Number.isSafeInteger(season) || season < range.from || season > range.to) {
+    throw new TypeError(
+      `The local Draftguru authority is limited to seasons ${range.from} through ${range.to}.`
+    );
   }
   return {
     decisionKey: authority.proposal.content.decisionKey,
@@ -539,6 +624,16 @@ export function createLocalGenuinePlayerDraftguruCaptureCommand(
     (authority.capabilityId !== 'draftguru-trade-index' && input.discoveryFromSeason !== undefined)
   ) {
     throw new TypeError('Draftguru discovery range must be supplied only for the trade index.');
+  }
+  if (
+    input.discoveryFromSeason !== undefined &&
+    (!Number.isSafeInteger(input.discoveryFromSeason) ||
+      input.discoveryFromSeason < authority.sourceRights.content.scope.seasonRanges[0]!.from ||
+      input.discoveryFromSeason > input.season)
+  ) {
+    throw new TypeError(
+      'Draftguru discovery range must remain entirely inside the authorized seasons.'
+    );
   }
   return {
     gateRequest,

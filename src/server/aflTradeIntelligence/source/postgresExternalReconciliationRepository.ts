@@ -200,6 +200,9 @@ export class PostgresAflTradeExternalReconciliationRepository {
       await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
         `outcome-external-reconciliation:${candidate.candidateId}`,
       ]);
+      await transaction.query(
+        `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
+      );
 
       const existing = await transaction.query<{
         status: string;
@@ -213,6 +216,16 @@ export class PostgresAflTradeExternalReconciliationRepository {
         [candidate.candidateId]
       );
       if (existing.rows.length > 0) {
+        const authority = await transaction.query<{ current: boolean }>(
+          `SELECT outcome_external_candidate_retained_sources_current($1,clock_timestamp()) AS current`,
+          [candidate.candidateId]
+        );
+        if (authority.rows[0]?.current !== true) {
+          throw new AflTradeExternalReconciliationPersistenceError(
+            'SOURCE_BATCH_UNAVAILABLE',
+            'Reconciliation replay requires current retained source authority.'
+          );
+        }
         const row = existing.rows[0];
         if (
           existing.rows.length !== 1 ||
