@@ -56,13 +56,14 @@ export class PostgresAflTradeAdmittedPlayerFactualPreparation {
     const claimParameters = [request.requestId, request.claim.claimId, leaseDigest];
     return this.client.transaction(async (transaction) => {
       await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
+      // Serialize before taking the claim's shared row locks: retention upgrades them.
+      await transaction.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
+        `outcome-private-valuation-factual-output:${request.requestId}`,
+      ]);
       await transaction.query(
         'SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)',
         claimParameters
       );
-      await transaction.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
-        `outcome-private-valuation-factual-output:${request.requestId}`,
-      ]);
       const retained = await transaction.query<{ output_json: unknown }>(
         'SELECT output_json FROM outcome_private_valuation_factual_output WHERE request_id=$1',
         [request.requestId]

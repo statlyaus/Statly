@@ -33,14 +33,27 @@ export interface AflTradePrivateValuationCaptureBindingRepository {
     readonly sourceRole?: AflTradePrivateValuationCaptureSourceRole;
     readonly normalizationRunId: string;
   }): Promise<AflTradePrivateValuationCaptureBinding>;
+  acceptSourceFirst?(input: {
+    readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
+    readonly claim: z.infer<typeof claimSchema>;
+    readonly sourceRole: AflTradePrivateValuationCaptureSourceRole;
+    readonly normalizationRunId: string;
+  }): Promise<AflTradePrivateValuationCaptureBinding>;
 }
 
 function requireBindingForRequest(
   binding: AflTradePrivateValuationCaptureBinding,
   request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>,
-  sourceRole: AflTradePrivateValuationCaptureSourceRole
+  sourceRole: AflTradePrivateValuationCaptureSourceRole,
+  captureAuthority: 'legacy' | 'source_first'
 ): AflTradePrivateValuationCaptureBinding {
   const parsed = parseAflTradePrivateValuationCaptureBinding(binding);
+  if (
+    (parsed.content.schemaVersion === 'afl-trade-private-valuation-capture-binding/v3') !==
+    (captureAuthority === 'source_first')
+  ) {
+    throw new TypeError('Accepted capture binding conflicts with the selected capture authority.');
+  }
   if (canonicalizeAflTradeJson(parsed.content.request) !== canonicalizeAflTradeJson(request)) {
     throw new TypeError('Accepted capture binding conflicts with the requested dispatch.');
   }
@@ -53,12 +66,23 @@ function requireBindingForRequest(
 export function createAflTradePrivateValuationRawDataCoordinator(dependencies: {
   readonly captureBindings: AflTradePrivateValuationCaptureBindingRepository;
   readonly sourceRole?: AflTradePrivateValuationCaptureSourceRole;
+  readonly captureAuthority?: 'legacy' | 'source_first';
   readonly capture: (input: {
     readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
     readonly claim: z.infer<typeof claimSchema>;
     readonly sourceRole: AflTradePrivateValuationCaptureSourceRole;
   }) => Promise<z.infer<typeof capturedNormalizationSchema>>;
 }) {
+  const captureAuthority = z
+    .enum(['legacy', 'source_first'])
+    .parse(dependencies.captureAuthority ?? 'legacy');
+  const accept =
+    captureAuthority === 'source_first'
+      ? dependencies.captureBindings.acceptSourceFirst?.bind(dependencies.captureBindings)
+      : dependencies.captureBindings.accept.bind(dependencies.captureBindings);
+  if (accept === undefined) {
+    throw new TypeError('Explicit source-first capture acceptance is not configured.');
+  }
   return {
     async run(input: {
       readonly request: z.input<typeof aflTradePrivateValuationDispatchRequestSchema>;
@@ -71,7 +95,7 @@ export function createAflTradePrivateValuationRawDataCoordinator(dependencies: {
       );
       const retained = await dependencies.captureBindings.load(request, sourceRole);
       if (retained !== null) {
-        const binding = requireBindingForRequest(retained, request, sourceRole);
+        const binding = requireBindingForRequest(retained, request, sourceRole, captureAuthority);
         return {
           state: 'capture_accepted' as const,
           requestId: request.requestId,
@@ -84,14 +108,15 @@ export function createAflTradePrivateValuationRawDataCoordinator(dependencies: {
         await dependencies.capture({ request, claim, sourceRole })
       );
       const binding = requireBindingForRequest(
-        await dependencies.captureBindings.accept({
+        await accept({
           request,
           claim,
           sourceRole,
           normalizationRunId: captured.normalizationRunId,
         }),
         request,
-        sourceRole
+        sourceRole,
+        captureAuthority
       );
       if (binding.content.dispatchClaimId !== claim.claimId) {
         throw new TypeError('Accepted capture binding disagrees with the live dispatch claim.');

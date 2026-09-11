@@ -31,10 +31,7 @@ import {
   type AflTradePrivateValuationModelPairExactInput,
   type AflTradePrivateValuationModelPairRepository,
 } from './privateValuationModelPair';
-import {
-  parseAflTradePrivateValuationFactualOutput,
-  type AflTradePrivateValuationFactualOutput,
-} from './privateValuationFactualOutput';
+import { parseAflTradePlayerModelFactualOutput } from './privateValuationFactualOutput';
 import type { AflTradePrivateValuationHpnPreparationResult } from './postgresPrivateValuationHpnPreparation';
 import {
   createGenuineDispatchBoundPickPavRunner,
@@ -343,16 +340,28 @@ export async function loadAflTradePrivateValuationModelPairExactInput(input: {
        JOIN outcome_hpn_pav_calculation calculation
          ON calculation.calculation_id=$3 AND calculation.status='finalized'
       WHERE factual.request_id=$1 AND factual.output_id=$2
-        AND calculation.calculation_json->'content'->>'factualRunId'=factual.factual_run_id`,
+        AND calculation.calculation_json->'content'->>'factualRunId'=
+          CASE WHEN factual.output_json#>>'{content,schemaVersion}'=
+            'afl-trade-private-valuation-factual-output/v1'
+          THEN factual.factual_run_id
+          ELSE load_outcome_private_valuation_hpn_factual_input(factual.request_id,factual.output_id)
+            ->>'hpnFactualRunId' END`,
     [input.prepared.requestId, input.prepared.factualOutputId, input.prepared.calculationId]
   );
   if (result.rows.length !== 1) {
     throw new TypeError('Exact private factual and HPN model input is unavailable.');
   }
   const row = result.rows[0]!;
-  const factual: AflTradePrivateValuationFactualOutput = parseAflTradePrivateValuationFactualOutput(
-    row.output_json
-  );
+  const factual = parseAflTradePlayerModelFactualOutput(row.output_json);
+  if (
+    factual.content.schemaVersion !== 'afl-trade-private-valuation-factual-output/v1' &&
+    (factual.content.admittedPlayerDataset.datasetId !== input.targets.player.datasetId ||
+      factual.content.admittedPlayerDataset.admissionId !== input.targets.player.datasetAdmissionId)
+  ) {
+    throw new TypeError(
+      'Exact admitted-player model targets differ from the retained factual parent.'
+    );
+  }
   const calculation = aflTradeFinalizedHpnPavCalculationSchema.parse(row.calculation_json);
   const hpnValuesSha256 = sha256Schema.parse(row.hpn_values_sha256);
   return {

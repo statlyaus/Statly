@@ -53,8 +53,10 @@ export async function materializeAflTradePrivateValuationFactualOutput(
        FROM outcome_private_valuation_dispatch_request request
        JOIN outcome_private_valuation_capture_binding binding
          ON binding.request_id=request.request_id
+        AND binding.source_role='factual_input'
        JOIN outcome_private_valuation_source_admission admission
          ON admission.request_id=request.request_id
+        AND admission.source_role='factual_input'
         AND admission.capture_binding_id=binding.binding_id
         AND admission.source_capture_id=binding.source_capture_id
         AND admission.normalization_run_id=binding.normalization_run_id
@@ -83,11 +85,6 @@ export async function materializeAflTradePrivateValuationFactualOutput(
         AND candidate.candidate_id=$2
         AND request.scope_key=candidate.scope_key
         AND candidate.environment='non_production'
-        AND NOT EXISTS (
-          SELECT 1
-            FROM outcome_release_source_capture candidate_source
-           WHERE candidate_source.release_id=candidate.target_release_id
-             AND candidate_source.capture_id<>binding.source_capture_id)
         AND NOT EXISTS (
           SELECT 1
             FROM outcome_release_factual_run_member candidate_run

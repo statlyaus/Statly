@@ -11,6 +11,8 @@ export const AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_SCHEMA_VERSION =
   'afl-trade-private-valuation-capture-binding/v1' as const;
 export const AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_V2_SCHEMA_VERSION =
   'afl-trade-private-valuation-capture-binding/v2' as const;
+export const AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_V3_SCHEMA_VERSION =
+  'afl-trade-private-valuation-capture-binding/v3' as const;
 export const AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_LIMITATION =
   'Accepted non-production source custody only; it grants no factual, model, private-evaluation, or publication authority.' as const;
 
@@ -108,9 +110,21 @@ export const aflTradePrivateValuationCaptureBindingV2ContentSchema = z
   .strict()
   .superRefine(refineCaptureBindingChronology);
 
+export const aflTradePrivateValuationCaptureBindingV3ContentSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_V3_SCHEMA_VERSION),
+    authorityKind: z.literal('source_first'),
+    ...captureBindingContentShape,
+    sourceRole: aflTradePrivateValuationCaptureSourceRoleSchema,
+    sourcePlan: aflTradePrivateValuationCaptureSourcePlanV2Schema,
+  })
+  .strict()
+  .superRefine(refineCaptureBindingChronology);
+
 export const aflTradePrivateValuationCaptureBindingContentSchema = z.union([
   aflTradePrivateValuationCaptureBindingV1ContentSchema,
   aflTradePrivateValuationCaptureBindingV2ContentSchema,
+  aflTradePrivateValuationCaptureBindingV3ContentSchema,
 ]);
 
 export const aflTradePrivateValuationCaptureBindingSchema = z

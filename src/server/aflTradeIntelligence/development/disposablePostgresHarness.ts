@@ -33,9 +33,11 @@ export interface DisposableAflTradeOutcomesTestOptions {
   readinessAttempts?: number;
   schemaEnvironmentFileExists?: (path: string) => boolean;
   signal?: AbortSignal;
+  storage?: { kind: 'owned_disk' };
 }
 
 export interface DisposableAflTradeOutcomesRuntime {
+  ownedVolumeName?: string;
   containerId: string;
   databaseUrl: string;
   environment: NodeJS.ProcessEnv;
@@ -145,6 +147,9 @@ async function waitForPostgres(options: {
           'exec',
           options.containerId,
           'pg_isready',
+          // The image's temporary initialization server accepts sockets only.
+          '--host',
+          '127.0.0.1',
           '--username',
           POSTGRES_USER,
           '--dbname',
@@ -168,6 +173,15 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
   options: DisposableAflTradeOutcomesTestOptions,
   workflow: (runtime: DisposableAflTradeOutcomesRuntime) => Promise<Result>
 ): Promise<Result> {
+  if (
+    options.storage !== undefined &&
+    (options.storage === null ||
+      typeof options.storage !== 'object' ||
+      options.storage.kind !== 'owned_disk' ||
+      Object.keys(options.storage).length !== 1)
+  ) {
+    throw new Error('Unsupported disposable PostgreSQL storage option.');
+  }
   const environment = options.environment ?? process.env;
   const processId = options.processId ?? process.pid;
   const randomId = options.randomId?.() ?? randomBytes(6).toString('hex');
@@ -177,6 +191,34 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
   const readinessAttempts = options.readinessAttempts ?? 120;
   const containerName = createContainerName(processId, randomId);
   const ownershipLabel = `com.statly.afl-outcomes-harness=${containerName}`;
+  const volumeName = options.storage ? `${containerName}-data` : undefined;
+  const volumeToken = volumeName ? randomBytes(24).toString('hex') : undefined;
+  let volumeCreationAttempted = false;
+  const inspectOwnedVolume = async () => {
+    const inspected = await options.execute({
+      command: 'docker',
+      args: [
+        'volume',
+        'inspect',
+        '--format',
+        '{"Name":{{json .Name}},"Labels":{{json .Labels}}}',
+        volumeName!,
+      ],
+      output: 'pipe',
+      timeoutMs: 15_000,
+    });
+    const value = JSON.parse(inspected.stdout) as {
+      Name?: unknown;
+      Labels?: Record<string, unknown>;
+    };
+    if (
+      value.Name !== volumeName ||
+      value.Labels?.['com.statly.afl-outcomes-harness'] !== containerName ||
+      value.Labels?.['com.statly.afl-outcomes-volume-token'] !== volumeToken
+    ) {
+      throw new Error(`Refusing access or deletion of unverified PostgreSQL volume ${volumeName}.`);
+    }
+  };
   let containerId: string | undefined;
   let failure: unknown;
   let result: Result | undefined;
@@ -192,6 +234,33 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
     });
 
     options.signal?.throwIfAborted();
+    if (volumeName !== undefined) {
+      const existing = await options.execute({
+        command: 'docker',
+        args: ['volume', 'ls', '--filter', `name=^${volumeName}$`, '--format', '{{.Name}}'],
+        output: 'pipe',
+        timeoutMs: 15_000,
+      });
+      if (existing.stdout.trim() !== '')
+        throw new Error(`Refusing pre-existing PostgreSQL volume ${volumeName}.`);
+      volumeCreationAttempted = true;
+      await options.execute({
+        command: 'docker',
+        args: [
+          'volume',
+          'create',
+          '--label',
+          ownershipLabel,
+          '--label',
+          `com.statly.afl-outcomes-volume-token=${volumeToken}`,
+          volumeName,
+        ],
+        output: 'pipe',
+        timeoutMs: 15_000,
+      });
+      await inspectOwnedVolume();
+    }
+    options.signal?.throwIfAborted();
     let creationFailure: unknown;
     try {
       const runResult = await options.execute({
@@ -206,8 +275,9 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
           containerName,
           '--publish',
           `127.0.0.1::${POSTGRES_CONTAINER_PORT}`,
-          '--tmpfs',
-          '/var/lib/postgresql/data:rw,noexec,nosuid,size=1g',
+          ...(volumeName === undefined
+            ? ['--tmpfs', '/var/lib/postgresql/data:rw,noexec,nosuid,size=1g']
+            : ['--mount', `type=volume,source=${volumeName},target=/var/lib/postgresql/data`]),
           '--env',
           `POSTGRES_DB=${POSTGRES_DATABASE}`,
           '--env',
@@ -283,6 +353,7 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
     const schemaPath = resolve(options.workspaceRoot, 'prisma/afl-trade-outcomes/schema.prisma');
     assertNoSchemaAdjacentPrismaEnvironmentFile(schemaPath, options.schemaEnvironmentFileExists);
     result = await workflow({
+      ...(volumeName === undefined ? {} : { ownedVolumeName: volumeName }),
       containerId,
       databaseUrl,
       environment: testEnvironment,
@@ -305,6 +376,36 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
       });
     } catch (error) {
       cleanupFailure = error;
+    }
+  }
+
+  if (volumeCreationAttempted) {
+    // A failed workflow may leave this volume as its only recoverable database copy.
+    if (failure === undefined && cleanupFailure === undefined && !options.signal?.aborted) {
+      try {
+        await inspectOwnedVolume();
+        options.signal?.throwIfAborted();
+        await options.execute({
+          command: 'docker',
+          args: ['volume', 'rm', volumeName!],
+          output: 'pipe',
+          timeoutMs: 15_000,
+        });
+      } catch (error) {
+        cleanupFailure = error;
+      }
+    }
+    if (failure !== undefined || cleanupFailure !== undefined || options.signal?.aborted) {
+      const causes = [
+        failure,
+        cleanupFailure,
+        options.signal?.aborted ? options.signal.reason : undefined,
+      ].filter((error) => error !== undefined);
+      throw new AggregateError(
+        causes,
+        `Disposable PostgreSQL failed. Recovery volume identifier: ${volumeName}. It may remain; verify existence and ownership before recovery. No further deletion was attempted.`,
+        { cause: failure ?? cleanupFailure ?? options.signal?.reason }
+      );
     }
   }
 

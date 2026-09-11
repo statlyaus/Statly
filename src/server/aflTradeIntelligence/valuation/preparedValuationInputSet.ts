@@ -98,15 +98,12 @@ const readyEntryV3Schema = z
   })
   .strict();
 
-const blockedEntrySchema = z
-  .object({
-    tradeId: publicIdSchema,
-    state: z.literal('blocked'),
-    blockers: z.array(aflTradeValuationInputBlockerSchema).min(1).max(100),
-  })
-  .strict()
-  .superRefine((entry, context) => {
-    const blockerKeys = entry.blockers.map(
+export const aflTradeValuationInputBlockersSchema = z
+  .array(aflTradeValuationInputBlockerSchema)
+  .min(1)
+  .max(100)
+  .superRefine((blockers, context) => {
+    const blockerKeys = blockers.map(
       ({ code, subject }) => `${code}\u0000${subject.kind}\u0000${subject.id}`
     );
     if (new Set(blockerKeys).size !== blockerKeys.length) {
@@ -119,6 +116,14 @@ const blockedEntrySchema = z
       });
     }
   });
+
+const blockedEntrySchema = z
+  .object({
+    tradeId: publicIdSchema,
+    state: z.literal('blocked'),
+    blockers: aflTradeValuationInputBlockersSchema,
+  })
+  .strict();
 
 const aflTradePreparedValuationInputEntryV1Schema = z.discriminatedUnion('state', [
   readyEntrySchema,

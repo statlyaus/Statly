@@ -30,6 +30,7 @@ import { PostgresGovernedPrivateEvaluationMaterializationManifestRepository } fr
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from './internal/postgresGovernedPrivateEvaluationStagingRepository';
 import type { AflTradeCurrentPreparedValuationInputHead } from './postgresPreparedValuationInputSetStore';
 import { PostgresAflTradePreparedValuationInputSetStore } from './postgresPreparedValuationInputSetStore';
+import { PostgresAflTradePrivateValuationCohortBinding } from './postgresPrivateValuationCohortBinding';
 import {
   aflTradePreparedValuationInputSetSchema,
   type AflTradePreparedValuationInputSet,
@@ -1065,6 +1066,8 @@ export function createPostgresAflTradePrivateCurrentValuationCohortCoordinator(d
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
   readonly maximumConcurrency?: number;
+  /** Required for a new v2 target cohort; legacy v1 retains its existing release parent. */
+  readonly cohortLineageAdmissionId?: string;
   readonly selectValuationInputBundleId: AflTradePrivateCurrentValuationInputBundleSelector;
   readonly loadConstructionEvidence: Parameters<
     typeof createPostgresAflTradePrivateCurrentValuationCohortAuthorityCapture
@@ -1102,6 +1105,13 @@ export function createPostgresAflTradePrivateCurrentValuationCohortCoordinator(d
       readonly claim: PrivatePreparedClaim;
     }): Promise<AflTradeCurrentValuationCohortPreparationResult> {
       try {
+        if (dependencies.cohortLineageAdmissionId !== undefined) {
+          await new PostgresAflTradePrivateValuationCohortBinding(dependencies.client).bind({
+            requestId: input.requestId,
+            claim: input.claim,
+            lineageAdmissionId: dependencies.cohortLineageAdmissionId,
+          });
+        }
         const current = await loadPostgresAflTradePrivateCurrentPreparedValuationCohort({
           client: dependencies.client,
           requestId: input.requestId,

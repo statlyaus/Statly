@@ -15,6 +15,12 @@ const inventoryRowSchema = z
     trade_count: z.number().int().positive().nullable(),
     ready_count: z.number().int().nonnegative().nullable(),
     unavailable_count: z.number().int().nonnegative().nullable(),
+    cohort_admission_count: z.number().int().nonnegative(),
+    cohort_trade_count: z.number().int().positive().nullable(),
+    current_registered_acquisition_spell_count: z.number().int().nonnegative(),
+    finalized_hpn_input_set_count: z.number().int().nonnegative(),
+    finalized_hpn_calculation_count: z.number().int().nonnegative(),
+    max_finalized_hpn_corroborating_player_row_count: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -25,7 +31,7 @@ export interface LocalPrivateValuationPreflightQueryClient {
 type RetainedHead = Readonly<{ present: boolean; revision: number | null }>;
 
 export interface Exact2025AflPrivateValuationRehearsalPreflight {
-  readonly schemaVersion: 'afl-private-valuation-rehearsal-preflight/v2';
+  readonly schemaVersion: 'afl-private-valuation-rehearsal-preflight/v3';
   readonly scopeKey: typeof SCOPE_KEY;
   readonly competitionCode: 'AFLM';
   readonly season: 2025;
@@ -36,6 +42,18 @@ export interface Exact2025AflPrivateValuationRehearsalPreflight {
   readonly sourceAuthority: {
     readonly genuineDraftTrade: 'not_inspected';
     readonly genuineHpnCorroboration: 'not_inspected';
+  };
+  readonly retainedSourceInventory: {
+    readonly cohortCandidates: {
+      readonly admissionCount: number;
+      readonly tradeCount: number | null;
+    };
+    readonly measurementEvidence: {
+      readonly currentRegisteredAcquisitionSpellCount: number;
+      readonly finalizedHpnInputSetCount: number;
+      readonly finalizedHpnCalculationCount: number;
+      readonly maxFinalizedHpnCorroboratingPlayerRowCount: number;
+    };
   };
   readonly retainedAuthority: {
     readonly privateFactualHead: RetainedHead;
@@ -105,6 +123,48 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
         WHERE head.scope_key=$1
           AND validate_outcome_private_evaluation_batch_complete(
                 head.scope_key,head.batch_id)=TRUE
+     ), cohort_inventory AS (
+       SELECT count(DISTINCT binding.lineage_admission_id)::integer AS admission_count,
+              CASE WHEN count(DISTINCT binding.lineage_admission_id)=1
+                THEN max(jsonb_array_length(binding.binding_json->'cohortTradeIds'))
+                ELSE NULL
+              END AS trade_count
+         FROM outcome_private_valuation_cohort_binding binding
+        WHERE binding.binding_json->>'cohortScopeKey'=$1
+     ), acquisition_inventory AS (
+       SELECT count(*)::integer AS current_registered_count
+         FROM outcome_acquisition_spell_version spell
+         JOIN outcome_event_version event_version
+           ON event_version.event_version_id=spell.start_event_version_id
+         JOIN outcome_event event ON event.event_id=event_version.event_id
+        WHERE spell.status='approved'
+          AND spell.registration_canonical_json IS NOT NULL
+          AND spell.registration_approval_decision_id IS NOT NULL
+          AND spell.registered_at IS NOT NULL
+          AND event.competition='AFLM' AND event.season_year=2025
+          AND NOT EXISTS (
+            SELECT 1 FROM outcome_acquisition_spell_version successor
+             WHERE successor.supersedes_spell_version_id=spell.spell_version_id
+          )
+     ), hpn_input_inventory AS (
+       SELECT count(*)::integer AS finalized_count,
+              COALESCE(max(input_set.corroborating_player_row_count),0)::integer
+                AS max_corroborating_player_row_count
+         FROM outcome_hpn_pav_input_set input_set
+        WHERE input_set.environment='non_production'
+          AND input_set.competition='AFLM' AND input_set.season_year=2025
+          AND input_set.status='finalized' AND input_set.finalized_at IS NOT NULL
+     ), hpn_calculation_inventory AS (
+       SELECT count(*)::integer AS finalized_count
+         FROM outcome_hpn_pav_calculation calculation
+         JOIN outcome_hpn_pav_input_set input_set
+           ON input_set.input_set_id=calculation.input_set_id
+        WHERE calculation.environment='non_production'
+          AND calculation.competition='AFLM' AND calculation.season_year=2025
+          AND calculation.status='finalized' AND calculation.finalized_at IS NOT NULL
+          AND input_set.environment=calculation.environment
+          AND input_set.competition=calculation.competition
+          AND input_set.season_year=calculation.season_year
      )
      SELECT EXISTS(SELECT 1 FROM factual) AS private_factual_present,
             (SELECT revision FROM factual) AS private_factual_revision,
@@ -116,7 +176,16 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
             (SELECT revision FROM private_batch) AS private_batch_revision,
             (SELECT trade_count FROM private_batch) AS trade_count,
             (SELECT ready_count FROM private_batch) AS ready_count,
-            (SELECT unavailable_count FROM private_batch) AS unavailable_count`,
+            (SELECT unavailable_count FROM private_batch) AS unavailable_count,
+            (SELECT admission_count FROM cohort_inventory) AS cohort_admission_count,
+            (SELECT trade_count FROM cohort_inventory) AS cohort_trade_count,
+            (SELECT current_registered_count FROM acquisition_inventory)
+              AS current_registered_acquisition_spell_count,
+            (SELECT finalized_count FROM hpn_input_inventory) AS finalized_hpn_input_set_count,
+            (SELECT finalized_count FROM hpn_calculation_inventory)
+              AS finalized_hpn_calculation_count,
+            (SELECT max_corroborating_player_row_count FROM hpn_input_inventory)
+              AS max_finalized_hpn_corroborating_player_row_count`,
     [SCOPE_KEY]
   );
   if (result.rows.length !== 1) {
@@ -128,10 +197,22 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
     ...(row.qualified_model_present ? [] : ['qualified_model_evidence_missing']),
     ...(row.prepared_v3_present ? [] : ['prepared_v3_head_missing']),
     ...(row.private_batch_present ? [] : ['exhaustive_private_batch_head_missing']),
+    ...(row.cohort_admission_count === 1
+      ? []
+      : [
+          row.cohort_admission_count === 0
+            ? 'retained_cohort_candidate_missing'
+            : 'retained_cohort_candidate_ambiguous',
+        ]),
+    ...(row.finalized_hpn_input_set_count > 0 &&
+    row.finalized_hpn_calculation_count > 0 &&
+    row.max_finalized_hpn_corroborating_player_row_count > 0
+      ? []
+      : ['retained_hpn_corroboration_missing']),
   ];
 
   return {
-    schemaVersion: 'afl-private-valuation-rehearsal-preflight/v2',
+    schemaVersion: 'afl-private-valuation-rehearsal-preflight/v3',
     scopeKey: SCOPE_KEY,
     competitionCode: 'AFLM',
     season: 2025,
@@ -142,6 +223,19 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
     sourceAuthority: {
       genuineDraftTrade: 'not_inspected',
       genuineHpnCorroboration: 'not_inspected',
+    },
+    retainedSourceInventory: {
+      cohortCandidates: {
+        admissionCount: row.cohort_admission_count,
+        tradeCount: row.cohort_trade_count,
+      },
+      measurementEvidence: {
+        currentRegisteredAcquisitionSpellCount: row.current_registered_acquisition_spell_count,
+        finalizedHpnInputSetCount: row.finalized_hpn_input_set_count,
+        finalizedHpnCalculationCount: row.finalized_hpn_calculation_count,
+        maxFinalizedHpnCorroboratingPlayerRowCount:
+          row.max_finalized_hpn_corroborating_player_row_count,
+      },
     },
     retainedAuthority: {
       privateFactualHead: {

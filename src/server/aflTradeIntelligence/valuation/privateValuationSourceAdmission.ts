@@ -83,3 +83,68 @@ export function parseAflTradePrivateValuationSourceAdmission(
 ): AflTradePrivateValuationSourceAdmission {
   return aflTradePrivateValuationSourceAdmissionSchema.parse(value);
 }
+
+export const aflTradePrivateValuationSupplementalSourceRoleSchema = z.enum([
+  'hpn_completed_results',
+  'hpn_primary_player_stats',
+  'hpn_corroborating_player_stats',
+]);
+
+const supplementalContentSchema = aflTradePrivateValuationSourceAdmissionContentSchema.extend({
+  schemaVersion: z.literal('afl-trade-private-valuation-source-admission/v2'),
+  sourceRole: aflTradePrivateValuationSupplementalSourceRoleSchema,
+  primarySourceAdmissionId: aflTradeContentAddressedIdSchema('private-valuation-source-admission'),
+});
+
+export const aflTradePrivateValuationSupplementalSourceAdmissionSchema = z
+  .object({
+    admissionId: aflTradeContentAddressedIdSchema('private-valuation-source-admission'),
+    content: supplementalContentSchema,
+  })
+  .strict()
+  .superRefine((admission, context) => {
+    addAflTradeContentAddressIssue(
+      'private-valuation-source-admission',
+      admission.admissionId,
+      admission.content,
+      context,
+      ['admissionId']
+    );
+  });
+
+export type AflTradePrivateValuationSupplementalSourceAdmission = z.infer<
+  typeof aflTradePrivateValuationSupplementalSourceAdmissionSchema
+>;
+
+/** Structural custody only; the existing admission database owner grants source authority. */
+export function createAflTradePrivateValuationSupplementalSourceAdmission(
+  input: Omit<
+    z.input<typeof supplementalContentSchema>,
+    | 'schemaVersion'
+    | 'principalId'
+    | 'environment'
+    | 'publicationEligible'
+    | 'publicationProhibited'
+    | 'limitation'
+  >
+): AflTradePrivateValuationSupplementalSourceAdmission {
+  const content = supplementalContentSchema.parse({
+    ...input,
+    schemaVersion: 'afl-trade-private-valuation-source-admission/v2',
+    principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+    environment: 'non_production',
+    publicationEligible: false,
+    publicationProhibited: true,
+    limitation: AFL_TRADE_PRIVATE_VALUATION_SOURCE_ADMISSION_LIMITATION,
+  });
+  return aflTradePrivateValuationSupplementalSourceAdmissionSchema.parse({
+    admissionId: createAflTradeContentAddress('private-valuation-source-admission', content),
+    content,
+  });
+}
+
+export function parseAflTradePrivateValuationSupplementalSourceAdmission(
+  value: unknown
+): AflTradePrivateValuationSupplementalSourceAdmission {
+  return aflTradePrivateValuationSupplementalSourceAdmissionSchema.parse(value);
+}
