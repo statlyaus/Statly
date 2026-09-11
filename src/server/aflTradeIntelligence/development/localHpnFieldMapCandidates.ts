@@ -47,11 +47,28 @@ const directFields = {
     clearances: 'clearances.totalClearances',
     tackles: 'tackles',
   },
+  footywire: {
+    player: 'Player',
+    match: 'Match_id',
+    club: 'Team',
+    hitOuts: 'HO',
+    goalAssists: 'GA',
+    inside50s: 'I50',
+    marks: 'M',
+    marksInside50: 'MI5',
+    freeKicksFor: 'FF',
+    freeKicksAgainst: 'FA',
+    rebound50s: 'R50',
+    onePercenters: 'One.Percenters',
+    clearances: 'CL',
+    tackles: 'T',
+  },
 } as const;
 
 const scoringFields = {
   afl_tables: { goals: 'Goals', behinds: 'Behinds' },
   official_afl: { goals: 'goals', behinds: 'behinds' },
+  footywire: { goals: 'G', behinds: 'B' },
 } as const;
 
 export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
@@ -62,14 +79,21 @@ export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
   readonly createdAt: string;
 }) {
   const decodeMap = decodeMapIdentitySchema.parse(input.providerDecodeMap);
-  const expectedCapability =
-    input.provider === 'afl_tables'
-      ? 'afl-tables-player-stats'
-      : 'official-afl-player-stats';
+  const expectedCapability = {
+    afl_tables: 'afl-tables-player-stats',
+    official_afl: 'official-afl-player-stats',
+    footywire: 'footywire-player-stats',
+  }[input.provider];
   if (decodeMap.capabilityId !== expectedCapability) {
     throw new TypeError('The retained provider decode map has the wrong HPN capability.');
   }
   const providerFields = directFields[input.provider];
+  // Follow the declared source locator; this candidate does not approve its identity namespace.
+  const playerField = input.provider === 'afl_tables' && decodeMap.identity !== undefined
+    ? z.object({
+        nativeId: z.object({ sourceField: z.enum(['ID', 'url']) }),
+      }).parse(decodeMap.identity).nativeId.sourceField
+    : providerFields.player;
   const semanticBindings = listAflTradeHpnRequiredSemanticFields(
     'player_match_stats'
   ).map<AflTradeHpnSemanticBindingCandidate>((semanticField) => ({
@@ -89,7 +113,9 @@ export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
         : {
             kind: 'direct',
             sourceField:
-              providerFields[semanticField as keyof typeof providerFields],
+              semanticField === 'player'
+                ? playerField
+                : providerFields[semanticField as keyof typeof providerFields],
           },
   }));
   return createAflTradeHpnFieldMapCandidate({

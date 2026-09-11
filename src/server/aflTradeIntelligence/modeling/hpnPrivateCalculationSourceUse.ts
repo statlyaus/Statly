@@ -1,9 +1,17 @@
+import { z } from 'zod';
+
 import {
+  aflTradeArtifactRefSchema,
   doAflTradeArtifactRefsExactlyMatch,
   doesAflTradeArtifactRefMatchCanonicalJson,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
-import { createAflTradeContentAddress } from '../artifacts/contentAddress';
+import {
+  addAflTradeContentAddressIssue,
+  aflTradeContentAddressedIdSchema,
+  aflTradeSha256Schema,
+  createAflTradeContentAddress,
+} from '../artifacts/contentAddress';
 import {
   aflTradeSourceRightsProposalSchema,
   type AflTradeSourceRightsProposal,
@@ -83,9 +91,7 @@ type AssessmentInput = Readonly<{
 function uniqueReasons(
   reasons: readonly AflTradeHpnPrivateSourceUseReason[]
 ): readonly AflTradeHpnPrivateSourceUseReason[] {
-  return AFL_TRADE_HPN_PRIVATE_SOURCE_USE_REASONS.filter((reason) =>
-    reasons.includes(reason)
-  );
+  return AFL_TRADE_HPN_PRIVATE_SOURCE_USE_REASONS.filter((reason) => reasons.includes(reason));
 }
 
 function hasExactRightsEvidence(
@@ -106,9 +112,7 @@ function isCurrentForEvaluation(
     throw new TypeError('A valid HPN source-use evaluation timestamp is required.');
   }
   const effectiveTime =
-    rights.content.termsEffectiveAt === null
-      ? null
-      : Date.parse(rights.content.termsEffectiveAt);
+    rights.content.termsEffectiveAt === null ? null : Date.parse(rights.content.termsEffectiveAt);
   const expiryTime =
     rights.content.termsExpireAt === null ? null : Date.parse(rights.content.termsExpireAt);
   return (
@@ -126,8 +130,7 @@ function isOverbroad(rights: AflTradeSourceRightsProposal): boolean {
     rights.content.redistribution.rawFieldsPermitted ||
     rights.content.redistribution.publicDerivedOutputPermitted ||
     rights.content.fields.some(
-      (field) =>
-        field.uses.model_training !== 'blocked' || field.uses.public_display !== 'blocked'
+      (field) => field.uses.model_training !== 'blocked' || field.uses.public_display !== 'blocked'
     )
   );
 }
@@ -176,10 +179,7 @@ function sealAssessment(
   content: AflTradeHpnPrivateCalculationSourceUseAssessmentContent
 ): AflTradeHpnPrivateCalculationSourceUseAssessment {
   return {
-    assessmentId: createAflTradeContentAddress(
-      'hpn-private-source-use-assessment',
-      content
-    ),
+    assessmentId: createAflTradeContentAddress('hpn-private-source-use-assessment', content),
     content,
   };
 }
@@ -188,9 +188,7 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
   input: AssessmentInput
 ): AflTradeHpnPrivateCalculationSourceUseAssessment {
   const rights = aflTradeSourceRightsProposalSchema.parse(input.rights);
-  const evidenceBundle = aflTradePrivateReviewedEvidenceBundleSchema.parse(
-    input.evidenceBundle
-  );
+  const evidenceBundle = aflTradePrivateReviewedEvidenceBundleSchema.parse(input.evidenceBundle);
   const sourceFields = [...input.sourceFields].sort((left, right) => left.localeCompare(right));
   if (
     sourceFields.length === 0 ||
@@ -205,25 +203,27 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
     reasons: readonly AflTradeHpnPrivateSourceUseReason[],
     fieldReasons?: ReadonlyMap<string, readonly AflTradeHpnPrivateSourceUseReason[]>
   ) =>
-    sealAssessment(unavailableAssessment({
-      competition: input.competition,
-      seasonYear: input.seasonYear,
-      valuationScopeKey:
-        input.admission.state === 'authorized'
-          ? input.admission.authority.valuationScopeKey
-          : null,
-      evaluationDecisionId:
-        input.admission.state === 'authorized'
-          ? input.admission.authority.decisionId
-          : input.admission.decisionId,
-      rightsArtifactId: rights.rightsArtifactId,
-      evidenceBundleId: evidenceBundle.evidenceBundleId,
-      sourceFields,
-      fieldReasons,
-      reasons,
-      evidenceRefs,
-      evaluatedAt: input.evaluatedAt,
-    }));
+    sealAssessment(
+      unavailableAssessment({
+        competition: input.competition,
+        seasonYear: input.seasonYear,
+        valuationScopeKey:
+          input.admission.state === 'authorized'
+            ? input.admission.authority.valuationScopeKey
+            : null,
+        evaluationDecisionId:
+          input.admission.state === 'authorized'
+            ? input.admission.authority.decisionId
+            : input.admission.decisionId,
+        rightsArtifactId: rights.rightsArtifactId,
+        evidenceBundleId: evidenceBundle.evidenceBundleId,
+        sourceFields,
+        fieldReasons,
+        reasons,
+        evidenceRefs,
+        evaluatedAt: input.evaluatedAt,
+      })
+    );
 
   if (input.admission.state !== 'authorized') {
     return unavailable(['private_evaluation_not_authorized']);
@@ -236,10 +236,7 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
       evidenceBundle
     ) ||
     input.admission.authority.evidenceBundleId !== evidenceBundle.evidenceBundleId ||
-    !hasExactRightsEvidence(
-      input.rightsArtifact,
-      evidenceBundle.content.sourceRightsEvidenceRefs
-    )
+    !hasExactRightsEvidence(input.rightsArtifact, evidenceBundle.content.sourceRightsEvidenceRefs)
   ) {
     return unavailable(['reviewed_evidence_not_exact']);
   }
@@ -324,5 +321,185 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false,
     publicationProhibited: true,
+  });
+}
+
+const sourceFirstContextSchema = z
+  .object({
+    captureId: aflTradeContentAddressedIdSchema('source-capture'),
+    sourceSnapshotId: aflTradeContentAddressedIdSchema('source-snapshot'),
+    sourceArtifact: aflTradeArtifactRefSchema,
+    normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
+    normalizationFinalizationSha256: aflTradeSha256Schema,
+    providerDecodeMapId: z.string().trim().min(1).max(240),
+    providerDecodeMapSha256: aflTradeSha256Schema,
+    sourceSchemaSha256: aflTradeSha256Schema,
+    gateDecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
+    gateProposalId: aflTradeContentAddressedIdSchema('gate-proposal'),
+    gateDecisionKey: z.string().trim().min(1).max(240),
+  })
+  .strict();
+
+const sourceFirstAssessmentContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-hpn-private-source-use-assessment/v2'),
+    environment: z.literal('non_production'),
+    purpose: z.literal('private_confirmed_realized_hpn_pav'),
+    competition: z.literal('AFLM'),
+    seasonYear: z.number().int().min(1998).max(2200),
+    valuationScopeKey: z.string().trim().min(1).max(240),
+    source: sourceFirstContextSchema,
+    state: z.enum(['permitted_private_calculation', 'not_permitted']),
+    rightsArtifactId: aflTradeContentAddressedIdSchema('source-rights'),
+    fields: z
+      .array(
+        z
+          .object({
+            sourceField: z.string().trim().min(1),
+            state: z.enum(['permitted_private_calculation', 'not_permitted']),
+            reasons: z.array(z.enum(AFL_TRADE_HPN_PRIVATE_SOURCE_USE_REASONS)),
+          })
+          .strict()
+      )
+      .min(1),
+    reasons: z.array(z.enum(AFL_TRADE_HPN_PRIVATE_SOURCE_USE_REASONS)),
+    evidenceRefs: z.tuple([aflTradeArtifactRefSchema]),
+    evaluatedAt: z.iso.datetime({ offset: true }),
+    publicationEligible: z.literal(false),
+    publicationProhibited: z.literal(true),
+    limitation: z.literal(
+      'Retained source-use assessment only; current source, field-map review, and database authority remain required. No model training or publication authority.'
+    ),
+  })
+  .strict()
+  .superRefine((content, context) => {
+    const names = content.fields.map((field) => field.sourceField);
+    if (
+      new Set(names).size !== names.length ||
+      names.some((name, index) => index > 0 && names[index - 1].localeCompare(name) >= 0)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Source fields must be a unique canonical set.',
+      });
+    }
+    if (
+      [content.source.sourceArtifact, ...content.evidenceRefs].some(
+        (ref) => Date.parse(ref.createdAt) > Date.parse(content.evaluatedAt)
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Source-use evidence must exist before assessment.',
+      });
+    }
+    if (
+      content.state === 'permitted_private_calculation' &&
+      (content.reasons.length > 0 ||
+        content.fields.some((field) => field.state !== content.state || field.reasons.length > 0))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A permitted assessment cannot contain blocked fields or reasons.',
+      });
+    }
+  });
+
+export const aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema = z
+  .object({
+    assessmentId: aflTradeContentAddressedIdSchema('hpn-private-source-use-assessment'),
+    content: sourceFirstAssessmentContentSchema,
+  })
+  .strict()
+  .superRefine((assessment, context) => {
+    addAflTradeContentAddressIssue(
+      'hpn-private-source-use-assessment',
+      assessment.assessmentId,
+      assessment.content,
+      context,
+      ['assessmentId']
+    );
+  });
+
+export type AflTradeHpnSourceFirstCalculationSourceUseAssessment = z.infer<
+  typeof aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema
+>;
+
+/** Evidence assessment, not authentication of caller-supplied source identifiers. */
+export function assessAflTradeHpnSourceFirstCalculationSourceUse(
+  input: Readonly<{
+    rights: unknown;
+    rightsArtifact: AflTradeArtifactRef;
+    competition: string;
+    seasonYear: number;
+    valuationScopeKey: string;
+    source: z.input<typeof sourceFirstContextSchema>;
+    sourceFields: readonly string[];
+    evaluatedAt: string;
+  }>
+): AflTradeHpnSourceFirstCalculationSourceUseAssessment {
+  const rights = aflTradeSourceRightsProposalSchema.parse(input.rights);
+  const reasons: AflTradeHpnPrivateSourceUseReason[] = [];
+  if (!doesAflTradeArtifactRefMatchCanonicalJson(input.rightsArtifact, rights))
+    reasons.push('reviewed_evidence_not_exact');
+  const permitsRestriction = (values: readonly string[], value: string) =>
+    values.length === 0 || values.includes(value);
+  if (
+    !rights.content.scope.competitions.includes(input.competition) ||
+    !rights.content.scope.seasonRanges.some(
+      (range) => range.from <= input.seasonYear && input.seasonYear <= range.to
+    ) ||
+    !permitsRestriction(rights.content.restrictions.commercial, 'internal-evaluation') ||
+    !permitsRestriction(rights.content.restrictions.audience, 'internal')
+  )
+    reasons.push('rights_scope_mismatch');
+  if (
+    !isCurrentForEvaluation(rights, input.evaluatedAt) ||
+    Date.parse(rights.content.proposedAt) > Date.parse(input.evaluatedAt)
+  )
+    reasons.push('rights_not_current');
+  if (rights.content.operations.derived_feature_creation !== 'allowed')
+    reasons.push('derived_feature_operation_blocked');
+  if (
+    rights.content.retention.derivedArtifacts.disposition === 'prohibited' ||
+    !rights.content.retention.derivedArtifacts.deleteOnWithdrawal
+  )
+    reasons.push('derived_artifact_retention_blocked');
+  if (!rights.content.withdrawalDuties.stopNewDerivedWork)
+    reasons.push('withdrawal_controls_missing');
+  const registeredFields = new Map(
+    rights.content.fields.map((field) => [field.sourceField, field])
+  );
+  for (const sourceField of input.sourceFields) {
+    const field = registeredFields.get(sourceField);
+    if (field === undefined) reasons.push('source_field_not_registered');
+    else if (field.uses.derived_feature !== 'allowed') reasons.push('derived_source_field_blocked');
+  }
+  const canonicalReasons = uniqueReasons(reasons);
+  const state = canonicalReasons.length === 0 ? 'permitted_private_calculation' : 'not_permitted';
+  const content = sourceFirstAssessmentContentSchema.parse({
+    schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v2',
+    environment: 'non_production',
+    purpose: 'private_confirmed_realized_hpn_pav',
+    competition: input.competition,
+    seasonYear: input.seasonYear,
+    valuationScopeKey: input.valuationScopeKey,
+    source: input.source,
+    state,
+    rightsArtifactId: rights.rightsArtifactId,
+    fields: [...input.sourceFields]
+      .sort((left, right) => left.localeCompare(right))
+      .map((sourceField) => ({ sourceField, state, reasons: canonicalReasons })),
+    reasons: canonicalReasons,
+    evidenceRefs: [input.rightsArtifact],
+    evaluatedAt: input.evaluatedAt,
+    publicationEligible: false,
+    publicationProhibited: true,
+    limitation:
+      'Retained source-use assessment only; current source, field-map review, and database authority remain required. No model training or publication authority.',
+  });
+  return aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema.parse({
+    assessmentId: createAflTradeContentAddress('hpn-private-source-use-assessment', content),
+    content,
   });
 }

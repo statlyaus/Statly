@@ -16,7 +16,11 @@ import {
   listAflTradeHpnCandidateSourceFields,
   type AflTradeHpnFieldMapCandidate,
 } from './hpnFieldMapCandidate';
-import type { AflTradeHpnPrivateCalculationSourceUseAssessment } from './hpnPrivateCalculationSourceUse';
+import {
+  aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema,
+  type AflTradeHpnPrivateCalculationSourceUseAssessment,
+  type AflTradeHpnSourceFirstCalculationSourceUseAssessment,
+} from './hpnPrivateCalculationSourceUse';
 
 export const AFL_TRADE_HPN_FIELD_MAP_REVIEW_DECISION_SCHEMA_VERSION =
   'afl-trade-hpn-field-map-review-decision/v2' as const;
@@ -32,14 +36,15 @@ const publicIdSchema = z
 
 const decisionContentSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_HPN_FIELD_MAP_REVIEW_DECISION_SCHEMA_VERSION),
+    schemaVersion: z.enum([
+      AFL_TRADE_HPN_FIELD_MAP_REVIEW_DECISION_SCHEMA_VERSION,
+      'afl-trade-hpn-field-map-review-decision/v3',
+    ]),
     environment: z.literal('non_production'),
     purpose: z.literal('private_confirmed_realized_hpn_pav_review'),
     candidateId: aflTradeContentAddressedIdSchema('hpn-field-map-candidate'),
     candidateArtifact: aflTradeArtifactRefSchema,
-    sourceUseAssessmentId: aflTradeContentAddressedIdSchema(
-      'hpn-private-source-use-assessment'
-    ),
+    sourceUseAssessmentId: aflTradeContentAddressedIdSchema('hpn-private-source-use-assessment'),
     sourceUseAssessmentArtifact: aflTradeArtifactRefSchema,
     decision: z.enum(['approved', 'rejected']),
     reviewerId: publicIdSchema,
@@ -92,9 +97,7 @@ const projectedMapContentSchema = z
     validThroughSeason: z.number().int().min(1998).max(2200),
     candidateId: aflTradeContentAddressedIdSchema('hpn-field-map-candidate'),
     candidateArtifact: aflTradeArtifactRefSchema,
-    approvalDecisionId: aflTradeContentAddressedIdSchema(
-      'hpn-field-map-review-decision'
-    ),
+    approvalDecisionId: aflTradeContentAddressedIdSchema('hpn-field-map-review-decision'),
     approvalDecisionArtifact: aflTradeArtifactRefSchema,
     semanticBindings: aflTradeHpnFieldMapCandidateSchema.shape.content.shape.semanticBindings,
     completionRule: aflTradeHpnFieldMapCandidateSchema.shape.content.shape.completionRule,
@@ -126,14 +129,14 @@ export const aflTradeHpnProjectedFieldMapSchema = z
 export type AflTradeHpnFieldMapReviewDecision = z.infer<
   typeof aflTradeHpnFieldMapReviewDecisionSchema
 >;
-export type AflTradeHpnProjectedFieldMap = z.infer<
-  typeof aflTradeHpnProjectedFieldMapSchema
->;
+export type AflTradeHpnProjectedFieldMap = z.infer<typeof aflTradeHpnProjectedFieldMapSchema>;
 
 export function createAflTradeHpnFieldMapReviewDecision(input: {
   readonly candidate: unknown;
   readonly candidateArtifact: AflTradeArtifactRef;
-  readonly sourceUseAssessment: AflTradeHpnPrivateCalculationSourceUseAssessment;
+  readonly sourceUseAssessment:
+    | AflTradeHpnPrivateCalculationSourceUseAssessment
+    | AflTradeHpnSourceFirstCalculationSourceUseAssessment;
   readonly sourceUseAssessmentArtifact: AflTradeArtifactRef;
   readonly decision: 'approved' | 'rejected';
   readonly reviewerId: string;
@@ -141,10 +144,31 @@ export function createAflTradeHpnFieldMapReviewDecision(input: {
   readonly decidedAt: string;
 }): AflTradeHpnFieldMapReviewDecision {
   const candidate = aflTradeHpnFieldMapCandidateSchema.parse(input.candidate);
-  const sourceUseAssessment = input.sourceUseAssessment;
-  const expectedSourceFields = [...new Set(
-    candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
-  )].sort();
+  const sourceUseAssessment =
+    input.sourceUseAssessment.content.schemaVersion ===
+    'afl-trade-hpn-private-source-use-assessment/v2'
+      ? aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema.parse(input.sourceUseAssessment)
+      : input.sourceUseAssessment;
+  if (
+    sourceUseAssessment.content.schemaVersion === 'afl-trade-hpn-private-source-use-assessment/v2'
+  ) {
+    const source = sourceUseAssessment.content.source;
+    if (
+      source.providerDecodeMapId !== candidate.content.providerDecodeMapId ||
+      source.providerDecodeMapSha256 !==
+        candidate.content.providerDecodeMapArtifact.contentSha256 ||
+      source.sourceSchemaSha256 !== candidate.content.sourceSchemaSha256 ||
+      Date.parse(sourceUseAssessment.content.evaluatedAt) > Date.parse(input.decidedAt) ||
+      Date.parse(input.sourceUseAssessmentArtifact.createdAt) > Date.parse(input.decidedAt)
+    ) {
+      throw new TypeError(
+        'Source-first HPN review requires the exact source decoder and prior assessment.'
+      );
+    }
+  }
+  const expectedSourceFields = [
+    ...new Set(candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
+  ].sort();
   const assessedSourceFields = sourceUseAssessment.content.fields
     .map(({ sourceField }) => sourceField)
     .sort();
@@ -175,7 +199,10 @@ export function createAflTradeHpnFieldMapReviewDecision(input: {
     throw new TypeError('An exact candidate artifact is required for HPN field-map review.');
   }
   const content = decisionContentSchema.parse({
-    schemaVersion: AFL_TRADE_HPN_FIELD_MAP_REVIEW_DECISION_SCHEMA_VERSION,
+    schemaVersion:
+      sourceUseAssessment.content.schemaVersion === 'afl-trade-hpn-private-source-use-assessment/v2'
+        ? 'afl-trade-hpn-field-map-review-decision/v3'
+        : AFL_TRADE_HPN_FIELD_MAP_REVIEW_DECISION_SCHEMA_VERSION,
     environment: 'non_production',
     purpose: 'private_confirmed_realized_hpn_pav_review',
     candidateId: candidate.candidateId,
@@ -203,18 +230,16 @@ export function createAflTradeHpnProjectedFieldMap(input: {
   readonly decision: unknown;
   readonly decisionArtifact: AflTradeArtifactRef;
 }): AflTradeHpnProjectedFieldMap {
-  const candidate: AflTradeHpnFieldMapCandidate =
-    aflTradeHpnFieldMapCandidateSchema.parse(input.candidate);
+  const candidate: AflTradeHpnFieldMapCandidate = aflTradeHpnFieldMapCandidateSchema.parse(
+    input.candidate
+  );
   const decision = aflTradeHpnFieldMapReviewDecisionSchema.parse(input.decision);
   if (
     !doesAflTradeArtifactRefMatchCanonicalJson(input.candidateArtifact, candidate) ||
     !doesAflTradeArtifactRefMatchCanonicalJson(input.decisionArtifact, decision) ||
     decision.content.decision !== 'approved' ||
     decision.content.candidateId !== candidate.candidateId ||
-    !doAflTradeArtifactRefsExactlyMatch(
-      decision.content.candidateArtifact,
-      input.candidateArtifact
-    )
+    !doAflTradeArtifactRefsExactlyMatch(decision.content.candidateArtifact, input.candidateArtifact)
   ) {
     throw new TypeError(
       'A projected HPN field map requires the exact candidate and its approved review decision.'

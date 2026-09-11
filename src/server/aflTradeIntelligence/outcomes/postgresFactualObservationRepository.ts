@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -111,19 +113,43 @@ export class PostgresAflTradeFactualObservationRepository {
       );
     }
 
+    const receiptCanonicalJson = canonicalizeAflTradeJson(batch);
+    const receiptCanonicalSha256 = createHash('sha256')
+      .update(receiptCanonicalJson, 'utf8')
+      .digest('hex');
     try {
       return await this.client.transaction(async (transaction) => {
         await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
           `provider-fact-batch:${batch.batchId}`,
         ]);
-        const replay = await transaction.query<{ receipt_json: unknown }>(
-          `SELECT receipt_json FROM outcome_provider_fact_batch WHERE fact_batch_id = $1`,
-          [batch.batchId]
+        const replay = await transaction.query<{
+          receipt_json: unknown;
+          receipt_is_text: boolean;
+          receipt_representation_valid: boolean;
+          receipt_text_matches: boolean | null;
+          status: string;
+          finalized_at: string | Date | null;
+        }>(
+          `SELECT CASE WHEN receipt_canonical_json IS NULL THEN receipt_json ELSE NULL END AS receipt_json,
+                  receipt_canonical_json IS NOT NULL AS receipt_is_text,
+                  ((receipt_json IS NOT NULL AND receipt_canonical_json IS NULL AND receipt_canonical_sha256 IS NULL)
+                   OR (receipt_json IS NULL AND receipt_canonical_json IS NOT NULL AND receipt_canonical_sha256 IS NOT NULL))
+                    AS receipt_representation_valid,
+                  (receipt_canonical_json = $2::text AND receipt_canonical_sha256 = $3) AS receipt_text_matches,
+                  status, finalized_at
+             FROM outcome_provider_fact_batch WHERE fact_batch_id = $1`,
+          [batch.batchId, receiptCanonicalJson, receiptCanonicalSha256]
         );
         if (replay.rows[0]) {
+          const receipt = replay.rows[0];
           if (
-            canonicalizeAflTradeJson(replay.rows[0].receipt_json) !==
-            canonicalizeAflTradeJson(batch)
+            receipt.status !== 'approved' ||
+            receipt.finalized_at === null ||
+            receipt.finalized_at === undefined ||
+            receipt.receipt_representation_valid !== true ||
+            (receipt.receipt_is_text
+              ? receipt.receipt_text_matches !== true
+              : canonicalizeAflTradeJson(receipt.receipt_json) !== receiptCanonicalJson)
           ) {
             throw new AflTradeFactualObservationPersistenceError(
               'REPLAY_CONFLICT',
@@ -134,16 +160,16 @@ export class PostgresAflTradeFactualObservationRepository {
         }
 
         const context = await requireExactFinalizedStaging(transaction, batch);
-        await insertOpenBatch(transaction, batch);
+        await insertOpenBatch(transaction, batch, receiptCanonicalJson, receiptCanonicalSha256);
         await insertRowAccounting(transaction, batch);
         await insertAppearanceCandidates(transaction, batch);
         await insertFacts(transaction, batch);
         await insertIssueClosures(transaction, batch);
         await transaction.query(
           `UPDATE outcome_provider_fact_batch
-              SET status = 'approved', completed_at = $2, finalized_at = $2, receipt_json = $3::jsonb
+              SET status = 'approved', completed_at = $2, finalized_at = $2
             WHERE fact_batch_id = $1 AND finalized_at IS NULL`,
-          [batch.batchId, batch.content.createdAt, canonicalizeAflTradeJson(batch)]
+          [batch.batchId, batch.content.createdAt]
         );
         const finalized = await transaction.query<{ finalized_at: string | Date | null }>(
           `SELECT finalized_at FROM outcome_provider_fact_batch WHERE fact_batch_id = $1`,
@@ -369,7 +395,9 @@ function requireCandidateDigests(
 
 async function insertOpenBatch(
   transaction: AflOutcomeSqlTransaction,
-  batch: AflTradeSourceFactBatch
+  batch: AflTradeSourceFactBatch,
+  receiptCanonicalJson: string,
+  receiptCanonicalSha256: string
 ) {
   const content = batch.content;
   await transaction.query(
@@ -380,9 +408,10 @@ async function insertOpenBatch(
        source_row_set_sha256, source_issue_set_sha256, fact_batch_sha256, status,
        source_row_count, match_fact_count, appearance_fact_count, metric_fact_count,
        achievement_fact_count, issue_count, normalized_row_count, non_normalized_row_count,
-       started_at, completed_at, finalized_at, receipt_json)
+       started_at, completed_at, finalized_at, receipt_json,
+       receipt_canonical_json, receipt_canonical_sha256)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'staged',
-             $17,$18,$19,$20,$21,$22,$23,$24,$25,NULL,NULL,$26::jsonb)`,
+             $17,$18,$19,$20,$21,$22,$23,$24,$25,NULL,NULL,NULL,$26::text,$27)`,
     [
       batch.batchId,
       content.normalizationRunId,
@@ -409,7 +438,8 @@ async function insertOpenBatch(
       content.counts.normalizedRows,
       content.counts.nonNormalizedRows,
       content.createdAt,
-      canonicalizeAflTradeJson(batch),
+      receiptCanonicalJson,
+      receiptCanonicalSha256,
     ]
   );
 }
@@ -477,13 +507,19 @@ async function insertAppearanceCandidates(
 }
 
 async function insertFacts(transaction: AflOutcomeSqlTransaction, batch: AflTradeSourceFactBatch) {
+  // Canonical content-address order is not dependency order. Match metrics require
+  // their appearance rows to exist, without changing the immutable batch or receipt.
+  for (const fact of batch.content.facts) {
+    if (fact.content.factKind === 'player_appearance') {
+      await insertAppearanceFact(transaction, batch, fact);
+    }
+  }
   for (const fact of batch.content.facts) {
     switch (fact.content.factKind) {
       case 'match_universe':
         await insertMatchFact(transaction, batch, fact);
         break;
       case 'player_appearance':
-        await insertAppearanceFact(transaction, batch, fact);
         break;
       case 'player_match_metric':
       case 'player_season_metric':
@@ -568,7 +604,7 @@ async function insertAppearanceFact(
       content.player.identityCandidateId,
       content.match.matchCandidateId,
       content.player.decision.id,
-      content.player.assignment.decisionId,
+      content.player.assignment?.decisionId ?? null,
       content.match.decision.id,
       content.match.assignment.decisionId,
       content.representedClub.decision.id,
@@ -653,7 +689,7 @@ async function insertMetricFact(
       isMatch ? content.appearanceFactId : null,
       content.player.identityCandidateId,
       content.player.decision.id,
-      content.player.assignment.decisionId,
+      content.player.assignment?.decisionId ?? null,
       content.player.playerIdentityId,
       content.player.playerId,
       isMatch ? content.match.matchId : null,
@@ -710,7 +746,7 @@ async function insertAchievementFact(
       content.achievementCandidateId,
       content.player.identityCandidateId,
       content.player.decision.id,
-      content.player.assignment.decisionId,
+      content.player.assignment?.decisionId ?? null,
       content.player.playerIdentityId,
       content.player.playerId,
       ...scope,

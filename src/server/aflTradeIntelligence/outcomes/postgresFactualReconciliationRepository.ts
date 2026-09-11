@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -131,42 +133,65 @@ export class PostgresAflTradeFactualReconciliationRepository {
       );
     }
     requireEnvironment(run.content.environment, execution);
+    const receiptCanonicalJson = canonicalizeAflTradeJson(run);
+    const receiptCanonicalSha256 = createHash('sha256')
+      .update(receiptCanonicalJson, 'utf8')
+      .digest('hex');
     try {
       return await this.client.transaction(async (transaction) => {
         await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
           `factual-reconciliation-run:${run.factualRunId}`,
         ]);
-        const replay = await transaction.query<{ receipt_json: unknown }>(
-          `SELECT receipt_json FROM outcome_factual_reconciliation_run WHERE factual_run_id = $1`,
-          [run.factualRunId]
+        const stagedReceiptTable = await stageCanonicalReceipt(transaction, receiptCanonicalJson);
+        const replay = await transaction.query<{
+          receipt_json: unknown;
+          receipt_is_text: boolean;
+          receipt_representation_valid: boolean;
+          receipt_text_matches: boolean | null;
+          status: string;
+          finalized_at: string | Date | null;
+        }>(
+          `SELECT CASE WHEN receipt_canonical_json IS NULL THEN receipt_json ELSE NULL END AS receipt_json,
+                  receipt_canonical_json IS NOT NULL AS receipt_is_text,
+                  ((receipt_json IS NOT NULL AND receipt_canonical_json IS NULL AND receipt_canonical_sha256 IS NULL)
+                   OR (receipt_json IS NULL AND receipt_canonical_json IS NOT NULL AND receipt_canonical_sha256 IS NOT NULL))
+                    AS receipt_representation_valid,
+                  (receipt_canonical_json = (SELECT receipt FROM pg_temp.${stagedReceiptTable})
+                   AND receipt_canonical_sha256 = $2) AS receipt_text_matches,
+                  status, finalized_at
+             FROM outcome_factual_reconciliation_run WHERE factual_run_id = $1`,
+          [run.factualRunId, receiptCanonicalSha256]
         );
         if (replay.rows[0]) {
+          const receipt = replay.rows[0];
           if (
-            canonicalizeAflTradeJson(replay.rows[0].receipt_json) !== canonicalizeAflTradeJson(run)
+            receipt.status !== 'approved' ||
+            receipt.finalized_at === null ||
+            receipt.finalized_at === undefined ||
+            receipt.receipt_representation_valid !== true ||
+            (receipt.receipt_is_text
+              ? receipt.receipt_text_matches !== true
+              : canonicalizeAflTradeJson(receipt.receipt_json) !== receiptCanonicalJson)
           ) {
             throw new AflTradeFactualReconciliationPersistenceError(
               'REPLAY_CONFLICT',
               'The reconciliation run ID already exists with different immutable content.'
             );
           }
+          await transaction.query(`DROP TABLE pg_temp.${stagedReceiptTable}`);
           return persistedRun(run, true);
         }
         await requireExactPolicy(transaction, run);
-        await insertOpenRun(transaction, run);
+        await insertOpenRun(transaction, run, stagedReceiptTable, receiptCanonicalSha256);
         await insertRunInputs(transaction, run);
         await insertResults(transaction, run);
         await advanceHeads(transaction, run);
         await transaction.query(
           `UPDATE outcome_factual_reconciliation_run
               SET status='approved', completed_at=$2, finalized_at=$2,
-                  output_set_sha256=$3, receipt_json=$4::jsonb
+                  output_set_sha256=$3
             WHERE factual_run_id=$1 AND finalized_at IS NULL`,
-          [
-            run.factualRunId,
-            run.content.completedAt,
-            run.content.outputSetSha256,
-            canonicalizeAflTradeJson(run),
-          ]
+          [run.factualRunId, run.content.completedAt, run.content.outputSetSha256]
         );
         const finalized = await transaction.query<{ finalized_at: string | Date | null }>(
           `SELECT finalized_at FROM outcome_factual_reconciliation_run WHERE factual_run_id=$1`,
@@ -178,6 +203,7 @@ export class PostgresAflTradeFactualReconciliationRepository {
             'The factual reconciliation run did not finalize atomically.'
           );
         }
+        await transaction.query(`DROP TABLE pg_temp.${stagedReceiptTable}`);
         return persistedRun(run, false);
       });
     } catch (error) {
@@ -188,6 +214,53 @@ export class PostgresAflTradeFactualReconciliationRepository {
       );
     }
   }
+}
+
+// Stream bounded UTF-8 bytes into a transaction-owned large object, then stage
+// uncompressed text in one conversion. Avoid repeatedly copying a growing string.
+// The object is unlinked before permanent writes; rollback also removes its creation.
+async function stageCanonicalReceipt(transaction: AflOutcomeSqlTransaction, canonical: string) {
+  const assembledTable = `factual_receipt_assembled_${randomUUID().replaceAll('-', '')}`;
+  await transaction.query(
+    `CREATE TEMP TABLE ${assembledTable} (receipt TEXT NOT NULL) ON COMMIT DROP`
+  );
+  await transaction.query(
+    `ALTER TABLE pg_temp.${assembledTable} ALTER COLUMN receipt SET STORAGE EXTERNAL`
+  );
+  const created = await transaction.query<{ oid: number }>('SELECT lo_create(0) AS oid');
+  const oid = created.rows[0]?.oid;
+  if (typeof oid !== 'number' || !Number.isInteger(oid) || oid <= 0 || oid > 0xffffffff) {
+    throw new AflTradeFactualReconciliationPersistenceError(
+      'PERSISTENCE_REJECTED',
+      'Receipt transfer did not allocate one transaction-owned large object.'
+    );
+  }
+  // One Mi UTF-16 code units encodes to at most three MiB of UTF-8. Keep
+  // surrogate pairs together and advance the large-object offset in bytes.
+  let byteOffset = 0;
+  for (let offset = 0; offset < canonical.length;) {
+    let end = Math.min(offset + 1024 ** 2, canonical.length);
+    const lastUnit = canonical.charCodeAt(end - 1);
+    if (end < canonical.length && lastUnit >= 0xd800 && lastUnit <= 0xdbff) end--;
+    const bytes = Buffer.from(canonical.slice(offset, end), 'utf8');
+    await transaction.query('SELECT lo_put($1,$2,$3)', [oid, byteOffset, bytes]);
+    byteOffset += bytes.length;
+    offset = end;
+  }
+  await transaction.query(
+    `INSERT INTO pg_temp.${assembledTable} SELECT convert_from(lo_get($1),'UTF8')`,
+    [oid]
+  );
+  const removed = await transaction.query<{ removed: number }>('SELECT lo_unlink($1) AS removed', [
+    oid,
+  ]);
+  if (removed.rows[0]?.removed !== 1) {
+    throw new AflTradeFactualReconciliationPersistenceError(
+      'PERSISTENCE_REJECTED',
+      'Receipt transfer did not remove its transaction-owned large object.'
+    );
+  }
+  return assembledTable;
 }
 
 function requireEnvironment(
@@ -247,15 +320,19 @@ async function requireExactPolicy(
 
 async function insertOpenRun(
   transaction: AflOutcomeSqlTransaction,
-  run: AflTradeFactualReconciliationRun
+  run: AflTradeFactualReconciliationRun,
+  stagedReceiptTable: string,
+  receiptCanonicalSha256: string
 ) {
   const content = run.content;
   await transaction.query(
     `INSERT INTO outcome_factual_reconciliation_run
       (factual_run_id,policy_id,environment,competition,season_year,algorithm_version,
        input_set_sha256,output_set_sha256,run_sha256,status,source_fact_count,
-       reconciled_fact_count,conflict_count,started_at,completed_at,finalized_at,receipt_json)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staged',$10,$11,$12,$13,NULL,NULL,$14::jsonb)`,
+       reconciled_fact_count,conflict_count,started_at,completed_at,finalized_at,
+       receipt_json,receipt_canonical_json,receipt_canonical_sha256)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staged',$10,$11,$12,$13,NULL,NULL,NULL,
+             (SELECT receipt FROM pg_temp.${stagedReceiptTable}),$14)`,
     [
       run.factualRunId,
       content.policy.policyId,
@@ -270,7 +347,7 @@ async function insertOpenRun(
       content.counts.reconciledFacts,
       content.counts.conflicting,
       content.startedAt,
-      canonicalizeAflTradeJson(run),
+      receiptCanonicalSha256,
     ]
   );
 }

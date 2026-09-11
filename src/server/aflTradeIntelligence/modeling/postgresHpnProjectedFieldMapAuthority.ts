@@ -20,16 +20,22 @@ import {
 import {
   aflTradeHpnFieldMapReviewDecisionSchema,
   aflTradeHpnProjectedFieldMapSchema,
+  createAflTradeHpnFieldMapReviewDecision,
   createAflTradeHpnProjectedFieldMap,
   type AflTradeHpnFieldMapReviewDecision,
   type AflTradeHpnProjectedFieldMap,
 } from './hpnProjectedFieldMap';
-import type { AflTradeHpnPrivateCalculationSourceUseAssessment } from './hpnPrivateCalculationSourceUse';
+import type {
+  AflTradeHpnPrivateCalculationSourceUseAssessment,
+  AflTradeHpnSourceFirstCalculationSourceUseAssessment,
+} from './hpnPrivateCalculationSourceUse';
 
 type ReviewedCandidateInput = Readonly<{
   candidate: AflTradeHpnFieldMapCandidate;
   candidateArtifact: AflTradeArtifactRef;
-  sourceUseAssessment: AflTradeHpnPrivateCalculationSourceUseAssessment;
+  sourceUseAssessment:
+    | AflTradeHpnPrivateCalculationSourceUseAssessment
+    | AflTradeHpnSourceFirstCalculationSourceUseAssessment;
   sourceUseAssessmentArtifact: AflTradeArtifactRef;
   reviewDecision: AflTradeHpnFieldMapReviewDecision;
   decisionArtifact: AflTradeArtifactRef;
@@ -59,8 +65,20 @@ const currentSourceSelectionSchema = z
     seasonYear: z.number().int().min(1998).max(2200),
     rightsArtifactId: z.string().regex(/^source-rights:[a-f0-9]{64}$/u),
     valuationScopeKey: z.string().trim().min(1).max(240),
+    captureId: z
+      .string()
+      .regex(/^source-capture:[a-f0-9]{64}$/u)
+      .optional(),
+    normalizationRunId: z
+      .string()
+      .regex(/^provider-normalization-run:[a-f0-9]{64}$/u)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (source) => (source.captureId === undefined) === (source.normalizationRunId === undefined),
+    'Capture and normalization selectors must be supplied together.'
+  );
 
 function digestFromId(id: string): string {
   return id.slice(id.indexOf(':') + 1);
@@ -71,16 +89,38 @@ function authenticateReviewedCandidate(input: ReviewedCandidateInput): ReviewedC
   const reviewDecision = aflTradeHpnFieldMapReviewDecisionSchema.parse(input.reviewDecision);
   const sourceUseAssessment = input.sourceUseAssessment;
   if (
+    sourceUseAssessment.content.schemaVersion ===
+      'afl-trade-hpn-private-source-use-assessment/v2' ||
+    reviewDecision.content.schemaVersion === 'afl-trade-hpn-field-map-review-decision/v3'
+  ) {
+    const reconstructed = createAflTradeHpnFieldMapReviewDecision({
+      candidate,
+      candidateArtifact: input.candidateArtifact,
+      sourceUseAssessment,
+      sourceUseAssessmentArtifact: input.sourceUseAssessmentArtifact,
+      decision: reviewDecision.content.decision,
+      reviewerId: reviewDecision.content.reviewerId,
+      rationale: reviewDecision.content.rationale,
+      decidedAt: reviewDecision.content.decidedAt,
+    });
+    if (canonicalizeAflTradeJson(reconstructed) !== canonicalizeAflTradeJson(reviewDecision)) {
+      throw new TypeError(
+        'Source-first HPN review and assessment versions must be paired exactly.'
+      );
+    }
+  }
+  if (
     !doesAflTradeArtifactRefMatchCanonicalJson(input.candidateArtifact, candidate) ||
     !doesAflTradeArtifactRefMatchCanonicalJson(input.decisionArtifact, reviewDecision) ||
     !doesAflTradeArtifactRefMatchCanonicalJson(
       input.sourceUseAssessmentArtifact,
       sourceUseAssessment
     ) ||
-    sourceUseAssessment.assessmentId !== createAflTradeContentAddress(
-      'hpn-private-source-use-assessment',
-      sourceUseAssessment.content
-    ) ||
+    sourceUseAssessment.assessmentId !==
+      createAflTradeContentAddress(
+        'hpn-private-source-use-assessment',
+        sourceUseAssessment.content
+      ) ||
     reviewDecision.content.candidateId !== candidate.candidateId ||
     !doAflTradeArtifactRefsExactlyMatch(
       reviewDecision.content.candidateArtifact,
@@ -145,11 +185,7 @@ async function persistCandidate(
     sql: `SELECT candidate_id FROM outcome_hpn_field_map_candidate
            WHERE candidate_id=$1 AND candidate_canonical_json=$2
              AND candidate_artifact_json=$3::jsonb FOR KEY SHARE`,
-    parameters: [
-      candidate.candidateId,
-      canonical,
-      canonicalizeAflTradeJson(candidateArtifact),
-    ],
+    parameters: [candidate.candidateId, canonical, canonicalizeAflTradeJson(candidateArtifact)],
     message: 'The HPN field-map candidate conflicts with durable authority.',
   });
 }
@@ -158,12 +194,8 @@ async function persistDecision(
   transaction: AflOutcomeSqlTransaction,
   input: ReviewedCandidateInput
 ): Promise<void> {
-  const {
-    reviewDecision,
-    decisionArtifact,
-    sourceUseAssessment,
-    sourceUseAssessmentArtifact,
-  } = input;
+  const { reviewDecision, decisionArtifact, sourceUseAssessment, sourceUseAssessmentArtifact } =
+    input;
   const canonical = canonicalizeAflTradeJson(reviewDecision);
   const sourceUseCanonical = canonicalizeAflTradeJson(sourceUseAssessment);
   await transaction.query(
@@ -263,19 +295,14 @@ export class PostgresAflTradeHpnProjectedFieldMapAuthority {
     if (authenticated.reviewDecision.content.decision !== 'approved') {
       throw new TypeError('A projected HPN field map requires an approved review decision.');
     }
-    const projectedFieldMap = aflTradeHpnProjectedFieldMapSchema.parse(
-      input.projectedFieldMap
-    );
+    const projectedFieldMap = aflTradeHpnProjectedFieldMapSchema.parse(input.projectedFieldMap);
     const reconstructed = createAflTradeHpnProjectedFieldMap({
       candidate: authenticated.candidate,
       candidateArtifact: authenticated.candidateArtifact,
       decision: authenticated.reviewDecision,
       decisionArtifact: authenticated.decisionArtifact,
     });
-    if (
-      canonicalizeAflTradeJson(reconstructed) !==
-      canonicalizeAflTradeJson(projectedFieldMap)
-    ) {
+    if (canonicalizeAflTradeJson(reconstructed) !== canonicalizeAflTradeJson(projectedFieldMap)) {
       throw new TypeError(
         'The projected HPN field map is not the exact output of its candidate and approval.'
       );
@@ -321,9 +348,8 @@ export class PostgresAflTradeHpnProjectedFieldMapAuthority {
       candidate,
       candidateArtifact: row.candidate_artifact_json as AflTradeArtifactRef,
       sourceUseAssessment:
-        row.source_use_assessment_json as AflTradeHpnPrivateCalculationSourceUseAssessment,
-      sourceUseAssessmentArtifact:
-        row.source_use_assessment_artifact_json as AflTradeArtifactRef,
+        row.source_use_assessment_json as ReviewedCandidateInput['sourceUseAssessment'],
+      sourceUseAssessmentArtifact: row.source_use_assessment_artifact_json as AflTradeArtifactRef,
       reviewDecision,
       decisionArtifact: row.decision_artifact_json as AflTradeArtifactRef,
     });
@@ -339,10 +365,7 @@ export class PostgresAflTradeHpnProjectedFieldMapAuthority {
       decision: authenticated.reviewDecision,
       decisionArtifact: authenticated.decisionArtifact,
     });
-    if (
-      canonicalizeAflTradeJson(reconstructed) !==
-      canonicalizeAflTradeJson(projectedFieldMap)
-    ) {
+    if (canonicalizeAflTradeJson(reconstructed) !== canonicalizeAflTradeJson(projectedFieldMap)) {
       throw new Error('Durable HPN projected field-map ancestry failed exact authentication.');
     }
     return projectedFieldMap;
@@ -353,7 +376,20 @@ export class PostgresAflTradeHpnProjectedFieldMapAuthority {
   ): Promise<AflTradeHpnProjectedFieldMap | null> {
     const source = currentSourceSelectionSchema.parse(input);
     const result = await this.client.query<{ readonly field_map_id: string }>(
-      `SELECT map.field_map_id
+      source.captureId !== undefined
+        ? `SELECT map.field_map_id
+         FROM outcome_hpn_projected_field_map map
+         JOIN outcome_hpn_field_map_candidate candidate ON candidate.candidate_id=map.candidate_id
+         JOIN outcome_hpn_field_map_review_decision approval ON approval.decision_id=map.approval_decision_id
+        WHERE map.environment='non_production' AND map.competition='AFLM'
+          AND map.provider=$1 AND map.capability_id=$2 AND map.input_kind=$3
+          AND map.source_schema_sha256=$4 AND map.valid_from_season<=$5 AND map.valid_through_season>=$5
+          AND approval.source_use_assessment_json#>>'{content,rightsArtifactId}'=$6
+          AND candidate.candidate_json#>>'{content,providerDecodeMapId}'=$7
+          AND approval.source_use_assessment_json#>>'{content,valuationScopeKey}'=$8
+          AND outcome_hpn_projected_field_map_authority_for_source_is_exact(map.field_map_id,$9,$10,clock_timestamp())
+        ORDER BY map.field_map_id`
+        : `SELECT map.field_map_id
          FROM outcome_hpn_projected_field_map map
          JOIN outcome_hpn_field_map_candidate candidate
            ON candidate.candidate_id=map.candidate_id
@@ -414,6 +450,7 @@ export class PostgresAflTradeHpnProjectedFieldMapAuthority {
         source.rightsArtifactId,
         source.providerDecodeMapId,
         source.valuationScopeKey,
+        ...(source.captureId === undefined ? [] : [source.captureId, source.normalizationRunId]),
       ]
     );
     if (result.rows.length === 0) return null;

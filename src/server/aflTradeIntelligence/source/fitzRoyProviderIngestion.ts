@@ -1,4 +1,10 @@
 import { createAflTradeSourceSnapshotManifest } from '../artifacts/sourceSnapshotManifest';
+import { createAflTradeCanonicalJsonArtifactRef } from '../artifacts/artifactReference';
+import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import {
+  AflTradeArtifactCustodyError,
+  verifyAflTradeArtifactReadback,
+} from '../artifacts/immutableArtifactRepository';
 import {
   captureAuthorizedAflTradeFitzRoyEvidence,
   type AflTradeFitzRoyCaptureCommand,
@@ -68,8 +74,12 @@ export function requireCurrentAflTradeFitzRoyCaptureAuthority(input: {
 }
 
 export async function captureAuthorizedAflTradeFitzRoyProviderSeason(
-  command: AflTradeFitzRoyProviderIngestionCommand,
-  dependencies: AflTradeFitzRoyProviderIngestionDependencies
+  command:
+    | Pick<AflTradeFitzRoyProviderIngestionCommand, 'capture' | 'effectiveAt'>
+    | AflTradeFitzRoyProviderIngestionCommand,
+  dependencies:
+    | Pick<AflTradeFitzRoyProviderIngestionDependencies, 'capture' | 'clock'>
+    | AflTradeFitzRoyProviderIngestionDependencies
 ): Promise<AflTradeFitzRoyProviderCaptureResult> {
   requireExactInstant(command.effectiveAt, 'effectiveAt');
   const receipt = await captureAuthorizedAflTradeFitzRoyEvidence(
@@ -153,7 +163,28 @@ export async function captureAuthorizedAflTradeFitzRoyProviderSeason(
     },
     createdAt,
   });
-  return { receipt, snapshot };
+  const captured = { receipt, snapshot };
+  // Retain the actual authorization chronology before any database staging can fail.
+  const retainedAt = dependencies.clock.now();
+  requireExactInstant(retainedAt, 'capture retention time');
+  const capturedBytes = new TextEncoder().encode(canonicalizeAflTradeJson(captured));
+  if (capturedBytes.byteLength > dependencies.capture.maximumDiagnosticsBytes) {
+    throw new AflTradeArtifactCustodyError(
+      'ARTIFACT_TOO_LARGE',
+      'Capture recovery evidence exceeds the metadata byte bound.'
+    );
+  }
+  const retained = await dependencies.capture.metadataArtifactRepository.putIfAbsent(
+    createAflTradeCanonicalJsonArtifactRef(captured, retainedAt),
+    capturedBytes
+  );
+  await verifyAflTradeArtifactReadback(
+    dependencies.capture.metadataArtifactRepository,
+    retained.reference,
+    retainedAt,
+    dependencies.capture.maximumDiagnosticsBytes
+  );
+  return captured;
 }
 
 export async function ingestAuthorizedAflTradeFitzRoyProviderSeason(

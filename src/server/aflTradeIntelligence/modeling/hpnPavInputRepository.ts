@@ -34,10 +34,43 @@ export const aflTradeHpnPavSeasonInputRequestSchema = z
     methodId: contentAddressedId('hpn-pav-method'),
     factualRunId: contentAddressedId('factual-reconciliation-run'),
     effectiveThrough: z.iso.datetime({ offset: true }),
+    knowledgePolicy: z.literal('retrospective_as_recorded_by_input_creation').optional(),
+    knowledgeCutoffAt: z.iso.datetime({ offset: true }).optional(),
+    reviewedNonparticipantDecisions: z
+      .array(contentAddressedId('review-decision'))
+      .min(1)
+      .max(100_000)
+      .optional(),
     sources: z.array(sourceSelectionSchema).min(3).max(100),
   })
   .strict()
   .superRefine((request, context) => {
+    if (
+      request.reviewedNonparticipantDecisions !== undefined &&
+      (request.knowledgePolicy === undefined ||
+        request.environment === 'production' ||
+        new Set(request.reviewedNonparticipantDecisions).size !==
+          request.reviewedNonparticipantDecisions.length)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Reviewed nonparticipants require unique decisions and explicit private retrospective custody.',
+      });
+    }
+    if (
+      (request.knowledgePolicy === undefined) !== (request.knowledgeCutoffAt === undefined) ||
+      (request.knowledgePolicy !== undefined &&
+        (request.environment === 'production' ||
+          Date.parse(request.knowledgeCutoffAt!) < Date.parse(request.effectiveThrough)))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['knowledgePolicy'],
+        message:
+          'Retrospective input custody requires a private explicit knowledge cutoff after event evidence.',
+      });
+    }
     const runIds = request.sources.map(({ normalizationRunId }) => normalizationRunId);
     if (new Set(runIds).size !== runIds.length) {
       context.addIssue({

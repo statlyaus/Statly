@@ -427,7 +427,8 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
       requireAtMostOne(
         selected.filter(
           ({ provider, capabilityId }) =>
-            provider === 'official_afl' && capabilityId === 'official-afl-player-stats'
+            (provider === 'official_afl' && capabilityId === 'official-afl-player-stats') ||
+            (provider === 'footywire' && capabilityId === 'footywire-player-stats')
         ),
         'corroborating player-stat'
       ),

@@ -6,14 +6,29 @@ import {
   type AflTradeCorpusFactualLineage,
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
+import { doesAflTradeArtifactRefMatchBytes } from '../artifacts/artifactReference';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '../artifacts/contentAddress';
+import { PostgresAflTradePlayerPavObservationRepository } from './postgresPlayerPavObservationRepository';
+import { PostgresAflTradeHpnPavCalculationRepository } from './postgresHpnPavCalculationRepository';
+import { PostgresAflTradeHpnPavInputRepository } from './postgresHpnPavInputRepository';
+import { aflTradeHpnPavMethodSchema, type AflTradeHpnPavMethod } from './hpnPlayerApproximateValue';
+import type { AflTradePlayerPavObservationSet } from './playerPavObservationContracts';
+import type { AflTradeFinalizedHpnPavCalculation } from './hpnPavCalculationService';
+import type { AflTradeHpnPavSeasonInputSet } from './hpnPavInputContracts';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { aflTradeFactualReleaseCandidateSchema } from '../outcomes/factualReleaseCandidateContracts';
+import { aflTradeSourceFactSchema } from '../outcomes/factualObservationContracts';
 import type { AflDraftTradeOutcomeReleaseRepository } from '../outcomes/outcomeReleaseRepository';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { aflTradeGate0AReceiptSchema } from '../source/gate0aReceipt';
 import { aflTradeProviderResolutionDecisionSchema } from '../source/providerResolutionContracts';
 import {
   AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
+  AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
   type AflTradeValuationDatasetAdmissionEvidenceAuthenticator,
 } from './valuationDatasetAdmission';
 import { parseAflTradeModelSourceSnapshotRecord } from './postgresValuationDatasetFactualLineageRepository';
@@ -74,6 +89,7 @@ interface IdentityAuthorityRow extends Record<string, unknown> {
   assignment_decision_id: string;
   assignment_status: string;
   assignment_updated_at: Date | string;
+  origin_assignment_revision: number | string;
 }
 
 interface EventRow extends Record<string, unknown> {
@@ -291,7 +307,7 @@ async function loadIdentityAuthority(
   decisionIds: readonly string[],
   authenticatedAt: string
 ) {
-  if (decisionIds.length === 0) return [];
+  if (decisionIds.length === 0) return { authorities: [], chains: [] };
   const isPlayer = entityKind === 'player';
   const table = isPlayer
     ? 'outcome_provider_player_resolution'
@@ -301,8 +317,18 @@ async function loadIdentityAuthority(
     : 'outcome_provider_club_resolution_head';
   const entityColumn = isPlayer ? 'player_id' : 'club_id';
   const result = await sql.query<IdentityAuthorityRow>(
-    `SELECT '${entityKind}' AS entity_kind,resolution.${entityColumn} AS entity_id,
+    `WITH requested AS MATERIALIZED (
+       SELECT * FROM ${table} WHERE decision_id=ANY($1::text[])
+     ), origins AS MATERIALIZED (
+       SELECT DISTINCT ON (assignment_case_id) assignment_case_id,decision_id
+       FROM requested ORDER BY assignment_case_id,assignment_revision
+     ), authorized AS MATERIALIZED (
+       SELECT assignment_case_id FROM origins
+       WHERE outcome_provider_assignment_continuity_current(decision_id)
+     )
+     SELECT '${entityKind}' AS entity_kind,resolution.${entityColumn} AS entity_id,
             resolution.decision_json,resolution.resolution_case_id,
+            resolution.assignment_revision AS origin_assignment_revision,
             resolution_head.revision AS resolution_revision,
             resolution_head.resolution_id,resolution_head.updated_at AS resolution_updated_at,
             assignment.assignment_case_id,assignment.entity_kind AS assignment_entity_kind,
@@ -310,12 +336,12 @@ async function loadIdentityAuthority(
             assignment.decision_id AS assignment_decision_id,
             assignment.status AS assignment_status,assignment.updated_at AS assignment_updated_at
        FROM ${table} resolution
+       JOIN authorized USING(assignment_case_id)
        JOIN ${head} resolution_head
          ON resolution_head.resolution_case_id=resolution.resolution_case_id
         AND resolution_head.resolution_id=resolution.resolution_id
        JOIN outcome_provider_identity_assignment_head assignment
          ON assignment.assignment_case_id=resolution.assignment_case_id
-        AND assignment.decision_id=resolution.decision_id
       WHERE resolution.decision_id=ANY($1::text[])
         AND resolution.${entityColumn} IS NOT NULL
       ORDER BY resolution.decision_id`,
@@ -326,27 +352,79 @@ async function loadIdentityAuthority(
       `Valuation dataset authentication is missing a current ${entityKind} authority.`
     );
   }
-  return result.rows.map((row) => ({
-    entityKind: row.entity_kind,
-    entityId: row.entity_id,
-    decision: aflTradeProviderResolutionDecisionSchema.parse(row.decision_json),
-    resolutionHead: {
-      resolutionCaseId: row.resolution_case_id,
-      revision: Number(row.resolution_revision),
-      resolutionId: row.resolution_id,
-      updatedAt: exactInstant(row.resolution_updated_at),
-    },
-    assignmentHead: {
-      assignmentCaseId: row.assignment_case_id,
-      entityKind: row.assignment_entity_kind,
-      identityId: row.assignment_identity_id,
-      revision: Number(row.assignment_revision),
-      decisionId: row.assignment_decision_id,
-      status: row.assignment_status,
-      updatedAt: exactInstant(row.assignment_updated_at),
-    },
-    authenticatedAt,
-  }));
+  const cases = uniqueValues(
+    result.rows
+      .filter((row) => Number(row.assignment_revision) > Number(row.origin_assignment_revision))
+      .map((row) => row.assignment_case_id)
+  );
+  const chainRows =
+    cases.length === 0
+      ? []
+      : (
+          await sql.query<{
+            assignment_case_id: string;
+            decision_json: unknown;
+          }>(
+            `WITH origins AS (
+       SELECT assignment_case_id,min(assignment_revision) AS revision FROM ${table}
+       WHERE decision_id=ANY($1::text[]) GROUP BY assignment_case_id
+     ) SELECT confirmation.assignment_case_id,confirmation.decision_json
+       FROM ${table} confirmation JOIN origins USING(assignment_case_id)
+       JOIN outcome_provider_identity_assignment_head head USING(assignment_case_id)
+       WHERE confirmation.assignment_case_id=ANY($2::text[])
+         AND confirmation.assignment_revision BETWEEN origins.revision AND head.revision
+       ORDER BY confirmation.assignment_case_id,confirmation.assignment_revision`,
+            [decisionIds, cases]
+          )
+        ).rows;
+  const grouped = new Map<
+    string,
+    ReturnType<typeof aflTradeProviderResolutionDecisionSchema.parse>[]
+  >();
+  for (const row of chainRows) {
+    const decisions = grouped.get(row.assignment_case_id) ?? [];
+    decisions.push(aflTradeProviderResolutionDecisionSchema.parse(row.decision_json));
+    grouped.set(row.assignment_case_id, decisions);
+  }
+  const chains = cases.map((assignmentCaseId) => {
+    const decisions = grouped.get(assignmentCaseId);
+    if (!decisions?.length)
+      throw new Error('Valuation dataset authentication requires exact assignment continuity.');
+    const content = {
+      schemaVersion: 'afl-trade-provider-assignment-chain/v1' as const,
+      assignmentCaseId,
+      decisions,
+    };
+    return { chainId: createAflTradeContentAddress('provider-assignment-chain', content), content };
+  });
+  const chainIds = new Map(chains.map((chain) => [chain.content.assignmentCaseId, chain.chainId]));
+  const authorities = result.rows.map((row) => {
+    return {
+      entityKind: row.entity_kind,
+      entityId: row.entity_id,
+      decision: aflTradeProviderResolutionDecisionSchema.parse(row.decision_json),
+      resolutionHead: {
+        resolutionCaseId: row.resolution_case_id,
+        revision: Number(row.resolution_revision),
+        resolutionId: row.resolution_id,
+        updatedAt: exactInstant(row.resolution_updated_at),
+      },
+      assignmentHead: {
+        assignmentCaseId: row.assignment_case_id,
+        entityKind: row.assignment_entity_kind,
+        identityId: row.assignment_identity_id,
+        revision: Number(row.assignment_revision),
+        decisionId: row.assignment_decision_id,
+        status: row.assignment_status,
+        updatedAt: exactInstant(row.assignment_updated_at),
+      },
+      ...(chainIds.has(row.assignment_case_id)
+        ? { assignmentContinuityId: chainIds.get(row.assignment_case_id)! }
+        : {}),
+      authenticatedAt,
+    };
+  });
+  return { authorities, chains };
 }
 
 async function loadDomainAuthority(
@@ -457,6 +535,180 @@ async function loadArtifactBytes(
   return retained;
 }
 
+/** Reauthenticates every original PAV calculation under the caller's transaction scope. */
+export async function loadAflTradeCurrentAdmittedPavMeasurements(
+  client: AflOutcomeSqlClient,
+  artifacts: ExactArtifactLoader,
+  dataset: Parameters<
+    AflTradeValuationDatasetAdmissionEvidenceAuthenticator['authenticate']
+  >[0]['dataset'],
+  consumedFieldSets: Awaited<ReturnType<typeof loadSourceAuthority>>['consumedFieldSets']
+): Promise<
+  | { pavObservationSet?: never; pavMeasurements?: never; hpnMethod?: never }
+  | {
+      pavObservationSet: AflTradePlayerPavObservationSet;
+      pavMeasurements: {
+        calculation: AflTradeFinalizedHpnPavCalculation;
+        inputSet: AflTradeHpnPavSeasonInputSet;
+        headRevision: number;
+      }[];
+      hpnMethod: AflTradeHpnPavMethod;
+    }
+> {
+  const binding = dataset.content.pavObservationSet;
+  if (!binding) return {};
+  return client.transaction(async (transaction) => {
+    const scoped: AflOutcomeSqlClient = {
+      query: transaction.query.bind(transaction),
+      transaction: async (work) => work(transaction),
+    };
+    const observations = new PostgresAflTradePlayerPavObservationRepository(scoped);
+    const pavObservationSet = await observations.loadFinalizedPrivate({
+      requestId: binding.requestId,
+      observationSetId: binding.observationSetId,
+    });
+    const methodAuthority = {
+      async loadExact(methodId: string) {
+        const rows = await scoped.query<{ method_json: unknown }>(
+          `SELECT method_json FROM outcome_hpn_pav_method
+           WHERE method_id=$1 AND environment=$2::"OutcomeEnvironment" FOR SHARE`,
+          [methodId, dataset.content.environment]
+        );
+        const method = aflTradeHpnPavMethodSchema.parse(
+          requireOne(rows.rows, 'HPN method').method_json
+        );
+        const retained = await artifacts.loadExactWithObservation(
+          method.content.sourceArtifact,
+          MAXIMUM_DATASET_ARTIFACT_BYTES
+        );
+        if (
+          method.methodId !== methodId ||
+          !retained ||
+          !doesAflTradeArtifactRefMatchBytes(
+            method.content.sourceArtifact,
+            retained.bytes,
+            'text/html'
+          )
+        ) {
+          throw new Error('PAV admission requires the exact registered method source bytes.');
+        }
+        return { method, sourceBytes: retained.bytes };
+      },
+    };
+    const calculations = new PostgresAflTradeHpnPavCalculationRepository(scoped, methodAuthority);
+    const inputs = new PostgresAflTradeHpnPavInputRepository(scoped);
+    const pavMeasurements = [];
+    for (const selected of pavObservationSet.content.calculations) {
+      const head = await scoped.query<{ revision: number; calculation_id: string }>(
+        `SELECT head.revision,head.calculation_id FROM outcome_hpn_pav_calculation_head head
+         JOIN outcome_hpn_pav_calculation calculation ON calculation.calculation_id=head.calculation_id
+         WHERE head.environment=$1::"OutcomeEnvironment" AND head.competition=$2
+           AND head.season_year=$3 AND head.method_id=$4 AND head.calculation_id=$5
+           AND calculation.status='finalized' AND calculation.finalized_at IS NOT NULL
+         FOR SHARE OF head,calculation`,
+        [
+          dataset.content.environment,
+          dataset.content.competition,
+          selected.seasonYear,
+          selected.methodId,
+          selected.calculationId,
+        ]
+      );
+      const current = requireOne(head.rows, 'current finalized HPN calculation head');
+      await methodAuthority.loadExact(selected.methodId);
+      const calculation = await calculations.loadFinalizedCalculation(
+        {
+          calculationId: selected.calculationId,
+          environment: dataset.content.environment,
+        },
+        { environment: dataset.content.environment }
+      );
+      const inputSet = await inputs.loadCurrentFinalizedSeasonInputSet(
+        {
+          inputSetId: calculation.content.inputSetId,
+          environment: dataset.content.environment,
+          competition: dataset.content.competition,
+          seasonYear: selected.seasonYear,
+          methodId: selected.methodId,
+        },
+        { environment: dataset.content.environment }
+      );
+      const factIds = [
+        ...new Set([
+          ...inputSet.content.factualUniverse.completedMatchFacts.flatMap(({ factIds }) => factIds),
+          ...inputSet.content.factualUniverse.playerAppearanceFacts.flatMap(
+            ({ factIds }) => factIds
+          ),
+        ]),
+      ].sort();
+      const facts = await scoped.query<{
+        fact_id: string;
+        fact_json: unknown;
+        source_snapshot_id: string;
+        capture_id: string;
+      }>(
+        `SELECT fact.fact_id,fact.fact_json,capture.source_snapshot_id,run.capture_id
+         FROM (
+           SELECT match_fact_id AS fact_id,fact_json,normalization_run_id
+           FROM outcome_provider_match_universe_fact WHERE match_fact_id=ANY($1::text[])
+           UNION ALL
+           SELECT appearance_fact_id AS fact_id,fact_json,normalization_run_id
+           FROM outcome_provider_player_appearance_fact WHERE appearance_fact_id=ANY($1::text[])
+         ) fact JOIN outcome_provider_normalization_run run USING(normalization_run_id)
+         JOIN outcome_source_capture capture USING(capture_id)
+         ORDER BY fact.fact_id`,
+        [factIds]
+      );
+      if (
+        facts.rows.length !== factIds.length ||
+        facts.rows.some((row, index) => {
+          const fact = aflTradeSourceFactSchema.parse(row.fact_json);
+          const fieldSet = consumedFieldSets.find(
+            ({ content }) => content.captureId === row.capture_id
+          );
+          return (
+            row.fact_id !== factIds[index] ||
+            fact.factId !== row.fact_id ||
+            fact.content.source.captureId !== row.capture_id ||
+            !fieldSet ||
+            fieldSet.content.sourceSnapshotId !== row.source_snapshot_id ||
+            fact.content.source.consumedSourceFields.some(
+              (field) => !fieldSet.content.fields.some(({ sourceField }) => sourceField === field)
+            )
+          );
+        })
+      ) {
+        throw new Error(
+          'PAV denominator fact ancestry requires exact admitted captures and consumed-field training rights.'
+        );
+      }
+      const players = await scoped.query<{ player_canonical_json: string; player_sha256: string }>(
+        `SELECT player_canonical_json,player_sha256 FROM outcome_hpn_pav_calculation_player
+         WHERE calculation_id=$1 ORDER BY ordinal FOR SHARE`,
+        [selected.calculationId]
+      );
+      if (
+        players.rows.length !== calculation.content.players.length ||
+        players.rows.some(
+          (row, index) =>
+            row.player_canonical_json !==
+              canonicalizeAflTradeJson(calculation.content.players[index]) ||
+            row.player_sha256 !== sha256AflTradeCanonicalJson(calculation.content.players[index])
+        )
+      ) {
+        throw new Error(
+          'PAV admission calculation player custody differs from its retained parent.'
+        );
+      }
+      pavMeasurements.push({ calculation, inputSet, headRevision: current.revision });
+    }
+    const { method: hpnMethod } = await methodAuthority.loadExact(
+      pavObservationSet.content.policy.content.methodId
+    );
+    return { pavObservationSet, pavMeasurements, hpnMethod };
+  });
+}
+
 export function createPostgresAflTradeValuationDatasetEvidenceAuthenticator(dependencies: {
   sql: AflOutcomeSqlClient;
   releaseRepository: Pick<AflDraftTradeOutcomeReleaseRepository, 'loadRegistry'>;
@@ -485,6 +737,19 @@ export function createPostgresAflTradeValuationDatasetEvidenceAuthenticator(depe
         admittedAt,
         gateState.ledger
       );
+      const currentPavEvidence = await loadAflTradeCurrentAdmittedPavMeasurements(
+        dependencies.sql,
+        dependencies.artifactRepository,
+        dataset,
+        sourceAuthority.consumedFieldSets
+      );
+      // Dataset-admission evidence has a strict existing shape; the method is for run authority.
+      const pavEvidence = currentPavEvidence.pavObservationSet
+        ? {
+            pavObservationSet: currentPavEvidence.pavObservationSet,
+            pavMeasurements: currentPavEvidence.pavMeasurements,
+          }
+        : {};
       const playerDecisionIds = uniqueValues(
         dataset.content.rows.map(({ content }) => content.identity.playerResolutionDecisionId)
       );
@@ -492,13 +757,8 @@ export function createPostgresAflTradeValuationDatasetEvidenceAuthenticator(depe
         dataset.content.rows.map(({ content }) => content.identity.clubResolutionDecisionId)
       );
       const [playerAuthorities, clubAuthorities, domainLineageAuthorities] = await Promise.all([
-        loadIdentityAuthority(
-          dependencies.sql,
-          'player',
-          playerDecisionIds,
-          dataset.content.createdAt
-        ),
-        loadIdentityAuthority(dependencies.sql, 'club', clubDecisionIds, dataset.content.createdAt),
+        loadIdentityAuthority(dependencies.sql, 'player', playerDecisionIds, admittedAt),
+        loadIdentityAuthority(dependencies.sql, 'club', clubDecisionIds, admittedAt),
         loadDomainAuthority(
           dependencies.sql,
           factual.factualCandidate,
@@ -507,7 +767,10 @@ export function createPostgresAflTradeValuationDatasetEvidenceAuthenticator(depe
         ),
       ]);
       return {
-        schemaVersion: AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
+        schemaVersion: dataset.content.pavObservationSet
+          ? AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION
+          : AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
+        ...pavEvidence,
         authenticatedAt: admittedAt,
         factualCandidate: factual.factualCandidate,
         factualCandidateFinalizedAt: factual.factualCandidateFinalizedAt,
@@ -517,7 +780,12 @@ export function createPostgresAflTradeValuationDatasetEvidenceAuthenticator(depe
         gate2Ledger: gateState.ledger,
         gate2DecisionKey: factual.gate2DecisionKey,
         sourceRights: sourceAuthority.sourceRights,
-        identityAuthorities: [...playerAuthorities, ...clubAuthorities],
+        identityAuthorities: [...playerAuthorities.authorities, ...clubAuthorities.authorities],
+        ...([...playerAuthorities.chains, ...clubAuthorities.chains].length === 0
+          ? {}
+          : {
+              assignmentContinuities: [...playerAuthorities.chains, ...clubAuthorities.chains],
+            }),
         domainLineageAuthorities,
         rowAuthorities: dataset.content.rows.map((row) => ({
           rowId: row.rowId,

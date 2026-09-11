@@ -67,11 +67,14 @@ import {
   LOCAL_FITZROY_REHEARSAL_RUNTIME,
   createLocalAflTradeFitzRoyFactualRehearsalFixture,
   type LocalFitzRoyFactualRehearsalGeneration,
+  type LocalFitzRoyFactualRehearsalProvider,
 } from './localFitzRoyFactualRehearsalFixture';
 
 const ENVIRONMENT = 'non_production' as const;
-const PROVIDER = 'footywire';
-const CAPABILITY_ID = 'footywire-player-stats';
+type SyntheticSource = Readonly<{
+  PROVIDER: LocalFitzRoyFactualRehearsalProvider;
+  CAPABILITY_ID: 'footywire-player-stats' | 'afl-tables-player-stats' | 'afl-tables-results';
+}>;
 const COMPETITION = 'AFLM' as const;
 const SEASON_YEAR = 2026;
 const GOVERNANCE_ROLE = 'afl_trade_nonproduction_governance_registry_writer';
@@ -131,7 +134,8 @@ interface StagedProviderRow {
     unit: string;
     sourceField: string;
     missingReason: null;
-  };
+  } | null;
+  participation_value: unknown;
 }
 
 interface NativeNamespaceEvidence {
@@ -349,7 +353,8 @@ async function ensureGovernedEvidence(
 
 async function ensureNativeNamespace(
   client: AflOutcomeSqlClient,
-  entityKind: 'player' | 'club' | 'match'
+  entityKind: 'player' | 'club' | 'match',
+  { PROVIDER, CAPABILITY_ID }: SyntheticSource
 ): Promise<NativeNamespaceEvidence> {
   const definitionSha256 = sha256AflTradeCanonicalJson({
     environment: ENVIRONMENT,
@@ -432,7 +437,9 @@ async function ensureNativeNamespace(
 
 async function loadStagedProviderRow(
   client: AflOutcomeSqlClient,
-  normalizationRunId: string
+  normalizationRunId: string,
+  appearanceOnly = false,
+  missingCompletionStatus = false
 ): Promise<StagedProviderRow> {
   const result = await client.query<StagedProviderRow>(
     `SELECT run.normalization_run_id,run.staging_sha256,run.finalized_at,
@@ -443,14 +450,16 @@ async function loadStagedProviderRow(
             identity.candidate_sha256 AS identity_candidate_sha256,
             match.match_candidate_id,match.candidate_sha256 AS match_candidate_sha256,
             match.candidate_json AS match_candidate_json,
-            metric.candidate_json AS metric_candidate_json
+            metric.candidate_json AS metric_candidate_json,
+            row.typed_payload#>'{values,Time.on.Ground}' AS participation_value
        FROM outcome_provider_normalization_run run
        JOIN outcome_provider_field_map field_map USING (field_map_id)
        JOIN outcome_provider_decoded_row row USING (normalization_run_id)
        JOIN outcome_provider_identity_candidate identity USING (provider_decoded_row_id)
        JOIN outcome_provider_match_candidate match USING (provider_decoded_row_id)
-       JOIN outcome_provider_metric_candidate metric USING (provider_decoded_row_id)
-      WHERE run.normalization_run_id=$1 AND metric.metric_code='goals'`,
+       LEFT JOIN outcome_provider_metric_candidate metric
+         ON metric.provider_decoded_row_id=row.provider_decoded_row_id AND metric.metric_code='goals'
+      WHERE run.normalization_run_id=$1`,
     [normalizationRunId]
   );
   const row = result.rows[0];
@@ -465,8 +474,12 @@ async function loadStagedProviderRow(
     !row.match_candidate_json.matchDateText ||
     !row.match_candidate_json.homeClubNativeId ||
     !row.match_candidate_json.awayClubNativeId ||
-    row.match_candidate_json.providerStatus !== 'Final' ||
-    row.metric_candidate_json.availability !== 'exact'
+    row.match_candidate_json.providerStatus !== (missingCompletionStatus ? null : 'Final') ||
+    (!appearanceOnly && row.metric_candidate_json?.availability !== 'exact') ||
+    (appearanceOnly &&
+      (row.metric_candidate_json !== null ||
+        canonicalizeAflTradeJson(row.participation_value) !==
+          canonicalizeAflTradeJson({ kind: 'integer', value: '76' })))
   ) {
     throw new TypeError('The local rehearsal staging row is not exactly promotable.');
   }
@@ -474,12 +487,22 @@ async function loadStagedProviderRow(
 }
 
 function resolutionStaging(
-  row: StagedProviderRow,
+  { PROVIDER, CAPABILITY_ID }: SyntheticSource,
+  row: Pick<
+    StagedProviderRow,
+    | 'normalization_run_id'
+    | 'staging_sha256'
+    | 'provider_decoded_row_id'
+    | 'source_row_sha256'
+    | 'field_map_sha256'
+    | 'row_status'
+  > & { identity_candidate_sha256?: string },
   namespace: NativeNamespaceEvidence | null,
   issueSet: { id: string; sha256: string },
   normalizationFinalization: { id: string; sha256: string },
   candidateSha256 = row.identity_candidate_sha256
 ) {
+  if (!candidateSha256) throw new TypeError('An exact staged candidate digest is required.');
   return {
     normalizationRunId: row.normalization_run_id,
     stagingSha256: row.staging_sha256,
@@ -551,7 +574,18 @@ async function resolutionDecision(
   });
 }
 
-async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: StagedProviderRow) {
+async function resolveProviderIdentities(
+  client: AflOutcomeSqlClient,
+  row: StagedProviderRow,
+  source: SyntheticSource,
+  hpnPlayerSide: 'home' | 'away' = 'home'
+) {
+  const { PROVIDER, CAPABILITY_ID } = source;
+  const playerId =
+    hpnPlayerSide === 'away' ? 'afl-player:local-rehearsal-away' : 'afl-player:local-rehearsal';
+  const playerName = hpnPlayerSide === 'away' ? 'Player Two' : 'Player One';
+  const representedClubId =
+    hpnPlayerSide === 'away' ? 'afl-club:local-rehearsal-away' : 'afl-club:local-rehearsal';
   const normalizationFinalizedAt = new Date(row.finalized_at).toISOString();
   const normalizationFinalization = reference('provider-normalization-finalization', {
     normalizationRunId: row.normalization_run_id,
@@ -563,19 +597,23 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
     providerDecodedRowId: row.provider_decoded_row_id,
     issues: [],
   });
-  const playerNamespace = await ensureNativeNamespace(client, 'player');
-  const clubNamespace = await ensureNativeNamespace(client, 'club');
-  const matchNamespace = await ensureNativeNamespace(client, 'match');
+  const playerNamespace = await ensureNativeNamespace(client, 'player', source);
+  const clubNamespace = await ensureNativeNamespace(client, 'club', source);
+  const matchNamespace = await ensureNativeNamespace(client, 'match', source);
   const method = await ensureGovernedEvidence(client, 'provider_resolution_method', {
     methodVersion: 'local-fitzroy-rehearsal/v1',
   });
   const playerSnapshot = await ensureGovernedEvidence(client, 'canonical_target_snapshot', {
-    playerId: 'afl-player:local-rehearsal',
-    displayName: 'Player One',
+    playerId,
+    displayName: playerName,
   });
   const clubSnapshot = await ensureGovernedEvidence(client, 'canonical_target_snapshot', {
-    clubId: 'afl-club:local-rehearsal',
+    clubId: representedClubId,
     displayName: row.recorded_club_name,
+  });
+  const homeClubSnapshot = await ensureGovernedEvidence(client, 'canonical_target_snapshot', {
+    clubId: 'afl-club:local-rehearsal',
+    displayName: row.match_candidate_json.homeClubName,
   });
   const awayClubSnapshot = await ensureGovernedEvidence(client, 'canonical_target_snapshot', {
     clubId: 'afl-club:local-rehearsal-away',
@@ -626,14 +664,15 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
   );
   await client.query(
     `INSERT INTO outcome_player (player_id,display_name,status)
-     VALUES ('afl-player:local-rehearsal','Player One','approved') ON CONFLICT DO NOTHING`
+     VALUES ($1,$2,'approved') ON CONFLICT DO NOTHING`,
+    [playerId, playerName]
   );
   await client.query(
     `INSERT INTO outcome_club (club_id,current_name,status)
      VALUES ('afl-club:local-rehearsal',$1,'approved'),
             ('afl-club:local-rehearsal-away',$2,'approved')
      ON CONFLICT DO NOTHING`,
-    [row.recorded_club_name, row.match_candidate_json.awayClubName]
+    [row.match_candidate_json.homeClubName, row.match_candidate_json.awayClubName]
   );
   await client.query(
     `INSERT INTO outcome_match
@@ -688,11 +727,11 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
       scope: 'provider_identity',
       playerIdentityId,
       assignmentCaseId: playerAssignmentCaseId,
-      playerId: 'afl-player:local-rehearsal',
+      playerId,
     },
     alternativePlayerIds: [],
     method,
-    staging: resolutionStaging(row, playerNamespace, issueSet, normalizationFinalization),
+    staging: resolutionStaging(source, row, playerNamespace, issueSet, normalizationFinalization),
     canonicalTargetSnapshot: playerSnapshot,
     supportingEvidence: [supportingEvidence],
     proposedAt: '2026-08-12T00:03:00.000Z',
@@ -730,11 +769,11 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
       scope: 'provider_identity',
       clubIdentityId,
       assignmentCaseId: clubAssignmentCaseId,
-      clubId: 'afl-club:local-rehearsal',
+      clubId: representedClubId,
     },
     alternativeClubIds: [],
     method,
-    staging: resolutionStaging(row, clubNamespace, issueSet, normalizationFinalization),
+    staging: resolutionStaging(source, row, clubNamespace, issueSet, normalizationFinalization),
     canonicalTargetSnapshot: clubSnapshot,
     supportingEvidence: [supportingEvidence],
     proposedAt: '2026-08-12T00:03:01.000Z',
@@ -792,13 +831,14 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
     alternativeClubIds: [],
     method,
     staging: resolutionStaging(
+      source,
       row,
       null,
       issueSet,
       normalizationFinalization,
       row.match_candidate_sha256
     ),
-    canonicalTargetSnapshot: clubSnapshot,
+    canonicalTargetSnapshot: homeClubSnapshot,
     supportingEvidence: [supportingEvidence],
     proposedAt: '2026-08-12T00:03:02.000Z',
   });
@@ -844,6 +884,7 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
     alternativeClubIds: [],
     method,
     staging: resolutionStaging(
+      source,
       row,
       clubNamespace,
       issueSet,
@@ -854,6 +895,11 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
     supportingEvidence: [supportingEvidence],
     proposedAt: '2026-08-12T00:03:03.000Z',
   });
+  const repository = new PostgresAflTradeProviderResolutionRepository(client);
+  const execution = { principalRef: PRINCIPAL_REF, environment: ENVIRONMENT } as const;
+  const playerPersistence = await repository.persistDecision(playerDecision, execution);
+  const clubPersistence = await repository.persistDecision(clubDecision, execution);
+  const homePersistence = await repository.persistDecision(homeDecision, execution);
   const awayDecision = await resolutionDecision(
     client,
     awayProposal,
@@ -862,11 +908,6 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
     awayAssignmentCaseId,
     reviewerAuthority
   );
-  const repository = new PostgresAflTradeProviderResolutionRepository(client);
-  const execution = { principalRef: PRINCIPAL_REF, environment: ENVIRONMENT } as const;
-  const playerPersistence = await repository.persistDecision(playerDecision, execution);
-  const clubPersistence = await repository.persistDecision(clubDecision, execution);
-  const homePersistence = await repository.persistDecision(homeDecision, execution);
   const awayPersistence = await repository.persistDecision(awayDecision, execution);
   const fixtureFingerprintSha256 = createAflTradeReviewedFixtureFingerprint({
     competition: COMPETITION,
@@ -917,6 +958,7 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
     alternativeMatchIds: [],
     method,
     staging: resolutionStaging(
+      source,
       row,
       matchNamespace,
       issueSet,
@@ -970,7 +1012,7 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
       canonicalTargetSnapshot: playerSnapshot,
       identityCandidateId: row.identity_candidate_id,
       playerIdentityId,
-      playerId: 'afl-player:local-rehearsal',
+      playerId,
       assignment: {
         assignmentCaseId: playerAssignmentCaseId,
         entityKind: 'player' as const,
@@ -987,7 +1029,7 @@ async function resolveProviderIdentities(client: AflOutcomeSqlClient, row: Stage
       canonicalTargetSnapshot: clubSnapshot,
       occurrence,
       clubIdentityId,
-      clubId: 'afl-club:local-rehearsal',
+      clubId: representedClubId,
       assignment: {
         assignmentCaseId: clubAssignmentCaseId,
         entityKind: 'club' as const,
@@ -1038,7 +1080,9 @@ async function createAndPersistFactBatch(
   client: AflOutcomeSqlClient,
   captureId: string,
   row: StagedProviderRow,
-  resolutions: Awaited<ReturnType<typeof resolveProviderIdentities>>
+  resolutions: Awaited<ReturnType<typeof resolveProviderIdentities>>,
+  { PROVIDER, CAPABILITY_ID }: SyntheticSource,
+  effectiveAt: string = LOCAL_FITZROY_REHEARSAL_INSTANTS.effectiveAt
 ) {
   const goalsDefinition = AFL_DRAFT_TRADE_OUTCOME_METRIC_DEFINITIONS.find(
     ({ metric }) => metric === 'goals'
@@ -1048,6 +1092,10 @@ async function createAndPersistFactBatch(
     id: goalsDefinition.metricDefinitionId,
     sha256: referenceFromId(goalsDefinition.metricDefinitionId).sha256,
   };
+  const appearanceOnly = row.metric_candidate_json === null;
+  const appearanceFields = appearanceOnly
+    ? ['Time.on.Ground', 'match_id', 'player_id']
+    : ['match_id', 'player_id'];
   const semanticNaturalKeySha256 = sha256AflTradeCanonicalJson({
     matchId: row.match_candidate_json.nativeMatchId,
     playerId: row.native_entity_id,
@@ -1079,7 +1127,7 @@ async function createAndPersistFactBatch(
     competition: COMPETITION,
     seasonYear: SEASON_YEAR,
     fieldMapSha256: row.field_map_sha256,
-    effectiveAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.effectiveAt,
+    effectiveAt,
     recordedAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.factBatchCreatedAt,
   } as const;
   const matchFact = createAflTradeSourceFact({
@@ -1099,9 +1147,15 @@ async function createAndPersistFactBatch(
     matchCandidateId: row.match_candidate_id,
     match: resolutions.match,
     completionPolicy: reference('match-universe-policy', {
-      policyVersion: 'local-fitzroy-rehearsal/v1',
+      policyVersion:
+        row.match_candidate_json.providerStatus === null
+          ? 'local-fitzroy-rehearsal-missing-completion/v1'
+          : 'local-fitzroy-rehearsal/v1',
     }),
-    completion: { state: 'completed', providerStatus: row.match_candidate_json.providerStatus },
+    completion:
+      row.match_candidate_json.providerStatus === null
+        ? { state: 'quarantined', providerStatus: null, reasonCode: 'status_missing' }
+        : { state: 'completed', providerStatus: row.match_candidate_json.providerStatus },
   });
   const appearanceCandidate = createAflTradeProviderAppearanceCandidate({
     schemaVersion: AFL_TRADE_APPEARANCE_CANDIDATE_SCHEMA_VERSION,
@@ -1125,9 +1179,11 @@ async function createAndPersistFactBatch(
     matchCandidateId: row.match_candidate_id,
     matchCandidateSha256: row.match_candidate_sha256,
     appearanceState: 'observed',
-    sourceFields: ['match_id', 'player_id'],
+    sourceFields: appearanceFields,
     derivationPolicy: reference('player-appearance-policy', {
-      policyVersion: 'local-fitzroy-rehearsal/v1',
+      policyVersion: appearanceOnly
+        ? 'synthetic-positive-time-on-ground/v1'
+        : 'local-fitzroy-rehearsal/v1',
     }),
   });
   const appearanceFact = createAflTradeSourceFact({
@@ -1141,7 +1197,7 @@ async function createAndPersistFactBatch(
         achievement: null,
         appearance: appearanceCandidate.candidateSha256,
       },
-      consumedSourceFields: ['match_id', 'player_id'],
+      consumedSourceFields: appearanceFields,
     },
     factKind: 'player_appearance',
     player: resolutions.player,
@@ -1161,24 +1217,27 @@ async function createAndPersistFactBatch(
     },
     consumedSourceFields: ['goals', 'player_id'],
   } as const;
-  const metricFact = createAflTradeSourceFact({
-    ...factBase,
-    source: metricSource,
-    factKind: 'player_season_metric',
-    player: resolutions.player,
-    seasonClubScope: { kind: 'resolved_single_club', club: resolutions.club },
-    metricCode: 'goals',
-    definitionVersion: 'goals/v1',
-    definition: metricDefinition,
-    unit: 'goals',
-    availability: {
-      state: 'measured',
-      numericValue: row.metric_candidate_json.numericValue,
-      reasonCode: null,
-    },
-  });
-  const facts = [matchFact, appearanceFact, metricFact].sort((left, right) =>
-    left.factId.localeCompare(right.factId)
+  const metricFact =
+    row.metric_candidate_json === null
+      ? null
+      : createAflTradeSourceFact({
+          ...factBase,
+          source: metricSource,
+          factKind: 'player_season_metric',
+          player: resolutions.player,
+          seasonClubScope: { kind: 'resolved_single_club', club: resolutions.club },
+          metricCode: 'goals',
+          definitionVersion: 'goals/v1',
+          definition: metricDefinition,
+          unit: 'goals',
+          availability: {
+            state: 'measured',
+            numericValue: row.metric_candidate_json.numericValue,
+            reasonCode: null,
+          },
+        });
+  const facts = [matchFact, appearanceFact, ...(metricFact === null ? [] : [metricFact])].sort(
+    (left, right) => left.factId.localeCompare(right.factId)
   );
   const rowAccounting = [
     {
@@ -1241,7 +1300,7 @@ async function createAndPersistFactBatch(
       matchUniverse: 1,
       playerAppearances: 1,
       playerMatchMetrics: 0,
-      playerSeasonMetrics: 1,
+      playerSeasonMetrics: metricFact === null ? 0 : 1,
       playerAchievements: 0,
       normalizedRows: 1,
       nonNormalizedRows: 0,
@@ -1285,15 +1344,22 @@ async function ensureFactualPolicyReview(
 
 async function createAndPersistFactualRun(
   client: AflOutcomeSqlClient,
-  batch: Awaited<ReturnType<typeof createAndPersistFactBatch>>
+  batch: Awaited<ReturnType<typeof createAndPersistFactBatch>>,
+  { PROVIDER, CAPABILITY_ID }: SyntheticSource
 ) {
   const gamesDefinition = AFL_DRAFT_TRADE_OUTCOME_METRIC_DEFINITIONS.find(
     ({ metric }) => metric === 'games'
   );
   if (!gamesDefinition) throw new TypeError('The governed games metric definition is missing.');
+  const policyVersion =
+    batch.metricFact === null
+      ? 'local-fitzroy-rehearsal/afl-tables-appearance/v1'
+      : PROVIDER === 'footywire'
+        ? 'local-fitzroy-rehearsal/v1'
+        : 'local-fitzroy-rehearsal/afl-tables/v1';
   const approval = reference('factual-reconciliation-policy-approval', {
     environment: ENVIRONMENT,
-    policyVersion: 'local-fitzroy-rehearsal/v1',
+    policyVersion,
   });
   const policy = createAflTradeFactualReconciliationPolicy({
     schemaVersion: AFL_TRADE_FACTUAL_RECONCILIATION_POLICY_SCHEMA_VERSION,
@@ -1304,23 +1370,26 @@ async function createAndPersistFactualRun(
     competition: COMPETITION,
     validFromSeason: SEASON_YEAR,
     validThroughSeason: SEASON_YEAR,
-    policyVersion: 'local-fitzroy-rehearsal/v1',
+    policyVersion,
     approval,
-    sourceMetricRules: [
-      {
-        ruleKind: 'source_metric',
-        metricCode: 'goals',
-        definitionVersion: 'goals/v1',
-        definition: batch.metricDefinition,
-        grain: 'season',
-        unit: 'goals',
-        comparison: 'exact_non_negative_integer',
-        missingValueSemantics: 'never_zero_and_never_did_not_play',
-        fallback: 'next_priority_only_when_higher_priority_has_no_measured_value',
-        conflict: 'same_priority_distinct_measured_values_are_conflicting',
-        sources: [{ priority: 1, provider: PROVIDER, capabilityId: CAPABILITY_ID }],
-      },
-    ],
+    sourceMetricRules:
+      batch.metricFact === null
+        ? []
+        : [
+            {
+              ruleKind: 'source_metric',
+              metricCode: 'goals',
+              definitionVersion: 'goals/v1',
+              definition: batch.metricDefinition,
+              grain: 'season',
+              unit: 'goals',
+              comparison: 'exact_non_negative_integer',
+              missingValueSemantics: 'never_zero_and_never_did_not_play',
+              fallback: 'next_priority_only_when_higher_priority_has_no_measured_value',
+              conflict: 'same_priority_distinct_measured_values_are_conflicting',
+              sources: [{ priority: 1, provider: PROVIDER, capabilityId: CAPABILITY_ID }],
+            },
+          ],
     gamesRule: {
       ruleKind: 'derived_games',
       metricCode: 'games',
@@ -1342,43 +1411,58 @@ async function createAndPersistFactualRun(
   await ensureFactualPolicyReview(client, policy.policyId, approval);
   const repository = new PostgresAflTradeFactualReconciliationRepository(client);
   await repository.persistPolicy(policy, { environment: ENVIRONMENT });
-  const replay = await client.query<{ receipt_json: unknown }>(
-    `SELECT run.receipt_json
+  const replay = await client.query<{
+    receipt_json: unknown;
+    receipt_canonical_json: string | null;
+  }>(
+    `SELECT run.receipt_json,run.receipt_canonical_json
        FROM outcome_factual_reconciliation_run run
-       JOIN outcome_factual_reconciliation_metric_input metric USING (factual_run_id)
+       LEFT JOIN outcome_factual_reconciliation_metric_input metric USING (factual_run_id)
        JOIN outcome_factual_reconciliation_appearance_input appearance USING (factual_run_id)
        JOIN outcome_factual_reconciliation_match_input match USING (factual_run_id)
-      WHERE metric.metric_fact_id=$1 AND appearance.appearance_fact_id=$2
+      WHERE metric.metric_fact_id IS NOT DISTINCT FROM $1::text AND appearance.appearance_fact_id=$2
         AND match.match_fact_id=$3`,
-    [batch.metricFact.factId, batch.appearanceFact.factId, batch.matchFact.factId]
+    [batch.metricFact?.factId ?? null, batch.appearanceFact.factId, batch.matchFact.factId]
   );
   if (replay.rows[0]) {
+    const stored = replay.rows[0];
+    const run = aflTradeFactualReconciliationRunSchema.parse(
+      stored.receipt_canonical_json === null
+        ? stored.receipt_json
+        : JSON.parse(stored.receipt_canonical_json)
+    );
     return {
-      run: aflTradeFactualReconciliationRunSchema.parse(replay.rows[0].receipt_json),
-      persisted: { idempotentReplay: true },
+      run,
+      persisted: await repository.persistRun(run, { environment: ENVIRONMENT }),
     };
   }
   if (
-    batch.metricFact.content.factKind !== 'player_season_metric' ||
-    batch.metricFact.content.seasonClubScope.kind !== 'resolved_single_club' ||
+    (batch.metricFact !== null &&
+      (batch.metricFact.content.factKind !== 'player_season_metric' ||
+        batch.metricFact.content.seasonClubScope.kind !== 'resolved_single_club')) ||
     batch.appearanceFact.content.factKind !== 'player_appearance'
   ) {
     throw new TypeError('The local factual run requires exact goals and appearance subjects.');
   }
   const currentSubjectKeys = [
-    createAflTradeReconciledSubjectKey({
-      environment: ENVIRONMENT,
-      competition: batch.metricFact.content.competition,
-      seasonYear: batch.metricFact.content.seasonYear,
-      playerId: batch.metricFact.content.player.playerId,
-      clubScope: {
-        kind: 'resolved_single_club',
-        clubId: batch.metricFact.content.seasonClubScope.club.clubId,
-      },
-      matchId: null,
-      metricCode: batch.metricFact.content.metricCode,
-      definitionVersion: batch.metricFact.content.definitionVersion,
-    }),
+    ...(batch.metricFact?.content.factKind === 'player_season_metric' &&
+    batch.metricFact.content.seasonClubScope.kind === 'resolved_single_club'
+      ? [
+          createAflTradeReconciledSubjectKey({
+            environment: ENVIRONMENT,
+            competition: batch.metricFact.content.competition,
+            seasonYear: batch.metricFact.content.seasonYear,
+            playerId: batch.metricFact.content.player.playerId,
+            clubScope: {
+              kind: 'resolved_single_club',
+              clubId: batch.metricFact.content.seasonClubScope.club.clubId,
+            },
+            matchId: null,
+            metricCode: batch.metricFact.content.metricCode,
+            definitionVersion: batch.metricFact.content.definitionVersion,
+          }),
+        ]
+      : []),
     createAflTradeReconciledSubjectKey({
       environment: ENVIRONMENT,
       competition: batch.appearanceFact.content.competition,
@@ -1398,13 +1482,15 @@ async function createAndPersistFactualRun(
       WHERE subject_key=ANY($1::text[])`,
     [currentSubjectKeys]
   );
-  const sourceMemberships = [batch.matchFact, batch.appearanceFact, batch.metricFact].map(
-    (fact) => ({
-      factBatchId: batch.batch.batchId,
-      factBatchSha256: batch.batch.batchSha256,
-      fact,
-    })
-  );
+  const sourceMemberships = [
+    batch.matchFact,
+    batch.appearanceFact,
+    ...(batch.metricFact === null ? [] : [batch.metricFact]),
+  ].map((fact) => ({
+    factBatchId: batch.batch.batchId,
+    factBatchSha256: batch.batch.batchSha256,
+    fact,
+  }));
   const run = reconcileAflTradeFactualFacts({
     policy,
     sourceMemberships,
@@ -1630,6 +1716,10 @@ function createPrivateCandidate(input: {
 }
 
 export interface LocalAflTradeFitzRoyFactualRehearsalOptions {
+  hpnPlayerStats?: boolean;
+  hpnPlayerSide?: 'home' | 'away';
+  missingCompletionStatus?: boolean;
+  provider?: LocalFitzRoyFactualRehearsalProvider;
   goals?: string;
   generation?: LocalFitzRoyFactualRehearsalGeneration;
 }
@@ -1639,10 +1729,12 @@ export interface PreparedLocalAflTradeFitzRoyFactualReleaseCandidate {
   candidate: ReturnType<typeof createPrivateCandidate>;
 }
 
-export async function prepareLocalAflTradeFitzRoyFactualReleaseCandidate(
+async function stageRehearsalEvidence(
   client: AflOutcomeSqlClient,
-  options?: LocalAflTradeFitzRoyFactualRehearsalOptions
-): Promise<PreparedLocalAflTradeFitzRoyFactualReleaseCandidate> {
+  options?: LocalAflTradeFitzRoyFactualRehearsalOptions & {
+    profile?: 'appearance_only' | 'match_only';
+  }
+) {
   await assertDisposableRehearsalDatabase(client);
   await client.query(
     `INSERT INTO outcome_competition_season (competition,season_year)
@@ -1658,7 +1750,10 @@ export async function prepareLocalAflTradeFitzRoyFactualReleaseCandidate(
        ('games','games/v1','Games','numeric','games',true,'{}'::jsonb,'approved')
      ON CONFLICT DO NOTHING`
   );
-  const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
+  const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture({
+    ...options,
+    profile: options?.hpnPlayerStats ? 'hpn_player_stats' : options?.profile,
+  });
   const fieldMapSha256 = createAflTradeFitzRoyFieldMapSha256(fixture.command.fieldMap);
   await ensureFieldMapReview(client, fixture.command.fieldMap, fieldMapSha256);
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);
@@ -1683,26 +1778,56 @@ export async function prepareLocalAflTradeFitzRoyFactualReleaseCandidate(
       timeoutMs: 30_000,
       maximumSourceBytes: 1_024,
       maximumRows: 10,
-      maximumFields: 20,
-      maximumCells: 200,
+      maximumFields: options?.hpnPlayerStats ? 25 : 20,
+      maximumCells: options?.hpnPlayerStats ? 250 : 200,
       maximumCellBytes: 1_024,
       maximumOutputBytes: 65_536,
       egressExecutionVerifier: fixture.captureDependencies.egressExecutionVerifier,
     },
     clock: { now: () => LOCAL_FITZROY_REHEARSAL_INSTANTS.captureCompletedAt },
   });
+  return { ingestion, fixture };
+}
+
+async function prepareLocalAflTradeFitzRoyEvidence(
+  client: AflOutcomeSqlClient,
+  options?: LocalAflTradeFitzRoyFactualRehearsalOptions & { profile?: 'appearance_only' }
+) {
+  const { ingestion, fixture } = await stageRehearsalEvidence(client, options);
   const row = await loadStagedProviderRow(
     client,
-    ingestion.staging.normalization.normalizationRunId
+    ingestion.staging.normalization.normalizationRunId,
+    options?.profile === 'appearance_only',
+    options?.missingCompletionStatus
   );
-  const resolutions = await resolveProviderIdentities(client, row);
+  const source: SyntheticSource = {
+    PROVIDER: options?.provider ?? 'footywire',
+    CAPABILITY_ID:
+      options?.provider === 'afl_tables' ? 'afl-tables-player-stats' : 'footywire-player-stats',
+  };
+  const resolutions = await resolveProviderIdentities(client, row, source, options?.hpnPlayerSide);
   const factBatch = await createAndPersistFactBatch(
     client,
     ingestion.staging.capture.captureId,
     row,
-    resolutions
+    resolutions,
+    source,
+    options?.hpnPlayerStats ? row.match_candidate_json.matchDateText : undefined
   );
-  const factual = await createAndPersistFactualRun(client, factBatch);
+  const factual = await createAndPersistFactualRun(client, factBatch, source);
+  if (options?.profile === 'appearance_only')
+    return {
+      kind: 'appearance_evidence' as const,
+      ingestion,
+      factBatch: factBatch.batch,
+      factualRun: factual.run,
+      idempotentReplay:
+        ingestion.staging.capture.idempotentReplay &&
+        ingestion.staging.normalization.idempotentReplay &&
+        resolutions.idempotentReplay &&
+        factBatch.persisted.idempotentReplay &&
+        factual.persisted.idempotentReplay,
+    };
   const candidate = createPrivateCandidate({
     captureId: ingestion.staging.capture.captureId,
     sourceSnapshotId: ingestion.snapshotId,
@@ -1729,7 +1854,575 @@ export async function prepareLocalAflTradeFitzRoyFactualReleaseCandidate(
       factBatch.persisted.idempotentReplay &&
       factual.persisted.idempotentReplay,
   };
-  return { receipt, candidate };
+  return { kind: 'release_candidate' as const, receipt, candidate };
+}
+
+export async function prepareLocalAflTradeFitzRoyFactualReleaseCandidate(
+  client: AflOutcomeSqlClient,
+  options?: LocalAflTradeFitzRoyFactualRehearsalOptions
+): Promise<PreparedLocalAflTradeFitzRoyFactualReleaseCandidate> {
+  const result = await prepareLocalAflTradeFitzRoyEvidence(client, options);
+  if (result.kind !== 'release_candidate')
+    throw new TypeError('The full rehearsal requires its goals-based release candidate.');
+  return { receipt: result.receipt, candidate: result.candidate };
+}
+
+/** Explicit synthetic match/appearance evidence only; no numeric goals or release candidate. */
+export async function prepareLocalAflTradeFitzRoyAppearanceEvidence(
+  client: AflOutcomeSqlClient,
+  options?: Pick<LocalAflTradeFitzRoyFactualRehearsalOptions, 'missingCompletionStatus'>
+) {
+  const result = await prepareLocalAflTradeFitzRoyEvidence(client, {
+    ...options,
+    provider: 'afl_tables',
+    profile: 'appearance_only',
+  });
+  if (result.kind !== 'appearance_evidence')
+    throw new TypeError('Appearance-only rehearsal did not produce exact evidence.');
+  return result;
+}
+
+/** Synthetic completed results only. Existing primary rehearsal owns the canonical fixture. */
+export async function prepareLocalAflTradeFitzRoyMatchEvidence(client: AflOutcomeSqlClient) {
+  const { ingestion } = await stageRehearsalEvidence(client, {
+    provider: 'afl_tables',
+    profile: 'match_only',
+  });
+  const source = { PROVIDER: 'afl_tables', CAPABILITY_ID: 'afl-tables-results' } as const;
+  type ResultRow = Pick<
+    StagedProviderRow,
+    | 'normalization_run_id'
+    | 'staging_sha256'
+    | 'finalized_at'
+    | 'field_map_sha256'
+    | 'provider_decoded_row_id'
+    | 'source_row_number'
+    | 'source_row_sha256'
+    | 'row_status'
+    | 'match_candidate_id'
+    | 'match_candidate_sha256'
+  > & {
+    match_candidate_json: Omit<
+      StagedProviderRow['match_candidate_json'],
+      'homeClubNativeId' | 'awayClubNativeId' | 'providerStatus'
+    > & {
+      homeClubNativeId: null;
+      awayClubNativeId: null;
+      providerStatus: null;
+    };
+    semantic_natural_key_sha256: string;
+    typed_payload: { values: Record<string, unknown> };
+    has_player: boolean;
+    has_metric: boolean;
+  };
+  const rows = await client.query<ResultRow>(
+    `SELECT run.normalization_run_id,run.staging_sha256,run.finalized_at,
+            field_map.field_map_sha256,row.provider_decoded_row_id,row.source_row_number,
+            row.source_row_sha256,row.row_status::text,
+            row.typed_payload->>'semanticNaturalKeySha256' AS semantic_natural_key_sha256,
+            row.typed_payload,match.match_candidate_id,
+            match.candidate_sha256 AS match_candidate_sha256,match.candidate_json AS match_candidate_json,
+            EXISTS(SELECT 1 FROM outcome_provider_identity_candidate identity
+                    WHERE identity.provider_decoded_row_id=row.provider_decoded_row_id) AS has_player,
+            EXISTS(SELECT 1 FROM outcome_provider_metric_candidate metric
+                    WHERE metric.provider_decoded_row_id=row.provider_decoded_row_id) AS has_metric
+       FROM outcome_provider_normalization_run run
+       JOIN outcome_provider_field_map field_map USING(field_map_id)
+       JOIN outcome_provider_decoded_row row USING(normalization_run_id)
+       JOIN outcome_provider_match_candidate match USING(provider_decoded_row_id)
+      WHERE run.normalization_run_id=$1`,
+    [ingestion.staging.normalization.normalizationRunId]
+  );
+  const row = rows.rows[0];
+  if (
+    rows.rows.length !== 1 ||
+    !row ||
+    row.row_status !== 'staged' ||
+    row.has_player ||
+    row.has_metric ||
+    row.match_candidate_json.providerStatus !== null ||
+    row.match_candidate_json.homeClubNativeId !== null ||
+    row.match_candidate_json.awayClubNativeId !== null ||
+    row.match_candidate_json.nativeMatchId !== '1001' ||
+    row.match_candidate_json.matchDateText !== '2026-03-20'
+  )
+    throw new TypeError('The results rehearsal requires its exact match-only staged row.');
+  for (const [field, value] of Object.entries({
+    'Home.Goals': '12',
+    'Home.Behinds': '12',
+    'Home.Points': '84',
+    'Away.Goals': '10',
+    'Away.Behinds': '12',
+    'Away.Points': '72',
+  })) {
+    if (
+      canonicalizeAflTradeJson(row.typed_payload.values[field]) !==
+      canonicalizeAflTradeJson({ kind: 'integer', value })
+    )
+      throw new TypeError('Synthetic completed results require their exact recorded final scores.');
+  }
+  const parents = await client.query<{
+    match_id: string;
+    match_date: string;
+    round_label: string;
+    home_club_id: string;
+    away_club_id: string;
+    home_name: string;
+    away_name: string;
+  }>(
+    `SELECT match.match_id,
+       to_char(match.match_date AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS match_date,
+       match.round_label,match.home_club_id,match.away_club_id,
+       home.current_name AS home_name,away.current_name AS away_name
+       FROM outcome_match match JOIN outcome_club home ON home.club_id=match.home_club_id
+       JOIN outcome_club away ON away.club_id=match.away_club_id
+       WHERE match.match_id='afl-match:local-rehearsal-2026-r1'
+         AND match.competition=$1 AND match.season_year=$2
+         AND home.status='approved' AND away.status='approved'`,
+    [COMPETITION, SEASON_YEAR]
+  );
+  const parent = parents.rows[0];
+  if (
+    parents.rows.length !== 1 ||
+    !parent ||
+    parent.match_date.slice(0, 10) !== row.match_candidate_json.matchDateText ||
+    parent.home_name !== row.match_candidate_json.homeClubName ||
+    parent.away_name !== row.match_candidate_json.awayClubName ||
+    parent.round_label !== row.match_candidate_json.roundLabel
+  )
+    throw new TypeError(
+      'Results require the exact existing primary synthetic canonical fixture and clubs.'
+    );
+  const normalizationFinalizedAt = new Date(row.finalized_at).toISOString();
+  const normalizationFinalization = reference('provider-normalization-finalization', {
+    normalizationRunId: row.normalization_run_id,
+    stagingSha256: row.staging_sha256,
+    finalizedAt: normalizationFinalizedAt,
+  });
+  const issueSet = reference('provider-resolution-issue-set', {
+    normalizationRunId: row.normalization_run_id,
+    providerDecodedRowId: row.provider_decoded_row_id,
+    issues: [],
+  });
+  const method = await ensureGovernedEvidence(client, 'provider_resolution_method', {
+    methodVersion: 'synthetic-results-existing-canonical-date/v1',
+    datePrecision: 'calendar_date',
+    sourceDate: row.match_candidate_json.matchDateText,
+  });
+  const supportingEvidence = await ensureGovernedEvidence(client, 'provider_resolution_evidence', {
+    source: 'synthetic-results-rehearsal',
+    candidateId: row.match_candidate_id,
+    sourceRowSha256: row.source_row_sha256,
+  });
+  const authorityScope = {
+    principalRef: PRINCIPAL_REF,
+    role: 'afl_trade_identity_reviewer' as const,
+    scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
+    provider: source.PROVIDER,
+    capabilityId: source.CAPABILITY_ID,
+    competition: COMPETITION,
+    validFromSeason: SEASON_YEAR,
+    validThroughSeason: SEASON_YEAR,
+  };
+  const authorityEvidence = await ensureGovernedEvidence(
+    client,
+    'reviewer_authority_evidence',
+    authorityScope
+  );
+  await client.query(
+    `INSERT INTO outcome_operational_principal_authority
+    (authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,
+     valid_from_season,valid_through_season,valid_from,valid_through)
+    VALUES($1,$2,'afl_trade_identity_reviewer',$3,$4,$5,$6,$7,$7,$8,NULL)
+    ON CONFLICT(authority_evidence_id) DO NOTHING`,
+    [
+      authorityEvidence.id,
+      PRINCIPAL_REF,
+      AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
+      source.PROVIDER,
+      source.CAPABILITY_ID,
+      COMPETITION,
+      SEASON_YEAR,
+      '2026-01-01T00:00:00.000Z',
+    ]
+  );
+  const reviewerAuthority = { ...authorityScope, authorityEvidence };
+  const aliasPolicy = await ensureGovernedEvidence(client, 'provider_resolution_policy', {
+    policyVersion: 'synthetic-results-exact-club-alias/v1',
+  });
+  const repository = new PostgresAflTradeProviderResolutionRepository(client);
+  const execution = { principalRef: PRINCIPAL_REF, environment: ENVIRONMENT } as const;
+  let resolutionsReplay = true;
+  const resolveSide = async (side: 'home' | 'away') => {
+    const clubId = side === 'home' ? parent.home_club_id : parent.away_club_id;
+    const name = side === 'home' ? parent.home_name : parent.away_name;
+    const normalizedName = normalizeAflTradeProviderClubAlias(name);
+    const aliasId = createAflTradeContentAddress('provider-club-alias', {
+      provider: source.PROVIDER,
+      competition: COMPETITION,
+      normalizationPolicyId: aliasPolicy.id,
+      normalizedName,
+      validFromSeason: SEASON_YEAR,
+      validThroughSeason: SEASON_YEAR,
+    });
+    const assignmentCaseId = createAflTradeContentAddress('provider-identity-assignment-case', {
+      entityKind: 'club_alias',
+      identityId: aliasId,
+    });
+    const occurrence = {
+      source: 'match_side' as const,
+      matchCandidateId: row.match_candidate_id,
+      side,
+    };
+    const snapshot = await ensureGovernedEvidence(client, 'canonical_target_snapshot', {
+      clubId,
+      displayName: name,
+    });
+    const proposal = createAflTradeProviderResolutionProposal({
+      schemaVersion: AFL_TRADE_PROVIDER_RESOLUTION_PROPOSAL_SCHEMA_VERSION,
+      resolutionCaseId: createAflTradeContentAddress('provider-resolution-case', {
+        subjectType: 'provider_club_candidate',
+        occurrence,
+      }),
+      subjectType: 'provider_club_candidate',
+      occurrence,
+      candidate: { nativeClubId: null, recordedName: name },
+      proposedTarget: {
+        scope: 'temporal_alias',
+        clubId,
+        validFromSeason: SEASON_YEAR,
+        validThroughSeason: SEASON_YEAR,
+        normalizedName,
+        aliasId,
+        assignmentCaseId,
+        normalizationPolicy: aliasPolicy,
+      },
+      alternativeClubIds: [],
+      method,
+      staging: resolutionStaging(
+        source,
+        row,
+        null,
+        issueSet,
+        normalizationFinalization,
+        row.match_candidate_sha256
+      ),
+      canonicalTargetSnapshot: snapshot,
+      supportingEvidence: [supportingEvidence],
+      proposedAt: '2026-08-12T00:03:02.000Z',
+    });
+    const decision = await resolutionDecision(
+      client,
+      proposal,
+      'club_alias',
+      aliasId,
+      assignmentCaseId,
+      reviewerAuthority
+    );
+    const persisted = await repository.persistDecision(decision, execution);
+    resolutionsReplay &&= persisted.idempotentReplay;
+    return {
+      clubId,
+      resolutionDecision: { id: decision.decisionId, sha256: decision.decisionSha256 },
+      assignment: {
+        assignmentCaseId,
+        entityKind: 'club_alias' as const,
+        revision: decision.content.assignmentRevision!.expectedRevision + 1,
+        decisionId: decision.decisionId,
+        status: 'active' as const,
+      },
+    };
+  };
+  const homeClub = await resolveSide('home');
+  const awayClub = await resolveSide('away');
+  const namespace = await ensureNativeNamespace(client, 'match', source);
+  const matchIdentityId = createAflTradeContentAddress('provider-match-identity', {
+    nativeIdNamespaceId: namespace.namespaceId,
+    nativeMatchId: row.match_candidate_json.nativeMatchId,
+  });
+  const assignmentCaseId = createAflTradeContentAddress('provider-identity-assignment-case', {
+    entityKind: 'match',
+    identityId: matchIdentityId,
+  });
+  const snapshot = await ensureGovernedEvidence(client, 'canonical_target_snapshot', {
+    matchId: parent.match_id,
+    canonicalMatchDate: parent.match_date,
+    canonicalRoundLabel: parent.round_label,
+  });
+  const candidate = {
+    nativeMatchId: row.match_candidate_json.nativeMatchId,
+    roundLabel: row.match_candidate_json.roundLabel,
+    matchDateText: row.match_candidate_json.matchDateText,
+    homeClubNativeId: row.match_candidate_json.homeClubNativeId,
+    homeClubName: row.match_candidate_json.homeClubName,
+    awayClubNativeId: row.match_candidate_json.awayClubNativeId,
+    awayClubName: row.match_candidate_json.awayClubName,
+    orderIndependentSha256: row.match_candidate_json.orderIndependentSha256,
+  };
+  const proposal = createAflTradeProviderResolutionProposal({
+    schemaVersion: AFL_TRADE_PROVIDER_RESOLUTION_PROPOSAL_SCHEMA_VERSION,
+    resolutionCaseId: createAflTradeContentAddress('provider-resolution-case', {
+      subjectType: 'provider_match_candidate',
+      matchCandidateId: row.match_candidate_id,
+    }),
+    subjectType: 'provider_match_candidate',
+    matchCandidateId: row.match_candidate_id,
+    candidate,
+    proposedTarget: {
+      matchIdentityKind: 'provider_native',
+      matchIdentityId,
+      assignmentCaseId,
+      matchId: parent.match_id,
+      canonicalMatchDate: parent.match_date,
+      canonicalRoundLabel: parent.round_label,
+      homeClubId: homeClub.clubId,
+      awayClubId: awayClub.clubId,
+      fixtureFingerprintSha256: createAflTradeReviewedFixtureFingerprint({
+        competition: COMPETITION,
+        seasonYear: SEASON_YEAR,
+        canonicalRoundLabel: parent.round_label,
+        canonicalMatchDate: parent.match_date,
+        clubIds: [homeClub.clubId, awayClub.clubId],
+      }),
+      homeClubResolutionDecisionId: homeClub.resolutionDecision.id,
+      awayClubResolutionDecisionId: awayClub.resolutionDecision.id,
+    },
+    alternativeMatchIds: [],
+    method,
+    staging: resolutionStaging(
+      source,
+      row,
+      namespace,
+      issueSet,
+      normalizationFinalization,
+      row.match_candidate_sha256
+    ),
+    canonicalTargetSnapshot: snapshot,
+    supportingEvidence: [supportingEvidence],
+    proposedAt: '2026-08-12T00:03:04.000Z',
+  });
+  const decision = await resolutionDecision(
+    client,
+    proposal,
+    'match',
+    matchIdentityId,
+    assignmentCaseId,
+    reviewerAuthority
+  );
+  const persistedMatch = await repository.persistDecision(decision, execution);
+  const match = {
+    resolutionCaseId: proposal.content.resolutionCaseId,
+    revision: persistedMatch.revision,
+    decision: { id: decision.decisionId, sha256: decision.decisionSha256 },
+    canonicalTargetSnapshot: snapshot,
+    matchCandidateId: row.match_candidate_id,
+    matchIdentityId,
+    matchId: parent.match_id,
+    canonicalMatchDate: parent.match_date,
+    canonicalRoundLabel: parent.round_label,
+    homeClub,
+    awayClub,
+    assignment: {
+      assignmentCaseId,
+      entityKind: 'match' as const,
+      revision: decision.content.assignmentRevision!.expectedRevision + 1,
+      decisionId: decision.decisionId,
+      status: 'active' as const,
+    },
+  };
+  const sourceBase = {
+    captureId: ingestion.staging.capture.captureId,
+    normalizationRunId: row.normalization_run_id,
+    normalizationFinalization,
+    normalizationFinalizedAt,
+    stagingSha256: row.staging_sha256,
+    providerDecodedRowId: row.provider_decoded_row_id,
+    sourceRowNumber: row.source_row_number,
+    sourceRowSha256: row.source_row_sha256,
+    semanticNaturalKeySha256: row.semantic_natural_key_sha256,
+    rowStatus: row.row_status,
+    issueSet,
+    blockingIssueCount: 0,
+    openBlockingIssueCount: 0,
+    blockingIssueClosures: [],
+  };
+  const fact = createAflTradeSourceFact({
+    schemaVersion: AFL_TRADE_SOURCE_FACT_SCHEMA_VERSION,
+    publicAssetBoundary: AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY,
+    authorityBoundary: AFL_TRADE_SOURCE_FACT_AUTHORITY_BOUNDARY,
+    publicationEligible: false,
+    environment: ENVIRONMENT,
+    provider: source.PROVIDER,
+    capabilityId: source.CAPABILITY_ID,
+    competition: COMPETITION,
+    seasonYear: SEASON_YEAR,
+    fieldMapSha256: row.field_map_sha256,
+    effectiveAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.effectiveAt,
+    recordedAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.factBatchCreatedAt,
+    source: {
+      ...sourceBase,
+      candidateDigests: {
+        identity: null,
+        match: row.match_candidate_sha256,
+        metric: null,
+        achievement: null,
+        appearance: null,
+      },
+      consumedSourceFields: [
+        'Away.Behinds',
+        'Away.Goals',
+        'Away.Points',
+        'Date',
+        'Game',
+        'Home.Behinds',
+        'Home.Goals',
+        'Home.Points',
+      ],
+    },
+    factKind: 'match_universe',
+    matchCandidateId: row.match_candidate_id,
+    match,
+    completionPolicy: reference('match-universe-policy', {
+      policyVersion: 'synthetic-reviewed-final-results/v1',
+      sourceRowSha256: row.source_row_sha256,
+      finalHomePoints: 84,
+      finalAwayPoints: 72,
+    }),
+    completion: { state: 'completed', providerStatus: null },
+  });
+  const rowAccounting = [
+    {
+      providerDecodedRowId: row.provider_decoded_row_id,
+      sourceRowSha256: row.source_row_sha256,
+      disposition: 'normalized' as const,
+      factIds: [fact.factId],
+      issueSet,
+      issueIds: [],
+      blockingIssueIds: [],
+      blockingIssueClosures: [],
+      reasonCode: null,
+    },
+  ];
+  const batch = createAflTradeSourceFactBatch({
+    schemaVersion: AFL_TRADE_SOURCE_FACT_BATCH_SCHEMA_VERSION,
+    publicAssetBoundary: AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY,
+    authorityBoundary: AFL_TRADE_SOURCE_FACT_AUTHORITY_BOUNDARY,
+    publicationEligible: false,
+    environment: ENVIRONMENT,
+    provider: source.PROVIDER,
+    capabilityId: source.CAPABILITY_ID,
+    competition: COMPETITION,
+    seasonYear: SEASON_YEAR,
+    captureId: sourceBase.captureId,
+    normalizationRunId: row.normalization_run_id,
+    normalizationFinalization,
+    normalizationFinalizedAt,
+    fieldMapSha256: row.field_map_sha256,
+    stagingSha256: row.staging_sha256,
+    sourceRowSetSha256: sha256AflTradeCanonicalJson(
+      rowAccounting.map(({ providerDecodedRowId, sourceRowSha256 }) => ({
+        providerDecodedRowId,
+        sourceRowSha256,
+      }))
+    ),
+    sourceIssueSetSha256: sha256AflTradeCanonicalJson(
+      rowAccounting.map(
+        ({
+          providerDecodedRowId,
+          issueSet,
+          issueIds,
+          blockingIssueIds,
+          blockingIssueClosures,
+        }) => ({
+          providerDecodedRowId,
+          issueSet,
+          issueIds,
+          blockingIssueIds,
+          blockingIssueClosures,
+        })
+      )
+    ),
+    createdAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.factBatchCreatedAt,
+    sourceRowCount: 1,
+    sourceIssueCount: 0,
+    facts: [fact],
+    rowAccounting,
+    counts: {
+      matchUniverse: 1,
+      playerAppearances: 0,
+      playerMatchMetrics: 0,
+      playerSeasonMetrics: 0,
+      playerAchievements: 0,
+      normalizedRows: 1,
+      nonNormalizedRows: 0,
+    },
+  });
+  const persistedBatch = await new PostgresAflTradeFactualObservationRepository(
+    client
+  ).persistBatch(batch, { environment: ENVIRONMENT });
+  const games = AFL_DRAFT_TRADE_OUTCOME_METRIC_DEFINITIONS.find(
+    ({ metric }) => metric === 'games'
+  )!;
+  const policyVersion = 'synthetic-results-only/v1';
+  const approval = reference('factual-reconciliation-policy-approval', {
+    environment: ENVIRONMENT,
+    policyVersion,
+  });
+  const policy = createAflTradeFactualReconciliationPolicy({
+    schemaVersion: AFL_TRADE_FACTUAL_RECONCILIATION_POLICY_SCHEMA_VERSION,
+    publicAssetBoundary: AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY,
+    authorityBoundary: AFL_TRADE_FACTUAL_RECONCILIATION_AUTHORITY_BOUNDARY,
+    publicationEligible: false,
+    environment: ENVIRONMENT,
+    competition: COMPETITION,
+    validFromSeason: SEASON_YEAR,
+    validThroughSeason: SEASON_YEAR,
+    policyVersion,
+    approval,
+    sourceMetricRules: [],
+    gamesRule: {
+      ruleKind: 'derived_games',
+      metricCode: 'games',
+      definitionVersion: 'games/v1',
+      definition: referenceFromId(games.metricDefinitionId),
+      grain: 'match',
+      unit: 'games',
+      derivation: 'one_only_for_completed_match_and_authenticated_observed_appearance',
+      absenceSemantics: 'absence_is_unknown_never_zero_or_did_not_play',
+      completionConflict: 'distinct_preferred_completion_states_are_conflicting',
+      appearanceSources: [
+        { priority: 1, provider: source.PROVIDER, capabilityId: source.CAPABILITY_ID },
+      ],
+      matchUniverseSources: [
+        { priority: 1, provider: source.PROVIDER, capabilityId: source.CAPABILITY_ID },
+      ],
+    },
+    createdAt: '2026-08-12T00:03:40.000Z',
+  });
+  await ensureFactualPolicyReview(client, policy.policyId, approval);
+  const factualRepository = new PostgresAflTradeFactualReconciliationRepository(client);
+  await factualRepository.persistPolicy(policy, { environment: ENVIRONMENT });
+  const run = reconcileAflTradeFactualFacts({
+    policy,
+    sourceMemberships: [{ factBatchId: batch.batchId, factBatchSha256: batch.batchSha256, fact }],
+    currentHeadRevisions: [],
+    startedAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.reconciliationStartedAt,
+    completedAt: LOCAL_FITZROY_REHEARSAL_INSTANTS.reconciliationCompletedAt,
+  });
+  const persistedRun = await factualRepository.persistRun(run, { environment: ENVIRONMENT });
+  return {
+    kind: 'match_evidence' as const,
+    ingestion,
+    factBatch: batch,
+    factualRun: run,
+    idempotentReplay:
+      ingestion.staging.capture.idempotentReplay &&
+      ingestion.staging.normalization.idempotentReplay &&
+      resolutionsReplay &&
+      persistedMatch.idempotentReplay &&
+      persistedBatch.idempotentReplay &&
+      persistedRun.idempotentReplay,
+  };
 }
 
 export async function runLocalAflTradeFitzRoyFactualRehearsal(
