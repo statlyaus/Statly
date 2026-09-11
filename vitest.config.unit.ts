@@ -34,6 +34,7 @@ export default defineConfig({
     setupFiles: ['tests/setup/unit.setup.ts'],
     coverage: {
       enabled: true,
+      exclude: ['**/tmp/**'],
       reportsDirectory: 'coverage/unit',
       provider: 'v8',
       reporter: ['text', 'lcov'],
