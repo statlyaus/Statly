@@ -401,6 +401,109 @@ spell evidence cannot extend beyond the release cutoff. Finalized import and rec
 append-only. Projection manifests remain append-only versions so a superseded release can complete a
 fresh validation cycle, and projection items carry an explicit non-null identity key within their
 exact projection.
+Reviewed acquisition registration uses the existing spell and rule tables. The
+`PostgresAflTradeAcquisitionSpellRegistrationRepository` exposes `registerReviewedRule`,
+`registerReviewedSpell`, and `loadCurrentExact`; proposals are content addressed and scoped to
+competition and test/nonproduction environment. Migration 0142 retains their canonical content,
+review decision and actual registration time. Current reads recheck exact promoted event/asset
+membership, the asset's identity decision, scoped reviewer authority, retained event and transfer
+artifacts, and rule evidence. Corrections append a gap-free version for the same player, club and
+spell; a later return creates a separate episode. Entry uses the incoming asset's event date, and
+an outgoing event closes the inclusive interval on the previous day. Appearance dates never supply
+missing acquisition dates.
+
+External canonical-target registration v2 uses the existing provider-resolution repository and
+reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
+from a current retained capture completion, an exact governed target snapshot, supporting custody
+and current scoped technical reviewer authority. The explicit `create` or `reuse` decision is
+separate from the later identity assignment. Creation leaves unavailable biography and club
+metadata null; reuse requires the exact existing record. Conflicting current reviews for one native
+subject cannot create a second canonical target. Source withdrawal blocks registration and replay
+while preserving historical canonical records. Normalization-backed v1 registration is unchanged.
+Both entry points take the identity, sorted target/review and Gate locks in the same order.
+
+Draft promotion proposal v2 assigns exact selection IDs to evidenced sessions, with consecutive
+session ordinals within each draft year/type. Typed `draft_session` claims retain the official
+date, name and selection numbers alongside the selection source. Reconciliation attaches that
+evidence to each selection. A resolved selection with agreeing completed-session evidence can
+establish recruitment without prior pick-custody claims for that slot. Its original pick owner
+remains unknown, and no custody or trade lineage is manufactured. Incomplete or conflicting
+custody for the slot still blocks this path. Migration 0143 checks the complete, disjoint selection union against
+the candidate and verifies each session against retained claims. Finalization binds each session
+to its own canonical event, selections and incoming player assets. Event roots include the session
+ordinal, so corrections append versions of the same session. Existing v1 receipts remain readable.
+Canonical import idempotency includes the reviewed promotion request, allowing a revised candidate
+to reuse retained captures while preserving each prior import. Other import kinds retain their
+capture/kind/parser uniqueness. The database binds new canonical imports to the exact open request.
+The bounded completed-session parser supports exact reviewed 2016–2024 sources. It verifies
+the contextual article date and the specific completed event statements assigned to each source.
+For the one-night 2016 national draft, the completed 25 November report supplies the event-night
+context, completion, Andrew McGrath/Essendon first boundary at pick 1, and Jake Waterman/West Coast
+terminal boundary at pick 77. The prospective final-order article corroborates 25 November only,
+and a separate 2019 retrospective supplies the completed total of 77 while retaining its own 2019
+publication timestamp. These pages do not establish the intervening membership; that remains the
+complete contiguous Draftguru inventory with reviewed identities. The completed report's incidental
+Sean Darcy pick-40 prose conflicts with Draftguru and the separate Official AFL club list at pick 38,
+so it is excluded from membership without rewriting either retained source. This parser and capture
+admission feeds the generic combined-proof resolver, and migration 0150 admits only the three reviewed
+article IDs and the exact retrospective-total/terminal-wrap pair. Disposable non-production coverage
+exercises public reconciliation, promotion and replay, and current spell dependency checks. Genuine
+capture completion, identity decisions, promotion, spell registration, and HPN inputs remain separate
+governed execution stages.
+For the one-night 2017 national draft, the completed 24 November report supplies the first selection,
+terminal selection and event-night context; a separate post-draft article supplies the completed total
+of 78; and the prospective final-order article supplies Friday-night date corroboration only. These
+Official AFL pages do not establish the intervening selection membership, and the parser preserves
+`Cameron Rayner` as recorded rather than normalizing it to Draftguru's `Cam Rayner`. A combined proof
+therefore still requires the complete contiguous Draftguru inventory and a reviewed identity decision.
+The 2019–2024 full-session reports additionally verify contiguous selection membership.
+The 2018 national draft uses a combined-proof boundary because no retained Official AFL article
+asserts the complete session membership by itself. Narrow claims retain their own source ancestry:
+the 22/23 November schedule supplies calendar corroboration only; the first-night report supplies the
+22 November observation; the McLennan report establishes pick 23 as the first selection on day two;
+the final-selection report establishes Walsh/Carlton at pick 1, Friday's completed second round, and
+Hayes/Western Bulldogs at the terminal pick 78; and the separate post-draft lessons article confirms
+the completed two-day sequence and total of 78 national selections. The resolver accepts these facts
+only with the complete contiguous Draftguru inventory, current reviewed boundary identities, one
+explicit completion for every dated session, and an independent total document. Every fact ID is
+attached to every derived session and selection so revocation invalidates the whole proof.
+
+The 2019 completed club summary supplies all 65 selections across 18 receiving-club sections.
+Scoped narratives place Dow's pick 21 at the end of the first round and Robertson's pick 22 first
+on the second night. Thursday-night and previous-night statements in that same completed Thursday
+review support 27 November (1–21) and 28 November (22–65). Every section, boundary identity and
+scoped narrative guard is mandatory. Both session claims retain the same source capture; feeder
+clubs, verdicts and measurements are not normalized. This exact reviewed policy does not introduce
+a general rule for subtracting a day from publication dates.
+The 2020 article supplies 59 numbered paragraph headings for the single 9 December session,
+corroborated by the retained official one-night schedule. Four split headings and the pick-28
+punctuation exception are restricted to that report; biographical and predicted draft-range fields
+in the same paragraphs are excluded from normalized session evidence.
+The 2021 reports conserve picks 1–20 on 24 November and 21–65 on 25 November; the second report uses
+an exact paragraph marker and following selection list, corroborated by the retained official schedule.
+Its conflicting prose reference to Arlo Draper's pick is excluded from session membership, which uses
+the complete numbered list.
+The 2022 reports conserve picks 1–21 on 28 November and 22–59 on 29 November; their round-heading
+formats are explicitly scoped to the reviewed reports. The 2023 second-night report begins at pick 30;
+the 2024 second-night report includes a first-round
+recap, which is excluded from that session. Video dates and publication times alone cannot establish
+a session.
+New draft acquisition registrations require v2 direct-session evidence or v3 combined-session
+evidence. A candidate containing partial session facts cannot be promoted through v1 or v2. The v3
+database guard reconstructs dates, completed-session ordinals, selection boundaries, boundary
+identities, the terminal selection, and the independent completed total from the exact retained fact
+set before promotion, finalization, or a current acquisition read succeeds. Publication or capture
+dates do not substitute for the actual selection date. Genuine official-source capture requires a
+separate access/field review and a supported parser; the indicative-draft-order capability does not
+authorize or parse completed recruitment announcements.
+
+HPN construction and current reconstruction apply the same registered-spell predicate as both spell
+checks in the projected SQL finalizer. Source-first classification comes from the original immutable
+map assessment, so revocation or capture approval cannot grant a legacy exemption. Registered spells
+must cover the appearance date within `observedThrough`. Historical finalized input loading remains
+an immutable receipt reader. These boundaries do not establish genuine cohort acquisition evidence;
+that requires retained sources, reviewed identities, canonical promotion and reviewed registration.
+
 The injected `pg` pool adapter commits or rolls back as one unit and never discovers configuration.
 This persistence slice remains inactive for production. The complete normalized migration history,
 disposable real-PostgreSQL rehearsal, supported repository verification, production build, cleanup,
@@ -527,6 +630,12 @@ a hosted environment. It reports the distinct `fixture_filesystem` assurance wit
 and an unencrypted-local-filesystem identity; it does not claim provider durability, encryption,
 retention, residency, transport, or recovery assurance.
 
+Local artifact repositories pass their explicit raw-object byte limit through to the filesystem
+store. Its encoded-envelope limit includes base64 expansion and a bounded metadata allowance;
+both limits are checked before publication and on reads. Direct low-level callers that omit a raw
+limit retain the 192 MiB envelope ceiling. This prevents an accepted write from becoming unreadable
+solely because encoding made it larger, without changing artifact identity or filesystem safeguards.
+
 ### Maturity-review acceptance criteria
 
 The broader Statly data-platform maturity review identified contract drift, name-derived player IDs,
@@ -626,6 +735,140 @@ different retrieval host also does not prove independent underlying statistical 
 [remote-object reader](https://github.com/jimmyday12/fitzRoy/blob/18097367c8c57ec333b1715ea10c7724871711e6/R/fetch-player-stats.R#L250-L295)
 does not itself establish a fixed history floor or complete 2025 coverage. These technical findings
 create neither a reviewed corroborating-source authority nor a model-method approval.
+
+`development/localFootywire2025FieldMap.ts` supplies the provider decoder-map constructor for the
+inspected cache-first, full-season 2025 return. It binds the exact 42 ordered field descriptors and
+invocation arguments, requires caller-supplied review metadata, and uses the existing normalizer.
+Raw annotated player names and missing statistics remain unchanged in the typed payload. The exact
+`Status` labels `Home` and `Away` orient the row-relative `Team` and `Opposition` into a match
+candidate; missing or unknown labels fail closed. Both club names and native IDs swap together.
+`Status` does not establish match completion. The map supplies no native player ID or participation
+claim: those require the existing identity and HPN reconciliation owners. A changed schema or
+invocation is rejected. The map does not
+authenticate its own review, broaden source-use rights, or admit the capture; the existing staging
+repository and source authority still enforce those boundaries.
+
+A fresh private local run on 8 September 2026 captured and staged 9,936 FootyWire rows, all from
+2025, with zero normalization issues through the initial map, which left match interpretation
+unset, and the existing pinned capture runtime.
+The retained capture is
+`source-capture:137662bb03da6e228ab1d7f5dc2e7ebbf26bb6061d3127c780acfa28b05481e8`,
+with normalization
+`provider-normalization-run:de5f46f87974d1138f9437c24952d56c865219b5a9f908387969936d90a58f66`.
+This run used fresh source-specific records under the standing source policy; it did not relabel the
+older capture-only exception. Its raw evidence and isolated database backup are retained locally.
+Successful staging establishes neither complete HPN field coverage nor canonical player/match
+reconciliation, historical forecast support, model admission, or completion of the genuine loop.
+
+The same retained capture was subsequently normalized with the reviewed orientation map as
+`provider-normalization-run:b6ca9edd9efcebf317874b6021f7e918dd95f087cdb83edbfb703d5b6a873421`.
+That local run produced 9,936 match candidates spanning 216 provider matches, zero normalization
+issues, zero appearance inferences, and no changed source-row hashes or typed source values.
+An exact second invocation returned the same normalization run as an idempotent replay. No new
+capture was made. Match candidates remain proposals, not approved canonical matches.
+
+A separate private AFL Tables results capture on 8 September 2026 retained and staged 216 rows,
+all from 2025, with zero normalization issues:
+`source-capture:7ca8b9f3b1c3afbc7036ad35b292d5eae6d0aabf291d30c6ae369e2ae0572693`,
+normalized as
+`provider-normalization-run:11feb4607491af12141b7f052a5cf228a7834970bc4bcca29affcdbd48e80b94`.
+This is retained source evidence, not yet canonical match-completion or HPN admission.
+
+`development/localAflTablesRawEvidenceFieldMap.ts` separately preserves player-row evidence
+without asserting measured statistics or participation. Its explicit `raw_evidence_only` policy
+requires an empty metric interpretation and independent appearance review; the existing factual
+map remains unchanged. Missing source IDs are not filled, and source occurrence keys are not
+canonical player identities. A fresh run reached source capture but failed database persistence
+with an immutable artifact-custody conflict; its raw evidence and backup remain retained for
+diagnosis. It is not a successful staging run, and no retry or zero-provenance approval is implied.
+
+That conflict was traced to identical invocation bytes receiving a different artifact creation
+timestamp in a separate local store. The private canonical-reference adapter now authenticates
+existing custody and reuses its exact reference rather than relaxing immutability. Capture
+completion also retains and reads back the exact receipt and snapshot before staging, so a staging
+failure need not lose the original authorization chronology. The first failed attempt's missing
+manifest was not reconstructed or re-signed.
+
+A separately reviewed second attempt on 9 September 2026 retained capture
+`source-capture:694075c069bef50da49aeeab57a8515847267d62c14a72bddad68130beada9e5`
+and normalization
+`provider-normalization-run:84c1455259c97cf7ba6290416b42e05294427f1c99d99a22b5c6b12819e464fe`.
+All 9,936 rows were retained, with 158 issues across 79 rows whose combined `Player` metadata is
+missing: one required-field and one occurrence-key issue per row. This is a successful capture and
+a `needs_review` staging result, not a clean HPN source. Exact payload inspection found populated
+`First.name`, `Surname` and `url` fields across all rows and no duplicate keys when using those name
+components. The raw-map constructor now explicitly uses the existing split-name normalizer;
+it leaves raw `Player` and missing IDs unchanged. Offline recovery subsequently retained normalization
+`provider-normalization-run:b1df99595ef351f1ac433534f3ec1d580a3cc9cbd2ed9ec158afe5d4db99f3ee`
+with 9,936 rows and zero issues. A second replay returned that exact normalization. All 9,936 raw
+row hashes and typed source values were unchanged; the old 158 issues remain retained. This is raw
+staging only: no metric or appearance claims, identity admission or model qualification were added.
+
+The first offline split-name replay failed atomically during persistence with PostgreSQL error
+`53100` (`No space left on device`). A copied-backup replay reproduced that exact failure without
+new capture or map approval. The disposable harness mounts PostgreSQL data on a 1 GiB temporary
+filesystem; the failing relation resides there. No at-failure capacity measurement was retained,
+so this is not evidence that the host disk or retained Docker volumes should be pruned. The bounded
+recovery run increased only its disposable data mount to 2 GiB and passed. Measured data-mount use
+rose from 963,324 KiB after restore to 1,050,524 KiB after staging, exceeding the old 1 GiB ceiling.
+This required no new capture, source approval, evidence deletion or global Docker change.
+The subsequent canonical-registration attempt exposed a separate startup race before restore:
+the image's socket-only initialization server could satisfy the harness readiness probe. The
+shared harness now probes loopback TCP, matching the workflow's connection path, and its regression
+requires the workflow to wait past socket-only initialization. No source or canonical records were
+changed by that failed pre-restore attempt.
+
+The genuine results registration subsequently passed against the retained 2025 results capture:
+18 canonical clubs, 216 canonical matches, and 648 original club/match occurrence resolutions.
+After all later confirmations were present, every original resolution remained current and all
+648 exact registration/resolution replays returned existing records. The source `Game` namespace
+was reviewed as the original fixed-width field parsed by pinned fitzRoy, scoped to these AFLM 2025
+results. Calendar-day precision is explicit rather than represented as an observed kickoff time.
+This is genuine canonical club/match evidence, not player reconciliation, factual appearance
+admission, numeric field approval, model qualification or completion of issue 579.
+
+The subsequent genuine player registration and recovery also passed: 668 canonical people and
+9,936 current exact candidate-only occurrence resolutions, with 9,936 exact registration replays
+and 9,936 exact resolution replays. Recovery preserved the 867 retained creation reviews and their
+original times, completed the remaining 9,069 using the database clock, and did not renew authority.
+All original raw fields remained unchanged, including 83 missing numeric IDs and 79 missing birth
+dates. Four separately retained profile-page reviews supplied canonical birth-date evidence without
+filling those raw nulls. The combined recovery backup has SHA-256
+`9d6e1a87cc3d9ee3a09209a8fe1c7449672db04bbb51b4ffee9583b278328690`.
+This establishes exact person reconciliation only; provider-identity namespaces, factual admission,
+participation and numeric interpretation remain separate checks.
+
+The following archive-only batch retained all thirteen AFL Tables player-stat seasons from
+2008 through 2020: 113,036 rows and 68,069,414 raw RDS bytes, each passing the strict 81-field
+capture schema. The first 2008 download survived a missing calendar-parent persistence failure;
+its signed receipt, snapshot and original raw timestamp were recovered offline without refetching.
+The remaining twelve seasons were captured once, and all thirteen snapshots passed exact
+second-persistence replay. The combined backup, which also preserves the completed 2025 person
+and results registration, has SHA-256
+`7d34e465808e6277f2bd6463690891060614d55e1d94932922e6d8d38b4bb4d2`.
+The disposable database was closed after backup verification. These are retained source captures,
+not normalized historical observations, an admitted training corpus, or evidence that a model
+meets predictive acceptance criteria. Existing source authorization and its original expiry were
+preserved; the persistence corrections did not create or renew source authority.
+
+An offline decode of those thirteen original signed captures confirmed numeric typed values for
+all thirteen HPN input fields on all 113,036 rows. Missing, zero and nonzero values were counted
+separately; this field-coverage audit does not approve their interpretation or supply independent
+corroboration. FootyWire has basic [2008 match statistics](https://www.footywire.com/afl/footy/ft_match_statistics?mid=3520)
+and a [2009 match page](https://www.footywire.com/afl/footy/ft_match_statistics?mid=4169), so fitzRoy's
+2010 lower bound is not evidence that all earlier website data are absent. However, the inspected
+2008 basic player table lacks marks inside 50, rebound 50s, one percenters and clearances. The
+[fitzRoy helper source](https://rdrr.io/cran/fitzRoy/src/R/helpers-footywire.R) requires the advanced
+table and rejects pre-2010 matches; the pinned season function also clamps requests to 2010 onward.
+Advanced-page probes did not yield inspectable content, so complete earlier thirteen-field coverage
+remains unverified. The existing HPN input contract still requires a different corroborating provider
+for the complete match universe. Duplicate AFL Tables bytes cannot satisfy that requirement, and
+this audit neither shortens the feature window or target horizon nor admits historical measurements.
+
+The five-season staging owner now uses the existing durable local signing authority, with a
+restart regression covering retained key identity and the shared receipt-verification tests.
+Future captures can reopen that authority for receipt authentication. Previously lost ephemeral
+keys are not recovered by this change, and old receipts are not re-signed.
 
 ## Proposed target architecture
 
@@ -1053,7 +1296,17 @@ the current terminal occurrence and exact finalized issue-free evidence batch un
 lock. Fresh captures bind their batch directly; unchanged observations bind their attempt, prior
 capture and prior batch. Late skips, dead letters, missing targets and parser issues cannot produce a
 completion even when the worker cursor has advanced past an operationally terminal state. The
-content-addressed completion conserves the frozen target set one-to-one and remains private. A
+content-addressed completion conserves the frozen target set one-to-one and remains private.
+For an explicitly reviewed private set of already captured sources, plan/completion v2 uses the same
+durable owners with retained targets. Each target binds its full request, raw artifact, actual capture,
+execution receipt, source-rights artifact, Gate decision and finalized evidence batch. This variant
+requires no trade-index inventory or scheduler occurrence; v1 retains those requirements. Plan
+registration verifies source and scope evidence bytes, including replay. Completion preserves the
+original batch finalization times and records its own later completion time. PostgreSQL checks exact
+membership, custody, retention and current source authority; an expired historical capture lease is
+not treated as a new retrieval. Gate withdrawal serializes with current reads and replays and blocks
+subsequent identity approval, reconciliation, promotion and current acquisition/HPN eligibility.
+Immutable historical receipts remain available for audit. A
 versioned reconciliation source-authority envelope binds its completion, plan, target/result roots,
 completion-order batch root and canonical sorted candidate-batch root. That exact completion also
 owns a content-addressed identity-review package. Provider-native subjects group only the exact
@@ -1312,6 +1565,15 @@ decision, author and recording-time contract. The loader recomputes its canonica
 reads the exact retained bytes from private capture-metadata custody before any Gate ledger read or
 append; an identifier alone cannot create authority.
 
+The same loader preserves the issue-574 v1 package and accepts a separate
+`local-genuine-draftguru-authority-evidence/v2` package for issue 579. The latter requires explicit
+contiguous historical seasons ending in 2025 and matching scope and decision timing across all four
+documents. Its dates cannot precede document recording; expiry and revalidation are bounded. The
+generated issue-579 decision keys are separate from the legacy chain, and capture discovery must
+stay entirely inside the supplied season range. This is compatibility support for retained reviewed
+documents, not a new approval, source capture or dataset admission. It does not select historical
+years on the operator's behalf, grant draft-result capabilities, or permit public use.
+
 The issue 574 genuine non-production diagnostic is deliberately small and retrospective. It uses
 five genuine Draftguru player trades—Adam Saad to Carlton, Jeremy Cameron to Geelong, Jordan Dawson
 to Adelaide, Josh Dunkley to Brisbane and Brodie Grundy to Sydney—joined to genuine AFL Tables match
@@ -1473,10 +1735,25 @@ The isolated outcomes PostgreSQL schema now implements the private factual bound
 release. A finalized provider-normalization run is promoted atomically into an immutable source-fact
 batch only when every decoded row is accounted for exactly once. The batch retains exact staged-row,
 candidate, issue, closure, capability, source-scope, and finalization digests. Match-universe,
-player-appearance, numeric metric, and achievement claims remain separate typed facts. Each accepted
+player-appearance, numeric metric, and achievement claims remain separate typed facts. Typed fact
+tables retain fact content directly in `fact_json`; the immutable batch retains the enclosing fact
+ID/hash wrapper, so readers and finalizers resolve match fields from `fact_json.match`. Each accepted
 player or match reference must bind the current reviewed provider resolution and active reusable
 assignment; represented clubs are real AFL clubs and must match the reviewed match side and occurrence
 evidence. No fantasy user, league, roster, or ownership identity enters this boundary.
+
+New source-fact batches retain the exact complete canonical receipt as text with a SHA-256 of the
+full wrapper bytes, distinct from the batch-content digest. Existing JSONB receipts remain unchanged;
+the database accepts exactly one representation. Text-backed replay compares exact bytes and the
+wrapper digest inside PostgreSQL without returning the large receipt to the caller. Both replay
+paths require approved, finalized custody. The full normalization still commits in one transaction.
+
+Batch finalization compares schema-bound record copies after clearing the four mutable finalization
+fields and the separately immutable canonical receipt text. Its small wrapper digest remains in the
+immutable comparison. This avoids expanding a large receipt merely to discard it during that check;
+all staging, child accounting, current identity and future-column protections remain. Finalization
+does not resend the unchanged receipt. This storage representation does not grant source rights,
+change batch identity, or replace genuine full-size persistence and replay verification.
 
 Reconciliation is a second immutable step. An approved, versioned policy selects exact source facts,
 records every input, preserves same-priority disagreements as conflicts, and advances a subject head by
@@ -1484,6 +1761,39 @@ compare-and-swap. A measured zero is retained as evidence. Missing, quarantined,
 not-applicable, or conflicting input never becomes zero. `games = 1` exists only as a derived
 match-grain result when an observed player appearance and a reconciled completed match agree; providers
 cannot submit `games` as a source metric.
+
+Match-level source metrics retain `appearance_fact` club scope. Reconciliation validates their exact
+linked appearance in the same approved batch, source row, player, match and season, including the
+immutable player, match and represented-club evidence. It compares the appearance's represented club
+with the result's `resolved_single_club` scope; an empty direct source club is not a missing club
+resolution. Season metrics retain their direct scope checks. This linkage alone does not assert a
+positive appearance or derive a game.
+
+New reconciliation runs retain the complete canonical receipt as text with a checksum of the full
+wrapper, separately from the run-content digest. Legacy JSONB receipts remain readable; exactly one
+representation is required. Text-backed replay compares exact bytes and checksum in PostgreSQL and
+requires an approved finalized run. Finalization compares typed row copies with the large receipt
+removed before JSON conversion, while checking receipt immutability directly. Policy, source input,
+result, evidence membership and subject-head checks remain unchanged. This storage choice preserves
+one season run and all source memberships; it does not establish full-workload memory or disk capacity.
+The owner transfers bounded UTF-8-safe chunks at byte offsets into a newly allocated PostgreSQL large
+object, then converts its complete bytes into uncompressed temporary text. It unlinks that object
+before inserting or comparing the permanent receipt. Successful calls remove the temporary table;
+rollback removes the large object's creation and transaction-end cleanup covers temporary rows.
+Transfer storage carries no factual authority, and the permanent checksum guard is unchanged.
+Capacity checks must account for the overlapping large object and temporary text, large-object WAL
+and catalog writes, and full-value conversion allocations during both persistence and replay.
+
+Participation policies must preserve that ordering. A policy may require an authenticated current
+completed match-universe fact and an exhaustive, retained conflict audit of the explicitly bound
+current fixture evidence before accepting a private source appearance. It must not require the
+appearance's later games reconciliation as a prerequisite for that same source fact. The audit must
+cover every affected canonical fixture and every relevant current match-fact membership, preserve
+quarantined or missing completion evidence as unknown, and reject contradictory usable completion
+evidence without inventing source priorities. A match-only reconciliation run with no appearance
+groups does not assess completion conflicts and cannot substitute for that audit. Source appearances
+remain distinct from reconciled games and release authority. Corrections to a retained policy use a
+new version and a separately dated review; earlier policies and candidate artifacts remain unchanged.
 
 Acquisition-spell aggregation is also versioned rather than written into the legacy total. Each metric
 version binds one approved real-club acquisition spell, one governed metric definition, exact current
@@ -2203,7 +2513,9 @@ pointer.
 The dispatch-bound pick component now has a genuine exact-authority runner behind the existing pick
 executor seam. It loads the request-to-operation binding while the dispatch claim is live, requires
 the bound private factual output and finalized governed HPN calculation, and materializes draft
-observations from the factual output's exact retained release. This private materialization mode does
+observations from the exact admitted pick dataset's retained release. Legacy v1 requires that release
+to equal its single factual-output parent. Admitted-player v2 preserves the separate player and pick
+dataset/admission parents and requires an authenticated HPN factual binding. This private materialization mode does
 not consult `outcome_active_release`; the existing public materializer retains its active-release
 default. The selected policy, protocol, dataset, finalized admission, HPN method and calculation,
 factual member digest, operation, claim and attempt must all agree before fitting begins.
@@ -2223,6 +2535,43 @@ dispatch-binding alternative for a retained factual release, including the bound
 calculation. Deterministic authority, materialization and validation failures remain closed; only
 storage or runtime failures may return through the dispatch attempt ledger. No new retry ledger,
 component store, public pointer or pick methodology is introduced.
+
+The admitted-player v2 handoff does not imply a single normalization or reconciliation run. A separate
+immutable, request-bound HPN factual binding joins its player dataset/admission to the exact current
+private factual refresh operation and an explicitly selected approved HPN reconciliation run. The
+binding authenticates every retained HPN match/appearance input and every player spell metric's
+numeric/appearance/match source membership against current normalized custody. Draft-trade event
+captures remain the independent pick parent's authority, not player-match evidence. Binding and
+replay require a live dispatch claim and the exact current reviewed/private factual heads. HPN input
+preparation, model-request binding, current-model-evidence ancestry and pick execution recheck this
+same retained authority. This connects existing model interfaces; it does not provision source data,
+authorize missing rights or constitute genuine rehearsal proof.
+
+The local private worker now delegates dispatch to the existing recalculation coordinator. Changed
+factual evidence must pass the existing model-evidence composition and prepared-cohort owner before
+batch execution. Its optional construction input supplies the exact model-pair and cohort dependencies;
+it does not select or manufacture admission, methodology or qualification authority. Missing construction
+configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path.
+Unavailable factual refreshes remain unavailable, while substantive no-change dispatches retain the
+existing batch reuse path. The command-line composition does not yet supply genuine construction
+configuration, and this wiring does not complete native PAV execution or the genuine-data rehearsal.
+
+Target-cohort authority is independent of both model-training releases. For admitted-player v2,
+private preparation selects one existing finalized corpus-factual-lineage admission under the live
+dispatch claim. An immutable request binding retains the exact promotion-backed corpus, dormant
+release/candidate, source and canonical member digests, scope, cutoff, and complete transaction IDs.
+Binding and replay authenticate the current factual/HPN parent, Gate 2 lineage admission, source
+capture rights and receipts, and every transaction's AFLM/2025 identity. A scope label alone is not
+season authority; foreign-season transactions are rejected rather than filtered out. The prepared-v3
+authority loader resolves this retained cohort parent for v2 and preserves the legacy v1 parent.
+Neither selecting an admission nor retaining the binding admits new data or advances a public head.
+
+The local HPN method authority reads an already registered method and authenticates its retained HTML
+source bytes. The local qualification adapter reads one selected retained policy matching the
+accepted model operation, derives evidence from both native validation reports, and invokes the
+existing qualification repository. The accepted-pair timestamp stabilizes retry identity; mechanical
+Gate 3 records use the fixed private automation principal and grant no human approval, source rights,
+or new model-spend permission. These adapters do not themselves install the worker composition.
 
 The private preparation boundary can now construct and activate that exact prepared-v3 head without
 re-running HPN preparation or either model component. Given a live dispatch claim, it loads one
@@ -2250,10 +2599,844 @@ does not read or change the active public factual release or model/valuation pub
 and it does not grant prepared-input authority to the current-model-evidence result itself. The
 separate retained preparation operation supplies that authority. For a dispatch whose exact private
 prepared-v3 head already exists, the local dispatcher now carries the same live claim into exhaustive
-cohort capture, durable calculation-cycle execution, and one atomic batch-head activation. It still
-does not invoke the upstream factual-output, HPN, model-evidence, valuation-bundle/trade-construction,
-or private prepared-v3 coordinators needed to create that head, so this is not yet a clean-checkout
+cohort capture, durable calculation-cycle execution, and one atomic batch-head activation. With exact
+construction dependencies supplied, the shared coordinator also invokes the upstream model-evidence
+and private prepared-v3 owners after factual refresh. The command-line composition still lacks those
+genuine dependencies and native PAV execution remains incomplete, so this is not yet a clean-checkout
 raw-data-to-recalculation pipeline.
+
+Fresh construction reuses `retainedValuationInputBundleConstruction.ts` to authenticate and retain
+the selected bundle, `postgresPrivateValuationTradeEvidence.ts` to load the claim-bound sealed trade
+cohort, and `authenticatedCurrentValuationTradeConstruction.ts` to authenticate and package supplied
+per-trade inputs. These owners do not derive forecasts, joint draws or realized measurements. Native
+player contribution predictions and measured fixed-horizon player-PAV observations are different
+contracts and must not be relabeled as one another. Private historical observation preparation is
+implemented by `PostgresAflTradePrivatePlayerPavPreparation` and its authority owner; it reuses the
+observation repository's private path with an independently admitted historical corpus, reviewed
+policy and finalized HPN ancestry, without selecting the active public release. The existing bundle
+owner now also supplies exact retained selection, and `localPrivateValuationConstructionEvidence.ts`
+composes the sealed reader, bundle constructor and artifact custody within the prepared-cohort
+transaction. Evidence-derived per-trade input assembly and full worker composition remain required.
+Replaying a retained fixture manifest proves none of this genuine fresh-construction evidence.
+
+### Fresh construction method proposal and required evidence
+
+Status: proposed for scientific and source-scope review, not an approved protocol, source decision,
+model qualification, or completed issue 579 rehearsal. Fresh governed execution is the continuation
+path; it must retain new execution identities. Missing earlier admission/model artifacts cannot be
+replaced by a staging snapshot or represented as a replay of the missing final run.
+
+The existing numerical work is reusable at these interfaces:
+
+| Interface                  | Existing implementation                                                                                                                                                    | Remaining requirement                                                                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Season measurement         | HPN method authentication, whole-league allocation, receiving-spell aggregation and source-row custody                                                                     | Exact finalized inputs, reviewed source use and method authority for every required season                                                          |
+| Player-PAV evidence        | `playerPavCalculationEvidence.ts` converts finalized HPN measurements using the existing player-value schema; the public PostgreSQL repository uses this shared conversion | Callers still authenticate release/spell membership, current source and method permission, and durable finalization; conversion grants no authority |
+| Fixed-horizon observations | `playerPavObservationService.ts` derives feature history and targets; private authority/preparation and the repository authenticate and persist historical observations    | Genuine admitted historical corpus, finalized measurements, explicit historical-knowledge policy and runtime composition                            |
+| Component execution        | Admitted player execution, pick-PAV fitting, retained replay, qualification and live-claim checks                                                                          | A player candidate in the same governed unit and horizon as the pick candidate                                                                      |
+| Complete-trade handoff     | Retained bundle construction, claim-bound trade evidence, authenticated trade packaging, joint-draw/ledger contracts and atomic batch activation                           | Evidence-derived forecasts, dependence and ledger records, plus concrete local selection and per-trade assembly                                     |
+
+The shared player-PAV conversion checks the calculation content address, requested environment,
+competition, method, measurement seasons and knowledge cutoff. It preserves the exact PAV components,
+games, source rows, row hashes and calculation ancestry. The existing player-value schema rejects
+duplicate game rows, inconsistent game counts or component totals, and invalid season chronology;
+the converter also rejects mismatched input digests and duplicate spell membership. It performs no
+fitting, rounding, rescaling, zero filling or rights evaluation. The PostgreSQL public path retains
+its active-release/current-policy selection and durable team/player membership checks. The private
+path instead authenticates its dispatch-bound historical policy, admitted corpus, spell membership
+and finalized calculations through the private authority loader. The shared conversion grants
+neither path new permission and supplies no absent historical measurements.
+
+Two contract differences require an explicit model review. The admitted scalar player candidate uses
+its retained weighted factual-metric transformation and replacement baseline; pick-PAV execution uses
+`fixed_horizon_pav`. Neither renaming the scalar unit nor selecting a conversion factor establishes
+compatibility. The admitted player protocol v2 in `artifacts/modelProtocol.ts` fixes its source outcome
+vector to Brownlow votes, coaches votes, games and goals. A player-PAV forecast needs an explicit
+protocol and execution extension with authenticated PAV observations; it cannot be enabled by
+changing that scalar protocol's configuration or relabeling its retained output. Separately,
+player-PAV v1 fixes prediction cutoffs to December 31 and requires
+`acquisitionSpell.recordedAt` to be no later than that historical cutoff. Newly captured retrospective
+spell evidence cannot be backdated to satisfy it. The explicit player-PAV policy and observation-set
+v2 contracts now support `retrospective_as_recorded_by_dataset_creation` through the existing
+materializer, restricted to non-production and fixture environments. Each observation retains its
+actual spell recording time and an exact knowledge-cutoff binding; recording and calculation custody
+must precede that cutoff, which cannot exceed set creation. V1 identities and historical recording
+rules remain unchanged. Forward migration 0116 extends the existing PostgreSQL policy, set and
+finalization owners; private historical authority uses the admitted corpus cutoff only for v2.
+Finalization authenticates the full spell record and each value's season and calculation dates
+against durable parents. The private preparation path retains and replays v2 observations without
+replacing their recording dates. This support does not supply a reviewed genuine policy, admitted
+historical data or governed forecast execution. Event validity remains distinct from
+historical information availability, source capture and calculation times. A year-end research
+forecast cannot be presented as an earlier October at-trade forecast.
+
+Observation completeness and training membership are distinct. The private observation materializer
+includes every released eligible acquisition spell at each policy-selected origin; a player can
+therefore occur at multiple origins. Training admission must preserve that complete original set
+while enforcing player/event/spell separation across its selected partitions. Selection belongs in
+the existing dataset specification's `inclusionPolicy` artifact and candidate `exclusionReport`,
+not in a shortened replacement observation set or fabricated non-overlapping careers. The PAV
+extension must execute a committed, target-independent selection rule, verify an exact bijection
+between selected observations and dataset rows, and account for every unselected observation.
+Complete measurement and source ancestry remains required, including league denominator inputs.
+An executable selection rule establishes reproducibility, not statistical suitability or model
+qualification; its genuine use remains subject to the existing dataset and method review owners.
+
+Dataset v5 and row v4 retain the original PAV set reference and each selected observation identity.
+Migration 0117 extends the existing dataset owner to reconstruct the canonical inclusion/exclusion
+artifacts, validate exact original measurement references and current calculation heads, and require
+training/derivation receipts covering every source and consumed field in the original league
+universe. Its internal helpers are permission-restricted; legacy v4 writers do not call them.
+These SQL guards do not replace current normalization, mapping and factual-input authentication:
+the admission authenticator must still call the existing current-input reader for every original
+calculation. Isolated admission tests with synthetic upstream parents establish the target guards,
+not complete private source admission or genuine model-training authority.
+
+The player-observation v3 projection retains each selected original PAV observation unchanged,
+bound to its exact dataset row and the complete original set's canonical artifact. It checks
+player/spell identity, partition, prediction origin, target horizon and the exact feature/target
+measurement references available in that set. Current calculation-head revisions and source match
+dates remain the responsibility of dataset admission and current-parent authentication. This
+projection performs no fitting or selection and grants no admission or protocol approval. It remains
+excluded from the legacy observation union; native run-start authority uses an explicitly paired
+protocol-v3/observation-v3 path. Its existence does not establish executable PAV qualification.
+
+The native player-PAV protocol v3 in `artifacts/modelProtocol.ts` separately binds the original
+observation set, PAV policy, HPN method and dataset admission. Its target is the sum of three annual
+season-PAV values, not a renamed scalar outcome or replacement-level transformation. It retains
+chronological embargoes, leakage prohibitions, sealed final-test selection and required subgroup
+review artifacts, with explicit feature definitions and knowledge policy. The strict proposal is
+restricted to fixture and non-production environments. Parsing it authenticates its structure and
+content address, not the referenced artifacts, current rights or scientific approval. Protocol
+construction alone cannot authorize a run.
+
+The existing admitted-run authority accepts an explicit native protocol/observation pair alongside
+its unchanged scalar pair. It reconstructs the selected observations from the complete original
+set and authenticates the exact original-set, policy, method and method-source artifact bytes,
+knowledge mode and partition windows before issuing authorization. Existing dataset ancestry,
+current Gate 2, training-rights reevaluation, trusted-clock freshness and operational authorization
+checks remain required. The shared runner preserves consume-once and completion/failure handling;
+its native execution input carries the exact authenticated dataset candidate alongside the selected
+observations and original PAV parents, without a second lookup or caller-selected replacement.
+The scalar executor explicitly rejects native inputs. Synthetic run-start tests do not establish
+native fitting or qualification. The PostgreSQL adapter accepts explicitly paired scalar and native
+records. Native preparation and evidence loading reuse the admission owner's current-original-PAV
+loader; issuance and consumption repeat that check within their own transaction, holding the
+current calculation and input-source locks through the authorization write. The saved selected
+observations must still equal the reconstructed admitted projection. Existing factual-release
+provenance alone is insufficient for that native check. Boundary tests prove refusal when current
+evidence is absent; a real-PostgreSQL consumption test also rejects an absent current private PAV
+parent before updating authorization. A positive loader test composes decoded source rows, real
+HPN calculations, the original PAV set, factual release, corpus and dataset admission through their
+existing constructors and services; it also rejects a superseded calculation head. Its database
+responses and source authority are explicitly synthetic. A matching adapter test exercises native
+preparation, issuance, consumption and exact started-checkpoint readback in one consumption
+transaction, rejects repeated consumption, and surfaces missing readback. This proves application
+composition against a synthetic database boundary, not real database atomicity or genuine source
+authority. Full positive native adapter execution against PostgreSQL remains unverified.
+
+Forward migration 0122 extends the existing model registration guards without adding an authority
+registry or grants. Native protocol v3 requires dataset v5 and exact original-set, policy and method
+artifact bindings. Observation v3 must equal the retained original observations selected in admitted
+row order and fit the protocol's partition windows. Isolated PostgreSQL tests with explicitly
+synthetic upstream parents reject mixed versions, substituted values or artifacts, reordered rows
+and invalid windows, while preserving legacy registration. These target-guard tests do not prove
+genuine admission, current-source execution, native fitting or scientific qualification.
+
+`admittedPlayerPavCandidate.ts` now supplies a numerical-only native fitted-candidate artifact.
+It binds exact declared configuration bytes, the intent, admitted projection and complete original
+PAV parents; only selected training observations enter the existing forecast fitter. Held-out and
+unselected targets do not affect fitted state. Fitting and restoration now explicitly open only
+training targets in the numerical row extractor; calibration, validation and final-test targets remain
+`target_not_opened` there while prediction features remain available. Canonical custody authentication
+still validates the complete retained source document; this is separation of numerical target access,
+not a claim that sealed source bytes were never parsed. A partition-specific scorer evaluates only the
+explicitly requested validation or final-test partition and rejects a forecast without a matching
+observation in that partition. The research comparison retains its deliberate two-partition wrapper.
+These numerical helpers grant no target-access authority: execution must separately commit a
+`final_test_started` checkpoint before opening final-test targets, and must not automatically repeat
+an evaluation whose completion evidence was lost. That execution integration and retained scientific
+evaluation definitions remain required.
+Restoration authenticates those bindings and restores
+the retained numerical state without refitting. The existing admitted-player candidate owner can
+retain/read back this artifact and reload exact bytes, refusing missing or changed custody. These
+operations require derived-private storage matching the intent's fixture, local non-production or
+validated durable-profile environment before artifact I/O. These
+helpers do not lock a run, resume a consumed intent, evaluate final-test acceptance, or qualify a
+model. Native execution and qualification remain required. The versioned checkpoint contract and
+forward migration 0123 add durable stage records under the existing run owner: started,
+candidate-locked, final-test-started and final-test-completed. Each root has at most one record per
+stage. Later stages require exact, nonempty JSON candidate and evidence references. A deferred
+constraint makes a native private root's initial consumption and started checkpoint atomic; the
+PostgreSQL adapter writes that checkpoint inside its consumption transaction. Synthetic database
+tests exercise the constraints, not a genuine admitted execution.
+The existing PostgreSQL run owner now provides `retainNativeCandidateCheckpoint` for an already
+consumed original native private intent. It accepts only retained intent and authorization IDs,
+derives the exact fitting inputs, revalidates current source/HPN and Gate authority in the same
+transaction, and retains the fitted candidate plus numerical-custody evidence in explicitly configured
+derived-private storage. Exact readback precedes the candidate checkpoint. Current operational
+validity is checked again at the final database timestamp; the insert guard independently fences the
+claim and stage. The short start authorization is neither reissued nor consumed again. Historical
+replay authenticates the saved candidate and custody evidence without refitting, writing artifacts or
+renewing authority. Storage failure does not invoke the terminal-failure recorder. Synthetic database
+boundary tests exercise these application semantics; full positive PostgreSQL execution and genuine
+source admission remain unproven. This operation does not evaluate final-test labels, produce a
+terminal model result or qualify a model, and it is not yet connected to the dispatch executor.
+The same owner now provides `beginNativeFinalTestCheckpoint` for the exact retained candidate.
+It shares the existing root lock and current-authority checks, commits `final_test_started` before
+returning a new-work grant, and refuses to fit a missing candidate. Reopening a retained start
+returns `already_started`, never another execution grant; completed custody uses the existing
+historical recovery reader. Focused service tests use synthetic database responses and real local
+candidate bytes. A separate PostgreSQL concurrency tracer proves one marker under the actual root
+lock, not a complete genuine adapter execution. Numerical final-test evaluation, completion and
+qualification remain separate unfinished work.
+Recovery preserves the original consumed authorization. A version-2 continuation intent records a
+fresh claim and start while retaining the root's scientific parents and linking its predecessor and
+checkpoint. The database validates same-request/substantive-operation ancestry, current claims,
+unique successors and worker fencing under a shared root lock. A saved candidate artifact alone
+does not permit final-test access. If evaluation started but no completion evidence survived,
+recovery must expose the ambiguity instead of automatically evaluating the final test again.
+Completed evaluation evidence may support persistence recovery without another evaluation.
+The model-run artifact owner defines a standalone native final-test completion-evidence contract
+for successful execution. It embeds the exact content-addressed final-test-start checkpoint,
+preserves its candidate reference, and records actual evaluation completion separately from later
+evidence retention. Output references must exist by retention time. This is structural evidence,
+not proof that the checkpoint was committed or that evaluation occurred: the execution owner must
+authenticate durable checkpoint ancestry and retain/read back the exact report bytes. Existing
+terminal-manifest and qualification readers do not accept this report as a model run. Execution
+integration and continuation-terminal recovery remain required.
+New checkpoint and terminal writes require a live claim and an unexpired operational receipt;
+exact replay of an already retained terminal record does not create new execution authority.
+The existing PostgreSQL run owner now loads retained recovery state under that same root lock.
+It reconstructs each continuation from its predecessor and checkpoint, checks the complete ordered
+stage chain, finds the active leaf through unconsumed intermediate intents, and authenticates any
+terminal v3 result against its retained authorization. Missing or inconsistent consumed-run evidence
+fails closed. The returned state explicitly grants no execution authority. Before returning a
+completed stage, it loads the bounded exact completion-report bytes and validates their reference,
+schema, embedded start checkpoint, candidate and retention timing against the retained chain.
+Missing or substituted completion custody fails closed. Other stages do not open artifacts;
+an ambiguous final-test start returns no completion report and no permission to evaluate again.
+This authenticates the report, not the output artifact bytes or scientific acceptance.
+Real PostgreSQL tests cover historical reads after receipt expiry and through an
+unconsumed continuation without changing original consumption. This is recovery-state retrieval,
+not a resumed fit or evaluation. A standalone terminal v4 contract now represents persistence-only
+recovery: it retains the complete intent chain, four checkpoint documents and exact completion
+report while preserving the child's fresh start, job, authorization reference and rights receipts.
+Candidate lock and evaluation times derive from the original retained evidence, not the restart.
+Forward migration 0124 pairs this format only with a consumed private native continuation. It
+compares embedded ancestry with database records and the canonical report hash with completed
+custody, validates output references and chronology, and preserves the existing live-child-claim,
+single-terminal and exact-replay fences. Synthetic PostgreSQL regressions cover successful
+persistence and malformed or substituted evidence; this is not genuine evaluation proof.
+The existing application run owner now explicitly saves and reads v4 persistence-recovery terminals.
+It authenticates the exact retained child authorization, then compares checkpoint ancestry and
+completion bytes inside the same root-locked transaction before saving. Missing custody fails before
+the terminal write; conflicting terminal replay is rejected. Historical exact replay and a fresh
+reader preserve the original scientific times without renewing authority. The original v3 path is
+unchanged. This is persistence-only integration: general manifest readers, execution admission and
+qualification owners do not silently accept v4 or authorize a second evaluation.
+The application authority now accepts a native version-2 continuation only with authenticated
+retained root, predecessor and checkpoint-owner evidence, unchanged scientific inputs, and current
+claim-bound operational and source authority. An older worker's checkpoint can remain the latest
+accepted work through unconsumed intermediate intents; same-attempt continuation preserves the
+exact claim and lease identity. The numerical path still rejects completed or ambiguously started
+final tests. The separate `authorizePersistenceRecovery` method requires completed evidence and
+returns `authorized_for_persistence_only`, without numerical observations or executable inputs.
+Its existing authorization is consumed by the durable owner, not by issuance, and cannot override
+the final-test stage fences. These service and adapter tests use synthetic admitted evidence;
+they do not establish genuine model execution or qualification.
+
+Forward migration 0129 extends the same checkpoint owner with individually committed
+`candidate_fitted`, `pre_final_retained` and `validation_plan_retained` stages before candidate lock.
+Recovery restores accepted root artifacts without refitting or rewriting them, while new work binds
+the current child claim. Completion evidence v2 and terminal manifest v5 retain all seven stages;
+legacy four-stage completion and terminal v4 retain their original contracts. Fresh disposable
+PostgreSQL tests cover two-connection contention, rollback of unaccepted work, strict stage ordering,
+completed-evidence persistence and exact terminal replay. Those tests prove the database mechanics
+against synthetic upstream records, not source admission, report generation or predictive acceptance.
+The existing private operational receipt is separate from the 30-second start authorization and
+is bound to one live request/claim/attempt. Its validity cannot outlast that claim's lease, and
+heartbeating the lease does not extend the immutable receipt. The current append-only operational
+table allows only one receipt per intent; it has no renewal path. Continuation must issue a fresh
+receipt for the new linked intent, not extend an expired receipt or reuse an old claim or job
+identity strings. Structural continuation records alone do not grant current execution authority.
+
+Model admission must not be a prerequisite for its own PAV observations. Private PAV authority calls
+`load_outcome_private_valuation_hpn_factual_input`; the original v2-only implementation called
+`load_outcome_admitted_player_factual_parent`, requiring a finalized dataset and admission. A
+separately admitted scalar dataset could supply that parent, but could not establish a source-first
+PAV bootstrap. Forward migration 0121 extends the existing HPN factual authenticator with an explicit
+factual-output v1 branch while preserving v2. V1 authenticates retained source admission and factual
+custody independently of a model dataset, sharing the original insert validator and rechecking
+current source rights, reviews, reconciliation policy and live claim. Both branches retain the
+existing exact current factual-operation and HPN input checks. The v1 lifecycle uses an approved
+private candidate with no public registry event; it does not invent a registry approval to satisfy
+the distinct v2 lifecycle.
+
+The required ordering remains authenticated factual evidence, HPN measurements, PAV observations,
+then model dataset admission. `PostgresAflTradePrivateValuationHpnFactualPreparation` accepts the
+existing source-first factual preparation with an exact factual-operation/HPN-run selection, while
+preserving its admitted-dataset constructor. Both paths retain the binding through the same SQL
+owner. The source-first adapter test reaches, and respects, the missing reviewed-factual-authority
+guard without requiring a model dataset. Local runtime composition and the complete private
+PAV-to-dataset path still require integrated proof. A passing current-parent test is not that proof.
+Replay of the older factual retention function alone is insufficient current-parent authentication because exact
+retention does not recheck every mutable source permission or review.
+
+The retained 2025 source records distinguish the archive-only capture request from the broader
+receipt-bound Gate proposal. Static inspection on 8 September 2026 found that both proposals
+explicitly include `derived_feature_creation` and `model_training`; their exact source-rights records
+allow derived use for all 42 FootyWire fields and all 81 AFL Tables fields, while blocking public
+display. FootyWire authority artifact
+`artifact:a561578bf15a54a7921bf604ac2af88364940e5ac4fb2d75f28d778ca6952310`
+and ingestion artifact
+`artifact:d7d13cb68a5e8142702aa6b2a2afa05a0adb57f4d15bb50d82b61e6e93a5916c`
+bind the capture above to Gate decision
+`gate-decision:2a91a273bf45c93e31daa1ace8e94b772ac0d4769f27359511fd4730d500a0b3`;
+its rights terms and Gate revalidation expire at `2026-09-09T12:34:19.130Z`.
+The AFL Tables retained receipt/snapshot envelope
+`artifact:a23cd6b63fd593ab0d787a80b6b9fce5cac70abe3fc92f875976ab917e7cca93`
+binds Gate decision
+`gate-decision:0c4722c1a13981f7c87ac17bb5f4faaea2f7f94d67a3f470fcb07655df055b46`,
+whose rights terms and revalidation expire at `2026-09-09T14:03:51.676Z`.
+The source-first rights helper checks the retained proposal's operation scope, so an archive-only
+capture request does not itself block subsequent derived use within that grant. This is static
+scope evidence, not a successful current-authority database check: the exact receipt-bound decision
+must still be current and unexpired when used, or have the explicit retained-use renewal below;
+all consumed fields, source custody and reviews
+must pass their existing guards. No grant was renewed or capture re-signed by this inspection;
+the separately scoped historical archive-only grant does not inherit these 2025 permissions.
+
+Forward migration 0136 permits one immediate, explicitly linked private-use renewal through the
+existing append-only Gate ledger. Its proposal names exactly one retained capture, the original
+Gate decision and the original rights artifact. The current approved successor must preserve the
+original provider, capability, context, conditions, limitations and field identities. It may renew
+only previously permitted private retention, quality evaluation and derived-feature use for at most
+30 days; capture, training, publication and redistribution are blocked. Expired, withdrawn, unrelated,
+broader or further-successor authority fails closed. The original capture manifest and historical
+source-use assessments remain unchanged. The shared private-use helper validates the fresh interval
+at database time under the existing Gate lock; it does not backdate authorization across an expired
+gap or claim that internal owner approval establishes an upstream licence. Generic capture, training
+and publication checks do not acquire this retained-use exception.
+
+Forward migration 0137 validates source-first assessment field permissions independently of
+JavaScript and PostgreSQL sorting differences. It compares complete field records in the same
+database order, preserving duplicate counts and rejecting missing or changed permissions. The
+original reviewed assessment array, canonical bytes, content address and source-rights lineage
+remain unchanged; this correction grants no additional source-use authority.
+
+Forward migration 0133 introduces an explicit same-request source-first admission path. Capture
+binding v3 names `authorityKind: source_first`; its current source, decoder, field-use and claim
+checks permit retained capture evidence to predate dispatch without claiming that it was recaptured.
+Legacy capture bindings retain their original contracts. The primary numerical factual admission
+remains v1. Supplemental admission v2 names that exact primary admission, request, source role,
+capture, normalization, complete factual batch and reconciliation run. Request-and-role uniqueness
+replaces request-only uniqueness; capture uniqueness and immutable admission custody remain intact.
+An appearance-only or match-only supplemental batch does not need an invented numerical metric.
+Its complete source membership, current identity decisions, assignment continuity, policy and
+consumed-field permissions must still pass the owning validators.
+
+All selected sources must be admitted and included in the private release before its finalization.
+The factual output retains the primary admission and numerical run; a separate complete HPN run
+can use the declared sources through the existing source-first factual binding. The v3 HPN
+admission branch consumes that same-request admission and finalized release membership without a
+second source-status promotion or an auxiliary dispatch request. The raw-data coordinator and HPN
+preparation opt into this path explicitly; they do not fall back between legacy and source-first
+authority. Returned custody is validated inside the transaction before it can commit.
+
+Synthetic rehearsal fixtures can explicitly retain a missing decoded match status. Their capture
+diagnostics report that missing value, their same-row match fact remains quarantined, and derived
+games remain null with `match_completion_quarantined`. The default completed-match fixture is
+unchanged. This fixture mode does not bypass the missing-match-universe guard, approve a genuine
+appearance or infer completion from a player row. Genuine 2025 player sources require independently
+reviewed participation evidence and separately retained completed-results evidence. Disposable
+PostgreSQL coverage exercises primary, appearance-only and match-only results admission under one
+request, exact replay, a predeclared three-source factual release, and the actual results-source v3
+HPN receipt. Expiring only results permission makes the HPN currency check return false and blocks
+receipt reuse while the unrelated appearance admission remains valid. Unknown database failures
+still propagate; only the recognized source-expiry exception is translated to false. Restricted
+mutation checks and both legacy admission suites remain covered. Supplemental reconciliation
+precedes the final primary reconciliation so it cannot supersede a primary candidate's games head
+before release finalization. The fixture records release creation using the current database clock
+after admission, without rewriting source dates or factual cutoffs. These synthetic checks do not
+establish genuine HPN calculation, model qualification or the completed valuation run.
+
+Tests that replace private current-authority functions establish only their isolated downstream
+behavior. In particular, passing projected-input or private-observation fixtures that substitute a
+reviewed-bundle or HPN-factual validator does not prove a complete source-to-dataset lifecycle.
+Integrated proof must execute those validators unchanged against admitted parents; historical
+review-set identities and counts must not be relaxed merely to accommodate a smaller fixture.
+
+Historical HPN inputs have a separate, explicit custody boundary. Input-set v3 uses
+`retrospective_as_recorded_by_input_creation` and a retained `knowledgeCutoffAt`; actual capture,
+normalization finalization, factual finalization and spell recording must not exceed that cutoff,
+which must fall between the historical event cutoff and input creation. The event dates are not
+rewritten. V3 retains either legacy or projected mapping authority without mixing them, and is
+private-only; projected maps remain non-production-only. Existing v1/v2 content identities and
+capture-time rules remain unchanged. Forward migration 0118 extends the existing insert and
+finalization checks rather than creating another input registry. Exact replay rejects a changed
+knowledge cutoff or an attempted downgrade to the legacy request.
+
+The existing private HPN preparation interface can explicitly carry this retained-input custody in
+source-first mode. It binds the request, factual output and current factual run, plus all three exact
+role/capture/normalization tuples, before forwarding the retrospective policy, cutoff and reviewed
+nonparticipant decision IDs to the existing input owner. Legacy mode rejects the option; omitting it
+preserves the existing path. The option does not select different mappings or grant source authority.
+
+`PostgresAflTradeHpnPavInputRepository.loadCurrentFinalizedSeasonInputSet` additionally reauthenticates
+retained input against current mapping, source, factual, identity and spell authority. It compares
+the exact retained source custody and reconstructs the canonical content in memory to detect changed
+membership; it does not persist a new input or recalculate PAV. Both build replay paths run this
+same validation inside the existing transaction before returning a retained input. Withdrawing a
+registered acquisition-spell review therefore rejects both current reads and build replay. The
+ordinary finalized reader retains its historical-read behavior. A complete source-first PostgreSQL
+regression covers both match sides, independently corroborated player rows, reviewed spell extension
+through match day, exact replay, review withdrawal and unchanged historical access. Focused PostgreSQL coverage exercises projected v3 creation, replay,
+both reads and rejection of changed source custody. Independent legacy v3 coverage exercises
+registration, materialization and current reads, then appends a superseding mapping review: the
+current reader rejects it while the historical reader still returns the retained input. The legacy
+finalizer's player/club lock-key extraction is parenthesized in migration 0118, matching the projected
+owner and fixing the SQL operator-precedence error exposed by that test. Neither input custody mode
+nor a successful current-authority read supplies source-training permission or a reviewed forecasting
+protocol.
+
+Player input authority also supports an exact `candidate_only` resolution when the provider has no
+reusable native player ID. This strict player-only variant retains the current resolution decision,
+canonical target and revision, with `assignmentDecision: null`; it does not manufacture a reusable
+identity assignment. The repository and migration 0125 require the decision to name that exact
+decoded row and identity candidate and reject superseded decisions or transplanted authority.
+Existing assignment-backed player inputs and club/match assignment requirements remain unchanged.
+This consumer compatibility does not issue identity reviews or register canonical targets.
+
+Occurrence-review currency is distinct from shared identity-assignment continuity. Migration 0128
+authenticates the complete immutable assignment chain from an occurrence's original assignment to
+the current head. Later approved confirmations of the same target preserve that assignment;
+retargets, inactive links, missing predecessors and revocations break it, including a change away
+and back. A superseding review is accepted only when it is itself an approved same-target member
+of the verified chain. Consumers still require the original occurrence's current resolution head,
+so a superseded occurrence cannot become current through this rule. HPN inputs retain the original
+assignment reference rather than changing their content whenever another occurrence is confirmed.
+Chain-review and assignment-head lock contention fails closed without waiting on a new lock cycle;
+the complete authorized operation may be retried. PostgreSQL tests cover repeated occurrences,
+same-occurrence corrections, invalidation and two-connection contention. These tests use synthetic
+upstream records, not genuine season-wide reconciliation.
+
+Factual observation contracts preserve that same distinction. An occurrence-only player carries
+`playerIdentityId: null` and `assignment: null`, while the exact decoded identity candidate,
+represented-club affiliation and match remain mandatory. Migration 0132 applies the existing
+same-target continuity owner to factual match, appearance, metric, achievement and season-club
+checks without replacing their original assignment references. Occurrence-only factual promotion
+and HPN reads share a nonblocking review-subject lock and exact current-head check. This uses SELECT
+authority rather than granting readers UPDATE permission merely to acquire a row lock. The typed
+resolution writer and immutable-maximum head guard still own all legal head advances. PostgreSQL
+regressions exercise both mapping scopes, replay, contention and retry, withdrawal, and a SELECT-only
+consumer. These compatibility checks neither approve a genuine player occurrence nor turn an
+unobserved appearance into a measured zero.
+
+Dataset admission retains the original scientific decision cutoff while authenticating identity
+currency at the actual admission time. Later benign confirmations can therefore preserve an earlier
+decision without introducing a decision made after dataset creation. Shared assignment chains are
+content-addressed once per assignment case, referenced by individual authorities, and indexed once
+during validation; conflicting chains for one case are rejected. The 100-origin regression checks
+deduplication and query shape with mocked composition, not genuine PostgreSQL throughput or source
+admission. Legacy evidence without the optional shared-chain representation remains readable.
+
+Private retrospective input-set v4 additionally retains `excludedSourceRows` for explicitly
+reviewed nonparticipants. These are separate source-custody members, not measured player rows:
+they contain no calculated statistics or acquisition spell. Each supplied decision must currently
+bind the exact decoded row and payload, resolved player/match/club, factual run, and retained report
+artifact. An actual factual appearance or measured player-match cannot be excluded. Migration 0127
+conserves every selected source row across measured and excluded membership and rejects missing,
+transplanted or revoked reviews; current reads reauthenticate those decisions, while historical
+reads preserve the original input. Omitting exclusions preserves existing v1/v2/v3 construction.
+The five-exclusion PostgreSQL regression uses explicitly synthetic upstream evidence. It is not
+admission of the five genuine 2025 unused substitutes or approval of any other missing value.
+
+The HPN input owner and migration 0141 read typed cells from the retained fitzRoy `values`
+envelope while preserving legacy flat payloads. Source hashes cover the complete original payload,
+including envelope metadata. Malformed envelopes, ambiguous selected fields and invalid scalar
+values fail closed; SQL distinguishes absent/invalid fields from explicit JSON-null missing cells.
+Staged captures are accepted only for non-production projected maps with both current source-first
+approval and exact capture/normalization binding. Creation and current reads enforce this same
+rule; legacy maps still require approved captures.
+
+HPN calculation totals sum the independently derived components after each component is normalized
+to twelve decimal places, matching the shared numerical core. Migration 0119 aligns the independent
+PostgreSQL total check with that order without relaxing component precision. Source-value comparison
+must also be scoped to the exact calculation before joining expected and stored teams: migration
+0120 prevents previously finalized seasons from appearing as unmatched teams in a later calculation.
+Missing, extra or mismatched teams within that calculation remain invalid.
+
+Historical coverage follows from the existing strict label-purge rule. For an `H`-season target,
+adjacent partition origin years must be at least `H + 1` years apart when mature outcomes are recorded
+at year end. Assuming 2025 is the latest completed target season:
+
+| Feature history / target horizon | Four minimally separated origin years | Required measurement span |
+| -------------------------------- | ------------------------------------- | ------------------------- |
+| One season / one season          | 2018, 2020, 2022, 2024                | 2018–2025                 |
+| One season / three seasons       | 2010, 2014, 2018, 2022                | 2010–2025                 |
+| Three seasons / three seasons    | 2010, 2014, 2018, 2022                | 2008–2025                 |
+
+These are mechanical lower bounds with one origin year per partition, not approved policies or
+statistical sample-size claims. Wider training windows require more history. The five-season
+2021–2025 capture scope cannot satisfy even the first example. Unavailable rows cannot be used to
+fill earlier partitions: their current `outcomeObservedAt` would violate the later historical
+prediction cutoffs. Participant/event/spell separation must also be enforced by the admitted
+dataset construction; the PAV schema's season separation alone does not establish group separation.
+
+The pre-2010 corroboration gap is therefore not a universal blocker to a three-season outcome
+horizon. A one-season feature candidate retains that horizon and the same four-year origin gaps,
+but requires an explicitly reviewed one-history observation policy and source construction.
+Selecting one lag inside an already constructed three-history observation set does not remove its
+earlier source-parent requirements. This alternative is mechanically feasible, not an approved
+protocol or a finding of sufficient statistical support; no historical measurements are admitted
+by changing the table.
+
+The proposed candidate for review is:
+
+1. Use HPN season PAV as the common measured primitive. Propose three seasons of feature history and
+   a three-season forecast horizon to evaluate both prior trajectory and more than one season of
+   acquired contribution. These are candidate choices, not findings that three is optimal. Freeze
+   the estimand, horizon and unit only after coverage and methodological review; insufficient data
+   must result in rejection or an explicit revised research scope, not silent horizon shortening.
+2. Construct observations from exact admitted spells and season measurements. Distinguish actual
+   trade-date forecast origins from current forecast origins. Where evidence supports only a
+   retrospective/year-end cohort, label that limitation and retain truthful recording times. Do not
+   claim point-in-time backtesting or complete at-trade support from that cohort.
+3. Evaluate a transparent per-horizon ridge candidate with whole residual trajectories against
+   prior-PAV persistence and expected-games-only baselines. Fit and tune only within the permitted
+   historical partitions. Predeclare departure, zero-game, censoring, pooling and any clipping rules.
+   This requires a new reviewed player method/protocol; the existing scalar run is retained intact.
+4. Estimate joint dependence from authenticated historical trajectories and shared season, club and
+   draft-class evidence. Whole-player residual paths alone do not establish cross-asset dependence.
+   An empirical rank-coupling candidate must declare the joint templates, dimensional mapping,
+   ties, support minima and sparse-cohort behavior. Reuse the future-pick simulator's ladder/rule/
+   class sequence only with evidenced input probabilities. Unsupported dependence leaves the
+   required distribution unavailable.
+5. Materialize realized contributions from finalized HPN receiving-spell allocations and verified
+   lineage custody, retaining the exact source periods and knowledge times. Do not prorate a
+   full-season allocation into partial-season value. Remaining forecasts cover only the unobserved
+   portion of the declared horizon, with realized and remaining contributions reconciled under the
+   same retained draw identities.
+6. Preregister support requirements and acceptance thresholds. Evaluate MAE/RMSE/bias, CRPS,
+   interval coverage and width, subgroup behavior, and package-level dependence/distribution scores.
+   Executable one-row minima do not establish statistical adequacy. Preserve sealed final-test
+   evidence and uncertainty about measured performance.
+
+The primary evidence supports this proposal's structure, not its AFL-specific validity:
+[HPN's original PAV method](https://www.hpnfooty.com/?p=21810) defines retrospective season allocation;
+[Hyndman and Athanasopoulos](https://otexts.com/fpp3/tscv.html) describe forecasting evaluation using
+prior observations and the intended forecast horizon;
+[Gneiting and Raftery](https://sites.stat.washington.edu/people/raftery/Research/PDF/Gneiting2007jasa.pdf)
+provide proper univariate and multivariate scoring principles; and
+[Schefzik, Thorarinsdottir and Gneiting](https://arxiv.org/abs/1302.7149) describe calibrating marginals
+while preserving an evidenced ensemble dependence structure. Their meteorological results do not
+validate an AFL joint forecast or supply a missing dependence template.
+
+The required review covers common unit/estimand, horizon and features, trade-date versus year-end
+origins, retrospective knowledge, grouping and embargo, censoring and departure, residual and joint
+dependence construction, support and acceptance thresholds. Keep three stages distinct:
+
+1. **Preregistration and method review:** retain the proposed change plan before proposal and
+   candidate evaluation, and obtain methodological review of the choices above. The package must
+   specify value-unit alignment, feature availability and knowledge treatment, baselines, censoring,
+   validation metrics, support requirements and acceptance criteria. Drafts are not registered
+   protocols, source decisions or evidence that a candidate has passed validation.
+2. **Admission and execution:** authenticate the applicable source, coverage and corpus decisions,
+   exact finalized dataset admission, registered protocol and exact run authorization before model
+   execution. Preserve the dependency order: the admitted player protocol binds an existing dataset
+   admission and cannot predate it; the run cannot start before protocol preparation. Preregistering
+   the scientific plan does not authorize capture, create an admission or supply these identities.
+3. **Post-run review and qualification:** use genuine candidate runs and evaluation evidence for the
+   [model-change review procedure](../runbooks/afl-trade-intelligence-operations.md#recalibration-and-model-change).
+   Its completed review requires at least two unique reviewers independent of the proposer, with
+   distinct responsibilities and unanimous advancement recommendations before recommending Gate 3
+   review. That recommendation is not the separate Gate 3 decision and grants no publication right.
+
+`operations/modelChangeReview.ts` requires both current and candidate valuation bundles, their exact
+component protocols and runs, and post-run evidence. It is not a pre-execution method-review record.
+If a fresh candidate has no authenticated current release, that schema cannot represent the initial
+candidate's review. Obtain an explicit governance decision on the applicable initial-candidate review
+route and any required contract support; do not manufacture a current bundle, reuse an unrelated
+release, or treat this gap as permission to bypass review or Gate 3. An engineering approval for this
+documentation or converter is not scientific approval.
+The [fresh execution prerequisites](../runbooks/afl-trade-intelligence-operations.md#fresh-governed-execution-prerequisites)
+identify the distinct source decisions, retained records and datasets needed at each stage.
+
+### Statistical assessment of the PAV forecast proposal
+
+Research assessment, 6 September 2026. These are evidence-backed recommendations for the proposal
+above, not a registered protocol, independent scientific sign-off, source permission or evidence of
+AFL predictive performance. The recommended direction is a small, auditable forecasting comparison;
+complexity must earn its place on genuinely later data.
+
+#### Define the question before choosing the model
+
+[HPN's original method](https://www.hpnfooty.com/?p=21810) allocates team-relative season value using
+player involvement, and acknowledges approximation and role-specific blind spots. Consequently, a
+PAV forecast predicts this measured contribution, not intrinsic ability, causal wins added, salary or
+the benefit of moving a player to a different club. Agreement with awards is not a future-forecast
+test. Keep the attack, midfield and defence components visible when interpreting the total; do not
+silently remove team context or present a club adjustment as a causal transfer effect.
+
+Recommendation: retain the proposed common fixed horizon, with the next three seasons as the first
+comparison target, subject to sufficient admitted history. For trade assessment, define the primary
+target as actual contribution to the receiving club during the governed acquisition spell. Report
+each season and their total. Distinguish it from contribution anywhere in the AFL and from
+downstream trade-lineage returns. Compare one-, two- and three-season feature histories inside
+development validation; three prior seasons are a candidate, not an established optimum. Forecast
+evaluation must match the intended horizon, as explained by
+[Hyndman and Athanasopoulos](https://otexts.com/fpp3/tscv.html).
+
+#### Separate zero, unknown and unfinished outcomes
+
+Recommendation: retain four explicit states. A verified complete season with no receiving-club
+appearances contributes a measured zero; an absent source row is unknown; an unfinished horizon is
+not yet observed; a confirmed end of the governed spell is a departure event. Under the proposed
+receiving-spell target, periods after confirmed departure contribute zero to that spell, not missing
+player ability. That is a proposed target policy requiring versioned contract support, not permission
+to change existing unavailable outcomes. A later acquisition is a separate spell. Do not drop injured,
+delisted or low-appearance players merely because their future contribution is poor.
+
+Use complete, mature horizon outcomes for the first transparent comparison, documenting selection
+and era limitations. A later survival/availability model may use incomplete follow-up, but censoring
+assumptions must be examined: the original
+[Kaplan–Meier paper](https://web.stanford.edu/~lutian/coursepdf/KMpaper.pdf) explicitly discusses
+incomplete observations and assumptions about loss to observation. It does not justify treating
+performance-related departure as harmless random missingness, nor does it directly model PAV totals.
+
+#### Start with shrinkage, not a large model
+
+Ridge regularization trades coefficient bias against variance for correlated predictors;
+[Hoerl and Kennard](https://homepages.math.uic.edu/~lreyzin/papers/ridge.pdf) supply the foundational
+argument, not an AFL performance guarantee. In a primary sports forecasting study,
+[Brown](https://arxiv.org/abs/0803.3697) found empirical/hierarchical Bayes methods improved on using
+current batting average directly, with performance depending on the population. That supports
+testing partial pooling, not copying a baseball likelihood into PAV.
+
+Recommendation: first compare prior-season PAV persistence, a training-only pooled-mean/shrinkage
+baseline, and a small direct annual-PAV ridge model. Use lagged PAV and games, explicit history
+availability, and age or role only where admitted point-in-time evidence supports them. Fit scaling,
+imputation, pooling and penalty selection within each training fold. Retain missingness flags;
+imputing a feature is not inventing a measured outcome. Prespecify the feature set and limited tuning
+grid before opening evaluation results.
+
+Forecast annual totals directly first. Separating availability from performance is a useful later
+diagnostic and possible two-part/hierarchical challenger, particularly for sparse histories, but it
+adds assumptions. If contribution is modeled as games times rate, simulate their conditional joint
+distribution: the expected product is not generally the product of separate expected games and rate.
+Do not force log transforms or clip negative values without checking the governed measurement's
+support and validating that transformation. A dynamic partial-pooling model is a challenger after
+the simple comparison, not a prerequisite to learning whether the data support forecasting.
+
+Recommendation: audit who is excluded by complete-history requirements before fitting. Requiring
+three previous seasons can exclude newcomers and select established survivors; include a declared
+short-history baseline or report that population as unsupported rather than silently dropping it.
+[Nguyen and Matthews](https://arxiv.org/abs/2210.02383) demonstrate dropout-related bias in baseball
+aging curves. Their imputation approach is not permission to fill missing raw AFL statistics or
+canonical measured PAV; any forecast-feature treatment needs separate validation.
+
+#### Backtest the information genuinely available at the time
+
+Recommendation: use chronological rolling origins with inner historical tuning, separate calibration
+and a sealed final evaluation period. At each origin, every training target must have matured and
+been available then; overlapping multi-season labels cannot leak across that boundary. Preserve the
+repository's stricter admitted split rules until explicitly versioned. Fit nothing on the final test,
+including residual scales, feature choices or dependence templates.
+
+Trade-date and December forecasts are different experiments. Retrospective source capture can support
+research only under an explicit information-availability policy; it cannot establish what an October
+decision-maker knew. Retain both event and recording times. These recommendations apply
+[rolling-origin forecasting principles](https://otexts.com/fpp3/tscv.html) to Statly's existing custody
+constraints.
+
+[Roberts and colleagues](https://nsojournals.onlinelibrary.wiley.com/doi/10.1111/ecog.02881) demonstrate
+why dependent observations need deliberate blocking, while warning that blocking can change the
+prediction task. For known-player forecasting, earlier history of the same player is legitimate
+input; a blanket leave-all-players-out test instead measures new-player generalization. Recommendation:
+report established-player and cold-start results separately, retain trade/event groups, and account
+for repeated players and shared seasons when estimating uncertainty in scores. Any change to the
+participant/event/spell separation required by the proposal above must be explicit in the admitted
+dataset policy; chronological partitions alone do not enforce it. Thousands of player-season rows
+are not thousands of independent seasons.
+
+#### Test uncertainty at both player and trade-package level
+
+Recommendation: generate prediction distributions, not just confidence intervals for mean forecasts.
+Report annual and cumulative bias, MAE/RMSE, CRPS, and prespecified interval coverage alongside width
+or interval score. Check age/history/role groups where support permits; overall coverage can conceal
+poor subgroup behavior. Proper scores reward honest distributions rather than arbitrarily wide
+ranges; see [Gneiting and Raftery](https://sites.stat.washington.edu/people/raftery/Research/PDF/Gneiting2007jasa.pdf).
+
+Whole residual trajectories from genuinely held-out historical forecasts can preserve within-player
+year-to-year errors, if their representativeness and scale are checked. They do not supply dependence
+between different players or picks. [Ensemble copula coupling](https://arxiv.org/abs/1302.7149) preserves
+an existing ensemble's rank dependence while adjusting marginals; it cannot create an evidenced AFL
+dependence template. Recommendation: require aligned historical evidence for shared club, season and
+draft-class scenarios. Independent draws may be a labeled sensitivity comparison, never an
+unacknowledged default for qualified package probabilities. Where joint support is inadequate, retain
+component research results but leave the required trade distribution unavailable.
+
+Assess package totals, differences and decision-event probabilities directly on held-out packages.
+Do not rely on energy score alone:
+[Scheuerer and Hamill](https://repository.library.noaa.gov/view/noaa/22327) show its limited sensitivity
+to incorrect correlations and motivate variogram-based scores. Recommendation: combine marginal,
+package-level and dependence-sensitive diagnostics; no single score establishes all three.
+
+#### Decide acceptance through useful precision
+
+Recommendation: before final evaluation, specify the smallest useful improvement over the strongest
+simple baseline, tolerable bias/miscalibration and the precision required for the intended trade
+decision. Estimate score-difference uncertainty with a declared dependence-aware resampling or
+simulation design; a few seasons may leave the answer inconclusive. Set support requirements from
+that precision target, cohort coverage and model complexity, not a convenient universal row count.
+[Riley and colleagues](https://www.bmj.com/content/384/bmj-2023-074821.abstract) recommend
+setting-specific precision calculations for external validation rather than generic sample-size
+rules. Their clinical examples do not supply AFL sample sizes or thresholds.
+
+For the retained paired scores, a concrete candidate is the
+[Owen–Eckles product-weight bootstrap](https://arxiv.org/pdf/1106.2125), Sections 4–6:
+freeze the metric, horizon, paired support and weighting estimand; for an observation-weighted
+mean let `d_i = primaryScore_i - baselineScore_i` and `delta = sum(d_i)/n`. Independently draw
+`A_player ~ Exp(1)` and `B_origin ~ Exp(1)` per distinct player and prediction origin in each
+replicate, set `w_i = A_player(i) * B_origin(i)`, and compute
+`delta_b = sum(w_i*d_i)/sum(w_i)`. Use the same weights for both models and retain the replicate
+variance `sum((delta_b - mean(delta_b))^2)/(B-1)`, declared seed and replicate count. This is
+reweighting retained scores, not refitting or reopening final targets; CRPS uses only exact paired
+distribution-supported rows and reports exclusions. The paper studies crossed random effects,
+including heteroscedasticity, not unrestricted dependence or exact finite-sample interval coverage.
+Its small maximum cluster-share condition is problematic here: with `T` origins that share is at
+least `1/T`; with one origin its weight cancels from every ratio. Thus a large player count cannot
+supply missing between-origin replication. As a Statly recommendation, with only one to three
+origins retain such output as a sensitivity diagnostic, not an automatically calibrated
+future-season confidence interval or qualification decision. Serial dependence between different
+origins, overlapping target years and additional shared club/event effects require an explicit
+dependence model; player/origin keys alone do not establish its adequacy.
+[MacKinnon, Nielsen and Webb](https://arxiv.org/pdf/2205.03285), Sections 4, 5 and 7, explain why
+cluster count, imbalance and leverage matter; their two-way wild-bootstrap discussion is an
+alternative to investigate, not a remedy that manufactures independent seasons. A conditional
+observed-season analysis or externally justified model-based simulation would require a separately
+declared estimand and assumptions. No universal minimum origin count, confidence level, improvement
+threshold or acceptance rule follows from these sources; absent a supported design, useful
+precision remains unestablished.
+
+The practical sequence is: freeze target and time policy; audit genuine coverage; compare shrinkage
+baselines with ridge; calibrate and evaluate uncertainty; then test evidence-backed joint packages.
+Add an availability or dynamic hierarchical challenger only when diagnostics justify it. This is a
+concrete research recommendation, not a claim that the three-year candidate has passed or that the
+remaining runtime and governance requirements have been fulfilled.
+
+#### First executable research comparison
+
+The user approved proceeding with the statistical recommendation on 6 September 2026.
+`modeling/playerPavForecastComparison.ts` now exposes `compareAflTradePlayerPavForecasts` as a pure
+research interface over an exact, parsed player-PAV observation set. This is implementation approval,
+not an admission, registered forecasting protocol, genuine-data validation or model qualification.
+The scalar player model, observation-v1 custody rules and production execution routes are unchanged.
+
+The comparison fixes the receiving-acquisition-spell target to the next three complete seasons,
+including exact horizon-end checks on every observation. It returns annual and cumulative forecasts
+for persistence, shrinkage and ridge. Versioned configuration explicitly supplies the one-/two-/three-
+season history candidates, positive ridge penalties, positive shrinkage pseudo-season weights,
+training/tuning/calibration support minima, interval coverage and knowledge policy. These numerical
+support settings are not claims of statistical adequacy. No configuration defaults imply acceptance.
+
+Each ridge candidate uses lagged season PAV, games and missingness indicators. Feature spells are
+summed within season only after rejecting repeated game evidence. Feature imputation, centering and
+population-standard-deviation scaling use training rows only; the intercept is unpenalized and the
+positive ridge penalty is added to the unnormalised cross-product matrix. Separate annual regressions
+are solved without a matrix inverse. Shrinkage blends observed historical season totals with the
+training-only mean outcome at each horizon. Persistence repeats the latest season; absent latest-
+season evidence uses a labeled short-history pooled fallback. Negative PAV is not clipped.
+
+Candidate selection within each family uses mean annual squared error, equally weighted across
+eligible historical training origins. Each inner fold includes only earlier rows whose complete
+labels were available before its cutoff. The selected candidate is fitted to eligible training rows
+before calibration begins; calibration, validation and final-test labels never select or fit it.
+The output retains candidate scores, fold memberships, final training memberships and row coverage.
+This known-player chronological research design does not establish group-disjoint dataset admission.
+
+Comparison output v2 also retains each selected model's content-addressed fitted numerical state;
+the comparison configuration remains v1. Ridge state includes training-only imputation means,
+centers, scales, coefficients and target means. Baselines retain their pooled means and candidate
+settings. The existing numerical owner can restore predictions from this strict, finite, hashed
+state without training rows or refitting. The comparison identity binds the fitted state to its
+training membership and exact observation set. This replayable numerical state is not a registered
+model run, candidate-lock record, calibration authority or qualification receipt.
+
+The `calculated_by_origin` policy excludes features calculated after the prediction cutoff and
+respects target calculation times when admitting earlier labels. The explicit
+`retrospective_finalized_measurements` alternative retains the retrospective limitation. Observation
+sets governed by the retrospective v2 policy require this alternative: the comparison rejects
+`calculated_by_origin` even if their measurement calculation dates happen to precede the origins,
+because the spell evidence is still admitted under a retrospective knowledge policy. Neither
+mode establishes source availability from calculation timestamps alone or converts year-end origins
+into October trade forecasts. Missing, immature and unavailable outcomes remain unscored, with their
+reasons retained. Short-history point forecasts are labeled unvalidated; observation v1 still cannot
+supply their withheld outcome labels for training, and the comparison does not manufacture them.
+Only the already-defined post-departure portion of a mature receiving-spell outcome becomes zero.
+
+Complete calibration residual trajectories form equally weighted empirical three-season paths for
+validation and final-test forecasts. Annual/cumulative diagnostics include bias, MAE, RMSE, CRPS,
+interval coverage, width and interval score. These empirical intervals are research estimates, not
+guaranteed calibrated coverage or confidence intervals for the mean. Sparse calibration and
+short-history calibration return explicit unavailable distributions. No cross-player dependence is
+inferred: trade-package distributions and qualification/publication eligibility remain unavailable
+or false. Acceptance thresholds, score-difference precision, subgroup validation, genuine source
+coverage and governed execution remain subsequent work, not implied by these calculations.
+
+The native pre-final numerical seam now reuses separately fitted, content-addressed empirical
+calibration state. It authenticates exact candidate and calibration-configuration bytes, opens
+selected calibration/validation targets, and produces validation-only forecasts and diagnostics.
+The strict configuration declares the empirical method, support minimum and interval coverage;
+there are no acceptance defaults or qualification grants. Restored calibration rejects held-out
+origins earlier than its retained cutoff, and a missing cutoff cannot authorize held-out use.
+Regression coverage checks numerical final-target sealing, exact state restoration, substituted
+bytes and unsupported calibration support. Complete parent documents are still authenticated;
+numerical isolation is not a claim that their canonical bytes remain unread. Freezing these
+outputs in run custody, executing the final test and qualifying a genuine model remain distinct.
+Fresh native candidate locks now retain candidate-custody v3 with the exact pre-final report and
+declared baseline/sensitivity validation-plan evidence before the lock commits. Replays of a
+committed lock authenticate its parent, configuration, membership and cutoff bindings without
+refitting or rescoring. New final-test starts require those exact retained bytes. Legacy v1/v2
+locks remain historically readable but cannot silently gain a new final-test grant;
+already-started history remains no-grant recovery. The focused tests use synthetic admitted graphs,
+not a genuine qualified native model. The native run owner now performs one fenced final-test
+execution, persists content-addressed completion evidence, and supports persistence-only recovery
+from that exact evidence. These mechanics do not establish genuine execution or qualification.
+
+The native final numerical utility now restores that exact candidate and calibration state and
+scores selected final-test observations. It checks candidate-custody v3, lock-to-start linkage,
+pre-final parents, configuration and calibration cutoff; it neither issues an execution grant nor
+persists completion or qualification. The shared numerical extractor applies both partition and
+selected-observation membership before opening targets. Native fitting, pre-final evaluation and
+final evaluation pass their admitted selection into that extractor; filtering afterward is not
+sufficient. Sealed-getter regressions cover unselected targets inside each permitted partition,
+while full canonical parent authentication remains unchanged. Actual committed single execution,
+completion persistence, and exact terminal recovery are implemented by the surrounding native run
+owner. Required model reports and genuine qualification still belong to the unfinished execution
+path.
+Final baseline comparisons restore the declared pre-final fitted states and report paired eligible
+observations; sensitivity analyses remain validation-only. Final-evaluation v2 also retains each
+paired observation's primary and baseline annual/cumulative error, absolute error, squared error and
+available distribution scores, together with its exact player and prediction-season keys. The
+original authorized evaluation computes these contributions; report assembly does not reopen
+outcomes. Missing predictive distributions remain null rather than zero. The strict reader preserves
+aggregate-only v1 evidence without upgrading it to v2. These contributions support later declared
+dependence-aware analysis but do not themselves establish confidence intervals, independent samples,
+trade/event grouping, adequate precision or qualification. Interrupted pre-lock artifact writes now
+reuse an existing identical object's original timestamp, with exact metadata, bytes and custody
+profile checks against the database clock. Three real-filesystem regression cases cover plan writes,
+plan readback and custody readback. This fixes the timestamp retry defect; it does not by itself
+prevent repeating numerical work that has not yet acquired a durable progress checkpoint.
+
+The exact input identity, canonical configuration and comparison results determine a content-addressed
+research-comparison identity. Non-finite arithmetic fails closed. Local work is bounded to two million
+candidate/fold-row evaluations and two million empirical annual/total path cells per selected model;
+larger requests fail explicitly rather than silently sampling a cohort. Public-interface tests use
+fixture-only observations, hand-worked numerical expectations, held-out-label substitutions,
+retrospective custody, short histories, departure/censoring, exact horizons and overflow regressions.
+These tests establish implementation behavior, not predictive performance on genuine AFL seasons.
 
 ### Current valuation refresh trace
 
@@ -2284,6 +3467,15 @@ stable operation key. A restart resumes those receipts before the private factua
 it does not duplicate a candidate or head transition. The operation either advances the candidate,
 reports it already current, or retains one exact unavailable cause: missing, stale, mismatched, or
 unauthenticated source authority.
+
+An unchanged private factual candidate is not by itself the terminal `no_change` result. When the
+aligned downstream authority required by that result is absent, refresh returns
+`factual_refresh_complete` with an `already_current` factual stage. A newly claimed dispatch can
+therefore retain a distinct refresh operation without advancing the factual head. It must still
+establish its own downstream model/prepared bindings: the private batch runner rejects a new request
+that merely points at an earlier dispatch's prepared custody. Exact refresh replay and this
+stale-authority guard are covered by the migrated PostgreSQL model-pair integration test; they do
+not establish a successful newly composed dispatch or the genuine 2025 rehearsal.
 
 The upstream current-evidence operation composes those existing boundaries before factual refresh.
 It resolves the durable Gate decision and source-rights proposal for each of the seven exact

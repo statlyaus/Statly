@@ -375,6 +375,14 @@ supersede production Gate authority, and production execution cannot reuse non-p
    the current unsuperseded Gate head and proposal-to-rights binding before it stores either a changed
    or unchanged observation, and its evidence-finalization trigger checks the lease against the
    database clock. It emits only stable IDs and status.
+   For an approved private set of retained captures, use
+   `PostgresAflTradeExternalDiscoveryRepository.persistRetainedPlan` with a v2 plan and an exact byte
+   reader, then `PostgresAflTradeExternalHistoricalCaptureCompletionRepository.completeRetainedPlan`.
+   Retain the actual capture, execution receipt, source/Gate authority, artifact and finalized batch
+   IDs in every target. Use the actual plan/completion creation times; do not backdate these records
+   or manufacture an index inventory or scheduler occurrence. Both initial registration and replay
+   require current source authority, and plan replay verifies retained bytes again. This is a
+   repository operation under the reviewed execution runbook, not a new public CLI command.
 6. Turn the finalized plan into a private reconciliation review candidate with
    `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion-id>`.
    PostgreSQL loads the exact immutable completion, plan and issue-free evidence batches; the command
@@ -394,6 +402,16 @@ supersede production Gate authority, and production execution cannot reuse non-p
    revision, predecessor and approved canonical-record snapshot from PostgreSQL; operators cannot
    submit those chain fields. A later completion may reuse a current decision only when its exact
    observation work item is unchanged. New spellings, seasons or evidence require a successor review.
+
+   If a canonical target is absent, retain an explicit external canonical-target registration v2
+   review before calling `PostgresAflTradeProviderResolutionRepository.registerCanonicalTarget`.
+   Bind the complete native-ID work item from the current retained completion, the exact governed
+   snapshot, supporting evidence and the actual scoped technical reviewer. Choose `create` only
+   after checking existing canonical provenance; choose `reuse` for an exact existing record.
+   Keep unsupported biography and club metadata null on creation. This operation creates no
+   normalization record or identity assignment; continue through the identity-review command above.
+   An internal owner-delegated technical reviewer must be recorded as such, without asserting
+   independent human review or provider permission. Withdrawn source authority blocks replay.
 
    Rerun the preparation command after review. It loads current decisions directly from the durable
    review heads and accepts no identity-resolution JSON. Reconciliation time is derived
@@ -1149,14 +1167,25 @@ independent genuinely admitted draft-trade release before the shipped HPN, genui
 pick, qualification/model-evidence, valuation-bundle/trade-construction, and private prepared-v3
 adapters can be composed by the worker.
 
-There is also an unresolved contract mismatch in that composition. The admitted-player factual output
-uses v2 with multiple admitted captures and a dataset/admission parent. HPN preparation, model-pair
-input selection, and current-model-evidence ancestry still require v1's single normalization and
-reconciliation run. A v3 that merely adds a pick release to v1 does not connect the admitted-player
-path. Resolve the multi-capture player and independent HPN ancestry together, then bind the separate
-dormant promotion-backed draft-trade release for pick observations and cohort membership. Reuse the
-existing corpus and dormant-release repositories; finalized player membership cannot be extended
-with pick records. The sequencing module is tested but is not yet installed in the local worker.
+The admitted-player factual output uses v2 with multiple admitted captures and a dataset/admission
+parent. HPN preparation, model-pair input selection, and current-model-evidence ancestry accept that
+output only with an explicit request-bound HPN factual binding. The binding retains the exact #571
+operation, private factual candidate/revision, approved HPN reconciliation run, input digest and
+finalization instant. Its loader reauthenticates the current reviewed authority, player parent, HPN
+match/appearance ancestry, and player spell-metric source ancestry on replay. A run selected only by
+season, a review-set identifier, or a v3 that merely adds a pick release to v1 is not a substitute.
+Pick observations use their own admitted dormant draft-trade release; finalized player membership
+cannot be extended with pick records. For v2, prepared-v3 now obtains its target release from an
+immutable request-bound cohort selection, not the player release or an automatic substitution of the
+pick training release. Historical pick training membership does not establish the complete 2025 trade
+universe. `PostgresAflTradePrivateValuationCohortBinding.bind` takes an existing finalized
+corpus-factual-lineage admission under the live claim. It authenticates its promotion-backed corpus,
+approved dormant release/candidate, source and canonical member digests, exact cutoff, current Gate 2
+and source rights, and every transaction's AFLM/2025 membership. Replay rechecks that authority;
+foreign-season transactions and withdrawn authority fail closed. Private cohort preparation accepts
+the explicit `cohortLineageAdmissionId` selection and retains this binding before construction.
+Legacy v1 keeps its original single-release parent. The sequencing module is tested but is not yet
+installed in the local worker.
 
 `PostgresAflTradeAdmittedPlayerFactualPreparation.prepare` materializes the existing v2 output for an
 already retained dispatch and exact finalized dataset/admission. It uses a claim-gated parent loader
@@ -1165,15 +1194,313 @@ content-addressed bytes. It does not enqueue a second request, import sources, a
 model execution, or publish a release. This adapter is available for composition but is not wired
 into the local worker.
 
+`PostgresAflTradePrivateValuationHpnFactualPreparation` composes that adapter with the HPN binding.
+Supply exact retained player dataset/admission, factual-operation and HPN reconciliation-run IDs;
+its `prepare` method satisfies the existing HPN preparation dependency. HPN checks this authority
+before source capture and again in the claim-fenced calculation transaction. It does not provision
+those parents or grant missing source rights.
+
+`createLocalAflTradePrivateValuationHpnCapture` supplies the existing HPN `captureSource` dependency
+using authorized fitzRoy ingestion, source retention and normalization. Configure exact reviewed
+source lanes with their policy-bound capture/staging dependencies; the adapter rejects substituted
+authority, wrong scope and incompatible source roles before external execution. The HPN coordinator
+still authenticates the live dispatch claim. This adapter neither selects a default 2025 source nor
+grants source approval, and is not yet installed in the local worker's full preparation sequence.
+
+`createLocalAflTradeHpnMethodAuthority` loads an already registered non-production method and verifies
+its exact retained HTML source bytes. It neither fetches a substitute nor registers a new method.
+`createLocalAflTradePrivateValuationQualificationRegistrar` takes one retained policy artifact,
+checks it against the accepted operation, derives evidence from the exact native player and pick
+validation reports, and uses the existing claim-fenced qualification registration and Gate 3 ledger.
+Its automated validation records grant no new source rights, human approval, or model-spend authority.
+
+Fresh prepared-v3 construction still needs evidence-derived per-trade assembly and worker
+composition, not replacement bundle or packaging infrastructure. Use
+`createPostgresAflTradeRetainedValuationInputBundleConstructor` with the exact retained construction
+specification and compatible qualified component runs. Load the sealed target cohort through
+`PostgresAflTradePrivateValuationTradeEvidence.load` under the live claim, and pass genuinely derived
+inputs to `constructAflTradeAuthenticatedCurrentValuationTrade`. These owners retain/authenticate
+their parents; they do not calculate missing forecasts, dependence or realized measurements.
+
+`createPostgresAflTradeRetainedValuationInputBundleSelector` supplies the existing prepared-cohort
+selection dependency. Configure the exact retained specification ID and artifact; selection reads
+only the matching retained construction under the caller's transaction, including scope, model
+evidence, revisions and component runs. It does not construct a bundle during prepared replay.
+`createLocalAflTradePrivateValuationConstructionEvidence` supplies the evidence-loading dependency
+for one explicitly configured 2025 dispatch and claim. It shares the supplied transaction across
+the sealed trade reader, bundle constructor and staging owner; rejects mismatched factual ancestry;
+and retains the full release manifest, canonical membership and selected bundle with artifact
+custody before returning. Release/membership timestamps remain the release's original creation time,
+and cohort trade IDs remain event-version IDs. These dependencies are implemented but not yet
+installed in the complete local worker. They do not derive per-trade calculation inputs or grant
+source, model or publication approval.
+
+Native player contribution predictions are not the fixed-horizon receiving-spell player-PAV
+observations consumed by the explanation materializer. Use
+`PostgresAflTradePrivatePlayerPavPreparation.prepare` with the exact request, live claim, reviewed
+policy and historical lineage admission. Its authority loader authenticates the independently
+admitted historical corpus, spell membership and finalized HPN ancestry, and its private repository
+path materializes observations without borrowing the active public release. This implementation
+still needs genuine historical inputs and local worker composition. Retained fixture manifests and
+relabeled native predictions cannot satisfy that requirement. Calculation packages also require
+authenticated component draws and realized contribution ledgers; their constructors validate
+supplied parents but do not provide a fresh source assembler.
+
+For historical spell evidence recorded after its prediction year, retain actual recording dates and
+use an exactly reviewed `afl-trade-player-pav-policy/v2` with knowledge policy
+`retrospective_as_recorded_by_dataset_creation`. The existing preparation and repository path emits
+observation-set v2; migration 0116 enforces matching policy, per-row cutoff bindings, full spell
+custody and exact calculation dates. Recording and calculation custody must not exceed the admitted
+historical corpus cutoff. V1 remains unchanged and cannot accept late-recorded spells. A v2 set is
+restricted to fixture/non-production use and cannot be compared under `calculated_by_origin`; use
+the explicitly retrospective comparison mode. This is not source admission or model qualification.
+
+Historical HPN source captures require their own explicit input request: set `knowledgePolicy` to
+`retrospective_as_recorded_by_input_creation` and supply `knowledgeCutoffAt` together. The existing
+input repository produces input-set v3 and retains the actual capture and recording dates. Keep
+`effectiveThrough` at the historical event cutoff; capture, normalization, factual finalization and
+spell recording must fit within the declared knowledge cutoff, no later than input creation.
+Migration 0118 enforces these rules in PostgreSQL. Do not change the cutoff on a replay or omit the
+mode to reuse a retrospective input as an older version. V3 is restricted to private environments,
+with projected mappings restricted to non-production. Use `loadCurrentFinalizedSeasonInputSet` when
+admission needs current source/mapping/factual/identity/spell authority rather than only retained
+historical input integrity. This read performs no persistence or PAV calculation and does not grant
+training rights. Both v3 mapping paths have focused disposable-PostgreSQL coverage, including a
+legacy mapping review successor that invalidates current reads without erasing historical reads.
+Migration 0118 also corrects the legacy finalizer's player/club lock-key expression exposed by that
+test. This fixture evidence is not a genuine historical admission or the full local rehearsal.
+
+The existing player-PAV observation-set contract requires all four chronological, label-purged model
+partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
+2025 HPN source set. Explicit historical calculation IDs establish identity, not current source/input
+permission; a private multi-season measurement authority must be authenticated independently. Do not
+relax the partition rules or borrow public active-release/HPN-head authority to fill that gap. Exact
+reconstruction of an already governed retained calculation package is distinct from proving fresh
+construction from newly admitted sources.
+
 The #571 normalized/reconciled custody contains source captures, normalization runs, review sets, and
 rights references. Its review sets are not approved factual reconciliation runs. HPN requires a
 separately retained, approved, finalized, conflict-free run with exact competition/season and complete
 match/appearance input membership. Bind that run and its input/calculation ancestry explicitly to the
-reviewed authority; selecting a run only by season is insufficient. The existing v2 model-request
-validator checks the player dataset/admission but does not establish this independent HPN ancestry.
+reviewed authority; selecting a run only by season is insufficient. New v2 model-request bindings
+check both the player dataset/admission and the authenticated HPN run. Previously retained standalone
+player bindings are not rewritten or retrospectively re-admitted by this change.
 Both player and pick dataset/admission IDs already bind their own immutable release, candidate, and
 member digest. Preserve those separate parents and authenticate exact ancestry on replay, even when
 substantively unchanged inputs permit reuse of a retained model operation.
+
+### FootyWire 2025 missing-stat participation corroboration
+
+Primary-source research checked on 2026-09-06 and rechecked on 2026-09-08 corroborates unused-substitute
+status for all five retained 2025 FootyWire rows identified with all 33 statistic fields missing.
+The dates below are the match dates confirmed by the dated AFL post-match reports, not research or
+capture dates.
+FootyWire match IDs identify the retained rows; the AFL reports do not authenticate those IDs.
+
+| Retained FootyWire match ID | Match date | Retained player and club         | Opponent        | Official post-match evidence                                                                                                                                                                                             |
+| --------------------------- | ---------- | -------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `11251`                     | 2025-05-02 | Tobie Travaglia, St Kilda        | Fremantle       | [AFL round-eight report](https://www.afl.com.au/news/1311568/st-kilda-saints-v-fremantle-dockers-match-report-afl-round-eight-2025/amp) lists Travaglia as an unused substitute.                                         |
+| `11321`                     | 2025-06-29 | Nathan Fyfe, Fremantle           | St Kilda        | [AFL round-16 report](https://www.afl.com.au/news/1353300/match-report-fremantle-dockers-v-st-kilda-saints/amp) lists Nat Fyfe as not used and describes no game time after a calf concern during his half-time warm-up. |
+| `11324`                     | 2025-07-03 | Lachlan McNeil, Western Bulldogs | North Melbourne | [AFL round-17 report](https://www.afl.com.au/news/1355675/western-bulldogs-hold-off-spirited-north-melbourne-kangaroos-to-mark-tom-liberatores-250th-in-style/amp) lists McNeil as an unused substitute.                 |
+| `11322`                     | 2025-07-05 | Mitchell Duncan, Geelong         | Richmond        | [AFL round-17 report](https://www.afl.com.au/news/1357096/geelong-cats-v-richmond-tigers-match-report-afl-round-17-2025/amp) lists Mitch Duncan as an unused substitute.                                                 |
+| `11370`                     | 2025-08-09 | Steely Green, Richmond           | St Kilda        | [AFL round-22 report](https://www.afl.com.au/news/1383852/st-kilda-saints-hold-off-richmond-tigers-in-saturday-scrap-at-the-mcg/amp) lists Green as an unused substitute.                                                |
+
+This is documentation-only corroboration, not a retained machine-verifiable capture, canonical
+identity reconciliation, approved participation classification, dataset admission or reviewer
+attestation. In particular, the reports' Nat/Nathan and Mitch/Mitchell name variants require the
+normal governed identity mapping; the table must not create that mapping implicitly. Retain exact
+source custody and reviewed participation evidence through the owning workflow before any approved
+projection treats these records as non-participating selections. Preserve the original rows and
+their missing values: do not zero-fill statistics, silently drop rows, rewrite the capture or infer
+the same status for any other missing-stat record. These findings narrow the five-record evidence
+gap; they do not establish complete HPN input coverage or complete issue 579.
+
+The initial bounded retained-evidence check on 2026-09-09 found no response-byte artifacts for these
+five official reports in the inspected source/research repositories. The inspected statistical
+returns did not provide explicit nonparticipation proof: FootyWire `Status` is home/away orientation, its
+missing statistics are not zero, and zero AFL Tables playing time alone is not an unused-substitute
+classification. A subsequent genuine Fryzigg 2025 capture also returned all 9,936 rows and the exact
+81-field schema. All 9,936 `subbed` values were missing. Each of the five date/surname candidate
+rows records `player_position = 'SUB'` and zero playing-time percentage, but that establishes neither
+an explicit unused status nor canonical identity. This is an observed approved-source limitation,
+not an unavailable fitzRoy package or an unattempted alternative. The capture is
+`source-capture:7d77f3fbce4ba014242a19222015c3ab987bc80f266353d1c057b47e93dbe41a`;
+its retained source digest is
+`00a02251ed76d335f14f11c6f933201aac414075a6f0134e4560185994625189`.
+A subsequent check of the five FootyWire match pages found explicit `Unused Substitute` cells beside
+the corresponding player profile links. All five exact HTML responses returned HTTP 200 and were
+retained with response headers, actual retrieval times, content hashes and read-back-verified
+research receipts. This supersedes the earlier claim that Official AFL acquisition was required:
+the approved FootyWire source contains the missing wording even though its fitzRoy statistical
+return loses it. The research responses are not relabelled as governed fitzRoy captures. Exact
+player/club/match reconciliation and an explicit semantic participation review are still required
+before the ten source occurrences can be excluded through the existing reviewed-nonparticipant
+owner. The original statistics remain untouched. Before preparing these decisions, verify migration 0141 is applied and
+that the SQL scalar reader returns the actual observed identity fields from each retained `values`
+envelope. Hash the complete original payload, and reject an all-null or fallback-derived inspection.
+For staged captures, verify the exact source-first projected map and capture/normalization binding.
+After recording decisions, require current-review checks and exact replay before treating any row
+as excluded; this does not supply missing acquisition-spell or method provenance.
+
+The owned non-production continuation completed these checks on 2026-09-10 after applying
+migration 0141. All ten source occurrences received evidence-backed nonparticipant decisions;
+current-review checks, exact replay, source-snapshot preservation and safe-role preservation
+passed. The resulting backup passed checksum and archive table-of-contents verification, without
+a full restore certification. The subsequent read-only prerequisite check still found no acquisition
+spells, acquisition rules, event versions, event assets, or registered HPN methods. All 668 observed
+player/club pairs lacked an approved acquisition spell, and no genuine HPN input set was created.
+A later owned-target step registered the retained HPN method through its existing owner. Genuine
+acquisition ancestry remains outstanding; the participation decisions supply neither entry dates nor
+spell authority.
+
+Acquisition registration now has a dedicated public repository and migration 0142. Before applying
+that migration to an owned target, complete the scoped PostgreSQL regressions and independent review,
+authenticate the exact target and backup, and preserve the resource reserve. Register the reviewed
+rule with its actual retained bytes. For each proposed spell, retain both the dated event evidence
+and the incoming player asset evidence, promote through the existing external reconciliation owner,
+and obtain the exact generic `acquisition_spell_registration` review for the content-addressed
+proposal. `registerReviewedSpell` checks current promotion, identity, reviewer authority and evidence;
+`loadCurrentExact` repeats current authority and byte authentication. Replay verifies the existing
+record. Corrections append versions; departures end the inclusive interval one day before the
+reviewed outgoing event. Record an evidence-backed `observedThrough` that covers every included HPN
+appearance. Never infer an entry or departure from first/last appearances or January 1.
+
+For draft entries, deploy migration 0143 after the same owned-target checks. Use proposal v2 and
+retain typed `draft_session` evidence for the actual event date, official name, session ordinal and
+exact selection numbers. Each candidate selection must belong to exactly one session; the union
+must cover the complete reviewed draft. Retain both the selection-page artifact and the session-date
+artifact when those facts come from separate pages. Verify separate event roots and dates for
+multi-day drafts, and exact replay of each promoted incoming asset before spell registration.
+Corrections append versions of the existing session root. Legacy promotion receipts are preserved,
+but cannot establish new draft spell registrations without reviewed session evidence. The current
+official indicative-order parser is insufficient for these captures: prepare a bounded completed-
+draft source access/field review before implementing or executing its parser. Synthetic session
+tests establish the downstream contract only.
+
+Source-first HPN construction and current reads require current registered spells, even if the
+capture has since moved from staged to approved. Registration revocation invalidates current use;
+historical input receipts remain readable. Implementation and synthetic tests do not authorize
+source access or establish any of the 668 genuine spell histories. Keep missing or ambiguous source
+claims unresolved and use the existing source-specific access/field review before new acquisition.
+
+| FootyWire match page                                                       | Explicitly labelled player | Retained HTML SHA-256                                              |
+| -------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------ |
+| [11251](https://www.footywire.com/afl/footy/ft_match_statistics?mid=11251) | Tobie Travaglia            | `21a174fd3f9de2e9fddaf30f13b8de811c50991a2ebbf57a922809d626a1bfbd` |
+| [11321](https://www.footywire.com/afl/footy/ft_match_statistics?mid=11321) | Nathan Fyfe                | `c31e2c86da1ffb61bd2afb16346bc1b8e9162d36702b7a829f835ad74b118953` |
+| [11324](https://www.footywire.com/afl/footy/ft_match_statistics?mid=11324) | Lachlan McNeil             | `9d17a20632b068e25c94d25c2315bf0c5fef84ee7894ec2159fcc9dff6c273df` |
+| [11322](https://www.footywire.com/afl/footy/ft_match_statistics?mid=11322) | Mitchell Duncan            | `53750afb3c166c284e7371dd20c404ba2831f65b2e9ee4b71debb7c0d5552201` |
+| [11370](https://www.footywire.com/afl/footy/ft_match_statistics?mid=11370) | Steely Green               | `b72cc12a1e0e6df28029adad7d6c5c52055a1d7574630b6689bda928eb2f15d3` |
+
+These five research artifacts do not themselves create identity authority or a finalized factual
+run. The standing source policy remains unchanged; an unrelated Official AFL capture would still
+need its own applicable source decision.
+
+### AFL Tables 2025 missing-ID profile evidence
+
+The initial retained 2025 return has 83 rows without a native player ID, covering five exact profile URLs.
+Research on 2026-09-08 retrieved those pages successfully and retained new response bytes, headers
+and actual retrieval times in private content-addressed storage. These are research artifacts, not
+governed source-capture receipts or approved identity assignments.
+
+| Exact retained profile                                                             | Rows | Profile birth date | Embedded page lookup key |
+| ---------------------------------------------------------------------------------- | ---: | ------------------ | ------------------------ |
+| [Charlie Cameron](https://afltables.com/afl/stats/players/C/Charlie_Cameron3.html) |   25 | 1994-07-05         | `12277`                  |
+| [Jack Ross](https://afltables.com/afl/stats/players/J/Jack_Ross3.html)             |   23 | 2000-09-03         | `12712`                  |
+| [Jack Graham](https://afltables.com/afl/stats/players/J/Jack_Graham2.html)         |   18 | 1998-02-25         | `12576`                  |
+| [Jack Williams](https://afltables.com/afl/stats/players/J/Jack_Williams3.html)     |   13 | 2003-12-01         | `12962`                  |
+| [Billy Wilson](https://afltables.com/afl/stats/players/B/Billy_Wilson2.html)       |    4 | 2005-06-16         | `13244`                  |
+
+The first four embedded keys match historical native-ID groups in the retained 2021–2025 corpus;
+Billy Wilson's profile birth date matches his retained missing-ID rows. None of these exact URLs
+has an ID-bearing row elsewhere in that corpus. The inspected pinned fitzRoy helper obtains `ID`
+and `DOB` by joining `player_mapping_afltables.csv` on the exact profile URL; it does not extract
+the embedded key. The page's displayed player-appearance ordinal is a different value for Cameron
+and Graham and must not be substituted for a native ID. Profile corroboration can support an exact
+candidate-only identity review without rewriting the missing source ID. A new reusable namespace
+or automatic suffix-normalization rule is not established by these findings.
+
+### Fresh governed execution prerequisites
+
+For issue 579, use fresh governed execution with new retained identities. The completed recovery
+inspection is not an execution input and need not be repeated without a new backup lead. Preserve
+retained original/recovered evidence separately; no staging snapshot establishes the missing final
+dataset admission or model run. The
+[construction proposal](../architecture/afl-trade-intelligence.md#fresh-construction-method-proposal-and-required-evidence)
+is unapproved research direction and identifies the reusable measurements and unresolved science.
+
+Resolve each requirement through its owning workflow at the applicable stage below. Pre-execution
+method review and post-run model-change review are different requirements:
+
+| Required record or dataset                                                                        | Why existing records do not satisfy it                                                                                                                                                         | Next action                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Draftguru authority for the complete 2025 target cohort and selected historical acquisition years | The existing loader supports a separate issue-579 v2 evidence package; the retained issue-574 v1 records still cover only 2020–2024 and cannot be relabeled                                    | Supply four distinct retained authorization/capture/access/field-review documents with matching explicit seasons ending in 2025 and matching current decision timing; load and record through the existing authority owner before capture. Schema support is not admission. |
+| Exact historical corroborating player-stat lane for HPN                                           | FootyWire candidate mapping and season-review selection are implemented, but do not approve a projection or identity reconciliation; the default 2025 capture resolver still rejects this lane | Supply exact reviewed source authority through the existing resolver; retain capture/schema, semantic field-map, identity and source-use reviews within the standing policy's applicable scope                                                                              |
+| Finalized measurement authority for every policy-selected season                                  | A dispatch-bound 2025 calculation or an ID selected from a historical HPN head grants no private multi-season source/input permission                                                          | Bind exact inputs, calculations, method bytes, factual reconciliation and current source rights to the private measurement scope and claim                                                                                                                                  |
+| Reviewed player-PAV policy, knowledge treatment and common-unit forecast protocol                 | Player protocol v2 fixes the scalar source outcome vector; neither it nor year-end PAV observations establish trade-date joint PAV forecasts                                                   | Retain the preregistered method package and its review, implement the explicit protocol/execution extension, then satisfy exact admission and run authorization; complete model-change review using the resulting genuine evidence                                          |
+| Complete historical spell and draft datasets, plus a separate 2025 cohort admission               | Five player training rows or historical pick membership do not establish the complete target trade universe                                                                                    | Retain promoted source/canonical membership, acquisition entry/departure evidence, whole-draft access/rule/selection/realization evidence, and the distinct finalized 2025 corpus-lineage admission                                                                         |
+
+Use this evidence order; do not fill a later-stage artifact with a placeholder to make an earlier
+stage appear complete:
+
+1. **Before candidate evaluation:** retain the change plan before proposal and evaluation. Prepare
+   the common-unit definition and pick alignment, horizon and feature policy, forecast origins and
+   knowledge-time treatment, replacement and comparison baselines, censoring/departure definitions,
+   dependence construction, partition/group embargo, support minima and acceptance criteria. Obtain
+   methodological review of these proposed choices. Retain the applicable preregistered
+   data-sufficiency protocol before its coverage assessment. A draft package is not a registered protocol,
+   completed model-change review or source authorization; capture still requires current scoped
+   source/Gate authority.
+2. **Before model execution:** authenticate source-rights proposals and current Gate 0A receipts for
+   the exact uses, the applicable Gate 0B coverage and Gate 1 architecture decisions, reviewed corpus
+   and factual lineage with current Gate 2 authority, finalized dataset admission, exact registered
+   protocol and exact run authorization. The admitted player protocol binds the existing admission;
+   its preparation cannot predate admission, and execution cannot predate protocol preparation.
+   Retain the actual referenced value-unit, feature-availability, baseline, censoring, validation and
+   acceptance-criteria artifacts. A PAV extension must preserve these authority boundaries rather
+   than borrowing the scalar protocol's outcome vector or retrospective policy.
+3. **After genuine candidate execution:** retain the distinct candidate bundle and both component
+   protocols/runs. The [model-change procedure](#recalibration-and-model-change) requires baseline
+   comparison, temporal validation, calibration/coverage, subgroup performance, sensitivity,
+   leakage audit, lineage invariants, public-contract parity, shadow evaluation and rollback-rehearsal
+   evidence, plus monitoring and rollback plans. Retain at least two unique reviewer attestations,
+   independent of the proposer and with distinct responsibilities. Unanimous advancement permits
+   only a recommendation for separate Gate 3 review; it does not authorize publication.
+
+The current model-change schema also requires an authenticated current bundle and its two component
+protocols/runs. If that release does not exist for the fresh candidate, obtain an explicit governance
+decision on the initial-candidate review route and any needed contract support, as described in the
+[construction proposal](../architecture/afl-trade-intelligence.md#fresh-construction-method-proposal-and-required-evidence).
+Do not invent a predecessor, substitute an unrelated release or waive review. This is a conditional
+review-route gap, not a requirement to recover the missing earlier execution before all fresh work.
+
+The standing AFL Tables, Footywire and Fryzigg decision already permits bounded historical training
+uses. Exact capability/year/field/operation records under that decision are mechanical scope and
+custody requirements, not a request to renegotiate the blanket source policy. Footywire's approved
+player-stat lane begins in 2010; the proposed 2008–2025 measurement example therefore needs another
+supported and authorized corroborating lane for its earlier seasons. Supported schema, coverage and
+independence must be demonstrated from source evidence. The AFLCA coaches-vote decision does not
+cover HPN's other statistics, and a new capability or uncovered provider/scope needs its own decision.
+
+For each HPN measurement season, retain complete match results (clubs, points and completion state)
+and the required player statistics: total points or governed goals/behinds, hitouts, goal assists,
+inside 50s, marks, marks inside 50, frees for/against, rebound 50s, one-percenters, clearances and
+tackles, with exact player/club/match identities. Authenticate the independent corroborating lane,
+reviewed projections, source-use decisions, full universe, finalized reconciliation and method
+before calculation. Add age, role or availability evidence only if the selected forecast uses it;
+an absent predictor cannot be manufactured from a display name or an unrelated source.
+
+`createAflTradePlayerPavCalculationEvidence` is a shared pure conversion of authenticated HPN-shaped
+measurements. Its scope, content-address, input-digest and player-row checks are useful to both
+measurement paths, but it cannot authenticate a durable source ledger, grant a private release
+selection, or approve a model. The PostgreSQL public path retains its current release/policy
+selection and durable membership checks. The private preparation path supplies an independently
+authenticated historical selection rather than borrowing the public active release.
+
+Record a stop precisely as missing implementation, missing scientific review, missing scoped source
+decision, or missing retained dataset/evidence. Cite the exact selection and failed requirement;
+do not infer source withdrawal merely from an empty database. A future fresh run must retain its
+own capture/admission/model identities and durable database/artifact export before disposable
+runtime cleanup. Existing preflight and unit results are not the full PostgreSQL 16 rehearsal.
 
 Run the non-mutating clean-checkout preflight with:
 
@@ -1201,6 +1528,16 @@ genuinely admitted local source authority. Prove restart/reclaim at every retain
 no-change replay, stale/superseded authority rejection, one genuinely unavailable cohort member,
 complete batch visibility only after commit, and byte-identical public heads. Any fixture, fabricated
 qualification, public-release fallback, or missing/expired rights authority invalidates the proof.
+
+The native run owner's candidate-checkpoint operation is currently an application seam, not a new
+CLI rehearsal command. It requires an already consumed original private native run and explicitly
+configured derived-private candidate storage. It derives fitting inputs from retained authority;
+operators cannot supply replacement candidate values. A successful call retains `candidate_locked`,
+not a completed or qualified model. Exact replay reads the saved candidate without fitting or
+renewing authorization. Storage failure leaves the started run without a terminal failure record.
+An expired operational receipt blocks a new checkpoint even if its dispatch lease was heartbeated.
+Do not renew that immutable receipt, clear consumption, or use this operation to bypass the still
+unfinished continuation and final-test execution paths.
 
 The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
 It accepts an exact retained dispatch plus its live claim, requires the exact immutable factual output
@@ -1305,7 +1642,9 @@ authenticate the component against the original immutable attempt and independen
 replacement claimant as current. An exact retained component returns without rematerializing the
 observation set, issuing a second model-run authorization or retraining. The model-evidence composition
 now pairs it with the genuine pick component through the existing model-pair coordinator, but the
-local worker does not invoke that composition until the later end-to-end wiring stage. No new player
+local worker now invokes that composition when exact model-pair and cohort construction dependencies
+are supplied. The command-line composition still lacks that genuine configuration; this wiring does
+not establish native PAV execution or a successful genuine-data rehearsal. No new player
 retry ledger or current pointer is part of this slice. Migration 0089 adds
 only the coordinator's least-privilege reads, immutable inserts and narrowly scoped row-lock/update
 permissions required by the existing append-only model-run and artifact-custody triggers.
@@ -1397,6 +1736,14 @@ npm run outcomes:valuation:run-local -- \
 The command is backend-only and fails closed unless the database is loopback PostgreSQL named exactly
 `statly_outcomes_test`. Reusing the operation key returns or completes the exact retained request; do
 not substitute a random key merely because the first command lost its response.
+
+Changed factual evidence now runs through the shared recalculation coordinator's model-evidence and
+prepared-cohort stages before batch execution. If exact construction dependencies have not been
+supplied, the runtime throws `MISSING_CONSTRUCTION_CONFIGURATION` and does not execute a new batch
+for that changed evidence. This is a configuration blocker, not a completed valuation. The CLI does
+not yet assemble those genuine dependencies. Do not replace them with fixture admissions or inferred
+scientific approvals. Unavailable evidence fails closed; substantive no-change retains the existing
+batch reuse path.
 
 For each cohort, verify the retained capture names the expected factual-release revision, model-pair
 revision, prepared-v3 revision, and prior batch revision. Expected unavailable members remain explicit
@@ -1660,6 +2007,30 @@ operational-role gates are satisfied.
    evidence and current CAS heads reconcile. Confirm no release, projection, valuation, grade,
    Firestore, fantasy user, league, team or roster row changed. Publication starts only through the
    separate factual-release procedure below.
+
+For complete-season reconciliation, measure receipt construction and persistence before execution.
+Migration `0139_canonical_text_reconciliation_receipt` allows the exact complete canonical wrapper in
+text with a separately authenticated wrapper checksum, preserving legacy JSONB receipts. Use the
+existing reconciliation owner for persistence and exact replay; do not cast a large receipt back to
+JSONB or split an authoritative season run merely to avoid the JSONB container limit. The HPN input
+owner consumes one run's normalized match and appearance memberships. Validate heap, database, WAL,
+backup and disk-reserve bounds independently; a successful source-batch run does not prove capacity
+for its larger reconciliation receipt and game-to-match evidence membership set. The owner writes
+bounded UTF-8 chunks into a newly allocated transaction-owned large object, converts its bytes to
+uncompressed temporary text, and unlinks it before the permanent checksum-guarded insert or exact
+replay comparison. Budget the overlapping large object and temporary text, large-object WAL/catalog
+writes, and full-value conversion allocations for both persistence and replay. Rollback removes a
+failed transfer's large-object creation; verify no transfer objects remain after successful calls.
+A scalar receipt capacity probe must cover insertion, an update, exact comparison and checksum
+readback; passing it does not certify the complete normalized membership transaction.
+
+Migration `0140_reconciled_match_metric_appearance_scope` validates match-metric club membership through
+the exact linked appearance, preserving the source's `appearance_fact` storage and the reconciled
+result's resolved club. Before retrying a membership rejection, verify that linkage and its retained
+player, match and represented-club evidence; do not populate empty direct source club columns or
+rewrite accepted facts. Season-metric scope checks and derived-games participation rules remain
+separate. After a failed transaction, authenticate rollback and a verified recovery backup before a
+fresh reviewed attempt.
 
 Local contract verification:
 
