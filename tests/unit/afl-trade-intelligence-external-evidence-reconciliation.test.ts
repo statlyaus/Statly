@@ -661,6 +661,58 @@ describe('external draft and trade evidence reconciliation', () => {
     );
   });
 
+  it('keeps unresolved future picks distinct by original club and stable when custody arrives', () => {
+    const baseClaims = futureDraftguru.content.evidence.map((row) => row.content.claim);
+    const first = baseClaims.find((claim) => claim.kind === 'directed_transfer');
+    if (!first || first.asset.kind !== 'future_pick') throw new Error('Missing future fixture');
+    const second = {
+      ...first,
+      nativeTransferId: 'bulldogs-2026-round-2',
+      asset: { ...first.asset, originalClub: { nativeId: null, recordedName: 'Western Bulldogs' } },
+    };
+    const input = {
+      environment: 'test_fixture' as const,
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [batch('draftguru', '4', [...baseClaims, second])],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    };
+    const unresolved = reconcileAflTradeExternalEvidence(input);
+    const assets = unresolved.content.transfers.map((transfer) => transfer.asset);
+    expect(assets.every((asset) => asset.kind === 'pick_entitlement')).toBe(true);
+    expect(
+      new Set(assets.map((asset) => (asset.kind === 'pick_entitlement' ? asset.pickId : null))).size
+    ).toBe(2);
+    expect(unresolved.content.transfers.every((transfer) => transfer.status === 'unresolved')).toBe(
+      true
+    );
+    const withCustody = reconcileAflTradeExternalEvidence({
+      ...input,
+      sourceBatches: [...input.sourceBatches, futureOrder],
+    });
+    const original = assets.find(
+      (asset) => asset.kind === 'pick_entitlement' && asset.originalClubId === 'club-gws'
+    );
+    expect(
+      withCustody.content.transfers.find(
+        (transfer) =>
+          transfer.asset.kind === 'pick_entitlement' && transfer.asset.originalClubId === 'club-gws'
+      )?.asset
+    ).toEqual(original);
+    const unknown = reconcileAflTradeExternalEvidence({ ...input, identityResolutions: [] });
+    expect(
+      new Set(
+        unknown.content.transfers.map((transfer) =>
+          transfer.asset.kind === 'pick_entitlement' ? transfer.asset.pickId : null
+        )
+      ).size
+    ).toBe(2);
+    expect(unknown.content.transfers.every((transfer) => transfer.status === 'unresolved')).toBe(
+      true
+    );
+  });
+
   it('keeps an unmatured future-pick entitlement open without inventing a selection', () => {
     const candidate = reconcileAflTradeExternalEvidence({
       environment: 'test_fixture',
