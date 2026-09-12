@@ -122,8 +122,24 @@ export function reviewSpecialEntitlementReconciliation(input: {
       if (selections[0].status === 'disputed') issues.add('canonical_selection_disputed');
       for (const edge of bundle.custody) {
         const asset = transfersById.get(edge.transferId)?.asset;
-        if (asset?.kind === 'pick_entitlement' && asset.pickId !== selections[0].pickId)
-          issues.add('canonical_pick_mismatch');
+        const renumbering = (bundle.renumbering ?? []).filter(
+          (binding) => binding.transferId === edge.transferId
+        );
+        if (asset?.kind === 'pick_entitlement' && asset.pickId !== selections[0].pickId) {
+          const binding = renumbering[0];
+          if (
+            renumbering.length !== 1 ||
+            !binding ||
+            binding.sourcePickId !== asset.pickId ||
+            binding.targetPickId !== selections[0].pickId ||
+            asset.draftYear !== selections[0].draftYear ||
+            asset.draftType !== selections[0].draftType
+          ) {
+            issues.add('canonical_pick_mismatch');
+          }
+        } else if (renumbering.length > 0) {
+          issues.add('unnecessary_renumbering_binding');
+        }
       }
     }
   }
@@ -154,6 +170,7 @@ export function reviewSpecialEntitlementReconciliation(input: {
         bundle.award,
         ...(bundle.activation ? [bundle.activation] : []),
         ...bundle.custody,
+        ...(bundle.renumbering ?? []),
         bundle.selection,
       ]) {
         if (!referencesMatch(event.evidence)) issues.add('capture_not_bound_to_candidate');
@@ -178,6 +195,7 @@ export function reviewSpecialEntitlementReconciliation(input: {
               custody: bundle.custody.map((edge) => ({ ...edge, entitlementId })),
               retrospectiveExercise: {
                 activation: bundle.activation,
+                ...(bundle.renumbering ? { renumbering: bundle.renumbering } : {}),
                 selection: bundle.selection,
                 scope: 'retrospective_only' as const,
                 historicalFeatureEligible: false as const,

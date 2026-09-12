@@ -17,7 +17,8 @@ import { reviewSpecialEntitlementReconciliation } from '@/server/aflTradeIntelli
 function fixture(
   occurredOn: string | null = '2010-10-02',
   selectedPlayerId = 'p',
-  component = 'CMP1 (Synthetic)'
+  component = 'CMP1 (Synthetic)',
+  renumbered = false
 ) {
   const at = '2026-09-12T00:00:00.000Z';
   const entity = (name: string) => ({ nativeId: name, recordedName: name });
@@ -66,6 +67,35 @@ function fixture(
       selectedByClub: entity('b'),
     },
   ];
+  if (renumbered) {
+    const selection = claims.find((claim) => claim.kind === 'draft_selection');
+    if (selection?.kind === 'draft_selection') selection.selectedByClub = entity('a');
+    claims.push(
+      {
+        kind: 'transaction',
+        nativeEventId: 'later',
+        seasonYear: 2013,
+        occurredOn: null,
+        transactionType: 'trade',
+        title: 'Later custody',
+      },
+      {
+        kind: 'directed_transfer',
+        nativeEventId: 'later',
+        nativeTransferId: 'later-edge',
+        fromClub: entity('b'),
+        toClub: entity('a'),
+        asset: {
+          kind: 'current_pick',
+          draftYear: 2013,
+          draftType: 'national',
+          recordedPickNumber: 7,
+          recordedRoundNumber: 1,
+          recordedLabel: 'Pick 7',
+        },
+      }
+    );
+  }
   const batch = createAflTradeExternalEvidenceBatch({
     schemaVersion: 'afl-trade-external-evidence-batch/v1',
     provider: 'statly_local_fixture',
@@ -142,10 +172,75 @@ function fixture(
       occurredAt: '2013-11-01T00:00:00Z',
     },
   };
+  if (renumbered) {
+    const first = candidate.content.transfers.find(
+      (transfer) => transfer.asset.kind === 'special_pick'
+    )!;
+    link.custody[0].transferId = first.transferId;
+    const later = candidate.content.transfers.find(
+      (transfer) => transfer.asset.kind === 'pick_entitlement'
+    )!;
+    link.custody.push({
+      ...event,
+      transferId: later.transferId,
+      fromClubId: 'b',
+      toClubId: 'a',
+      occurredAt: '2013-10-01T00:00:00Z',
+    });
+    link.selection.clubId = 'a';
+  }
   return { input, candidate, link, sourceBatches: [batch] };
 }
 
 describe('entitlement reconciliation binding', () => {
+  it('binds evidenced renumbering without changing trade-time picks or inventing dates', () => {
+    const f = fixture(null, 'p', 'CMP1 (Synthetic)', true);
+    const later = f.candidate.content.transfers.find(
+      (transfer) => transfer.asset.kind === 'pick_entitlement'
+    )!;
+    if (later.asset.kind !== 'pick_entitlement') throw new Error('Missing pick');
+    const binding = {
+      entitlementId: f.link.award.entitlementId,
+      transferId: later.transferId,
+      sourcePickId: later.asset.pickId,
+      targetPickId: f.candidate.content.draftSelections[0].pickId,
+      occurredAt: { precision: 'year', year: 2013 },
+      evidence: f.link.selection.evidence,
+    };
+    const review = (renumbering: unknown[]) =>
+      reviewSpecialEntitlementReconciliation({
+        ...f,
+        links: [{ ...f.link, renumbering }],
+      });
+    expect(review([]).content.results[0].issues).toContain('canonical_pick_mismatch');
+    const result = review([binding]);
+    expect(result.content.bindingStatus).toBe('candidate_bound');
+    expect(
+      result.content.results[0].proposedResolution?.retrospectiveExercise.renumbering?.[0]
+        .occurredAt
+    ).toEqual({ precision: 'year', year: 2013 });
+    expect(later.asset.nominalPick).toBe(7);
+    expect(f.candidate.content.draftSelections[0].selectionNumber).toBe(9);
+    expect(result.content.promotionEligible).toBe(false);
+    for (const invalid of [
+      [binding, binding],
+      [{ ...binding, sourcePickId: binding.targetPickId }],
+      [{ ...binding, targetPickId: binding.sourcePickId }],
+      [{ ...binding, transferId: f.link.custody[0].transferId }],
+      [{ ...binding, occurredAt: { precision: 'year', year: 2014 } }],
+      [{ ...binding, evidence: [] }],
+      [
+        {
+          ...binding,
+          evidence: [{ ...binding.evidence[0], captureId: `source-capture:${'9'.repeat(64)}` }],
+        },
+      ],
+    ]) {
+      expect(review(invalid).content.bindingStatus).toBe('blocked');
+      expect(review(invalid).content.results[0].proposedResolution).toBeNull();
+    }
+  });
+
   it('keeps identity independent of eventual player and distinguishes award components', () => {
     const identity = (f: ReturnType<typeof fixture>) =>
       reviewSpecialEntitlementReconciliation({ ...f, links: [f.link] }).content.results[0]
