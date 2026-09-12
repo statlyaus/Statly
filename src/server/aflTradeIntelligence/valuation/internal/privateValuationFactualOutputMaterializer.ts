@@ -91,6 +91,15 @@ export async function materializeAflTradePrivateValuationFactualOutput(
            WHERE candidate_run.candidate_id=candidate.candidate_id
              AND candidate_run.factual_run_id<>factual_run.factual_run_id)
         AND NOT EXISTS (
+          SELECT 1
+            FROM outcome_release_source_capture candidate_source
+           WHERE candidate_source.release_id=candidate.target_release_id
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM jsonb_array_elements(candidate.candidate_json->'members'->'sourceCaptures') declared
+                WHERE declared.value=candidate_source.membership_json
+                  AND declared.value->>'captureId'=candidate_source.capture_id))
+        AND NOT EXISTS (
           SELECT 1 FROM outcome_registry_event event
            WHERE event.release_id=candidate.target_release_id)
       GROUP BY request.scope_key,binding.binding_id,admission.admission_id,
