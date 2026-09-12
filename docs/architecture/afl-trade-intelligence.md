@@ -748,108 +748,23 @@ invocation is rejected. The map does not
 authenticate its own review, broaden source-use rights, or admit the capture; the existing staging
 repository and source authority still enforce those boundaries.
 
-A fresh private local run on 8 September 2026 captured and staged 9,936 FootyWire rows, all from
-2025, with zero normalization issues through the initial map, which left match interpretation
-unset, and the existing pinned capture runtime.
-The retained capture is
-`source-capture:137662bb03da6e228ab1d7f5dc2e7ebbf26bb6061d3127c780acfa28b05481e8`,
-with normalization
-`provider-normalization-run:de5f46f87974d1138f9437c24952d56c865219b5a9f908387969936d90a58f66`.
-This run used fresh source-specific records under the standing source policy; it did not relabel the
-older capture-only exception. Its raw evidence and isolated database backup are retained locally.
-Successful staging establishes neither complete HPN field coverage nor canonical player/match
-reconciliation, historical forecast support, model admission, or completion of the genuine loop.
-
-The same retained capture was subsequently normalized with the reviewed orientation map as
-`provider-normalization-run:b6ca9edd9efcebf317874b6021f7e918dd95f087cdb83edbfb703d5b6a873421`.
-That local run produced 9,936 match candidates spanning 216 provider matches, zero normalization
-issues, zero appearance inferences, and no changed source-row hashes or typed source values.
-An exact second invocation returned the same normalization run as an idempotent replay. No new
-capture was made. Match candidates remain proposals, not approved canonical matches.
-
-A separate private AFL Tables results capture on 8 September 2026 retained and staged 216 rows,
-all from 2025, with zero normalization issues:
-`source-capture:7ca8b9f3b1c3afbc7036ad35b292d5eae6d0aabf291d30c6ae369e2ae0572693`,
-normalized as
-`provider-normalization-run:11feb4607491af12141b7f052a5cf228a7834970bc4bcca29affcdbd48e80b94`.
-This is retained source evidence, not yet canonical match-completion or HPN admission.
-
 `development/localAflTablesRawEvidenceFieldMap.ts` separately preserves player-row evidence
 without asserting measured statistics or participation. Its explicit `raw_evidence_only` policy
 requires an empty metric interpretation and independent appearance review; the existing factual
 map remains unchanged. Missing source IDs are not filled, and source occurrence keys are not
-canonical player identities. A fresh run reached source capture but failed database persistence
-with an immutable artifact-custody conflict; its raw evidence and backup remain retained for
-diagnosis. It is not a successful staging run, and no retry or zero-provenance approval is implied.
+canonical player identities. The private canonical-reference adapter authenticates and reuses exact
+existing custody rather than relaxing immutability. Capture completion retains and reads back the
+receipt and snapshot before staging, so later staging failure does not lose the original authorization
+chronology. Exact normalization and registration replays return the retained records without changing
+raw source values, timestamps, authority or review evidence.
 
-That conflict was traced to identical invocation bytes receiving a different artifact creation
-timestamp in a separate local store. The private canonical-reference adapter now authenticates
-existing custody and reuses its exact reference rather than relaxing immutability. Capture
-completion also retains and reads back the exact receipt and snapshot before staging, so a staging
-failure need not lose the original authorization chronology. The first failed attempt's missing
-manifest was not reconstructed or re-signed.
-
-A separately reviewed second attempt on 9 September 2026 retained capture
-`source-capture:694075c069bef50da49aeeab57a8515847267d62c14a72bddad68130beada9e5`
-and normalization
-`provider-normalization-run:84c1455259c97cf7ba6290416b42e05294427f1c99d99a22b5c6b12819e464fe`.
-All 9,936 rows were retained, with 158 issues across 79 rows whose combined `Player` metadata is
-missing: one required-field and one occurrence-key issue per row. This is a successful capture and
-a `needs_review` staging result, not a clean HPN source. Exact payload inspection found populated
-`First.name`, `Surname` and `url` fields across all rows and no duplicate keys when using those name
-components. The raw-map constructor now explicitly uses the existing split-name normalizer;
-it leaves raw `Player` and missing IDs unchanged. Offline recovery subsequently retained normalization
-`provider-normalization-run:b1df99595ef351f1ac433534f3ec1d580a3cc9cbd2ed9ec158afe5d4db99f3ee`
-with 9,936 rows and zero issues. A second replay returned that exact normalization. All 9,936 raw
-row hashes and typed source values were unchanged; the old 158 issues remain retained. This is raw
-staging only: no metric or appearance claims, identity admission or model qualification were added.
-
-The first offline split-name replay failed atomically during persistence with PostgreSQL error
-`53100` (`No space left on device`). A copied-backup replay reproduced that exact failure without
-new capture or map approval. The disposable harness mounts PostgreSQL data on a 1 GiB temporary
-filesystem; the failing relation resides there. No at-failure capacity measurement was retained,
-so this is not evidence that the host disk or retained Docker volumes should be pruned. The bounded
-recovery run increased only its disposable data mount to 2 GiB and passed. Measured data-mount use
-rose from 963,324 KiB after restore to 1,050,524 KiB after staging, exceeding the old 1 GiB ceiling.
-This required no new capture, source approval, evidence deletion or global Docker change.
-The subsequent canonical-registration attempt exposed a separate startup race before restore:
-the image's socket-only initialization server could satisfy the harness readiness probe. The
-shared harness now probes loopback TCP, matching the workflow's connection path, and its regression
-requires the workflow to wait past socket-only initialization. No source or canonical records were
-changed by that failed pre-restore attempt.
-
-The genuine results registration subsequently passed against the retained 2025 results capture:
-18 canonical clubs, 216 canonical matches, and 648 original club/match occurrence resolutions.
-After all later confirmations were present, every original resolution remained current and all
-648 exact registration/resolution replays returned existing records. The source `Game` namespace
-was reviewed as the original fixed-width field parsed by pinned fitzRoy, scoped to these AFLM 2025
-results. Calendar-day precision is explicit rather than represented as an observed kickoff time.
-This is genuine canonical club/match evidence, not player reconciliation, factual appearance
-admission, numeric field approval, model qualification or completion of issue 579.
-
-The subsequent genuine player registration and recovery also passed: 668 canonical people and
-9,936 current exact candidate-only occurrence resolutions, with 9,936 exact registration replays
-and 9,936 exact resolution replays. Recovery preserved the 867 retained creation reviews and their
-original times, completed the remaining 9,069 using the database clock, and did not renew authority.
-All original raw fields remained unchanged, including 83 missing numeric IDs and 79 missing birth
-dates. Four separately retained profile-page reviews supplied canonical birth-date evidence without
-filling those raw nulls. The combined recovery backup has SHA-256
-`9d6e1a87cc3d9ee3a09209a8fe1c7449672db04bbb51b4ffee9583b278328690`.
-This establishes exact person reconciliation only; provider-identity namespaces, factual admission,
-participation and numeric interpretation remain separate checks.
-
-The following archive-only batch retained all thirteen AFL Tables player-stat seasons from
-2008 through 2020: 113,036 rows and 68,069,414 raw RDS bytes, each passing the strict 81-field
-capture schema. The first 2008 download survived a missing calendar-parent persistence failure;
-its signed receipt, snapshot and original raw timestamp were recovered offline without refetching.
-The remaining twelve seasons were captured once, and all thirteen snapshots passed exact
-second-persistence replay. The combined backup, which also preserves the completed 2025 person
-and results registration, has SHA-256
-`7d34e465808e6277f2bd6463690891060614d55e1d94932922e6d8d38b4bb4d2`.
-The disposable database was closed after backup verification. These are retained source captures,
-not normalized historical observations, an admitted training corpus, or evidence that a model
-meets predictive acceptance criteria. Existing source authorization and its original expiry were
-preserved; the persistence corrections did not create or renew source authority.
+The disposable PostgreSQL harness probes the same loopback TCP path used by the workflow, waits for
+the database rather than a socket-only initialization process, and removes only resources created for
+that run. Its caller must provide enough bounded temporary storage for the admitted corpus. Canonical
+club, match and person registration remains distinct from provider-identity assignment, factual
+appearance admission, numeric-field approval, HPN admission and model qualification. Operational run
+identifiers, measurements, failures and recovery evidence belong in the runbook, issue or pull request;
+they do not change these architecture boundaries.
 
 An offline decode of those thirteen original signed captures confirmed numeric typed values for
 all thirteen HPN input fields on all 113,036 rows. Missing, zero and nonzero values were counted
@@ -2755,15 +2670,17 @@ explicitly requested validation or final-test partition and rejects a forecast w
 observation in that partition. The research comparison retains its deliberate two-partition wrapper.
 These numerical helpers grant no target-access authority: execution must separately commit a
 `final_test_started` checkpoint before opening final-test targets, and must not automatically repeat
-an evaluation whose completion evidence was lost. That execution integration and retained scientific
-evaluation definitions remain required.
+an evaluation whose completion evidence was lost. The surrounding native run owner enforces that
+ordering and persists completion evidence; retained scientific acceptance and qualification definitions
+remain required for a genuine model.
 Restoration authenticates those bindings and restores
 the retained numerical state without refitting. The existing admitted-player candidate owner can
 retain/read back this artifact and reload exact bytes, refusing missing or changed custody. These
 operations require derived-private storage matching the intent's fixture, local non-production or
 validated durable-profile environment before artifact I/O. These
-helpers do not lock a run, resume a consumed intent, evaluate final-test acceptance, or qualify a
-model. Native execution and qualification remain required. The versioned checkpoint contract and
+helpers do not themselves lock a run, resume a consumed intent, evaluate final-test acceptance, or
+qualify a model. The native run owner supplies execution and recovery around them; genuine scientific
+qualification remains required. The versioned checkpoint contract and
 forward migration 0123 add durable stage records under the existing run owner: started,
 candidate-locked, final-test-started and final-test-completed. Each root has at most one record per
 stage. Later stages require exact, nonempty JSON candidate and evidence references. A deferred
@@ -2780,16 +2697,17 @@ claim and stage. The short start authorization is neither reissued nor consumed 
 replay authenticates the saved candidate and custody evidence without refitting, writing artifacts or
 renewing authority. Storage failure does not invoke the terminal-failure recorder. Synthetic database
 boundary tests exercise these application semantics; full positive PostgreSQL execution and genuine
-source admission remain unproven. This operation does not evaluate final-test labels, produce a
-terminal model result or qualify a model, and it is not yet connected to the dispatch executor.
+source admission remain unproven. This checkpoint operation alone does not evaluate final-test labels,
+produce a terminal model result or qualify a model; the surrounding native run owner sequences it with
+the retained final-test execution and recovery operations.
 The same owner now provides `beginNativeFinalTestCheckpoint` for the exact retained candidate.
 It shares the existing root lock and current-authority checks, commits `final_test_started` before
 returning a new-work grant, and refuses to fit a missing candidate. Reopening a retained start
 returns `already_started`, never another execution grant; completed custody uses the existing
 historical recovery reader. Focused service tests use synthetic database responses and real local
 candidate bytes. A separate PostgreSQL concurrency tracer proves one marker under the actual root
-lock, not a complete genuine adapter execution. Numerical final-test evaluation, completion and
-qualification remain separate unfinished work.
+lock, not a complete genuine adapter execution. The surrounding owner implements numerical final-test
+execution and completion persistence; genuine end-to-end execution and qualification remain unproven.
 Recovery preserves the original consumed authorization. A version-2 continuation intent records a
 fresh claim and start while retaining the root's scientific parents and linking its predecessor and
 checkpoint. The database validates same-request/substantive-operation ancestry, current claims,
@@ -2804,7 +2722,8 @@ evidence retention. Output references must exist by retention time. This is stru
 not proof that the checkpoint was committed or that evaluation occurred: the execution owner must
 authenticate durable checkpoint ancestry and retain/read back the exact report bytes. Existing
 terminal-manifest and qualification readers do not accept this report as a model run. Execution
-integration and continuation-terminal recovery remain required.
+integration and continuation-terminal recovery are implemented by the native run owner; this evidence
+contract alone does not grant either capability.
 New checkpoint and terminal writes require a live claim and an unexpired operational receipt;
 exact replay of an already retained terminal record does not create new execution authority.
 The existing PostgreSQL run owner now loads retained recovery state under that same root lock.
