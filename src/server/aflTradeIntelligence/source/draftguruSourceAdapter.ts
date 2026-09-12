@@ -536,9 +536,11 @@ export function parseDraftguruYearSelections(
     scopeSummary.observedRows++;
     const wrapped = $(row);
     const draftLabel = normalizeText(wrapped.find('td.draft').text());
-    if (excludedLabels.has(draftLabel)) {
-      scopeSummary.excludedByPathway[draftLabel] =
-        (scopeSummary.excludedByPathway[draftLabel] ?? 0) + 1;
+    const nonSelectionLabel =
+      draftLabel || normalizeText(wrapped.find('td.category').first().text());
+    if (excludedLabels.has(nonSelectionLabel)) {
+      scopeSummary.excludedByPathway[nonSelectionLabel] =
+        (scopeSummary.excludedByPathway[nonSelectionLabel] ?? 0) + 1;
       return;
     }
     const draftType = (

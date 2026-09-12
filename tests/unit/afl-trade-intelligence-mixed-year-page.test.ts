@@ -39,6 +39,26 @@ describe('mixed year-page conservation', () => {
       excludedByPathway: Object.fromEntries(excluded.map((label) => [label, 1])),
     });
   });
+  it('uses category only for non-selection rows with an empty draft cell', () => {
+    const categoryRow = (draft: string, category: string) =>
+      `<tr><td class="category">${category}</td><td class="draft">${draft}</td><td class="number">1</td><td class="club">Gold Coast</td><td class="player">Example</td></tr>`;
+    const result = parse(
+      table(
+        row('Mini-Draft') +
+          categoryRow('', 'Trade') +
+          categoryRow('Unknown', 'Trade') +
+          categoryRow('', 'National')
+      )
+    );
+    expect(result.evidence).toHaveLength(1);
+    expect(result.issues).toHaveLength(2);
+    expect(result.scopeSummary).toEqual({
+      observedRows: 4,
+      includedRows: 1,
+      invalidRows: 2,
+      excludedByPathway: { Trade: 1 },
+    });
+  });
   it.each(['1x', '1.5', '1e2', '0', '-1', '', '9007199254740992'])(
     'rejects malformed selection %s',
     (number) => {
