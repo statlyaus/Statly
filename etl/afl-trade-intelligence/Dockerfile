@@ -24,6 +24,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     STATLY_CAPTURE_RENV_PROJECT=/opt/statly/capture \
     STATLY_R_LOCK_SHA256=${R_LOCK_SHA256}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
       libcurl4-openssl-dev \
