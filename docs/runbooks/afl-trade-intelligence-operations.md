@@ -285,6 +285,15 @@ Run these lanes independently. Each produces source claims, not canonical facts:
    pages and linked transaction detail pages. Capture only transaction identity/date/type, parties,
    directed packages, pick/selection facts, stable source identifiers and source URLs. Do not import
    Draftguru grades, games, pick points or other derived values.
+   The general year-page parser retains National, Rookie, Pre-Season, Mid-Season and Mini-Draft
+   selections. Its `scopeSummary` accounts for every observed row as included, invalid or excluded
+   under the reviewed Trade, Free Agency, Pre-Draft, Post-Draft and Training Squad Selection labels.
+   A known non-selection label may occur in the first category cell when the draft cell is empty.
+   Selection types still come from the draft cell; a nonempty unknown draft label is not overridden.
+   Unknown pathways and malformed selections remain issues; do not suppress them before staging.
+   Require exactly one year table, at least one supported selection, and one complete positive safe
+   integer per selection-number cell. National-only capture remains a separate capability and must
+   not replace the general pathway when mini-draft evidence is required.
 2. Capture Footywire's full draft table for each supported draft year and pathway. Preserve selection
    number, round, player, selected club, draft type/year and native identifiers as provider claims.
 3. Capture the official AFL current draft order as a point-in-time custody claim. It may corroborate

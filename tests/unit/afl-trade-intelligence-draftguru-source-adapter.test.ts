@@ -233,9 +233,13 @@ describe('Draftguru source adapter', () => {
       player: { nativeId: 'harry_kyle/1', recordedName: 'Harry Kyle' },
       selectedByClub: { nativeId: 'sydney', recordedName: 'Sydney' },
     });
-    expect(result.issues).toContainEqual(
-      expect.objectContaining({ code: 'unsupported_row', sourceKey: 'year-row:2' })
-    );
+    expect(result.issues).toEqual([]);
+    expect(result.scopeSummary).toEqual({
+      observedRows: 2,
+      includedRows: 1,
+      invalidRows: 0,
+      excludedByPathway: { Trade: 1 },
+    });
     expect(JSON.stringify(result.evidence)).not.toContain('grade');
     expect(JSON.stringify(result.evidence)).not.toContain('games');
   });
