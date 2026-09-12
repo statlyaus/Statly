@@ -34,7 +34,8 @@ export async function createRetainedExternalCaptureFixture(
   sql: AflOutcomeSqlClient,
   official = false,
   environment: 'test_fixture' | 'non_production' = 'test_fixture',
-  selectionCount = 1
+  selectionCount = 1,
+  nullableTerms = false
 ) {
   await sql.query(`INSERT INTO outcome_competition_season (competition,season_year)
     VALUES ('AFLM',2024) ON CONFLICT DO NOTHING`);
@@ -182,8 +183,8 @@ export async function createRetainedExternalCaptureFixture(
       },
     ],
     rightsEvidenceIds: [scope.artifactId],
-    termsEffectiveAt: at,
-    termsExpireAt: expires,
+    termsEffectiveAt: nullableTerms ? null : at,
+    termsExpireAt: nullableTerms ? null : expires,
     withdrawalDuties: {
       stopCollection: true,
       stopNewDerivedWork: true,
