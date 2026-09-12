@@ -6,6 +6,8 @@ import {
 } from '@/server/aflTradeIntelligence/source/approvedFitzRoySourcePolicies';
 import { createApprovedAflTradeFitzRoyGateRecords } from '@/server/aflTradeIntelligence/source/approvedFitzRoyGateRecords';
 import { evaluateAflTradeGate0A } from '@/server/aflTradeIntelligence/source/sourceContracts';
+import { createRetainedFitzRoyPrivateUseRenewal } from '@/server/aflTradeIntelligence/source/retainedFitzRoyPrivateUseRenewal';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 
 const field = (sourceField: string, normalizedField: string) => ({
   sourceField,
@@ -57,6 +59,75 @@ const policies = () =>
   });
 
 describe('approved fitzRoy source policies', () => {
+  it('renews only private use for an exact retained capture without changing its original authority', () => {
+    const sourceRights = policies()[0];
+    const original = createApprovedAflTradeFitzRoyGateRecords({
+      sourceRights,
+      environment: 'non_production',
+      version: 1,
+      supersedesDecisionId: null,
+      decidedAt: '2026-08-08T00:00:00.000Z',
+      effectiveAt: '2026-08-08T00:00:00.000Z',
+      revalidateAt: '2026-09-08T00:00:00.000Z',
+      accountableOwner: 'owner',
+      reviewer: {
+        id: 'reviewer',
+        role: 'technical-reviewer',
+        evidenceId: `artifact:${'d'.repeat(64)}`,
+      },
+      authorityEvidenceId: `artifact:${'e'.repeat(64)}`,
+      rateLimitEvidenceId: `artifact:${'c'.repeat(64)}`,
+    });
+    const before = JSON.stringify({ sourceRights, ...original });
+    const renewalInput = {
+      sourceRights,
+      ...original,
+      captureId: `source-capture:${'1'.repeat(64)}`,
+      renewedAt: '2026-09-09T13:00:00.000Z',
+      accountableOwner: 'owner',
+      authorityEvidenceId: `artifact:${'f'.repeat(64)}`,
+      reviewer: {
+        id: 'actual-reviewer',
+        role: 'technical-reviewer',
+        evidenceId: `artifact:${'2'.repeat(64)}`,
+      },
+    };
+    const renewed = createRetainedFitzRoyPrivateUseRenewal(renewalInput);
+    expect(renewed.sourceRights.content.termsExpireAt).toBe('2026-10-09T13:00:00.000Z');
+    expect(renewed.sourceRights.content.operations).toMatchObject({
+      bounded_evaluation_capture: 'blocked',
+      model_training: 'blocked',
+      public_derived_output: 'blocked',
+      public_fact_display: 'blocked',
+      derived_feature_creation: 'allowed',
+    });
+    expect(renewed.proposal.content.scope.dimensions).toEqual(
+      expect.arrayContaining([
+        { name: 'retained_source_capture', values: [`source-capture:${'1'.repeat(64)}`] },
+        { name: 'original_gate_decision', values: [original.decision.decisionId] },
+        { name: 'original_source_rights_artifact', values: [sourceRights.rightsArtifactId] },
+      ])
+    );
+    expect(renewed.decision.content.supersedesDecisionId).toBe(original.decision.decisionId);
+    expect(renewed.decision.content.version).toBe(2);
+    expect(renewed.decision.content.limitations).toEqual(
+      expect.arrayContaining(original.decision.content.limitations)
+    );
+    expect(JSON.stringify({ sourceRights, ...original })).toBe(before);
+    const mismatchedContent = {
+      ...original.decision.content,
+      scope: { ...original.decision.content.scope, exclusions: ['An unagreed change'] },
+    };
+    expect(() =>
+      createRetainedFitzRoyPrivateUseRenewal({
+        ...renewalInput,
+        decision: {
+          decisionId: createAflTradeContentAddress('gate-decision', mismatchedContent),
+          content: mismatchedContent,
+        },
+      })
+    ).toThrow(/matching original/i);
+  });
   it('creates exactly one policy for each approved player-stat capability', () => {
     const result = policies();
 

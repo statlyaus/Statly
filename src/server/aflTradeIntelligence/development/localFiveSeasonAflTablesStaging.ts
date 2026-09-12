@@ -1,10 +1,8 @@
-import { generateKeyPairSync } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
-import { createAflTradeEd25519EgressExecutionVerifier } from '../source/fitzRoyHttpEgressExecutor';
 import {
   createAflTradeFitzRoyFieldMapSha256,
   type AflTradeFitzRoyFieldMap,
@@ -14,6 +12,7 @@ import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoy
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
 import { createLocalAflTradeDockerFitzRoyCaptureExecutor } from './localDockerFitzRoyCaptureExecutor';
 import { createLocalAflTradeDockerFitzRoyDecodeExecutor } from './localDockerFitzRoyDecodeExecutor';
+import { createLocalAflTradeEgressSigningAuthority } from './localEgressSigningAuthority';
 import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
 import { createLocalAflTradeFiveSeasonAflTablesAuthority } from './localFiveSeasonAflTablesAuthority';
 import {
@@ -158,11 +157,10 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
   if (!egressPolicyEvidenceId) {
     throw new TypeError('The local AFL Tables authority is missing its egress policy evidence.');
   }
-  const signingKeyId = 'local-five-season-fitzroy-capture';
-  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
-  const egressExecutionVerifier = createAflTradeEd25519EgressExecutionVerifier({
-    [signingKeyId]: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+  const signingAuthority = createLocalAflTradeEgressSigningAuthority({
+    artifactRoot: artifactRootDirectory,
   });
+  const egressExecutionVerifier = signingAuthority.verifier;
   const captureExecutor = createLocalAflTradeDockerFitzRoyCaptureExecutor({
     imageReference,
     runtimeIdentity: LOCAL_AFL_TRADE_FITZROY_RUNTIME,
@@ -171,7 +169,7 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
       cacheSeconds: 86_400,
       egressPolicyEvidenceId,
     },
-    signingKey: { keyId: signingKeyId, privateKey },
+    signingKey: signingAuthority.signingKey,
   });
   const decoderExecutor = createLocalAflTradeDockerFitzRoyDecodeExecutor({ imageReference });
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);

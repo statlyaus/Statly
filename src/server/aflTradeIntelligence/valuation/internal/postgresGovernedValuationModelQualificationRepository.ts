@@ -582,6 +582,33 @@ async function registerQualificationWithinTransaction(
         'A retained qualification replay cannot replace a newer current pair.'
       );
     }
+    // Ledger writers serialize on this head. Keep replay's exact Gate 3 authority
+    // stable until the claim-bound registration transaction commits.
+    const head = await transaction.query(
+      `SELECT revision FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
+    );
+    const gates = await transaction.query<{ decision_id: string }>(
+      `SELECT decision.decision_id FROM outcome_gate_decision decision
+       WHERE decision.gate='gate_3_model_validity' AND decision.environment='non_production'
+         AND decision.state='approved' AND decision.effective_at<=clock_timestamp()
+         AND (decision.revalidate_at IS NULL OR decision.revalidate_at>clock_timestamp())
+         AND ((decision.decision_id=$2 AND decision.decision_key=$1||':player-model-validity')
+           OR (decision.decision_id=$3 AND decision.decision_key=$1||':pick-model-validity'))
+         AND NOT EXISTS (SELECT 1 FROM outcome_gate_decision successor
+           WHERE successor.gate=decision.gate AND successor.environment=decision.environment
+             AND successor.decision_key=decision.decision_key AND successor.version>decision.version)`,
+      [
+        qualification.content.scopeKey,
+        existingCurrent.playerGate3DecisionId,
+        existingCurrent.pickGate3DecisionId,
+      ]
+    );
+    if (head.rows.length !== 1 || gates.rows.length !== 2) {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'STALE_GATE_LEDGER',
+        'Qualification replay lost its exact current Gate 3 authority.'
+      );
+    }
     const workResult = await transaction.query<JsonRow>(
       `SELECT work_json AS value FROM outcome_governed_model_qualification_work WHERE work_id=$1`,
       [existingCurrent.workId]

@@ -9,11 +9,12 @@ const sourceSchema = z
   .object({
     seasonYear: z.number().int().min(1998).max(2200),
     captureId: publicIdSchema,
-    provider: z.enum(['afl_tables', 'official_afl']),
+    provider: z.enum(['afl_tables', 'official_afl', 'footywire']),
     capabilityId: z.enum([
       'afl-tables-results',
       'afl-tables-player-stats',
       'official-afl-player-stats',
+      'footywire-player-stats',
     ]),
     normalizationRunId: publicIdSchema,
     providerDecodeMap: z.unknown(),
@@ -24,7 +25,15 @@ const sourceSchema = z
     factualRunId: publicIdSchema.nullable(),
     hpnResolutionsCurrent: z.boolean(),
   })
-  .strict();
+  .strict()
+  .refine(
+    ({ provider, capabilityId }) =>
+      (provider === 'afl_tables' &&
+        (capabilityId === 'afl-tables-results' || capabilityId === 'afl-tables-player-stats')) ||
+      (provider === 'official_afl' && capabilityId === 'official-afl-player-stats') ||
+      (provider === 'footywire' && capabilityId === 'footywire-player-stats'),
+    'The local HPN source provider does not match its capability.'
+  );
 const rowSchema = z
   .object({
     trusted_at: timestampSchema,
@@ -49,11 +58,12 @@ export type LocalAflTradeHpnReviewSnapshot = Readonly<{
   sources: readonly Readonly<{
     seasonYear: number;
     captureId: string;
-    provider: 'afl_tables' | 'official_afl';
+    provider: 'afl_tables' | 'official_afl' | 'footywire';
     capabilityId:
       | 'afl-tables-results'
       | 'afl-tables-player-stats'
-      | 'official-afl-player-stats';
+      | 'official-afl-player-stats'
+      | 'footywire-player-stats';
     normalizationRunId: string;
     providerDecodeMap: unknown;
     rights: unknown;
@@ -193,7 +203,8 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
    WHERE capture.environment='non_production' AND capture.status='staged'
      AND capture.anchor_season_year BETWEEN $2 AND $3
      AND capture.capability_id IN (
-       'afl-tables-results','afl-tables-player-stats','official-afl-player-stats'
+       'afl-tables-results','afl-tables-player-stats','official-afl-player-stats',
+       'footywire-player-stats'
      )
 )
 SELECT transaction_timestamp() AS trusted_at,authority.bundle_json AS reviewed_evidence_bundle_json,

@@ -39,7 +39,7 @@ function capture(
         ? 'fitzroy://official-afl-player-details/2025'
         : provider === 'statly_local_fixture'
           ? `fixture://statly/${suffix}`
-          : `https://example.test/${provider}/2025`,
+          : `https://example.test/${provider}/2025/${suffix}`,
     capturedAt,
     effectiveAt: '2025-11-20T00:00:00.000Z',
     parserVersion: `${provider}/v1`,
@@ -50,9 +50,15 @@ function capture(
 function batch(
   provider: AflTradeExternalEvidenceContent['provider'],
   suffix: string,
-  claims: AflTradeExternalEvidenceContent['claim'][]
+  claims: AflTradeExternalEvidenceContent['claim'][],
+  sourceUrl?: string,
+  captureOverrides: Partial<AflTradeExternalEvidenceContent['capture']> = {}
 ) {
-  const sourceCapture = capture(provider, suffix);
+  const sourceCapture = {
+    ...capture(provider, suffix),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...captureOverrides,
+  };
   const evidence = claims.map((claim, index) =>
     createAflTradeExternalEvidenceEnvelope({
       schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
@@ -891,4 +897,692 @@ describe('external draft and trade evidence reconciliation', () => {
       expect.objectContaining({ code: 'identity_unresolved', severity: 'blocking' })
     );
   });
+});
+
+it('conserves explicit draft session evidence on each covered selection and blocks conflicting dates', () => {
+  const session = batch('official_afl', '9', [
+    {
+      kind: 'draft_session',
+      draftYear: 2025,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-20',
+      officialName: 'Synthetic national draft',
+      selectionNumbers: [14],
+    },
+  ]);
+  const reconcile = (extra: (typeof session)[] = []) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, footywire, officialOrder, session, ...extra],
+      identityResolutions: resolutions,
+      reconciledAt: capturedAt,
+    });
+  const candidate = reconcile();
+  expect(candidate.content.draftSelections[0]!.evidenceIds).toContain(
+    session.content.evidence[0]!.evidenceId
+  );
+  const conflict = batch('official_afl', '8', [
+    {
+      kind: 'draft_session',
+      draftYear: 2025,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-21',
+      officialName: 'Synthetic conflicting date',
+      selectionNumbers: [14],
+    },
+  ]);
+  expect(reconcile([conflict]).content.issues).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: 'selection_conflict', severity: 'blocking' }),
+    ])
+  );
+});
+
+it('reconciles a dated selection without inventing pre-draft pick custody or lineage', () => {
+  const selection = batch('draftguru', '7', [
+    {
+      kind: 'draft_selection',
+      draftYear: 2025,
+      draftType: 'national',
+      selectionNumber: 14,
+      roundNumber: null,
+      player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+      selectedByClub: { nativeId: 'western-bulldogs', recordedName: 'Western Bulldogs' },
+    },
+  ]);
+  const session = batch('official_afl', '6', [
+    {
+      kind: 'draft_session',
+      draftYear: 2025,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-20',
+      officialName: 'Synthetic completed national draft',
+      selectionNumbers: [14],
+    },
+  ]);
+  const reconcile = (additional: (typeof selection)[] = [], identity = resolutions) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [selection, session, ...additional],
+      identityResolutions: identity,
+      reconciledAt: capturedAt,
+    });
+  const candidate = reconcile();
+  expect(candidate.content.issues).toEqual([]);
+  expect(candidate.content.draftSelections).toEqual([
+    expect.objectContaining({
+      selectionNumber: 14,
+      playerId: 'player-harry-kyle',
+      clubId: 'club-western-bulldogs',
+      status: 'single_source',
+    }),
+  ]);
+  expect(candidate.content.pickCustody).toEqual([]);
+  expect(candidate.content.pickLineage).toEqual([]);
+  const custody = batch('official_afl', '5', [
+    {
+      kind: 'pick_custody',
+      draftYear: 2025,
+      draftType: 'national',
+      roundNumber: 1,
+      observedAt: '2025-11-20T00:00:00.000Z',
+      recordedPickNumber: 14,
+      originalClub: { nativeId: null, recordedName: 'GWS' },
+      currentClub: { nativeId: null, recordedName: 'GWS' },
+    },
+  ]);
+  expect(reconcile([custody]).content.draftSelections[0]!.status).toBe('unresolved');
+  const incompleteCustody = batch('official_afl', '4', [
+    {
+      ...custody.content.evidence[0]!.content.claim,
+      originalClub: null,
+    } as AflTradeExternalEvidenceContent['claim'],
+  ]);
+  expect(reconcile([incompleteCustody]).content.draftSelections[0]!.status).toBe('unresolved');
+  const agreeingSession = batch('official_afl', '2', [session.content.evidence[0]!.content.claim]);
+  expect(reconcile([agreeingSession]).content.draftSelections[0]!.status).toBe('single_source');
+  const conflictingSession = batch('official_afl', '3', [
+    {
+      kind: 'draft_session',
+      draftYear: 2025,
+      draftType: 'national',
+      sessionOrdinal: 2,
+      eventDate: '2025-11-21',
+      officialName: 'Synthetic conflicting session',
+      selectionNumbers: [14],
+    },
+  ]);
+  expect(reconcile([conflictingSession]).content.draftSelections[0]!.status).toBe('disputed');
+  expect(reconcile([], []).content.draftSelections[0]!.status).toBe('unresolved');
+});
+
+it('reconciles complementary session facts only with their complete inventory proof', () => {
+  const selectionClaims = [1, 2, 3].map((selectionNumber) => ({
+    kind: 'draft_selection' as const,
+    draftYear: 2018,
+    draftType: 'national' as const,
+    selectionNumber,
+    roundNumber: null,
+    player: { nativeId: `player-${selectionNumber}`, recordedName: `Player ${selectionNumber}` },
+    selectedByClub: {
+      nativeId: `club-${selectionNumber}`,
+      recordedName: `Club ${selectionNumber}`,
+    },
+  }));
+  const inventory = batch('draftguru', 'a', selectionClaims);
+  const dateOne = batch(
+    'official_afl',
+    '4',
+    [
+      {
+        kind: 'draft_session_date',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 1,
+        eventDate: '2018-11-22',
+      },
+      {
+        kind: 'draft_session_completion',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 1,
+      },
+    ],
+    'https://www.afl.com.au/news/53184/night-one'
+  );
+  const first = batch(
+    'official_afl',
+    '5',
+    [
+      {
+        kind: 'draft_session_boundary',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 1,
+        boundary: 'first',
+        selectionNumber: 1,
+        player: { nativeId: 'player-1', recordedName: 'Player 1' },
+        selectedByClub: { nativeId: 'club-1', recordedName: 'Club 1' },
+      },
+    ],
+    'https://www.afl.com.au/news/99499/final-report'
+  );
+  const secondStart = batch(
+    'official_afl',
+    '6',
+    [
+      {
+        kind: 'draft_session_boundary',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 2,
+        boundary: 'first',
+        selectionNumber: 2,
+        player: { nativeId: 'player-2', recordedName: 'Player 2' },
+        selectedByClub: { nativeId: 'club-2', recordedName: 'Club 2' },
+      },
+    ],
+    'https://www.afl.com.au/news/39763/day-two-first'
+  );
+  const finalSession = batch(
+    'official_afl',
+    '7',
+    [
+      {
+        kind: 'draft_session_date',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 2,
+        eventDate: '2018-11-23',
+      },
+      {
+        kind: 'draft_session_completion',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 2,
+      },
+      {
+        kind: 'draft_session_boundary',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 2,
+        boundary: 'last',
+        selectionNumber: 3,
+        player: { nativeId: 'player-3', recordedName: 'Player 3' },
+        selectedByClub: { nativeId: 'club-3', recordedName: 'Club 3' },
+      },
+    ],
+    'https://www.afl.com.au/news/99499/original-slug'
+  );
+  const total = batch(
+    'official_afl',
+    '8',
+    [
+      {
+        kind: 'draft_completed_total',
+        draftYear: 2018,
+        draftType: 'national',
+        selectionCount: 3,
+      },
+    ],
+    'https://www.afl.com.au/news/140672/independent-total'
+  );
+  const identityResolutions = [
+    ...['draftguru', 'official_afl'].flatMap((provider) =>
+      [1, 2, 3].flatMap((number) => [
+        resolution(
+          provider as 'draftguru' | 'official_afl',
+          'player',
+          `Player ${number}`,
+          `player-${number}`,
+          `player-${number}`
+        ),
+        resolution(
+          provider as 'draftguru' | 'official_afl',
+          'club',
+          `Club ${number}`,
+          `club-${number}`,
+          `club-${number}`
+        ),
+      ])
+    ),
+  ];
+  const candidate = reconcileAflTradeExternalEvidence({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2018,
+    sourceBatches: [inventory, dateOne, first, secondStart, finalSession, total],
+    identityResolutions,
+    reconciledAt: capturedAt,
+  });
+  const proofIds = [dateOne, first, secondStart, finalSession, total]
+    .flatMap(({ content }) => content.evidence.map(({ evidenceId }) => evidenceId))
+    .sort();
+
+  expect(candidate.content.issues).toEqual([]);
+  expect(candidate.content.draftSelections).toHaveLength(3);
+  for (const selection of candidate.content.draftSelections) {
+    expect(selection.status).toBe('single_source');
+    expect(selection.evidenceIds).toEqual(expect.arrayContaining(proofIds));
+  }
+
+  const aliasTotal = batch(
+    'official_afl',
+    '9',
+    [total.content.evidence[0]!.content.claim],
+    'https://www.afl.com.au/news/99499/alternate-slug?capture=2'
+  );
+  const aliasCandidate = reconcileAflTradeExternalEvidence({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2018,
+    sourceBatches: [inventory, dateOne, first, secondStart, finalSession, aliasTotal],
+    identityResolutions,
+    reconciledAt: capturedAt,
+  });
+  expect(aliasCandidate.content.issues[0]?.detail).toContain('independent authenticated document');
+  const unrecognizedTerminal = batch(
+    'official_afl',
+    'b',
+    finalSession.content.evidence.map(({ content }) => content.claim),
+    'https://example.test/not-an-authenticated-afl-article'
+  );
+  const unrecognizedCandidate = reconcileAflTradeExternalEvidence({
+    environment: 'non_production',
+    competition: 'AFLM',
+    anchorSeasonYear: 2018,
+    sourceBatches: [inventory, dateOne, first, secondStart, unrecognizedTerminal, total],
+    identityResolutions,
+    reconciledAt: capturedAt,
+  });
+  expect(unrecognizedCandidate.content.issues[0]?.detail).toContain(
+    'reviewed Official AFL article identity'
+  );
+});
+
+it('reconciles the exact reviewed 2017 one-session article set outside fixtures', () => {
+  const selectionClaims = Array.from({ length: 78 }, (_, index) => {
+    const selectionNumber = index + 1;
+    return {
+      kind: 'draft_selection' as const,
+      draftYear: 2017,
+      draftType: 'national' as const,
+      selectionNumber,
+      roundNumber: null,
+      player: {
+        nativeId: `player-${selectionNumber}`,
+        recordedName:
+          selectionNumber === 1
+            ? 'Cameron Rayner'
+            : selectionNumber === 78
+              ? 'Jarrod Garlett'
+              : `Player ${selectionNumber}`,
+      },
+      selectedByClub: {
+        nativeId: `club-${selectionNumber}`,
+        recordedName:
+          selectionNumber === 1
+            ? 'Brisbane Lions'
+            : selectionNumber === 78
+              ? 'Carlton'
+              : `Club ${selectionNumber}`,
+      },
+    };
+  });
+  const inventory = batch('draftguru', 'c', selectionClaims);
+  const wrapClaims: AflTradeExternalEvidenceContent['claim'][] = [
+    {
+      kind: 'draft_session_date',
+      draftYear: 2017,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2017-11-24',
+    },
+    {
+      kind: 'draft_session_completion',
+      draftYear: 2017,
+      draftType: 'national',
+      sessionOrdinal: 1,
+    },
+    {
+      kind: 'draft_session_boundary',
+      draftYear: 2017,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      boundary: 'first',
+      selectionNumber: 1,
+      player: { nativeId: null, recordedName: 'Cameron Rayner' },
+      selectedByClub: { nativeId: null, recordedName: 'Brisbane Lions' },
+    },
+    {
+      kind: 'draft_session_boundary',
+      draftYear: 2017,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      boundary: 'last',
+      selectionNumber: 78,
+      player: { nativeId: null, recordedName: 'Jarrod Garlett' },
+      selectedByClub: { nativeId: null, recordedName: 'Carlton' },
+    },
+  ];
+  const wrap = batch(
+    'official_afl',
+    'd',
+    wrapClaims,
+    'https://www.afl.com.au/news/142762/draft-wrap-lions-reveal-top-pick-freos-big-call'
+  );
+  const total = batch(
+    'official_afl',
+    'e',
+    [
+      {
+        kind: 'draft_completed_total',
+        draftYear: 2017,
+        draftType: 'national',
+        selectionCount: 78,
+      },
+    ],
+    'https://www.afl.com.au/news/83698/broadcast-guide-premiership'
+  );
+  const date = batch(
+    'official_afl',
+    'f',
+    [wrapClaims[0]!],
+    'https://www.afl.com.au/news/46107/final-draft-order-check-out-all-of-your-clubs-picks'
+  );
+  const identityResolutions = [
+    ...selectionClaims.flatMap((claim) => [
+      resolution(
+        'draftguru',
+        'player',
+        claim.player.recordedName,
+        `canonical-${claim.player.nativeId}`,
+        claim.player.nativeId
+      ),
+      resolution(
+        'draftguru',
+        'club',
+        claim.selectedByClub.recordedName,
+        `canonical-${claim.selectedByClub.nativeId}`,
+        claim.selectedByClub.nativeId
+      ),
+    ]),
+    resolution('official_afl', 'player', 'Cameron Rayner', 'canonical-player-1'),
+    resolution('official_afl', 'club', 'Brisbane Lions', 'canonical-club-1'),
+    resolution('official_afl', 'player', 'Jarrod Garlett', 'canonical-player-78'),
+    resolution('official_afl', 'club', 'Carlton', 'canonical-club-78'),
+  ];
+  const reconcile2017 = (
+    sourceBatches: ReturnType<typeof batch>[],
+    resolutionsForCandidate = identityResolutions
+  ) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'non_production',
+      competition: 'AFLM',
+      anchorSeasonYear: 2017,
+      sourceBatches,
+      identityResolutions: resolutionsForCandidate,
+      reconciledAt: capturedAt,
+    });
+
+  const candidate = reconcile2017([inventory, wrap, total, date]);
+  const proofIds = [wrap, total, date]
+    .flatMap(({ content }) => content.evidence.map(({ evidenceId }) => evidenceId))
+    .sort();
+  expect(candidate.content.issues).toEqual([]);
+  expect(candidate.content.draftSelections).toHaveLength(78);
+  for (const selection of candidate.content.draftSelections) {
+    expect(selection.status).toBe('single_source');
+    expect(selection.evidenceIds).toEqual(expect.arrayContaining(proofIds));
+  }
+
+  const unknownWrap = batch(
+    'official_afl',
+    '1',
+    wrapClaims,
+    'https://www.afl.com.au/news/999999/unreviewed-draft-wrap'
+  );
+  expect(reconcile2017([inventory, unknownWrap, total, date]).content.issues[0]?.detail).toContain(
+    'reviewed Official AFL article identity'
+  );
+
+  const aliasTotal = batch(
+    'official_afl',
+    '2',
+    total.content.evidence.map(({ content }) => content.claim),
+    'https://www.afl.com.au/news/142762/alternate-slug'
+  );
+  expect(reconcile2017([inventory, wrap, aliasTotal, date]).content.issues[0]?.detail).toContain(
+    'independent authenticated document'
+  );
+
+  const missingInventory = batch('draftguru', '3', selectionClaims.slice(0, -1));
+  expect(reconcile2017([missingInventory, wrap, total, date]).content.issues[0]?.detail).toContain(
+    'complete unique contiguous inventory'
+  );
+
+  const duplicateInventory = batch('draftguru', '4', [
+    ...selectionClaims,
+    { ...selectionClaims[77]!, player: { nativeId: 'duplicate-78', recordedName: 'Duplicate 78' } },
+  ]);
+  expect(reconcile2017([duplicateInventory, wrap, total, date]).content.issues).not.toEqual([]);
+
+  const conflictingDate = batch(
+    'official_afl',
+    '5',
+    [
+      {
+        kind: 'draft_session_date',
+        draftYear: 2017,
+        draftType: 'national',
+        sessionOrdinal: 1,
+        eventDate: '2017-11-25',
+      },
+    ],
+    'https://www.afl.com.au/news/46107/date-conflict'
+  );
+  expect(
+    reconcile2017([inventory, wrap, total, conflictingDate]).content.issues[0]?.detail
+  ).toContain('one agreed completed date');
+
+  const extraSession = batch(
+    'official_afl',
+    '6',
+    [
+      {
+        kind: 'draft_session_date',
+        draftYear: 2017,
+        draftType: 'national',
+        sessionOrdinal: 2,
+        eventDate: '2017-11-25',
+      },
+      {
+        kind: 'draft_session_completion',
+        draftYear: 2017,
+        draftType: 'national',
+        sessionOrdinal: 2,
+      },
+    ],
+    'https://www.afl.com.au/news/46107/extra-session'
+  );
+  expect(reconcile2017([inventory, wrap, total, date, extraSession]).content.issues).not.toEqual(
+    []
+  );
+
+  const wrongBoundaryResolutions = identityResolutions.map((identity) =>
+    identity.content.provider === 'official_afl' &&
+    identity.content.entityKind === 'player' &&
+    identity.content.sourceIdentity.recordedName === 'Cameron Rayner'
+      ? createAflTradeExternalIdentityResolution({
+          ...identity.content,
+          canonicalId: 'wrong-cameron-rayner',
+        })
+      : identity
+  );
+  expect(
+    reconcile2017([inventory, wrap, total, date], wrongBoundaryResolutions).content.issues[0]
+      ?.detail
+  ).toContain('boundary identity disagrees');
+});
+
+it('reconciles only the reviewed 2016 one-session article identities outside fixtures', () => {
+  const selectionClaims = Array.from({ length: 77 }, (_, index) => {
+    const selectionNumber = index + 1;
+    return {
+      kind: 'draft_selection' as const,
+      draftYear: 2016,
+      draftType: 'national' as const,
+      selectionNumber,
+      roundNumber: null,
+      player: {
+        nativeId: `2016-player-${selectionNumber}`,
+        recordedName:
+          selectionNumber === 1
+            ? 'Andrew McGrath'
+            : selectionNumber === 77
+              ? 'Jake Waterman'
+              : `2016 Player ${selectionNumber}`,
+      },
+      selectedByClub: {
+        nativeId: `2016-club-${selectionNumber}`,
+        recordedName:
+          selectionNumber === 1
+            ? 'Essendon'
+            : selectionNumber === 77
+              ? 'West Coast'
+              : `2016 Club ${selectionNumber}`,
+      },
+    };
+  });
+  const inventory = batch('draftguru', '1', selectionClaims);
+  const wrapClaims: AflTradeExternalEvidenceContent['claim'][] = [
+    {
+      kind: 'draft_session_date',
+      draftYear: 2016,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2016-11-25',
+    },
+    {
+      kind: 'draft_session_completion',
+      draftYear: 2016,
+      draftType: 'national',
+      sessionOrdinal: 1,
+    },
+    {
+      kind: 'draft_session_boundary',
+      draftYear: 2016,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      boundary: 'first',
+      selectionNumber: 1,
+      player: { nativeId: null, recordedName: 'Andrew McGrath' },
+      selectedByClub: { nativeId: null, recordedName: 'Essendon' },
+    },
+    {
+      kind: 'draft_session_boundary',
+      draftYear: 2016,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      boundary: 'last',
+      selectionNumber: 77,
+      player: { nativeId: null, recordedName: 'Jake Waterman' },
+      selectedByClub: { nativeId: null, recordedName: 'West Coast' },
+    },
+  ];
+  const wrapUrl = 'https://www.afl.com.au/news/157359/all-the-picks-from-the-2016-nab-afl-draft';
+  const scheduleUrl = 'https://www.afl.com.au/news/49872/indicative-draft-order-your-clubs-picks';
+  const totalUrl = 'https://www.afl.com.au/news/149290/revisiting-the-drafts-2016-national-draft';
+  const wrap = batch('official_afl', '2', wrapClaims, wrapUrl);
+  const schedule = batch('official_afl', '3', [wrapClaims[0]!], scheduleUrl);
+  const total = batch(
+    'official_afl',
+    '4',
+    [
+      {
+        kind: 'draft_completed_total',
+        draftYear: 2016,
+        draftType: 'national',
+        selectionCount: 77,
+      },
+    ],
+    totalUrl,
+    { effectiveAt: '2019-11-28T11:30:00.000Z' }
+  );
+  const identityResolutions = [
+    ...selectionClaims.flatMap((claim) => [
+      resolution(
+        'draftguru',
+        'player',
+        claim.player.recordedName,
+        `canonical-${claim.player.nativeId}`,
+        claim.player.nativeId
+      ),
+      resolution(
+        'draftguru',
+        'club',
+        claim.selectedByClub.recordedName,
+        `canonical-${claim.selectedByClub.nativeId}`,
+        claim.selectedByClub.nativeId
+      ),
+    ]),
+    resolution('official_afl', 'player', 'Andrew McGrath', 'canonical-2016-player-1'),
+    resolution('official_afl', 'club', 'Essendon', 'canonical-2016-club-1'),
+    resolution('official_afl', 'player', 'Jake Waterman', 'canonical-2016-player-77'),
+    resolution('official_afl', 'club', 'West Coast', 'canonical-2016-club-77'),
+  ];
+  const reconcile2016 = (sourceBatches: ReturnType<typeof batch>[]) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'non_production',
+      competition: 'AFLM',
+      anchorSeasonYear: 2016,
+      sourceBatches,
+      identityResolutions,
+      reconciledAt: capturedAt,
+    });
+
+  const candidate = reconcile2016([inventory, wrap, schedule, total]);
+  expect(total.content.evidence[0]!.content.capture.effectiveAt).toBe('2019-11-28T11:30:00.000Z');
+  expect(total.content.evidence[0]!.content.claim).toMatchObject({
+    kind: 'draft_completed_total',
+    draftYear: 2016,
+    selectionCount: 77,
+  });
+  const proofIds = [wrap, schedule, total]
+    .flatMap(({ content }) => content.evidence.map(({ evidenceId }) => evidenceId))
+    .sort();
+  expect(candidate.content.issues).toEqual([]);
+  expect(candidate.content.draftSelections).toHaveLength(77);
+  expect(candidate.content.anchorSeasonYear).toBe(2016);
+  for (const selection of candidate.content.draftSelections) {
+    expect(selection.draftYear).toBe(2016);
+    expect(selection.draftType).toBe('national');
+    expect(selection.evidenceIds).toEqual(expect.arrayContaining(proofIds));
+  }
+
+  const aliasSchedule = batch(
+    'official_afl',
+    '5',
+    [wrapClaims[0]!],
+    'https://www.afl.com.au/news/49872/alternate-reviewed-slug?capture=2'
+  );
+  expect(reconcile2016([inventory, wrap, aliasSchedule, total]).content.issues).toEqual([]);
+
+  for (const sourceUrl of [
+    'https://www.afl.com.au/news/123233/club-verdict',
+    'https://www.afl.com.au/news/999999/unknown',
+    'https://example.test/news/157359/copied-article-id',
+  ]) {
+    const rejectedWrap = batch('official_afl', '6', wrapClaims, sourceUrl);
+    expect(
+      reconcile2016([inventory, rejectedWrap, schedule, total]).content.issues[0]?.detail
+    ).toContain('reviewed Official AFL article identity');
+  }
 });

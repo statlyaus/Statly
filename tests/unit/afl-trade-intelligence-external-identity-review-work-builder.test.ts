@@ -107,6 +107,32 @@ function sourceAuthority(sourceBatches = [draftguru]) {
 }
 
 describe('external identity review work builder', () => {
+  it('creates intentional identity work for draft-session boundary facts', () => {
+    const official = batch('official_afl', 'd', [
+      {
+        kind: 'draft_session_boundary',
+        draftYear: 2018,
+        draftType: 'national',
+        sessionOrdinal: 2,
+        boundary: 'first',
+        selectionNumber: 23,
+        player: { nativeId: null, recordedName: 'Jez McLennan' },
+        selectedByClub: { nativeId: null, recordedName: 'Gold Coast' },
+      },
+    ]);
+
+    const reviewPackage = buildAflTradeExternalIdentityReviewPackage({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      sourceAuthority: sourceAuthority([official]),
+      sourceBatches: [official],
+    });
+
+    expect(
+      reviewPackage.content.items.map(({ workItem }) => workItem.content.observedNames).sort()
+    ).toEqual([['Gold Coast'], ['Jez McLennan']]);
+  });
+
   it('enumerates the exact provider identities without merging distinct source scopes', () => {
     const reviewPackage = buildAflTradeExternalIdentityReviewPackage({
       environment: 'test_fixture',

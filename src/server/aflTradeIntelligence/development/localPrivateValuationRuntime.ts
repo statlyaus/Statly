@@ -1,9 +1,7 @@
 import { resolve } from 'node:path';
 
-import type { Pool } from 'pg';
-
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
-import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
+import { createPgAflOutcomeSqlClient, type AflOutcomePgPool } from '../outcomes/pgOutcomeSqlClient';
 import { stageAflTradeFitzRoySourceSnapshot } from '../source/fitzRoyCaptureToStaging';
 import { captureAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoyProviderIngestion';
 import { PostgresAflTradeProviderObservationRepository } from '../source/postgresProviderObservationRepository';
@@ -11,7 +9,10 @@ import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourc
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
 import { createAflTradeCurrentValuationEvidenceCoordinator } from '../valuation/currentValuationEvidenceOrchestration';
 import { createAflTradeCurrentValuationRefresh } from '../valuation/currentValuationRefresh';
-import { createAflTradePrivateValuationDispatchEvidenceKey } from '../valuation/privateValuationScheduling';
+import { createAflTradePrivateRecalculationCoordinator } from '../valuation/privateRecalculationCoordinator';
+import { composePostgresAflTradeCurrentValuationModelEvidenceDispatch } from '../valuation/postgresCurrentValuationModelEvidencePreparation';
+import { createPostgresAflTradePrivateCurrentValuationCohortCoordinator } from '../valuation/postgresCurrentValuationCohortPreparation';
+import { aflTradeCurrentPrivateFactualAuthoritySchema } from '../valuation/currentValuationModelEvidence';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '../valuation/postgresCurrentValuationCohortRunner';
 import { createPostgresGovernedPrivateEvaluationWorkspace } from '../valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '../valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
@@ -46,10 +47,31 @@ function now(): string {
   return new Date().toISOString();
 }
 
+export interface AflTradeLocalPrivateValuationConstruction {
+  readonly modelPair: Parameters<
+    typeof composePostgresAflTradeCurrentValuationModelEvidenceDispatch
+  >[0]['modelPair'];
+  readonly cohort: Omit<
+    Parameters<typeof createPostgresAflTradePrivateCurrentValuationCohortCoordinator>[0],
+    'client' | 'artifactRepository' | 'maximumArtifactBytes'
+  >;
+}
+
+export class AflTradeLocalPrivateValuationConfigurationError extends Error {
+  readonly code = 'MISSING_CONSTRUCTION_CONFIGURATION';
+  constructor() {
+    super(
+      'Changed factual evidence requires exact admitted model and cohort construction configuration; local batch execution is blocked.'
+    );
+    this.name = 'AflTradeLocalPrivateValuationConfigurationError';
+  }
+}
+
 export function createLocalAflTradePrivateValuationRuntime(input: {
-  readonly pool: Pool;
+  readonly pool: AflOutcomePgPool;
   readonly artifactRoot: string;
   readonly workerId?: string;
+  readonly construction?: AflTradeLocalPrivateValuationConstruction;
 }): ReturnType<typeof createPostgresAflTradePrivateValuationDispatcher> {
   const client = createPgAflOutcomeSqlClient(input.pool);
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);
@@ -261,18 +283,60 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     ),
     workerId: input.workerId,
   });
+  const construction = input.construction;
+  const prepared =
+    construction === undefined
+      ? null
+      : createPostgresAflTradePrivateCurrentValuationCohortCoordinator({
+          ...construction.cohort,
+          client,
+          artifactRepository: artifacts,
+          maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
+        });
+  const coordinator = createAflTradePrivateRecalculationCoordinator({
+    evidence: {
+      refreshCurrent: async (request) => {
+        const result = await evidence.refreshCurrent(request);
+        if (
+          result.state === 'unavailable' ||
+          result.currentValuationRefresh.state === 'unavailable'
+        ) {
+          return { state: 'unavailable' as const };
+        }
+        return {
+          state: 'complete' as const,
+          currentValuationRefresh: result.currentValuationRefresh,
+        };
+      },
+    },
+    modelEvidence: {
+      refresh: async ({ dispatch, factual }) => {
+        if (construction === undefined) throw new AflTradeLocalPrivateValuationConfigurationError();
+        return composePostgresAflTradeCurrentValuationModelEvidenceDispatch({
+          client,
+          dispatch,
+          modelPair: construction.modelPair,
+        }).refresh({
+          scopeKey: factual.scopeKey,
+          factualOperationId: factual.operationId,
+          privateFactualAuthority: aflTradeCurrentPrivateFactualAuthoritySchema.parse(
+            factual.privateFactualAuthority
+          ),
+        });
+      },
+    },
+    prepared: {
+      prepare: async ({ request, claim }) => {
+        if (prepared === null) throw new AflTradeLocalPrivateValuationConfigurationError();
+        return prepared.prepare({ requestId: request.requestId, claim });
+      },
+    },
+    batch: runner,
+  });
   return createPostgresAflTradePrivateValuationDispatcher({
     repository: new PostgresAflTradePrivateValuationScheduleRepository(client),
     runner: {
-      run: async ({ request, claim }) => {
-        const result = await evidence.refreshCurrent({
-          scopeKey: request.scopeKey,
-          trigger: request.trigger,
-          stableOperationKey: createAflTradePrivateValuationDispatchEvidenceKey(request),
-        });
-        if (result.state === 'unavailable') return { state: 'exhausted' as const };
-        return runner.runPrivate({ request, claim });
-      },
+      run: (dispatch) => coordinator.run(dispatch),
       repairCurrent: (scopeKey, reason, repairOperationId) =>
         runner.repairPrivateCurrent(scopeKey, reason, repairOperationId),
     },

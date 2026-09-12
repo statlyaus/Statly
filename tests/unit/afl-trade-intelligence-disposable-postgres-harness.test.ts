@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   runDisposableAflTradeOutcomesTests,
+  withDisposableAflTradeOutcomesPostgres,
   type AflTradeOutcomesHarnessCommand,
+  type DisposableAflTradeOutcomesRuntime,
 } from '@/server/aflTradeIntelligence/development/disposablePostgresHarness';
 
 const firstContainerId = 'a'.repeat(64);
@@ -14,6 +16,254 @@ const harnessPaths = {
 };
 
 describe('disposable AFL outcomes PostgreSQL harness', () => {
+  it.each([
+    'preexisting',
+    'foreign_on_mount',
+    'foreign_on_cleanup',
+    'callback',
+    'container_cleanup',
+    'callback_and_cleanup',
+    'lost_create_response',
+    'lost_remove_response',
+    'cancel_during_cleanup_inspection',
+  ] as const)('preserves disk evidence and rejects unsafe lifecycle: %s', async (scenario) => {
+    const commands: string[][] = [];
+    const primary = new Error('original failure');
+    const cleanup = new Error('cleanup failure');
+    const controller = new AbortController();
+    let labels: Record<string, string> = {};
+    let inspections = 0;
+    const volumeName = 'statly-afl-outcomes-test-4141-123456abcdef-data';
+    const execute = async (command: AflTradeOutcomesHarnessCommand) => {
+      commands.push(command.args);
+      const [kind, action] = command.args;
+      if (kind === 'volume') {
+        if (action === 'ls') return { stdout: scenario === 'preexisting' ? volumeName : '' };
+        if (action === 'create') {
+          command.args.forEach((arg, index) => {
+            if (arg === '--label') {
+              const [key, value] = command.args[index + 1]!.split('=');
+              labels[key!] = value!;
+            }
+          });
+          if (scenario === 'lost_create_response') throw primary;
+          return { stdout: volumeName };
+        }
+        if (action === 'inspect') {
+          inspections++;
+          if (scenario === 'cancel_during_cleanup_inspection' && inspections === 2)
+            controller.abort(primary);
+          if (
+            scenario === 'foreign_on_mount' ||
+            (scenario === 'foreign_on_cleanup' && inspections === 2)
+          )
+            labels = {};
+          return { stdout: JSON.stringify({ Name: volumeName, Labels: labels }) };
+        }
+        if (action === 'rm') {
+          if (scenario === 'lost_remove_response') throw primary;
+          throw new Error('Must never remove retained or foreign evidence');
+        }
+      }
+      if (kind === 'run') return { stdout: firstContainerId };
+      if (kind === 'port') return { stdout: '127.0.0.1:49151' };
+      if (kind === 'rm' && scenario === 'container_cleanup') throw primary;
+      if (kind === 'rm' && scenario === 'callback_and_cleanup') throw cleanup;
+      return { stdout: '' };
+    };
+    const workflow = vi.fn(async () => {
+      if (scenario === 'callback' || scenario === 'callback_and_cleanup') throw primary;
+    });
+    let caught: unknown;
+    try {
+      await withDisposableAflTradeOutcomesPostgres(
+        {
+          ...harnessPaths,
+          execute,
+          storage: { kind: 'owned_disk' },
+          signal: controller.signal,
+          processId: 4141,
+          randomId: () => '123456abcdef',
+        },
+        workflow
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain(volumeName);
+    const removalAttempts = commands.filter((args) => args[0] === 'volume' && args[1] === 'rm');
+    expect(removalAttempts).toHaveLength(scenario === 'lost_remove_response' ? 1 : 0);
+    if (scenario === 'lost_remove_response') {
+      expect((caught as Error).message).toContain('may remain');
+      expect((caught as Error).message).toContain('verify existence and ownership');
+      expect((caught as AggregateError).errors).toContain(primary);
+      expect((caught as Error).cause).toBe(primary);
+    }
+    if (['preexisting', 'foreign_on_mount', 'lost_create_response'].includes(scenario))
+      expect(workflow).not.toHaveBeenCalled();
+    if (scenario === 'preexisting')
+      expect(commands.some((args) => args[1] === 'create')).toBe(false);
+    if (
+      ['callback', 'callback_and_cleanup', 'container_cleanup', 'lost_create_response'].includes(
+        scenario
+      )
+    ) {
+      expect((caught as AggregateError).errors).toContain(primary);
+      expect((caught as Error).cause).toBe(primary);
+    }
+    if (scenario === 'callback_and_cleanup')
+      expect((caught as AggregateError).errors).toEqual([primary, cleanup]);
+  });
+
+  it('rejects unknown storage configuration before any Docker command', async () => {
+    const execute = vi.fn();
+    await expect(
+      withDisposableAflTradeOutcomesPostgres(
+        { ...harnessPaths, execute, storage: { kind: 'shared_disk' } as never },
+        async () => undefined
+      )
+    ).rejects.toThrow('Unsupported');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('uses an owned disk volume and removes it only after the successful workflow and container cleanup', async () => {
+    const commands: AflTradeOutcomesHarnessCommand[] = [];
+    let volume: { Name: string; Labels: Record<string, string> } | undefined;
+    let backedUp = false;
+    const execute = async (command: AflTradeOutcomesHarnessCommand) => {
+      commands.push(command);
+      if (command.args[0] === 'volume') {
+        if (command.args[1] === 'ls') return { stdout: '' };
+        if (command.args[1] === 'create') {
+          const labels: Record<string, string> = {};
+          command.args.forEach((arg, index) => {
+            if (arg === '--label') {
+              const [key, value] = command.args[index + 1]!.split('=');
+              labels[key!] = value!;
+            }
+          });
+          volume = { Name: command.args.at(-1)!, Labels: labels };
+          return { stdout: volume.Name };
+        }
+        if (command.args[1] === 'inspect') return { stdout: JSON.stringify(volume) };
+        if (command.args[1] === 'rm') {
+          expect(backedUp).toBe(true);
+          expect(commands.at(-3)?.args).toEqual(['rm', '--force', firstContainerId]);
+          expect(command.args).toEqual(['volume', 'rm', volume!.Name]);
+          return { stdout: volume!.Name };
+        }
+      }
+      if (command.args[0] === 'run') {
+        expect(command.args).not.toContain('--tmpfs');
+        expect(command.args).toContain(
+          `type=volume,source=${volume!.Name},target=/var/lib/postgresql/data`
+        );
+        return { stdout: firstContainerId };
+      }
+      if (command.args[0] === 'port') return { stdout: '127.0.0.1:49151' };
+      return { stdout: '' };
+    };
+    const result = await withDisposableAflTradeOutcomesPostgres(
+      {
+        ...harnessPaths,
+        execute,
+        storage: { kind: 'owned_disk' },
+        processId: 4141,
+        randomId: () => '123456abcdef',
+      },
+      async (runtime) => {
+        expect(runtime.ownedVolumeName).toBe('statly-afl-outcomes-test-4141-123456abcdef-data');
+        backedUp = true;
+        return 'backup-retained';
+      }
+    );
+    expect(result).toBe('backup-retained');
+    expect(commands.at(-1)?.args[0]).toBe('volume');
+  });
+
+  it('does not expose a socket-only initialization server as a ready workflow database', async () => {
+    let tcpReady = false;
+    const execute = async (command: AflTradeOutcomesHarnessCommand) => {
+      if (command.args[0] === 'run') return { stdout: firstContainerId };
+      if (command.args[0] === 'port') return { stdout: '127.0.0.1:49151' };
+      if (command.args.includes('pg_isready') && command.args.includes('--host')) {
+        expect(command.args[command.args.indexOf('--host') + 1]).toBe('127.0.0.1');
+        if (!tcpReady) throw new Error('TCP startup server is not ready');
+      }
+      // The image's initialization server accepts Unix sockets before TCP starts.
+      return { stdout: '' };
+    };
+    await withDisposableAflTradeOutcomesPostgres(
+      {
+        ...harnessPaths,
+        execute,
+        processId: 4141,
+        randomId: () => '123456abcdef',
+        sleep: async () => {
+          tcpReady = true;
+        },
+      },
+      async () => {
+        expect(tcpReady).toBe(true);
+      }
+    );
+  });
+
+  it('exposes the isolated runtime to one workflow and removes the exact container afterward', async () => {
+    const commands: AflTradeOutcomesHarnessCommand[] = [];
+    const execute = vi.fn(async (command: AflTradeOutcomesHarnessCommand) => {
+      commands.push(command);
+      if (command.command === 'docker' && command.args[0] === 'run') {
+        return { stdout: `${firstContainerId}\n` };
+      }
+      if (command.command === 'docker' && command.args[0] === 'port') {
+        return { stdout: '127.0.0.1:49151\n' };
+      }
+      return { stdout: '' };
+    });
+    const workflow = vi.fn(async (_runtime: DisposableAflTradeOutcomesRuntime) =>
+      Promise.resolve('inventory-complete')
+    );
+
+    const result = await withDisposableAflTradeOutcomesPostgres(
+      {
+        ...harnessPaths,
+        execute,
+        environment: {
+          NODE_ENV: 'test',
+          PATH: '/test/bin',
+          UNRELATED_RUNTIME_VALUE: 'not-forwarded',
+        },
+        processId: 4141,
+        randomId: () => '123456abcdef',
+        sleep: async () => undefined,
+      },
+      workflow
+    );
+
+    expect(result).toBe('inventory-complete');
+    expect(workflow).toHaveBeenCalledOnce();
+    expect(workflow).toHaveBeenCalledWith({
+      containerId: firstContainerId,
+      databaseUrl: 'postgresql://statly_test:statly_test@127.0.0.1:49151/statly_outcomes_test',
+      environment: expect.objectContaining({
+        PATH: '/test/bin',
+        AFL_OUTCOMES_TEST_CONTAINER_ID: firstContainerId,
+      }),
+      safeWorkingDirectory: '/tmp/statly-afl-outcomes-test',
+      schemaPath: '/workspace/prisma/afl-trade-outcomes/schema.prisma',
+      workspaceRoot: '/workspace',
+    });
+    expect(workflow.mock.calls[0]?.[0].environment).not.toHaveProperty('UNRELATED_RUNTIME_VALUE');
+    expect(commands.at(-1)).toEqual({
+      command: 'docker',
+      args: ['rm', '--force', firstContainerId],
+      output: 'pipe',
+      timeoutMs: 15_000,
+    });
+  });
+
   it('runs the outcomes checks against a loopback-only temporary PostgreSQL container', async () => {
     const commands: AflTradeOutcomesHarnessCommand[] = [];
     const execute = vi.fn(async (command: AflTradeOutcomesHarnessCommand) => {
@@ -145,6 +395,8 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
         'exec',
         firstContainerId,
         'pg_isready',
+        '--host',
+        '127.0.0.1',
         '--username',
         'statly_test',
         '--dbname',

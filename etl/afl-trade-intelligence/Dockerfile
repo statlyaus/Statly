@@ -24,6 +24,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     STATLY_CAPTURE_RENV_PROJECT=/opt/statly/capture \
     STATLY_R_LOCK_SHA256=${R_LOCK_SHA256}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
       libcurl4-openssl-dev \
@@ -52,10 +54,30 @@ RUN Rscript --vanilla -e "install.packages('renv', repos = Sys.getenv('RENV_CONF
       < patches/fitzRoy-1.7.0-scoped-aflca-votes.patch \
     && Rscript --vanilla -e "target_library <- dirname(find.package('fitzRoy')); install.packages('/tmp/fitzRoy-source/fitzRoy', repos = NULL, type = 'source', lib = target_library); stopifnot(as.character(packageVersion('fitzRoy')) == '1.7.0', 'award_scope' %in% names(formals(fitzRoy::fetch_coaches_votes)))"
 
-COPY capture_fitzroy.R decode_fitzroy_capture.R test_decode_contract.R test_coaches_votes_scope_contract.R ./
+ARG FITZROY_FOOTYWIRE_PATCH_SHA256=ea947225ead3f89c4b30bd042028aa236c632b070339f89272a9683bed5b55c3
+LABEL au.com.statly.fitzroy.footywire.patch.sha256="${FITZROY_FOOTYWIRE_PATCH_SHA256}"
+COPY patches/fitzRoy-1.7.0-footywire-pacing.patch ./patches/fitzRoy-1.7.0-footywire-pacing.patch
+
+RUN printf '%s  %s\n' "${FITZROY_FOOTYWIRE_PATCH_SHA256}" patches/fitzRoy-1.7.0-footywire-pacing.patch | sha256sum --check --strict \
+    && patch --batch --forward --fuzz=0 --strip=1 --directory /tmp/fitzRoy-source/fitzRoy \
+      < patches/fitzRoy-1.7.0-footywire-pacing.patch \
+    && Rscript --vanilla -e "target_library <- dirname(find.package('fitzRoy')); install.packages('/tmp/fitzRoy-source/fitzRoy', repos = NULL, type = 'source', lib = target_library); stopifnot(as.character(packageVersion('fitzRoy')) == '1.7.0')"
+
+ARG FITZROY_FOOTYWIRE_IDENTITY_PATCH_SHA256=319372b659c0232d2890242d8115a81e33c4e29038fd035aef44478a29fc1cd1
+LABEL au.com.statly.fitzroy.footywire.identity.patch.sha256="${FITZROY_FOOTYWIRE_IDENTITY_PATCH_SHA256}"
+COPY patches/fitzRoy-1.7.0-footywire-identity.patch ./patches/fitzRoy-1.7.0-footywire-identity.patch
+
+RUN printf '%s  %s\n' "${FITZROY_FOOTYWIRE_IDENTITY_PATCH_SHA256}" patches/fitzRoy-1.7.0-footywire-identity.patch | sha256sum --check --strict \
+    && patch --batch --forward --fuzz=0 --strip=1 --directory /tmp/fitzRoy-source/fitzRoy \
+      < patches/fitzRoy-1.7.0-footywire-identity.patch \
+    && Rscript --vanilla -e "target_library <- dirname(find.package('fitzRoy')); install.packages('/tmp/fitzRoy-source/fitzRoy', repos = NULL, type = 'source', lib = target_library); stopifnot(as.character(packageVersion('fitzRoy')) == '1.7.0')"
+
+COPY capture_fitzroy.R decode_fitzroy_capture.R test_decode_contract.R test_coaches_votes_scope_contract.R test_footywire_pacing_contract.R test_footywire_identity_contract.R ./
 
 RUN Rscript --vanilla test_coaches_votes_scope_contract.R \
-    && chmod 0555 capture_fitzroy.R decode_fitzroy_capture.R test_decode_contract.R test_coaches_votes_scope_contract.R \
+    && Rscript --vanilla test_footywire_pacing_contract.R \
+    && Rscript --vanilla test_footywire_identity_contract.R \
+    && chmod 0555 capture_fitzroy.R decode_fitzroy_capture.R test_decode_contract.R test_coaches_votes_scope_contract.R test_footywire_pacing_contract.R test_footywire_identity_contract.R \
     && useradd --create-home --shell /usr/sbin/nologin --uid 10001 statly-capture \
     && chown --recursive root:root /opt/statly \
     && chmod --recursive go-w /opt/statly

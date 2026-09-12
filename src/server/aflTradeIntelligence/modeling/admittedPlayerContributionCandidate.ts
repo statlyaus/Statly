@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 import {
   createAflTradeCanonicalJsonArtifactRef,
+  doAflTradeArtifactRefsExactlyMatch,
   doesAflTradeArtifactRefMatchBytes,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import { aflTradeArtifactCustodyProfileSchema } from '../artifacts/artifactCustodyProfile';
 import {
   verifyAflTradeArtifactReadback,
   type AflTradeImmutableArtifactRepository,
@@ -13,6 +15,11 @@ import {
 import type { AflTradePlayerContributionModelProtocolV2 } from '../artifacts/modelProtocol';
 import type { AflTradeAcquisitionSpellMetric } from '../outcomes/acquisitionSpellMetricContracts';
 import type { AflTradeAuthorizedModelExecutor } from './admittedModelRunAuthority';
+import {
+  fitAflTradeAdmittedPlayerPavCandidate,
+  restoreAflTradeAdmittedPlayerPavCandidate,
+  type AflTradeAdmittedPlayerPavFitInput,
+} from './admittedPlayerPavCandidate';
 import { fitAflTradePlayerContributionBaseline } from './playerContributionBaseline';
 import {
   aflTradePlayerBaselineConfigSchema,
@@ -668,6 +675,81 @@ async function retainArtifacts(input: {
   return references;
 }
 
+function requireNativePavCustody(
+  repository: AflTradeImmutableArtifactRepository,
+  environment: AflTradeAdmittedPlayerPavFitInput['intent']['content']['environment']
+) {
+  if (repository.artifactClass !== 'derived_private') {
+    throw new TypeError('Native PAV candidates require derived-private artifact custody.');
+  }
+  if (repository.assurance === 'durable_object_storage') {
+    const profile = aflTradeArtifactCustodyProfileSchema.parse(repository.custodyProfile);
+    if (
+      profile.content.environment === environment &&
+      profile.content.artifactClass === 'derived_private'
+    )
+      return;
+  } else if (
+    repository.custodyProfile === null &&
+    (((repository.assurance === 'fixture_memory' ||
+      repository.assurance === 'fixture_filesystem') &&
+      environment === 'test_fixture') ||
+      (repository.assurance === 'local_non_production_filesystem' &&
+        environment === 'non_production'))
+  )
+    return;
+  throw new TypeError('Native PAV candidate custody environment must match its exact intent.');
+}
+
+/** Retains numerical fit evidence only; this is not a run lock or qualification. */
+export async function retainAflTradeAdmittedPlayerPavCandidate(input: {
+  fitInput: AflTradeAdmittedPlayerPavFitInput;
+  artifactRepository: AflTradeImmutableArtifactRepository;
+  createdAt: string;
+  maximumArtifactBytes: number;
+}) {
+  requireNativePavCustody(input.artifactRepository, input.fitInput.intent.content.environment);
+  const candidate = fitAflTradeAdmittedPlayerPavCandidate(input.fitInput);
+  const references = await retainArtifacts({
+    repository: input.artifactRepository,
+    createdAt: input.createdAt,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+    documents: { candidate },
+  });
+  return { candidate, artifact: references.candidate! };
+}
+
+/** Reads exact numerical state only; restoring an artifact does not resume a consumed run. */
+export async function loadAflTradeAdmittedPlayerPavCandidate(input: {
+  fitInput: AflTradeAdmittedPlayerPavFitInput;
+  artifact: AflTradeArtifactRef;
+  artifactRepository: AflTradeImmutableArtifactRepository;
+  maximumArtifactBytes: number;
+}) {
+  requireNativePavCustody(input.artifactRepository, input.fitInput.intent.content.environment);
+  if (
+    !Number.isSafeInteger(input.maximumArtifactBytes) ||
+    input.maximumArtifactBytes <= 0 ||
+    input.artifact.byteLength > input.maximumArtifactBytes
+  )
+    throw new RangeError('Native PAV candidate requires a bounded artifact read.');
+  const retained = await input.artifactRepository.loadExact(
+    input.artifact,
+    input.maximumArtifactBytes
+  );
+  if (
+    !retained ||
+    !doAflTradeArtifactRefsExactlyMatch(input.artifact, retained.reference) ||
+    !doesAflTradeArtifactRefMatchBytes(input.artifact, retained.bytes, 'application/json')
+  ) {
+    throw new RangeError('Native PAV candidate requires its exact retained artifact bytes.');
+  }
+  return restoreAflTradeAdmittedPlayerPavCandidate(
+    JSON.parse(new TextDecoder().decode(retained.bytes)),
+    input.fitInput
+  );
+}
+
 export function createAflTradeAdmittedPlayerContributionExecutor(input: {
   artifactRepository: AflTradeImmutableArtifactRepository;
   maximumArtifactBytes: number;
@@ -675,6 +757,11 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
 }): AflTradeAuthorizedModelExecutor {
   return {
     async execute(request) {
+      if (request.modelFamily === 'native_pav') {
+        throw new RangeError(
+          'Native PAV observations cannot execute through the scalar candidate.'
+        );
+      }
       const executorBuild = parseAuthenticatedJson({
         reference: request.intent.content.sourceCodeArtifact,
         executableArtifacts: request.executableArtifacts,

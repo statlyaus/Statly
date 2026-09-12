@@ -7,12 +7,13 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
-import { AFL_TRADE_MODEL_PARTITIONS } from './playerContributionContracts';
+import { AFL_TRADE_MODEL_PARTITIONS } from './modelPartitions';
 
-export const AFL_TRADE_PLAYER_PAV_POLICY_SCHEMA_VERSION =
-  'afl-trade-player-pav-policy/v1' as const;
+export const AFL_TRADE_PLAYER_PAV_POLICY_SCHEMA_VERSION = 'afl-trade-player-pav-policy/v1' as const;
 export const AFL_TRADE_PLAYER_PAV_OBSERVATION_SET_SCHEMA_VERSION =
   'afl-trade-player-pav-observation-set/v1' as const;
+export const AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY =
+  'retrospective_as_recorded_by_dataset_creation' as const;
 export const AFL_TRADE_PLAYER_PAV_AUTHORITY_BOUNDARY =
   'private_released_acquisition_spell_exact_finalized_hpn_pav_no_grade_publication_or_fantasy_ownership' as const;
 
@@ -51,7 +52,11 @@ const partitionSchema = z
 
 const policyContentSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_PLAYER_PAV_POLICY_SCHEMA_VERSION),
+    schemaVersion: z.enum([
+      AFL_TRADE_PLAYER_PAV_POLICY_SCHEMA_VERSION,
+      'afl-trade-player-pav-policy/v2',
+    ]),
+    knowledgePolicy: z.literal(AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY).optional(),
     authorityBoundary: z.literal(AFL_TRADE_PLAYER_PAV_AUTHORITY_BOUNDARY),
     publicationEligible: z.literal(false),
     environment: z.enum(['test_fixture', 'non_production', 'production']),
@@ -68,14 +73,25 @@ const policyContentSchema = z
   })
   .strict()
   .superRefine((policy, context) => {
+    const retrospective = policy.schemaVersion === 'afl-trade-player-pav-policy/v2';
+    if (
+      retrospective !== (policy.knowledgePolicy !== undefined) ||
+      (retrospective && policy.environment === 'production')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['knowledgePolicy'],
+        message:
+          'Only explicit non-production v2 policies may use retrospective recording knowledge.',
+      });
+    }
     if (
       policy.partitions.some(
         (partition, index) =>
           partition.role !== AFL_TRADE_MODEL_PARTITIONS[index] ||
           partition.throughPredictionSeason < partition.fromPredictionSeason ||
           (index > 0 &&
-            partition.fromPredictionSeason <=
-              policy.partitions[index - 1]!.throughPredictionSeason)
+            partition.fromPredictionSeason <= policy.partitions[index - 1]!.throughPredictionSeason)
       )
     ) {
       context.addIssue({
@@ -145,9 +161,8 @@ export const aflTradePlayerPavValueSchema = z
       value.calculationId !== `hpn-pav-season:${value.calculationSha256}` ||
       value.gamesPlayed !== value.sourceRowIds.length ||
       new Set(value.sourceRowIds).size !== value.sourceRowIds.length ||
-      Math.abs(
-        value.offensivePav + value.midfieldPav + value.defensivePav - value.totalPav
-      ) > FLOAT_TOLERANCE ||
+      Math.abs(value.offensivePav + value.midfieldPav + value.defensivePav - value.totalPav) >
+        FLOAT_TOLERANCE ||
       value.effectiveThrough.slice(0, 4) !== String(value.seasonYear) ||
       Date.parse(value.calculatedAt) < Date.parse(value.effectiveThrough)
     ) {
@@ -216,6 +231,13 @@ const unavailableOutcomeSchema = z
   .strict();
 
 const observationShape = {
+  knowledgeBinding: z
+    .object({
+      policy: z.literal(AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY),
+      knowledgeCutoffAt: instant,
+    })
+    .strict()
+    .optional(),
   ordinal: z.number().int().positive().max(100_000),
   partition: z.enum(AFL_TRADE_MODEL_PARTITIONS),
   predictionSeason: z.number().int().min(1998).max(2200),
@@ -267,10 +289,7 @@ export const aflTradePlayerPavObservationSchema = z
       (sum, value) => sum + value.totalPav,
       0
     );
-    const targetGames = observation.targetValues.reduce(
-      (sum, value) => sum + value.gamesPlayed,
-      0
-    );
+    const targetGames = observation.targetValues.reduce((sum, value) => sum + value.gamesPlayed, 0);
     const spellEndSeason =
       observation.acquisitionSpell.effectiveThrough === null
         ? null
@@ -282,15 +301,35 @@ export const aflTradePlayerPavObservationSchema = z
     if (
       observation.predictionCutoffAt !== expectedPredictionCutoff ||
       Date.parse(observation.acquisitionSpell.recordedAt) >
-        Date.parse(observation.predictionCutoffAt) ||
-      Date.parse(observation.outcomeHorizonEndsAt) <=
-        Date.parse(observation.predictionCutoffAt) ||
+        Date.parse(
+          observation.knowledgeBinding?.knowledgeCutoffAt ?? observation.predictionCutoffAt
+        ) ||
+      Date.parse(observation.outcomeHorizonEndsAt) <= Date.parse(observation.predictionCutoffAt) ||
       Date.parse(observation.outcomeObservedAt) <= Date.parse(observation.predictionCutoffAt)
     ) {
       context.addIssue({
         code: 'custom',
         path: ['predictionCutoffAt'],
         message: 'Player prediction, spell evidence, and outcome chronology is invalid.',
+      });
+    }
+    if (
+      observation.knowledgeBinding &&
+      (Date.parse(observation.predictionCutoffAt) >
+        Date.parse(observation.knowledgeBinding.knowledgeCutoffAt) ||
+        Date.parse(observation.outcomeObservedAt) >
+          Date.parse(observation.knowledgeBinding.knowledgeCutoffAt) ||
+        [...observation.featureValues, ...observation.targetValues].some(
+          (value) =>
+            Date.parse(value.calculatedAt) >
+            Date.parse(observation.knowledgeBinding!.knowledgeCutoffAt)
+        ))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['knowledgeBinding'],
+        message:
+          'Retrospective evidence must be recorded and calculated by its explicit knowledge cutoff.',
       });
     }
     if (
@@ -347,7 +386,7 @@ export const aflTradePlayerPavObservationSchema = z
         code: 'custom',
         path: ['targetValues'],
         message:
-          'Feature evidence must be known at prediction time and target PAV must remain on the exact receiving-club acquisition spell.',
+          'Feature football events must precede the prediction cutoff and target PAV must remain on the exact receiving-club acquisition spell.',
       });
     }
     if (
@@ -379,13 +418,11 @@ export const aflTradePlayerPavObservationSchema = z
       context.addIssue({
         code: 'custom',
         path: ['outcome'],
-        message: 'Censored player outcomes must exactly sum the partial path observed by the cutoff.',
+        message:
+          'Censored player outcomes must exactly sum the partial path observed by the cutoff.',
       });
     }
-    if (
-      observation.outcome.state === 'unavailable' &&
-      observation.targetValues.length !== 0
-    ) {
+    if (observation.outcome.state === 'unavailable' && observation.targetValues.length !== 0) {
       context.addIssue({
         code: 'custom',
         path: ['targetValues'],
@@ -400,7 +437,11 @@ function observationPreimages(observations: readonly AflTradePlayerPavObservatio
 
 const observationSetContentSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_PLAYER_PAV_OBSERVATION_SET_SCHEMA_VERSION),
+    schemaVersion: z.enum([
+      AFL_TRADE_PLAYER_PAV_OBSERVATION_SET_SCHEMA_VERSION,
+      'afl-trade-player-pav-observation-set/v2',
+    ]),
+    knowledgePolicy: z.literal(AFL_TRADE_PLAYER_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY).optional(),
     authorityBoundary: z.literal(AFL_TRADE_PLAYER_PAV_AUTHORITY_BOUNDARY),
     publicationEligible: z.literal(false),
     environment: z.enum(['test_fixture', 'non_production', 'production']),
@@ -416,6 +457,25 @@ const observationSetContentSchema = z
   })
   .strict()
   .superRefine((set, context) => {
+    const retrospective = set.schemaVersion === 'afl-trade-player-pav-observation-set/v2';
+    if (
+      retrospective !== (set.knowledgePolicy !== undefined) ||
+      retrospective !== (set.policy.content.schemaVersion === 'afl-trade-player-pav-policy/v2') ||
+      (retrospective && set.environment === 'production') ||
+      set.observations.some((observation) =>
+        retrospective
+          ? observation.knowledgeBinding?.policy !== set.knowledgePolicy ||
+            observation.knowledgeBinding?.knowledgeCutoffAt !== set.knowledgeCutoffAt
+          : observation.knowledgeBinding !== undefined
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['knowledgePolicy'],
+        message:
+          'Set, policy and every observation must share the exact versioned knowledge policy and cutoff.',
+      });
+    }
     if (
       set.environment !== set.policy.content.environment ||
       set.competition !== set.policy.content.competition ||
@@ -430,9 +490,7 @@ const observationSetContentSchema = z
       (left, right) =>
         left.predictionSeason - right.predictionSeason ||
         left.playerId.localeCompare(right.playerId) ||
-        left.acquisitionSpell.spellVersionId.localeCompare(
-          right.acquisitionSpell.spellVersionId
-        )
+        left.acquisitionSpell.spellVersionId.localeCompare(right.acquisitionSpell.spellVersionId)
     );
     const calculations = [...set.calculations].sort(
       (left, right) =>
@@ -445,8 +503,7 @@ const observationSetContentSchema = z
           observation.ordinal !== index + 1
       ) ||
       calculations.some(
-        (calculation, index) =>
-          calculation.calculationId !== set.calculations[index]?.calculationId
+        (calculation, index) => calculation.calculationId !== set.calculations[index]?.calculationId
       ) ||
       new Set(calculations.map(({ calculationId }) => calculationId)).size !==
         calculations.length ||
@@ -517,7 +574,8 @@ const observationSetContentSchema = z
       context.addIssue({
         code: 'custom',
         path: ['calculations'],
-        message: 'Calculation membership must equal the exact set referenced by player observations.',
+        message:
+          'Calculation membership must equal the exact set referenced by player observations.',
       });
     }
     for (const partition of AFL_TRADE_MODEL_PARTITIONS) {
@@ -566,15 +624,9 @@ export const aflTradePlayerPavObservationSetSchema = z
   });
 
 export type AflTradePlayerPavPolicy = z.infer<typeof aflTradePlayerPavPolicySchema>;
-export type AflTradePlayerPavObservation = z.infer<
-  typeof aflTradePlayerPavObservationSchema
->;
-export type AflTradePlayerPavObservationSet = z.infer<
-  typeof aflTradePlayerPavObservationSetSchema
->;
-export type AflTradePlayerPavObservationSetContent = z.infer<
-  typeof observationSetContentSchema
->;
+export type AflTradePlayerPavObservation = z.infer<typeof aflTradePlayerPavObservationSchema>;
+export type AflTradePlayerPavObservationSet = z.infer<typeof aflTradePlayerPavObservationSetSchema>;
+export type AflTradePlayerPavObservationSetContent = z.infer<typeof observationSetContentSchema>;
 
 export function createAflTradePlayerPavPolicy(
   unparsedContent: z.input<typeof policyContentSchema>
@@ -606,9 +658,7 @@ export function createAflTradePlayerPavObservationSet(
       (left, right) =>
         left.predictionSeason - right.predictionSeason ||
         left.playerId.localeCompare(right.playerId) ||
-        left.acquisitionSpell.spellVersionId.localeCompare(
-          right.acquisitionSpell.spellVersionId
-        )
+        left.acquisitionSpell.spellVersionId.localeCompare(right.acquisitionSpell.spellVersionId)
     );
   const calculations = [...unparsed.calculations].sort(
     (left, right) =>

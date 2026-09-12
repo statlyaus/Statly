@@ -9,6 +9,8 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradeExternalHistoricalCapturePlanSchema,
+  aflTradeRetainedExternalCapturePlanSchema,
+  type AflTradeRetainedExternalCapturePlan,
   type AflTradeExternalHistoricalCapturePlan,
 } from './externalDraftTradeDiscoveryContracts';
 
@@ -56,6 +58,70 @@ const completionResultSchema = z
     }
   });
 
+function validateCompletion(
+  completion: {
+    targetCount: number;
+    results: readonly { ordinal: number; evidenceBatchId: string; finalizedAt: string }[];
+    sourceBatchIds: readonly string[];
+    resultSetSha256: string;
+    sourceBatchSetSha256: string;
+    completedAt: string;
+  },
+  context: z.RefinementCtx
+) {
+  if (
+    completion.targetCount !== completion.results.length ||
+    completion.targetCount !== completion.sourceBatchIds.length
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['targetCount'],
+      message: 'Completion must account for every target and source batch exactly once.',
+    });
+  }
+  const sourceBatchIds = completion.results.map(({ evidenceBatchId }) => evidenceBatchId);
+  if (
+    new Set(sourceBatchIds).size !== sourceBatchIds.length ||
+    sourceBatchIds.some((batchId, index) => completion.sourceBatchIds[index] !== batchId)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['sourceBatchIds'],
+      message: 'Source batches must be unique and ordered exactly with completed targets.',
+    });
+  }
+  if (completion.resultSetSha256 !== sha256AflTradeCanonicalJson(completion.results)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['resultSetSha256'],
+      message: 'Completion result-set digest mismatch.',
+    });
+  }
+  if (completion.sourceBatchSetSha256 !== sha256AflTradeCanonicalJson(completion.sourceBatchIds)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['sourceBatchSetSha256'],
+      message: 'Completion source-batch-set digest mismatch.',
+    });
+  }
+  completion.results.forEach((result, index) => {
+    if (result.ordinal !== index + 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['results', index, 'ordinal'],
+        message: 'Completion results must have contiguous one-based ordinals.',
+      });
+    }
+    if (Date.parse(result.finalizedAt) > Date.parse(completion.completedAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['results', index, 'finalizedAt'],
+        message: 'Evidence batches must finalize before the completion record.',
+      });
+    }
+  });
+}
+
 const completionContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_EXTERNAL_HISTORICAL_CAPTURE_COMPLETION_SCHEMA_VERSION),
@@ -78,61 +144,7 @@ const completionContentSchema = z
     publicationEligible: z.literal(false),
   })
   .strict()
-  .superRefine((completion, context) => {
-    if (
-      completion.targetCount !== completion.results.length ||
-      completion.targetCount !== completion.sourceBatchIds.length
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['targetCount'],
-        message: 'Completion must account for every target and source batch exactly once.',
-      });
-    }
-    const sourceBatchIds = completion.results.map(({ evidenceBatchId }) => evidenceBatchId);
-    if (
-      new Set(sourceBatchIds).size !== sourceBatchIds.length ||
-      sourceBatchIds.some((batchId, index) => completion.sourceBatchIds[index] !== batchId)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['sourceBatchIds'],
-        message: 'Source batches must be unique and ordered exactly with completed targets.',
-      });
-    }
-    if (completion.resultSetSha256 !== sha256AflTradeCanonicalJson(completion.results)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['resultSetSha256'],
-        message: 'Completion result-set digest mismatch.',
-      });
-    }
-    if (
-      completion.sourceBatchSetSha256 !== sha256AflTradeCanonicalJson(completion.sourceBatchIds)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['sourceBatchSetSha256'],
-        message: 'Completion source-batch-set digest mismatch.',
-      });
-    }
-    completion.results.forEach((result, index) => {
-      if (result.ordinal !== index + 1) {
-        context.addIssue({
-          code: 'custom',
-          path: ['results', index, 'ordinal'],
-          message: 'Completion results must have contiguous one-based ordinals.',
-        });
-      }
-      if (Date.parse(result.finalizedAt) > Date.parse(completion.completedAt)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['results', index, 'finalizedAt'],
-          message: 'Evidence batches must finalize before the completion record.',
-        });
-      }
-    });
-  });
+  .superRefine(validateCompletion);
 
 export const aflTradeExternalHistoricalCaptureCompletionSchema = z
   .object({
@@ -200,6 +212,114 @@ export function createAflTradeExternalHistoricalCaptureCompletion(input: {
     publicationEligible: false,
   });
   return aflTradeExternalHistoricalCaptureCompletionSchema.parse({
+    completionId: createAflTradeContentAddress('external-historical-capture-completion', content),
+    content,
+  });
+}
+
+const retainedCompletionResultSchema = z
+  .object({
+    ordinal: z.number().int().positive().max(200_000),
+    targetId: aflTradeContentAddressedIdSchema('external-capture-target'),
+    captureMode: z.literal('retained'),
+    resultId: aflTradeContentAddressedIdSchema('external-evidence-batch'),
+    captureId: aflTradeContentAddressedIdSchema('source-capture'),
+    executionReceiptId: aflTradeContentAddressedIdSchema('external-capture-execution'),
+    evidenceBatchId: aflTradeContentAddressedIdSchema('external-evidence-batch'),
+    evidenceBatchSha256: aflTradeSha256Schema,
+    evidenceCount: z.number().int().positive().max(1_000_000),
+    finalizedAt: instantSchema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    if (
+      result.resultId !== result.evidenceBatchId ||
+      result.evidenceBatchId !== `external-evidence-batch:${result.evidenceBatchSha256}`
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Retained result must identify its exact evidence batch.',
+      });
+  });
+const retainedCompletionContentSchema = z
+  .object({
+    ...completionContentSchema.shape,
+    schemaVersion: z.literal('afl-trade-external-historical-capture-completion/v2'),
+    environment: z.enum(['test_fixture', 'non_production']),
+    results: z.array(retainedCompletionResultSchema).min(1).max(200_000),
+  })
+  .strict()
+  .superRefine(validateCompletion);
+export const aflTradeRetainedExternalCaptureCompletionSchema = z
+  .object({
+    completionId: aflTradeContentAddressedIdSchema('external-historical-capture-completion'),
+    content: retainedCompletionContentSchema,
+  })
+  .strict()
+  .superRefine((completion, context) => {
+    addAflTradeContentAddressIssue(
+      'external-historical-capture-completion',
+      completion.completionId,
+      completion.content,
+      context,
+      ['completionId']
+    );
+  });
+export const aflTradeAnyExternalHistoricalCaptureCompletionSchema = z.union([
+  aflTradeExternalHistoricalCaptureCompletionSchema,
+  aflTradeRetainedExternalCaptureCompletionSchema,
+]);
+export type AflTradeRetainedExternalCaptureCompletion = z.infer<
+  typeof aflTradeRetainedExternalCaptureCompletionSchema
+>;
+export type AflTradeRetainedExternalCaptureCompletionResult = z.infer<
+  typeof retainedCompletionResultSchema
+>;
+export function createAflTradeRetainedExternalCaptureCompletion(input: {
+  plan: AflTradeRetainedExternalCapturePlan;
+  completedAt: string;
+  results: readonly AflTradeRetainedExternalCaptureCompletionResult[];
+}): AflTradeRetainedExternalCaptureCompletion {
+  const plan = aflTradeRetainedExternalCapturePlanSchema.parse(input.plan);
+  const results = z.array(retainedCompletionResultSchema).parse(input.results);
+  if (
+    Date.parse(input.completedAt) < Date.parse(plan.content.plannedAt) ||
+    results.length !== plan.content.targets.length
+  )
+    throw new TypeError(
+      'Retained completion requires every planned target after the plan is recorded.'
+    );
+  results.forEach((result, index) => {
+    const target = plan.content.targets[index]!;
+    if (
+      result.ordinal !== target.content.ordinal ||
+      result.targetId !== target.targetId ||
+      result.captureId !== target.content.captureId ||
+      result.evidenceBatchId !== target.content.evidenceBatchId ||
+      result.executionReceiptId !== target.content.executionReceiptId ||
+      Date.parse(result.finalizedAt) < Date.parse(target.content.request.capturedAt)
+    )
+      throw new TypeError('Retained completion differs from its exact capture target.');
+  });
+  const sourceBatchIds = results.map((r) => r.evidenceBatchId);
+  const content = retainedCompletionContentSchema.parse({
+    schemaVersion: 'afl-trade-external-historical-capture-completion/v2',
+    environment: plan.content.environment,
+    competition: plan.content.competition,
+    planId: plan.planId,
+    planSha256: sha256AflTradeCanonicalJson(plan.content),
+    targetCount: plan.content.targetCount,
+    targetSetSha256: plan.content.targetSetSha256,
+    results,
+    sourceBatchIds,
+    resultSetSha256: sha256AflTradeCanonicalJson(results),
+    sourceBatchSetSha256: sha256AflTradeCanonicalJson(sourceBatchIds),
+    completedAt: input.completedAt,
+    status: 'complete',
+    reconciliationEligible: true,
+    publicationEligible: false,
+  });
+  return aflTradeRetainedExternalCaptureCompletionSchema.parse({
     completionId: createAflTradeContentAddress('external-historical-capture-completion', content),
     content,
   });

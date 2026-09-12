@@ -23,7 +23,7 @@ export default defineConfig({
       'src/app/dashboard/**/*.test.tsx',
       'src/app/api/draft-trades/**/*.test.ts',
     ],
-    exclude: ['node_modules'],
+    exclude: ['**/node_modules/**', '**/tmp/**'],
     globals: true,
     clearMocks: true,
     // Replay, canonicalization, and hostile-size contract tests run under full V8 coverage in CI.
@@ -34,6 +34,7 @@ export default defineConfig({
     setupFiles: ['tests/setup/unit.setup.ts'],
     coverage: {
       enabled: true,
+      exclude: ['**/.next/**', '**/tmp/**'],
       reportsDirectory: 'coverage/unit',
       provider: 'v8',
       reporter: ['text', 'lcov'],

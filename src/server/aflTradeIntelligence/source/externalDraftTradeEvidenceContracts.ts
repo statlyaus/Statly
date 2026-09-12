@@ -264,7 +264,80 @@ const playerDraftDetailClaimSchema = z
     }
   });
 
+const draftSessionClaimSchema = z
+  .object({
+    kind: z.literal('draft_session'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    sessionOrdinal: z.number().int().min(1).max(100),
+    eventDate: dateSchema,
+    officialName: boundedText,
+    selectionNumbers: z
+      .array(positiveOrdinalSchema)
+      .min(1)
+      .max(500)
+      .refine(
+        (numbers) => numbers.every((value, index) => index === 0 || numbers[index - 1]! < value),
+        'Session selection numbers must be unique and ascending.'
+      ),
+  })
+  .strict()
+  .refine(
+    (claim) => Number(claim.eventDate.slice(0, 4)) === claim.draftYear,
+    'Draft session date must belong to its draft year.'
+  );
+
+const draftSessionDateClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_date'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    sessionOrdinal: z.number().int().min(1).max(100),
+    eventDate: dateSchema,
+  })
+  .strict()
+  .refine(
+    (claim) => Number(claim.eventDate.slice(0, 4)) === claim.draftYear,
+    'Draft session date must belong to its draft year.'
+  );
+
+const draftSessionCompletionClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_completion'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    sessionOrdinal: z.number().int().min(1).max(100),
+  })
+  .strict();
+
+const draftSessionBoundaryClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_boundary'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    sessionOrdinal: z.number().int().min(1).max(100),
+    boundary: z.enum(['first', 'last']),
+    selectionNumber: positiveOrdinalSchema,
+    player: recordedEntitySchema,
+    selectedByClub: recordedEntitySchema,
+  })
+  .strict();
+
+const draftCompletedTotalClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_total'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    selectionCount: positiveOrdinalSchema,
+  })
+  .strict();
+
 const claimSchema = z.discriminatedUnion('kind', [
+  draftSessionClaimSchema,
+  draftSessionDateClaimSchema,
+  draftSessionCompletionClaimSchema,
+  draftSessionBoundaryClaimSchema,
+  draftCompletedTotalClaimSchema,
   tradeDetailLinkClaimSchema,
   transactionClaimSchema,
   transactionPartyClaimSchema,
@@ -276,6 +349,11 @@ const claimSchema = z.discriminatedUnion('kind', [
 
 const allowedKindsByProvider = {
   statly_local_fixture: new Set([
+    'draft_session',
+    'draft_session_date',
+    'draft_session_completion',
+    'draft_session_boundary',
+    'draft_completed_total',
     'transaction',
     'transaction_party',
     'directed_transfer',
@@ -290,7 +368,14 @@ const allowedKindsByProvider = {
     'draft_selection',
   ]),
   footywire: new Set(['draft_selection']),
-  official_afl: new Set(['pick_custody']),
+  official_afl: new Set([
+    'pick_custody',
+    'draft_session',
+    'draft_session_date',
+    'draft_session_completion',
+    'draft_session_boundary',
+    'draft_completed_total',
+  ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
 } as const;
 

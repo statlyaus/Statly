@@ -33,6 +33,7 @@ import {
   AFL_TRADE_PROVIDER_RESOLUTION_SCHEMA_VERSION,
   createAflTradeProviderResolutionDecision,
   createAflTradeProviderResolutionProposal,
+  aflTradeCanonicalTargetRegistrationSchema,
   type AflTradeProviderResolutionProposal,
 } from '@/server/aflTradeIntelligence/source/providerResolutionContracts';
 import { aflDraftTradeOutcomeListItemSchema } from '@/types/aflDraftTradeOutcomes';
@@ -1131,6 +1132,52 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0102_admitted_player_factual_output',
       '0103_private_prepared_v3_from_current_model_evidence',
       '0104_dispatch_bound_private_evaluation_batch',
+      '0105_governed_hpn_scope_policy',
+      '0106_private_valuation_first_generation_schedule',
+      '0107_admitted_player_factual_preparation',
+      '0108_private_valuation_hpn_factual_binding',
+      '0109_authenticated_hpn_consumers',
+      '0110_independent_dispatch_pick_parent',
+      '0111_private_valuation_cohort_binding',
+      '0112_private_prepared_cohort_parent',
+      '0113_player_pav_observation_authority',
+      '0114_valuation_input_bundle_construction_operation',
+      '0115_private_valuation_trade_evidence',
+      '0116_retrospective_player_pav_custody',
+      '0117_player_pav_dataset_admission',
+      '0118_retrospective_hpn_input_custody',
+      '0119_hpn_pav_total_normalization',
+      '0120_hpn_pav_calculation_team_scope',
+      '0121_source_first_private_hpn_factual_authority',
+      '0122_native_pav_model_run_authority',
+      '0123_model_run_continuation_checkpoints',
+      '0124_model_run_persistence_recovery',
+      '0125_hpn_candidate_only_player_resolution',
+      '0126_reviewed_canonical_target_registration',
+      '0127_hpn_reviewed_nonparticipant_custody',
+      '0128_provider_assignment_continuity',
+      '0129_model_run_accepted_numerical_progress',
+      '0130_source_first_hpn_factual_binding',
+      '0131_source_first_hpn_projected_map_authority',
+      '0132_factual_assignment_continuity',
+      '0133_same_request_supplemental_source_admission',
+      '0134_hpn_direct_match_fact_content',
+      '0135_bounded_factual_batch_finalization',
+      '0136_retained_capture_private_use_renewal',
+      '0137_hpn_source_assessment_field_order',
+      '0138_canonical_text_factual_batch_receipt',
+      '0139_canonical_text_reconciliation_receipt',
+      '0140_reconciled_match_metric_appearance_scope',
+      '0141_hpn_retained_payload_scalar',
+      '0142_acquisition_spell_registration',
+      '0143_draft_session_promotion',
+      '0144_retained_external_capture_completion',
+      '0145_external_canonical_target_registration',
+      '0146_combined_draft_session_evidence',
+      '0147_draft_session_boundary_identity_review',
+      '0148_draft_session_boundary_identity_kind',
+      '0149_official_2017_combined_draft_session_evidence',
+      '0150_official_2016_combined_draft_session_evidence',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -3189,5 +3236,250 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       await racePool.end();
       await adminPool.query(`DROP SCHEMA "${raceSchemaName}" CASCADE`);
     }
+  });
+
+  it('registers a source-derived canonical player only from an explicit retained creation review', async () => {
+    // Synthetic upstream source/reviewer evidence; exercises real registration and resolution owners.
+    const scenario = providerResolutionScenario!;
+    expect(scenario).toBeDefined();
+    const canonicalId = 'afl-player:reviewed-registration';
+    const snapshot = {
+      evidenceKind: 'canonical_target_snapshot' as const,
+      schemaVersion: 'afl-trade-canonical-target-snapshot/v1' as const,
+      environment: 'test_fixture' as const,
+      staging: scenario.staging,
+      record: {
+        entityKind: 'player' as const,
+        canonicalId,
+        displayName: scenario.candidate.recordedName,
+        birthDate: null,
+      },
+    };
+    const reference = await seedFixtureGovernedEvidence('canonical_target_snapshot', snapshot);
+    const heads = await query<{ revision: number; resolution_id: string }>(
+      'SELECT revision,resolution_id FROM outcome_provider_player_resolution_head WHERE resolution_case_id=$1',
+      [scenario.resolutionCaseId]
+    );
+    const previous = heads.rows[0]!;
+    const proposal = scenario.proposal(canonicalId, reference, '2026-08-08T00:00:00.000Z');
+    const decision = createPlayerResolutionDecision({
+      proposal,
+      expectedRevision: previous.revision,
+      supersedesDecisionId: previous.resolution_id,
+      expectedAssignmentRevision: previous.revision,
+      supersedesAssignmentDecisionId: previous.resolution_id,
+      outcome: 'approved',
+      rationale: 'Explicit synthetic canonical creation and exact source identity review.',
+      decidedAt: '2026-08-08T00:01:00.000Z',
+      reviewerAuthority: scenario.reviewerAuthority,
+    });
+    const content = {
+      schemaVersion: 'afl-trade-canonical-target-registration/v1',
+      authorityBoundary: 'reviewed_canonical_creation_no_provider_assignment',
+      targetSnapshot: snapshot,
+      resolutionDecision: decision,
+    };
+    const registration = aflTradeCanonicalTargetRegistrationSchema.parse({
+      registrationDecisionId: createAflTradeContentAddress(
+        'canonical-target-registration',
+        content
+      ),
+      content,
+    });
+    const request = {
+      registrationDecisionId: registration.registrationDecisionId,
+      targetSnapshotReferenceId: reference.id,
+    };
+    await expect(
+      scenario.repository.registerCanonicalTarget(request, scenario.execution)
+    ).rejects.toMatchObject({ code: 'EVIDENCE_MISSING' });
+    await query(
+      `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,
+      canonical_record_type,canonical_record_id,rationale,evidence_json,decided_by,decided_at)
+      VALUES($1,'canonical_target_creation',$2,'approved','player',$3,$4,$5::jsonb,$6,$7)`,
+      [
+        registration.registrationDecisionId,
+        reference.id,
+        canonicalId,
+        decision.content.rationale,
+        canonicalizeAflTradeJson(registration),
+        scenario.execution.principalRef,
+        decision.content.decidedAt,
+      ]
+    );
+    await expect(
+      scenario.repository.registerCanonicalTarget(request, {
+        ...scenario.execution,
+        principalRef: 'not-the-reviewer',
+      })
+    ).rejects.toMatchObject({ code: 'EVIDENCE_MISSING' });
+    await expect(
+      scenario.repository.registerCanonicalTarget(request, scenario.execution)
+    ).resolves.toEqual({
+      entityKind: 'player',
+      canonicalId,
+      idempotentReplay: false,
+    });
+    await expect(
+      scenario.repository.registerCanonicalTarget(request, scenario.execution)
+    ).resolves.toEqual({
+      entityKind: 'player',
+      canonicalId,
+      idempotentReplay: true,
+    });
+    expect(
+      (
+        await query('SELECT display_name,birth_date FROM outcome_player WHERE player_id=$1', [
+          canonicalId,
+        ])
+      ).rows
+    ).toEqual([{ display_name: scenario.candidate.recordedName, birth_date: null }]);
+    await expect(
+      scenario.repository.persistDecision(decision, scenario.execution)
+    ).resolves.toMatchObject({ outcome: 'approved' });
+    // Readdress the outer review so the database must authenticate nested identities itself.
+    const substitutedProposalContent = {
+      ...proposal.content,
+      identityCandidateId: 'identity-candidate:unrelated-retained-row',
+    };
+    const substitutedProposalId = createAflTradeContentAddress(
+      'provider-resolution-proposal',
+      substitutedProposalContent
+    );
+    const substitutedDecisionContent = {
+      ...decision.content,
+      proposal: {
+        proposalId: substitutedProposalId,
+        proposalSha256: substitutedProposalId.split(':')[1],
+        content: substitutedProposalContent,
+      },
+    };
+    const substitutedDecisionId = createAflTradeContentAddress(
+      'provider-resolution-decision',
+      substitutedDecisionContent
+    );
+    const malformedContents = [
+      { ...content, unexpected: true },
+      { ...content, targetSnapshot: { ...snapshot, unexpected: true } },
+      {
+        ...content,
+        resolutionDecision: {
+          ...decision,
+          decisionId: `provider-resolution-decision:${'a'.repeat(64)}`,
+        },
+      },
+      {
+        ...content,
+        resolutionDecision: {
+          decisionId: substitutedDecisionId,
+          decisionSha256: substitutedDecisionId.split(':')[1],
+          content: substitutedDecisionContent,
+        },
+      },
+    ];
+    for (const malformedContent of malformedContents) {
+      const malformedId = createAflTradeContentAddress(
+        'canonical-target-registration',
+        malformedContent
+      );
+      await query(
+        `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,
+        canonical_record_type,canonical_record_id,rationale,evidence_json,decided_by,decided_at)
+        VALUES($1,'canonical_target_creation',$2,'approved','player',$3,$4,$5::jsonb,$6,$7)`,
+        [
+          malformedId,
+          reference.id,
+          canonicalId,
+          decision.content.rationale,
+          canonicalizeAflTradeJson({
+            registrationDecisionId: malformedId,
+            content: malformedContent,
+          }),
+          scenario.execution.principalRef,
+          decision.content.decidedAt,
+        ]
+      );
+      await expect(
+        query('SELECT * FROM register_outcome_reviewed_canonical_target($1,$2,$3,$4)', [
+          malformedId,
+          reference.id,
+          scenario.execution.principalRef,
+          scenario.execution.environment,
+        ])
+      ).rejects.toThrow(/Canonical creation review|exact finalized source/);
+    }
+    const conflictingSnapshot = {
+      ...snapshot,
+      record: { ...snapshot.record, displayName: 'Conflicting reviewed name' },
+    };
+    const conflictingReference = await seedFixtureGovernedEvidence(
+      'canonical_target_snapshot',
+      conflictingSnapshot
+    );
+    const conflictingProposal = createAflTradeProviderResolutionProposal({
+      ...proposal.content,
+      canonicalTargetSnapshot: conflictingReference,
+    });
+    const conflictingDecision = createAflTradeProviderResolutionDecision({
+      ...decision.content,
+      proposal: conflictingProposal,
+    });
+    const conflictingContent = {
+      ...content,
+      targetSnapshot: conflictingSnapshot,
+      resolutionDecision: conflictingDecision,
+    };
+    const conflictingRegistration = aflTradeCanonicalTargetRegistrationSchema.parse({
+      registrationDecisionId: createAflTradeContentAddress(
+        'canonical-target-registration',
+        conflictingContent
+      ),
+      content: conflictingContent,
+    });
+    await query(
+      `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,
+      canonical_record_type,canonical_record_id,rationale,evidence_json,decided_by,decided_at)
+      VALUES($1,'canonical_target_creation',$2,'approved','player',$3,$4,$5::jsonb,$6,$7)`,
+      [
+        conflictingRegistration.registrationDecisionId,
+        conflictingReference.id,
+        canonicalId,
+        decision.content.rationale,
+        canonicalizeAflTradeJson(conflictingRegistration),
+        scenario.execution.principalRef,
+        decision.content.decidedAt,
+      ]
+    );
+    await expect(
+      scenario.repository.registerCanonicalTarget(
+        {
+          registrationDecisionId: conflictingRegistration.registrationDecisionId,
+          targetSnapshotReferenceId: conflictingReference.id,
+        },
+        scenario.execution
+      )
+    ).rejects.toThrow('Canonical target conflicts');
+    await query(
+      `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,supersedes_decision_id,
+      rationale,evidence_json,decided_by,decided_at) VALUES($1,'canonical_target_creation',$2,'withdrawn',$3,
+      'Synthetic withdrawal must prevent creation replay','{}'::jsonb,$4,clock_timestamp())`,
+      [
+        'canonical-registration-withdrawal',
+        reference.id,
+        registration.registrationDecisionId,
+        scenario.execution.principalRef,
+      ]
+    );
+    await expect(
+      scenario.repository.registerCanonicalTarget(request, scenario.execution)
+    ).rejects.toMatchObject({ code: 'EVIDENCE_MISSING' });
+    await expect(
+      query('SELECT * FROM register_outcome_reviewed_canonical_target($1,$2,$3,$4)', [
+        request.registrationDecisionId,
+        request.targetSnapshotReferenceId,
+        scenario.execution.principalRef,
+        scenario.execution.environment,
+      ])
+    ).rejects.toThrow('Canonical creation review');
   });
 });

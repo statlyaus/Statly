@@ -1,0 +1,88 @@
+--- a/R/helpers-footywire.R
++++ b/R/helpers-footywire.R
+@@ -62,6 +62,20 @@
+ #'
+ #' @keywords internal
+ #' @noRd
++footywire_player_links <- function(table) {
++  rows <- rvest::html_elements(table, xpath = "./tr | ./tbody/tr")
++  if (length(rows) < 2L) stop("FootyWire player table has no rows.")
++  vapply(rows[-1L], function(row) {
++    links <- rvest::html_elements(row, xpath = "./td[1]//a")
++    if (length(links) != 1L) stop("FootyWire player row requires one profile link.")
++    href <- rvest::html_attr(links, "href")
++    # Retain the pp- path segment used by Statly's FootyWire draft adapter.
++    allowed <- "^(https://www\\.footywire\\.com/afl/footy/|/afl/footy/)?pp-[a-z0-9]+(-[a-z0-9]+)*--[a-z0-9]+(-[a-z0-9]+)*$"
++    if (is.na(href) || !grepl(allowed, href)) stop("Invalid FootyWire player profile link.")
++    sub("^.*/", "", href)
++  }, character(1), USE.NAMES = FALSE)
++}
++
+ footywire_html <- function(x, id) {
+ 
+   game_details <- x %>% rvest::html_node("tr:nth-child(2) .lnorm") %>% rvest::html_text(trim = TRUE)
+@@ -96,6 +110,7 @@
+     janitor::remove_empty("cols") %>%
+     standardise_player_col() %>%
+     dplyr::mutate(
++      PlayerLink = footywire_player_links(rvest::html_nodes(x, "table")[[13]]),
+       Team = home_team,
+       Opposition = away_team,
+       Status = "Home"
+@@ -105,7 +120,7 @@
+       ~ dplyr::na_if(.x, "Unused Substitute")
+     )) %>%
+     dplyr::mutate(dplyr::across(
+-      -tidyselect::any_of(c("Player","Team","Opposition","Status")),
++      -tidyselect::any_of(c("Player","PlayerLink","Team","Opposition","Status")),
+       ~ suppressWarnings(as.numeric(gsub("[^0-9.-]", "", .x)))
+     ))
+   
+@@ -117,6 +132,7 @@
+     janitor::remove_empty("cols") %>%
+     standardise_player_col() %>%
+     dplyr::mutate(
++      PlayerLink = footywire_player_links(rvest::html_nodes(x, "table")[[18]]),
+       Team = away_team,
+       Opposition = home_team,
+       Status = "Away"
+@@ -126,7 +142,7 @@
+       ~ dplyr::na_if(.x, "Unused Substitute")
+     )) %>%
+     dplyr::mutate(dplyr::across(
+-      -tidyselect::any_of(c("Player","Team","Opposition","Status")),
++      -tidyselect::any_of(c("Player","PlayerLink","Team","Opposition","Status")),
+       ~ suppressWarnings(as.numeric(gsub("[^0-9.-]", "", .x)))
+     ))
+   
+@@ -223,15 +239,24 @@
+       if (is.list(footywire_advanced)) {
+         player_stats_advanced <- footywire_html(footywire_advanced, id)
+ 
+-        # Join them
++        # Identity, not display-name abbreviation or row order, owns the join.
++        keys <- c("Match_id", "Team", "PlayerLink")
++        if (anyDuplicated(player_stats_basic[keys]) || anyDuplicated(player_stats_advanced[keys]) ||
++            nrow(dplyr::anti_join(player_stats_basic, player_stats_advanced, by = keys)) ||
++            nrow(dplyr::anti_join(player_stats_advanced, player_stats_basic, by = keys))) {
++          stop("FootyWire basic/advanced player keys must match one-to-one.")
++        }
+         info_columns <- c(
+           "Date", "Season", "Round", "Venue", "Player",
+-          "Team", "Opposition", "Status", "Match_id", "GA"
++          "Team", "Opposition", "Status", "Match_id", "GA", "PlayerLink"
+         )
+-        player_stats_table <- player_stats_advanced %>%
+-          dplyr::select(-dplyr::one_of(info_columns)) %>%
+-          dplyr::bind_cols(player_stats_basic) %>%
+-          dplyr::select(dplyr::one_of(info_columns), dplyr::everything())
++        advanced_columns <- setdiff(names(player_stats_advanced), info_columns)
++        player_stats_table <- dplyr::left_join(
++          player_stats_basic,
++          dplyr::select(player_stats_advanced, dplyr::all_of(c(keys, advanced_columns))),
++          by = keys, relationship = "one-to-one"
++        ) %>%
++          dplyr::select(dplyr::all_of(info_columns), dplyr::all_of(advanced_columns), dplyr::everything())
+ 
+         # Tidy Names
+         player_stats_table <- player_stats_table %>%

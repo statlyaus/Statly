@@ -130,19 +130,21 @@ export const AFL_TRADE_FITZROY_CAPABILITIES = [
     captureOrigin: 'cached_then_live_delta',
     documentedMinimumSeason: 2010,
     identifiers: {
-      player: 'source_local_identifier',
+      player: 'name_and_context_only',
       match: 'source_local_identifier',
       club: 'name_and_context_only',
     },
     intendedRole: 'candidate_secondary',
     requiredCaptureChecks: [
       'Record cached fitzRoy_data match identifiers separately from newly scraped match identifiers.',
+      'Keep player nativeId null without retained source identifier evidence and use the existing reviewed identity assignment boundary.',
       'Verify full-season row counts and match coverage for every requested year.',
       'Fingerprint the fixed-position HTML result before accepting schema changes.',
     ],
     knownCautions: [
       'round_number is ignored and the function returns all rounds in the requested seasons.',
       'The function clamps requested seasons to 2010 through the current calendar year.',
+      'The pinned fresh parser returns Player display text, not a native player identifier.',
       'The HTML extraction path is sensitive to upstream table-layout changes.',
     ],
   },

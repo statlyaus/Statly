@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { Buffer } from 'node:buffer';
-import { createHash, sign, type KeyObject } from 'node:crypto';
+import { createHash, randomUUID, sign, type KeyObject } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -20,6 +20,7 @@ const evidenceIdPattern = /^artifact:[a-f0-9]{64}$/;
 
 export interface LocalAflTradeDockerCommand {
   binary: string;
+  containerName: string;
   args: readonly string[];
   timeoutMs: number;
   maximumOutputBytes: number;
@@ -83,11 +84,43 @@ async function readBoundedLocalOutput(
 async function runDockerCommand(
   command: LocalAflTradeDockerCommand
 ): Promise<LocalAflTradeDockerCommandResult> {
-  const result = await execFileAsync(command.binary, [...command.args], {
-    timeout: command.timeoutMs,
-    maxBuffer: command.maximumOutputBytes,
-    windowsHide: true,
-  });
+  const started = performance.now();
+  let failure: unknown;
+  let result: LocalAflTradeDockerCommandResult | undefined;
+  try {
+    result = await execFileAsync(command.binary, [...command.args], {
+      timeout: command.timeoutMs,
+      // Killing the client alone does not stop the daemon-owned container; remove it below.
+      killSignal: 'SIGKILL',
+      maxBuffer: command.maximumOutputBytes,
+      windowsHide: true,
+    });
+    if (performance.now() - started >= command.timeoutMs) {
+      throw new Error('The local fitzRoy capture exceeded its execution deadline.');
+    }
+  } catch (error) {
+    failure =
+      performance.now() - started >= command.timeoutMs
+        ? new Error('The local fitzRoy capture exceeded its execution deadline.', { cause: error })
+        : error;
+  }
+  try {
+    // Explicit cleanup owns the lifecycle, including successful exits; do not combine with --rm.
+    // No broad prune, name lookup, or retry: this UUID belongs to this single attempt.
+    await execFileAsync(command.binary, ['rm', '--force', command.containerName], {
+      timeout: 10_000,
+      killSignal: 'SIGKILL',
+      maxBuffer: 4096,
+      windowsHide: true,
+    });
+  } catch (cleanupError) {
+    throw new AggregateError(
+      failure === undefined ? [cleanupError] : [failure, cleanupError],
+      `Local fitzRoy container cleanup failed for ${command.containerName}; termination is unconfirmed.`
+    );
+  }
+  if (failure !== undefined) throw failure;
+  if (result === undefined) throw new Error('The local fitzRoy process returned no result.');
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -198,9 +231,11 @@ export function createLocalAflTradeDockerFitzRoyCaptureExecutor(
         });
         // The parent remains private; only the mounted output directory is writable by the image UID.
         await chmod(outputDirectory, 0o777);
+        const containerName = `statly-fitzroy-capture-${randomUUID()}`;
         const args = [
           'run',
-          '--rm',
+          '--init',
+          `--name=${containerName}`,
           '--read-only',
           '--cap-drop=ALL',
           '--security-opt=no-new-privileges',
@@ -220,6 +255,7 @@ export function createLocalAflTradeDockerFitzRoyCaptureExecutor(
         const startedAt = isoDateTime(nowMs());
         const processResult = await executeDocker({
           binary: dockerBinary,
+          containerName,
           args,
           timeoutMs: limits.timeoutMs,
           maximumOutputBytes: limits.maximumDiagnosticsBytes,

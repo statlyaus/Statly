@@ -5,10 +5,14 @@ import type {
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   aflTradeExternalHistoricalCapturePlanSchema,
+  aflTradeRetainedExternalCapturePlanSchema,
   type AflTradeExternalHistoricalCapturePlan,
 } from './externalDraftTradeDiscoveryContracts';
 import {
   aflTradeExternalHistoricalCaptureCompletionSchema,
+  aflTradeRetainedExternalCaptureCompletionSchema,
+  createAflTradeRetainedExternalCaptureCompletion,
+  type AflTradeRetainedExternalCaptureCompletionResult,
   createAflTradeExternalHistoricalCaptureCompletion,
   type AflTradeExternalHistoricalCaptureCompletion,
   type AflTradeExternalHistoricalCaptureCompletionResult,
@@ -240,6 +244,167 @@ function latestInstant(values: readonly string[]): string {
 
 export class PostgresAflTradeExternalHistoricalCaptureCompletionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
+
+  async completeRetainedPlan(
+    planId: string
+  ): Promise<PersistedAflTradeExternalHistoricalCaptureCompletion> {
+    if (!/^external-historical-capture-plan:[a-f0-9]{64}$/.test(planId)) {
+      throw new TypeError('Retained completion requires one content-addressed plan ID.');
+    }
+    return this.client.transaction(async (transaction) => {
+      await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+        `external-historical-capture-completion:${planId}`,
+      ]);
+      await transaction.query(
+        `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
+      );
+      const stored = await transaction.query<PlanRow>(
+        `SELECT plan_json,finalized_at
+        FROM outcome_external_historical_capture_plan WHERE plan_id=$1 FOR SHARE`,
+        [planId]
+      );
+      const row = stored.rows[0];
+      const plan = aflTradeRetainedExternalCapturePlanSchema.parse(row?.plan_json);
+      if (
+        !row?.finalized_at ||
+        exactInstant(row.finalized_at) !== plan.content.plannedAt ||
+        plan.planId !== planId
+      ) {
+        throw new AflTradeExternalHistoricalCaptureCompletionPersistenceError(
+          'PLAN_NOT_FOUND',
+          'Retained completion requires the exact finalized retained plan.'
+        );
+      }
+      const current = await transaction.query<{ valid: boolean; now: Date | string }>(
+        `SELECT outcome_external_retained_plan_is_current($1::jsonb,clock_timestamp()) AS valid,
+          date_trunc('milliseconds',clock_timestamp()) AS now`,
+        [canonicalizeAflTradeJson(plan)]
+      );
+      if (current.rows[0]?.valid !== true)
+        throw new AflTradeExternalHistoricalCaptureCompletionPersistenceError(
+          'EVIDENCE_MISMATCH',
+          'Retained source authority or custody is no longer current.'
+        );
+      const prior = await transaction.query<CompletionRow>(
+        `SELECT completion_json,finalized_at
+        FROM outcome_external_historical_capture_completion WHERE plan_id=$1 FOR SHARE`,
+        [planId]
+      );
+      const priorRow = prior.rows[0];
+      if (priorRow) {
+        const completion = aflTradeRetainedExternalCaptureCompletionSchema.parse(
+          priorRow.completion_json
+        );
+        if (
+          !priorRow.finalized_at ||
+          exactInstant(priorRow.finalized_at) !== completion.content.completedAt ||
+          completion.content.planId !== planId
+        )
+          throw new AflTradeExternalHistoricalCaptureCompletionPersistenceError(
+            'COMPLETION_CONFLICT',
+            'Stored retained completion is not finalized exactly.'
+          );
+        return {
+          completionId: completion.completionId,
+          planId,
+          targetCount: completion.content.targetCount,
+          sourceBatchCount: completion.content.sourceBatchIds.length,
+          completedAt: completion.content.completedAt,
+          idempotentReplay: true,
+          publicationEligible: false,
+        };
+      }
+      const results: AflTradeRetainedExternalCaptureCompletionResult[] = [];
+      for (const target of plan.content.targets) {
+        const batch = await loadCapturedBatch(transaction, target.content.evidenceBatchId);
+        if (
+          !batch?.finalized_at ||
+          batch.status !== 'finalized' ||
+          batch.issue_count !== 0 ||
+          batch.capture_id !== target.content.captureId
+        )
+          throw new AflTradeExternalHistoricalCaptureCompletionPersistenceError(
+            'EVIDENCE_MISMATCH',
+            'Retained capture does not match its finalized evidence.'
+          );
+        results.push({
+          ordinal: target.content.ordinal,
+          targetId: target.targetId,
+          captureMode: 'retained',
+          resultId: batch.batch_id,
+          captureId: batch.capture_id,
+          executionReceiptId: target.content.executionReceiptId,
+          evidenceBatchId: batch.batch_id,
+          evidenceBatchSha256: batch.batch_id.slice('external-evidence-batch:'.length),
+          evidenceCount: batch.evidence_count,
+          finalizedAt: exactInstant(batch.finalized_at),
+        });
+      }
+      const completion = createAflTradeRetainedExternalCaptureCompletion({
+        plan,
+        completedAt: exactInstant(current.rows[0].now),
+        results,
+      });
+      await transaction.query(
+        `INSERT INTO outcome_external_historical_capture_completion
+        (completion_id,plan_id,environment,competition,target_count,result_set_sha256,
+         source_batch_set_sha256,completed_at,status,reconciliation_eligible,completion_json,
+         completion_canonical_json,finalized_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,'complete',TRUE,$9::jsonb,$10,NULL)`,
+        [
+          completion.completionId,
+          planId,
+          completion.content.environment,
+          completion.content.competition,
+          completion.content.targetCount,
+          completion.content.resultSetSha256,
+          completion.content.sourceBatchSetSha256,
+          completion.content.completedAt,
+          canonicalizeAflTradeJson(completion),
+          canonicalizeAflTradeJson(completion.content),
+        ]
+      );
+      for (const result of results) {
+        await transaction.query(
+          `INSERT INTO outcome_external_historical_capture_completion_result
+          (completion_id,ordinal,plan_id,target_id,capture_mode,result_id,capture_id,evidence_batch_id,
+           evidence_count,finalized_at,result_json)
+          VALUES($1,$2,$3,$4,'retained',$5,$6,$7,$8,$9,$10::jsonb)`,
+          [
+            completion.completionId,
+            result.ordinal,
+            planId,
+            result.targetId,
+            result.resultId,
+            result.captureId,
+            result.evidenceBatchId,
+            result.evidenceCount,
+            result.finalizedAt,
+            canonicalizeAflTradeJson(result),
+          ]
+        );
+      }
+      const finalized = await transaction.query(
+        `UPDATE outcome_external_historical_capture_completion
+        SET finalized_at=$2 WHERE completion_id=$1 AND finalized_at IS NULL`,
+        [completion.completionId, completion.content.completedAt]
+      );
+      if (finalized.rowCount !== 1)
+        throw new AflTradeExternalHistoricalCaptureCompletionPersistenceError(
+          'COMPLETION_CONFLICT',
+          'Retained completion did not finalize exactly once.'
+        );
+      return {
+        completionId: completion.completionId,
+        planId,
+        targetCount: completion.content.targetCount,
+        sourceBatchCount: completion.content.sourceBatchIds.length,
+        completedAt: completion.content.completedAt,
+        idempotentReplay: false,
+        publicationEligible: false,
+      };
+    });
+  }
 
   async completePlan(
     planId: string

@@ -85,16 +85,28 @@ export async function seedPrivateValuationAcquisitionSpellFixture(
   fixtureKey = 'default'
 ) {
   const player = await client.query<{ player_id: string; player_identity_id: string }>(
-    `SELECT player_id,player_identity_id
-       FROM outcome_provider_player_resolution
-      WHERE outcome='approved' AND player_id IS NOT NULL AND player_identity_id IS NOT NULL
-      ORDER BY revision DESC LIMIT 1`
+    `SELECT resolution.player_id,resolution.player_identity_id
+       FROM outcome_provider_player_resolution resolution
+       JOIN outcome_provider_identity_candidate candidate
+         ON candidate.identity_candidate_id=resolution.identity_candidate_id
+       JOIN outcome_provider_decoded_row decoded
+         ON decoded.provider_decoded_row_id=candidate.provider_decoded_row_id
+      WHERE resolution.outcome='approved' AND resolution.player_id IS NOT NULL
+        AND resolution.player_identity_id IS NOT NULL AND decoded.capture_id=$1
+      ORDER BY resolution.revision DESC,resolution.resolution_id LIMIT 1`,
+    [captureId]
   );
   const club = await client.query<{ club_id: string }>(
-    `SELECT club_id
-       FROM outcome_provider_club_resolution
-      WHERE outcome='approved' AND club_id IS NOT NULL
-      ORDER BY revision DESC LIMIT 1`
+    `SELECT resolution.club_id
+       FROM outcome_provider_club_resolution resolution
+       JOIN outcome_provider_identity_candidate candidate
+         ON candidate.identity_candidate_id=resolution.identity_candidate_id
+       JOIN outcome_provider_decoded_row decoded
+         ON decoded.provider_decoded_row_id=candidate.provider_decoded_row_id
+      WHERE resolution.outcome='approved' AND resolution.club_id IS NOT NULL
+        AND decoded.capture_id=$1
+      ORDER BY resolution.revision DESC,resolution.resolution_id LIMIT 1`,
+    [captureId]
   );
   const playerRow = player.rows[0];
   const clubRow = club.rows[0];
@@ -387,11 +399,25 @@ export async function persistPrivateValuationFactualCandidateFixture(
   baseCandidate: AflTradeFactualReleaseCandidate,
   spellFixture: Awaited<ReturnType<typeof seedPrivateValuationAcquisitionSpellFixture>>,
   scopeKey: string,
-  spellMemberOverrides: Readonly<{ playerId?: string; clubId?: string }> = {}
+  spellMemberOverrides: Readonly<{
+    createdAt?: string;
+    playerId?: string;
+    clubId?: string;
+    supplementalSources?: readonly Readonly<{
+      member: AflTradeFactualReleaseCandidate['content']['members']['sourceCaptures'][number];
+      rights: AflDraftTradeOutcomeFactualReleaseManifest['content']['sourceRightsBindings'][number];
+    }>[];
+  }> = {}
 ) {
   const recordedAt = '2026-08-12T00:06:00.000Z';
   const members = {
     ...baseCandidate.content.members,
+    sourceCaptures: [
+      ...baseCandidate.content.members.sourceCaptures,
+      ...(spellMemberOverrides.supplementalSources ?? []).map(({ member }) => member),
+    ]
+      .sort((left, right) => left.captureId.localeCompare(right.captureId))
+      .map((member, index) => ({ ...member, ordinal: index + 1 })),
     eventVersions: [
       {
         ordinal: 1,
@@ -446,8 +472,18 @@ export async function persistPrivateValuationFactualCandidateFixture(
   const memberSetSha256 = sha256AflTradeCanonicalJson(members);
   const release = createAflDraftTradeOutcomeFactualReleaseManifest({
     ...baseCandidate.content.targetReleaseManifest.content,
+    sourceRightsBindings: [
+      ...baseCandidate.content.targetReleaseManifest.content.sourceRightsBindings,
+      ...(spellMemberOverrides.supplementalSources ?? []).map(({ rights }) => rights),
+    ].sort((left, right) =>
+      left.sourceSnapshotId < right.sourceSnapshotId
+        ? -1
+        : left.sourceSnapshotId > right.sourceSnapshotId
+          ? 1
+          : 0
+    ),
     scopeKey,
-    createdAt: recordedAt,
+    createdAt: spellMemberOverrides.createdAt ?? recordedAt,
     effectiveThrough: recordedAt,
     acquisitionSpellRuleId: spellFixture.rule.id,
     outcomeRecordCount:
@@ -462,7 +498,7 @@ export async function persistPrivateValuationFactualCandidateFixture(
   const candidate = createAflTradeFactualReleaseCandidate({
     ...baseCandidate.content,
     scopeKey,
-    createdAt: recordedAt,
+    createdAt: spellMemberOverrides.createdAt ?? recordedAt,
     effectiveThrough: recordedAt,
     targetRelease: {
       id: release.releaseId,

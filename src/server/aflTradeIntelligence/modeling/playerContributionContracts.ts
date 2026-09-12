@@ -3,8 +3,10 @@ import { z } from 'zod';
 import {
   addAflTradeContentAddressIssue,
   aflTradeContentAddressedIdSchema,
+  canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { doesAflTradeArtifactRefMatchBytes } from '../artifacts/artifactReference';
 import {
   type AflTradeValuationDatasetCandidate,
   aflTradeValuationDatasetCandidateSchema,
@@ -14,6 +16,14 @@ import {
   type AflTradeAcquisitionSpellMetric,
   aflTradeAcquisitionSpellMetricSchema,
 } from '../outcomes/acquisitionSpellMetricContracts';
+import { AFL_TRADE_MODEL_PARTITIONS } from './modelPartitions';
+import {
+  aflTradePlayerPavObservationSchema,
+  aflTradePlayerPavObservationSetSchema,
+  type AflTradePlayerPavObservationSet,
+} from './playerPavObservationContracts';
+
+export { AFL_TRADE_MODEL_PARTITIONS } from './modelPartitions';
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const finiteNumberSchema = z.number().finite();
@@ -23,13 +33,6 @@ const publicIdSchema = z
   .min(1)
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
-
-export const AFL_TRADE_MODEL_PARTITIONS = [
-  'train',
-  'calibration',
-  'validation',
-  'final_test',
-] as const;
 
 export const AFL_TRADE_PLAYER_OBSERVATION_SET_SCHEMA_VERSION_V2 =
   'afl-trade-player-observation-set/v2' as const;
@@ -440,6 +443,209 @@ export const aflTradeAnyPlayerObservationSetSchema = z.union([
   aflTradePlayerObservationSetSchema,
   aflTradePlayerObservationSetV2Schema,
 ]);
+
+const admittedPavObservationContentSchema = z
+  .object({
+    datasetRowId: aflTradeContentAddressedIdSchema('valuation-dataset-row'),
+    rowOrdinal: z.number().int().positive().max(100_000),
+    pavObservation: aflTradePlayerPavObservationSchema,
+  })
+  .strict();
+
+const admittedPavObservationSchema = admittedPavObservationContentSchema
+  .extend({
+    observationId: aflTradeContentAddressedIdSchema('player-observation'),
+  })
+  .superRefine(({ observationId, ...content }, context) => {
+    addAflTradeContentAddressIssue('player-observation', observationId, content, context, [
+      'observationId',
+    ]);
+  });
+
+export const aflTradePlayerObservationSetV3ContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-player-observation-set/v3'),
+    publicIdentityBoundary: z.literal('source_native_no_fantasy_ownership'),
+    authorityBoundary: z.literal(
+      'deterministic_admitted_pav_dataset_projection_no_fit_grade_publication_or_fantasy_ownership'
+    ),
+    publicationEligible: z.literal(false),
+    observationGrain: z.literal('player_acquisition_spell_prediction'),
+    featureKnowledgePolicy: z.enum([
+      'point_in_time_as_known_at_prediction_cutoff',
+      'retrospective_as_captured_at_dataset_creation',
+    ]),
+    valueUnit: z.literal('fixed_horizon_pav'),
+    fixedHorizonSeasons: z.literal(3),
+    datasetId: aflTradeContentAddressedIdSchema('dataset'),
+    datasetRowSetSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    datasetAdmissionId: aflTradeContentAddressedIdSchema('dataset-admission'),
+    modelProtocolId: aflTradeContentAddressedIdSchema('model-protocol'),
+    pavObservationSetId: aflTradeContentAddressedIdSchema('player-pav-observation-set'),
+    pavPolicyId: aflTradeContentAddressedIdSchema('player-pav-policy'),
+    methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+    observations: z.array(admittedPavObservationSchema).min(4).max(100_000),
+  })
+  .strict()
+  .superRefine((set, context) => {
+    if (
+      new Set(set.observations.map(({ datasetRowId }) => datasetRowId)).size !==
+        set.observations.length ||
+      new Set(set.observations.map(({ pavObservation }) => pavObservation.observationId)).size !==
+        set.observations.length ||
+      set.observations.some(({ rowOrdinal }, index) => rowOrdinal !== index + 1) ||
+      AFL_TRADE_MODEL_PARTITIONS.some(
+        (partition) =>
+          !set.observations.some(({ pavObservation }) => pavObservation.partition === partition)
+      )
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['observations'],
+        message:
+          'PAV projection requires unique original observations in exact admitted row order across all partitions.',
+      });
+  });
+
+export const aflTradePlayerObservationSetV3Schema = z
+  .object({
+    observationSetId: aflTradeContentAddressedIdSchema('player-observation-set'),
+    content: aflTradePlayerObservationSetV3ContentSchema,
+  })
+  .strict()
+  .superRefine((set, context) => {
+    addAflTradeContentAddressIssue(
+      'player-observation-set',
+      set.observationSetId,
+      set.content,
+      context,
+      ['observationSetId']
+    );
+  });
+
+export type AflTradePlayerObservationSetV3 = z.infer<typeof aflTradePlayerObservationSetV3Schema>;
+
+/** Projection only: callers still authenticate dataset admission, original custody and protocol authority. */
+export function createAflTradePlayerObservationSetV3(input: {
+  candidate: AflTradeValuationDatasetCandidate;
+  datasetAdmissionId: string;
+  modelProtocolId: string;
+  pavObservationSet: AflTradePlayerPavObservationSet;
+}): AflTradePlayerObservationSetV3 {
+  const candidate = aflTradeValuationDatasetCandidateSchema.parse(input.candidate);
+  const original = aflTradePlayerPavObservationSetSchema.parse(input.pavObservationSet);
+  const binding = candidate.content.pavObservationSet;
+  if (
+    candidate.content.schemaVersion !== 'afl-trade-valuation-dataset/v5' ||
+    !binding ||
+    binding.observationSetId !== original.observationSetId ||
+    !doesAflTradeArtifactRefMatchBytes(
+      binding.artifact,
+      new TextEncoder().encode(canonicalizeAflTradeJson(original)),
+      'application/json'
+    ) ||
+    original.content.policy.content.fixedHorizonSeasons !== 3 ||
+    original.content.environment !== candidate.content.environment ||
+    original.content.competition !== candidate.content.competition ||
+    original.content.releaseId !== candidate.content.factualParent.factualReleaseId ||
+    original.content.knowledgeCutoffAt !== candidate.content.knowledgeCutoffAt
+  )
+    throw new RangeError(
+      'PAV projection requires the exact original three-season admitted dataset parent.'
+    );
+  const byId = new Map(
+    original.content.observations.map((observation) => [observation.observationId, observation])
+  );
+  const calculationById = new Map(
+    original.content.calculations.map((calculation) => [calculation.calculationId, calculation])
+  );
+  const observations = candidate.content.rows.map(({ rowId, content: row }) => {
+    const observation = byId.get(row.pavObservationId!);
+    if (
+      !observation ||
+      row.schemaVersion !== 'afl-trade-valuation-dataset-row/v4' ||
+      observation.playerId !== row.identity.playerId ||
+      observation.acquisitionSpell.clubId !== row.identity.clubId ||
+      observation.acquisitionSpell.spellId !== row.lineage.acquisitionSpellId ||
+      observation.acquisitionSpell.spellVersionId !== row.lineage.acquisitionSpellVersionId ||
+      observation.partition !== row.splitRole ||
+      observation.predictionSeason !== row.seasonYear ||
+      observation.predictionCutoffAt !== row.predictionOriginAt ||
+      new Date(Date.parse(observation.predictionCutoffAt) + 1).toISOString() !== row.targetFrom ||
+      observation.outcomeHorizonEndsAt !== row.targetThrough
+    )
+      throw new RangeError('Admitted PAV row does not match its exact original observation.');
+    for (const [inputs, values] of [
+      [row.featureInputs, observation.featureValues],
+      [row.targetInputs, observation.targetValues],
+    ] as const) {
+      const valueByMemberId = new Map(
+        values.map((value) => [
+          createAflTradeContentAddress('hpn-pav-measurement', {
+            calculationId: value.calculationId,
+            spellVersionId: value.spellVersionId,
+            playerSha256: value.playerSha256,
+          }),
+          value,
+        ])
+      );
+      if (
+        inputs.length !== values.length ||
+        valueByMemberId.size !== values.length ||
+        new Set(inputs.map(({ memberId }) => memberId)).size !== inputs.length ||
+        inputs.some((measurement) => {
+          if (measurement.kind !== 'hpn_pav_measurement') return true;
+          const value = valueByMemberId.get(measurement.memberId);
+          const calculation = calculationById.get(measurement.calculationId);
+          return (
+            !value ||
+            !calculation ||
+            measurement.calculationId !== value.calculationId ||
+            measurement.spellVersionId !== value.spellVersionId ||
+            measurement.recordSha256 !== value.playerSha256 ||
+            measurement.methodId !== calculation.methodId ||
+            measurement.inputSetId !== calculation.inputSetId ||
+            measurement.seasonYear !== value.seasonYear ||
+            measurement.playerId !== value.playerId ||
+            measurement.clubId !== value.clubId ||
+            measurement.effectiveThrough !== value.effectiveThrough ||
+            measurement.recordedAt !== value.calculatedAt
+          );
+        })
+      )
+        throw new RangeError('Admitted inputs must match the exact original PAV measurements.');
+    }
+    // Current head revisions and source match dates remain authenticated by dataset admission.
+    const content = { datasetRowId: rowId, rowOrdinal: row.ordinal, pavObservation: observation };
+    return {
+      observationId: createAflTradeContentAddress('player-observation', content),
+      ...content,
+    };
+  });
+  const content = aflTradePlayerObservationSetV3ContentSchema.parse({
+    schemaVersion: 'afl-trade-player-observation-set/v3',
+    publicIdentityBoundary: 'source_native_no_fantasy_ownership',
+    authorityBoundary:
+      'deterministic_admitted_pav_dataset_projection_no_fit_grade_publication_or_fantasy_ownership',
+    publicationEligible: false,
+    observationGrain: 'player_acquisition_spell_prediction',
+    featureKnowledgePolicy: candidate.content.specification.content.featurePolicy.knowledgeJoin,
+    valueUnit: 'fixed_horizon_pav',
+    fixedHorizonSeasons: 3,
+    datasetId: candidate.datasetId,
+    datasetRowSetSha256: candidate.content.rowSetSha256,
+    datasetAdmissionId: input.datasetAdmissionId,
+    modelProtocolId: input.modelProtocolId,
+    pavObservationSetId: original.observationSetId,
+    pavPolicyId: original.content.policy.policyId,
+    methodId: original.content.policy.content.methodId,
+    observations,
+  });
+  return aflTradePlayerObservationSetV3Schema.parse({
+    observationSetId: createAflTradeContentAddress('player-observation-set', content),
+    content,
+  });
+}
 
 export const aflTradePlayerBaselineConfigSchema = z
   .object({

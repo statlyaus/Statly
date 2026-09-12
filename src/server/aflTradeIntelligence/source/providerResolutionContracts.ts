@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
+import { aflTradeExternalIdentityReviewWorkItemSchema } from './externalIdentityReviewContracts';
 
 import {
   addAflTradeContentAddressIssue,
@@ -725,6 +727,252 @@ export const aflTradeProviderResolutionDecisionSchema = z
 export type AflTradeProviderResolutionDecision = z.infer<
   typeof aflTradeProviderResolutionDecisionSchema
 >;
+
+/** Canonical facts proposed from retained source evidence; no inferred dates or identity aliases. */
+export const aflTradeCanonicalTargetRecordSchema = z.discriminatedUnion('entityKind', [
+  z
+    .object({
+      entityKind: z.literal('player'),
+      canonicalId: publicIdSchema,
+      displayName: recordedTextSchema,
+      birthDate: z.iso.date().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      entityKind: z.literal('club'),
+      canonicalId: publicIdSchema,
+      currentName: recordedTextSchema,
+      abbreviation: recordedTextSchema.nullable(),
+      activeFromYear: seasonSchema.nullable(),
+      activeThroughYear: seasonSchema.nullable(),
+    })
+    .strict()
+    .refine(
+      (record) =>
+        record.activeFromYear === null ||
+        record.activeThroughYear === null ||
+        record.activeFromYear <= record.activeThroughYear,
+      'Club active years must be ordered.'
+    ),
+  z
+    .object({
+      entityKind: z.literal('match'),
+      canonicalId: publicIdSchema,
+      competition: z.enum(['AFLM', 'AFLW']),
+      seasonYear: seasonSchema,
+      roundLabel: recordedTextSchema,
+      matchDate: utcIsoInstantSchema,
+      sourceDateText: recordedTextSchema,
+      dateInterpretation: z.enum(['source_instant', 'source_calendar_date_as_utc_midnight']),
+      homeClubId: publicIdSchema,
+      awayClubId: publicIdSchema,
+    })
+    .strict()
+    .refine((record) => record.homeClubId !== record.awayClubId, 'Match clubs must differ.')
+    .refine(
+      (record) =>
+        record.dateInterpretation === 'source_calendar_date_as_utc_midnight'
+          ? /^\d{4}-\d{2}-\d{2}$/.test(record.sourceDateText) &&
+            record.matchDate === `${record.sourceDateText}T00:00:00.000Z`
+          : z.iso.datetime({ offset: true }).safeParse(record.sourceDateText).success &&
+            Date.parse(record.sourceDateText) === Date.parse(record.matchDate),
+      'Match date must preserve the explicitly reviewed source precision.'
+    ),
+]);
+
+export const aflTradeCanonicalTargetSnapshotSchema = z
+  .object({
+    evidenceKind: z.literal('canonical_target_snapshot'),
+    schemaVersion: z.literal('afl-trade-canonical-target-snapshot/v1'),
+    environment: z.enum(['test_fixture', 'non_production', 'production']),
+    staging: stagingEvidenceSchema,
+    record: aflTradeCanonicalTargetRecordSchema,
+  })
+  .strict()
+  .refine(
+    (snapshot) => snapshot.environment === snapshot.staging.environment,
+    'Canonical target evidence environment must match its source.'
+  );
+
+/** Parses an already retained explicit creation review; this does not issue or approve that review. */
+export const aflTradeCanonicalTargetRegistrationSchema = z
+  .object({
+    registrationDecisionId: aflTradeContentAddressedIdSchema('canonical-target-registration'),
+    content: z
+      .object({
+        schemaVersion: z.literal('afl-trade-canonical-target-registration/v1'),
+        authorityBoundary: z.literal('reviewed_canonical_creation_no_provider_assignment'),
+        targetSnapshot: aflTradeCanonicalTargetSnapshotSchema,
+        resolutionDecision: aflTradeProviderResolutionDecisionSchema,
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((registration, context) => {
+    addAflTradeContentAddressIssue(
+      'canonical-target-registration',
+      registration.registrationDecisionId,
+      registration.content,
+      context,
+      ['registrationDecisionId']
+    );
+    const { targetSnapshot: snapshot, resolutionDecision: decision } = registration.content;
+    const proposal = decision.content.proposal.content;
+    const record = snapshot.record;
+    const target = proposal.proposedTarget;
+    const expectedId = createAflTradeContentAddress('canonical-target-snapshot', snapshot);
+    const targetMatches =
+      target !== null &&
+      ((record.entityKind === 'player' &&
+        'playerId' in target &&
+        target.playerId === record.canonicalId) ||
+        (record.entityKind === 'club' &&
+          'clubId' in target &&
+          target.clubId === record.canonicalId) ||
+        (record.entityKind === 'match' &&
+          'matchId' in target &&
+          target.matchId === record.canonicalId &&
+          target.canonicalMatchDate === record.matchDate &&
+          target.canonicalRoundLabel === record.roundLabel &&
+          target.homeClubId === record.homeClubId &&
+          target.awayClubId === record.awayClubId &&
+          record.competition === proposal.staging.competition &&
+          record.seasonYear === proposal.staging.seasonYear));
+    if (
+      decision.content.outcome !== 'approved' ||
+      !targetMatches ||
+      proposal.canonicalTargetSnapshot.id !== expectedId ||
+      createAflTradeContentAddress('canonical-registration-source', snapshot.staging) !==
+        createAflTradeContentAddress('canonical-registration-source', proposal.staging)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Canonical creation must bind the exact reviewed target and source.',
+      });
+    }
+  });
+
+export type AflTradeCanonicalTargetRegistration = z.infer<
+  typeof aflTradeCanonicalTargetRegistrationSchema
+>;
+
+/** External source observations establish identity; they do not fabricate normalization ancestry. */
+export const aflTradeExternalCanonicalTargetSnapshotSchema = z
+  .object({
+    evidenceKind: z.literal('canonical_target_snapshot'),
+    schemaVersion: z.literal('afl-trade-canonical-target-snapshot/v2'),
+    environment: z.enum(['test_fixture', 'non_production']),
+    source: z
+      .object({
+        historicalCompletionId: aflTradeContentAddressedIdSchema(
+          'external-historical-capture-completion'
+        ),
+        workItem: aflTradeExternalIdentityReviewWorkItemSchema,
+      })
+      .strict(),
+    record: aflTradeCanonicalTargetRecordSchema,
+  })
+  .strict()
+  .superRefine((snapshot, context) => {
+    const subject = snapshot.source.workItem.content.subject.content;
+    if (
+      subject.environment !== snapshot.environment ||
+      subject.competition !== 'AFLM' ||
+      subject.entityKind !== snapshot.record.entityKind ||
+      subject.identityScope.kind !== 'provider_native_id'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'External creation requires an exact private native identity and matching target kind.',
+      });
+    }
+  });
+
+/** Parses an actual retained creation/reuse review. This schema grants no reviewer authority. */
+export const aflTradeExternalCanonicalTargetRegistrationSchema = z
+  .object({
+    registrationDecisionId: aflTradeContentAddressedIdSchema('canonical-target-registration'),
+    content: z
+      .object({
+        schemaVersion: z.literal('afl-trade-canonical-target-registration/v2'),
+        authorityBoundary: z.literal('reviewed_canonical_creation_no_provider_assignment'),
+        action: z.enum(['create', 'reuse']),
+        targetSnapshot: aflTradeExternalCanonicalTargetSnapshotSchema,
+        targetSnapshotReferenceId: aflTradeContentAddressedIdSchema('canonical-target-snapshot'),
+        reviewerAuthority: z
+          .object({
+            principalRef: publicIdSchema,
+            authorityEvidence: authorityEvidenceReferenceSchema,
+          })
+          .strict(),
+        supportingEvidence: z.array(aflTradeArtifactRefSchema).min(1).max(50),
+        rationale: z.string().trim().min(1).max(4000),
+        decidedAt: utcIsoInstantSchema,
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((registration, context) => {
+    addAflTradeContentAddressIssue(
+      'canonical-target-registration',
+      registration.registrationDecisionId,
+      registration.content,
+      context,
+      ['registrationDecisionId']
+    );
+    const content = registration.content;
+    if (
+      content.targetSnapshotReferenceId !==
+      createAflTradeContentAddress('canonical-target-snapshot', content.targetSnapshot)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Creation review must bind the exact retained target snapshot.',
+      });
+    }
+    const proofs = content.supportingEvidence;
+    if (
+      proofs.some(
+        (ref, index) =>
+          Date.parse(ref.createdAt) > Date.parse(content.decidedAt) ||
+          (index > 0 && ref.artifactId <= proofs[index - 1]!.artifactId)
+      ) ||
+      content.targetSnapshot.source.workItem.content.observations.some(
+        (observation) => Date.parse(observation.capturedAt) > Date.parse(content.decidedAt)
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Creation review requires existing source observations and unique ordered supporting evidence.',
+      });
+    }
+    const record = content.targetSnapshot.record;
+    if (
+      content.action === 'create' &&
+      ((record.entityKind === 'player' && record.birthDate !== null) ||
+        (record.entityKind === 'club' &&
+          (record.abbreviation !== null ||
+            record.activeFromYear !== null ||
+            record.activeThroughYear !== null)))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'External identity observations do not establish biography or club lifespan; leave those fields unknown.',
+      });
+    }
+  });
+
+export type AflTradeExternalCanonicalTargetRegistration = z.infer<
+  typeof aflTradeExternalCanonicalTargetRegistrationSchema
+>;
+export const aflTradeAnyCanonicalTargetRegistrationSchema = z.union([
+  aflTradeCanonicalTargetRegistrationSchema,
+  aflTradeExternalCanonicalTargetRegistrationSchema,
+]);
 
 export function createAflTradeProviderResolutionProposal(
   content: unknown

@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import {
   createLocalGenuinePlayerDraftguruCaptureCommand,
@@ -52,6 +55,45 @@ const authorityEvidence = {
     evidenceContent('field_boundary_review')
   ),
 };
+function issue579Content(
+  kind: LocalGenuinePlayerDraftguruAuthorityEvidenceContent['evidenceKind']
+) {
+  return {
+    ...evidenceContent(kind),
+    schemaVersion: 'local-genuine-draftguru-authority-evidence/v2',
+    issueNumber: 579,
+    scope: { ...evidenceContent(kind).scope, seasons: [2023, 2024, 2025] },
+    statement: `Fixture-only reviewed ${kind} for issue 579.`,
+    recordedAt: '2026-09-06T00:00:00.000Z',
+    decisionTiming: {
+      termsEffectiveAt: '2026-09-06T00:00:01.000Z',
+      rightsProposedAt: '2026-09-06T00:00:02.000Z',
+      proposalProposedAt: '2026-09-06T00:00:03.000Z',
+      decidedAt: '2026-09-06T00:00:04.000Z',
+      effectiveAt: '2026-09-06T00:00:05.000Z',
+      termsExpireAt: '2027-09-05T00:00:00.000Z',
+      revalidateAt: '2027-09-04T00:00:00.000Z',
+    },
+  } as LocalGenuinePlayerDraftguruAuthorityEvidenceContent;
+}
+async function issue579Fixture() {
+  const repository = createAflTradeFixtureArtifactRepository({ artifactClass: 'capture_metadata' });
+  const documents = Object.fromEntries(
+    Object.entries(authorityEvidence).map(([key, evidence]) => [
+      key,
+      createLocalGenuinePlayerDraftguruAuthorityEvidenceArtifact(
+        issue579Content(evidence.content.evidenceKind)
+      ),
+    ])
+  ) as typeof authorityEvidence;
+  for (const document of Object.values(documents)) {
+    await repository.putIfAbsent(
+      document.artifact,
+      new TextEncoder().encode(canonicalizeAflTradeJson(document.content))
+    );
+  }
+  return { repository, documents };
+}
 const artifactRepository = createAflTradeFixtureArtifactRepository({
   artifactClass: 'capture_metadata',
 });
@@ -71,6 +113,187 @@ beforeAll(async () => {
 });
 
 describe('local genuine-player Draftguru authority', () => {
+  it('preserves the retained legacy authority byte-for-byte', () => {
+    expect(sha256AflTradeCanonicalJson(authorities)).toBe(
+      '6020634fb6d86935bc666ee75e8d3c799fa4654e49007087c4e5f0d695b7d2a9'
+    );
+  });
+  it('loads explicit issue-579 authority through the same retained evidence seam', async () => {
+    const evidence = await issue579Fixture();
+    const current = await loadExactLocalGenuinePlayerDraftguruAuthorities(
+      evidence.repository,
+      evidence.documents
+    );
+    for (const authority of current) {
+      expect(authority.sourceRights.content.scope.seasonRanges).toEqual([{ from: 2023, to: 2025 }]);
+      expect(authority.sourceRights.content.termsEffectiveAt).toBe('2026-09-06T00:00:01.000Z');
+      expect(authority.decision.content.effectiveAt).toBe('2026-09-06T00:00:05.000Z');
+      expect(authority.proposal.content.decisionKey).toContain('issue-579');
+      expect(authority.sourceRights.content.operations).toMatchObject({
+        public_derived_output: 'blocked',
+        public_fact_display: 'blocked',
+        raw_field_redistribution: 'blocked',
+      });
+      expect(
+        evaluateAflTradeGate0A(
+          { proposals: [authority.proposal], decisions: [authority.decision] },
+          authority.sourceRights,
+          createLocalGenuinePlayerDraftguruGateRequest(authority, 2025, {
+            evaluatedAt: '2026-09-06T01:00:00.000Z',
+          })
+        )
+      ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+    }
+    const command = createLocalGenuinePlayerDraftguruCaptureCommand(current[0], {
+      season: 2025,
+      discoveryFromSeason: 2023,
+      sourceUrl: 'https://www.draftguru.com.au/trades',
+      capturedAt: '2026-09-06T01:00:00.000Z',
+      effectiveAt: '2026-09-06T01:00:00.000Z',
+      maximumBytes: 1000,
+    });
+    expect(command.request).toMatchObject({
+      anchorSeasonYear: 2025,
+      discoveryFromSeasonYear: 2023,
+      datasetVersion: 'live-web-2026-09-06',
+    });
+    expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+  });
+  it.each([2022, 2026, 2024.5, NaN])(
+    'rejects an unauthorized discovery start %s',
+    async (discoveryFromSeason) => {
+      const evidence = await issue579Fixture();
+      const [authority] = await loadExactLocalGenuinePlayerDraftguruAuthorities(
+        evidence.repository,
+        evidence.documents
+      );
+      expect(() =>
+        createLocalGenuinePlayerDraftguruCaptureCommand(authority, {
+          season: 2025,
+          discoveryFromSeason,
+          sourceUrl: 'https://www.draftguru.com.au/trades',
+          capturedAt: '2026-09-06T01:00:00.000Z',
+          effectiveAt: '2026-09-06T01:00:00.000Z',
+          maximumBytes: 1000,
+        })
+      ).toThrow(/discovery range/i);
+    }
+  );
+  it.each([[2024], [2023, 2025], [2024, 2024, 2025], [2025, 2024], [2025, 2026], [2024.5, 2025]])(
+    'rejects a non-exact issue-579 season scope %j',
+    (...seasons) => {
+      const content = issue579Content('product_owner_authorization');
+      expect(() =>
+        createLocalGenuinePlayerDraftguruAuthorityEvidenceArtifact({
+          ...content,
+          scope: { ...content.scope, seasons },
+        } as LocalGenuinePlayerDraftguruAuthorityEvidenceContent)
+      ).toThrow();
+    }
+  );
+  it('rejects wrong issue numbers and backdated or unbounded decisions', () => {
+    const content = issue579Content('product_owner_authorization');
+    if (!('decisionTiming' in content)) throw new Error('Expected v2 fixture');
+    for (const change of [
+      { issueNumber: 574 },
+      { recordedAt: '2026-09-06T01:00:00.000Z' },
+      { decisionTiming: { ...content.decisionTiming, termsExpireAt: '2028-09-06T00:00:00.000Z' } },
+      {
+        decisionTiming: {
+          ...content.decisionTiming,
+          termsExpireAt: content.decisionTiming.effectiveAt,
+        },
+      },
+      { decisionTiming: { ...content.decisionTiming, revalidateAt: '2026-09-06T00:00:00.000Z' } },
+    ]) {
+      expect(() =>
+        createLocalGenuinePlayerDraftguruAuthorityEvidenceArtifact({
+          ...content,
+          ...change,
+        } as LocalGenuinePlayerDraftguruAuthorityEvidenceContent)
+      ).toThrow();
+    }
+  });
+  it('rejects mixed versions, scopes and decision timing even when individually retained', async () => {
+    const fixture = await issue579Fixture();
+    const content = issue579Content('field_boundary_review');
+    if (!('decisionTiming' in content)) throw new Error('Expected v2 fixture');
+    for (const changed of [
+      evidenceContent('field_boundary_review'),
+      { ...content, scope: { ...content.scope, seasons: [2024, 2025] } },
+      {
+        ...content,
+        decisionTiming: { ...content.decisionTiming, revalidateAt: '2027-09-03T00:00:00.000Z' },
+      },
+    ]) {
+      const document = createLocalGenuinePlayerDraftguruAuthorityEvidenceArtifact(
+        changed as LocalGenuinePlayerDraftguruAuthorityEvidenceContent
+      );
+      await fixture.repository.putIfAbsent(
+        document.artifact,
+        new TextEncoder().encode(canonicalizeAflTradeJson(document.content))
+      );
+      await expect(
+        loadExactLocalGenuinePlayerDraftguruAuthorities(fixture.repository, {
+          ...fixture.documents,
+          fieldBoundaryReview: document,
+        })
+      ).rejects.toThrow(/exact version, scope and decision timing/i);
+    }
+  });
+  it('rejects missing or tampered v2 bytes before using the existing ledger', async () => {
+    const fixture = await issue579Fixture();
+    for (const loadExact of [
+      async () => null,
+      async () => ({
+        reference: fixture.documents.productOwnerAuthorization.artifact,
+        bytes: new TextEncoder().encode('{}'),
+      }),
+    ]) {
+      const ledger = { load: vi.fn(), appendBatch: vi.fn() };
+      await expect(
+        recordLocalGenuinePlayerDraftguruAuthorities(
+          ledger,
+          { ...fixture.repository, loadExact },
+          fixture.documents
+        )
+      ).rejects.toThrow(/missing or differ/i);
+      expect(ledger.load).not.toHaveBeenCalled();
+      expect(ledger.appendBatch).not.toHaveBeenCalled();
+    }
+  });
+  it('records the three v2 authorities through the same optimistic ledger boundary', async () => {
+    const fixture = await issue579Fixture();
+    const expected = await loadExactLocalGenuinePlayerDraftguruAuthorities(
+      fixture.repository,
+      fixture.documents
+    );
+    let recorded: unknown;
+    const result = await recordLocalGenuinePlayerDraftguruAuthorities(
+      {
+        load: async () => ({ revision: 3, ledger: { proposals: [], decisions: [] } }),
+        appendBatch: async (input) => {
+          recorded = input;
+          return {
+            revision: 6,
+            ledger: { proposals: [], decisions: [] },
+            idempotentReplays: [false, false, false],
+          };
+        },
+      },
+      fixture.repository,
+      fixture.documents
+    );
+    expect(recorded).toEqual({
+      expectedRevision: 3,
+      records: expected.map(({ sourceRights, proposal, decision }) => ({
+        sourceRights,
+        proposal,
+        decision,
+      })),
+    });
+    expect(result.revision).toBe(6);
+  });
   it('requires retained approval and review evidence instead of generating authority', async () => {
     await expect(
       loadExactLocalGenuinePlayerDraftguruAuthorities(artifactRepository, {

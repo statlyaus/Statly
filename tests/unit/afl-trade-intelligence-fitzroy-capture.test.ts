@@ -644,6 +644,16 @@ describe('fitzRoy capture request contracts', () => {
     );
     const lockSha256 = createHash('sha256').update(lockBytes).digest('hex');
     const aflcaPatchSha256 = createHash('sha256').update(aflcaPatchBytes).digest('hex');
+    const footywirePatchSha256 = createHash('sha256')
+      .update(
+        readFileSync(
+          join(
+            process.cwd(),
+            'etl/afl-trade-intelligence/patches/fitzRoy-1.7.0-footywire-pacing.patch'
+          )
+        )
+      )
+      .digest('hex');
     expect(lock.R.Version).toBe('4.5.1');
     expect(lock.R.Repositories[0]?.URL).toBe('https://packagemanager.posit.co/cran/2026-08-07');
     expect(lock.Packages.fitzRoy?.Version).toBe('1.7.0');
@@ -657,6 +667,22 @@ describe('fitzRoy capture request contracts', () => {
       'ARG FITZROY_SOURCE_SHA256=296ef05e86cb3ed8473f88948a1561a05ee3db0b5e037624f2dba0acf20b5412'
     );
     expect(dockerfile).toContain(`ARG FITZROY_AFLCA_PATCH_SHA256=${aflcaPatchSha256}`);
+    expect(dockerfile).toContain(`ARG FITZROY_FOOTYWIRE_PATCH_SHA256=${footywirePatchSha256}`);
+    const identityPatchSha256 = createHash('sha256')
+      .update(
+        readFileSync(
+          join(
+            process.cwd(),
+            'etl/afl-trade-intelligence/patches/fitzRoy-1.7.0-footywire-identity.patch'
+          )
+        )
+      )
+      .digest('hex');
+    expect(dockerfile).toContain(
+      `ARG FITZROY_FOOTYWIRE_IDENTITY_PATCH_SHA256=${identityPatchSha256}`
+    );
+    expect(dockerfile).toContain('Rscript --vanilla test_footywire_identity_contract.R');
+    expect(dockerfile).toContain('Rscript --vanilla test_footywire_pacing_contract.R');
     expect(dockerfile).toContain('Rscript --vanilla test_coaches_votes_scope_contract.R');
     expect(dockerfile).not.toContain('alpine');
   });

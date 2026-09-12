@@ -7,7 +7,7 @@ import {
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { parseAflTradeExternalEvidenceBatch } from './externalDraftTradeEvidenceContracts';
 import type { AflTradeHistoricalReconciliationSource } from './externalHistoricalReconciliationPreparation';
-import { aflTradeExternalHistoricalCaptureCompletionSchema } from './externalHistoricalCaptureCompletionContracts';
+import { aflTradeAnyExternalHistoricalCaptureCompletionSchema } from './externalHistoricalCaptureCompletionContracts';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
   createAflTradeHistoricalCompletionReconciliationAuthority,
@@ -35,6 +35,9 @@ export class PostgresAflTradeExternalHistoricalReconciliationSource implements A
       'external-historical-capture-completion'
     ).parse(completionIdInput);
     return this.client.transaction(async (transaction) => {
+      await transaction.query(
+        `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
+      );
       const completionResult = await transaction.query<{
         completion_json: unknown;
         finalized_at: string | Date | null;
@@ -51,6 +54,7 @@ export class PostgresAflTradeExternalHistoricalReconciliationSource implements A
            FROM outcome_external_historical_capture_completion completion
            JOIN outcome_external_historical_capture_plan plan ON plan.plan_id=completion.plan_id
           WHERE completion.completion_id=$1
+            AND outcome_external_retained_completion_is_current(completion.completion_id,clock_timestamp())
           FOR SHARE OF completion,plan`,
         [completionId]
       );
@@ -67,7 +71,7 @@ export class PostgresAflTradeExternalHistoricalReconciliationSource implements A
           'Historical capture completion is absent, unfinalized, or not reconciliation eligible.'
         );
       }
-      const completion = aflTradeExternalHistoricalCaptureCompletionSchema.parse(
+      const completion = aflTradeAnyExternalHistoricalCaptureCompletionSchema.parse(
         row.completion_json
       );
       if (

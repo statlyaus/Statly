@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
 
 import {
   addAflTradeContentAddressIssue,
@@ -20,6 +21,8 @@ export const AFL_TRADE_HPN_PAV_FIELD_MAP_SCHEMA_VERSION = 'afl-trade-hpn-pav-fie
 export const AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION = 'afl-trade-hpn-pav-input-set/v1' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION =
   'afl-trade-hpn-pav-input-set/v2' as const;
+export const AFL_TRADE_HPN_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY =
+  'retrospective_as_recorded_by_input_creation' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY =
   'private_exact_finalized_provider_rows_current_resolutions_no_publication_or_fantasy_ownership' as const;
 
@@ -287,7 +290,20 @@ const playerRowSchema = z
     role: z.enum(['primary', 'corroborating']),
     source: rowSourceSchema,
     match: currentResolutionSchema,
-    player: currentResolutionSchema,
+    player: z.union([
+      currentResolutionSchema,
+      z
+        .object({
+          entityKind: z.literal('player'),
+          resolutionScope: z.literal('candidate_only'),
+          canonicalId: publicIdSchema,
+          revision: z.number().int().positive(),
+          status: z.literal('current_approved'),
+          resolutionDecision: resolutionDecisionSchema,
+          assignmentDecision: z.null(),
+        })
+        .strict(),
+    ]),
     club: currentResolutionSchema,
     acquisitionSpell: acquisitionSpellSchema,
     stats: pavStatsSchema,
@@ -295,6 +311,24 @@ const playerRowSchema = z
   .strict();
 
 const inputRowSchema = z.discriminatedUnion('kind', [resultRowSchema, playerRowSchema]);
+
+// A reviewed absence is source custody, never a measured zero or an appearance.
+export const aflTradeHpnPavExcludedSourceRowSchema = z
+  .object({
+    reason: z.literal('reviewed_nonparticipant'),
+    source: rowSourceSchema,
+    player: playerRowSchema.shape.player,
+    match: currentResolutionSchema,
+    club: currentResolutionSchema,
+    review: z
+      .object({
+        decision: reviewDecisionSchema,
+        decidedAt: instantSchema,
+        evidenceArtifact: aflTradeArtifactRefSchema.refine((artifact) => artifact.byteLength > 0),
+      })
+      .strict(),
+  })
+  .strict();
 
 const sourceRunSchema = z
   .object({
@@ -452,9 +486,62 @@ const projectedInputSetContentSchema = z
   .strict()
   .superRefine(addInputSetIssues);
 
+const retrospectiveInputSetBase = {
+  ...inputSetBase,
+  schemaVersion: z.literal('afl-trade-hpn-pav-input-set/v3'),
+  knowledgePolicy: z.literal(AFL_TRADE_HPN_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY),
+  knowledgeCutoffAt: instantSchema,
+};
+const retrospectiveLegacyInputSetContentSchema = z
+  .object({
+    ...retrospectiveInputSetBase,
+    environment: z.enum(['test_fixture', 'non_production']),
+    fieldMapAuthority: z.literal('legacy'),
+    fieldMaps: z.array(aflTradeHpnPavFieldMapSchema).min(3).max(100),
+  })
+  .strict()
+  .superRefine(addInputSetIssues);
+const retrospectiveProjectedInputSetContentSchema = z
+  .object({
+    ...retrospectiveInputSetBase,
+    environment: z.literal('non_production'),
+    fieldMapAuthority: z.literal('projected'),
+    fieldMaps: z.array(aflTradeHpnProjectedFieldMapSchema).min(3).max(100),
+  })
+  .strict()
+  .superRefine(addInputSetIssues);
+
+const excludedInputSetBase = {
+  ...retrospectiveInputSetBase,
+  schemaVersion: z.literal('afl-trade-hpn-pav-input-set/v4'),
+  excludedSourceRows: z.array(aflTradeHpnPavExcludedSourceRowSchema).min(1).max(100_000),
+};
+const excludedLegacyInputSetContentSchema = z
+  .object({
+    ...excludedInputSetBase,
+    environment: z.enum(['test_fixture', 'non_production']),
+    fieldMapAuthority: z.literal('legacy'),
+    fieldMaps: z.array(aflTradeHpnPavFieldMapSchema).min(3).max(100),
+  })
+  .strict()
+  .superRefine(addInputSetIssues);
+const excludedProjectedInputSetContentSchema = z
+  .object({
+    ...excludedInputSetBase,
+    environment: z.literal('non_production'),
+    fieldMapAuthority: z.literal('projected'),
+    fieldMaps: z.array(aflTradeHpnProjectedFieldMapSchema).min(3).max(100),
+  })
+  .strict()
+  .superRefine(addInputSetIssues);
+
 const inputSetContentSchema = z.union([
   legacyInputSetContentSchema,
   projectedInputSetContentSchema,
+  retrospectiveLegacyInputSetContentSchema,
+  retrospectiveProjectedInputSetContentSchema,
+  excludedLegacyInputSetContentSchema,
+  excludedProjectedInputSetContentSchema,
 ]);
 
 export const aflTradeHpnPavSeasonInputSetSchema = z
@@ -474,9 +561,7 @@ export const aflTradeHpnPavSeasonInputSetSchema = z
   });
 
 export type AflTradeHpnPavFieldMap = z.infer<typeof aflTradeHpnPavFieldMapSchema>;
-export type AflTradeHpnPavInputFieldMap =
-  | AflTradeHpnPavFieldMap
-  | AflTradeHpnProjectedFieldMap;
+export type AflTradeHpnPavInputFieldMap = AflTradeHpnPavFieldMap | AflTradeHpnProjectedFieldMap;
 export type AflTradeHpnPavSeasonInputSet = z.infer<typeof aflTradeHpnPavSeasonInputSetSchema>;
 
 export function aflTradeHpnPavReviewedFields(
@@ -525,9 +610,8 @@ function projectedBinding(
   fieldMap: AflTradeHpnProjectedFieldMap['content'],
   semanticField: AflTradeHpnSemanticBindingCandidate['semanticField']
 ): AflTradeHpnSemanticBindingCandidate['mapping'] | undefined {
-  return fieldMap.semanticBindings.find(
-    (binding) => binding.semanticField === semanticField
-  )?.mapping;
+  return fieldMap.semanticBindings.find((binding) => binding.semanticField === semanticField)
+    ?.mapping;
 }
 
 function projectedSourceNumber(
@@ -590,9 +674,7 @@ function statsFromSource(
 function reviewedFields(fieldMap: AflTradeHpnPavInputFieldMap['content']): string[] {
   if (fieldMap.schemaVersion === 'afl-trade-hpn-projected-field-map/v1') {
     return [
-      ...new Set(
-        fieldMap.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
-      ),
+      ...new Set(fieldMap.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
     ].sort(ordinalCompare);
   }
   return aflTradeHpnPavReviewedFields(fieldMap);
@@ -634,13 +716,23 @@ function addInputSetIssues(
   input: z.infer<typeof inputSetContentSchema>,
   context: z.RefinementCtx
 ): void {
+  const custodyCutoff = 'knowledgeCutoffAt' in input ? input.knowledgeCutoffAt : input.createdAt;
+  if (
+    Date.parse(custodyCutoff) > Date.parse(input.createdAt) ||
+    Date.parse(input.effectiveThrough) > Date.parse(custodyCutoff)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'PAV knowledge cutoff must follow event evidence and not exceed creation.',
+    });
+  }
   if (Date.parse(input.effectiveThrough) > Date.parse(input.createdAt)) {
     context.addIssue({
       code: 'custom',
       message: 'PAV input creation precedes its evidence cutoff.',
     });
   }
-  if (Date.parse(input.factualUniverse.finalizedAt) > Date.parse(input.createdAt)) {
+  if (Date.parse(input.factualUniverse.finalizedAt) > Date.parse(custodyCutoff)) {
     context.addIssue({
       code: 'custom',
       path: ['factualUniverse', 'finalizedAt'],
@@ -670,6 +762,42 @@ function addInputSetIssues(
   }
   const fieldMaps = new Map(input.fieldMaps.map((fieldMap) => [fieldMap.fieldMapId, fieldMap]));
   const runs = new Map(input.sourceRuns.map((run) => [run.normalizationRunId, run]));
+  const excluded = 'excludedSourceRows' in input ? input.excludedSourceRows : [];
+  const accountedRows = [...input.rows, ...excluded];
+  for (const row of excluded) {
+    const run = runs.get(row.source.normalizationRunId);
+    const map = run ? fieldMaps.get(run.fieldMapId) : undefined;
+    const match = factualMatches.get(row.match.canonicalId);
+    const fields = map ? reviewedFields(map.content) : [];
+    if (
+      !map ||
+      map.content.inputKind !== 'player_match_stats' ||
+      !match ||
+      row.player.entityKind !== 'player' ||
+      row.match.entityKind !== 'match' ||
+      row.club.entityKind !== 'club' ||
+      ![match.homeClubId, match.awayClubId].includes(row.club.canonicalId) ||
+      input.factualUniverse.playerAppearanceFacts.some(
+        (fact) => fact.matchId === row.match.canonicalId && fact.playerId === row.player.canonicalId
+      ) ||
+      input.rows.some(
+        (measured) =>
+          measured.kind === 'player_match_stats' &&
+          measured.match.canonicalId === row.match.canonicalId &&
+          measured.player.canonicalId === row.player.canonicalId
+      ) ||
+      fields.length !== row.source.sourceFields.length ||
+      fields.some((field, index) => field !== row.source.sourceFields[index]) ||
+      Date.parse(row.review.decidedAt) > Date.parse(custodyCutoff) ||
+      Date.parse(row.review.evidenceArtifact.createdAt) > Date.parse(row.review.decidedAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Excluded source rows require exact reviewed nonparticipant context, source fields, and factual absence.',
+      });
+    }
+  }
   if (fieldMaps.size !== input.fieldMaps.length || runs.size !== input.sourceRuns.length) {
     context.addIssue({ code: 'custom', message: 'PAV field maps and source runs must be unique.' });
   }
@@ -685,8 +813,9 @@ function addInputSetIssues(
       input.seasonYear > fieldMap.content.validThroughSeason ||
       run.competition !== input.competition ||
       run.seasonYear !== input.seasonYear ||
-      Date.parse(run.capturedAt) > Date.parse(input.effectiveThrough) ||
-      Date.parse(run.finalizedAt) > Date.parse(input.createdAt)
+      Date.parse(run.capturedAt) >
+        Date.parse('knowledgeCutoffAt' in input ? custodyCutoff : input.effectiveThrough) ||
+      Date.parse(run.finalizedAt) > Date.parse(custodyCutoff)
     ) {
       context.addIssue({
         code: 'custom',
@@ -708,7 +837,7 @@ function addInputSetIssues(
         });
       }
     }
-    const runRows = input.rows.filter(
+    const runRows = accountedRows.filter(
       ({ source }) => source.normalizationRunId === run.normalizationRunId
     );
     if (runRows.length !== run.sourceRowCount) {
@@ -719,7 +848,7 @@ function addInputSetIssues(
       });
     }
   }
-  const sourceRowIds = input.rows.map(({ source }) => source.providerDecodedRowId);
+  const sourceRowIds = accountedRows.map(({ source }) => source.providerDecodedRowId);
   if (new Set(sourceRowIds).size !== sourceRowIds.length) {
     context.addIssue({
       code: 'custom',
@@ -766,9 +895,7 @@ function addInputSetIssues(
             typeof row.source.sourceValues[fieldMap.content.bindings.completionStatus] ===
               'string' &&
             fieldMap.content.bindings.completedValues.includes(
-              row.source.sourceValues[
-                fieldMap.content.bindings.completionStatus
-              ] as string
+              row.source.sourceValues[fieldMap.content.bindings.completionStatus] as string
             );
       if (!valuesMatch) {
         context.addIssue({
@@ -810,7 +937,7 @@ function addInputSetIssues(
         effectiveDate === undefined ||
         effectiveDate < row.acquisitionSpell.startDate ||
         (row.acquisitionSpell.endDate !== null && effectiveDate > row.acquisitionSpell.endDate) ||
-        Date.parse(row.acquisitionSpell.recordedAt) > Date.parse(input.createdAt)
+        Date.parse(row.acquisitionSpell.recordedAt) > Date.parse(custodyCutoff)
       ) {
         context.addIssue({
           code: 'custom',
@@ -977,7 +1104,21 @@ type CreateProjectedInputSet = Omit<
   z.input<typeof projectedInputSetContentSchema>,
   'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts'
 >;
-type CreateInputSet = CreateLegacyInputSet | CreateProjectedInputSet;
+type CreateRetrospectiveInputSet = Omit<
+  | z.input<typeof retrospectiveLegacyInputSetContentSchema>
+  | z.input<typeof retrospectiveProjectedInputSetContentSchema>,
+  'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts' | 'fieldMapAuthority'
+>;
+type CreateExcludedInputSet = Omit<
+  | z.input<typeof excludedLegacyInputSetContentSchema>
+  | z.input<typeof excludedProjectedInputSetContentSchema>,
+  'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts' | 'fieldMapAuthority'
+>;
+type CreateInputSet =
+  | CreateLegacyInputSet
+  | CreateProjectedInputSet
+  | CreateRetrospectiveInputSet
+  | CreateExcludedInputSet;
 
 export function createAflTradeHpnPavSeasonInputSet(
   unparsedInput: CreateInputSet
@@ -1022,9 +1163,26 @@ export function createAflTradeHpnPavSeasonInputSet(
   };
   const content = inputSetContentSchema.parse({
     ...unparsedInput,
-    schemaVersion: usesProjectedMaps
-      ? AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION
-      : AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION,
+    ...('excludedSourceRows' in unparsedInput
+      ? {
+          excludedSourceRows: [...unparsedInput.excludedSourceRows].sort((left, right) =>
+            ordinalCompare(left.source.providerDecodedRowId, right.source.providerDecodedRowId)
+          ),
+        }
+      : {}),
+    ...('knowledgePolicy' in unparsedInput
+      ? {
+          fieldMapAuthority: usesProjectedMaps ? 'projected' : 'legacy',
+        }
+      : {}),
+    schemaVersion:
+      'excludedSourceRows' in unparsedInput
+        ? 'afl-trade-hpn-pav-input-set/v4'
+        : 'knowledgePolicy' in unparsedInput
+          ? 'afl-trade-hpn-pav-input-set/v3'
+          : usesProjectedMaps
+            ? AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION
+            : AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION,
     authorityBoundary: AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY,
     publicationEligible: false,
     fieldMaps,

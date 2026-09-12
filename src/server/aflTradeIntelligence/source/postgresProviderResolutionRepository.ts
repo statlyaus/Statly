@@ -1,3 +1,5 @@
+import { PostgresAflTradeExternalHistoricalReconciliationSource } from './postgresExternalHistoricalReconciliationSource';
+import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityReviewWorkBuilder';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -9,6 +11,7 @@ import type {
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   aflTradeProviderResolutionDecisionSchema,
+  aflTradeAnyCanonicalTargetRegistrationSchema,
   type AflTradeProviderResolutionDecision,
   type AflTradeProviderResolutionProposalContent,
 } from './providerResolutionContracts';
@@ -75,6 +78,169 @@ interface IssueRow {
 
 export class PostgresAflTradeProviderResolutionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
+
+  async registerCanonicalTarget(
+    input: {
+      registrationDecisionId: string;
+      targetSnapshotReferenceId: string;
+    },
+    execution: AflTradeProviderResolutionExecutionContext
+  ): Promise<{
+    entityKind: 'player' | 'club' | 'match';
+    canonicalId: string;
+    idempotentReplay: boolean;
+  }> {
+    if (
+      !/^canonical-target-registration:[a-f0-9]{64}$/.test(input.registrationDecisionId) ||
+      !/^canonical-target-snapshot:[a-f0-9]{64}$/.test(input.targetSnapshotReferenceId) ||
+      !execution.principalRef.trim() ||
+      !['test_fixture', 'non_production'].includes(execution.environment)
+    ) {
+      throw new AflTradeProviderResolutionPersistenceError(
+        'INVALID_DECISION',
+        'Canonical target registration requires exact private retained review references.'
+      );
+    }
+    return this.client.transaction(async (transaction) => {
+      const retained = await transaction.query<{ evidence_json: unknown }>(
+        `SELECT evidence_json FROM outcome_review_decision
+         WHERE decision_id=$1 AND subject_type='canonical_target_creation'
+           AND subject_id=$2 AND decision='approved'
+           AND decided_by=$3 AND decided_at<=statement_timestamp()
+           AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
+             WHERE successor.supersedes_decision_id=$1) FOR SHARE`,
+        [input.registrationDecisionId, input.targetSnapshotReferenceId, execution.principalRef]
+      );
+      if (retained.rows.length !== 1)
+        throw new AflTradeProviderResolutionPersistenceError(
+          'EVIDENCE_MISSING',
+          'Exact current canonical creation review is missing.'
+        );
+      const registration = aflTradeAnyCanonicalTargetRegistrationSchema.parse(
+        retained.rows[0]!.evidence_json
+      );
+      if (registration.content.schemaVersion === 'afl-trade-canonical-target-registration/v2') {
+        const content = registration.content;
+        await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+          `outcome-external-identity:${content.targetSnapshot.source.workItem.content.subject.subjectId}`,
+        ]);
+        if (
+          registration.registrationDecisionId !== input.registrationDecisionId ||
+          content.targetSnapshotReferenceId !== input.targetSnapshotReferenceId ||
+          content.reviewerAuthority.principalRef !== execution.principalRef ||
+          content.targetSnapshot.environment !== execution.environment
+        ) {
+          throw new AflTradeProviderResolutionPersistenceError(
+            'AUTHORITY_MISMATCH',
+            'External canonical creation must bind its exact reviewer, snapshot and private environment.'
+          );
+        }
+        // Match the SQL owner's complete lock order before the source loader takes Gate.
+        await transaction.query(
+          `SELECT pg_advisory_xact_lock(hashtextextended(value,0))
+           FROM (SELECT DISTINCT unnest($1::text[]) AS value ORDER BY value) locks`,
+          [
+            [
+              `outcome-canonical-target:${content.targetSnapshot.record.entityKind}:${content.targetSnapshot.record.canonicalId}`,
+              `outcome-review-subject:canonical_target_creation:${input.targetSnapshotReferenceId}`,
+              `outcome-review-subject:governed_evidence_reference:${input.targetSnapshotReferenceId}`,
+              `outcome-review-subject:governed_evidence_reference:${content.reviewerAuthority.authorityEvidence.id}`,
+            ],
+          ]
+        );
+        const sourceOwner = new PostgresAflTradeExternalHistoricalReconciliationSource({
+          query: transaction.query.bind(transaction),
+          transaction: async (work) => work(transaction),
+        });
+        const source = await sourceOwner.load(content.targetSnapshot.source.historicalCompletionId);
+        const work = buildAflTradeExternalIdentityReviewPackage({
+          environment: source.environment,
+          competition: source.competition,
+          sourceAuthority: source.sourceAuthority,
+          sourceBatches: source.sourceBatches,
+        });
+        const retainedItem = content.targetSnapshot.source.workItem;
+        const actual = work.content.items.find(
+          (item) => item.subjectId === retainedItem.content.subject.subjectId
+        );
+        if (
+          !actual ||
+          canonicalizeAflTradeJson(actual.workItem) !== canonicalizeAflTradeJson(retainedItem)
+        ) {
+          throw new AflTradeProviderResolutionPersistenceError(
+            'STAGING_MISMATCH',
+            'External canonical creation requires the complete exact native-identity observation work item.'
+          );
+        }
+      } else {
+        const decision = registration.content.resolutionDecision;
+        const proposal = decision.content.proposal.content;
+        if (
+          registration.registrationDecisionId !== input.registrationDecisionId ||
+          proposal.canonicalTargetSnapshot.id !== input.targetSnapshotReferenceId ||
+          decision.content.reviewerAuthority.principalRef !== execution.principalRef ||
+          proposal.staging.environment !== execution.environment
+        )
+          throw new AflTradeProviderResolutionPersistenceError(
+            'AUTHORITY_MISMATCH',
+            'Canonical creation must bind its authenticated reviewer and source scope.'
+          );
+        await acquireDecisionLocks(transaction, decision);
+        const staging = await requireExactStaging(transaction, proposal, execution.environment);
+        await requireGovernedEvidence(transaction, decision, execution);
+        await requireCurrentNamespace(transaction, proposal);
+        const issues = await loadIssues(transaction, proposal.staging.normalizationRunId, staging);
+        requireIssueEvidence(proposal, issues);
+        await requireCurrentClosures(transaction, proposal, issues);
+        if (
+          proposal.subjectType === 'provider_match_candidate' &&
+          proposal.proposedTarget !== null
+        ) {
+          await requireCurrentMatchClubResolution(
+            transaction,
+            proposal.matchCandidateId,
+            'home',
+            proposal.proposedTarget.homeClubId,
+            proposal.proposedTarget.homeClubResolutionDecisionId
+          );
+          await requireCurrentMatchClubResolution(
+            transaction,
+            proposal.matchCandidateId,
+            'away',
+            proposal.proposedTarget.awayClubId,
+            proposal.proposedTarget.awayClubResolutionDecisionId
+          );
+        }
+      }
+      const persisted = await transaction.query<{
+        entity_kind: 'player' | 'club' | 'match';
+        canonical_id: string;
+        idempotent_replay: boolean;
+      }>(`SELECT * FROM register_outcome_reviewed_canonical_target($1,$2,$3,$4)`, [
+        input.registrationDecisionId,
+        input.targetSnapshotReferenceId,
+        execution.principalRef,
+        execution.environment,
+      ]);
+      const row = persisted.rows[0];
+      const expected = registration.content.targetSnapshot.record;
+      if (
+        persisted.rows.length !== 1 ||
+        !row ||
+        row.canonical_id !== expected.canonicalId ||
+        row.entity_kind !== expected.entityKind
+      )
+        throw new AflTradeProviderResolutionPersistenceError(
+          'TARGET_MISMATCH',
+          'Canonical registration did not return its exact reviewed record.'
+        );
+      return {
+        entityKind: row.entity_kind,
+        canonicalId: row.canonical_id,
+        idempotentReplay: row.idempotent_replay,
+      };
+    });
+  }
 
   async persistDecision(
     input: unknown,
@@ -684,7 +850,7 @@ async function requireCurrentMatchClubResolution(
          ON head.resolution_id = resolution.resolution_id
        JOIN outcome_provider_identity_assignment_head assignment
          ON assignment.assignment_case_id = resolution.assignment_case_id
-        AND assignment.decision_id = resolution.decision_id
+        AND outcome_provider_assignment_continuity_current(resolution.decision_id)
         AND assignment.status = 'active'
       WHERE resolution.decision_id = $1 AND resolution.outcome = 'approved'
         AND resolution.match_candidate_id = $2 AND resolution.side = $3

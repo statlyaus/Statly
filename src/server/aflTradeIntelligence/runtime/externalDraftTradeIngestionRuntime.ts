@@ -18,7 +18,9 @@ import {
   parseDraftguruTradeDetail,
   parseDraftguruTradeIndexEvidence,
   parseDraftguruYearSelections,
+  parseDraftguruNationalYearSelections,
 } from '../source/draftguruSourceAdapter';
+import { parseOfficialAflDraftSession } from '../source/officialAflDraftSessionAdapter';
 import { createAflTradeExternalCaptureAdmission } from '../source/externalDraftTradeCaptureAdmission';
 import type { AflTradeExternalPageCapture } from '../source/externalDraftTradeIngestion';
 import {
@@ -117,7 +119,7 @@ async function readBounded(response: Response, maximumBytes: number): Promise<Ui
   return bytes;
 }
 
-async function captureOfficialAflPage(input: {
+export async function captureOfficialAflPage(input: {
   url: string;
   validators: { eTag: string | null; lastModified: string | null } | null;
   maximumBytes: number;
@@ -245,6 +247,11 @@ export function createAflTradeExternalIngestionRuntime(
               capture,
               draftYear: command.request.anchorSeasonYear,
             });
+          case 'draftguru-national-year-page':
+            return parseDraftguruNationalYearSelections(html, {
+              capture,
+              draftYear: command.request.anchorSeasonYear,
+            });
           case 'footywire-draft-results':
             return parseFootywireDraftSelections(html, { capture });
           case 'official-afl-indicative-draft-order':
@@ -253,6 +260,8 @@ export function createAflTradeExternalIngestionRuntime(
               draftYear: command.request.anchorSeasonYear,
               observedAt: command.request.effectiveAt,
             });
+          case 'official-afl-completed-draft-session':
+            return parseOfficialAflDraftSession(html, { capture });
           default:
             throw new TypeError('External ingestion capability is not implemented.');
         }

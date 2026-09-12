@@ -169,6 +169,9 @@ function fakeClient(options?: {
   const { candidate } = fixture();
   const query = async (sql: string, parameters: readonly unknown[] = []) => {
     statements.push({ sql, parameters });
+    if (sql.includes('outcome_external_candidate_retained_sources_current')) {
+      return { rows: [{ current: true }], rowCount: 1 };
+    }
     if (sql.includes('FROM outcome_external_reconciliation_candidate')) {
       return options?.replay
         ? {

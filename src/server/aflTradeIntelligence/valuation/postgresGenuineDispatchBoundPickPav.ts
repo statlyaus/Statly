@@ -25,7 +25,8 @@ import {
   parseGenuineDispatchBoundPickPavExecutionInput,
   type GenuineDispatchBoundPickPavExecutionInput,
 } from './genuineDispatchBoundPickPav';
-import { parseAflTradePrivateValuationFactualOutput } from './privateValuationFactualOutput';
+import { parseAflTradePlayerModelFactualOutput } from './privateValuationFactualOutput';
+import { loadAflTradePrivateValuationHpnFactualBinding } from './postgresPrivateValuationHpnFactualBinding';
 import { PostgresGovernedValuationComponentRunRepository } from './internal/postgresGovernedValuationComponentRunRepository';
 import { createAflTradeGenuineDispatchBoundGovernedPickExecutor } from './postgresPrivateValuationModelPair';
 
@@ -63,6 +64,8 @@ interface ModelAuthorityRow {
 interface RetainedComponentRow {
   readonly run_id: string;
   readonly execution_id: string;
+  readonly factual_schema_version: string;
+  readonly factual_run_id: string;
 }
 
 function sha256(value: string): string {
@@ -175,7 +178,57 @@ export class PostgresGenuineDispatchBoundPickPavMaterializer {
         throw new TypeError('Exact dispatch-bound pick-PAV authority is unavailable.');
       }
       const row = authority.rows[0]!;
-      const factual = parseAflTradePrivateValuationFactualOutput(row.output_json);
+      const factual = parseAflTradePlayerModelFactualOutput(row.output_json);
+      let factualRunId: string;
+      let releaseId = factual.content.factualRelease.releaseId;
+      if (factual.content.schemaVersion === 'afl-trade-private-valuation-factual-output/v2') {
+        const authority = await loadAflTradePrivateValuationHpnFactualBinding(transaction, {
+          requestId: execution.exactInput.requestId,
+          factualOutputId: execution.exactInput.factualOutputId,
+        });
+        factualRunId = authority.hpnFactualRunId;
+        const parents = await transaction.query<{ dataset_json: unknown; admission_json: unknown }>(
+          `SELECT dataset.dataset_json,admission.admission_json
+             FROM outcome_valuation_dataset_candidate dataset
+             JOIN outcome_valuation_dataset_admission admission
+               ON admission.dataset_id=dataset.dataset_id AND admission.admission_id=$2
+              AND admission.environment='non_production'
+              AND admission.status='finalized' AND admission.finalized_at IS NOT NULL
+            WHERE dataset.dataset_id=$1 AND dataset.scope_key=$3
+              AND dataset.environment='non_production'
+              AND dataset.status='finalized' AND dataset.finalized_at IS NOT NULL
+              AND outcome_private_valuation_pick_parent_is_current(
+                $4,$5,dataset.dataset_id,admission.admission_id,dataset.factual_release_id)`,
+          [
+            execution.operation.content.pick.datasetId,
+            execution.operation.content.pick.datasetAdmissionId,
+            execution.operation.content.scopeKey,
+            execution.exactInput.requestId,
+            execution.exactInput.factualOutputId,
+          ]
+        );
+        if (parents.rows.length !== 1) {
+          throw new TypeError('Exact independent pick dataset parent is unavailable.');
+        }
+        const dataset = aflTradeValuationDatasetCandidateSchema.parse(
+          parents.rows[0]!.dataset_json
+        );
+        const admission = aflTradeValuationDatasetAdmissionReceiptSchema.parse(
+          parents.rows[0]!.admission_json
+        );
+        const parent = dataset.content.factualParent;
+        if (
+          admission.content.datasetId !== dataset.datasetId ||
+          admission.content.factualReleaseId !== parent.factualReleaseId ||
+          admission.content.factualCandidateId !== parent.factualCandidateId ||
+          admission.content.sourceMemberSetSha256 !== parent.sourceMemberSetSha256
+        ) {
+          throw new TypeError('Independent pick dataset and admission ancestry is inconsistent.');
+        }
+        releaseId = parent.factualReleaseId;
+      } else {
+        factualRunId = factual.content.reconciliation.factualRunId;
+      }
       const calculation = aflTradeFinalizedHpnPavCalculationSchema.parse(row.calculation_json);
       if (
         factual.content.requestId !== execution.exactInput.requestId ||
@@ -184,7 +237,7 @@ export class PostgresGenuineDispatchBoundPickPavMaterializer {
         factual.content.candidate.memberSetSha256 !==
           execution.operation.content.factualValuesSha256 ||
         calculation.calculationId !== execution.exactInput.hpnCalculationId ||
-        calculation.content.factualRunId !== factual.content.reconciliation.factualRunId ||
+        calculation.content.factualRunId !== factualRunId ||
         calculation.content.methodId !== execution.operation.content.hpnMethodId ||
         row.hpn_values_sha256 !== execution.operation.content.hpnValuesSha256
       ) {
@@ -195,7 +248,6 @@ export class PostgresGenuineDispatchBoundPickPavMaterializer {
         execution.operation.content.pick.policyId,
         'non_production'
       );
-      const releaseId = factual.content.factualRelease.releaseId;
       const selections = await loadAflTradePickPavSelections(
         transaction,
         releaseId,
@@ -302,13 +354,18 @@ export function createPostgresGenuineDispatchBoundPickPavAuthorityLoader(input: 
       dataset.datasetId !== target.datasetId ||
       admission.admissionId !== target.datasetAdmissionId ||
       admission.content.datasetId !== target.datasetId ||
-      dataset.content.factualParent.factualReleaseId !== factual.content.factualRelease.releaseId ||
-      dataset.content.factualParent.factualCandidateId !== factual.content.candidate.candidateId ||
-      dataset.content.factualParent.sourceMemberSetSha256 !==
-        factual.content.candidate.memberSetSha256 ||
-      admission.content.factualReleaseId !== factual.content.factualRelease.releaseId ||
-      admission.content.factualCandidateId !== factual.content.candidate.candidateId ||
-      admission.content.sourceMemberSetSha256 !== factual.content.candidate.memberSetSha256 ||
+      dataset.content.factualParent.factualReleaseId !== observationSet.content.releaseId ||
+      admission.content.factualReleaseId !== dataset.content.factualParent.factualReleaseId ||
+      admission.content.factualCandidateId !== dataset.content.factualParent.factualCandidateId ||
+      admission.content.sourceMemberSetSha256 !==
+        dataset.content.factualParent.sourceMemberSetSha256 ||
+      (factual.content.schemaVersion === 'afl-trade-private-valuation-factual-output/v1' &&
+        (dataset.content.factualParent.factualReleaseId !==
+          factual.content.factualRelease.releaseId ||
+          dataset.content.factualParent.factualCandidateId !==
+            factual.content.candidate.candidateId ||
+          dataset.content.factualParent.sourceMemberSetSha256 !==
+            factual.content.candidate.memberSetSha256)) ||
       protocol.protocolId !== target.protocolId ||
       protocol.content.datasetId !== target.datasetId
     ) {
@@ -387,8 +444,10 @@ export function createPostgresGenuineDispatchBoundPickPavExecutor(input: {
             sha256(execution.claim.leaseToken),
           ]
         );
-        return transaction.query<RetainedComponentRow>(
-          `SELECT component.run_id,native.execution_id
+        const result = await transaction.query<RetainedComponentRow>(
+          `SELECT component.run_id,native.execution_id,
+                  factual.output_json#>>'{content,schemaVersion}' AS factual_schema_version,
+                  hpn.calculation_json#>>'{content,factualRunId}' AS factual_run_id
              FROM outcome_governed_valuation_component_run component
              JOIN outcome_governed_pick_pav_model_execution native
                ON native.execution_id=component.native_execution_id
@@ -401,6 +460,10 @@ export function createPostgresGenuineDispatchBoundPickPavExecutor(input: {
                     native.execution_json->'content'->'privateInput'->>'factualOutputId'
               AND binding.hpn_calculation_id=
                     native.execution_json->'content'->'privateInput'->>'hpnCalculationId'
+             JOIN outcome_private_valuation_factual_output factual
+               ON factual.output_id=binding.factual_output_id
+             JOIN outcome_hpn_pav_calculation hpn
+               ON hpn.calculation_id=binding.hpn_calculation_id
              JOIN outcome_private_valuation_dispatch_attempt retained_attempt
                ON retained_attempt.request_id=binding.request_id
               AND retained_attempt.claim_id=
@@ -435,6 +498,32 @@ export function createPostgresGenuineDispatchBoundPickPavExecutor(input: {
             execution.operation.content.pick.datasetAdmissionId,
           ]
         );
+        for (const row of result.rows) {
+          if (row.factual_schema_version === 'afl-trade-private-valuation-factual-output/v2') {
+            const authority = await loadAflTradePrivateValuationHpnFactualBinding(transaction, {
+              requestId: execution.exactInput.requestId,
+              factualOutputId: execution.exactInput.factualOutputId,
+            });
+            if (authority.hpnFactualRunId !== row.factual_run_id) {
+              throw new TypeError('Retained pick-PAV HPN factual ancestry is inconsistent.');
+            }
+            const parent = await transaction.query<{ current: boolean }>(
+              `SELECT outcome_private_valuation_pick_parent_is_current(
+                 $1,$2,$3,$4,dataset.factual_release_id) AS current
+                 FROM outcome_valuation_dataset_candidate dataset WHERE dataset.dataset_id=$3`,
+              [
+                execution.exactInput.requestId,
+                execution.exactInput.factualOutputId,
+                execution.operation.content.pick.datasetId,
+                execution.operation.content.pick.datasetAdmissionId,
+              ]
+            );
+            if (parent.rows.length !== 1 || parent.rows[0]?.current !== true) {
+              throw new TypeError('Retained independent pick parent is no longer current.');
+            }
+          }
+        }
+        return result;
       });
       if (retained.rows.length === 0) return null;
       if (retained.rows.length !== 1) {

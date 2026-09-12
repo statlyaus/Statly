@@ -26,6 +26,7 @@ const ENVELOPE_SCHEMA_VERSION = 'statly-local-conditional-object/v1';
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const MAXIMUM_OBJECT_KEY_BYTES = 1_024;
 const MAXIMUM_ENVELOPE_BYTES = 192 * 1024 * 1024;
+const MAXIMUM_ENVELOPE_METADATA_BYTES = 1024 * 1024;
 const UUID_V4_PATTERN_SOURCE =
   '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
@@ -179,7 +180,24 @@ function validateEnvelope(value: unknown, objectKey: string): StoredEnvelope {
 
 export function createLocalAflTradeFileConditionalObjectStore(options: {
   rootDirectory: string;
+  maximumObjectBytes?: number;
 }): AflTradeConditionalObjectStore {
+  const maximumObjectBytes = options.maximumObjectBytes;
+  const maximumEnvelopeBytes =
+    maximumObjectBytes === undefined
+      ? MAXIMUM_ENVELOPE_BYTES
+      : Math.ceil(maximumObjectBytes / 3) * 4 + MAXIMUM_ENVELOPE_METADATA_BYTES;
+  if (
+    (maximumObjectBytes !== undefined &&
+      (!Number.isSafeInteger(maximumObjectBytes) || maximumObjectBytes <= 0)) ||
+    !Number.isSafeInteger(maximumEnvelopeBytes) ||
+    maximumEnvelopeBytes <= 0
+  ) {
+    fail(
+      'INVALID_REQUEST',
+      'Local object custody requires safe finite object and envelope bounds.'
+    );
+  }
   if (!isAbsolute(options.rootDirectory)) {
     fail('INVALID_REQUEST', 'Local object custody requires one absolute root directory.');
   }
@@ -298,10 +316,14 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
       await recoverOwnedLinksAndAssertAnchoredEnvelope(path, handle, objectKey);
       const details = await handle.stat();
-      if (!details.isFile() || details.size > MAXIMUM_ENVELOPE_BYTES) {
-        fail('OBJECT_TOO_LARGE', 'Local object envelope exceeds its fixed read bound.');
+      if (!details.isFile() || details.size > maximumEnvelopeBytes) {
+        fail('OBJECT_TOO_LARGE', 'Local object envelope exceeds its configured read bound.');
       }
-      return validateEnvelope(JSON.parse(await handle.readFile('utf8')), objectKey);
+      const envelope = validateEnvelope(JSON.parse(await handle.readFile('utf8')), objectKey);
+      if (maximumObjectBytes !== undefined && envelope.identity.byteLength > maximumObjectBytes) {
+        fail('OBJECT_TOO_LARGE', 'Local object exceeds its configured raw-byte bound.');
+      }
+      return envelope;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
       if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
@@ -320,6 +342,9 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
 
   return {
     async createIfAbsent(request) {
+      if (maximumObjectBytes !== undefined && request.bytes.byteLength > maximumObjectBytes) {
+        fail('OBJECT_TOO_LARGE', 'Local object exceeds its configured raw-byte bound.');
+      }
       const path = await envelopePath(request.objectKey);
       const pendingPath = await pendingEnvelopePath(request.objectKey);
       const identity = identityFor(request);
@@ -328,6 +353,10 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
         identity,
         bytesBase64: Buffer.from(request.bytes).toString('base64'),
       };
+      let serializedEnvelope: string | null = JSON.stringify(envelope);
+      if (Buffer.byteLength(serializedEnvelope, 'utf8') > maximumEnvelopeBytes) {
+        fail('OBJECT_TOO_LARGE', 'Local object envelope exceeds its configured publication bound.');
+      }
       let handle: Awaited<ReturnType<typeof open>> | null = null;
       try {
         handle = await open(
@@ -336,7 +365,8 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
           0o600
         );
         await recoverOwnedLinksAndAssertAnchoredEnvelope(pendingPath, handle);
-        await handle.writeFile(JSON.stringify(envelope), 'utf8');
+        await handle.writeFile(serializedEnvelope, 'utf8');
+        serializedEnvelope = null;
         await handle.sync();
         await recoverOwnedLinksAndAssertAnchoredEnvelope(pendingPath, handle);
         await handle.close();
@@ -481,6 +511,7 @@ function createLocalAflTradeFilesystemArtifactRepository(options: {
   }
   const store = createLocalAflTradeFileConditionalObjectStore({
     rootDirectory: resolve(options.rootDirectory, options.repositoryId),
+    maximumObjectBytes: options.maximumObjectBytes,
   });
   const objectKey = (sha256Value: string) =>
     `${options.assurance}/sha256/${sha256Value.slice(0, 2)}/${sha256Value.slice(2, 4)}/${sha256Value}`;

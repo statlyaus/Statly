@@ -22,6 +22,7 @@ export type AflTradeProviderObservationIssueCode =
   | 'required_field_missing'
   | 'source_season_mismatch'
   | 'invalid_metric'
+  | 'invalid_match_orientation'
   | 'ambiguous_provider_zero'
   | 'natural_key_component_missing'
   | 'duplicate_natural_key';
@@ -239,13 +240,13 @@ function makeMatchCandidate(input: {
   bindings: NonNullable<AflTradeFitzRoyFieldMap['match']>;
   issues: AflTradeProviderObservationIssue[];
 }): AflTradeProviderMatchCandidate | null {
-  const homeClubName = requiredText({
+  let homeClubName = requiredText({
     row: input.row,
     field: input.bindings.homeClubName.sourceField,
     rowNumber: input.rowNumber,
     issues: input.issues,
   });
-  const awayClubName = requiredText({
+  let awayClubName = requiredText({
     row: input.row,
     field: input.bindings.awayClubName.sourceField,
     rowNumber: input.rowNumber,
@@ -265,15 +266,33 @@ function makeMatchCandidate(input: {
     issues: input.issues,
   };
   const nativeMatchId = boundText({ ...bindingInput, binding: input.bindings.nativeMatchId });
-  const homeClubNativeId = boundText({
+  let homeClubNativeId = boundText({
     ...bindingInput,
     binding: input.bindings.homeClubNativeId,
   });
-  const awayClubNativeId = boundText({
+  let awayClubNativeId = boundText({
     ...bindingInput,
     binding: input.bindings.awayClubNativeId,
   });
   const matchDateText = boundText({ ...bindingInput, binding: input.bindings.matchDate });
+  const orientation = input.bindings.rowClubOrientation;
+  if (orientation !== undefined) {
+    const value = boundText({ ...bindingInput, binding: orientation });
+    if (value === null) return null;
+    if (value !== orientation.homeValue && value !== orientation.awayValue) {
+      input.issues.push({
+        rowNumber: input.rowNumber,
+        code: 'invalid_match_orientation',
+        field: orientation.sourceField,
+        message: 'Source club orientation does not match either reviewed label.',
+      });
+      return null;
+    }
+    if (value === orientation.awayValue) {
+      [homeClubName, awayClubName] = [awayClubName, homeClubName];
+      [homeClubNativeId, awayClubNativeId] = [awayClubNativeId, homeClubNativeId];
+    }
+  }
   const clubs = [
     clubLocator(homeClubNativeId, homeClubName),
     clubLocator(awayClubNativeId, awayClubName),
@@ -621,6 +640,7 @@ function normalizeDecodedRow(input: {
     metricCandidates,
     achievementCandidate,
     appearanceCandidate:
+      input.fieldMap.appearanceEvidence !== 'requires_independent_review' &&
       input.fieldMap.observationKind === 'player_stat' &&
       matchCandidate !== null &&
       input.capability.metrics.includes('match_appearance'),

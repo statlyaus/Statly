@@ -117,28 +117,88 @@ function projectedFieldMap(
   const semanticBindings =
     fieldMap.content.inputKind === 'completed_match_result'
       ? [
-          { semanticField: 'awayClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayClub } },
-          { semanticField: 'awayPoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayPoints } },
-          { semanticField: 'completionStatus', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.completionStatus } },
-          { semanticField: 'homeClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homeClub } },
-          { semanticField: 'homePoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homePoints } },
-          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
+          {
+            semanticField: 'awayClub',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayClub },
+          },
+          {
+            semanticField: 'awayPoints',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayPoints },
+          },
+          {
+            semanticField: 'completionStatus',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.completionStatus },
+          },
+          {
+            semanticField: 'homeClub',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homeClub },
+          },
+          {
+            semanticField: 'homePoints',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homePoints },
+          },
+          {
+            semanticField: 'match',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match },
+          },
         ]
       : [
-          { semanticField: 'clearances', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.clearances } },
-          { semanticField: 'club', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.club } },
-          { semanticField: 'freeKicksAgainst', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksAgainst } },
-          { semanticField: 'freeKicksFor', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksFor } },
-          { semanticField: 'goalAssists', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.goalAssists } },
-          { semanticField: 'hitOuts', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.hitOuts } },
-          { semanticField: 'inside50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.inside50s } },
-          { semanticField: 'marks', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marks } },
-          { semanticField: 'marksInside50', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marksInside50 } },
-          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
-          { semanticField: 'onePercenters', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.onePercenters } },
-          { semanticField: 'player', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.player } },
-          { semanticField: 'rebound50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.rebound50s } },
-          { semanticField: 'tackles', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.tackles } },
+          {
+            semanticField: 'clearances',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.clearances },
+          },
+          {
+            semanticField: 'club',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.club },
+          },
+          {
+            semanticField: 'freeKicksAgainst',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksAgainst },
+          },
+          {
+            semanticField: 'freeKicksFor',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksFor },
+          },
+          {
+            semanticField: 'goalAssists',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.goalAssists },
+          },
+          {
+            semanticField: 'hitOuts',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.hitOuts },
+          },
+          {
+            semanticField: 'inside50s',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.inside50s },
+          },
+          {
+            semanticField: 'marks',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marks },
+          },
+          {
+            semanticField: 'marksInside50',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marksInside50 },
+          },
+          {
+            semanticField: 'match',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match },
+          },
+          {
+            semanticField: 'onePercenters',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.onePercenters },
+          },
+          {
+            semanticField: 'player',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.player },
+          },
+          {
+            semanticField: 'rebound50s',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.rebound50s },
+          },
+          {
+            semanticField: 'tackles',
+            mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.tackles },
+          },
           { semanticField: 'totalPoints', mapping: fieldMap.content.bindings.totalPoints },
         ];
   const content = {
@@ -349,6 +409,170 @@ function fixture() {
 }
 
 describe('HPN PAV governed input contracts', () => {
+  it('conserves five reviewed unused substitutes separately without manufacturing measured zeros', () => {
+    const input = fixture();
+    const template = input.rows.find(
+      (row) => row.kind === 'player_match_stats' && row.role === 'corroborating'
+    );
+    if (!template || template.kind !== 'player_match_stats') throw new Error('Missing fixture row');
+    const excludedSourceRows = Array.from({ length: 5 }, (_, index) => ({
+      reason: 'reviewed_nonparticipant' as const,
+      source: source(
+        template.source.normalizationRunId,
+        `provider-row:unused-${index}`,
+        `unused-${index}`,
+        Object.fromEntries(
+          Object.keys(template.source.sourceValues).map((field) => [
+            field,
+            field === 'player_id'
+              ? `unused-${index}`
+              : field === 'team'
+                ? 'club:a'
+                : field === 'match_id'
+                  ? 'match:2025-1'
+                  : null,
+          ])
+        )
+      ),
+      player: resolution('player', `unused-${index}`),
+      match: template.match,
+      club: template.club,
+      review: {
+        decision: decision('review-decision', `unused-${index}`),
+        decidedAt: '2026-08-09T00:00:00.000Z',
+        evidenceArtifact: createAflTradeCanonicalJsonArtifactRef(
+          { syntheticOfficialReport: `unused-${index}` },
+          '2026-08-08T00:00:00.000Z'
+        ),
+      },
+    }));
+    const result = createAflTradeHpnPavSeasonInputSet({
+      ...input,
+      knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+      knowledgeCutoffAt: input.createdAt,
+      sourceRuns: input.sourceRuns.map((run) =>
+        run.provider === 'footywire' ? { ...run, sourceRowCount: 9, acceptedRowCount: 9 } : run
+      ),
+      excludedSourceRows,
+    });
+    expect(result.content.schemaVersion).toBe('afl-trade-hpn-pav-input-set/v4');
+    expect(result.content.rows).toHaveLength(9);
+    expect('excludedSourceRows' in result.content && result.content.excludedSourceRows).toEqual(
+      excludedSourceRows
+    );
+    expect(() =>
+      createAflTradeHpnPavSeasonInputSet({
+        ...result.content,
+        excludedSourceRows: excludedSourceRows.slice(1),
+      })
+    ).toThrow(/source row count/i);
+    expect(() =>
+      createAflTradeHpnPavSeasonInputSet({
+        ...result.content,
+        excludedSourceRows: excludedSourceRows.map((row, index) =>
+          index === 0 ? { ...row, player: resolution('player', 'a1') } : row
+        ),
+      })
+    ).toThrow(/factual absence/i);
+    expect(() =>
+      createAflTradeHpnPavSeasonInputSet({
+        ...result.content,
+        excludedSourceRows: excludedSourceRows.map((row, index) =>
+          index === 0
+            ? {
+                ...row,
+                source: {
+                  ...row.source,
+                  providerDecodedRowId: template.source.providerDecodedRowId,
+                },
+              }
+            : row
+        ),
+      })
+    ).toThrow(/exactly once/i);
+    expect(() =>
+      createAflTradeHpnPavSeasonInputSet({
+        ...result.content,
+        excludedSourceRows: excludedSourceRows.map((row, index) =>
+          index === 0 ? { ...row, club: resolution('club', 'not-in-match') } : row
+        ),
+      })
+    ).toThrow(/nonparticipant context/i);
+    expect(
+      createAflTradeHpnPavSeasonInputSet({
+        ...result.content,
+        excludedSourceRows: [...excludedSourceRows].reverse(),
+        rows: [...result.content.rows].reverse(),
+      }).inputSetId
+    ).toBe(result.inputSetId);
+  });
+  it('retains an exact candidate-only player decision without inventing an assignment', () => {
+    const input = fixture();
+    const rows = input.rows.map((row) =>
+      row.kind === 'player_match_stats'
+        ? {
+            ...row,
+            player: {
+              ...row.player,
+              entityKind: 'player' as const,
+              resolutionScope: 'candidate_only' as const,
+              assignmentDecision: null,
+            },
+          }
+        : row
+    );
+    const result = createAflTradeHpnPavSeasonInputSet({ ...input, rows });
+    expect(
+      result.content.rows
+        .filter((row) => row.kind === 'player_match_stats')
+        .every((row) => row.player.assignmentDecision === null)
+    ).toBe(true);
+  });
+  it.each(['club', 'match', 'player_with_assignment'] as const)(
+    'rejects candidate-only authority for %s',
+    (kind) => {
+      const input = fixture();
+      const rows = input.rows.map((row) => {
+        if (row.kind !== 'player_match_stats') return row;
+        const key = kind === 'player_with_assignment' ? 'player' : kind;
+        return {
+          ...row,
+          [key]: {
+            ...row[key],
+            resolutionScope: 'candidate_only',
+            assignmentDecision:
+              kind === 'player_with_assignment' ? row.player.assignmentDecision : null,
+          },
+        };
+      });
+      expect(() => createAflTradeHpnPavSeasonInputSet({ ...input, rows })).toThrow();
+    }
+  );
+  it('retains late historical capture only under explicit retrospective input custody', () => {
+    const original = fixture();
+    const late = {
+      ...original,
+      sourceRuns: original.sourceRuns.map((run) => ({
+        ...run,
+        capturedAt: '2026-08-08T00:00:00.000Z',
+      })),
+    };
+    expect(() => createAflTradeHpnPavSeasonInputSet(late)).toThrow(/chronology/i);
+    const input = createAflTradeHpnPavSeasonInputSet({
+      ...late,
+      knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+      knowledgeCutoffAt: original.createdAt,
+    });
+    expect(input.content).toMatchObject({
+      schemaVersion: 'afl-trade-hpn-pav-input-set/v3',
+      fieldMapAuthority: 'legacy',
+      effectiveThrough: original.effectiveThrough,
+      sourceRuns: expect.arrayContaining([
+        expect.objectContaining({ capturedAt: '2026-08-08T00:00:00.000Z' }),
+      ]),
+    });
+  });
+
   it('seals one exhaustive, independently corroborated completed season input', () => {
     const inputSet = createAflTradeHpnPavSeasonInputSet(fixture());
 
@@ -360,6 +584,19 @@ describe('HPN PAV governed input contracts', () => {
       corroboratingPlayerRows: 4,
     });
     expect(inputSet.content.publicationEligible).toBe(false);
+  });
+
+  it('rejects retrospective custody cutoffs before finalization or after creation', () => {
+    const original = fixture();
+    for (const knowledgeCutoffAt of ['2026-08-08T00:00:00.000Z', '2026-08-11T00:00:00.000Z']) {
+      expect(() =>
+        createAflTradeHpnPavSeasonInputSet({
+          ...original,
+          knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
+          knowledgeCutoffAt,
+        })
+      ).toThrow();
+    }
   });
 
   it('seals projected-map authority without manufacturing legacy field maps', () => {

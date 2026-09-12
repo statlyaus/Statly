@@ -7,9 +7,7 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../outcomes/postgresOutcomeReleaseRepository';
-import {
-  type AflTradeCurrentValuationPreparedModelEvidence,
-} from './currentValuationModelEvidence';
+import { type AflTradeCurrentValuationPreparedModelEvidence } from './currentValuationModelEvidence';
 import { aflTradeCurrentValuationEvidenceOrchestrationResultSchema } from './currentValuationEvidenceOrchestration';
 import {
   createAflTradeCurrentValuationModelEvidencePreparation,
@@ -28,9 +26,7 @@ type PairPreparation = Parameters<
   typeof createAflTradeCurrentValuationModelEvidencePreparation
 >[0]['pair'];
 type TerminalPair = Parameters<
-  Parameters<
-    typeof createAflTradeCurrentValuationModelEvidencePreparation
-  >[0]['evidence']['load']
+  Parameters<typeof createAflTradeCurrentValuationModelEvidencePreparation>[0]['evidence']['load']
 >[0]['pair'];
 
 interface AuthorityRow {
@@ -87,11 +83,7 @@ async function authenticateWithinTransaction(
   }
   const authority = await transaction.query<AuthorityRow>(
     `SELECT result_json FROM load_outcome_current_valuation_evidence($1,$2,$3)`,
-    [
-      input.current.scopeKey,
-      input.dispatch.request.trigger,
-      input.dispatch.request.requestId,
-    ]
+    [input.current.scopeKey, input.dispatch.request.trigger, input.dispatch.request.requestId]
   );
   const row = authority.rows[0];
   const orchestration = aflTradeCurrentValuationEvidenceOrchestrationResultSchema.safeParse(
@@ -139,12 +131,10 @@ function projectTerminalEvidence(
   ) {
     throw new TypeError('Retained model evidence does not match the exact terminal pair.');
   }
-  const playerObservationSetId = nativeExecutionSchema.parse(
-    row.player_native_execution_json
-  ).content.observationSetId;
-  const pickBenchmarkEvidenceId = nativeExecutionSchema.parse(
-    row.pick_native_execution_json
-  ).content.observationSetId;
+  const playerObservationSetId = nativeExecutionSchema.parse(row.player_native_execution_json)
+    .content.observationSetId;
+  const pickBenchmarkEvidenceId = nativeExecutionSchema.parse(row.pick_native_execution_json)
+    .content.observationSetId;
   const common = {
     playerObservationSetId,
     pickBenchmarkEvidenceId,
@@ -266,14 +256,24 @@ async function hasPreparedFactualAncestry(
            JOIN outcome_private_factual_candidate candidate
              ON candidate.candidate_id=$3
           WHERE factual.request_id=$1 AND factual.output_id=$2
-            AND factual.output_json->'content'->>'schemaVersion'=
+            AND CASE WHEN factual.output_json->'content'->>'schemaVersion'=
               'afl-trade-private-valuation-factual-output/v1'
-            AND candidate.candidate_json#>'{content,normalizedReconciledCustody,normalizationRuns}'
-              @> jsonb_build_array(jsonb_build_object(
-                'normalizationRunId',factual.normalization_run_id
-              ))
+            THEN candidate.candidate_json#>'{content,normalizedReconciledCustody,normalizationRuns}'
+                @> jsonb_build_array(jsonb_build_object(
+                  'normalizationRunId',factual.normalization_run_id
+                ))
+            ELSE load_outcome_private_valuation_hpn_factual_input(factual.request_id,factual.output_id)
+              @> jsonb_build_object('factualOperationId',$4::text,
+                'privateFactualCandidateId',$3::text,'privateFactualRevision',$5::integer)
+            END
        ) AS exact`,
-    [input.dispatch.request.requestId, input.factualOutputId, input.current.privateFactualAuthority.candidateId]
+    [
+      input.dispatch.request.requestId,
+      input.factualOutputId,
+      input.current.privateFactualAuthority.candidateId,
+      input.current.factualOperationId,
+      input.current.privateFactualAuthority.revision,
+    ]
   );
   return ancestry.rows.length === 1 && ancestry.rows[0]?.exact === true;
 }
@@ -286,7 +286,8 @@ export function createPostgresAflTradeCurrentValuationModelEvidencePreparation(i
   const authenticate = (value: {
     readonly current: AflTradeCurrentValuationModelEvidencePreparationInput;
     readonly dispatch: AflTradeCurrentValuationModelEvidenceDispatch;
-  }) => input.client.transaction((transaction) => authenticateWithinTransaction(transaction, value));
+  }) =>
+    input.client.transaction((transaction) => authenticateWithinTransaction(transaction, value));
 
   return createAflTradeCurrentValuationModelEvidencePreparation({
     dispatch: input.dispatch,

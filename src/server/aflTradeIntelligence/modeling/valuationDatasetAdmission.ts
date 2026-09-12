@@ -39,6 +39,13 @@ import {
   type AflTradeFactualReleaseCandidate,
 } from '../outcomes/factualReleaseCandidateContracts';
 import { aflTradeSourceSnapshotManifestSchema } from '../artifacts/sourceSnapshotManifest';
+import { aflTradeFinalizedHpnPavCalculationSchema } from './hpnPavCalculationService';
+import { aflTradeHpnPavSeasonInputSetSchema } from './hpnPavInputContracts';
+import { aflTradePlayerPavObservationSetSchema } from './playerPavObservationContracts';
+import {
+  aflTradePlayerPavDatasetInclusionPolicySchema,
+  createAflTradePlayerPavDatasetExclusionReport,
+} from './playerPavDatasetSelection';
 import {
   authenticateAflDraftTradeOutcomeReleaseRegistry,
   type AflDraftTradeOutcomeReleaseRegistry,
@@ -46,6 +53,16 @@ import {
 
 export const AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION =
   'afl-trade-dataset-admission-evidence/v5' as const;
+export const AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION =
+  'afl-trade-dataset-admission-evidence/v6' as const;
+
+export const aflTradePavMeasurementAdmissionEvidenceSchema = z
+  .object({
+    calculation: aflTradeFinalizedHpnPavCalculationSchema,
+    inputSet: aflTradeHpnPavSeasonInputSetSchema,
+    headRevision: z.number().int().positive(),
+  })
+  .strict();
 
 const utcInstantSchema = z
   .string()
@@ -119,6 +136,23 @@ const assignmentHeadSchema = z
   })
   .strict();
 
+const assignmentChainSchema = z
+  .object({
+    chainId: contentAddressSchema,
+    content: z
+      .object({
+        schemaVersion: z.literal('afl-trade-provider-assignment-chain/v1'),
+        assignmentCaseId: contentAddressSchema,
+        decisions: z.array(aflTradeProviderResolutionDecisionSchema).min(1).max(100_000),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine(
+    (chain) =>
+      chain.chainId === createAflTradeContentAddress('provider-assignment-chain', chain.content)
+  );
+
 const identityAuthorityEvidenceSchema = z
   .object({
     entityKind: z.enum(['player', 'club']),
@@ -126,6 +160,14 @@ const identityAuthorityEvidenceSchema = z
     decision: aflTradeProviderResolutionDecisionSchema,
     resolutionHead: resolutionHeadSchema,
     assignmentHead: assignmentHeadSchema,
+    assignmentContinuityId: contentAddressSchema.optional(),
+    assignmentContinuity: z
+      .object({
+        schemaVersion: z.literal('afl-trade-provider-assignment-continuity/v1'),
+        confirmations: z.array(aflTradeProviderResolutionDecisionSchema).min(1).max(100_000),
+      })
+      .strict()
+      .optional(),
     authenticatedAt: utcInstantSchema,
   })
   .strict();
@@ -236,7 +278,11 @@ const modelSourceSnapshotEvidenceSchema = z.union([
 ]);
 
 interface AuthenticatedAdmissionEvidence {
-  schemaVersion: typeof AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION;
+  schemaVersion:
+    | typeof AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION
+    | typeof AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION;
+  pavObservationSet?: z.infer<typeof aflTradePlayerPavObservationSetSchema>;
+  pavMeasurements?: z.infer<typeof aflTradePavMeasurementAdmissionEvidenceSchema>[];
   authenticatedAt: string;
   factualCandidate: AflTradeFactualReleaseCandidate;
   factualCandidateFinalizedAt: string;
@@ -247,6 +293,7 @@ interface AuthenticatedAdmissionEvidence {
   gate2DecisionKey: string;
   sourceRights: readonly SourceRightsEvidence[];
   identityAuthorities: readonly z.infer<typeof identityAuthorityEvidenceSchema>[];
+  assignmentContinuities?: readonly z.infer<typeof assignmentChainSchema>[];
   domainLineageAuthorities: readonly z.infer<typeof domainLineageAuthoritySchema>[];
   rowAuthorities: readonly z.infer<typeof rowAuthorityEvidenceSchema>[];
   artifactBytes: readonly z.infer<typeof retainedBytesSchema>[];
@@ -270,6 +317,24 @@ function blocker(
 function parseAuthenticatedEvidence(value: unknown): AuthenticatedAdmissionEvidence | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
+  const pav = candidate.schemaVersion === AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION;
+  const pavObservationSet = pav
+    ? aflTradePlayerPavObservationSetSchema.safeParse(candidate.pavObservationSet)
+    : null;
+  const pavMeasurements = pav
+    ? z
+        .array(aflTradePavMeasurementAdmissionEvidenceSchema)
+        .min(1)
+        .max(1000)
+        .safeParse(candidate.pavMeasurements)
+    : null;
+  // Legacy evidence has no governed PAV measurement binding. Never silently discard one.
+  if (
+    pav
+      ? !pavObservationSet?.success || !pavMeasurements?.success
+      : 'pavMeasurements' in candidate || 'pavObservationSet' in candidate
+  )
+    return null;
   const factualCandidate = aflTradeFactualReleaseCandidateSchema.safeParse(
     candidate.factualCandidate
   );
@@ -280,6 +345,11 @@ function parseAuthenticatedEvidence(value: unknown): AuthenticatedAdmissionEvide
   const identityAuthorities = z
     .array(identityAuthorityEvidenceSchema)
     .safeParse(candidate.identityAuthorities);
+  const assignmentContinuities = z
+    .array(assignmentChainSchema)
+    .max(100_000)
+    .optional()
+    .safeParse(candidate.assignmentContinuities);
   const domainLineageAuthorities = z
     .array(domainLineageAuthoritySchema)
     .safeParse(candidate.domainLineageAuthorities);
@@ -300,13 +370,15 @@ function parseAuthenticatedEvidence(value: unknown): AuthenticatedAdmissionEvide
     return null;
   }
   if (
-    candidate.schemaVersion !== AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION ||
+    (!pav &&
+      candidate.schemaVersion !== AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION) ||
     !utcInstantSchema.safeParse(candidate.authenticatedAt).success ||
     !utcInstantSchema.safeParse(candidate.factualCandidateFinalizedAt).success ||
     !factualCandidate.success ||
     !corpusLineage.success ||
     !consumedFieldSets.success ||
     !identityAuthorities.success ||
+    !assignmentContinuities.success ||
     !domainLineageAuthorities.success ||
     !rowAuthorities.success ||
     !artifactBytes.success ||
@@ -356,7 +428,15 @@ function parseAuthenticatedEvidence(value: unknown): AuthenticatedAdmissionEvide
     });
   }
   return {
-    schemaVersion: AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
+    schemaVersion: pav
+      ? AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION
+      : AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION,
+    ...(pavObservationSet?.success && pavMeasurements?.success
+      ? {
+          pavObservationSet: pavObservationSet.data,
+          pavMeasurements: pavMeasurements.data,
+        }
+      : {}),
     authenticatedAt: candidate.authenticatedAt as string,
     factualCandidate: factualCandidate.data,
     factualCandidateFinalizedAt: candidate.factualCandidateFinalizedAt as string,
@@ -367,6 +447,9 @@ function parseAuthenticatedEvidence(value: unknown): AuthenticatedAdmissionEvide
     gate2DecisionKey: candidate.gate2DecisionKey,
     sourceRights,
     identityAuthorities: identityAuthorities.data,
+    ...(assignmentContinuities.data === undefined
+      ? {}
+      : { assignmentContinuities: assignmentContinuities.data }),
     domainLineageAuthorities: domainLineageAuthorities.data,
     rowAuthorities: rowAuthorities.data,
     artifactBytes: artifactBytes.data,
@@ -480,6 +563,7 @@ type FactualInput =
   AflTradeValuationDatasetCandidate['content']['rows'][number]['content']['featureInputs'][number];
 
 function candidateMemberFor(candidate: AflTradeFactualReleaseCandidate, input: FactualInput) {
+  if (input.kind === 'hpn_pav_measurement') return undefined;
   if (input.kind === 'reconciled_achievement') {
     return candidate.content.members.reconciledAchievements.find(
       ({ reconciledAchievementId }) => reconciledAchievementId === input.memberId
@@ -600,6 +684,118 @@ function reusableIdentityBinding(
   };
 }
 
+type AssignmentChainIndex = Map<
+  string,
+  {
+    decisions: Map<string, AflTradeProviderResolutionDecision>;
+    last: AflTradeProviderResolutionDecision;
+    binding: string;
+    valid: boolean;
+  }
+>;
+
+function indexAssignmentChains(evidence: AuthenticatedAdmissionEvidence): AssignmentChainIndex {
+  const index: AssignmentChainIndex = new Map();
+  const assignmentCases = new Set<string>();
+  for (const chain of evidence.assignmentContinuities ?? []) {
+    const first = chain.content.decisions[0]!;
+    const kind =
+      first.content.proposal.content.subjectType === 'provider_player_candidate'
+        ? 'player'
+        : 'club';
+    const binding = canonicalizeAflTradeJson(reusableIdentityBinding(first, kind));
+    let previous = first;
+    let valid =
+      !index.has(chain.chainId) &&
+      !assignmentCases.has(chain.content.assignmentCaseId) &&
+      !!first.content.assignmentRevision &&
+      reusableIdentityBinding(first, kind)?.assignmentCaseId === chain.content.assignmentCaseId;
+    assignmentCases.add(chain.content.assignmentCaseId);
+    const decisions = new Map<string, AflTradeProviderResolutionDecision>();
+    for (const decision of chain.content.decisions) {
+      const assignment = decision.content.assignmentRevision;
+      valid =
+        valid &&
+        !!assignment &&
+        assignment.nextStatus === 'active' &&
+        !decisions.has(decision.decisionId) &&
+        canonicalizeAflTradeJson(reusableIdentityBinding(decision, kind)) === binding &&
+        decision.content.proposal.content.staging.environment ===
+          first.content.proposal.content.staging.environment &&
+        decision.content.proposal.content.staging.competition ===
+          first.content.proposal.content.staging.competition &&
+        time(decision.content.decidedAt) <= time(evidence.authenticatedAt) &&
+        (decisions.size === 0 ||
+          (assignment.expectedRevision ===
+            previous.content.assignmentRevision!.expectedRevision + 1 &&
+            assignment.supersedesDecisionId === previous.decisionId &&
+            time(decision.content.decidedAt) >= time(previous.content.decidedAt)));
+      decisions.set(decision.decisionId, decision);
+      previous = decision;
+    }
+    index.set(chain.chainId, { decisions, last: previous, binding, valid });
+  }
+  return index;
+}
+
+function assignmentContinuityMatches(
+  authority: z.infer<typeof identityAuthorityEvidenceSchema>,
+  entityKind: 'player' | 'club',
+  chains: AssignmentChainIndex
+): boolean {
+  const origin = authority.decision;
+  const originBinding = reusableIdentityBinding(origin, entityKind);
+  if (!originBinding || !origin.content.assignmentRevision) return false;
+  if (authority.assignmentContinuityId) {
+    const chain = chains.get(authority.assignmentContinuityId);
+    const retainedOrigin = chain?.decisions.get(origin.decisionId);
+    return (
+      !authority.assignmentContinuity &&
+      !!chain?.valid &&
+      !!retainedOrigin &&
+      canonicalizeAflTradeJson(retainedOrigin) === canonicalizeAflTradeJson(origin) &&
+      chain.binding === canonicalizeAflTradeJson(originBinding) &&
+      authority.assignmentHead.assignmentCaseId === originBinding.assignmentCaseId &&
+      authority.assignmentHead.entityKind === originBinding.assignmentEntityKind &&
+      authority.assignmentHead.identityId === originBinding.assignmentIdentityId &&
+      authority.assignmentHead.revision ===
+        chain.last.content.assignmentRevision!.expectedRevision + 1 &&
+      authority.assignmentHead.decisionId === chain.last.decisionId &&
+      authority.assignmentHead.updatedAt === chain.last.content.decidedAt &&
+      time(chain.last.content.decidedAt) <= time(authority.authenticatedAt)
+    );
+  }
+  let previous = origin;
+  for (const confirmation of authority.assignmentContinuity?.confirmations ?? []) {
+    const assignment = confirmation.content.assignmentRevision;
+    if (
+      !assignment ||
+      canonicalizeAflTradeJson(reusableIdentityBinding(confirmation, entityKind)) !==
+        canonicalizeAflTradeJson(originBinding) ||
+      assignment.expectedRevision !== previous.content.assignmentRevision!.expectedRevision + 1 ||
+      assignment.supersedesDecisionId !== previous.decisionId ||
+      assignment.nextStatus !== 'active' ||
+      confirmation.content.proposal.content.staging.environment !==
+        origin.content.proposal.content.staging.environment ||
+      confirmation.content.proposal.content.staging.competition !==
+        origin.content.proposal.content.staging.competition ||
+      time(confirmation.content.decidedAt) < time(previous.content.decidedAt) ||
+      time(confirmation.content.decidedAt) > time(authority.authenticatedAt)
+    )
+      return false;
+    previous = confirmation;
+  }
+  return (
+    authority.assignmentHead.assignmentCaseId === originBinding.assignmentCaseId &&
+    authority.assignmentHead.entityKind === originBinding.assignmentEntityKind &&
+    authority.assignmentHead.identityId === originBinding.assignmentIdentityId &&
+    authority.assignmentHead.revision ===
+      previous.content.assignmentRevision!.expectedRevision + 1 &&
+    authority.assignmentHead.decisionId === previous.decisionId &&
+    authority.assignmentHead.updatedAt === previous.content.decidedAt
+  );
+}
+
 function identityAuthorityMatches(
   authority: z.infer<typeof identityAuthorityEvidenceSchema>,
   entityKind: 'player' | 'club',
@@ -607,7 +803,9 @@ function identityAuthorityMatches(
   decisionId: string,
   assignmentRevision: number,
   dataset: AflTradeValuationDatasetCandidate,
-  row: AflTradeValuationDatasetCandidate['content']['rows'][number]['content']
+  row: AflTradeValuationDatasetCandidate['content']['rows'][number]['content'],
+  authenticatedAt: string,
+  chains: AssignmentChainIndex
 ): boolean {
   const decision = authority.decision;
   const proposal = decision.content.proposal.content;
@@ -633,12 +831,7 @@ function identityAuthorityMatches(
     authority.resolutionHead.revision === decision.content.expectedRevision + 1 &&
     authority.resolutionHead.resolutionId === decision.decisionId &&
     authority.resolutionHead.updatedAt === decision.content.decidedAt &&
-    authority.assignmentHead.assignmentCaseId === binding.assignmentCaseId &&
-    authority.assignmentHead.entityKind === binding.assignmentEntityKind &&
-    authority.assignmentHead.identityId === binding.assignmentIdentityId &&
-    authority.assignmentHead.revision === assignmentRevision &&
-    authority.assignmentHead.decisionId === decision.decisionId &&
-    authority.assignmentHead.updatedAt === decision.content.decidedAt &&
+    assignmentContinuityMatches(authority, entityKind, chains) &&
     staging.environment === dataset.content.environment &&
     staging.competition === dataset.content.competition &&
     staging.competition === row.competition &&
@@ -658,7 +851,8 @@ function identityAuthorityMatches(
         (namespace.identityScope.kind === 'global' ||
           namespace.identityScope.competition === row.competition))) &&
     time(decision.content.decidedAt) <= time(authority.authenticatedAt) &&
-    time(authority.authenticatedAt) <= time(dataset.content.createdAt)
+    time(decision.content.decidedAt) <= time(dataset.content.createdAt) &&
+    time(authority.authenticatedAt) <= time(authenticatedAt)
   );
 }
 
@@ -667,6 +861,7 @@ function memberMatchesInputAndRow(
   row: AflTradeValuationDatasetCandidate['content']['rows'][number]['content'],
   input: FactualInput
 ): boolean {
+  if (input.kind === 'hpn_pav_measurement') return false;
   if (input.kind === 'acquisition_spell_metric') {
     const member = candidate.content.members.spellMetrics.find(
       ({ spellMetricVersionId }) => spellMetricVersionId === input.memberId
@@ -732,6 +927,7 @@ function validateMembership(
     [...row.content.featureInputs, ...row.content.targetInputs].map((input) => ({ row, input }))
   );
   const invalidMember = inputEntries.some(({ row, input }) => {
+    if (input.kind === 'hpn_pav_measurement') return evidence.pavMeasurements === undefined;
     const member = candidateMemberFor(candidate, input);
     return !member || !memberMatchesInputAndRow(candidate, row.content, input);
   });
@@ -766,6 +962,24 @@ function validateMembership(
       authority,
     ])
   );
+  const assignmentChains = indexAssignmentChains(evidence);
+  const requiredChains = new Set(
+    evidence.identityAuthorities.flatMap((authority) =>
+      authority.assignmentContinuityId ? [authority.assignmentContinuityId] : []
+    )
+  );
+  if (
+    assignmentChains.size !== (evidence.assignmentContinuities?.length ?? 0) ||
+    requiredChains.size !== assignmentChains.size ||
+    [...assignmentChains].some(([chainId, chain]) => !chain.valid || !requiredChains.has(chainId))
+  ) {
+    blocker(
+      blockers,
+      'IDENTITY_OR_LINEAGE_NOT_ELIGIBLE',
+      dataset.datasetId,
+      'Assignment continuity must contain each exact referenced valid chain once.'
+    );
+  }
   const requiredIdentityAuthorities = new Set(
     dataset.content.rows.flatMap(({ content }) => [
       `player|${content.identity.playerResolutionDecisionId}`,
@@ -884,7 +1098,9 @@ function validateMembership(
         content.identity.playerResolutionDecisionId,
         content.identity.playerAssignmentRevision,
         dataset,
-        content
+        content,
+        evidence.authenticatedAt,
+        assignmentChains
       ) ||
       !identityAuthorityMatches(
         clubAuthority,
@@ -893,7 +1109,9 @@ function validateMembership(
         content.identity.clubResolutionDecisionId,
         content.identity.clubAssignmentRevision,
         dataset,
-        content
+        content,
+        evidence.authenticatedAt,
+        assignmentChains
       ) ||
       !domainLineage.has(sha256AflTradeCanonicalJson(mapping))
     );
@@ -916,6 +1134,274 @@ function validateMembership(
   }
 }
 
+/** PAV is a derived measurement with its own exact parents, never a scalar factual member. */
+function validatePavMeasurements(
+  dataset: AflTradeValuationDatasetCandidate,
+  evidence: AuthenticatedAdmissionEvidence,
+  blockers: AflTradeValuationDatasetAdmissionBlocker[]
+) {
+  const binding = dataset.content.pavObservationSet;
+  const set = evidence.pavObservationSet;
+  const measurements = evidence.pavMeasurements;
+  if (!binding) {
+    if (set || measurements)
+      blocker(
+        blockers,
+        'FACTUAL_ANCESTRY_MISMATCH',
+        dataset.datasetId,
+        'Scalar admission cannot consume PAV evidence.'
+      );
+    return;
+  }
+  const reject = (message: string) =>
+    blocker(blockers, 'FACTUAL_MEMBERSHIP_MISMATCH', dataset.datasetId, message);
+  if (
+    !set ||
+    !measurements ||
+    evidence.schemaVersion !== AFL_TRADE_PAV_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION
+  ) {
+    reject('PAV admission requires independently authenticated retained measurements.');
+    return;
+  }
+  const retained = evidence.artifactBytes.find(
+    ({ artifactId }) => artifactId === binding.artifact.artifactId
+  );
+  const observations = new Map(set.content.observations.map((row) => [row.observationId, row]));
+  const calculationById = new Map(
+    measurements.map((proof) => [proof.calculation.calculationId, proof])
+  );
+  if (
+    binding.observationSetId !== set.observationSetId ||
+    !retained ||
+    !bytesEqual(retained.bytes, new TextEncoder().encode(canonicalizeAflTradeJson(set))) ||
+    set.content.environment !== dataset.content.environment ||
+    set.content.releaseId !== dataset.content.factualParent.factualReleaseId ||
+    set.content.knowledgeCutoffAt !== dataset.content.knowledgeCutoffAt ||
+    time(set.content.createdAt) > time(dataset.content.createdAt) ||
+    set.content.policy.content.fixedHorizonSeasons !== 3 ||
+    new Set(dataset.content.rows.map(({ content }) => content.pavObservationId)).size !==
+      dataset.content.rows.length ||
+    calculationById.size !== measurements.length ||
+    canonicalizeAflTradeJson([...calculationById.keys()].sort()) !==
+      canonicalizeAflTradeJson(
+        set.content.calculations.map(({ calculationId }) => calculationId).sort()
+      )
+  ) {
+    reject(
+      'PAV observation, exact row membership, three-season horizon or measurement ancestry differs.'
+    );
+    return;
+  }
+  try {
+    const policyRef = dataset.content.specification.content.inclusionPolicy;
+    const policyBytes = evidence.artifactBytes.find(
+      ({ artifactId }) => artifactId === policyRef.artifactId
+    )?.bytes;
+    const exclusionBytes = evidence.artifactBytes.find(
+      ({ artifactId }) => artifactId === dataset.content.exclusionReport.artifactId
+    )?.bytes;
+    if (
+      !policyBytes ||
+      !exclusionBytes ||
+      policyRef.mediaType !== 'application/json' ||
+      dataset.content.exclusionReport.mediaType !== 'application/json' ||
+      time(policyRef.createdAt) < time(set.content.createdAt)
+    )
+      throw new TypeError('PAV selection artifacts are unavailable or precede the original set.');
+    const policy = aflTradePlayerPavDatasetInclusionPolicySchema.parse(
+      JSON.parse(new TextDecoder().decode(policyBytes))
+    );
+    const report = createAflTradePlayerPavDatasetExclusionReport({
+      observationSet: set,
+      corpusLineage: evidence.corpusLineage,
+      inclusionPolicy: policy,
+      inclusionPolicyArtifactId: policyRef.artifactId,
+    });
+    const selectedIds = dataset.content.rows.map(({ content }) => content.pavObservationId!).sort();
+    if (
+      !bytesEqual(policyBytes, new TextEncoder().encode(canonicalizeAflTradeJson(policy))) ||
+      !bytesEqual(exclusionBytes, new TextEncoder().encode(canonicalizeAflTradeJson(report))) ||
+      canonicalizeAflTradeJson(selectedIds) !==
+        canonicalizeAflTradeJson(report.includedObservationIds) ||
+      new Set(dataset.content.rows.map(({ content }) => content.splitRole)).size !== 4
+    ) {
+      throw new TypeError(
+        'PAV selected rows and exclusions must exactly conserve the committed identity-only group assignment.'
+      );
+    }
+  } catch (error) {
+    reject(error instanceof Error ? error.message : 'PAV selection authority is invalid.');
+    return;
+  }
+  const sourceCaptures = new Map(
+    evidence.factualCandidate.content.members.sourceCaptures.map((source) => [
+      source.captureId,
+      source,
+    ])
+  );
+  const sourceFields = new Map(
+    evidence.consumedFieldSets.map((fields) => [fields.content.captureId, fields])
+  );
+  for (const proof of measurements) {
+    const { calculation, inputSet } = proof;
+    const content = calculation.content;
+    if (
+      content.environment !== dataset.content.environment ||
+      inputSet.content.environment !== dataset.content.environment ||
+      content.competition !== dataset.content.competition ||
+      inputSet.content.competition !== content.competition ||
+      content.inputSetId !== inputSet.inputSetId ||
+      content.inputSetSha256 !== inputSet.inputSetId.split(':')[1] ||
+      content.methodId !== set.content.policy.content.methodId ||
+      inputSet.content.methodId !== content.methodId ||
+      content.seasonYear !== inputSet.content.seasonYear ||
+      content.effectiveThrough !== inputSet.content.effectiveThrough ||
+      content.factualRunId !== inputSet.content.factualUniverse.factualRunId ||
+      content.factualInputSetSha256 !== inputSet.content.factualUniverse.inputSetSha256 ||
+      time(content.calculatedAt) > time(dataset.content.knowledgeCutoffAt)
+    ) {
+      reject('A PAV calculation does not bind its exact admitted finalized input universe.');
+    }
+    // League allocation consumes the entire season universe, not merely the selected player's rows.
+    for (const run of inputSet.content.sourceRuns) {
+      const capture = sourceCaptures.get(run.captureId);
+      const consumed = sourceFields.get(run.captureId);
+      const fields = new Set(
+        inputSet.content.rows
+          .filter((row) => row.source.normalizationRunId === run.normalizationRunId)
+          .flatMap((row) => row.source.sourceFields)
+      );
+      if (
+        !capture ||
+        capture.sourceSnapshotId !== run.sourceSnapshotId ||
+        !consumed ||
+        consumed.content.sourceSnapshotId !== run.sourceSnapshotId ||
+        fields.size === 0 ||
+        [...fields].some(
+          (field) => !consumed.content.fields.some(({ sourceField }) => sourceField === field)
+        )
+      ) {
+        blocker(
+          blockers,
+          'SOURCE_RIGHTS_INCOMPLETE',
+          run.captureId,
+          'Every league-wide HPN input capture and consumed field requires independently admitted training and derivation rights.'
+        );
+      }
+    }
+  }
+  for (const { content: row } of dataset.content.rows) {
+    const observation = observations.get(row.pavObservationId!);
+    if (
+      !observation ||
+      observation.playerId !== row.identity.playerId ||
+      observation.acquisitionSpell.clubId !== row.identity.clubId ||
+      observation.acquisitionSpell.spellVersionId !== row.lineage.acquisitionSpellVersionId ||
+      observation.partition !== row.splitRole ||
+      observation.predictionSeason !== row.seasonYear ||
+      observation.predictionCutoffAt !== row.predictionOriginAt ||
+      row.targetFrom !== new Date(time(observation.predictionCutoffAt) + 1).toISOString() ||
+      observation.outcomeHorizonEndsAt !== row.targetThrough ||
+      (set.content.knowledgePolicy !== undefined &&
+        dataset.content.specification.content.featurePolicy.knowledgeJoin !==
+          'retrospective_as_captured_at_dataset_creation')
+    ) {
+      reject(
+        'Each admitted row must bind its original PAV player, spell, partition and prediction windows.'
+      );
+      continue;
+    }
+    for (const [inputs, values] of [
+      [row.featureInputs, observation.featureValues],
+      [row.targetInputs, observation.targetValues],
+    ] as const) {
+      if (inputs.length !== values.length) {
+        reject('PAV rows must retain every original measurement without substitution.');
+        continue;
+      }
+      for (const input of inputs) {
+        if (input.kind !== 'hpn_pav_measurement') {
+          reject('PAV rows cannot consume scalar measurements.');
+          continue;
+        }
+        const proof = calculationById.get(input.calculationId);
+        const value = values.find(
+          (entry) =>
+            entry.calculationId === input.calculationId &&
+            entry.spellVersionId === input.spellVersionId
+        );
+        const player = proof?.calculation.content.players.find(
+          (entry) => entry.spellVersionId === input.spellVersionId
+        );
+        const dates =
+          proof?.inputSet.content.rows
+            .filter(
+              (entry) =>
+                entry.kind === 'player_match_stats' &&
+                entry.acquisitionSpell.spellVersionId === input.spellVersionId
+            )
+            .map(
+              (entry) =>
+                proof.inputSet.content.completedMatches.find(
+                  ({ matchId }) => matchId === entry.match.canonicalId
+                )?.effectiveAt
+            )
+            .filter((date): date is string => date !== undefined)
+            .sort() ?? [];
+        if (
+          !proof ||
+          !value ||
+          !player ||
+          dates.length === 0 ||
+          input.memberId !==
+            createAflTradeContentAddress('hpn-pav-measurement', {
+              calculationId: input.calculationId,
+              spellVersionId: input.spellVersionId,
+              playerSha256: value.playerSha256,
+            }) ||
+          input.recordSha256 !== value.playerSha256 ||
+          sha256AflTradeCanonicalJson(player) !== value.playerSha256 ||
+          input.headRevision !== proof.headRevision ||
+          input.methodId !== proof.calculation.content.methodId ||
+          input.inputSetId !== proof.inputSet.inputSetId ||
+          input.seasonYear !== value.seasonYear ||
+          input.playerId !== value.playerId ||
+          input.clubId !== value.clubId ||
+          input.effectiveFrom !== dates[0] ||
+          input.effectiveThrough !== value.effectiveThrough ||
+          input.recordedAt !== value.calculatedAt ||
+          value.calculatedAt !== proof.calculation.content.calculatedAt ||
+          value.effectiveThrough !== proof.calculation.content.effectiveThrough ||
+          value.totalPav !== player.totalPav ||
+          value.offensivePav !== player.offensivePav ||
+          value.midfieldPav !== player.midfieldPav ||
+          value.defensivePav !== player.defensivePav ||
+          value.gamesPlayed !== player.source.gamesPlayed ||
+          canonicalizeAflTradeJson(value.sourceRowIds) !==
+            canonicalizeAflTradeJson(player.source.sourceRowIds)
+        ) {
+          reject(
+            'PAV input differs from authenticated measurement values, source membership or custody.'
+          );
+        }
+      }
+    }
+    if (
+      row.targetInputs.length === 0 &&
+      (observation.outcome.state !== 'mature_observed' ||
+        observation.outcome.contribution !== 0 ||
+        observation.acquisitionSpell.effectiveThrough === null ||
+        observation.targetCalculationSeasons.some(
+          (year) => year <= Number(observation.acquisitionSpell.effectiveThrough!.slice(0, 4))
+        ))
+    ) {
+      reject(
+        'Empty measured targets require an exact mature all-post-departure structural-zero horizon.'
+      );
+    }
+  }
+}
+
 function validateArtifacts(
   dataset: AflTradeValuationDatasetCandidate,
   evidence: AuthenticatedAdmissionEvidence,
@@ -924,6 +1410,7 @@ function validateArtifacts(
 ) {
   const specification = dataset.content.specification.content;
   const expectedReferences = [
+    ...(dataset.content.pavObservationSet ? [dataset.content.pavObservationSet.artifact] : []),
     dataset.content.datasetArtifact,
     dataset.content.exclusionReport,
     dataset.content.extractor.codeArtifact,
@@ -1263,6 +1750,7 @@ export class AflTradeValuationDatasetAdmissionService {
     const blockers: AflTradeValuationDatasetAdmissionBlocker[] = [];
     validateFactualAuthority(dataset, evidence, request.admittedAt, blockers);
     validateMembership(dataset, evidence, blockers);
+    validatePavMeasurements(dataset, evidence, blockers);
     validateArtifacts(dataset, evidence, request.admittedAt, blockers);
     const gate2 = validateGate2(dataset, evidence, request.admittedAt, blockers);
     validateSourceRights(dataset, evidence, request.admittedAt, blockers);

@@ -83,6 +83,39 @@ The two 2025 players absent from the current AFL Tables match rows resolve only 
 content-addressed human reviews binding historical native IDs `12576` and `12712`; the reconciler no
 longer manufactures current player-club identities from name equality.
 
+## Private acquisition evidence decision for issue 579
+
+On 2026-09-10 the Statly product owner explicitly approved bounded Official AFL and Draftguru
+source use for the existing 668-player/club cohort's 2000–2025 acquisition history. This is an
+internal source-use risk assumption without waiting for separate written provider permission;
+it is not a claim of a provider licence or resolved legal uncertainty. The actual approval is
+retained with the exact source-use proposal and its digest.
+
+The decision covers local non-production recruitment/date evidence, identity reconciliation,
+canonical promotion, acquisition spell registration, HPN input ancestry and deterministic replay.
+It does not authorize model training, forecasting, new predictive features, public display/output,
+raw redistribution, fantasy use or production activation. Acquisition facts may bound attribution
+within the private HPN input; that does not grant training rights for those fields.
+
+Use source-specific Gate 0A records with accountable-owner-only review and accurately labelled
+agent-assisted technical evidence. Every capability, field set, season range and source URL list
+must match the bounded capture plan. The initial package is the two official 2024 national draft
+night reports, the official schedule for corroboration, and Draftguru's 2024 year page. Later
+cohort sources need exact reviewed allowlists within the approved provider/year/purpose scope;
+they do not require another copy of this unchanged source decision. New providers or uses do.
+
+Requests are sequential at most once per five seconds, bounded to 2 MiB decoded bytes and 30 seconds,
+with at most two transient retries and no login or unbounded discovery. Stop on 403, 429, unknown
+redirects or schema drift. Retain private raw and derived evidence for at most 365 days through the
+existing custody owner; retain permitted hash/metadata audit custody under its recorded policy.
+Revalidate annually or sooner on changed terms, schema or withdrawal. Withdrawal stops collection,
+invalidates dependent current use and invokes the recorded deletion duties. Record independently
+established provider restrictions rather than presenting the internal assumption as permission.
+
+Australia-only storage, a blanket 30-day expiry and a qualified independent reviewer are not
+requirements of this decision. Synthetic tests establish technical behavior; authentic source
+bytes, exact dates and current identity/source decisions remain necessary for genuine facts.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five

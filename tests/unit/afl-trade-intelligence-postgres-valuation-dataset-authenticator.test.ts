@@ -5,16 +5,22 @@ const id = (prefix: string, character: string) => `${prefix}:${digest(character)
 const createdAt = '2026-08-09T00:00:00.000Z';
 const admittedAt = '2026-08-09T01:00:00.000Z';
 
-vi.mock('@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContracts', () => ({
-  AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION:
-    'afl-trade-dataset-admission-evidence/v5',
-  aflTradeConsumedFieldSetSchema: { parse: (value: unknown) => value },
-  aflTradeCorpusFactualLineageSchema: { parse: (value: unknown) => value },
-  aflTradeDatasetOperationAuthorizationSchema: { parse: (value: unknown) => value },
-  listAflTradeValuationDatasetArtifactMemberships: (dataset: any) => [
-    { role: 'dataset', ordinal: 1, reference: dataset.content.datasetArtifact },
-  ],
-}));
+vi.mock(
+  '@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContracts',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@/server/aflTradeIntelligence/artifacts/valuationDatasetAdmissionContracts')
+    >()),
+    AFL_TRADE_VALUATION_DATASET_ADMISSION_EVIDENCE_SCHEMA_VERSION:
+      'afl-trade-dataset-admission-evidence/v5',
+    aflTradeConsumedFieldSetSchema: { parse: (value: unknown) => value },
+    aflTradeCorpusFactualLineageSchema: { parse: (value: unknown) => value },
+    aflTradeDatasetOperationAuthorizationSchema: { parse: (value: unknown) => value },
+    listAflTradeValuationDatasetArtifactMemberships: (dataset: any) => [
+      { role: 'dataset', ordinal: 1, reference: dataset.content.datasetArtifact },
+    ],
+  })
+);
 vi.mock('@/server/aflTradeIntelligence/outcomes/factualReleaseCandidateContracts', () => ({
   aflTradeFactualReleaseCandidateSchema: { parse: (value: unknown) => value },
 }));
@@ -207,6 +213,7 @@ function rowFor(sql: string) {
         assignment_decision_id: id('provider-resolution-decision', 'd'),
         assignment_status: 'active',
         assignment_updated_at: createdAt,
+        origin_assignment_revision: 1,
       },
     ];
   if (sql.includes('outcome_provider_club_resolution'))
@@ -226,6 +233,7 @@ function rowFor(sql: string) {
         assignment_decision_id: id('provider-resolution-decision', 'e'),
         assignment_status: 'active',
         assignment_updated_at: createdAt,
+        origin_assignment_revision: 1,
       },
     ];
   if (sql.includes('outcome_event_version'))
@@ -245,6 +253,91 @@ function rowFor(sql: string) {
 }
 
 describe('PostgreSQL valuation dataset evidence authenticator', () => {
+  it('maps many shared origins to one fetched chain instead of repeated suffix JSON', async () => {
+    // This existing module-mocked suite proves query/result composition only;
+    // the admission service suite authenticates real canonical decisions separately.
+    const calls: string[] = [];
+    const origins = Array.from({ length: 100 }, (_, index) => ({
+      ...rowFor('outcome_provider_club_resolution')[0],
+      decision_json: {
+        decisionId: `provider-resolution-decision:${index.toString(16).padStart(64, '0')}`,
+      },
+      origin_assignment_revision: index + 1,
+      assignment_revision: 101,
+      assignment_case_id: id('provider-assignment-case', '9'),
+    }));
+    const sharedDataset = {
+      ...dataset,
+      content: {
+        ...dataset.content,
+        rows: origins.map((origin) => ({
+          ...dataset.content.rows[0],
+          content: {
+            ...dataset.content.rows[0]!.content,
+            identity: {
+              ...dataset.content.rows[0]!.content.identity,
+              clubResolutionDecisionId: origin.decision_json.decisionId,
+            },
+          },
+        })),
+      },
+    };
+    const authenticator = createPostgresAflTradeValuationDatasetEvidenceAuthenticator({
+      sql: {
+        async query<Row>(statement: string) {
+          calls.push(statement);
+          const rows = statement.includes('SELECT confirmation.assignment_case_id')
+            ? Array.from({ length: 101 }, (_, index) => ({
+                assignment_case_id: origins[0]!.assignment_case_id,
+                decision_json: {
+                  decisionId: `provider-resolution-decision:${index.toString(16).padStart(64, '0')}`,
+                },
+              }))
+            : statement.includes('outcome_provider_club_resolution')
+              ? origins
+              : rowFor(statement);
+          return { rows: rows as Row[], rowCount: rows.length };
+        },
+        async transaction() {
+          throw new Error('not used');
+        },
+      },
+      releaseRepository: {
+        loadRegistry: vi.fn(async () => ({
+          revision: 3,
+          releases: {},
+          activeByScope: {},
+          events: [],
+        })),
+      },
+      gateRepository: {
+        load: vi.fn(async () => ({ revision: 9, ledger: { proposals: [], decisions: [] } })),
+      },
+      artifactRepository: {
+        loadExactWithObservation: vi.fn(async () => ({ bytes: new Uint8Array([123, 125]) })),
+      },
+    });
+    const evidence = (await authenticator.authenticate({
+      dataset: sharedDataset as never,
+      admittedAt,
+    })) as Record<string, any>;
+    expect(evidence.assignmentContinuities).toHaveLength(1);
+    expect(evidence.assignmentContinuities[0].content.decisions).toHaveLength(101);
+    expect(
+      evidence.identityAuthorities.filter((authority: any) => authority.assignmentContinuityId)
+    ).toHaveLength(100);
+    expect(
+      new Set(
+        evidence.identityAuthorities
+          .filter((authority: any) => authority.assignmentContinuityId)
+          .map((authority: any) => authority.assignmentContinuityId)
+      ).size
+    ).toBe(1);
+    expect(
+      calls.filter((statement) => statement.includes('SELECT confirmation.assignment_case_id'))
+    ).toHaveLength(1);
+    expect(calls.some((statement) => statement.includes('jsonb_agg'))).toBe(false);
+  });
   it('reconstructs authority from durable rows and exact retained bytes', async () => {
     const loadExactWithObservation = vi.fn(async () => ({ bytes: new Uint8Array([123, 125]) }));
     const authenticator = createPostgresAflTradeValuationDatasetEvidenceAuthenticator({

@@ -17,6 +17,10 @@ import {
   aflTradeExternalReconciliationSourceAuthoritySchema,
   type AflTradeExternalReconciliationSourceAuthority,
 } from './externalReconciliationSourceAuthorityContracts';
+import {
+  resolveCombinedDraftSessionEvidence,
+  type CombinedDraftSessionFact,
+} from './combinedDraftSessionEvidence';
 
 export const AFL_TRADE_EXTERNAL_IDENTITY_RESOLUTION_SCHEMA_VERSION =
   'afl-trade-external-identity-resolution/v1' as const;
@@ -27,6 +31,47 @@ type Provider = AflTradeExternalEvidenceContent['provider'];
 type Claim = AflTradeExternalEvidenceContent['claim'];
 type RecordedEntity = Extract<Claim, { kind: 'transaction_party' }>['club'];
 type Evidence = AflTradeExternalEvidenceBatch['content']['evidence'][number];
+
+const reviewedCombinedDraftArticleIds = new Set([
+  '53184',
+  '39763',
+  '99499',
+  '140672',
+  '98796',
+  '142762',
+  '83698',
+  '46107',
+  '157359',
+  '49872',
+  '149290',
+]);
+
+function combinedDraftDocumentId(
+  provider: Provider,
+  sourceUrl: string,
+  environment: 'test_fixture' | 'non_production' | 'production'
+): string {
+  if (provider === 'official_afl') {
+    try {
+      const parsed = new URL(sourceUrl);
+      const articleId = /^\/news\/(\d+)(?:\/|$)/.exec(parsed.pathname)?.[1];
+      if (
+        parsed.hostname === 'www.afl.com.au' &&
+        articleId &&
+        (environment === 'test_fixture' || reviewedCombinedDraftArticleIds.has(articleId))
+      ) {
+        return `official_afl:news:${articleId}`;
+      }
+    } catch {
+      // Schema validation reports malformed source URLs before reconciliation.
+    }
+    throw new TypeError('Combined draft proof requires a reviewed Official AFL article identity.');
+  }
+  if (provider === 'statly_local_fixture' && environment === 'test_fixture') {
+    return `statly_local_fixture:url:${sourceUrl}`;
+  }
+  throw new TypeError('Combined draft proof source cannot establish an authenticated document.');
+}
 
 const providerSchema = z.enum([
   'statly_local_fixture',
@@ -754,6 +799,32 @@ export function reconcileAflTradeExternalEvidence(input: {
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'draft_selection' }> } } =>
       row.content.claim.kind === 'draft_selection'
   );
+  const sessionClaims = evidence.filter(
+    (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'draft_session' }> } } =>
+      row.content.claim.kind === 'draft_session'
+  );
+  for (const session of sessionClaims) {
+    const claim = session.content.claim;
+    if (
+      claim.selectionNumbers.some(
+        (number) =>
+          !selectionClaims.some(
+            ({ content }) =>
+              content.claim.draftYear === claim.draftYear &&
+              content.claim.draftType === claim.draftType &&
+              content.claim.selectionNumber === number
+          )
+      )
+    ) {
+      issues.push({
+        code: 'selection_conflict',
+        severity: 'blocking',
+        subjectKey: `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}`,
+        detail: 'Draft session evidence names a selection absent from the reviewed source set.',
+        evidenceIds: [session.evidenceId],
+      });
+    }
+  }
   const detailClaims = evidence.filter(
     (
       row
@@ -833,6 +904,28 @@ export function reconcileAflTradeExternalEvidence(input: {
           ) === playerId
         );
       });
+      const sessionSupport = sessionClaims.filter(
+        ({ content }) =>
+          content.claim.draftYear === first.draftYear &&
+          content.claim.draftType === first.draftType &&
+          content.claim.selectionNumbers.includes(first.selectionNumber)
+      );
+      if (
+        new Set(
+          sessionSupport.map(
+            ({ content }) => `${content.claim.sessionOrdinal}|${content.claim.eventDate}`
+          )
+        ).size > 1
+      ) {
+        status = 'disputed';
+        issues.push({
+          code: 'selection_conflict',
+          severity: 'blocking',
+          subjectKey: `selection:${first.draftYear}:${first.draftType}:${first.selectionNumber}`,
+          detail: 'Retained source claims disagree on the selection session or date.',
+          evidenceIds: sessionSupport.map(({ evidenceId }) => evidenceId).sort(),
+        });
+      }
       const supportingProviders = sortedUnique([
         ...rows.map((row) => row.content.provider),
         ...detailSupport.map((row) => row.content.provider),
@@ -850,7 +943,23 @@ export function reconcileAflTradeExternalEvidence(input: {
         matchingCustody.length === 1
           ? matchingCustody[0].pickId
           : pickId(first.draftYear, first.draftType, first.selectionNumber, first.roundNumber);
-      if (matchingCustody.length !== 1 && status !== 'disputed') status = 'unresolved';
+      // A completed selection is evidence of recruitment, not of the pick's prior owner.
+      // Keep its slot identity when a dated session is retained and no custody claim
+      // exists for that slot. Conflicting or incomplete custody remains unresolved.
+      const datedSelectionWithoutCustody =
+        new Set(
+          sessionSupport.map(
+            ({ content }) => `${content.claim.sessionOrdinal}|${content.claim.eventDate}`
+          )
+        ).size === 1 &&
+        !pickCustody.some(
+          (custody) =>
+            custody.draftYear === first.draftYear &&
+            custody.draftType === first.draftType &&
+            custody.recordedPickNumber === first.selectionNumber
+        );
+      if (matchingCustody.length !== 1 && !datedSelectionWithoutCustody && status !== 'disputed')
+        status = 'unresolved';
       return {
         selectionId: createAflTradeContentAddress('external-draft-selection', {
           draftYear: first.draftYear,
@@ -866,7 +975,9 @@ export function reconcileAflTradeExternalEvidence(input: {
         clubId,
         status,
         supportingProviders,
-        evidenceIds: [...rows, ...detailSupport].map((row) => row.evidenceId).sort(),
+        evidenceIds: [...rows, ...detailSupport, ...sessionSupport]
+          .map((row) => row.evidenceId)
+          .sort(),
       };
     })
     .sort(
@@ -875,6 +986,153 @@ export function reconcileAflTradeExternalEvidence(input: {
         left.draftType.localeCompare(right.draftType) ||
         left.selectionNumber - right.selectionNumber
     );
+
+  const partialSessionClaims = evidence.filter(({ content }) =>
+    [
+      'draft_session_date',
+      'draft_session_completion',
+      'draft_session_boundary',
+      'draft_completed_total',
+    ].includes(content.claim.kind)
+  );
+  const partialSessionKeys = sortedUnique(
+    partialSessionClaims.map(({ content }) => {
+      const claim = content.claim as Extract<
+        Claim,
+        {
+          kind:
+            | 'draft_session_date'
+            | 'draft_session_completion'
+            | 'draft_session_boundary'
+            | 'draft_completed_total';
+        }
+      >;
+      return `${claim.draftYear}|${claim.draftType}`;
+    })
+  );
+  for (const key of partialSessionKeys) {
+    const [yearText, draftType] = key.split('|');
+    const draftYear = Number(yearText);
+    const scoped = partialSessionClaims.filter(({ content }) => {
+      const claim = content.claim as Extract<
+        Claim,
+        {
+          kind:
+            | 'draft_session_date'
+            | 'draft_session_completion'
+            | 'draft_session_boundary'
+            | 'draft_completed_total';
+        }
+      >;
+      return claim.draftYear === draftYear && claim.draftType === draftType;
+    });
+    try {
+      const facts: CombinedDraftSessionFact[] = scoped.map((row) => {
+        const claim = row.content.claim;
+        const source = {
+          evidenceId: row.evidenceId,
+          captureId: row.content.capture.captureId,
+          artifactId: row.content.capture.artifactId,
+          documentId: combinedDraftDocumentId(
+            row.content.provider,
+            row.content.capture.sourceUrl,
+            input.environment
+          ),
+        };
+        if (claim.kind === 'draft_session_date') {
+          return {
+            ...source,
+            kind: 'completed_session_date',
+            sessionOrdinal: claim.sessionOrdinal,
+            eventDate: claim.eventDate,
+          };
+        }
+        if (claim.kind === 'draft_session_completion') {
+          return {
+            ...source,
+            kind: 'completed_session',
+            sessionOrdinal: claim.sessionOrdinal,
+          };
+        }
+        if (claim.kind === 'draft_completed_total') {
+          return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
+        }
+        if (claim.kind !== 'draft_session_boundary') {
+          throw new TypeError('Unexpected combined draft-session evidence kind.');
+        }
+        const playerId = resolve(
+          row.content.provider,
+          'player',
+          claim.player,
+          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.boundary}:player`,
+          row.evidenceId
+        );
+        const clubId = resolve(
+          row.content.provider,
+          'club',
+          claim.selectedByClub,
+          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.boundary}:club`,
+          row.evidenceId
+        );
+        return {
+          ...source,
+          kind: 'session_boundary',
+          sessionOrdinal: claim.sessionOrdinal,
+          boundary: claim.boundary,
+          selectionNumber: claim.selectionNumber,
+          playerId: playerId ?? '',
+          clubId: clubId ?? '',
+        };
+      });
+      const sessions = resolveCombinedDraftSessionEvidence({
+        draftYear,
+        draftType: draftType!,
+        officialName: `${draftYear} AFL Draft`,
+        selections: draftSelections
+          .filter(
+            (selection) => selection.draftYear === draftYear && selection.draftType === draftType
+          )
+          .map((selection) => ({
+            selectionId: selection.selectionId,
+            selectionNumber: selection.selectionNumber,
+            playerId: selection.playerId ?? '',
+            clubId: selection.clubId ?? '',
+          })),
+        facts,
+      });
+      for (const session of sessions) {
+        for (const selection of draftSelections.filter(({ selectionId }) =>
+          session.selectionIds.includes(selectionId)
+        )) {
+          selection.evidenceIds = sortedUnique([...selection.evidenceIds, ...session.evidenceIds]);
+          const hasCustody = pickCustody.some(
+            (custody) =>
+              custody.draftYear === selection.draftYear &&
+              custody.draftType === selection.draftType &&
+              custody.recordedPickNumber === selection.selectionNumber
+          );
+          if (
+            selection.status === 'unresolved' &&
+            selection.playerId !== null &&
+            selection.clubId !== null &&
+            !hasCustody
+          ) {
+            selection.status =
+              selection.supportingProviders.length > 1 ? 'corroborated' : 'single_source';
+          }
+        }
+      }
+    } catch (error) {
+      issues.push({
+        code: 'selection_conflict',
+        severity: 'blocking',
+        subjectKey: `combined-draft-session:${key}`,
+        detail:
+          error instanceof Error ? error.message : 'Combined draft-session evidence is invalid.',
+        evidenceIds: scoped.map(({ evidenceId }) => evidenceId).sort(),
+      });
+    }
+  }
 
   const pickLineage: CanonicalPickLineage[] = [];
   transfers.forEach((transfer) => {

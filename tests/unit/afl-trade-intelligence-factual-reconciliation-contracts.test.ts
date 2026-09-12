@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY } from '@/types/aflDraftTradeOutcomes';
 
-import { createAflTradeContentAddress } from '../../src/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '../../src/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   AFL_TRADE_FACTUAL_RECONCILIATION_ALGORITHM_VERSION,
   AFL_TRADE_FACTUAL_RECONCILIATION_AUTHORITY_BOUNDARY,
@@ -469,7 +472,8 @@ class ReconciliationSqlFixture implements AflOutcomeSqlClient {
 
   constructor(
     private readonly run = completedRun(),
-    private readonly staleHead = false
+    private readonly staleHead = false,
+    private readonly replay?: Record<string, unknown>
   ) {}
 
   async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
@@ -483,8 +487,14 @@ class ReconciliationSqlFixture implements AflOutcomeSqlClient {
     this.calls.push({ sql, parameters });
     const placeholders = [...sql.matchAll(/\$(\d+)/g)].map((match) => Number(match[1]));
     expect(Math.max(0, ...placeholders)).toBeLessThanOrEqual(parameters.length);
-    if (sql.includes('SELECT receipt_json FROM outcome_factual_reconciliation_run')) {
-      return { rows: [], rowCount: 0 };
+    if (sql === 'SELECT lo_create(0) AS oid') {
+      return { rows: [{ oid: 42 }] as Row[], rowCount: 1 };
+    }
+    if (sql === 'SELECT lo_unlink($1) AS removed') {
+      return { rows: [{ removed: 1 }] as Row[], rowCount: 1 };
+    }
+    if (sql.includes('AS receipt_text_matches')) {
+      return { rows: (this.replay ? [this.replay] : []) as Row[], rowCount: this.replay ? 1 : 0 };
     }
     if (sql.includes('FROM outcome_factual_reconciliation_policy WHERE policy_id')) {
       const policy = this.run.content.policy;
@@ -576,6 +586,30 @@ describe('AFL trade factual reconciliation contracts', () => {
     expect(AFL_TRADE_FACTUAL_RECONCILIATION_ALGORITHM_VERSION).toBe(
       'afl-trade-factual-reconciliation/v1'
     );
+  });
+
+  it('reconciles a games-only policy from match and appearance facts with no source metric', () => {
+    const policy = createAflTradeFactualReconciliationPolicy({
+      ...policyContent(),
+      sourceMetricRules: [],
+    });
+    const run = reconcileAflTradeFactualFacts({
+      policy,
+      sourceMemberships: [
+        membership(appearanceFact(), 'appearance'),
+        membership(matchFact('completed'), 'match'),
+      ],
+      currentHeadRevisions: [],
+      startedAt: '2026-03-22T08:00:00.000Z',
+      completedAt: '2026-03-22T08:01:00.000Z',
+    });
+    expect(run.content.results).toHaveLength(1);
+    expect(run.content.results[0]!.content).toMatchObject({
+      resultKind: 'derived_games',
+      metricCode: 'games',
+      availability: { state: 'measured', numericValue: '1', reasonCode: null },
+    });
+    expect(run.content.counts).toMatchObject({ measured: 1, conflicting: 0 });
   });
 
   it('derives games only from an authenticated appearance plus a completed match', () => {
@@ -684,6 +718,47 @@ describe('AFL trade factual reconciliation contracts', () => {
     ).toThrowError(AflTradeFactualReconciliationError);
   });
 
+  it('retains a completed match-only input without inventing player results or head advances', () => {
+    const run = reconcileAflTradeFactualFacts({
+      policy: createAflTradeFactualReconciliationPolicy({
+        ...policyContent(),
+        sourceMetricRules: [],
+      }),
+      sourceMemberships: [membership(matchFact('completed'), 'match')],
+      currentHeadRevisions: [],
+      startedAt: '2026-03-22T08:00:00.000Z',
+      completedAt: '2026-03-22T08:01:00.000Z',
+    });
+    expect(run.content.results).toEqual([]);
+    expect(run.content.headAdvances).toEqual([]);
+    expect(run.content.sourceMemberships).toHaveLength(1);
+  });
+
+  it('keeps games quarantined and null for a retained same-row match with missing completion', () => {
+    const original = matchFact('completed');
+    if (original.content.factKind !== 'match_universe') throw new Error('Wrong fixture');
+    const missing = createAflTradeSourceFact({
+      ...original.content,
+      completion: { state: 'quarantined', providerStatus: null, reasonCode: 'status_missing' },
+    });
+    const run = reconcileAflTradeFactualFacts({
+      policy: createAflTradeFactualReconciliationPolicy({
+        ...policyContent(),
+        sourceMetricRules: [],
+      }),
+      sourceMemberships: [membership(appearanceFact(), 'appearance'), membership(missing, 'match')],
+      currentHeadRevisions: [],
+      startedAt: '2026-03-22T08:00:00.000Z',
+      completedAt: '2026-03-22T08:01:00.000Z',
+    });
+    expect(run.content.results).toHaveLength(1);
+    expect(run.content.results[0]!.content.availability).toEqual({
+      state: 'quarantined',
+      numericValue: null,
+      reasonCode: 'match_completion_quarantined',
+    });
+  });
+
   it('persists typed inputs, outputs, evidence, heads, and finalization in one transaction', async () => {
     const run = completedRun();
     const client = new ReconciliationSqlFixture(run);
@@ -708,6 +783,69 @@ describe('AFL trade factual reconciliation contracts', () => {
     expect(statements).not.toMatch(/outcome_release|public_projection|fantasy|\buser\b/i);
   });
 
+  it('transfers a multi-chunk Unicode receipt without resending the complete SQL parameter', async () => {
+    const original = matchFact('completed');
+    if (original.content.factKind !== 'match_universe') throw new Error('Wrong fixture');
+    const sourceMemberships = Array.from({ length: 800 }, (_, index) =>
+      membership(
+        createAflTradeSourceFact({
+          ...original.content,
+          source: { ...original.content.source, providerDecodedRowId: `provider-row:${index}` },
+          completion: { state: 'completed', providerStatus: '🏉'.repeat(201) },
+        }),
+        `unicode-match-${index}`
+      )
+    );
+    const buildRun = (padding = 0) =>
+      reconcileAflTradeFactualFacts({
+        policy: createAflTradeFactualReconciliationPolicy({
+          ...policyContent(),
+          policyVersion: `facts/v1${'x'.repeat(padding)}`,
+          sourceMetricRules: [],
+        }),
+        sourceMemberships,
+        currentHeadRevisions: [],
+        startedAt: '2026-03-22T08:00:00.000Z',
+        completedAt: '2026-03-22T08:01:00.000Z',
+      });
+    const baseline = canonicalizeAflTradeJson(buildRun());
+    const boundary = Array.from(
+      { length: Math.floor(baseline.length / 1024 ** 2) },
+      (_, index) => (index + 1) * 1024 ** 2
+    ).find((end) => end - 1 - baseline.lastIndexOf('🏉', end - 1) <= 150);
+    expect(boundary).toBeDefined();
+    const end = boundary!;
+    const padding = end - 1 - baseline.lastIndexOf('🏉', end - 1);
+    const run = buildRun(padding);
+    const canonical = canonicalizeAflTradeJson(run);
+    // The unadjusted transport boundary would split this valid surrogate pair.
+    expect(canonical.slice(end - 1, end + 1)).toBe('🏉');
+    expect(Buffer.byteLength(canonical)).toBeGreaterThan(1024 ** 2);
+    const client = new ReconciliationSqlFixture(run);
+    await new PostgresAflTradeFactualReconciliationRepository(client).persistRun(run, {
+      environment: 'test_fixture',
+    });
+    const writes = client.calls.filter(({ sql }) => sql === 'SELECT lo_put($1,$2,$3)');
+    const chunks = writes.map(({ parameters }) => parameters[2] as Buffer);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(Buffer.concat(chunks).equals(Buffer.from(canonical, 'utf8'))).toBe(true);
+    let byteOffset = 0;
+    for (const write of writes) {
+      expect(write.parameters[0]).toBe(42);
+      expect(write.parameters[1]).toBe(byteOffset);
+      const chunk = write.parameters[2] as Buffer;
+      expect(chunk.length).toBeLessThanOrEqual(3 * 1024 ** 2);
+      expect(Buffer.from(chunk.toString('utf8')).equals(chunk)).toBe(true);
+      byteOffset += chunk.length;
+    }
+    expect(byteOffset).toBe(Buffer.byteLength(canonical));
+    expect(client.calls.filter(({ sql }) => sql === 'SELECT lo_unlink($1) AS removed')).toEqual([
+      { sql: 'SELECT lo_unlink($1) AS removed', parameters: [42] },
+    ]);
+    expect(client.calls.some(({ parameters }) => parameters.includes(canonical))).toBe(false);
+    expect(client.calls.at(-1)?.sql).toMatch(/^DROP TABLE pg_temp\.factual_receipt_assembled_/);
+  });
+
   it('rejects an execution-environment mismatch before opening a transaction', async () => {
     const run = completedRun();
     const client = new ReconciliationSqlFixture(run);
@@ -717,6 +855,56 @@ describe('AFL trade factual reconciliation contracts', () => {
       repository.persistRun(run, { environment: 'non_production' })
     ).rejects.toMatchObject({ code: 'ENVIRONMENT_MISMATCH' });
     expect(client.calls).toHaveLength(0);
+  });
+
+  it.each(['legacy_jsonb', 'canonical_text'])(
+    'replays an exact finalized %s receipt',
+    async (format) => {
+      const run = completedRun();
+      const client = new ReconciliationSqlFixture(run, false, {
+        receipt_json: format === 'legacy_jsonb' ? run : null,
+        receipt_is_text: format === 'canonical_text',
+        receipt_representation_valid: true,
+        receipt_text_matches: format === 'canonical_text' ? true : null,
+        status: 'approved',
+        finalized_at: run.content.completedAt,
+      });
+      await expect(
+        new PostgresAflTradeFactualReconciliationRepository(client).persistRun(run, {
+          environment: 'test_fixture',
+        })
+      ).resolves.toMatchObject({ factualRunId: run.factualRunId, idempotentReplay: true });
+      expect(client.calls.some(({ sql }) => /(?:INSERT\s+INTO|UPDATE)\s+outcome_/.test(sql))).toBe(
+        false
+      );
+    }
+  );
+
+  it.each([
+    ['changed canonical bytes', { receipt_text_matches: false }],
+    ['ambiguous representation', { receipt_representation_valid: false }],
+    ['unfinalized receipt', { finalized_at: null }],
+    ['unapproved receipt', { status: 'staged' }],
+    ['changed legacy content', { receipt_is_text: false, receipt_json: {} }],
+  ])('rejects replay of %s', async (_name, changed) => {
+    const run = completedRun();
+    const client = new ReconciliationSqlFixture(run, false, {
+      receipt_json: null,
+      receipt_is_text: true,
+      receipt_representation_valid: true,
+      receipt_text_matches: true,
+      status: 'approved',
+      finalized_at: run.content.completedAt,
+      ...changed,
+    });
+    await expect(
+      new PostgresAflTradeFactualReconciliationRepository(client).persistRun(run, {
+        environment: 'test_fixture',
+      })
+    ).rejects.toMatchObject({ code: 'REPLAY_CONFLICT' });
+    expect(client.calls.some(({ sql }) => /(?:INSERT\s+INTO|UPDATE)\s+outcome_/.test(sql))).toBe(
+      false
+    );
   });
 
   it('maps a failed compare-and-swap head advance to a typed stale revision', async () => {

@@ -3,17 +3,25 @@ import { z } from 'zod';
 import {
   type AflTradeModelRunIntent,
   type AflTradeModelRunManifestV3,
+  type AflTradeModelRunManifestV4,
+  type AflTradeModelRunManifestV5,
+  aflTradeModelRunManifestV4Schema,
+  aflTradeModelRunManifestV5Schema,
   aflTradeModelRunManifestV3ContentSchema,
   aflTradeModelRunManifestV3Schema,
   aflTradeModelRunIntentSchema,
+  createAflTradeModelRunContinuationIntent,
 } from '../artifacts/modelRunManifest';
+import { aflTradeAnyModelRunCheckpointSchema } from '../artifacts/modelRunCheckpoint';
 import {
   type AflTradeArtifactRef,
   doesAflTradeArtifactRefMatchBytes,
 } from '../artifacts/artifactReference';
 import {
   type AflTradePlayerContributionModelProtocolV2,
+  type AflTradePlayerPavModelProtocol,
   aflTradePlayerContributionModelProtocolV2Schema,
+  aflTradePlayerPavModelProtocolSchema,
 } from '../artifacts/modelProtocol';
 import {
   type AflTradeValuationDatasetAdmissionReceipt,
@@ -40,9 +48,17 @@ import {
 } from '../source/sourceRights';
 import {
   type AflTradePlayerObservationSetV2,
+  type AflTradePlayerObservationSetV3,
   aflTradePlayerObservationSetV2Schema,
+  aflTradePlayerObservationSetV3Schema,
   createAflTradePlayerObservationSetV2,
+  createAflTradePlayerObservationSetV3,
 } from './playerContributionContracts';
+import {
+  type AflTradePlayerPavObservationSet,
+  aflTradePlayerPavObservationSetSchema,
+} from './playerPavObservationContracts';
+import { type AflTradeHpnPavMethod, aflTradeHpnPavMethodSchema } from './hpnPlayerApproximateValue';
 import {
   type AflTradeAcquisitionSpellMetric,
   aflTradeAcquisitionSpellMetricSchema,
@@ -368,6 +384,41 @@ export function authenticateAflTradeAuthorizedModelRunManifest(input: {
   return run;
 }
 
+/** Authenticates retained bindings only; consumption and live write authority belong to the durable owner. */
+export function authenticateAflTradeAuthorizedPersistenceRecoveryManifest(input: {
+  run: AflTradeModelRunManifestV4 | AflTradeModelRunManifestV5;
+  intent: AflTradeModelRunIntent;
+  authorization: AflTradeModelRunAuthorization;
+}): AflTradeModelRunManifestV4 | AflTradeModelRunManifestV5 {
+  const run = z
+    .union([aflTradeModelRunManifestV4Schema, aflTradeModelRunManifestV5Schema])
+    .parse(input.run);
+  const intent = aflTradeModelRunIntentSchema.parse(input.intent);
+  const authorization = aflTradeModelRunAuthorizationSchema.parse(input.authorization);
+  const child = run.content.recovery.intentChain.at(-1)!;
+  if (
+    canonicalizeAflTradeJson(child) !== canonicalizeAflTradeJson(intent) ||
+    run.content.runAuthorizationId !== authorization.authorizationId ||
+    authorization.content.runIntentId !== intent.intentId ||
+    authorization.content.environment !== intent.content.environment ||
+    authorization.content.datasetId !== intent.content.datasetId ||
+    authorization.content.datasetAdmissionId !== intent.content.datasetAdmissionId ||
+    authorization.content.modelProtocolId !== intent.content.modelProtocolId ||
+    authorization.content.observationSetId !== intent.content.observationSetId ||
+    !exactIds(
+      authorization.content.modelTrainingEvaluationReceiptIds,
+      intent.content.modelTrainingEvaluationReceiptIds
+    ) ||
+    Date.parse(authorization.content.authorizedAt) < Date.parse(intent.content.startedAt) ||
+    Date.parse(authorization.content.authorizedAt) > Date.parse(run.content.finishedAt)
+  ) {
+    throw new RangeError(
+      'Persistence recovery does not bind its exact child intent and authorization.'
+    );
+  }
+  return run;
+}
+
 export interface AflTradeAdmittedModelRunEvidence {
   registeredProtocol: AflTradePlayerContributionModelProtocolV2;
   admission: AflTradeValuationDatasetAdmissionReceipt;
@@ -391,8 +442,48 @@ export interface AflTradeAdmittedModelRunEvidence {
 export interface AflTradeAdmittedModelRunEvidenceAuthenticator {
   authenticate(input: {
     intent: AflTradeModelRunIntent;
-  }): Promise<AflTradeAdmittedModelRunEvidence>;
+    /** Completed evidence recovery only; omission retains numerical-start rules. */
+    purpose?: 'persistence_only';
+  }): Promise<AflTradeAdmittedModelRunEvidence | AflTradeNativePavModelRunEvidence>;
 }
+
+export type AflTradeNativePavModelRunEvidence = Omit<
+  AflTradeAdmittedModelRunEvidence,
+  'registeredProtocol' | 'observationSet' | 'spellMetrics'
+> & {
+  registeredProtocol: AflTradePlayerPavModelProtocol;
+  observationSet: AflTradePlayerObservationSetV3;
+  pavObservationSet: AflTradePlayerPavObservationSet;
+  hpnMethod: AflTradeHpnPavMethod;
+  spellMetrics: readonly [];
+  continuationAuthority?: z.infer<typeof nativeContinuationAuthoritySchema>;
+};
+
+const nativeContinuationAuthoritySchema = z
+  .object({
+    rootIntent: aflTradeModelRunIntentSchema,
+    previousIntent: aflTradeModelRunIntentSchema,
+    checkpoint: aflTradeAnyModelRunCheckpointSchema,
+    checkpointIntent: aflTradeModelRunIntentSchema.optional(),
+  })
+  .strict();
+
+type AuthorizedModelInputs =
+  | {
+      modelFamily?: 'scalar';
+      protocol: AflTradePlayerContributionModelProtocolV2;
+      observationSet: AflTradePlayerObservationSetV2;
+      spellMetrics: readonly AflTradeAcquisitionSpellMetric[];
+    }
+  | {
+      modelFamily: 'native_pav';
+      protocol: AflTradePlayerPavModelProtocol;
+      datasetCandidate: AflTradeValuationDatasetCandidate;
+      observationSet: AflTradePlayerObservationSetV3;
+      pavObservationSet: AflTradePlayerPavObservationSet;
+      hpnMethod: AflTradeHpnPavMethod;
+      spellMetrics: readonly [];
+    };
 
 export type AflTradeAdmittedModelRunAuthorityBlockerCode =
   | 'invalid_request'
@@ -415,16 +506,13 @@ export interface AflTradeAdmittedModelRunAuthorityBlocker {
 }
 
 export type AflTradeAdmittedModelRunAuthorityResult =
-  | {
+  | (AuthorizedModelInputs & {
       status: 'authorized';
       authorization: AflTradeModelRunAuthorization;
       intent: AflTradeModelRunIntent;
-      protocol: AflTradePlayerContributionModelProtocolV2;
-      observationSet: AflTradePlayerObservationSetV2;
-      spellMetrics: readonly AflTradeAcquisitionSpellMetric[];
       executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
       blockers: readonly [];
-    }
+    })
   | {
       status: 'blocked';
       authorization: null;
@@ -435,6 +523,15 @@ export interface AflTradeAdmittedModelRunAuthorityRequest {
   intent: unknown;
   protocol: unknown;
 }
+
+export type AflTradePersistenceRecoveryAuthorityResult =
+  | Extract<AflTradeAdmittedModelRunAuthorityResult, { status: 'blocked' }>
+  | {
+      status: 'authorized_for_persistence_only';
+      authorization: AflTradeModelRunAuthorization;
+      intent: AflTradeModelRunIntent;
+      blockers: readonly [];
+    };
 
 export interface AflTradeModelRunAuthorityClock {
   now(): Promise<string>;
@@ -476,15 +573,37 @@ function requestWithoutEvaluationTime(receipt: AflTradeGate0AReceipt): string {
   return canonicalizeAflTradeJson(request);
 }
 
-function parseEvidence(value: AflTradeAdmittedModelRunEvidence) {
-  const registeredProtocol = aflTradePlayerContributionModelProtocolV2Schema.safeParse(
-    value.registeredProtocol
-  );
+const pairedModelEvidenceSchema = z.union([
+  z
+    .object({
+      registeredProtocol: aflTradePlayerContributionModelProtocolV2Schema,
+      observationSet: aflTradePlayerObservationSetV2Schema,
+      spellMetrics: z.array(aflTradeAcquisitionSpellMetricSchema),
+      pavObservationSet: z.never().optional(),
+      hpnMethod: z.never().optional(),
+      continuationAuthority: z.never().optional(),
+    })
+    .transform((value) => ({ ...value, modelFamily: 'scalar' as const })),
+  z
+    .object({
+      registeredProtocol: aflTradePlayerPavModelProtocolSchema,
+      observationSet: aflTradePlayerObservationSetV3Schema,
+      pavObservationSet: aflTradePlayerPavObservationSetSchema,
+      hpnMethod: aflTradeHpnPavMethodSchema,
+      spellMetrics: z.tuple([]),
+      continuationAuthority: nativeContinuationAuthoritySchema.optional(),
+    })
+    .transform((value) => ({ ...value, modelFamily: 'native_pav' as const })),
+]);
+
+function parseEvidence(
+  value: AflTradeAdmittedModelRunEvidence | AflTradeNativePavModelRunEvidence
+) {
+  const model = pairedModelEvidenceSchema.safeParse(value);
   const admission = aflTradeValuationDatasetAdmissionReceiptSchema.safeParse(value.admission);
   const datasetCandidate = aflTradeValuationDatasetCandidateSchema.safeParse(
     value.datasetCandidate
   );
-  const observationSet = aflTradePlayerObservationSetV2Schema.safeParse(value.observationSet);
   const admissionEvaluationReceipts = value.admissionEvaluationReceipts.map((receipt) =>
     aflTradeGate0AReceiptSchema.safeParse(receipt)
   );
@@ -494,21 +613,16 @@ function parseEvidence(value: AflTradeAdmittedModelRunEvidence) {
   const sourceRightsProposals = value.sourceRightsProposals.map((rights) =>
     aflTradeSourceRightsProposalSchema.safeParse(rights)
   );
-  const spellMetrics = value.spellMetrics.map((metric) =>
-    aflTradeAcquisitionSpellMetricSchema.safeParse(metric)
-  );
   const operationalAuthorization = aflTradeModelRunOperationalAuthorizationSchema.safeParse(
     value.operationalAuthorization
   );
   if (
-    !registeredProtocol.success ||
+    !model.success ||
     !admission.success ||
     !datasetCandidate.success ||
-    !observationSet.success ||
     admissionEvaluationReceipts.some((receipt) => !receipt.success) ||
     runStartEvaluationReceipts.some((receipt) => !receipt.success) ||
     sourceRightsProposals.some((rights) => !rights.success) ||
-    spellMetrics.some((metric) => !metric.success) ||
     !operationalAuthorization.success ||
     !Number.isSafeInteger(value.gateLedgerRevision) ||
     value.gateLedgerRevision < 0 ||
@@ -519,10 +633,9 @@ function parseEvidence(value: AflTradeAdmittedModelRunEvidence) {
     return null;
   }
   return {
-    registeredProtocol: registeredProtocol.data,
+    ...model.data,
     admission: admission.data,
     datasetCandidate: datasetCandidate.data,
-    observationSet: observationSet.data,
     admissionEvaluationReceipts: admissionEvaluationReceipts.flatMap((receipt) =>
       receipt.success ? [receipt.data] : []
     ),
@@ -537,7 +650,6 @@ function parseEvidence(value: AflTradeAdmittedModelRunEvidence) {
     gate2DecisionKey: value.gate2DecisionKey,
     gate2Ledger: value.gate2Ledger,
     operationalAuthorization: operationalAuthorization.data,
-    spellMetrics: spellMetrics.flatMap((metric) => (metric.success ? [metric.data] : [])),
     executableArtifacts: value.executableArtifacts,
   };
 }
@@ -565,9 +677,105 @@ function operationalAuthorizationIsCurrent(
         intent.content.job.workerIdentity === AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID;
 }
 
+/** Retained ancestry is necessary, not execution authority. The durable adapter owns currentness. */
+function nativeContinuationMatches(
+  intent: AflTradeModelRunIntent,
+  evidence: NonNullable<ReturnType<typeof parseEvidence>>,
+  purpose: 'numerical' | 'persistence_only' = 'numerical'
+): boolean {
+  const context = evidence.continuationAuthority;
+  if (intent.content.schemaVersion === 'afl-trade-model-run-intent/v1')
+    return purpose === 'numerical' && context === undefined;
+  if (
+    evidence.modelFamily !== 'native_pav' ||
+    !context ||
+    intent.content.environment !== 'non_production'
+  )
+    return false;
+  const { rootIntent, previousIntent, checkpoint } = context;
+  const checkpointIntent =
+    context.checkpointIntent ??
+    (checkpoint.content.intentId === rootIntent.intentId
+      ? rootIntent
+      : checkpoint.content.intentId === previousIntent.intentId
+        ? previousIntent
+        : undefined);
+  const binding = intent.content.continuation;
+  const operational = evidence.operationalAuthorization.content;
+  if (
+    rootIntent.content.schemaVersion !== 'afl-trade-model-run-intent/v1' ||
+    rootIntent.content.environment !== 'non_production' ||
+    binding.rootIntentId !== rootIntent.intentId ||
+    binding.previousIntentId !== previousIntent.intentId ||
+    checkpoint.content.rootIntentId !== rootIntent.intentId ||
+    !checkpointIntent ||
+    checkpointIntent.intentId !== checkpoint.content.intentId ||
+    checkpointIntent.content.job.attempt !== checkpoint.content.dispatchAttemptNumber ||
+    Date.parse(checkpointIntent.content.startedAt) > Date.parse(checkpoint.content.recordedAt) ||
+    (checkpointIntent.content.schemaVersion === 'afl-trade-model-run-intent/v1'
+      ? checkpointIntent.intentId !== rootIntent.intentId
+      : checkpointIntent.content.continuation.rootIntentId !== rootIntent.intentId) ||
+    (purpose === 'persistence_only'
+      ? checkpoint.content.stage !== 'final_test_completed'
+      : ![
+          'started',
+          'candidate_fitted',
+          'pre_final_retained',
+          'validation_plan_retained',
+          'candidate_locked',
+        ].includes(checkpoint.content.stage)) ||
+    binding.dispatchAttemptNumber < previousIntent.content.job.attempt ||
+    (binding.dispatchAttemptNumber === previousIntent.content.job.attempt &&
+      previousIntent.content.schemaVersion === 'afl-trade-model-run-intent/v2' &&
+      (binding.dispatchClaimId !== previousIntent.content.continuation.dispatchClaimId ||
+        binding.dispatchLeaseTokenSha256 !==
+          previousIntent.content.continuation.dispatchLeaseTokenSha256)) ||
+    (previousIntent.content.schemaVersion === 'afl-trade-model-run-intent/v1'
+      ? previousIntent.intentId !== rootIntent.intentId
+      : previousIntent.content.continuation.rootIntentId !== rootIntent.intentId) ||
+    operational.authorityBoundary !==
+      'policy_owned_local_private_valuation_for_one_exact_model_run_intent' ||
+    operational.dispatchRequestId !== binding.dispatchRequestId ||
+    operational.substantiveOperationId !== binding.substantiveOperationId ||
+    operational.dispatchClaimId !== binding.dispatchClaimId ||
+    operational.dispatchLeaseTokenSha256 !== binding.dispatchLeaseTokenSha256 ||
+    operational.dispatchAttemptNumber !== binding.dispatchAttemptNumber
+  )
+    return false;
+  const immutableExecution = (value: AflTradeModelRunIntent) => {
+    const body: Record<string, unknown> = { ...value.content, job: { ...value.content.job } };
+    delete body.schemaVersion;
+    delete body.startedAt;
+    delete body.continuation;
+    delete body.modelTrainingEvaluationReceiptIds;
+    const { attempt: _attempt, ...job } = value.content.job;
+    body.job = job;
+    return canonicalizeAflTradeJson(body);
+  };
+  if (
+    immutableExecution(rootIntent) !== immutableExecution(previousIntent) ||
+    immutableExecution(rootIntent) !== immutableExecution(checkpointIntent)
+  )
+    return false;
+  try {
+    const expected = createAflTradeModelRunContinuationIntent({
+      previousIntent,
+      checkpoint,
+      startedAt: intent.content.startedAt,
+      dispatchClaimId: binding.dispatchClaimId,
+      dispatchLeaseTokenSha256: binding.dispatchLeaseTokenSha256,
+      dispatchAttemptNumber: binding.dispatchAttemptNumber,
+      modelTrainingEvaluationReceiptIds: [...intent.content.modelTrainingEvaluationReceiptIds],
+    });
+    return canonicalizeAflTradeJson(expected) === canonicalizeAflTradeJson(intent);
+  } catch {
+    return false;
+  }
+}
+
 function intentMatchesProtocol(
   intent: AflTradeModelRunIntent,
-  protocol: AflTradePlayerContributionModelProtocolV2
+  protocol: AflTradePlayerContributionModelProtocolV2 | AflTradePlayerPavModelProtocol
 ): boolean {
   return (
     intent.content.environment === protocol.content.environment &&
@@ -582,9 +790,62 @@ function intentMatchesProtocol(
 
 function observationSetMatchesExactCandidate(
   evidence: NonNullable<ReturnType<typeof parseEvidence>>,
-  protocol: AflTradePlayerContributionModelProtocolV2,
   intent: AflTradeModelRunIntent
 ): boolean {
+  if (evidence.modelFamily === 'native_pav') {
+    const { registeredProtocol: protocol, pavObservationSet: original, hpnMethod } = evidence;
+    const content = protocol.content;
+    const matchesDocument = (reference: AflTradeArtifactRef, document: unknown) =>
+      doesAflTradeArtifactRefMatchBytes(
+        reference,
+        new TextEncoder().encode(canonicalizeAflTradeJson(document)),
+        'application/json'
+      );
+    if (
+      content.sourceObservationSet.observationSetId !== original.observationSetId ||
+      !matchesDocument(content.sourceObservationSet.artifact, original) ||
+      content.pavPolicy.policyId !== original.content.policy.policyId ||
+      !matchesDocument(content.pavPolicy.artifact, original.content.policy) ||
+      content.hpnMethod.methodId !== hpnMethod.methodId ||
+      hpnMethod.methodId !== original.content.policy.content.methodId ||
+      !matchesDocument(content.hpnMethod.artifact, hpnMethod) ||
+      Date.parse(hpnMethod.content.capturedAt) > Date.parse(original.content.knowledgeCutoffAt) ||
+      content.featurePolicy.knowledgeJoin !==
+        evidence.datasetCandidate.content.specification.content.featurePolicy.knowledgeJoin ||
+      content.featurePolicy.knowledgeJoin !==
+        evidence.observationSet.content.featureKnowledgePolicy ||
+      (original.content.knowledgePolicy !== undefined &&
+        content.featurePolicy.knowledgeJoin !== 'retrospective_as_captured_at_dataset_creation')
+    )
+      return false;
+    try {
+      const expected = createAflTradePlayerObservationSetV3({
+        candidate: evidence.datasetCandidate,
+        datasetAdmissionId: evidence.admission.admissionId,
+        modelProtocolId: protocol.protocolId,
+        pavObservationSet: original,
+      });
+      if (
+        expected.observationSetId !== intent.content.observationSetId ||
+        canonicalizeAflTradeJson(expected) !== canonicalizeAflTradeJson(evidence.observationSet)
+      )
+        return false;
+    } catch {
+      return false;
+    }
+    const windows = {
+      train: content.windows.train,
+      calibration: content.windows.calibration,
+      validation: content.windows.validation,
+      final_test: content.windows.finalTest,
+    };
+    return evidence.observationSet.content.observations.every(({ pavObservation }) => {
+      const window = windows[pavObservation.partition];
+      const cutoff = Date.parse(pavObservation.predictionCutoffAt);
+      return cutoff >= Date.parse(window.from) && cutoff < Date.parse(window.to);
+    });
+  }
+  const protocol = evidence.registeredProtocol;
   let expected: AflTradePlayerObservationSetV2;
   try {
     expected = createAflTradePlayerObservationSetV2({
@@ -620,7 +881,7 @@ function observationSetMatchesExactCandidate(
 
 function exactDatasetAncestry(
   evidence: NonNullable<ReturnType<typeof parseEvidence>>,
-  protocol: AflTradePlayerContributionModelProtocolV2,
+  protocol: AflTradePlayerContributionModelProtocolV2 | AflTradePlayerPavModelProtocol,
   intent: AflTradeModelRunIntent
 ): boolean {
   const { admission, datasetCandidate } = evidence;
@@ -810,46 +1071,75 @@ function rightsCoverageIsCurrent(
 
 function executableArtifactsMatch(
   evidence: NonNullable<ReturnType<typeof parseEvidence>>,
-  intent: AflTradeModelRunIntent,
-  protocol: AflTradePlayerContributionModelProtocolV2
+  intent: AflTradeModelRunIntent
 ): boolean {
   const datasetSpecification = evidence.datasetCandidate.content.specification.content;
   if (
     canonicalizeAflTradeJson(intent.content.featureDefinitionArtifacts) !==
-      canonicalizeAflTradeJson(datasetSpecification.featureDefinitions) ||
-    canonicalizeAflTradeJson(protocol.content.valueUnit.definitionArtifact) !==
-      canonicalizeAflTradeJson(datasetSpecification.valueUnitDefinition) ||
-    canonicalizeAflTradeJson(protocol.content.footballContext.roleTaxonomyArtifact) !==
-      canonicalizeAflTradeJson(datasetSpecification.roleTaxonomy) ||
-    canonicalizeAflTradeJson(protocol.content.footballContext.eraDefinitionArtifact) !==
-      canonicalizeAflTradeJson(datasetSpecification.eraDefinition) ||
-    canonicalizeAflTradeJson(
-      protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact
-    ) !== canonicalizeAflTradeJson(datasetSpecification.censoringDefinition)
-  ) {
+    canonicalizeAflTradeJson(datasetSpecification.featureDefinitions)
+  )
     return false;
+  let protocolReferences: AflTradeArtifactRef[];
+  if (evidence.modelFamily === 'native_pav') {
+    const protocol = evidence.registeredProtocol;
+    if (
+      !datasetSpecification.featureDefinitions.some(
+        (reference) =>
+          canonicalizeAflTradeJson(reference) ===
+          canonicalizeAflTradeJson(protocol.content.featureDefinitionArtifact)
+      )
+    )
+      return false;
+    protocolReferences = [
+      protocol.content.sourceObservationSet.artifact,
+      protocol.content.pavPolicy.artifact,
+      protocol.content.hpnMethod.artifact,
+      evidence.hpnMethod.content.sourceArtifact,
+      protocol.content.featureDefinitionArtifact,
+      protocol.content.featurePolicy.featureAvailabilityArtifact,
+      ...protocol.content.validationPlan.baselineDefinitionArtifacts,
+      ...protocol.content.validationPlan.metricDefinitionArtifacts,
+      protocol.content.validationPlan.intervalCalibrationArtifact,
+      ...protocol.content.validationPlan.sensitivityAnalysisArtifacts,
+      protocol.content.validationPlan.acceptanceCriteriaArtifact,
+    ];
+  } else {
+    const protocol = evidence.registeredProtocol;
+    if (
+      canonicalizeAflTradeJson(protocol.content.valueUnit.definitionArtifact) !==
+        canonicalizeAflTradeJson(datasetSpecification.valueUnitDefinition) ||
+      canonicalizeAflTradeJson(protocol.content.footballContext.roleTaxonomyArtifact) !==
+        canonicalizeAflTradeJson(datasetSpecification.roleTaxonomy) ||
+      canonicalizeAflTradeJson(protocol.content.footballContext.eraDefinitionArtifact) !==
+        canonicalizeAflTradeJson(datasetSpecification.eraDefinition) ||
+      canonicalizeAflTradeJson(
+        protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact
+      ) !== canonicalizeAflTradeJson(datasetSpecification.censoringDefinition)
+    ) {
+      return false;
+    }
+    protocolReferences = [
+      protocol.content.valueUnit.definitionArtifact,
+      protocol.content.footballContext.roleTaxonomyArtifact,
+      protocol.content.footballContext.eraDefinitionArtifact,
+      protocol.content.replacementBaseline.definitionArtifact,
+      protocol.content.featurePolicy.featureAvailabilityArtifact,
+      protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
+      protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
+      protocol.content.scalarValueTransformArtifact,
+      ...(protocol.content.featureValuesArtifact === undefined
+        ? []
+        : [protocol.content.featureValuesArtifact]),
+      ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
+        ? []
+        : [protocol.content.pointInTimeFeatureValuesArtifact]),
+      ...protocol.content.validationPlan.baselineDefinitionArtifacts,
+      ...protocol.content.validationPlan.metricDefinitionArtifacts,
+      protocol.content.validationPlan.intervalCalibrationArtifact,
+      ...protocol.content.validationPlan.sensitivityAnalysisArtifacts,
+      protocol.content.validationPlan.acceptanceCriteriaArtifact,
+    ];
   }
-  const protocolReferences: AflTradeArtifactRef[] = [
-    protocol.content.valueUnit.definitionArtifact,
-    protocol.content.footballContext.roleTaxonomyArtifact,
-    protocol.content.footballContext.eraDefinitionArtifact,
-    protocol.content.replacementBaseline.definitionArtifact,
-    protocol.content.featurePolicy.featureAvailabilityArtifact,
-    protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
-    protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
-    protocol.content.scalarValueTransformArtifact,
-    ...(protocol.content.featureValuesArtifact === undefined
-      ? []
-      : [protocol.content.featureValuesArtifact]),
-    ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
-      ? []
-      : [protocol.content.pointInTimeFeatureValuesArtifact]),
-    ...protocol.content.validationPlan.baselineDefinitionArtifacts,
-    ...protocol.content.validationPlan.metricDefinitionArtifacts,
-    protocol.content.validationPlan.intervalCalibrationArtifact,
-    ...protocol.content.validationPlan.sensitivityAnalysisArtifacts,
-    protocol.content.validationPlan.acceptanceCriteriaArtifact,
-  ];
   const references: AflTradeArtifactRef[] = [
     intent.content.sourceCodeArtifact,
     intent.content.dependencyLockArtifact,
@@ -872,6 +1162,57 @@ function executableArtifactsMatch(
   });
 }
 
+/** Revalidates native stage evidence; caller must separately fence consumed authority and custody. */
+export function authenticateAflTradeNativePavStageEvidence(input: {
+  intent: AflTradeModelRunIntent;
+  evidence: AflTradeAdmittedModelRunEvidence | AflTradeNativePavModelRunEvidence;
+  evaluatedAt: string;
+}): AflTradeNativePavModelRunEvidence {
+  const intent = aflTradeModelRunIntentSchema.parse(input.intent);
+  if (intent.content.environment !== 'non_production') {
+    throw new RangeError('Native PAV stage requires an exact private root intent.');
+  }
+  const evidence = parseEvidence(input.evidence);
+  if (
+    !evidence ||
+    evidence.modelFamily !== 'native_pav' ||
+    evidence.operationalAuthorization.content.authorityBoundary !==
+      'policy_owned_local_private_valuation_for_one_exact_model_run_intent'
+  ) {
+    throw new RangeError('Native PAV stage requires exact private native evidence.');
+  }
+  if (!nativeContinuationMatches(intent, evidence))
+    throw new RangeError('Native PAV stage requires exact retained continuation ancestry.');
+  if (
+    !Number.isFinite(Date.parse(input.evaluatedAt)) ||
+    Date.parse(input.evaluatedAt) < Date.parse(intent.content.startedAt)
+  ) {
+    throw new RangeError('Native PAV stage requires a valid current evaluation time.');
+  }
+  if (
+    !intentMatchesProtocol(intent, evidence.registeredProtocol) ||
+    !exactDatasetAncestry(evidence, evidence.registeredProtocol, intent) ||
+    !observationSetMatchesExactCandidate(evidence, intent)
+  ) {
+    throw new RangeError('Native PAV stage requires exact admitted observation ancestry.');
+  }
+  if (!executableArtifactsMatch(evidence, intent)) {
+    throw new RangeError('Native PAV stage requires exact executable artifact bytes.');
+  }
+  if (gate2IsCurrent(evidence, intent, input.evaluatedAt) === null) {
+    throw new RangeError('Native PAV stage requires current Gate 2 authority.');
+  }
+  if (rightsCoverageIsCurrent(evidence, intent, input.evaluatedAt) === null) {
+    throw new RangeError('Native PAV stage requires current model-training rights.');
+  }
+  if (
+    !operationalAuthorizationIsCurrent(evidence.operationalAuthorization, intent, input.evaluatedAt)
+  ) {
+    throw new RangeError('Native PAV stage requires current exact operational authorization.');
+  }
+  return evidence;
+}
+
 export class AflTradeAdmittedModelRunAuthorityService {
   constructor(
     private readonly dependencies: {
@@ -886,8 +1227,34 @@ export class AflTradeAdmittedModelRunAuthorityService {
   async authorize(
     request: AflTradeAdmittedModelRunAuthorityRequest
   ): Promise<AflTradeAdmittedModelRunAuthorityResult> {
+    return this.authorizeForPurpose(request, 'numerical');
+  }
+
+  /** This result cannot be supplied to the numerical runner; the durable owner still consumes once. */
+  async authorizePersistenceRecovery(
+    request: AflTradeAdmittedModelRunAuthorityRequest
+  ): Promise<AflTradePersistenceRecoveryAuthorityResult> {
+    const result = await this.authorizeForPurpose(request, 'persistence_only');
+    if (result.status === 'blocked') return result;
+    return {
+      status: 'authorized_for_persistence_only',
+      authorization: result.authorization,
+      intent: result.intent,
+      blockers: [],
+    };
+  }
+
+  private async authorizeForPurpose(
+    request: AflTradeAdmittedModelRunAuthorityRequest,
+    purpose: 'numerical' | 'persistence_only'
+  ): Promise<AflTradeAdmittedModelRunAuthorityResult> {
     const intent = aflTradeModelRunIntentSchema.safeParse(request.intent);
-    const protocol = aflTradePlayerContributionModelProtocolV2Schema.safeParse(request.protocol);
+    const protocol = z
+      .union([
+        aflTradePlayerContributionModelProtocolV2Schema,
+        aflTradePlayerPavModelProtocolSchema,
+      ])
+      .safeParse(request.protocol);
     if (
       !intent.success ||
       !protocol.success ||
@@ -896,10 +1263,11 @@ export class AflTradeAdmittedModelRunAuthorityService {
       return blocked('invalid_request', 'The admitted model-run intent is invalid.');
     }
 
-    let unparsedEvidence: AflTradeAdmittedModelRunEvidence;
+    let unparsedEvidence: AflTradeAdmittedModelRunEvidence | AflTradeNativePavModelRunEvidence;
     try {
       unparsedEvidence = await this.dependencies.authenticator.authenticate({
         intent: intent.data,
+        ...(purpose === 'persistence_only' ? { purpose } : {}),
       });
     } catch {
       return blocked('evidence_unavailable', 'Admitted model-run evidence could not be loaded.');
@@ -908,6 +1276,11 @@ export class AflTradeAdmittedModelRunAuthorityService {
     if (!evidence) {
       return blocked('invalid_evidence', 'Admitted model-run evidence failed authentication.');
     }
+    if (!nativeContinuationMatches(intent.data, evidence, purpose))
+      return blocked(
+        'ancestry_mismatch',
+        'The run lacks exact retained native continuation ancestry.'
+      );
     if (!exactDatasetAncestry(evidence, protocol.data, intent.data)) {
       return blocked('ancestry_mismatch', 'The run does not bind the exact admitted dataset.');
     }
@@ -920,13 +1293,13 @@ export class AflTradeAdmittedModelRunAuthorityService {
         'The run protocol is not the exact durably registered protocol.'
       );
     }
-    if (!observationSetMatchesExactCandidate(evidence, protocol.data, intent.data)) {
+    if (!observationSetMatchesExactCandidate(evidence, intent.data)) {
       return blocked(
         'observation_set_mismatch',
         'The observation set is not the deterministic projection of the admitted rows.'
       );
     }
-    if (!executableArtifactsMatch(evidence, intent.data, protocol.data)) {
+    if (!executableArtifactsMatch(evidence, intent.data)) {
       return blocked(
         'execution_artifact_mismatch',
         'Every executable model artifact must match its exact retained bytes.'
@@ -1015,13 +1388,27 @@ export class AflTradeAdmittedModelRunAuthorityService {
         'The exact model-run authorization could not be issued durably.'
       );
     }
+    const modelInputs: AuthorizedModelInputs =
+      evidence.modelFamily === 'native_pav'
+        ? {
+            modelFamily: 'native_pav',
+            protocol: evidence.registeredProtocol,
+            datasetCandidate: evidence.datasetCandidate,
+            observationSet: evidence.observationSet,
+            pavObservationSet: evidence.pavObservationSet,
+            hpnMethod: evidence.hpnMethod,
+            spellMetrics: evidence.spellMetrics,
+          }
+        : {
+            protocol: evidence.registeredProtocol,
+            observationSet: evidence.observationSet,
+            spellMetrics: evidence.spellMetrics,
+          };
     return {
       status: 'authorized',
+      ...modelInputs,
       authorization,
       intent: intent.data,
-      protocol: protocol.data,
-      observationSet: evidence.observationSet,
-      spellMetrics: evidence.spellMetrics,
       executableArtifacts: evidence.executableArtifacts,
       blockers: [],
     };
@@ -1029,14 +1416,13 @@ export class AflTradeAdmittedModelRunAuthorityService {
 }
 
 export interface AflTradeAuthorizedModelExecutor {
-  execute(input: {
-    intent: AflTradeModelRunIntent;
-    authorization: AflTradeModelRunAuthorization;
-    protocol: AflTradePlayerContributionModelProtocolV2;
-    observationSet: AflTradePlayerObservationSetV2;
-    spellMetrics: readonly AflTradeAcquisitionSpellMetric[];
-    executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
-  }): Promise<AflTradeAuthorizedModelRunCompletion>;
+  execute(
+    input: AuthorizedModelInputs & {
+      intent: AflTradeModelRunIntent;
+      authorization: AflTradeModelRunAuthorization;
+      executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
+    }
+  ): Promise<AflTradeAuthorizedModelRunCompletion>;
 }
 
 export interface AflTradeModelRunFailureRecorder {
@@ -1103,14 +1489,7 @@ export class AflTradeAdmittedModelRunner {
     }
     let completion: AflTradeAuthorizedModelRunCompletion;
     try {
-      completion = await this.executor.execute({
-        intent: authorized.intent,
-        authorization: authorized.authorization,
-        protocol: authorized.protocol,
-        observationSet: authorized.observationSet,
-        spellMetrics: authorized.spellMetrics,
-        executableArtifacts: authorized.executableArtifacts,
-      });
+      completion = await this.executor.execute(authorized);
     } catch (cause) {
       try {
         const failedAt = await this.clock.now();

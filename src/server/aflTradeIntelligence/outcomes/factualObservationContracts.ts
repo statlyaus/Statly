@@ -196,17 +196,33 @@ const resolutionBase = {
 };
 
 const playerResolutionSchema = z
-  .object({
-    ...resolutionBase,
-    mappingScope: z.literal('provider_identity'),
-    identityCandidateId: publicIdSchema,
-    playerIdentityId: aflTradeContentAddressedIdSchema('provider-player-identity'),
-    playerId: publicIdSchema,
-    assignment: activeAssignmentSchema('player'),
-  })
-  .strict()
+  .discriminatedUnion('mappingScope', [
+    z
+      .object({
+        ...resolutionBase,
+        mappingScope: z.literal('provider_identity'),
+        identityCandidateId: publicIdSchema,
+        playerIdentityId: aflTradeContentAddressedIdSchema('provider-player-identity'),
+        playerId: publicIdSchema,
+        assignment: activeAssignmentSchema('player'),
+      })
+      .strict(),
+    z
+      .object({
+        ...resolutionBase,
+        mappingScope: z.literal('candidate_only'),
+        identityCandidateId: publicIdSchema,
+        playerIdentityId: z.null(),
+        playerId: publicIdSchema,
+        assignment: z.null(),
+      })
+      .strict(),
+  ])
   .superRefine((resolution, context) => {
-    if (resolution.assignment.decisionId !== resolution.decision.id) {
+    if (
+      resolution.mappingScope === 'provider_identity' &&
+      resolution.assignment.decisionId !== resolution.decision.id
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['assignment', 'decisionId'],
@@ -1263,6 +1279,16 @@ export type AflTradeProviderAppearanceCandidateContent = z.infer<
 export type AflTradeProviderAppearanceCandidate = z.infer<
   typeof aflTradeProviderAppearanceCandidateSchema
 >;
+
+/** Structural receipt validation only; current authority remains with persistence. */
+export function parseAflTradeFactualPlayerResolution(input: unknown) {
+  return playerResolutionSchema.parse(input);
+}
+
+/** Structural receipt validation only; current authority remains with persistence. */
+export function parseAflTradeFactualClubResolution(input: unknown) {
+  return clubResolutionSchema.parse(input);
+}
 
 export function createAflTradeProviderAppearanceCandidate(
   content: unknown

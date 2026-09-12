@@ -187,6 +187,21 @@ export const factualInputSchema = z
     z
       .object({
         ...factualInputBaseShape,
+        kind: z.literal('hpn_pav_measurement'),
+        state: z.literal('finalized'),
+        memberId: aflTradeContentAddressedIdSchema('hpn-pav-measurement'),
+        playerId: publicIdSchema,
+        clubId: publicIdSchema,
+        spellVersionId: aflTradeContentAddressedIdSchema('acquisition-spell-version'),
+        calculationId: aflTradeContentAddressedIdSchema('hpn-pav-season'),
+        inputSetId: aflTradeContentAddressedIdSchema('hpn-pav-input-set'),
+        methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+        seasonYear: seasonSchema,
+      })
+      .strict(),
+    z
+      .object({
+        ...factualInputBaseShape,
         kind: z.literal('acquisition_spell_metric'),
         state: z.literal('complete'),
         playerId: publicIdSchema,
@@ -386,7 +401,11 @@ export const aflTradeCorpusFactualLineageSchema = z
 
 const valuationDatasetRowContentSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_VALUATION_DATASET_ROW_SCHEMA_VERSION),
+    schemaVersion: z.enum([
+      AFL_TRADE_VALUATION_DATASET_ROW_SCHEMA_VERSION,
+      'afl-trade-valuation-dataset-row/v4',
+    ]),
+    pavObservationId: aflTradeContentAddressedIdSchema('player-pav-observation').optional(),
     ordinal: z.number().int().positive().max(1_000_000),
     rowKey: publicIdSchema,
     competition: z.enum(['AFLM', 'AFLW']),
@@ -420,10 +439,25 @@ const valuationDatasetRowContentSchema = z
       })
       .strict(),
     featureInputs: z.array(factualInputSchema).min(1).max(1000),
-    targetInputs: z.array(factualInputSchema).min(1).max(1000),
+    targetInputs: z.array(factualInputSchema).max(1000),
   })
   .strict()
   .superRefine((row, context) => {
+    const pav = row.schemaVersion === 'afl-trade-valuation-dataset-row/v4';
+    if (
+      (!pav && row.targetInputs.length === 0) ||
+      pav !== (row.pavObservationId !== undefined) ||
+      [...row.featureInputs, ...row.targetInputs].some(({ kind }) =>
+        pav ? kind !== 'hpn_pav_measurement' : kind === 'hpn_pav_measurement'
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['featureInputs'],
+        message:
+          'PAV measurements require an explicit v4 row and original observation binding; scalar rows remain unchanged.',
+      });
+    }
     if (!exactUniqueSorted(row.cohortIds, (value) => value)) {
       context.addIssue({
         code: 'custom',
@@ -537,7 +571,21 @@ const requiredSourceUsesSchema = z
 
 const valuationDatasetCandidateContentSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_VALUATION_DATASET_CANDIDATE_SCHEMA_VERSION),
+    schemaVersion: z.enum([
+      AFL_TRADE_VALUATION_DATASET_CANDIDATE_SCHEMA_VERSION,
+      'afl-trade-valuation-dataset/v5',
+    ]),
+    pavObservationSet: z
+      .object({
+        requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
+        observationSetId: aflTradeContentAddressedIdSchema('player-pav-observation-set'),
+        artifact: aflTradeArtifactRefSchema.refine(
+          ({ mediaType }) => mediaType === 'application/json',
+          'The retained original PAV observation set must be a canonical JSON artifact.'
+        ),
+      })
+      .strict()
+      .optional(),
     authorityBoundary: z.literal(
       'private_factual_feature_dataset_no_model_fit_grade_publication_or_fantasy_ownership'
     ),
@@ -566,6 +614,21 @@ const valuationDatasetCandidateContentSchema = z
   })
   .strict()
   .superRefine((candidate, context) => {
+    const pav = candidate.schemaVersion === 'afl-trade-valuation-dataset/v5';
+    if (
+      pav !== (candidate.pavObservationSet !== undefined) ||
+      (pav && candidate.environment === 'production') ||
+      candidate.rows.some(
+        ({ content }) => (content.schemaVersion === 'afl-trade-valuation-dataset-row/v4') !== pav
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pavObservationSet'],
+        message:
+          'Only explicit non-production v5 datasets bind PAV observation artifacts and v4 rows.',
+      });
+    }
     const specification = candidate.specification.content;
     if (
       specification.environment !== candidate.environment ||
@@ -995,6 +1058,15 @@ export function listAflTradeValuationDatasetArtifactMemberships(
   const content = candidate.content;
   const specification = content.specification.content;
   return [
+    ...(content.pavObservationSet
+      ? [
+          {
+            role: 'pav_observation_set' as const,
+            ordinal: 1,
+            reference: content.pavObservationSet.artifact,
+          },
+        ]
+      : []),
     { role: 'dataset' as const, ordinal: 1, reference: content.datasetArtifact },
     { role: 'exclusion_report' as const, ordinal: 1, reference: content.exclusionReport },
     { role: 'extractor_code' as const, ordinal: 1, reference: content.extractor.codeArtifact },

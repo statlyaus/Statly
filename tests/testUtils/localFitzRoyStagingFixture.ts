@@ -10,8 +10,11 @@ import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '@/server/aflTrade
 import { PostgresAflTradeProviderObservationRepository } from '@/server/aflTradeIntelligence/source/postgresProviderObservationRepository';
 import { PostgresAflTradeSourceCaptureRepository } from '@/server/aflTradeIntelligence/source/postgresSourceCaptureRepository';
 
-export async function stageLocalAflTradeFitzRoyFixture(client: AflOutcomeSqlClient) {
-  const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture();
+export async function stageLocalAflTradeFitzRoyFixture(
+  client: AflOutcomeSqlClient,
+  options?: Parameters<typeof createLocalAflTradeFitzRoyFactualRehearsalFixture>[0]
+) {
+  const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
   const fieldMap = fixture.command.fieldMap;
   const fieldMapSha256 = createAflTradeFitzRoyFieldMapSha256(fieldMap);
   await client.query(
@@ -64,16 +67,15 @@ export async function stageLocalAflTradeFitzRoyFixture(client: AflOutcomeSqlClie
       decoderExecutor: fixture.decoderExecutor,
       clock: {
         now: () =>
-          normalizationTimes.shift() ??
-          LOCAL_FITZROY_REHEARSAL_INSTANTS.normalizationCompletedAt,
+          normalizationTimes.shift() ?? LOCAL_FITZROY_REHEARSAL_INSTANTS.normalizationCompletedAt,
       },
       dependencyLockSha256: LOCAL_FITZROY_REHEARSAL_RUNTIME.dependencyLockSha256,
       imageDigest: LOCAL_FITZROY_REHEARSAL_RUNTIME.imageDigest,
       timeoutMs: 30_000,
       maximumSourceBytes: 1_024,
       maximumRows: 10,
-      maximumFields: 20,
-      maximumCells: 200,
+      maximumFields: options?.profile === 'hpn_player_stats' ? 25 : 20,
+      maximumCells: options?.profile === 'hpn_player_stats' ? 250 : 200,
       maximumCellBytes: 1_024,
       maximumOutputBytes: 65_536,
       egressExecutionVerifier: fixture.captureDependencies.egressExecutionVerifier,

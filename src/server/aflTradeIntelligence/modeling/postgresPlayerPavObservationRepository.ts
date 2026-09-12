@@ -1,9 +1,13 @@
-import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
+import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import { z } from 'zod';
+
+import { aflTradeContentAddressedIdSchema } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import { aflTradeFinalizedHpnPavCalculationSchema } from './hpnPavCalculationService';
+import { createAflTradePlayerPavCalculationEvidence } from './playerPavCalculationEvidence';
 import {
   aflTradePlayerPavObservationSetSchema,
   aflTradePlayerPavPolicySchema,
@@ -16,6 +20,7 @@ import {
   aflTradePlayerPavMaterializationRequestSchema,
   type AflTradePlayerPavExecutionContext,
   type AflTradePlayerPavObservationRepository,
+  type PersistedAflTradePlayerPavObservationSet,
 } from './playerPavObservationRepository';
 import {
   materializeAflTradePlayerPavObservationSet,
@@ -56,6 +61,21 @@ interface ObservationSetRow {
   actual_observation_count: number;
 }
 
+export type AflTradePrivatePlayerPavMaterializationAuthority = Readonly<{
+  requestId: string;
+}>;
+
+const privateAuthoritySchema = z
+  .object({
+    requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
+    policyId: aflTradeContentAddressedIdSchema('player-pav-policy'),
+    releaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+    knowledgeCutoffAt: z.iso.datetime({ offset: true }),
+    predictionSeasons: z.array(z.number().int().min(1998).max(2200)).min(4),
+    requiredMeasurementSeasons: z.array(z.number().int().min(1998).max(2200)).min(1),
+  })
+  .passthrough();
+
 function digestFromId(id: string, prefix: string): string {
   const marker = `${prefix}:`;
   if (!id.startsWith(marker)) throw new TypeError(`Expected ${prefix} content address.`);
@@ -70,6 +90,12 @@ function iso(value: Date | string): string {
 
 function dateOnly(value: Date | string): string {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    const year = String(value.getFullYear()).padStart(4, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
   return iso(value).slice(0, 10);
 }
 
@@ -169,25 +195,32 @@ async function loadPredictions(
   transaction: AflOutcomeSqlTransaction,
   releaseId: string,
   environment: AflTradePlayerPavExecutionContext['environment'],
-  policy: AflTradePlayerPavPolicy
+  policy: AflTradePlayerPavPolicy,
+  requireActiveRelease = true
 ): Promise<AflTradeReleasedPlayerSpellPrediction[]> {
   const seasons = reviewedPredictionSeasons(policy);
+  const releaseSelection = requireActiveRelease
+    ? `FROM outcome_active_release active
+       JOIN outcome_release_manifest release ON release.release_id=active.release_id`
+    : 'FROM outcome_release_manifest release';
+  const lockedAuthority = requireActiveRelease
+    ? 'active,release,member,spell'
+    : 'release,member,spell';
   const result = await transaction.query<SpellRow>(
     `SELECT spell.spell_version_id,spell.spell_id,spell.player_id,spell.club_id,
        spell.start_date,spell.end_date,spell.recorded_at,reviewed.prediction_season
-     FROM outcome_active_release active
-     JOIN outcome_release_manifest release ON release.release_id=active.release_id
+     ${releaseSelection}
      JOIN outcome_release_acquisition_spell member ON member.release_id=release.release_id
      JOIN outcome_acquisition_spell_version spell
        ON spell.spell_version_id=member.spell_version_id
      CROSS JOIN unnest($4::integer[]) AS reviewed(prediction_season)
-     WHERE active.release_id=$1 AND release.environment=$2::TEXT
+     WHERE release.release_id=$1 AND release.environment=$2::TEXT
        AND release.manifest_json#>>'{content,competition}'=$3
        AND spell.status='approved'::"OutcomeRecordStatus"
        AND spell.start_date<=make_date(reviewed.prediction_season,12,31)
        AND (spell.end_date IS NULL OR spell.end_date>=make_date(reviewed.prediction_season,12,31))
      ORDER BY reviewed.prediction_season,spell.player_id,spell.spell_version_id
-     FOR SHARE OF active,release,member,spell`,
+     FOR SHARE OF ${lockedAuthority}`,
     [releaseId, environment, policy.content.competition, seasons]
   );
   const representedPartitions = new Set(
@@ -274,35 +307,14 @@ async function loadCalculations(
         'A selected player-PAV calculation has incomplete durable membership.'
       );
     }
-    const calculationSha256 = digestFromId(calculation.calculationId, 'hpn-pav-season');
-    return {
-      calculation: {
-        calculationId: calculation.calculationId,
-        calculationSha256,
-        inputSetId: calculation.content.inputSetId,
-        methodId: calculation.content.methodId,
-        seasonYear: calculation.content.seasonYear,
-        effectiveThrough: calculation.content.effectiveThrough,
-        calculatedAt: calculation.content.calculatedAt,
-      },
-      playerValues: calculation.content.players.map((player) => ({
-        calculationId: calculation.calculationId,
-        calculationSha256,
-        seasonYear: calculation.content.seasonYear,
-        effectiveThrough: calculation.content.effectiveThrough,
-        calculatedAt: calculation.content.calculatedAt,
-        spellVersionId: player.spellVersionId,
-        playerId: player.playerId,
-        playerSha256: sha256AflTradeCanonicalJson(player),
-        clubId: player.teamId,
-        sourceRowIds: player.source.sourceRowIds,
-        gamesPlayed: player.source.gamesPlayed,
-        offensivePav: player.offensivePav,
-        midfieldPav: player.midfieldPav,
-        defensivePav: player.defensivePav,
-        totalPav: player.totalPav,
-      })),
-    };
+    return createAflTradePlayerPavCalculationEvidence({
+      calculation,
+      environment: policy.content.environment,
+      competition: policy.content.competition,
+      methodId: policy.content.methodId,
+      seasonYears: seasons,
+      knowledgeCutoffAt,
+    });
   });
 }
 
@@ -667,7 +679,118 @@ export class PostgresAflTradePlayerPavObservationRepository implements AflTradeP
     }
   }
 
+  async materializePrivateAndPersist(
+    authority: AflTradePrivatePlayerPavMaterializationAuthority
+  ): Promise<PersistedAflTradePlayerPavObservationSet> {
+    return this.client.transaction(async (transaction) => {
+      await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
+      const loaded = await transaction.query<{ readonly binding_json: unknown }>(
+        'SELECT load_outcome_private_player_pav_authority($1) AS binding_json',
+        [authority.requestId]
+      );
+      const currentAuthority = privateAuthoritySchema.parse(loaded.rows[0]?.binding_json);
+      if (currentAuthority.requestId !== authority.requestId) {
+        throw new AflTradePlayerPavObservationError(
+          'RELEASE_NOT_CURRENT',
+          'Private player-PAV authority belongs to another dispatch.'
+        );
+      }
+      await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+        `outcome-player-pav-set:non_production:${currentAuthority.releaseId}:${currentAuthority.policyId}:${currentAuthority.knowledgeCutoffAt}`,
+      ]);
+      const policy = await loadPolicy(transaction, currentAuthority.policyId, 'non_production');
+      const predictions = await loadPredictions(
+        transaction,
+        currentAuthority.releaseId,
+        'non_production',
+        policy,
+        false
+      );
+      const selectedPredictionSeasons = [
+        ...new Set(predictions.map(({ predictionSeason }) => predictionSeason)),
+      ].sort((left, right) => left - right);
+      if (
+        canonicalizeAflTradeJson(selectedPredictionSeasons) !==
+        canonicalizeAflTradeJson(currentAuthority.predictionSeasons)
+      ) {
+        throw new AflTradePlayerPavObservationError(
+          'SPELL_MEMBERSHIP_INCOMPLETE',
+          'Private player-PAV spell membership differs from its authenticated season authority.'
+        );
+      }
+      const calculations = await loadCalculations(
+        transaction,
+        policy,
+        predictions,
+        currentAuthority.knowledgeCutoffAt
+      );
+      const selectedMeasurementSeasons = calculations
+        .map(({ calculation }) => calculation.seasonYear)
+        .sort((left, right) => left - right);
+      if (
+        canonicalizeAflTradeJson(selectedMeasurementSeasons) !==
+        canonicalizeAflTradeJson(currentAuthority.requiredMeasurementSeasons)
+      ) {
+        throw new AflTradePlayerPavObservationError(
+          'CALCULATION_EVIDENCE_INCOMPLETE',
+          'Private player-PAV calculations differ from authenticated measurement authority.'
+        );
+      }
+      const replay = await findReplay(
+        transaction,
+        'non_production',
+        currentAuthority.releaseId,
+        currentAuthority.policyId,
+        currentAuthority.knowledgeCutoffAt
+      );
+      if (replay) {
+        await requireCurrentAuthority(transaction, replay, policy, predictions);
+        return { observationSet: replay, idempotentReplay: true };
+      }
+      const createdAt = await trustedNow(transaction);
+      const observationSet = materializeAflTradePlayerPavObservationSet({
+        environment: 'non_production',
+        competition: 'AFLM',
+        createdAt,
+        knowledgeCutoffAt: currentAuthority.knowledgeCutoffAt,
+        releaseId: currentAuthority.releaseId,
+        policy,
+        predictions,
+        calculations,
+      });
+      await persistSet(transaction, observationSet);
+      return { observationSet, idempotentReplay: false };
+    });
+  }
+
   async loadFinalized(input: unknown, execution: AflTradePlayerPavExecutionContext) {
+    return this.loadWithAuthority(input, execution);
+  }
+
+  async loadFinalizedPrivate(input: { requestId: string; observationSetId: string }) {
+    let requestId: string;
+    try {
+      requestId = aflTradeContentAddressedIdSchema('private-valuation-dispatch').parse(
+        input.requestId
+      );
+    } catch (error) {
+      throw new AflTradePlayerPavObservationError(
+        'INVALID_REQUEST',
+        error instanceof Error ? error.message : 'Invalid private player-PAV request.'
+      );
+    }
+    return this.loadWithAuthority(
+      { observationSetId: input.observationSetId, environment: 'non_production' },
+      { environment: 'non_production' },
+      requestId
+    );
+  }
+
+  private async loadWithAuthority(
+    input: unknown,
+    execution: AflTradePlayerPavExecutionContext,
+    privateRequestId?: string
+  ) {
     let request: ReturnType<typeof aflTradeFinalizedPlayerPavObservationSetRequestSchema.parse>;
     try {
       request = aflTradeFinalizedPlayerPavObservationSetRequestSchema.parse(input);
@@ -721,7 +844,37 @@ export class PostgresAflTradePlayerPavObservationRepository implements AflTradeP
           'Player-PAV observation-set child counts drifted.'
         );
       }
-      await requireCurrentAuthority(transaction, set);
+      if (privateRequestId === undefined) {
+        await requireCurrentAuthority(transaction, set);
+      } else {
+        const authority = await transaction.query<{ binding_json: unknown }>(
+          'SELECT load_outcome_private_player_pav_authority($1) AS binding_json',
+          [privateRequestId]
+        );
+        const binding = privateAuthoritySchema.parse(authority.rows[0]?.binding_json);
+        if (
+          authority.rows.length !== 1 ||
+          binding.requestId !== privateRequestId ||
+          binding.releaseId !== set.content.releaseId ||
+          binding.policyId !== set.content.policy.policyId ||
+          binding.methodId !== set.content.policy.content.methodId ||
+          binding.knowledgeCutoffAt !== set.content.knowledgeCutoffAt
+        ) {
+          throw new AflTradePlayerPavObservationError(
+            'RELEASE_NOT_CURRENT',
+            'Retained player-PAV observations differ from the exact private authority.'
+          );
+        }
+        const policy = await loadPolicy(transaction, binding.policyId, 'non_production');
+        const predictions = await loadPredictions(
+          transaction,
+          binding.releaseId,
+          'non_production',
+          policy,
+          false
+        );
+        await requireCurrentAuthority(transaction, set, policy, predictions);
+      }
       return set;
     });
   }

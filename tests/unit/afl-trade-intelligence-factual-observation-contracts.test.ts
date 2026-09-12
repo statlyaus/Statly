@@ -16,6 +16,8 @@ import {
   type AflTradeSourceFact,
 } from '@/server/aflTradeIntelligence/outcomes/factualObservationContracts';
 import { AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY } from '@/types/aflDraftTradeOutcomes';
+import { PostgresAflTradeFactualObservationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresFactualObservationRepository';
+import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 
 const digest = (character: string) => character.repeat(64);
 
@@ -355,6 +357,141 @@ function batchContent(facts: readonly AflTradeSourceFact[]) {
 }
 
 describe('AFL trade factual source contracts', () => {
+  it('retains an exact candidate-only appearance without inventing a reusable player identity', () => {
+    const player = {
+      ...playerResolution(),
+      mappingScope: 'candidate_only',
+      playerIdentityId: null,
+      assignment: null,
+    };
+    const fact = createAflTradeSourceFact(appearanceContent({ player }));
+    expect(fact.content).toMatchObject({ player });
+    expect(createAflTradeSourceFact(structuredClone(fact.content))).toEqual(fact);
+  });
+
+  it('rejects mixed candidate-only identity fields and a different appearance candidate', () => {
+    const original = playerResolution();
+    const player = {
+      ...original,
+      mappingScope: 'candidate_only',
+      playerIdentityId: null,
+      assignment: null,
+    };
+    for (const invalid of [
+      { ...player, playerIdentityId: original.playerIdentityId },
+      { ...player, assignment: original.assignment },
+      { ...player, identityCandidateId: 'identity-candidate:other' },
+      { ...original, assignment: null },
+    ])
+      expect(() => createAflTradeSourceFact(appearanceContent({ player: invalid }))).toThrow();
+  });
+
+  it('keeps occurrence-only player custody identical across a match metric and its appearance', () => {
+    const player = {
+      ...playerResolution(),
+      mappingScope: 'candidate_only',
+      playerIdentityId: null,
+      assignment: null,
+    };
+    const appearance = createAflTradeSourceFact(appearanceContent({ player }));
+    const metric = createAflTradeSourceFact(metricContent(appearance.factId, { player }));
+    expect(
+      createAflTradeSourceFactBatch(batchContent([appearance, metric])).content.counts
+    ).toMatchObject({
+      playerAppearances: 1,
+      playerMatchMetrics: 1,
+    });
+    const substituted = createAflTradeSourceFact(metricContent(appearance.factId));
+    expect(() => createAflTradeSourceFactBatch(batchContent([appearance, substituted]))).toThrow(
+      /exact appearance fact/
+    );
+  });
+
+  it('persists an occurrence-only appearance through the factual repository without a synthetic assignment', async () => {
+    const player = {
+      ...playerResolution(),
+      mappingScope: 'candidate_only',
+      playerIdentityId: null,
+      assignment: null,
+    };
+    const emptyIssueSet = immutableReference('provider-resolution-issue-set', 'unused');
+    emptyIssueSet.id = createAflTradeContentAddress('provider-resolution-issue-set', {
+      normalizationRunId,
+      providerDecodedRowId: 'provider-row:fixture',
+      issues: [],
+    });
+    emptyIssueSet.sha256 = emptyIssueSet.id.split(':')[1]!;
+    const content = appearanceContent({ player });
+    content.source.issueSet = emptyIssueSet;
+    const fact = createAflTradeSourceFact(content);
+    const batch = batchContent([fact]);
+    batch.rowAccounting[0]!.issueSet = emptyIssueSet;
+    batch.sourceIssueSetSha256 = sha256AflTradeCanonicalJson(
+      batch.rowAccounting.map(
+        ({
+          providerDecodedRowId,
+          issueSet,
+          issueIds,
+          blockingIssueIds,
+          blockingIssueClosures,
+        }) => ({
+          providerDecodedRowId,
+          issueSet,
+          issueIds,
+          blockingIssueIds,
+          blockingIssueClosures,
+        })
+      )
+    );
+    const client: AflOutcomeSqlClient = {
+      transaction: async (work) => work(client),
+      query: async <Row>(sql: string) => {
+        let rows: unknown[] = [];
+        if (sql.includes('FROM outcome_provider_normalization_run r'))
+          rows = [
+            {
+              normalization_run_id: normalizationRunId,
+              capture_id: 'source-capture:fixture',
+              staging_sha256: stagingSha256,
+              source_row_count: 1,
+              issue_count: 0,
+              finalized_at: normalizationFinalizedAt,
+              field_map_sha256: digest('4'),
+              environment: 'test_fixture',
+              provider: 'official_afl',
+              capability_id: 'official-afl-player-stats',
+              competition: 'AFLM',
+            },
+          ];
+        else if (sql.includes('FROM outcome_provider_decoded_row r'))
+          rows = [
+            {
+              provider_decoded_row_id: 'provider-row:fixture',
+              source_row_number: 1,
+              source_row_sha256: digest('1'),
+              row_status: 'staged',
+              identity_candidate_sha256: digest('7'),
+              match_candidate_sha256: digest('8'),
+            },
+          ];
+        else if (sql.includes('SELECT finalized_at FROM outcome_provider_fact_batch'))
+          rows = [{ finalized_at: batch.createdAt }];
+        return { rows: rows as Row[], rowCount: rows.length };
+      },
+    };
+    await expect(
+      new PostgresAflTradeFactualObservationRepository(client).persistBatch(
+        createAflTradeSourceFactBatch(batch),
+        { environment: 'test_fixture' }
+      )
+    ).resolves.toMatchObject({
+      factCount: 1,
+      sourceRowCount: 1,
+      idempotentReplay: false,
+      publicationEligible: false,
+    });
+  });
+
   it('content-addresses facts and exhaustive batches deterministically', () => {
     const candidate = appearanceCandidate();
     const replayedCandidate = createAflTradeProviderAppearanceCandidate(

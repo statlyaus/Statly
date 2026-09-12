@@ -2,17 +2,21 @@ import {
   createAflTradeByteArtifactRef,
   createAflTradeCanonicalJsonArtifactRef,
 } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createLocalAflTradeAflTablesResultsAuthority,
   createLocalAflTradeFiveSeasonAflTablesAuthority,
 } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { assembleLocalAflTradeHpnLeagueSeasonReviewPacket } from '@/server/aflTradeIntelligence/development/localHpnLeagueSeasonReviewAssembler';
+import type { LocalAflTradeHpnReviewSnapshot } from '@/server/aflTradeIntelligence/development/localHpnReviewSnapshot';
+import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlQueryResult,
   AflOutcomeSqlTransaction,
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 import {
   createAflTradePrivateReviewedEvidenceBundle,
   createAflTradePrivateReviewedEvidenceEvaluationDecision,
@@ -31,8 +35,65 @@ const method = createAflTradeHpnPavMethod({
   capturedAt: '2026-08-16T02:00:00.000Z',
 });
 
-function snapshot(input: { withMethod?: boolean; withResults?: boolean } = {}) {
+type SnapshotSource = LocalAflTradeHpnReviewSnapshot['sources'][number];
+
+function footywireSource(seasonYear = 2025) {
+  const exactOrderedFields = [
+    'Player', 'Match_id', 'Team', 'HO', 'GA', 'I50', 'M', 'MI5', 'FF', 'FA',
+    'R50', 'One.Percenters', 'CL', 'T', 'G', 'B',
+  ];
+  const baseRights = createLocalAflTradeFiveSeasonAflTablesAuthority(seasonYear)
+    .capture.sourceRights.content;
+  const rightsContent = {
+    ...baseRights,
+    provider: 'footywire',
+    dataset: 'FootyWire player statistics fixture',
+    acquisition: {
+      ...baseRights.acquisition,
+      capabilities: [{
+        capabilityId: 'footywire-player-stats',
+        provider: 'footywire',
+        directFunction: 'fetch_player_stats_footywire',
+      }],
+    },
+    fields: exactOrderedFields.map((sourceField) => ({
+      ...baseRights.fields[0]!, sourceField, normalizedField: sourceField,
+    })),
+  };
+  const rights = aflTradeSourceRightsProposalSchema.parse({
+    rightsArtifactId: createAflTradeContentAddress('source-rights', rightsContent),
+    content: rightsContent,
+  });
+  return {
+    seasonYear,
+    captureId: `capture:footywire:${seasonYear}`,
+    provider: 'footywire',
+    capabilityId: 'footywire-player-stats',
+    normalizationRunId: `provider-normalization-run:${'6'.repeat(64)}`,
+    providerDecodeMap: {
+      mapId: `footywire-player-stats-fixture-${seasonYear}`,
+      capabilityId: 'footywire-player-stats',
+      sourceSchemaSha256: 'a'.repeat(64),
+      exactOrderedFields,
+      validFromSeason: seasonYear,
+      validThroughSeason: seasonYear,
+    },
+    rights,
+    rightsArtifact: createAflTradeCanonicalJsonArtifactRef(rights, rights.content.proposedAt),
+    hpnResultProjection: null,
+    hpnPlayerProjection: null,
+    factualRunId: null,
+    hpnResolutionsCurrent: false,
+  } as const;
+}
+
+function snapshot(input: {
+  withMethod?: boolean;
+  withResults?: boolean;
+  additionalPlayerSources?: readonly SnapshotSource[];
+} = {}) {
   const withResults = input.withResults ?? true;
+  const additionalPlayerSources = input.additionalPlayerSources ?? [];
   const authority2024 = createLocalAflTradeFiveSeasonAflTablesAuthority(2024);
   const authority2025 = createLocalAflTradeFiveSeasonAflTablesAuthority(2025);
   const results2024 = createLocalAflTradeAflTablesResultsAuthority(2024);
@@ -97,10 +158,15 @@ function snapshot(input: { withMethod?: boolean; withResults?: boolean } = {}) {
             },
           ]
         : []),
+      ...additionalPlayerSources.map(({ captureId, provider, capabilityId, seasonYear }) => ({
+        captureId, provider, capabilityId, seasonYear, sourceArtifact: sourceArtifact(seasonYear),
+      })),
     ],
-    sourceRightsEvidenceRefs: withResults
-      ? [rightsArtifact, resultsRightsArtifact]
-      : [rightsArtifact],
+    sourceRightsEvidenceRefs: [
+      rightsArtifact,
+      ...(withResults ? [resultsRightsArtifact] : []),
+      ...additionalPlayerSources.map(({ rightsArtifact: artifact }) => artifact),
+    ],
     createdAt: '2026-08-16T03:30:00.000Z',
   });
   const evidenceBundleArtifact = createAflTradeCanonicalJsonArtifactRef(
@@ -167,6 +233,7 @@ function snapshot(input: { withMethod?: boolean; withResults?: boolean } = {}) {
       playerSource(2024, authority2024.fieldMap, '4'),
       ...(withResults ? [resultSource(2025, results2025.fieldMap, '3')] : []),
       playerSource(2025, authority2025.fieldMap, '5'),
+      ...additionalPlayerSources,
     ],
   };
 }
@@ -186,6 +253,48 @@ class FixtureClient implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
 }
 
 describe('local HPN league-season review assembler', () => {
+  it('selects FootyWire corroboration while retaining field-map and identity review blockers', async () => {
+    const source = footywireSource();
+    const client = new FixtureClient(snapshot({
+      withMethod: true, additionalPlayerSources: [source],
+    }));
+    const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
+      client,
+      { valuationScopeKey: 'workbook:2025', fromSeason: 2025, throughSeason: 2025 }
+    );
+
+    expect(client.statements[0]).toContain("'footywire-player-stats'");
+    const corroborating = assembled.eligibilityReports[0]!.report.content.sources.find(
+      ({ role }) => role === 'corroborating'
+    )!;
+    expect(corroborating).toMatchObject({
+      selectionState: 'selected',
+      provider: 'footywire',
+      normalizationRunId: source.normalizationRunId,
+      fields: expect.arrayContaining([
+        expect.objectContaining({
+          semanticField: 'player',
+          sourceFields: ['Player'],
+          state: 'blocked',
+          fieldMapReview: expect.objectContaining({ state: 'missing' }),
+          factualReview: expect.objectContaining({ state: 'missing' }),
+          canonicalIdentity: expect.objectContaining({ state: 'incomplete' }),
+          sourceUse: expect.objectContaining({ state: 'permitted_private_calculation' }),
+        }),
+      ]),
+    });
+    const footywireCandidate = assembled.fieldMapCandidates.find(
+      ({ candidate }) => candidate.content.provider === 'footywire'
+    );
+    expect(footywireCandidate?.candidate.content).toMatchObject({
+      provider: 'footywire',
+      capabilityId: 'footywire-player-stats',
+      reviewState: 'requires_review',
+      publicationProhibited: true,
+    });
+    expect(assembled.packet.content).toMatchObject({ state: 'blocked', publicationProhibited: true });
+  });
+
   it('derives one immutable blocked packet from the exact database snapshot', async () => {
     const client = new FixtureClient();
     const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(client, {
@@ -254,6 +363,58 @@ describe('local HPN league-season review assembler', () => {
     expect(assembled.documents).toEqual(
       expect.arrayContaining([expect.objectContaining({ artifactRef: assembled.packetArtifact })])
     );
+  });
+
+  it.each([
+    ['official_afl', 'footywire-player-stats'],
+    ['afl_tables', 'footywire-player-stats'],
+    ['footywire', 'official-afl-player-stats'],
+    ['footywire', 'afl-tables-player-stats'],
+    ['footywire', 'afl-tables-results'],
+  ] as const)('rejects mismatched provider %s and capability %s', async (provider, capabilityId) => {
+    const row = snapshot({ additionalPlayerSources: [footywireSource()] });
+    row.sources_json[4] = { ...row.sources_json[4]!, provider, capabilityId };
+
+    await expect(assembleLocalAflTradeHpnLeagueSeasonReviewPacket(new FixtureClient(row), {
+      valuationScopeKey: 'workbook:2025', fromSeason: 2025, throughSeason: 2025,
+    })).rejects.toThrow(/provider.*capability/i);
+  });
+
+  it('rejects ambiguous FootyWire and official AFL corroborating captures', async () => {
+    const source = footywireSource(2026);
+    const official = createLocalAflTradeOfficialAfl2026Authority();
+    const rights = official.capture.sourceRights;
+    const row = snapshot({ additionalPlayerSources: [
+      source,
+      {
+        ...source,
+        captureId: 'capture:official-afl:2026',
+        provider: 'official_afl',
+        capabilityId: 'official-afl-player-stats',
+        normalizationRunId: `provider-normalization-run:${'7'.repeat(64)}`,
+        providerDecodeMap: official.fieldMap,
+        rights,
+        rightsArtifact: createAflTradeCanonicalJsonArtifactRef(rights, rights.content.proposedAt),
+      },
+    ] });
+
+    await expect(assembleLocalAflTradeHpnLeagueSeasonReviewPacket(new FixtureClient(row), {
+      valuationScopeKey: 'workbook:2025', fromSeason: 2026, throughSeason: 2026,
+    })).rejects.toThrow(/corroborating player-stat source selection is ambiguous/i);
+  });
+
+  it('does not use FootyWire evidence from another season for corroboration', async () => {
+    const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
+      new FixtureClient(snapshot({ additionalPlayerSources: [footywireSource(2024)] })),
+      { valuationScopeKey: 'workbook:2025', fromSeason: 2025, throughSeason: 2025 }
+    );
+
+    expect(assembled.eligibilityReports[0]!.report.content.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'corroborating', selectionState: 'missing', provider: null }),
+    ]));
+    expect(assembled.fieldMapCandidates.every(({ candidate }) =>
+      candidate.content.provider === 'afl_tables'
+    )).toBe(true);
   });
 
   it('rejects a stale reviewed-evidence head before constructing reports', async () => {

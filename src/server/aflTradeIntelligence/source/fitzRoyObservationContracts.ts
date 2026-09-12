@@ -177,6 +177,20 @@ const matchBindingsSchema = z
     awayClubNativeId: sourceFieldBindingSchema.nullable(),
     awayClubName: sourceFieldBindingSchema,
     status: sourceFieldBindingSchema.nullable(),
+    /** Home bindings describe the row's club until this explicit orientation is applied. */
+    rowClubOrientation: z
+      .object({
+        sourceField: fieldNameSchema,
+        required: z.literal(true),
+        homeValue: z.string().min(1),
+        awayValue: z.string().min(1),
+      })
+      .strict()
+      .refine(
+        (binding) => binding.homeValue !== binding.awayValue,
+        'Orientation labels must be distinct.'
+      )
+      .optional(),
   })
   .strict();
 
@@ -224,6 +238,8 @@ const fieldMapContentSchema = z
     approvalDecisionId: z.string().min(1).max(240),
     identity: identityBindingsSchema.nullable(),
     match: matchBindingsSchema.nullable(),
+    appearanceEvidence: z.literal('requires_independent_review').optional(),
+    statisticalInterpretation: z.literal('raw_evidence_only').optional(),
     metrics: z.array(metricBindingSchema),
     achievement: achievementBindingSchema.nullable(),
   })
@@ -281,12 +297,26 @@ function validateFieldMapObservationBindings(map: FieldMapContent, context: z.Re
   }
   if (
     map.observationKind === 'player_stat' &&
-    (map.identity === null || map.metrics.length === 0)
+    (map.identity === null ||
+      (map.metrics.length === 0 && map.statisticalInterpretation !== 'raw_evidence_only'))
   ) {
     addFieldMapIssue(
       context,
       'identity',
       'Player-stat maps need provider identity and metric bindings.'
+    );
+  }
+  if (
+    map.statisticalInterpretation === 'raw_evidence_only' &&
+    (map.observationKind !== 'player_stat' ||
+      map.metrics.length !== 0 ||
+      map.achievement !== null ||
+      map.appearanceEvidence !== 'requires_independent_review')
+  ) {
+    addFieldMapIssue(
+      context,
+      'statisticalInterpretation',
+      'Raw-evidence-only player maps must not assert metrics, achievements or participation.'
     );
   }
   if (
@@ -340,7 +370,7 @@ function collectBoundFields(map: {
     if (binding != null) fields.push(binding.sourceField);
   }
   for (const binding of Object.values(map.match ?? {})) {
-    if (binding !== null) fields.push(binding.sourceField);
+    if (binding != null) fields.push(binding.sourceField);
   }
   fields.push(...map.metrics.map((metric) => metric.sourceField));
   if (map.achievement?.evidenceField !== null && map.achievement?.evidenceField !== undefined) {
