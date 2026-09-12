@@ -2040,10 +2040,23 @@ describe.sequential(
         }).prepare(preparationInput),
       ]);
       const first = concurrent.find(({ state }) => state === 'prepared');
-      const replay = concurrent.find(({ state }) => state === 'already_prepared');
-      if (!first || !replay) {
+      if (!first) {
         throw new TypeError('Concurrent HPN preparation did not converge on one retained result.');
       }
+      expect(
+        concurrent
+          .map(({ state }) => state)
+          .every((state) => state === 'prepared' || state === 'already_prepared')
+      ).toBe(true);
+      expect(concurrent[1]).toEqual({ ...concurrent[0], state: concurrent[1]!.state });
+      const replay = await new PostgresAflTradePrivateValuationHpnPreparation(client, {
+        factualPreparation: {
+          prepare: async () => ({ state: 'already_prepared' as const, output }),
+        },
+        methodId: method.methodId,
+        methodAuthority,
+        captureSource,
+      }).prepare(preparationInput);
 
       expect(first).toMatchObject({
         state: 'prepared',
