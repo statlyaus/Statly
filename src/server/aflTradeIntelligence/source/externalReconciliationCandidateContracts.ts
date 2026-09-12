@@ -1,3 +1,8 @@
+import {
+  canonicalPickEntitlementSchema,
+  resolvedSpecialEntitlementSchema,
+} from './resolvedSpecialEntitlement';
+import { specialDraftEntitlementSchema } from './specialDraftEntitlement';
 import { z } from 'zod';
 
 import {
@@ -51,6 +56,8 @@ const transferSchema = z
     fromClubId: z.string().trim().min(1).max(240).nullable(),
     toClubId: z.string().trim().min(1).max(240).nullable(),
     asset: z.discriminatedUnion('kind', [
+      specialDraftEntitlementSchema,
+      resolvedSpecialEntitlementSchema,
       z
         .object({
           kind: z.literal('player'),
@@ -58,18 +65,7 @@ const transferSchema = z
           recordedName: z.string().trim().min(1).max(500),
         })
         .strict(),
-      z
-        .object({
-          kind: z.literal('pick_entitlement'),
-          pickId: aflTradeContentAddressedIdSchema('draft-pick'),
-          draftYear: z.number().int().min(1897).max(2200),
-          draftType: z.string().trim().min(1).max(80),
-          nominalRound: z.number().int().positive().nullable(),
-          nominalPick: z.number().int().positive().nullable(),
-          originalClubId: z.string().trim().min(1).max(240).nullable(),
-          recordedLabel: z.string().trim().min(1).max(500).nullable(),
-        })
-        .strict(),
+      canonicalPickEntitlementSchema,
     ]),
     status: statusSchema,
     evidenceIds: evidenceIdsSchema,

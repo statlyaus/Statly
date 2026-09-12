@@ -129,9 +129,8 @@ function records(): AflTradePromotionBackedPublicArchiveRecordInput[] {
   ];
 }
 
-function candidate(): AflTradePromotionBackedFactualCandidate {
+function candidate(sourceRecords = records()): AflTradePromotionBackedFactualCandidate {
   const promotionId = `external-canonical-promotion:${sha('d')}`;
-  const sourceRecords = records();
   const corpus = createAflTradePromotionBackedCorpus({
     environment: 'test_fixture',
     competition: 'AFLM',
@@ -204,6 +203,35 @@ describe('promotion-backed public factual archive', () => {
     expect(result.content.canonicalMemberSetSha256).toBe(
       candidate().content.canonicalMemberSetSha256
     );
+  });
+
+  it('retains a corrected event and rejects missing, cross-event, forked and cyclic predecessors', () => {
+    const original = records()[0];
+    if (original.recordKind !== 'transaction') throw new Error('Expected transaction fixture');
+    const corrected = {
+      ...original,
+      recordId: `event-version:${sha('0')}`,
+      eventVersionId: `event-version:${sha('0')}`,
+      supersedesVersionId: original.eventVersionId,
+      officialName: 'Corrected retained trade',
+    };
+    const seal = (rows: AflTradePromotionBackedPublicArchiveRecordInput[]) =>
+      createAflTradePromotionBackedPublicArchive({
+        candidate: candidate(rows),
+        createdAt: '2026-08-10T00:00:04.000Z',
+        records: rows,
+      });
+    const retained = [...records(), corrected];
+    expect(parseAflTradePromotionBackedPublicArchive(seal(retained))).toEqual(seal(retained));
+    expect(() => seal([...records(), { ...corrected, supersedesVersionId: 'missing' }])).toThrow();
+    expect(() => seal([...records(), { ...corrected, eventId: 'another-event' }])).toThrow();
+    expect(() => seal([...retained, {
+      ...corrected, recordId: 'fork', eventVersionId: 'fork',
+    }])).toThrow();
+    expect(() => seal([
+      { ...original, supersedesVersionId: corrected.eventVersionId },
+      ...records().slice(1), corrected,
+    ])).toThrow();
   });
 
   it('rejects omitted, substituted, or orphaned public facts', () => {

@@ -1,3 +1,4 @@
+import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
 import { z } from 'zod';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '../artifacts/artifactReference';
@@ -43,9 +44,10 @@ const eventSchema = z
   .object({
     eventVersionId: z.string().min(1),
     eventId: z.string().min(1),
+    supersedesVersionId: z.string().min(1).nullable().optional(),
     seasonYear: z.number().int(),
     kind: z.string().min(1),
-    eventDate: z.string().min(1),
+    eventDate: z.string().min(1).nullable(),
     officialName: z.string().min(1),
     parties: z.array(partySchema),
   })
@@ -56,6 +58,10 @@ const assetSchema = z
     eventVersionId: z.string().min(1),
     assetKey: z.string().min(1),
     kind: z.enum(['player', 'current_pick', 'future_pick', 'cash', 'list_right', 'other']),
+    specialEntitlement: z
+      .object({ entitlementId: z.string().min(1), award: specialEntitlementAwardSchema })
+      .passthrough()
+      .optional(),
     playerId: z.string().min(1).nullable(),
     pickId: z.string().min(1).nullable(),
     fromClubId: z.string().min(1).nullable(),
@@ -320,8 +326,9 @@ async function buildRecords(
           recordId: value.eventVersionId,
           eventId: value.eventId,
           eventVersionId: value.eventVersionId,
+          ...(value.supersedesVersionId ? { supersedesVersionId: value.supersedesVersionId } : {}),
           seasonYear: value.seasonYear,
-          occurredOn: dateOnly(value.eventDate),
+          occurredOn: value.eventDate === null ? null : dateOnly(value.eventDate),
           officialName: value.officialName,
           transactionType: value.kind,
           parties: value.parties.map((party) => ({
@@ -331,11 +338,14 @@ async function buildRecords(
           })),
         };
       }
+      if (value.eventDate === null)
+        throw new TypeError('Draft events require an exact occurrence date.');
       return {
         recordKind: 'draft_event',
         recordId: value.eventVersionId,
         eventId: value.eventId,
         eventVersionId: value.eventVersionId,
+        ...(value.supersedesVersionId ? { supersedesVersionId: value.supersedesVersionId } : {}),
         seasonYear: value.seasonYear,
         occurredOn: dateOnly(value.eventDate),
         officialName: value.officialName,
@@ -353,6 +363,15 @@ async function buildRecords(
         eventVersionId: value.eventVersionId,
         assetKey: value.assetKey,
         assetKind: value.kind,
+        ...(value.specialEntitlement
+          ? {
+              specialEntitlement: {
+                entitlementId: value.specialEntitlement.entitlementId,
+                entitlementType: value.specialEntitlement.award.content.asset.entitlementType,
+                sourceLabel: value.specialEntitlement.award.content.asset.sourceLabel,
+              },
+            }
+          : {}),
         rawDescription: value.rawDescription,
         player: value.playerId ? player(value.playerId) : null,
         pick: value.pickId ? pick(value.pickId) : null,

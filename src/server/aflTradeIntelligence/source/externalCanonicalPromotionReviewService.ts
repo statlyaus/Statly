@@ -40,7 +40,7 @@ const inputSchema = z
         z
           .object({
             transactionId: aflTradeContentAddressedIdSchema('external-transaction'),
-            occurredOn: z.iso.date(),
+            occurredOn: z.iso.date().nullable(),
           })
           .strict()
       )

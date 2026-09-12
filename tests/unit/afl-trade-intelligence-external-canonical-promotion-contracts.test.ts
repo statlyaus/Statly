@@ -5,6 +5,7 @@ import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from '@/server/aflTr
 import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import {
   AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
+  aflTradeExternalCanonicalPromotionProposalSchema,
   authenticateAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionRequest,
@@ -252,6 +253,76 @@ describe('external canonical promotion contracts', () => {
         proposal: derived,
       })
     ).toMatchObject({ candidateId: source.candidateId });
+  });
+
+  it('retains an explicitly reviewed year-only occurrence without inventing a day', () => {
+    const source = candidate({ undated: true });
+    const datedProposal = proposal([selectionId], source);
+    const partial = createAflTradeExternalCanonicalPromotionProposal({
+      ...datedProposal.content,
+      schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v4',
+      transactionDateCoverage: [{ transactionId, seasonYear: 2025, occurredOn: null }],
+    });
+    expect(
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate: source,
+        proposal: partial,
+      })
+    ).toMatchObject({ transactionCount: 1 });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate: candidate(),
+        proposal: {
+          ...partial,
+          content: { ...partial.content, candidateId: candidate().candidateId },
+        },
+      })
+    ).toThrow();
+    expect(() =>
+      aflTradeExternalCanonicalPromotionProposalSchema.parse({
+        ...partial,
+        content: {
+          ...partial.content,
+          schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
+        },
+      })
+    ).toThrow();
+    const derived = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: source,
+      proposedAt: datedProposal.content.proposedAt,
+      draftEvents: datedProposal.content.draftEventCoverage.map(
+        ({ draftYear, draftType, eventDate, officialName }) => ({
+          draftYear,
+          draftType,
+          eventDate,
+          officialName,
+        })
+      ),
+      transactionDates: [{ transactionId, occurredOn: null }],
+    });
+    expect(derived.content).toEqual(partial.content);
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate: candidate(),
+        proposedAt: datedProposal.content.proposedAt,
+        draftEvents: datedProposal.content.draftEventCoverage.map(
+          ({ draftYear, draftType, eventDate, officialName }) => ({
+            draftYear,
+            draftType,
+            eventDate,
+            officialName,
+          })
+        ),
+        transactionDates: [{ transactionId, occurredOn: null }],
+      })
+    ).toThrow(/conflicts with exact source evidence/);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...partial.content,
+        schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v4',
+        transactionDateCoverage: [{ transactionId, seasonYear: 2027, occurredOn: null }],
+      })
+    ).toThrow(/occurrence year cannot postdate/);
   });
 
   it('rejects reviewed dates outside the transaction season or after proposal time', () => {

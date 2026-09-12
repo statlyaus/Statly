@@ -73,7 +73,7 @@ const draftEventCoverageSchema = z
 const reviewedTransactionDateSchema = z
   .object({
     transactionId: transactionIdSchema,
-    occurredOn: z.iso.date(),
+    occurredOn: z.iso.date().nullable(),
   })
   .strict();
 
@@ -92,7 +92,9 @@ const proposalBaseSchema = z
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     draftEventCoverage: z.array(draftEventCoverageSchema).max(100),
-    transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+    transactionDateCoverage: z
+      .array(transactionDateCoverageSchema.extend({ occurredOn: z.iso.date() }))
+      .max(10_000),
     proposedAt: instantSchema,
     publicationEligible: z.literal(false),
   })
@@ -117,6 +119,10 @@ const combinedDraftSessionCoverageSchema = draftSessionCoverageSchema.safeExtend
 const proposalContentSchema = z
   .union([
     proposalBaseSchema,
+    proposalBaseSchema.extend({
+      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v4'),
+      transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+    }),
     proposalBaseSchema.extend({
       schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v2'),
       draftEventCoverage: z.array(draftSessionCoverageSchema).max(100),
@@ -205,6 +211,16 @@ const proposalContentSchema = z
       timeZone: 'Australia/Melbourne',
     });
     proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear }, index) => {
+      if (occurredOn === null) {
+        if (seasonYear > Number(proposedOn.slice(0, 4))) {
+          context.addIssue({
+            code: 'custom',
+            path: ['transactionDateCoverage', index],
+            message: 'Transaction occurrence year cannot postdate the promotion proposal.',
+          });
+        }
+        return;
+      }
       if (Number(occurredOn.slice(0, 4)) !== seasonYear) {
         context.addIssue({
           code: 'custom',
@@ -376,11 +392,15 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   const transactionDateCoverage = candidate.content.transactions
     .map((transaction) => {
       const supplied = suppliedDateByTransaction.get(transaction.transactionId);
-      if (transaction.occurredOn !== null && supplied && supplied !== transaction.occurredOn) {
+      if (
+        transaction.occurredOn !== null &&
+        supplied !== undefined &&
+        supplied !== transaction.occurredOn
+      ) {
         throw new TypeError('Reviewed transaction date conflicts with exact source evidence.');
       }
       const occurredOn = transaction.occurredOn ?? supplied;
-      if (!occurredOn) {
+      if (occurredOn === undefined) {
         throw new TypeError('Every promoted transaction requires one reviewed transaction date.');
       }
       return {
@@ -400,28 +420,32 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
     throw new TypeError('Reviewed transaction dates must exactly cover candidate transactions.');
   }
 
-  const proposal = createAflTradeExternalCanonicalPromotionProposal({
-    schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
-    candidateId: candidate.candidateId,
-    candidateSha256: candidate.candidateId.split(':')[1] ?? '',
-    environment: candidate.content.environment,
-    competition: candidate.content.competition,
-    anchorSeasonYear: candidate.content.anchorSeasonYear,
-    draftEventCoverage: expectedKeys.map((key) => {
-      const event = eventByKey.get(key);
-      const selectionIds = selectionIdsByKey.get(key);
-      if (!event || !selectionIds) throw new TypeError('Draft-event coverage derivation failed.');
-      return {
-        ...event,
-        expectedSelectionCount: selectionIds.length,
-        selectionIds,
-        status: 'complete' as const,
-      };
-    }),
-    transactionDateCoverage,
-    proposedAt,
-    publicationEligible: false,
-  });
+  const proposal = createAflTradeExternalCanonicalPromotionProposal(
+    proposalContentSchema.parse({
+      schemaVersion: transactionDateCoverage.some(({ occurredOn }) => occurredOn === null)
+        ? 'afl-trade-external-canonical-promotion-proposal/v4'
+        : AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
+      candidateId: candidate.candidateId,
+      candidateSha256: candidate.candidateId.split(':')[1] ?? '',
+      environment: candidate.content.environment,
+      competition: candidate.content.competition,
+      anchorSeasonYear: candidate.content.anchorSeasonYear,
+      draftEventCoverage: expectedKeys.map((key) => {
+        const event = eventByKey.get(key);
+        const selectionIds = selectionIdsByKey.get(key);
+        if (!event || !selectionIds) throw new TypeError('Draft-event coverage derivation failed.');
+        return {
+          ...event,
+          expectedSelectionCount: selectionIds.length,
+          selectionIds,
+          status: 'complete' as const,
+        };
+      }),
+      transactionDateCoverage,
+      proposedAt,
+      publicationEligible: false,
+    })
+  );
   authenticateAflTradeExternalCanonicalPromotionProposal({ candidate, proposal });
   return proposal;
 }
@@ -462,6 +486,9 @@ export function deriveCombinedDraftSessionCanonicalPromotionProposal(input: {
     draftEvents: [...eventMetadata.values()],
     transactionDates: input.transactionDates,
   });
+  if (base.content.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v4') {
+    throw new TypeError('Combined draft session proposals require exact transaction dates.');
+  }
   const proposal = createAflTradeExternalCanonicalPromotionProposal({
     ...base.content,
     schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
@@ -529,6 +556,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   }
   if (Date.parse(proposal.content.proposedAt) < Date.parse(content.reconciledAt)) {
     throw new TypeError('Promotion proposal cannot predate candidate reconciliation.');
+  }
+  if (content.transfers.some(({ asset }) => asset.kind === 'special_pick')) {
+    throw new TypeError('Special entitlement must be resolved before canonical promotion.');
   }
   if (content.issues.length !== 0) {
     throw new TypeError('A candidate with a blocking issue cannot be promoted.');

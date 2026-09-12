@@ -130,13 +130,19 @@ export function createPostgresAflTradePromotionBackedPublicArchiveReadRepository
     limit: number
   ): Promise<readonly RecordRow[]> {
     const rows = await dependencies.client.query<RecordRow>(
-      `SELECT ordinal,record_json FROM outcome_public_factual_archive_record
+      `SELECT ordinal,record_json FROM outcome_public_factual_archive_record current_record
         WHERE archive_id=$1 AND record_kind=ANY($2::text[])
           AND ($3::integer IS NULL OR season_year=$3)
           AND ($4::text IS NULL OR club_ids @> ARRAY[$4]::text[])
           AND ($5::text IS NULL OR player_ids @> ARRAY[$5]::text[])
           AND (cardinality($6::text[])=0 OR event_version_id=ANY($6::text[]))
           AND (cardinality($7::text[])=0 OR pick_id=ANY($7::text[]))
+          AND NOT EXISTS (
+            SELECT 1 FROM outcome_public_factual_archive_record successor
+             WHERE successor.archive_id=current_record.archive_id
+               AND successor.record_kind IN ('transaction','draft_event')
+               AND successor.record_json#>>'{record,supersedesVersionId}'=current_record.event_version_id
+          )
           AND ordinal>$8
         ORDER BY ordinal LIMIT $9`,
       [

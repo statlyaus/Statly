@@ -1,3 +1,7 @@
+import {
+  parseSpecialDraftEntitlement,
+  type SpecialDraftEntitlement,
+} from './specialDraftEntitlement';
 import { createHash } from 'node:crypto';
 
 import { load, type Cheerio, type CheerioAPI } from 'cheerio';
@@ -169,6 +173,7 @@ function expandCells($: CheerioAPI, row: AnyNode): Array<Cheerio<AnyNode> | null
 }
 
 type ParsedAsset =
+  | SpecialDraftEntitlement
   | { kind: 'current_pick'; draftYear: number; draftType: 'national'; recordedPickNumber: number }
   | {
       kind: 'future_pick';
@@ -217,6 +222,16 @@ function parseSideAsset(
     (cell) => cell.hasClass('actual-asset') && cell.hasClass('future-pick-name')
   );
   if (actualFuturePick) {
+    const factualCell = actualFuturePick.clone();
+    factualCell.find('.pick-estimation').remove();
+    const factualLabel = normalizeText(factualCell.text());
+    const special = parseSpecialDraftEntitlement(factualLabel, draftYear);
+    if (special) {
+      return {
+        fingerprint: `special:${special.entitlementType}:${special.draftYear ?? 'unactivated'}:${special.sourceLabel}`,
+        asset: special,
+      };
+    }
     const match = /^(\d{4})R(\d+)\s+\(([^)]+)\)/i.exec(normalizeText(actualFuturePick.text()));
     if (!match) return null;
     const year = Number(match[1]);

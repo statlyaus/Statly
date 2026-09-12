@@ -272,6 +272,23 @@ describe.sequential('request-bound private cohort authority', () => {
     );
   });
 
+  it('rejects special-right assets as historical valuation inputs even on dated trades', async () => {
+    await rejectsMutation(
+      `INSERT INTO outcome_event_asset(asset_version_id,event_version_id,asset_key,kind,source_import_row_id,
+      raw_description,status,special_entitlement_id)
+      SELECT 'fixture-special-asset',event_version_id,'fixture-special','list_right',source_import_row_id,
+      'Fixture right','approved','fixture-special-right' FROM outcome_event_version WHERE kind='trade' LIMIT 1`,
+      [],
+      /requires exhaustive approved AFLM 2025 trades/
+    );
+  });
+  it('rejects a year-only factual trade at the private valuation boundary', async () => {
+    await rejectsMutation(
+      `UPDATE outcome_event_version SET event_date=NULL WHERE kind='trade'`,
+      [],
+      /requires exhaustive approved AFLM 2025 trades/
+    );
+  });
   it('rejects foreign-year transactions and post-cutoff captures rather than filtering them away', async () => {
     await rejectsMutation(
       `UPDATE outcome_event SET season_year=2024 WHERE event_id=$1`,

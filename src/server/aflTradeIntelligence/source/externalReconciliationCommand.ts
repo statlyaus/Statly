@@ -1,4 +1,7 @@
+import { resolveSpecialEntitlementCustody } from './resolveSpecialEntitlementCustody';
 import { z } from 'zod';
+
+import { reviewSpecialEntitlementReconciliation } from './specialEntitlementReconciliationReview';
 
 import { reconcileAflTradeExternalEvidence } from './externalEvidenceReconciliation';
 import type {
@@ -17,6 +20,8 @@ const commandSchema = z
       .refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid reconciliation instant.'),
     sourceBatches: z.array(z.unknown()).min(1).max(100_000),
     identityResolutions: z.array(z.unknown()).max(100_000),
+    specialEntitlementLinks: z.array(z.unknown()).max(10_000).optional(),
+    specialEntitlementAwardBindings: z.array(z.unknown()).min(1).max(10_000).optional(),
   })
   .strict();
 
@@ -32,6 +37,8 @@ export interface BuildAflTradeExternalReconciliationDependencies {
 
 export interface BuildAflTradeExternalReconciliationResult extends PersistedAflTradeExternalReconciliation {
   publicationEligible: false;
+  sourceCandidateId?: string;
+  specialEntitlementReview?: ReturnType<typeof reviewSpecialEntitlementReconciliation>;
 }
 
 /**
@@ -45,6 +52,22 @@ export async function buildAndPersistAflTradeExternalReconciliation(
 ): Promise<BuildAflTradeExternalReconciliationResult> {
   const input = commandSchema.parse(unparsedInput);
   const candidate = reconcileAflTradeExternalEvidence(input);
+  const specialEntitlementReview =
+    input.specialEntitlementLinks === undefined
+      ? undefined
+      : reviewSpecialEntitlementReconciliation({
+          candidate,
+          sourceBatches: input.sourceBatches,
+          links: input.specialEntitlementLinks,
+        });
+  const resolved =
+    input.specialEntitlementAwardBindings === undefined
+      ? undefined
+      : resolveSpecialEntitlementCustody({
+          candidate,
+          bindings: input.specialEntitlementAwardBindings,
+          reconciledAt: input.reconciledAt,
+        });
   const persisted = await dependencies.repository.persistCandidate({
     candidate,
     identityResolutions: input.identityResolutions,
@@ -52,5 +75,19 @@ export async function buildAndPersistAflTradeExternalReconciliation(
   if (persisted.candidateId !== candidate.candidateId) {
     throw new TypeError('Persisted reconciliation identity does not match the built candidate.');
   }
-  return { ...persisted, publicationEligible: false };
+  const resolvedResult = resolved
+    ? await dependencies.repository.persistCandidate({
+        candidate: resolved,
+        identityResolutions: input.identityResolutions,
+      })
+    : undefined;
+  if (resolvedResult && resolvedResult.candidateId !== resolved?.candidateId) {
+    throw new TypeError('Persisted resolved custody identity differs from the reviewed bindings.');
+  }
+  return {
+    ...(resolvedResult ?? persisted),
+    ...(resolved ? { sourceCandidateId: candidate.candidateId } : {}),
+    publicationEligible: false,
+    ...(specialEntitlementReview === undefined ? {} : { specialEntitlementReview }),
+  };
 }

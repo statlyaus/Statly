@@ -1,3 +1,7 @@
+import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
+import { specialEntitlementRevisionSchema } from './specialEntitlementRevisionContracts';
+import { specialEntitlementLifecycleSchema } from './specialEntitlementLifecycleContracts';
+import { specialEntitlementAwardSchema } from './specialEntitlementAwardContracts';
 import { z } from 'zod';
 
 import {
@@ -561,11 +565,272 @@ async function ensureEventRoot(
   }
 }
 
+function plannedTradeVersion(
+  promotionId: string,
+  record: TransactionRecord,
+  predecessor: { eventVersionId: string; version: number } | null
+) {
+  const version = (predecessor?.version ?? 0) + 1;
+  return {
+    version,
+    eventVersionId: createAflTradeContentAddress('event-version', {
+      promotionId,
+      eventId: record.transactionId,
+      version,
+      supersedesVersionId: predecessor?.eventVersionId ?? null,
+      record,
+    }),
+  };
+}
+function plannedTradeAsset(promotionId: string, eventVersionId: string, transferId: string) {
+  return createAflTradeContentAddress('event-asset-version', {
+    promotionId,
+    eventVersionId,
+    transferId,
+  });
+}
+
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
+  /** Persists a reviewed award only; this does not admit its custody trades or exercise. */
+  async registerSpecialEntitlementAward(input: { award: unknown; approvalDecisionId: string }) {
+    const award = specialEntitlementAwardSchema.parse(input.award);
+    const decisionId = z.string().min(1).parse(input.approvalDecisionId);
+    return this.client.transaction(async (transaction) => {
+      const result = await transaction.query<{ award_json: unknown; idempotent_replay: boolean }>(
+        `SELECT award_json,idempotent_replay FROM register_outcome_special_entitlement_award($1::jsonb,$2)`,
+        [canonicalizeAflTradeJson(award), decisionId]
+      );
+      const row = result.rows[0];
+      if (!row)
+        throw new TypeError('Special-entitlement award registration returned no retained record.');
+      const retained = specialEntitlementAwardSchema.parse(row.award_json);
+      if (canonicalizeAflTradeJson(retained) !== canonicalizeAflTradeJson(award)) {
+        throw new TypeError(
+          'Special-entitlement award readback does not match the reviewed record.'
+        );
+      }
+      return {
+        award: retained,
+        idempotentReplay: row.idempotent_replay,
+        custodyPromoted: false as const,
+        exerciseRegistered: false as const,
+      };
+    });
+  }
+
+  /** Separate retrospective facts; registration never enables historical valuation. */
+  async registerSpecialEntitlementLifecycle(input: {
+    record: unknown;
+    approvalDecisionId: string;
+  }) {
+    const record = specialEntitlementLifecycleSchema.parse(input.record);
+    const decisionId = z.string().min(1).parse(input.approvalDecisionId);
+    return this.client.transaction(async (transaction) => {
+      const result = await transaction.query<{ record_json: unknown; idempotent_replay: boolean }>(
+        'SELECT * FROM register_outcome_special_entitlement_lifecycle($1::jsonb,$2)',
+        [canonicalizeAflTradeJson(record), decisionId]
+      );
+      const row = result.rows[0];
+      if (!row) throw new TypeError('Lifecycle registration returned no retained record.');
+      const retained = specialEntitlementLifecycleSchema.parse(row.record_json);
+      if (canonicalizeAflTradeJson(retained) !== canonicalizeAflTradeJson(record)) {
+        throw new TypeError('Lifecycle readback differs from the reviewed record.');
+      }
+      return {
+        record: retained,
+        idempotentReplay: row.idempotent_replay,
+        historicalFeatureEligible: false as const,
+      };
+    });
+  }
+
+  /** Reads an exact predecessor; a legacy snapshot is historical binding, not approval. */
+  async loadSpecialEntitlementRevision(entitlementId: string) {
+    const id = z.string().min(1).parse(entitlementId);
+    const result = await this.client.query<{ revision_json: unknown }>(
+      `SELECT COALESCE((SELECT revision_json FROM outcome_special_entitlement_revision
+       WHERE entitlement_id=$1 ORDER BY revision DESC LIMIT 1),outcome_special_entitlement_initial_revision($1)) AS revision_json`,
+      [id]
+    );
+    return specialEntitlementRevisionSchema.parse(result.rows[0]?.revision_json);
+  }
+
+  async registerSpecialEntitlementRevision(input: {
+    revision: unknown;
+    approvalDecisionId: string;
+  }) {
+    const revision = specialEntitlementRevisionSchema.parse(input.revision);
+    const decisionId = z.string().min(1).parse(input.approvalDecisionId);
+    return this.client.transaction(async (transaction) => {
+      const result = await transaction.query<{
+        retained_revision: unknown;
+        idempotent_replay: boolean;
+      }>('SELECT * FROM register_outcome_special_entitlement_revision($1::jsonb,$2)', [
+        canonicalizeAflTradeJson(revision),
+        decisionId,
+      ]);
+      const row = result.rows[0];
+      const retained = specialEntitlementRevisionSchema.parse(row?.retained_revision);
+      if (!row || canonicalizeAflTradeJson(retained) !== canonicalizeAflTradeJson(revision))
+        throw new TypeError('Retained revision differs from the exact reviewed correction.');
+      return {
+        revision: retained,
+        idempotentReplay: row.idempotent_replay,
+        historicalFeatureEligible: false as const,
+      };
+    });
+  }
+
+  /** Read-only deterministic bindings for a reviewed promotion; concurrent changes invalidate them. */
+  async previewSpecialEntitlementCustody(
+    input: PromoteAflTradeExternalCandidateInput,
+    entitlementId: string
+  ) {
+    const parsed = promotionInputSchema.parse(input);
+    return this.client.transaction(async (transaction) => {
+      const candidate = await loadCandidate(transaction, parsed.candidateId);
+      const approval = await loadApproval(
+        transaction,
+        parsed.candidateId,
+        parsed.approvalDecisionId
+      );
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate,
+        proposal: approval.proposal,
+      });
+      const request = createAflTradeExternalCanonicalPromotionRequest({
+        candidateId: candidate.candidateId,
+        proposalId: approval.proposal.proposalId,
+        approvalDecisionId: parsed.approvalDecisionId,
+      });
+      const planned = new Map<
+        string,
+        { eventVersionId: string; seasonYear: number; occurredOn: string | null }
+      >();
+      for (const source of candidate.content.transactions) {
+        const coverage = approval.proposal.content.transactionDateCoverage.find(
+          (item) => item.transactionId === source.transactionId
+        );
+        if (!coverage)
+          throw new TypeError('Correction preview requires reviewed transaction coverage.');
+        const record = { ...source, occurredOn: coverage.occurredOn };
+        const version = plannedTradeVersion(
+          request.promotionId,
+          record,
+          await currentEventVersion(transaction, record.transactionId)
+        );
+        planned.set(record.transactionId, {
+          eventVersionId: version.eventVersionId,
+          seasonYear: record.seasonYear,
+          occurredOn: record.occurredOn,
+        });
+      }
+      const custody = candidate.content.transfers.flatMap((record) => {
+        if (
+          record.asset.kind !== 'special_entitlement' ||
+          record.asset.entitlementId !== entitlementId
+        )
+          return [];
+        const event = planned.get(record.transactionId);
+        if (!event || !record.fromClubId || !record.toClubId)
+          throw new TypeError('Correction preview requires complete custody references.');
+        return [
+          {
+            transferId: record.transferId,
+            assetVersionId: plannedTradeAsset(
+              request.promotionId,
+              event.eventVersionId,
+              record.transferId
+            ),
+            ...event,
+            predecessorTransferId: record.asset.predecessorTransferId,
+            fromClubId: record.fromClubId,
+            toClubId: record.toClubId,
+          },
+        ];
+      });
+      return { custody, promotionEligible: false as const };
+    });
+  }
+
+  /** Retire and replace an incorrectly identified right with its reviewed canonical promotion. */
+  async replaceSpecialEntitlementIdentity(input: {
+    replacement: unknown;
+    approvalDecisionId: string;
+    replacementRevisionApprovalDecisionId?: string;
+    promotion?: PromoteAflTradeExternalCandidateInput;
+  }) {
+    const replacement = specialEntitlementIdentityReplacementSchema.parse(input.replacement);
+    const awardOnly = replacement.content.replacementRevision.content.revision === 1;
+    if (awardOnly && (input.promotion !== undefined || input.replacementRevisionApprovalDecisionId !== undefined))
+      throw new TypeError('Award-only replacement uses its award and relationship approvals without a promotion.');
+    if (!awardOnly && (!input.promotion || !input.replacementRevisionApprovalDecisionId))
+      throw new TypeError('Replacement custody requires an atomic promotion and revision approval.');
+
+    return this.client.transaction(async (transaction) => {
+      const started = await transaction.query<{ replay: boolean }>(
+        'SELECT begin_outcome_special_identity_replacement($1::jsonb,$2) AS replay',
+        [canonicalizeAflTradeJson(replacement), z.string().min(1).parse(input.approvalDecisionId)]
+      );
+      if (awardOnly) return {
+        replacement, promotion: null, revisions: [], historicalFeatureEligible: false as const,
+        idempotentReplay: started.rows[0]?.replay === true,
+      };
+      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository({
+        query: transaction.query.bind(transaction), transaction: (work) => work(transaction),
+      });
+      const result = await bound.promoteWithSpecialEntitlementRevisions({
+        promotion: input.promotion!,
+        revisions: [{ revision: replacement.content.replacementRevision,
+          approvalDecisionId: input.replacementRevisionApprovalDecisionId! }],
+      });
+      return { replacement, ...result, idempotentReplay: started.rows[0]?.replay === true };
+    });
+  }
+
+  /** Promotion and every affected complete-state correction succeed or roll back together. */
+  async promoteWithSpecialEntitlementRevisions(input: {
+    promotion: PromoteAflTradeExternalCandidateInput;
+    revisions: Array<{ revision: unknown; approvalDecisionId: string }>;
+  }) {
+    if (!input.revisions.length)
+      throw new TypeError('Atomic correction requires reviewed revisions.');
+    const revisions = input.revisions.map((item) => ({
+      ...item,
+      revision: specialEntitlementRevisionSchema.parse(item.revision),
+    }));
+    const states = new Map(
+      revisions.map((item) => [item.revision.content.entitlementId, item.revision.content.state])
+    );
+    if (states.size !== revisions.length)
+      throw new TypeError('Atomic correction cannot repeat a right.');
+    return this.client.transaction(async (transaction) => {
+      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository({
+        query: transaction.query.bind(transaction),
+        transaction: (work) => work(transaction),
+      });
+      const promotion = await bound.promoteInternal(input.promotion, states);
+      const retained = [];
+      for (const item of revisions)
+        retained.push(await bound.registerSpecialEntitlementRevision(item));
+      return { promotion, revisions: retained, historicalFeatureEligible: false as const };
+    });
+  }
+
   async promote(
-    unparsedInput: PromoteAflTradeExternalCandidateInput
+    input: PromoteAflTradeExternalCandidateInput
+  ): Promise<PromotedAflTradeExternalCandidate> {
+    return this.promoteInternal(input, new Map());
+  }
+
+  private async promoteInternal(
+    unparsedInput: PromoteAflTradeExternalCandidateInput,
+    correctionStates: ReadonlyMap<
+      string,
+      z.infer<typeof specialEntitlementRevisionSchema>['content']['state']
+    >
   ): Promise<PromotedAflTradeExternalCandidate> {
     let input: z.infer<typeof promotionInputSchema>;
     try {
@@ -600,6 +865,40 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidate,
         proposal: approval.proposal,
       });
+      // Revalidate award authority before replay as well as before new writes.
+      const rights = candidate.content.transfers.filter(
+        (record) => record.asset.kind === 'special_entitlement'
+      );
+      await lockKeys(
+        transaction,
+        rights.flatMap((record) =>
+          record.asset.kind === 'special_entitlement'
+            ? [`special-entitlement-custody:${record.asset.entitlementId}`]
+            : []
+        )
+      );
+      for (const record of rights) {
+        const state =
+          record.asset.kind === 'special_entitlement'
+            ? correctionStates.get(record.asset.entitlementId)
+            : undefined;
+        if (state) {
+          await transaction.query(
+            'SELECT authenticate_outcome_special_corrected_custody_source($1,$2,$3::jsonb,$4)',
+            [
+              candidate.candidateId,
+              record.transferId,
+              canonicalizeAflTradeJson(state.award.award),
+              state.award.approvalDecisionId,
+            ]
+          );
+        } else {
+          await transaction.query('SELECT authenticate_outcome_special_custody_source($1,$2)', [
+            candidate.candidateId,
+            record.transferId,
+          ]);
+        }
+      }
       const request = createAflTradeExternalCanonicalPromotionRequest({
         candidateId: candidate.candidateId,
         proposalId: approval.proposal.proposalId,
@@ -665,7 +964,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       );
       const promotedTransactions = content.transactions.map((record) => {
         const occurredOn = reviewedTransactionDateById.get(record.transactionId);
-        if (!occurredOn) {
+        if (occurredOn === undefined) {
           throw new AflTradeExternalCanonicalPromotionError(
             'CANDIDATE_UNAVAILABLE',
             `Transaction ${record.transactionId} has no reviewed occurrence date.`
@@ -763,7 +1062,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             (import_run_id,capture_id,import_kind,parser_version,started_at,completed_at,status,manifest_json,idempotency_scope)
            VALUES ($1,$2,'external_canonical_promotion','external-promotion/v1',$3,$3,
                    'approved'::"OutcomeRecordStatus",$4::jsonb,$5)`,
-          [importRunId, capture.capture_id, approval.promotedAt, receiptCanonical, request.promotionId]
+          [
+            importRunId,
+            capture.capture_id,
+            approval.promotedAt,
+            receiptCanonical,
+            request.promotionId,
+          ]
         );
         await transaction.query(
           `INSERT INTO outcome_external_canonical_promotion_import_run
@@ -909,14 +1214,11 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             'Promotion cannot backdate an event correction.'
           );
         }
-        const version = (predecessor?.version ?? 0) + 1;
-        const eventVersionId = createAflTradeContentAddress('event-version', {
-          promotionId: request.promotionId,
-          eventId: record.transactionId,
-          version,
-          supersedesVersionId: predecessor?.eventVersionId ?? null,
+        const { version, eventVersionId } = plannedTradeVersion(
+          request.promotionId,
           record,
-        });
+          predecessor
+        );
         const kind = transactionKind(record);
         await transaction.query(
           `INSERT INTO outcome_event_version
@@ -955,7 +1257,22 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       }
 
       const assetByTransfer = new Map<string, string>();
-      for (const record of content.transfers) {
+      const pendingTransfers = [...content.transfers];
+      const orderedTransfers: typeof pendingTransfers = [];
+      const pendingIds = new Set(pendingTransfers.map((record) => record.transferId));
+      while (pendingTransfers.length) {
+        const index = pendingTransfers.findIndex(
+          (record) =>
+            record.asset.kind !== 'special_entitlement' ||
+            record.asset.predecessorTransferId === null ||
+            !pendingIds.has(record.asset.predecessorTransferId)
+        );
+        if (index < 0) throw new TypeError('Special-entitlement custody contains a cycle.');
+        const record = pendingTransfers.splice(index, 1)[0]!;
+        pendingIds.delete(record.transferId);
+        orderedTransfers.push(record);
+      }
+      for (const record of orderedTransfers) {
         const sourceTransaction = promotedTransactions.find(
           ({ transactionId }) => transactionId === record.transactionId
         );
@@ -974,32 +1291,43 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           evidenceIds: record.evidenceIds,
           record,
         });
-        const assetVersionId = createAflTradeContentAddress('event-asset-version', {
-          promotionId: request.promotionId,
+        const assetVersionId = plannedTradeAsset(
+          request.promotionId,
           eventVersionId,
-          transferId: record.transferId,
-        });
+          record.transferId
+        );
+        if (record.asset.kind === 'special_pick') {
+          throw new TypeError(
+            'Unresolved special entitlement cannot be persisted as an ordinary pick.'
+          );
+        }
         const player = record.asset.kind === 'player' ? record.asset.playerId : null;
         const identityDecision = player ? identityDecisionByPlayer.get(player) : null;
         const pick = record.asset.kind === 'pick_entitlement' ? record.asset.pickId : null;
         const assetKind =
-          record.asset.kind === 'player'
-            ? 'player'
-            : record.asset.draftYear > sourceTransaction.seasonYear
-              ? 'future_pick'
-              : 'current_pick';
+          record.asset.kind === 'special_entitlement'
+            ? 'list_right'
+            : record.asset.kind === 'player'
+              ? 'player'
+              : record.asset.draftYear > sourceTransaction.seasonYear
+                ? 'future_pick'
+                : 'current_pick';
         const rawDescription =
-          record.asset.kind === 'player'
-            ? record.asset.recordedName
-            : (record.asset.recordedLabel ??
-              `${record.asset.draftYear} ${record.asset.draftType} pick ${record.asset.nominalPick ?? `round ${record.asset.nominalRound ?? '?'}`}`);
+          record.asset.kind === 'special_entitlement'
+            ? record.asset.sourceAsset.kind === 'special_pick'
+              ? record.asset.sourceAsset.sourceLabel
+              : (record.asset.sourceAsset.recordedLabel ?? 'Special draft entitlement')
+            : record.asset.kind === 'player'
+              ? record.asset.recordedName
+              : (record.asset.recordedLabel ??
+                `${record.asset.draftYear} ${record.asset.draftType} pick ${record.asset.nominalPick ?? `round ${record.asset.nominalRound ?? '?'}`}`);
         await transaction.query(
           `INSERT INTO outcome_event_asset
             (asset_version_id,event_version_id,asset_key,kind,player_id,player_identity_id,
              external_identity_decision_id,pick_id,from_club_id,to_club_id,source_import_row_id,
-             raw_description,status)
+             raw_description,status,special_entitlement_id)
            VALUES ($1,$2,$3,$4::"OutcomeAssetKind",$5,NULL,$6,$7,$8,$9,$10,$11,
-                   'approved'::"OutcomeRecordStatus")`,
+                   'approved'::"OutcomeRecordStatus",$12)`,
           [
             assetVersionId,
             eventVersionId,
@@ -1012,8 +1340,25 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             record.toClubId,
             row.importRowId,
             rawDescription,
+            record.asset.kind === 'special_entitlement' ? record.asset.entitlementId : null,
           ]
         );
+        if (
+          record.asset.kind === 'special_entitlement' &&
+          !correctionStates.has(record.asset.entitlementId)
+        ) {
+          await transaction.query(
+            `INSERT INTO outcome_special_entitlement_custody
+            (transfer_id,entitlement_id,asset_version_id,predecessor_transfer_id)
+            VALUES ($1,$2,$3,$4)`,
+            [
+              record.transferId,
+              record.asset.entitlementId,
+              assetVersionId,
+              record.asset.predecessorTransferId,
+            ]
+          );
+        }
         assetByTransfer.set(record.transferId, assetVersionId);
         promotionRecords.push({
           recordKind: 'transfer',

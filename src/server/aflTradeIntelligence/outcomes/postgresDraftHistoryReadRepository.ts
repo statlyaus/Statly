@@ -92,7 +92,10 @@ function selectionRows(
       })
       .sort(
         (left, right) =>
-          left.transaction.occurredOn.localeCompare(right.transaction.occurredOn) ||
+          left.transaction.seasonYear - right.transaction.seasonYear ||
+          Number(left.transaction.occurredOn === null) -
+            Number(right.transaction.occurredOn === null) ||
+          (left.transaction.occurredOn ?? '').localeCompare(right.transaction.occurredOn ?? '') ||
           left.transaction.eventId.localeCompare(right.transaction.eventId) ||
           left.realization.realizationId.localeCompare(right.realization.realizationId)
       );

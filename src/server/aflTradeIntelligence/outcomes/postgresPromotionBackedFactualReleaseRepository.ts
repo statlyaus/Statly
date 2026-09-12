@@ -231,7 +231,9 @@ async function loadSourceAncestry(
   const expectedPromotions = new Set(
     corpus.content.promotions.map(({ promotionId }) => promotionId)
   );
-  const captureById = new Map<string, CaptureRow>();
+  const captureById = new Map<string, Pick<CaptureRow,
+    'capture_id' | 'source_snapshot_id' | 'environment' | 'competition' |
+    'anchor_season_year' | 'captured_at' | 'manifest_json'>>();
   const captureIdsByPromotion = new Map<string, Set<string>>();
   for (const row of result.rows) {
     if (
@@ -245,17 +247,19 @@ async function loadSourceAncestry(
         'A promotion capture falls outside the corpus scope or knowledge cutoff.'
       );
     }
+    const { promotion_id: promotionId, ...captureFields } = row;
+    const capture = { ...captureFields, captured_at: exactInstant(row.captured_at) };
     const existing = captureById.get(row.capture_id);
-    if (existing && !exactJson(existing, row)) {
+    if (existing && !exactJson(existing, capture)) {
       throw new AflTradePromotionBackedFactualReleasePersistenceError(
         'SOURCE_AUTHORITY_MISMATCH',
         'One capture identity has conflicting immutable ancestry.'
       );
     }
-    captureById.set(row.capture_id, row);
-    const ids = captureIdsByPromotion.get(row.promotion_id) ?? new Set<string>();
+    captureById.set(row.capture_id, capture);
+    const ids = captureIdsByPromotion.get(promotionId) ?? new Set<string>();
     ids.add(row.capture_id);
-    captureIdsByPromotion.set(row.promotion_id, ids);
+    captureIdsByPromotion.set(promotionId, ids);
   }
   if (
     result.rows.length === 0 ||
@@ -313,7 +317,8 @@ async function loadSourceAncestry(
 
 async function loadCanonicalMembers(
   transaction: AflOutcomeSqlTransaction,
-  corpus: AflTradePromotionBackedCorpus
+  corpus: AflTradePromotionBackedCorpus,
+  releaseCaptureIds: string[]
 ) {
   const requested = [
     ...new Map(
@@ -327,6 +332,22 @@ async function loadCanonicalMembers(
       `${right.recordKind}\0${right.canonicalRecordId}`
     )
   );
+  const specialAwards = await transaction.query<{
+    award_json: unknown;
+    approval_decision_id: string;
+  }>(
+    `SELECT DISTINCT award.award_json,award.approval_decision_id FROM outcome_event_asset asset
+     JOIN outcome_special_entitlement_award award ON award.entitlement_id=asset.special_entitlement_id
+     WHERE asset.asset_version_id=ANY($1::text[])
+       AND NOT EXISTS (SELECT 1 FROM outcome_special_entitlement_revision revision WHERE revision.entitlement_id=award.entitlement_id AND revision.revision>1)`,
+    [requested.map((member) => member.canonicalRecordId)]
+  );
+  for (const award of specialAwards.rows) {
+    await transaction.query('SELECT authenticate_outcome_special_entitlement_award($1::jsonb,$2)', [
+      canonicalizeAflTradeJson(award.award_json),
+      award.approval_decision_id,
+    ]);
+  }
   const result = await transaction.query<CanonicalRow>(
     `WITH requested_member AS (
        SELECT member->>'recordKind' AS record_kind,member->>'canonicalRecordId' AS canonical_record_id
@@ -361,6 +382,9 @@ async function loadCanonicalMembers(
                 'pickId',asset.pick_id,'fromClubId',asset.from_club_id,'toClubId',asset.to_club_id,
                 'sourceImportRowId',asset.source_import_row_id,
                 'rawDescription',asset.raw_description,'status',asset.status)
+                || CASE WHEN asset.special_entitlement_id IS NULL THEN '{}'::jsonb ELSE
+                  jsonb_build_object('specialEntitlement',read_outcome_special_entitlement_revision_for_asset(
+                    asset.special_entitlement_id,asset.asset_version_id,$2::timestamptz,$3::text[])) END
          FROM requested_member requested
          JOIN outcome_event_asset asset ON asset.asset_version_id=requested.canonical_record_id
         WHERE requested.record_kind IN ('transfer','draft_player_asset')
@@ -405,7 +429,7 @@ async function loadCanonicalMembers(
      )
      SELECT record_kind,canonical_record_id,canonical_record_json
        FROM canonical_member ORDER BY record_kind,canonical_record_id`,
-    [canonicalizeAflTradeJson(requested)]
+    [canonicalizeAflTradeJson(requested), corpus.content.knowledgeCutoffAt, releaseCaptureIds]
   );
   const expectedKeys = requested.map(
     ({ recordKind, canonicalRecordId }) => `${recordKind}\0${canonicalRecordId}`
@@ -621,7 +645,11 @@ export class PostgresAflTradePromotionBackedFactualReleaseRepository {
         );
       }
       const ancestry = await loadSourceAncestry(transaction, corpus, request.createdAt);
-      const canonical = await loadCanonicalMembers(transaction, corpus);
+      const canonical = await loadCanonicalMembers(
+        transaction,
+        corpus,
+        ancestry.sourceCaptures.map((item) => item.captureId)
+      );
       let bundle: ReturnType<typeof createAflTradePromotionBackedFactualRelease>;
       try {
         bundle = createAflTradePromotionBackedFactualRelease({
