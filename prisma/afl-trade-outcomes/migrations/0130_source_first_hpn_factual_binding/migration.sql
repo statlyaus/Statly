@@ -16,6 +16,8 @@ ALTER TABLE outcome_private_valuation_hpn_factual_binding
 
 GRANT SELECT ON outcome_release_source_capture,outcome_factual_reconciliation_metric_input
   TO afl_trade_private_valuation_scheduler_owner;
+GRANT SELECT ON outcome_private_valuation_hpn_factual_binding
+  TO afl_trade_private_evaluation_coordinator;
 GRANT UPDATE (fact_batch_id) ON outcome_provider_fact_batch
   TO afl_trade_private_valuation_scheduler_owner;
 DO $$ BEGIN
