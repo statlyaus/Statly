@@ -19,6 +19,62 @@ const activation = {
   ],
 };
 describe('special entitlement lifecycle boundary', () => {
+  it('retains partial renumbering dates and requires bound, nonconflicting evidence', () => {
+    const binding = {
+      transferId: `external-transfer:${'4'.repeat(64)}`,
+      sourcePickId: `draft-pick:${'5'.repeat(64)}`,
+      targetPickId: `draft-pick:${'6'.repeat(64)}`,
+      occurredAt: { precision: 'year', year: 2013 },
+      evidenceCaptureIds: [activation.evidence[0].captureId],
+    };
+    const exercise = {
+      schemaVersion: activation.schemaVersion,
+      kind: 'exercise',
+      entitlementId: activation.entitlementId,
+      evidence: activation.evidence,
+      selectionId: 'canonical-selection',
+      terminalTransferId: binding.transferId,
+      renumbering: [binding],
+    };
+    expect(specialEntitlementLifecycleSchema.parse(exercise)).toEqual(exercise);
+    expect(
+      specialEntitlementLifecycleSchema.parse({
+        ...exercise,
+        renumbering: [{ ...binding, occurredAt: { precision: 'day', date: '2013-11-20' } }],
+      })
+    ).toMatchObject({
+      renumbering: [{ occurredAt: { precision: 'day', date: '2013-11-20' } }],
+    });
+    for (const renumbering of [
+      [],
+      [binding, binding],
+      [{ ...binding, targetPickId: binding.sourcePickId }],
+      [{ ...binding, occurredAt: { precision: 'year', year: 1800 } }],
+      [{ ...binding, evidenceCaptureIds: [] }],
+      [
+        {
+          ...binding,
+          evidenceCaptureIds: [activation.evidence[0].captureId, activation.evidence[0].captureId],
+        },
+      ],
+      [{ ...binding, evidenceCaptureIds: [`source-capture:${'9'.repeat(64)}`] }],
+      [
+        binding,
+        {
+          ...binding,
+          transferId: `external-transfer:${'8'.repeat(64)}`,
+          targetPickId: `draft-pick:${'7'.repeat(64)}`,
+        },
+      ],
+    ])
+      expect(
+        specialEntitlementLifecycleSchema.safeParse({ ...exercise, renumbering }).success
+      ).toBe(false);
+    expect(
+      specialEntitlementLifecycleSchema.safeParse({ ...activation, renumbering: [binding] }).success
+    ).toBe(false);
+  });
+
   it('preserves a known use year without assigning a notice day or selected player', () => {
     expect(specialEntitlementLifecycleSchema.parse(activation)).toEqual(activation);
     expect(

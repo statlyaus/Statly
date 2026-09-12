@@ -1208,11 +1208,20 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             entitlementId: award.entitlementId,
             evidence: award.content.evidence,
           };
+          const terminalSource = sourceCandidate.content.transfers.find((transfer) => transfer.transferId === transferIds[1])!.asset;
+          const renumbering = terminalSource.kind === 'pick_entitlement' ? [{
+            transferId: transferIds[1], sourcePickId: terminalSource.pickId,
+            targetPickId: selectionCandidate.content.draftSelections[0]!.pickId,
+            occurredAt: precision === 'year' ? { precision: 'year', year: selectionYear }
+              : { precision: 'day', date: `${selectionYear}-11-20` },
+            evidenceCaptureIds: [rightCaptureId],
+          }] : undefined;
           const exercise = {
             ...base,
             kind: 'exercise',
             selectionId,
             terminalTransferId: transferIds[1],
+            ...(renumbering ? { renumbering } : {}),
           };
           const exerciseInput = await reviewed(exercise);
           const activation = {
@@ -1239,6 +1248,19 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             await expect(
               repository.registerSpecialEntitlementLifecycle(activationInput)
             ).rejects.toThrow(/only to reviewed compensation/);
+          }
+          if (renumbering) {
+            for (const change of [
+              { sourcePickId: `draft-pick:${digest('9')}` },
+              { targetPickId: `draft-pick:${digest('8')}` },
+              { transferId: transferIds[0] },
+              { occurredAt: { precision: 'year', year: selectionYear + 1 } },
+              { evidenceCaptureIds: [selectionCaptureId] },
+            ]) {
+              await expect(repository.registerSpecialEntitlementLifecycle(await reviewed({
+                ...exercise, renumbering: [{ ...renumbering[0], ...change }],
+              }))).rejects.toThrow();
+            }
           }
           await expect(
             repository.registerSpecialEntitlementLifecycle(
