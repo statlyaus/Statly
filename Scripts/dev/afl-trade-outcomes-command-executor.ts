@@ -23,6 +23,7 @@ export function executeAflTradeOutcomesHarnessCommand(
     let capturedBytes = 0;
     let settled = false;
     let timedOut = false;
+    let pendingError: Error | undefined;
     const resolveOnce = (result: AflTradeOutcomesHarnessCommandResult): void => {
       if (settled) return;
       settled = true;
@@ -43,10 +44,11 @@ export function executeAflTradeOutcomesHarnessCommand(
     timeout?.unref();
 
     const capture = (target: Buffer[], chunk: Buffer): void => {
+      if (pendingError !== undefined) return;
       capturedBytes += chunk.byteLength;
       if (capturedBytes > maximumCapturedBytes) {
+        pendingError = new Error(`Command ${command.command} exceeded its output limit.`);
         child.kill('SIGKILL');
-        rejectOnce(new Error(`Command ${command.command} exceeded its output limit.`));
         return;
       }
       target.push(chunk);
@@ -56,13 +58,24 @@ export function executeAflTradeOutcomesHarnessCommand(
       child.stdout?.on('data', (chunk: Buffer) => capture(stdoutChunks, chunk));
       child.stderr?.on('data', (chunk: Buffer) => capture(stderrChunks, chunk));
     }
-    child.once('error', (error) => rejectOnce(error));
+    child.once('error', (error) => {
+      if (child.pid === undefined) {
+        if (timeout !== undefined) clearTimeout(timeout);
+        rejectOnce(error);
+        return;
+      }
+      pendingError = error;
+    });
     child.once('close', (code, signal) => {
       if (timeout !== undefined) clearTimeout(timeout);
       if (timedOut) {
         rejectOnce(
           new Error(`Command ${command.command} exceeded its ${command.timeoutMs}ms timeout.`)
         );
+        return;
+      }
+      if (pendingError !== undefined) {
+        rejectOnce(pendingError);
         return;
       }
       if (code === 0) {
