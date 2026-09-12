@@ -536,15 +536,14 @@ export function parseAflTradeExternalCanonicalPromotionRequest(
   return aflTradeExternalCanonicalPromotionRequestSchema.parse(input);
 }
 
-export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
-  candidate: unknown;
-  proposal: unknown;
-}): AuthenticatedAflTradeExternalCanonicalPromotion {
-  const candidate: AflTradeExternalReconciliationCandidateRecord =
-    parseAflTradeExternalReconciliationCandidate(input.candidate);
-  const proposal = parseAflTradeExternalCanonicalPromotionProposal(input.proposal);
-  const content = candidate.content;
+type PromotionCandidateContent = AflTradeExternalReconciliationCandidateRecord['content'];
+type ParsedPromotionProposal = ReturnType<typeof parseAflTradeExternalCanonicalPromotionProposal>;
 
+function assertPromotionCandidateScope(
+  candidate: AflTradeExternalReconciliationCandidateRecord,
+  proposal: ParsedPromotionProposal
+): void {
+  const content = candidate.content;
   if (
     proposal.content.candidateId !== candidate.candidateId ||
     proposal.content.candidateSha256 !== candidate.candidateId.split(':')[1] ||
@@ -563,6 +562,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   if (content.issues.length !== 0) {
     throw new TypeError('A candidate with a blocking issue cannot be promoted.');
   }
+}
+
+function assertPromotionFactIdentities(content: PromotionCandidateContent): void {
   const records = [
     ...content.transactions,
     ...content.transfers,
@@ -594,7 +596,12 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   ) {
     throw new TypeError('Promoted facts require complete reviewed canonical identities and dates.');
   }
+}
 
+function reviewedDraftCoverage(
+  content: PromotionCandidateContent,
+  proposal: ParsedPromotionProposal
+): Map<string, string[]> {
   const expectedCoverage = new Map<string, string[]>();
   for (const coverage of proposal.content.draftEventCoverage) {
     const key = coverageKey(coverage.draftYear, coverage.draftType);
@@ -616,6 +623,13 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
         'Each draft session requires retained date evidence for its exact selections.'
       );
   }
+  return expectedCoverage;
+}
+
+function assertPromotionTransactionDates(
+  content: PromotionCandidateContent,
+  proposal: ParsedPromotionProposal
+): void {
   const transactionDateById = new Map(
     proposal.content.transactionDateCoverage.map(({ transactionId, seasonYear, occurredOn }) => [
       transactionId,
@@ -635,6 +649,12 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   ) {
     throw new TypeError('Promotion proposal transaction dates must exactly cover the candidate.');
   }
+}
+
+function assertPromotionDraftCoverage(
+  content: PromotionCandidateContent,
+  expectedCoverage: ReadonlyMap<string, string[]>
+): void {
   const actualCoverage = new Map<string, string[]>();
   content.draftSelections.forEach((selection) => {
     const key = coverageKey(selection.draftYear, selection.draftType);
@@ -654,6 +674,22 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
       'Draft-event coverage must equal the exact candidate selection set for every promoted draft.'
     );
   }
+}
+
+export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
+  candidate: unknown;
+  proposal: unknown;
+}): AuthenticatedAflTradeExternalCanonicalPromotion {
+  const candidate: AflTradeExternalReconciliationCandidateRecord =
+    parseAflTradeExternalReconciliationCandidate(input.candidate);
+  const proposal = parseAflTradeExternalCanonicalPromotionProposal(input.proposal);
+  const content = candidate.content;
+
+  assertPromotionCandidateScope(candidate, proposal);
+  assertPromotionFactIdentities(content);
+  const expectedCoverage = reviewedDraftCoverage(content, proposal);
+  assertPromotionTransactionDates(content, proposal);
+  assertPromotionDraftCoverage(content, expectedCoverage);
 
   return {
     candidateId: candidate.candidateId,

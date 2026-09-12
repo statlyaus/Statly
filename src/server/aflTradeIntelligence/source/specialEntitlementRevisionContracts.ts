@@ -29,67 +29,91 @@ const custodyEdge = z
 /** Complete replacement state, not a patch that can leave dependent facts on an old revision.
  * Canonical references and approvals must still be authenticated by the database owner.
  */
-export const specialEntitlementRevisionStateSchema = z
+const revisionStateShape = z
   .object({
     award: z.object({ award: specialEntitlementAwardSchema, approvalDecisionId: id }).strict(),
     custody: z.array(custodyEdge),
     activation: reviewedLifecycle.nullable(),
     exercise: reviewedLifecycle.nullable(),
   })
-  .strict()
-  .superRefine((state, context) => {
-    const { award } = state.award;
-    const issue = (message: string) => context.addIssue({ code: 'custom', message });
+  .strict();
+
+type RevisionState = z.infer<typeof revisionStateShape>;
+
+function validateRevisionLifecycle(state: RevisionState, context: z.RefinementCtx): void {
+  const { award } = state.award;
+  const issue = (message: string) => context.addIssue({ code: 'custom', message });
+  if (
+    state.activation &&
+    (state.activation.record.kind !== 'activation' ||
+      state.activation.record.entitlementId !== award.entitlementId ||
+      award.content.asset.entitlementType !== 'expansion_compensation')
+  )
+    issue('Activation must belong to this compensation right.');
+  if (
+    state.exercise &&
+    (state.exercise.record.kind !== 'exercise' ||
+      state.exercise.record.entitlementId !== award.entitlementId)
+  )
+    issue('Exercise must belong to this right.');
+  if (
+    state.exercise &&
+    award.content.asset.entitlementType === 'expansion_compensation' &&
+    !state.activation
+  )
+    issue('Compensation exercise requires activation in the same revision.');
+}
+
+function advanceCustodyDate(
+  earliest: string,
+  edge: z.infer<typeof custodyEdge>,
+  issue: (message: string) => void
+): string {
+  if (edge.occurredOn !== null && Number(edge.occurredOn.slice(0, 4)) !== edge.seasonYear)
+    issue('Custody day must belong to its recorded season.');
+  const lower = edge.occurredOn ?? `${edge.seasonYear}-01-01`;
+  const upper = edge.occurredOn ?? `${edge.seasonYear}-12-31`;
+  const next = earliest > lower ? earliest : lower;
+  if (next > upper) issue('Revision custody chronology is impossible.');
+  return next;
+}
+
+function validateRevisionCustody(state: RevisionState, context: z.RefinementCtx): void {
+  const { award } = state.award;
+  const issue = (message: string) => context.addIssue({ code: 'custom', message });
+  let holder = award.content.holderClubId;
+  let predecessor: string | null = null;
+  let earliest = award.content.awardedOn ?? `${award.content.awardYear}-01-01`;
+  const transfers = new Set<string>();
+  const assets = new Set<string>();
+  for (const edge of state.custody) {
+    if (transfers.has(edge.transferId) || assets.has(edge.assetVersionId))
+      issue('Custody references must not repeat.');
+    transfers.add(edge.transferId);
+    assets.add(edge.assetVersionId);
     if (
-      state.activation &&
-      (state.activation.record.kind !== 'activation' ||
-        state.activation.record.entitlementId !== award.entitlementId ||
-        award.content.asset.entitlementType !== 'expansion_compensation')
+      edge.predecessorTransferId !== predecessor ||
+      edge.fromClubId !== holder ||
+      edge.fromClubId === edge.toClubId
     )
-      issue('Activation must belong to this compensation right.');
-    if (
-      state.exercise &&
-      (state.exercise.record.kind !== 'exercise' ||
-        state.exercise.record.entitlementId !== award.entitlementId)
-    )
-      issue('Exercise must belong to this right.');
-    if (
-      state.exercise &&
-      award.content.asset.entitlementType === 'expansion_compensation' &&
-      !state.activation
-    )
-      issue('Compensation exercise requires activation in the same revision.');
-    let holder = award.content.holderClubId;
-    let predecessor: string | null = null;
-    let earliest = award.content.awardedOn ?? `${award.content.awardYear}-01-01`;
-    const transfers = new Set<string>();
-    const assets = new Set<string>();
-    for (const edge of state.custody) {
-      if (transfers.has(edge.transferId) || assets.has(edge.assetVersionId))
-        issue('Custody references must not repeat.');
-      transfers.add(edge.transferId);
-      assets.add(edge.assetVersionId);
-      if (
-        edge.predecessorTransferId !== predecessor ||
-        edge.fromClubId !== holder ||
-        edge.fromClubId === edge.toClubId
-      )
-        issue('Revision custody must form one continuous ordered holder chain.');
-      if (edge.occurredOn !== null && Number(edge.occurredOn.slice(0, 4)) !== edge.seasonYear)
-        issue('Custody day must belong to its recorded season.');
-      const lower = edge.occurredOn ?? `${edge.seasonYear}-01-01`;
-      const upper = edge.occurredOn ?? `${edge.seasonYear}-12-31`;
-      earliest = earliest > lower ? earliest : lower;
-      if (earliest > upper) issue('Revision custody chronology is impossible.');
-      holder = edge.toClubId;
-      predecessor = edge.transferId;
-    }
-    if (
-      state.exercise?.record.kind === 'exercise' &&
-      state.exercise.record.terminalTransferId !== predecessor
-    )
-      issue('Exercise must reference this revision’s terminal custody transfer.');
-  });
+      issue('Revision custody must form one continuous ordered holder chain.');
+    earliest = advanceCustodyDate(earliest, edge, issue);
+    holder = edge.toClubId;
+    predecessor = edge.transferId;
+  }
+  if (
+    state.exercise?.record.kind === 'exercise' &&
+    state.exercise.record.terminalTransferId !== predecessor
+  )
+    issue('Exercise must reference this revision’s terminal custody transfer.');
+}
+
+export const specialEntitlementRevisionStateSchema = revisionStateShape.superRefine(
+  (state, context) => {
+    validateRevisionLifecycle(state, context);
+    validateRevisionCustody(state, context);
+  }
+);
 
 const fields = ['activation', 'award', 'custody', 'exercise'] as const;
 const revisionContentSchema = z

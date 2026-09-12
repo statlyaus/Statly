@@ -302,6 +302,46 @@ function rowKey(record: AflTradePromotionBackedPublicArchiveRecordInput): string
   return `${record.recordKind}\0${record.recordId}`;
 }
 
+type ArchiveEvent =
+  z.infer<typeof transactionRecordSchema> | z.infer<typeof draftEventRecordSchema>;
+
+function validateEventSupersession(
+  events: ReadonlyMap<string, ArchiveEvent>,
+  context: z.RefinementCtx
+): void {
+  const successors = new Set<string>();
+  for (const event of events.values()) {
+    const predecessorId = event.supersedesVersionId;
+    if (predecessorId === undefined) continue;
+    const predecessor = events.get(predecessorId);
+    if (
+      predecessor === undefined ||
+      predecessor.eventId !== event.eventId ||
+      predecessor.recordKind !== event.recordKind ||
+      successors.has(predecessorId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Event supersession has no unique matching predecessor.',
+      });
+    }
+    successors.add(predecessorId);
+    const visited = new Set([event.eventVersionId]);
+    let cursor = predecessor;
+    while (cursor !== undefined) {
+      if (visited.has(cursor.eventVersionId)) {
+        context.addIssue({ code: 'custom', message: 'Event supersession contains a cycle.' });
+        break;
+      }
+      visited.add(cursor.eventVersionId);
+      cursor =
+        cursor.supersedesVersionId === undefined
+          ? undefined
+          : events.get(cursor.supersedesVersionId);
+    }
+  }
+}
+
 function validateRecordClosure(
   records: readonly AflTradePromotionBackedPublicArchiveRecordInput[],
   context: z.RefinementCtx
@@ -322,35 +362,10 @@ function validateRecordClosure(
       )
       .map((record) => [record.eventVersionId, record])
   );
-  const events = new Map<
-    string,
-    z.infer<typeof transactionRecordSchema> | z.infer<typeof draftEventRecordSchema>
-  >([...transactions, ...draftEvents]);
-  const successors = new Set<string>();
-  for (const event of events.values()) {
-    const predecessorId = event.supersedesVersionId;
-    if (predecessorId === undefined) continue;
-    const predecessor = events.get(predecessorId);
-    if (
-      predecessor === undefined ||
-      predecessor.eventId !== event.eventId ||
-      predecessor.recordKind !== event.recordKind ||
-      successors.has(predecessorId)
-    ) {
-      context.addIssue({ code: 'custom', message: 'Event supersession has no unique matching predecessor.' });
-    }
-    successors.add(predecessorId);
-    const visited = new Set([event.eventVersionId]);
-    let cursor = predecessor;
-    while (cursor !== undefined) {
-      if (visited.has(cursor.eventVersionId)) {
-        context.addIssue({ code: 'custom', message: 'Event supersession contains a cycle.' });
-        break;
-      }
-      visited.add(cursor.eventVersionId);
-      cursor = cursor.supersedesVersionId === undefined ? undefined : events.get(cursor.supersedesVersionId);
-    }
-  }
+  validateEventSupersession(
+    new Map<string, ArchiveEvent>([...transactions, ...draftEvents]),
+    context
+  );
   const transfers = new Map(
     records
       .filter(
@@ -368,30 +383,45 @@ function validateRecordClosure(
       .map((record) => [record.selectionId, record])
   );
 
+  function validateDraftPlayerAsset(
+    record: Extract<
+      AflTradePromotionBackedPublicArchiveRecordInput,
+      { recordKind: 'draft_player_asset' }
+    >
+  ): void {
+    const matchingSelection = [...selections.values()].find(
+      (selection) =>
+        selection.eventVersionId === record.eventVersionId &&
+        selection.player.playerId === record.player.playerId &&
+        selection.club.clubId === record.club.clubId
+    );
+    if (!draftEvents.has(record.eventVersionId) || !matchingSelection) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Draft player asset has no exact draft event and selection.',
+      });
+    }
+  }
+
+  function validateTransferParties(
+    record: Extract<AflTradePromotionBackedPublicArchiveRecordInput, { recordKind: 'transfer' }>
+  ): void {
+    const transaction = transactions.get(record.eventVersionId);
+    const partyIds = new Set(transaction?.parties.map(({ club }) => club.clubId) ?? []);
+    if (
+      transaction === undefined ||
+      !partyIds.has(record.fromClub.clubId) ||
+      !partyIds.has(record.toClub.clubId)
+    ) {
+      context.addIssue({ code: 'custom', message: 'Transfer has no exact transaction parties.' });
+    }
+  }
+
   for (const record of records) {
     if (record.recordKind === 'transfer') {
-      const transaction = transactions.get(record.eventVersionId);
-      const partyIds = new Set(transaction?.parties.map(({ club }) => club.clubId) ?? []);
-      if (
-        transaction === undefined ||
-        !partyIds.has(record.fromClub.clubId) ||
-        !partyIds.has(record.toClub.clubId)
-      ) {
-        context.addIssue({ code: 'custom', message: 'Transfer has no exact transaction parties.' });
-      }
+      validateTransferParties(record);
     } else if (record.recordKind === 'draft_player_asset') {
-      const matchingSelection = [...selections.values()].find(
-        (selection) =>
-          selection.eventVersionId === record.eventVersionId &&
-          selection.player.playerId === record.player.playerId &&
-          selection.club.clubId === record.club.clubId
-      );
-      if (!draftEvents.has(record.eventVersionId) || !matchingSelection) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Draft player asset has no exact draft event and selection.',
-        });
-      }
+      validateDraftPlayerAsset(record);
     } else if (record.recordKind === 'draft_selection') {
       if (!draftEvents.has(record.eventVersionId)) {
         context.addIssue({ code: 'custom', message: 'Draft selection has no draft event.' });

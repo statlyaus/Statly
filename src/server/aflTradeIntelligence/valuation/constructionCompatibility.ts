@@ -83,6 +83,98 @@ export interface AflTradeConstructionCompatibilityRequest {
   repository: AflTradeImmutableArtifactRepository;
 }
 
+type CompatibilityEvidence = z.infer<typeof evidenceSchema>;
+type CompatibilityRequirement = z.infer<typeof requirement>;
+type CompatibilityViewContext = AflTradeValuationCase['content']['viewContexts'][number];
+type AddCompatibilityIssue = (reason: string) => void;
+
+function checkEvidenceChronology(
+  evidence: CompatibilityEvidence,
+  viewName: CompatibilityRequirement['view'],
+  context: CompatibilityViewContext,
+  artifactCreatedAt: string,
+  add: AddCompatibilityIssue
+): void {
+  if (Date.parse(evidence.knownAt) > Date.parse(context.knowledgeCutoffAt))
+    add('knowledge_after_cutoff');
+  if (
+    (viewName === 'at_trade' || viewName === 'remaining') &&
+    Date.parse(evidence.knownAt) > Date.parse(evidence.predictionCutoffAt)
+  )
+    add('knowledge_after_origin');
+  if (Date.parse(evidence.predictionCutoffAt) > Date.parse(context.effectiveAt))
+    add('origin_after_view');
+  if (
+    Date.parse(evidence.knownAt) > Date.parse(evidence.recordedAt) ||
+    Date.parse(evidence.recordedAt) > Date.parse(artifactCreatedAt)
+  ) {
+    throw new TypeError(
+      'Compatibility evidence has invalid knowledge/recording custody chronology.'
+    );
+  }
+}
+
+function checkEvidencePolicy(
+  required: CompatibilityRequirement,
+  evidence: CompatibilityEvidence,
+  add: AddCompatibilityIssue
+): void {
+  if (
+    evidence.runId !== required.runId ||
+    evidence.methodId !== required.methodId ||
+    evidence.valueUnitId !== required.valueUnitId
+  )
+    add('component_policy_mismatch');
+  if (canonicalizeAflTradeJson(evidence.seasons) !== canonicalizeAflTradeJson(required.seasons)) {
+    add('calendar_window_mismatch');
+  }
+  if (
+    evidence.attribution !== 'receiving_spell' ||
+    (required.assetKind === 'player' && required.receivingSpellId === null) ||
+    evidence.receivingSpellId !== required.receivingSpellId ||
+    evidence.receivingClubId !== required.receivingClubId
+  )
+    add('receiving_spell_mismatch');
+}
+
+function checkPickEvidence(
+  required: CompatibilityRequirement,
+  evidence: CompatibilityEvidence,
+  add: AddCompatibilityIssue
+): void {
+  if (required.assetKind !== 'player') {
+    if (evidence.pathway !== 'national' || evidence.access !== 'open')
+      add('pick_pathway_unsupported');
+    if (evidence.draftYear === null) add('draft_year_missing');
+    else if (evidence.seasons.some((season) => season <= evidence.draftYear!))
+      add('pick_window_before_debut');
+  }
+}
+
+function assertCompatibilityCustody(
+  repository: AflTradeImmutableArtifactRepository,
+  environment: AflTradeConstructionCompatibilityRequest['environment']
+): void {
+  if (
+    repository.artifactClass !== 'derived_private' ||
+    (environment === 'non_production' && repository.assurance.startsWith('fixture_'))
+  ) {
+    throw new TypeError('Compatibility evidence requires matching private artifact custody.');
+  }
+}
+
+function assertSelectedDrawIdentity(
+  valuationCase: AflTradeValuationCase['content'],
+  draws: AflTradeComponentDrawSet
+): void {
+  if (
+    draws.componentDrawSetId !== valuationCase.componentDrawSetId ||
+    draws.content.valuationInputBundleId !== valuationCase.valuationInputBundleId
+  ) {
+    throw new TypeError('Compatibility draws do not match the selected case.');
+  }
+}
+
 /**
  * Readback and compatibility checks only. The caller must authenticate current source, policy,
  * factual and run authority before calling. Retained bytes alone cannot establish those grants.
@@ -94,12 +186,7 @@ export async function assessAflTradeConstructionCompatibility(
   const assessedAt = instant.parse(request.assessedAt);
   const valuationCase = aflTradeValuationCaseSchema.parse(request.valuationCase).content;
   const draws = aflTradeComponentDrawSetSchema.parse(request.componentDrawSet);
-  if (
-    draws.componentDrawSetId !== valuationCase.componentDrawSetId ||
-    draws.content.valuationInputBundleId !== valuationCase.valuationInputBundleId
-  ) {
-    throw new TypeError('Compatibility draws do not match the selected case.');
-  }
+  assertSelectedDrawIdentity(valuationCase, draws);
   const assetKinds = new Map(draws.content.assets.map((asset) => [asset.assetId, asset.assetKind]));
   const environment = policySchema.shape.environment.parse(request.environment);
   const selectedRuns = z.object({ player: id, pick: id }).strict().parse(request.selectedRuns);
@@ -116,12 +203,7 @@ export async function assessAflTradeConstructionCompatibility(
   ) {
     throw new TypeError('Compatibility draws differ from selected component runs or value unit.');
   }
-  if (
-    request.repository.artifactClass !== 'derived_private' ||
-    (environment === 'non_production' && request.repository.assurance.startsWith('fixture_'))
-  ) {
-    throw new TypeError('Compatibility evidence requires matching private artifact custody.');
-  }
+  assertCompatibilityCustody(request.repository, environment);
   async function load(reference: AflTradeArtifactRef) {
     const expected = aflTradeArtifactRefSchema.parse(reference);
     if (Date.parse(expected.createdAt) > Date.parse(assessedAt)) {
@@ -175,9 +257,7 @@ export async function assessAflTradeConstructionCompatibility(
     );
   }
   const issues: AflTradeConstructionCompatibilityIssue[] = [];
-  for (const required of [...policy.requirements].sort((a, b) =>
-    `${a.assetId}/${a.view}`.localeCompare(`${b.assetId}/${b.view}`)
-  )) {
+  async function assessRequirement(required: CompatibilityRequirement): Promise<void> {
     const add = (reason: string) =>
       issues.push({ assetId: required.assetId, view: required.view, reason });
     const selectedRun = required.assetKind === 'player' ? selectedRuns.player : selectedRuns.pick;
@@ -191,12 +271,12 @@ export async function assessAflTradeConstructionCompatibility(
     }
     if (required.evidence === null) {
       add('evidence_reference_missing');
-      continue;
+      return;
     }
     const rawEvidence = await load(required.evidence);
     if (rawEvidence === null) {
       add('evidence_missing');
-      continue;
+      return;
     }
     const evidence = evidenceSchema.parse(rawEvidence);
     if (
@@ -209,46 +289,14 @@ export async function assessAflTradeConstructionCompatibility(
       throw new TypeError('Compatibility evidence belongs to a different scope, asset or view.');
     }
     const context = valuationCase.viewContexts.find(({ view }) => view === required.view)!;
-    if (Date.parse(evidence.knownAt) > Date.parse(context.knowledgeCutoffAt))
-      add('knowledge_after_cutoff');
-    if (
-      (required.view === 'at_trade' || required.view === 'remaining') &&
-      Date.parse(evidence.knownAt) > Date.parse(evidence.predictionCutoffAt)
-    )
-      add('knowledge_after_origin');
-    if (Date.parse(evidence.predictionCutoffAt) > Date.parse(context.effectiveAt))
-      add('origin_after_view');
-    if (
-      Date.parse(evidence.knownAt) > Date.parse(evidence.recordedAt) ||
-      Date.parse(evidence.recordedAt) > Date.parse(required.evidence.createdAt)
-    ) {
-      throw new TypeError(
-        'Compatibility evidence has invalid knowledge/recording custody chronology.'
-      );
-    }
-    if (
-      evidence.runId !== required.runId ||
-      evidence.methodId !== required.methodId ||
-      evidence.valueUnitId !== required.valueUnitId
-    )
-      add('component_policy_mismatch');
-    if (canonicalizeAflTradeJson(evidence.seasons) !== canonicalizeAflTradeJson(required.seasons)) {
-      add('calendar_window_mismatch');
-    }
-    if (
-      evidence.attribution !== 'receiving_spell' ||
-      (required.assetKind === 'player' && required.receivingSpellId === null) ||
-      evidence.receivingSpellId !== required.receivingSpellId ||
-      evidence.receivingClubId !== required.receivingClubId
-    )
-      add('receiving_spell_mismatch');
-    if (required.assetKind !== 'player') {
-      if (evidence.pathway !== 'national' || evidence.access !== 'open')
-        add('pick_pathway_unsupported');
-      if (evidence.draftYear === null) add('draft_year_missing');
-      else if (evidence.seasons.some((season) => season <= evidence.draftYear!))
-        add('pick_window_before_debut');
-    }
+    checkEvidenceChronology(evidence, required.view, context, required.evidence.createdAt, add);
+    checkEvidencePolicy(required, evidence, add);
+    checkPickEvidence(required, evidence, add);
+  }
+  for (const required of [...policy.requirements].sort((a, b) =>
+    `${a.assetId}/${a.view}`.localeCompare(`${b.assetId}/${b.view}`)
+  )) {
+    await assessRequirement(required);
   }
   return {
     state: issues.length ? ('incompatible' as const) : ('compatible' as const),

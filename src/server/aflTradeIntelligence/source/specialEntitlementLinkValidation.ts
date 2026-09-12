@@ -86,25 +86,17 @@ export const specialEntitlementLinkInputSchema = z
   })
   .strict();
 
-/**
- * Checks internal consistency of a retrospective evidence bundle only. References must still
- * be authenticated against the capture/authority ledger by the admission boundary. This result
- * is neither a canonical asset nor authority to promote or construct historical model inputs.
- */
-export function validateSpecialEntitlementLink(input: unknown) {
-  const parsed = specialEntitlementLinkInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { status: 'blocked' as const, issues: ['missing_or_invalid_evidence'], link: null };
-  }
-  const bundle = parsed.data;
-  const { asset, award, activation, custody, selection } = bundle;
-  const issues = new Set<string>();
-  const awardDate = specialEntitlementDateBounds(award.occurredAt);
-  const activationDate = activation ? specialEntitlementDateBounds(activation.occurredAt) : null;
+type LinkBundle = z.infer<typeof specialEntitlementLinkInputSchema>;
+type LinkEvent = z.infer<typeof event>;
+
+function validateAwardAndSelection(
+  bundle: LinkBundle,
+  events: readonly LinkEvent[],
+  issues: Set<string>
+): void {
+  const { asset, award, activation, selection } = bundle;
   if (asset.entitlementType === 'expansion_compensation' && !activation)
     issues.add('missing_applicable_activation');
-  const selectionDate = specialEntitlementDateBounds(selection.occurredAt);
-  const events = [award, ...(activation ? [activation] : []), ...custody, selection];
   if (events.some((item) => item.entitlementId !== award.entitlementId)) {
     issues.add('entitlement_identity_mismatch');
   }
@@ -122,6 +114,14 @@ export function validateSpecialEntitlementLink(input: unknown) {
   ) {
     issues.add('selection_kind_or_ordinal_mismatch');
   }
+  validateLinkChronology(bundle, issues);
+}
+
+function validateLinkChronology(bundle: LinkBundle, issues: Set<string>): void {
+  const { award, activation, selection } = bundle;
+  const awardDate = specialEntitlementDateBounds(award.occurredAt);
+  const activationDate = activation ? specialEntitlementDateBounds(activation.occurredAt) : null;
+  const selectionDate = specialEntitlementDateBounds(selection.occurredAt);
   if (
     selectionDate.year !== selection.draftYear ||
     (activationDate && activationDate.latest < awardDate.earliest) ||
@@ -130,6 +130,12 @@ export function validateSpecialEntitlementLink(input: unknown) {
   ) {
     issues.add('activation_or_selection_chronology_invalid');
   }
+}
+
+function validateCustodyChain(bundle: LinkBundle, issues: Set<string>): void {
+  const { award, custody, selection } = bundle;
+  const awardDate = specialEntitlementDateBounds(award.occurredAt);
+  const selectionDate = specialEntitlementDateBounds(selection.occurredAt);
   let holder = award.holderClubId;
   let earliestPossibleAt = awardDate.earliest;
   const transferIds = new Set<string>();
@@ -147,6 +153,9 @@ export function validateSpecialEntitlementLink(input: unknown) {
     holder = transfer.toClubId;
   }
   if (holder !== selection.clubId) issues.add('selection_holder_mismatch');
+}
+
+function validateCaptureBindings(events: readonly LinkEvent[], issues: Set<string>): void {
   const captureBindings = new Map<string, string>();
   for (const item of events) {
     for (const reference of item.evidence) {
@@ -156,6 +165,25 @@ export function validateSpecialEntitlementLink(input: unknown) {
       captureBindings.set(reference.captureId, binding);
     }
   }
+}
+
+/**
+ * Checks internal consistency of a retrospective evidence bundle only. References must still
+ * be authenticated against the capture/authority ledger by the admission boundary. This result
+ * is neither a canonical asset nor authority to promote or construct historical model inputs.
+ */
+export function validateSpecialEntitlementLink(input: unknown) {
+  const parsed = specialEntitlementLinkInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { status: 'blocked' as const, issues: ['missing_or_invalid_evidence'], link: null };
+  }
+  const bundle = parsed.data;
+  const { award, activation, custody, selection } = bundle;
+  const events = [award, ...(activation ? [activation] : []), ...custody, selection];
+  const issues = new Set<string>();
+  validateAwardAndSelection(bundle, events, issues);
+  validateCustodyChain(bundle, issues);
+  validateCaptureBindings(events, issues);
   return {
     status: issues.size ? ('blocked' as const) : ('internally_consistent' as const),
     issues: [...issues],
