@@ -1178,6 +1178,16 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0148_draft_session_boundary_identity_kind',
       '0149_official_2017_combined_draft_session_evidence',
       '0150_official_2016_combined_draft_session_evidence',
+      '0151_partial_factual_trade_dates',
+      '0152_special_entitlement_awards',
+      '0153_special_entitlement_custody',
+      '0154_special_entitlement_lifecycle',
+      '0155_special_entitlement_revisions',
+      '0156_atomic_special_entitlement_corrections',
+      '0157_special_entitlement_historical_readback',
+      '0158_special_entitlement_identity_replacement',
+      '0159_special_entitlement_correction_dependencies',
+      '0160_special_entitlement_historical_authority',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

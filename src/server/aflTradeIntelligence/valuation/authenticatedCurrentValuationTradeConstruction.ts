@@ -1,4 +1,8 @@
 import {
+  assessAflTradeConstructionCompatibility,
+  type AflTradeConstructionCompatibilityRequest,
+} from './constructionCompatibility';
+import {
   aflTradeArtifactRefSchema,
   createAflTradeCanonicalJsonArtifactRef,
   doesAflTradeArtifactRefMatchBytes,
@@ -280,4 +284,32 @@ export function constructAflTradeAuthenticatedCurrentValuationTrade(
     manifestArtifact: createAflTradeCanonicalJsonArtifactRef(manifest, input.createdAt),
     retainedParents,
   };
+}
+
+/** Checked entry point for genuine assembly; compatibility never substitutes for selected authority. */
+export async function constructAflTradeCompatibleCurrentValuationTrade(
+  input: ConstructionInput,
+  compatibility: Pick<
+    AflTradeConstructionCompatibilityRequest,
+    'environment' | 'policyReference' | 'repository'
+  >
+) {
+  if (input.state === 'blocked') return constructAflTradeAuthenticatedCurrentValuationTrade(input);
+  assertSelectedAuthority(input);
+  const assessment = await assessAflTradeConstructionCompatibility({
+    ...compatibility,
+    assessedAt: input.createdAt,
+    valuationCase: input.valuationCase,
+    componentDrawSet: input.componentDrawSet,
+    selectedRuns: {
+      player: input.components.find(
+        (component) => component.role === 'player_contribution_and_availability'
+      )!.runId,
+      pick: input.components.find(
+        (component) => component.role === 'draft_pick_and_future_pick_distribution'
+      )!.runId,
+    },
+  });
+  if (assessment.state !== 'compatible') return { state: 'incompatible' as const, assessment };
+  return constructAflTradeAuthenticatedCurrentValuationTrade(input);
 }

@@ -437,8 +437,12 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `afl_trade_canonical_promoter` authority, record the review with
    `npm run outcomes:sources:review-external-promotion -- --candidate <candidate-id> --draft-events <reviewed-json-path> --transaction-dates <reviewed-json-path> --decision approved --rationale <text> --authority-evidence <governed-evidence-id> --reviewer <principal-ref> --decided-at <UTC-millisecond-instant>`.
    The transaction-date file must exactly cover every candidate transaction. A source-recorded date
-   must be repeated exactly; an undated Draftguru transaction requires an independently reviewed date
-   here. The content-addressed proposal and approval bind those dates before canonical promotion.
+   must be repeated exactly. For an undated transaction, supply an independently supported day or
+   explicit `occurredOn: null` to retain year-only factual precision. Do not invent a completion day.
+   A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
+   reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
+   and approval bind that coverage before canonical promotion. Year-only factual admission does not
+   grant eligibility for historical valuation that requires an exact trade day.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
    content-addressed decision rather than manufacture a successor.
    PostgreSQL derives and authenticates the proposal, appends one typed decision, and advances its
@@ -1152,6 +1156,24 @@ stale authority and leaves the prior batch head readable; do not update the batc
 
 ### Clean-checkout genuine rehearsal blocker
 
+For a populated disposable local database, run `npm run outcomes:valuation:inspect-local` with the
+existing `AFL_OUTCOMES_DATABASE_URL` and `STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE` supplied through the
+local launch environment. Do not print connection credentials or the nonce. The connection must name
+the loopback `statly_outcomes_test` database and contain no query options or fragment. The command
+authenticates runtime identity and reads inventory within one repeatable-read, read-only transaction;
+it neither provisions another database nor dispatches valuation work. Its JSON has purpose
+`existing_database_inventory`, `rehearsalExecuted: false`, and the existing inventory-only assessment.
+A successful exit means the inventory read succeeded, even when its state is `blocked` or
+`inconclusive`. Errors emit no inventory receipt and exit with code 1.
+
+Retain these JSON receipts outside Git alongside the corresponding persistent database/artifact
+checkpoint, for example under `~/Documents/Statly/2025-trade-grading-data/receipts/`. An inventory
+receipt is not a database backup or restore proof. Its acquisition counter counts registered spells
+starting in the selected season; it does not enumerate the authenticated cohort's required spells
+over the evaluation horizon or establish historical 668/668 coverage. Authenticate the exact cohort
+and compute that requirement separately. The `preflight-genuine-local` command remains an
+empty-database bootstrap smoke check, not an inspection of this populated runtime.
+
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
 current HPN preparation implementation admits both `afl-men:2025-trades` and
@@ -1418,6 +1440,26 @@ the embedded key. The page's displayed player-appearance ordinal is a different 
 and Graham and must not be substituted for a native ID. Profile corroboration can support an exact
 candidate-only identity review without rewriting the missing source ID. A new reusable namespace
 or automatic suffix-normalization rule is not established by these findings.
+
+### Construction compatibility preflight
+
+Before using the new checked construction entry point, select the compatibility-policy artifact
+through current policy authority and select both component runs through current run/Gate authority.
+Use the existing private immutable artifact repository. The policy must name exactly every receiving
+root asset and all four required views. Each input metadata artifact must bind the selected trade,
+bundle, asset/view, run/method/unit, receiving club/spell, explicit annual window, knowledge/origin
+and recording times, and applicable draft year/pathway/access. Retain original evidence through its
+owning source/model workflow; a metadata assertion cannot establish historical knowledge or approval.
+
+Call `constructAflTradeCompatibleCurrentValuationTrade` with those selections. Missing policy or
+input evidence prevents packaging. An incompatible assessment reports each asset/view and reason;
+corrupted bytes, foreign scope, incomplete membership or selected-authority mismatches fail closed.
+A compatible result only permits the existing authenticated packager to run its normal checks.
+No model/source/publication grant is issued, and no database or artifact write occurs in assessment.
+
+This entry point is implemented but not wired into the local command/worker. Genuine policy and
+input-metadata production, current authority selection, scientific alignment and end-to-end assembly
+remain outstanding. Existing low-level packaging and fixture replay do not prove this preflight ran.
 
 ### Fresh governed execution prerequisites
 
@@ -2528,3 +2570,37 @@ Use disposable fixtures for rehearsal. Never point tests at `prisma/dev.db`, pro
 production public-outcomes data. A local build or fixture pass is not workbook provenance, upstream
 permission, object-storage readiness, PostgreSQL readiness, factual release approval, deployment, Gate
 approval, production health, or valuation publication evidence.
+
+### Correcting admitted special-entitlement facts
+
+Use the existing external canonical promotion repository for corrections. Retain the current full
+revision through `loadSpecialEntitlementRevision`, prepare exact reviewed replacement evidence, and
+obtain approvals for the proposed complete state through the existing scoped review boundary.
+`previewSpecialEntitlementCustody` prepares canonical references only; it grants no write authority.
+
+- For a correction under the same entitlement identity, call
+  `promoteWithSpecialEntitlementRevisions` with the reviewed promotion and every affected complete
+  revision. A standalone canonical correction must not strand an existing custody or exercise fact.
+- When the issuing identity itself changes, use `replaceSpecialEntitlementIdentity` with the exact
+  reviewed retirement/replacement relationship. A custody-bearing target requires the reviewed
+  promotion and target revision approval. An unused award-only target uses its exact initial state
+  and must not supply a promotion or fabricate a successor revision.
+- On SQLSTATE `40001`, roll back the entire operation. After the competing transaction ends, reload
+  current state and retry the operation if its reviewed inputs still apply. Do not retry individual
+  statements inside a failed transaction or replace stale inputs without their required review.
+- Rebuild factual corpus/release evidence through the existing owners. Check oldest-asset historical
+  readback, replacement reservation ownership and selected-archive current-version behavior. Keep
+  immutable source revisions and previously sealed archives; do not edit them to match current facts.
+  Historical reads authenticate the actual live entitlement head, following current identity
+  replacements even when they postdate the requested cutoff. Returned facts remain selected at the
+  cutoff; later approval evidence must not be inserted into the historical snapshot. Baseline award
+  approvals must also exist at or before that cutoff. Withdrawal of current authority still blocks
+  reconstruction. Within a selected archive, a pick realization is hidden if either its trade event
+  or its linked draft-selection event has a successor in that same archive.
+
+Use a disposable `AFL_OUTCOMES_TEST_DATABASE_URL` for the canonical-promotion PostgreSQL test suite.
+The day/year cases cover correction rollback/replay, reservation transfer, chained identities,
+withdrawal, historical archive readback and identity/event lock contention. Fixture success does not
+satisfy genuine source admission or scientific acceptance. Apply migrations and genuine writes only
+under the existing reviewed target runbook and authorization, and record commit, push, PR/CI, merge,
+main synchronization, deployment and admission outcomes separately.

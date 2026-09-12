@@ -1,3 +1,4 @@
+import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
 import { z } from 'zod';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '../artifacts/artifactReference';
@@ -43,9 +44,10 @@ const eventSchema = z
   .object({
     eventVersionId: z.string().min(1),
     eventId: z.string().min(1),
+    supersedesVersionId: z.string().min(1).nullable().optional(),
     seasonYear: z.number().int(),
     kind: z.string().min(1),
-    eventDate: z.string().min(1),
+    eventDate: z.string().min(1).nullable(),
     officialName: z.string().min(1),
     parties: z.array(partySchema),
   })
@@ -56,6 +58,10 @@ const assetSchema = z
     eventVersionId: z.string().min(1),
     assetKey: z.string().min(1),
     kind: z.enum(['player', 'current_pick', 'future_pick', 'cash', 'list_right', 'other']),
+    specialEntitlement: z
+      .object({ entitlementId: z.string().min(1), award: specialEntitlementAwardSchema })
+      .passthrough()
+      .optional(),
     playerId: z.string().min(1).nullable(),
     pickId: z.string().min(1).nullable(),
     fromClubId: z.string().min(1).nullable(),
@@ -311,55 +317,76 @@ async function buildRecords(
     };
   };
 
-  return decoded.map(({ record_kind, record }) => {
-    if (record_kind === 'transaction' || record_kind === 'draft_event') {
-      const value = eventSchema.parse(record);
-      if (record_kind === 'transaction') {
-        return {
-          recordKind: 'transaction',
-          recordId: value.eventVersionId,
-          eventId: value.eventId,
-          eventVersionId: value.eventVersionId,
-          seasonYear: value.seasonYear,
-          occurredOn: dateOnly(value.eventDate),
-          officialName: value.officialName,
-          transactionType: value.kind,
-          parties: value.parties.map((party) => ({
-            club: club(party.clubId),
-            role: party.role,
-            ordinal: party.ordinal,
-          })),
-        };
-      }
+  function mapEvent(
+    kind: 'transaction' | 'draft_event',
+    record: unknown
+  ): AflTradePromotionBackedPublicArchiveRecordInput {
+    const value = eventSchema.parse(record);
+    if (kind === 'transaction') {
       return {
-        recordKind: 'draft_event',
+        recordKind: 'transaction',
         recordId: value.eventVersionId,
         eventId: value.eventId,
         eventVersionId: value.eventVersionId,
+        ...(value.supersedesVersionId ? { supersedesVersionId: value.supersedesVersionId } : {}),
         seasonYear: value.seasonYear,
-        occurredOn: dateOnly(value.eventDate),
+        occurredOn: value.eventDate === null ? null : dateOnly(value.eventDate),
         officialName: value.officialName,
-        draftKind: value.kind as 'national_draft',
+        transactionType: value.kind,
+        parties: value.parties.map((party) => ({
+          club: club(party.clubId),
+          role: party.role,
+          ordinal: party.ordinal,
+        })),
       };
     }
-    if (record_kind === 'transfer') {
-      const value = assetSchema.parse(record);
-      if (!value.fromClubId || !value.toClubId)
-        throw new TypeError('Directed asset clubs are incomplete.');
-      return {
-        recordKind: record_kind,
-        recordId: value.assetVersionId,
-        assetVersionId: value.assetVersionId,
-        eventVersionId: value.eventVersionId,
-        assetKey: value.assetKey,
-        assetKind: value.kind,
-        rawDescription: value.rawDescription,
-        player: value.playerId ? player(value.playerId) : null,
-        pick: value.pickId ? pick(value.pickId) : null,
-        fromClub: club(value.fromClubId),
-        toClub: club(value.toClubId),
-      } as AflTradePromotionBackedPublicArchiveRecordInput;
-    }
+    if (value.eventDate === null)
+      throw new TypeError('Draft events require an exact occurrence date.');
+    return {
+      recordKind: 'draft_event',
+      recordId: value.eventVersionId,
+      eventId: value.eventId,
+      eventVersionId: value.eventVersionId,
+      ...(value.supersedesVersionId ? { supersedesVersionId: value.supersedesVersionId } : {}),
+      seasonYear: value.seasonYear,
+      occurredOn: dateOnly(value.eventDate),
+      officialName: value.officialName,
+      draftKind: value.kind as 'national_draft',
+    };
+  }
+
+  function mapTransfer(record: unknown): AflTradePromotionBackedPublicArchiveRecordInput {
+    const value = assetSchema.parse(record);
+    if (!value.fromClubId || !value.toClubId)
+      throw new TypeError('Directed asset clubs are incomplete.');
+    return {
+      recordKind: 'transfer',
+      recordId: value.assetVersionId,
+      assetVersionId: value.assetVersionId,
+      eventVersionId: value.eventVersionId,
+      assetKey: value.assetKey,
+      assetKind: value.kind,
+      ...(value.specialEntitlement
+        ? {
+            specialEntitlement: {
+              entitlementId: value.specialEntitlement.entitlementId,
+              entitlementType: value.specialEntitlement.award.content.asset.entitlementType,
+              sourceLabel: value.specialEntitlement.award.content.asset.sourceLabel,
+            },
+          }
+        : {}),
+      rawDescription: value.rawDescription,
+      player: value.playerId ? player(value.playerId) : null,
+      pick: value.pickId ? pick(value.pickId) : null,
+      fromClub: club(value.fromClubId),
+      toClub: club(value.toClubId),
+    } as AflTradePromotionBackedPublicArchiveRecordInput;
+  }
+
+  return decoded.map(({ record_kind, record }) => {
+    if (record_kind === 'transaction' || record_kind === 'draft_event')
+      return mapEvent(record_kind, record);
+    if (record_kind === 'transfer') return mapTransfer(record);
     if (record_kind === 'draft_player_asset') {
       const value = assetSchema.parse(record);
       if (!value.playerId || !value.toClubId)

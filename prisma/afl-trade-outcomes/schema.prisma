@@ -972,6 +972,7 @@ model OutcomeImportPartitionRow {
 }
 
 model OutcomeCompetitionSeason {
+  specialEntitlementAwards OutcomeSpecialEntitlementAward[]
   competition         String
   seasonYear          Int                            @map("season_year")
   startsOn            DateTime?                      @map("starts_on") @outcomes.Date
@@ -988,6 +989,7 @@ model OutcomeCompetitionSeason {
 }
 
 model OutcomeClub {
+  specialEntitlementAwards OutcomeSpecialEntitlementAward[]
   clubId              String                           @id @map("club_id")
   currentName         String                           @map("current_name")
   abbreviation        String?
@@ -3233,6 +3235,7 @@ model OutcomeReleaseSpellMetricMember {
 }
 
 model OutcomeEvent {
+  specialSelectionClaims OutcomeSpecialEntitlementSelectionClaim[]
   eventId      String                   @id @map("event_id")
   competition  String
   seasonYear   Int                      @map("season_year")
@@ -3251,7 +3254,7 @@ model OutcomeEventVersion {
   version              Int
   kind                 OutcomeEventKind
   acquisitionMechanism OutcomeAcquisitionMechanism      @map("acquisition_mechanism")
-  eventDate            DateTime                         @map("event_date") @outcomes.Date
+  eventDate            DateTime?                        @map("event_date") @outcomes.Date
   officialName         String                           @map("official_name")
   status               OutcomeRecordStatus
   sourceImportRowId    String                           @map("source_import_row_id")
@@ -3308,6 +3311,10 @@ model OutcomeDraftPick {
 }
 
 model OutcomeEventAsset {
+  specialEntitlementId String? @map("special_entitlement_id")
+  specialEntitlement OutcomeSpecialEntitlementAward? @relation(fields: [specialEntitlementId], references: [entitlementId], onDelete: Restrict)
+  specialCustody OutcomeSpecialEntitlementCustody?
+
   assetVersionId             String                           @id @map("asset_version_id")
   eventVersionId             String                           @map("event_version_id")
   assetKey                   String                           @map("asset_key")
@@ -3340,6 +3347,8 @@ model OutcomeEventAsset {
 }
 
 model OutcomeDraftSelection {
+  specialExercise OutcomeSpecialEntitlementLifecycle[]
+  specialSelectionClaim OutcomeSpecialEntitlementSelectionClaim?
   selectionId                String                          @id @map("selection_id")
   eventVersionId             String                          @map("event_version_id")
   selectionNumber            Int                             @map("selection_number")
@@ -3436,6 +3445,10 @@ model OutcomePickRealization {
 }
 
 model OutcomeReviewDecision {
+  specialIdentityReplacements OutcomeSpecialEntitlementIdentityReplacement[]
+  specialRevisions OutcomeSpecialEntitlementRevision[]
+  specialLifecycle OutcomeSpecialEntitlementLifecycle[]
+  specialEntitlementAwards OutcomeSpecialEntitlementAward[]
   acquisitionRuleRegistrations OutcomeAcquisitionSpellRule[]
   acquisitionSpellRegistrations OutcomeAcquisitionSpellVersion[]
   decisionId                       String                                            @id @map("decision_id")
@@ -6174,4 +6187,97 @@ model OutcomePrivateEvaluationReconstructionVerification {
 
   @@index([valuationScopeKey, tradeId, generationId, verifiedAt], map: "outcome_private_evaluation_reconstruction_selector_idx")
   @@map("outcome_private_evaluation_reconstruction_verification")
+}
+
+model OutcomeSpecialEntitlementAward {
+  retiredIdentity OutcomeSpecialEntitlementIdentityReplacement? @relation("RetiredSpecialIdentity")
+  replacementIdentity OutcomeSpecialEntitlementIdentityReplacement? @relation("ReplacementSpecialIdentity")
+  revisions OutcomeSpecialEntitlementRevision[]
+  selectionClaim OutcomeSpecialEntitlementSelectionClaim?
+  lifecycle OutcomeSpecialEntitlementLifecycle[]
+  assets OutcomeEventAsset[]
+  custody OutcomeSpecialEntitlementCustody[]
+  entitlementId String @id @map("entitlement_id")
+  environment OutcomeEnvironment
+  competition String
+  awardYear Int @map("award_year")
+  holderClubId String @map("holder_club_id")
+  approvalDecisionId String @map("approval_decision_id")
+  awardJson Json @map("award_json")
+  holderClub OutcomeClub @relation(fields: [holderClubId], references: [clubId], onDelete: Restrict)
+  approvalDecision OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict)
+  season OutcomeCompetitionSeason @relation(fields: [competition, awardYear], references: [competition, seasonYear], onDelete: Restrict)
+  @@map("outcome_special_entitlement_award")
+}
+
+model OutcomeSpecialEntitlementCustody {
+  exercises OutcomeSpecialEntitlementLifecycle[]
+  transferId String @id @map("transfer_id")
+  entitlementId String @map("entitlement_id")
+  assetVersionId String @unique @map("asset_version_id")
+  predecessorTransferId String? @unique @map("predecessor_transfer_id")
+  award OutcomeSpecialEntitlementAward @relation(fields: [entitlementId], references: [entitlementId], onDelete: Restrict)
+  asset OutcomeEventAsset @relation(fields: [assetVersionId], references: [assetVersionId], onDelete: Restrict)
+  predecessor OutcomeSpecialEntitlementCustody? @relation("SpecialCustodyChain", fields: [predecessorTransferId], references: [transferId], onDelete: Restrict)
+  successor OutcomeSpecialEntitlementCustody? @relation("SpecialCustodyChain")
+  @@map("outcome_special_entitlement_custody")
+}
+
+model OutcomeSpecialEntitlementLifecycle {
+  entitlementId String @map("entitlement_id")
+  kind String
+  selectionId String? @map("selection_id")
+  terminalTransferId String? @map("terminal_transfer_id")
+  approvalDecisionId String @map("approval_decision_id")
+  recordJson Json @map("record_json")
+  award OutcomeSpecialEntitlementAward @relation(fields: [entitlementId], references: [entitlementId], onDelete: Restrict, onUpdate: NoAction)
+  selection OutcomeDraftSelection? @relation(fields: [selectionId], references: [selectionId], onDelete: Restrict, onUpdate: NoAction)
+  terminalCustody OutcomeSpecialEntitlementCustody? @relation(fields: [terminalTransferId], references: [transferId], onDelete: Restrict, onUpdate: NoAction)
+  approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  @@id([entitlementId, kind])
+  @@map("outcome_special_entitlement_lifecycle")
+}
+
+model OutcomeSpecialEntitlementRevision {
+  retiredIdentities OutcomeSpecialEntitlementIdentityReplacement[] @relation("RetiredSpecialRevision")
+  replacementIdentities OutcomeSpecialEntitlementIdentityReplacement[] @relation("ReplacementSpecialRevision")
+  revisionId String @id @map("revision_id")
+  entitlementId String @map("entitlement_id")
+  revision Int
+  supersedesRevisionId String? @unique @map("supersedes_revision_id")
+  approvalDecisionId String? @map("approval_decision_id")
+  revisionJson Json @map("revision_json")
+  award OutcomeSpecialEntitlementAward @relation(fields: [entitlementId], references: [entitlementId], onDelete: Restrict, onUpdate: NoAction)
+  approval OutcomeReviewDecision? @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  predecessor OutcomeSpecialEntitlementRevision? @relation("SpecialRevisionChain", fields: [supersedesRevisionId], references: [revisionId], onDelete: Restrict, onUpdate: NoAction)
+  successor OutcomeSpecialEntitlementRevision? @relation("SpecialRevisionChain")
+  @@unique([entitlementId, revision])
+  @@map("outcome_special_entitlement_revision")
+}
+model OutcomeSpecialEntitlementSelectionClaim {
+  entitlementId String @id @map("entitlement_id")
+  selectionId String @unique @map("selection_id")
+  eventId String @map("event_id")
+  selectionNumber Int @map("selection_number")
+  award OutcomeSpecialEntitlementAward @relation(fields: [entitlementId], references: [entitlementId], onDelete: Restrict, onUpdate: NoAction)
+  selection OutcomeDraftSelection @relation(fields: [selectionId], references: [selectionId], onDelete: Restrict, onUpdate: NoAction)
+  event OutcomeEvent @relation(fields: [eventId], references: [eventId], onDelete: Restrict, onUpdate: NoAction)
+  @@unique([eventId, selectionNumber])
+  @@map("outcome_special_entitlement_selection_claim")
+}
+
+model OutcomeSpecialEntitlementIdentityReplacement {
+  replacementId String @id @map("replacement_id")
+  retiredEntitlementId String @unique @map("retired_entitlement_id")
+  replacementEntitlementId String @unique @map("replacement_entitlement_id")
+  retiredRevisionId String @map("retired_revision_id")
+  replacementRevisionId String @map("replacement_revision_id")
+  approvalDecisionId String @map("approval_decision_id")
+  replacementJson Json @map("replacement_json")
+  retiredAward OutcomeSpecialEntitlementAward @relation("RetiredSpecialIdentity", fields: [retiredEntitlementId], references: [entitlementId], onDelete: Restrict, onUpdate: NoAction, map: "special_identity_old_award_fk")
+  replacementAward OutcomeSpecialEntitlementAward @relation("ReplacementSpecialIdentity", fields: [replacementEntitlementId], references: [entitlementId], onDelete: Restrict, onUpdate: NoAction, map: "special_identity_new_award_fk")
+  retiredRevision OutcomeSpecialEntitlementRevision @relation("RetiredSpecialRevision", fields: [retiredRevisionId], references: [revisionId], onDelete: NoAction, onUpdate: NoAction, map: "special_identity_old_revision_fk")
+  replacementRevision OutcomeSpecialEntitlementRevision @relation("ReplacementSpecialRevision", fields: [replacementRevisionId], references: [revisionId], onDelete: NoAction, onUpdate: NoAction, map: "special_identity_new_revision_fk")
+  approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction, map: "special_identity_approval_fk")
+  @@map("outcome_special_entitlement_identity_replacement")
 }

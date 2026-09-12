@@ -2,6 +2,8 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { inspectExact2025AflPrivateValuationRehearsalPreflight } from '@/server/aflTradeIntelligence/development/localPrivateValuationRehearsalPreflight';
+import { installLocalAflTradeOutcomesRuntimeIdentity } from '@/server/aflTradeIntelligence/development/localOutcomesRuntimeIdentity';
+import { inspectLocalAflPrivateValuationCommand } from '../../Scripts/dev/inspect-local-afl-private-valuation';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -162,5 +164,28 @@ describe('exact 2025 private valuation rehearsal preflight on PostgreSQL', () =>
       genuineDraftTrade: 'not_inspected',
       genuineHpnCorroboration: 'not_inspected',
     });
+
+    const runtimeNonce = 'c'.repeat(64);
+    await installLocalAflTradeOutcomesRuntimeIdentity(pool, runtimeNonce, process.pid);
+    const connection = new URL(databaseUrl);
+    connection.search = '';
+    const inspect = () =>
+      inspectLocalAflPrivateValuationCommand({
+        env: {
+          AFL_OUTCOMES_DATABASE_URL: connection.toString(),
+          STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: runtimeNonce,
+        },
+        writeOutput: () => undefined,
+        createPool: (configuration) =>
+          new Pool({
+            ...configuration,
+            options: `${configuration.options} -c search_path=${schemaName}`,
+          }),
+      });
+    const first = await inspect();
+    const replay = await inspect();
+    expect(first.inventory).toEqual(report);
+    expect(replay).toEqual(first);
+    expect(first.rehearsalExecuted).toBe(false);
   });
 });

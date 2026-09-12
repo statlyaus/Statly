@@ -1,3 +1,4 @@
+import { specialDraftEntitlementSchema } from './specialDraftEntitlement';
 import { z } from 'zod';
 
 import {
@@ -195,6 +196,7 @@ const directedTransferClaimSchema = z
       playerAssetSchema,
       currentPickAssetSchema,
       futurePickAssetSchema,
+      specialDraftEntitlementSchema,
     ]),
   })
   .strict()

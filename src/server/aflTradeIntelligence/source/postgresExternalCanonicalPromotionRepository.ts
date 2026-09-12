@@ -1,3 +1,7 @@
+import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
+import { specialEntitlementRevisionSchema } from './specialEntitlementRevisionContracts';
+import { specialEntitlementLifecycleSchema } from './specialEntitlementLifecycleContracts';
+import { specialEntitlementAwardSchema } from './specialEntitlementAwardContracts';
 import { z } from 'zod';
 
 import {
@@ -561,11 +565,288 @@ async function ensureEventRoot(
   }
 }
 
+function plannedTradeVersion(
+  promotionId: string,
+  record: TransactionRecord,
+  predecessor: { eventVersionId: string; version: number } | null
+) {
+  const version = (predecessor?.version ?? 0) + 1;
+  return {
+    version,
+    eventVersionId: createAflTradeContentAddress('event-version', {
+      promotionId,
+      eventId: record.transactionId,
+      version,
+      supersedesVersionId: predecessor?.eventVersionId ?? null,
+      record,
+    }),
+  };
+}
+function plannedTradeAsset(promotionId: string, eventVersionId: string, transferId: string) {
+  return createAflTradeContentAddress('event-asset-version', {
+    promotionId,
+    eventVersionId,
+    transferId,
+  });
+}
+
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
+  /** Persists a reviewed award only; this does not admit its custody trades or exercise. */
+  async registerSpecialEntitlementAward(input: { award: unknown; approvalDecisionId: string }) {
+    const award = specialEntitlementAwardSchema.parse(input.award);
+    const decisionId = z.string().min(1).parse(input.approvalDecisionId);
+    return this.client.transaction(async (transaction) => {
+      const result = await transaction.query<{ award_json: unknown; idempotent_replay: boolean }>(
+        `SELECT award_json,idempotent_replay FROM register_outcome_special_entitlement_award($1::jsonb,$2)`,
+        [canonicalizeAflTradeJson(award), decisionId]
+      );
+      const row = result.rows[0];
+      if (!row)
+        throw new TypeError('Special-entitlement award registration returned no retained record.');
+      const retained = specialEntitlementAwardSchema.parse(row.award_json);
+      if (canonicalizeAflTradeJson(retained) !== canonicalizeAflTradeJson(award)) {
+        throw new TypeError(
+          'Special-entitlement award readback does not match the reviewed record.'
+        );
+      }
+      return {
+        award: retained,
+        idempotentReplay: row.idempotent_replay,
+        custodyPromoted: false as const,
+        exerciseRegistered: false as const,
+      };
+    });
+  }
+
+  /** Separate retrospective facts; registration never enables historical valuation. */
+  async registerSpecialEntitlementLifecycle(input: {
+    record: unknown;
+    approvalDecisionId: string;
+  }) {
+    const record = specialEntitlementLifecycleSchema.parse(input.record);
+    const decisionId = z.string().min(1).parse(input.approvalDecisionId);
+    return this.client.transaction(async (transaction) => {
+      const result = await transaction.query<{ record_json: unknown; idempotent_replay: boolean }>(
+        'SELECT * FROM register_outcome_special_entitlement_lifecycle($1::jsonb,$2)',
+        [canonicalizeAflTradeJson(record), decisionId]
+      );
+      const row = result.rows[0];
+      if (!row) throw new TypeError('Lifecycle registration returned no retained record.');
+      const retained = specialEntitlementLifecycleSchema.parse(row.record_json);
+      if (canonicalizeAflTradeJson(retained) !== canonicalizeAflTradeJson(record)) {
+        throw new TypeError('Lifecycle readback differs from the reviewed record.');
+      }
+      return {
+        record: retained,
+        idempotentReplay: row.idempotent_replay,
+        historicalFeatureEligible: false as const,
+      };
+    });
+  }
+
+  /** Reads an exact predecessor; a legacy snapshot is historical binding, not approval. */
+  async loadSpecialEntitlementRevision(entitlementId: string) {
+    const id = z.string().min(1).parse(entitlementId);
+    const result = await this.client.query<{ revision_json: unknown }>(
+      `SELECT COALESCE((SELECT revision_json FROM outcome_special_entitlement_revision
+       WHERE entitlement_id=$1 ORDER BY revision DESC LIMIT 1),outcome_special_entitlement_initial_revision($1)) AS revision_json`,
+      [id]
+    );
+    return specialEntitlementRevisionSchema.parse(result.rows[0]?.revision_json);
+  }
+
+  async registerSpecialEntitlementRevision(input: {
+    revision: unknown;
+    approvalDecisionId: string;
+  }) {
+    const revision = specialEntitlementRevisionSchema.parse(input.revision);
+    const decisionId = z.string().min(1).parse(input.approvalDecisionId);
+    return this.client.transaction(async (transaction) => {
+      const result = await transaction.query<{
+        retained_revision: unknown;
+        idempotent_replay: boolean;
+      }>('SELECT * FROM register_outcome_special_entitlement_revision($1::jsonb,$2)', [
+        canonicalizeAflTradeJson(revision),
+        decisionId,
+      ]);
+      const row = result.rows[0];
+      const retained = specialEntitlementRevisionSchema.parse(row?.retained_revision);
+      if (!row || canonicalizeAflTradeJson(retained) !== canonicalizeAflTradeJson(revision))
+        throw new TypeError('Retained revision differs from the exact reviewed correction.');
+      return {
+        revision: retained,
+        idempotentReplay: row.idempotent_replay,
+        historicalFeatureEligible: false as const,
+      };
+    });
+  }
+
+  /** Read-only deterministic bindings for a reviewed promotion; concurrent changes invalidate them. */
+  async previewSpecialEntitlementCustody(
+    input: PromoteAflTradeExternalCandidateInput,
+    entitlementId: string
+  ) {
+    const parsed = promotionInputSchema.parse(input);
+    return this.client.transaction(async (transaction) => {
+      const candidate = await loadCandidate(transaction, parsed.candidateId);
+      const approval = await loadApproval(
+        transaction,
+        parsed.candidateId,
+        parsed.approvalDecisionId
+      );
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate,
+        proposal: approval.proposal,
+      });
+      const request = createAflTradeExternalCanonicalPromotionRequest({
+        candidateId: candidate.candidateId,
+        proposalId: approval.proposal.proposalId,
+        approvalDecisionId: parsed.approvalDecisionId,
+      });
+      const planned = new Map<
+        string,
+        { eventVersionId: string; seasonYear: number; occurredOn: string | null }
+      >();
+      for (const source of candidate.content.transactions) {
+        const coverage = approval.proposal.content.transactionDateCoverage.find(
+          (item) => item.transactionId === source.transactionId
+        );
+        if (!coverage)
+          throw new TypeError('Correction preview requires reviewed transaction coverage.');
+        const record = { ...source, occurredOn: coverage.occurredOn };
+        const version = plannedTradeVersion(
+          request.promotionId,
+          record,
+          await currentEventVersion(transaction, record.transactionId)
+        );
+        planned.set(record.transactionId, {
+          eventVersionId: version.eventVersionId,
+          seasonYear: record.seasonYear,
+          occurredOn: record.occurredOn,
+        });
+      }
+      const custody = candidate.content.transfers.flatMap((record) => {
+        if (
+          record.asset.kind !== 'special_entitlement' ||
+          record.asset.entitlementId !== entitlementId
+        )
+          return [];
+        const event = planned.get(record.transactionId);
+        if (!event || !record.fromClubId || !record.toClubId)
+          throw new TypeError('Correction preview requires complete custody references.');
+        return [
+          {
+            transferId: record.transferId,
+            assetVersionId: plannedTradeAsset(
+              request.promotionId,
+              event.eventVersionId,
+              record.transferId
+            ),
+            ...event,
+            predecessorTransferId: record.asset.predecessorTransferId,
+            fromClubId: record.fromClubId,
+            toClubId: record.toClubId,
+          },
+        ];
+      });
+      return { custody, promotionEligible: false as const };
+    });
+  }
+
+  /** Retire and replace an incorrectly identified right with its reviewed canonical promotion. */
+  async replaceSpecialEntitlementIdentity(input: {
+    replacement: unknown;
+    approvalDecisionId: string;
+    replacementRevisionApprovalDecisionId?: string;
+    promotion?: PromoteAflTradeExternalCandidateInput;
+  }) {
+    const replacement = specialEntitlementIdentityReplacementSchema.parse(input.replacement);
+    const awardOnly = replacement.content.replacementRevision.content.revision === 1;
+    if (
+      awardOnly &&
+      (input.promotion !== undefined || input.replacementRevisionApprovalDecisionId !== undefined)
+    )
+      throw new TypeError(
+        'Award-only replacement uses its award and relationship approvals without a promotion.'
+      );
+    if (!awardOnly && (!input.promotion || !input.replacementRevisionApprovalDecisionId))
+      throw new TypeError(
+        'Replacement custody requires an atomic promotion and revision approval.'
+      );
+
+    return this.client.transaction(async (transaction) => {
+      const started = await transaction.query<{ replay: boolean }>(
+        'SELECT begin_outcome_special_identity_replacement($1::jsonb,$2) AS replay',
+        [canonicalizeAflTradeJson(replacement), z.string().min(1).parse(input.approvalDecisionId)]
+      );
+      if (awardOnly)
+        return {
+          replacement,
+          promotion: null,
+          revisions: [],
+          historicalFeatureEligible: false as const,
+          idempotentReplay: started.rows[0]?.replay === true,
+        };
+      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository({
+        query: transaction.query.bind(transaction),
+        transaction: (work) => work(transaction),
+      });
+      const result = await bound.promoteWithSpecialEntitlementRevisions({
+        promotion: input.promotion!,
+        revisions: [
+          {
+            revision: replacement.content.replacementRevision,
+            approvalDecisionId: input.replacementRevisionApprovalDecisionId!,
+          },
+        ],
+      });
+      return { replacement, ...result, idempotentReplay: started.rows[0]?.replay === true };
+    });
+  }
+
+  /** Promotion and every affected complete-state correction succeed or roll back together. */
+  async promoteWithSpecialEntitlementRevisions(input: {
+    promotion: PromoteAflTradeExternalCandidateInput;
+    revisions: Array<{ revision: unknown; approvalDecisionId: string }>;
+  }) {
+    if (!input.revisions.length)
+      throw new TypeError('Atomic correction requires reviewed revisions.');
+    const revisions = input.revisions.map((item) => ({
+      ...item,
+      revision: specialEntitlementRevisionSchema.parse(item.revision),
+    }));
+    const states = new Map(
+      revisions.map((item) => [item.revision.content.entitlementId, item.revision.content.state])
+    );
+    if (states.size !== revisions.length)
+      throw new TypeError('Atomic correction cannot repeat a right.');
+    return this.client.transaction(async (transaction) => {
+      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository({
+        query: transaction.query.bind(transaction),
+        transaction: (work) => work(transaction),
+      });
+      const promotion = await bound.promoteInternal(input.promotion, states);
+      const retained = [];
+      for (const item of revisions)
+        retained.push(await bound.registerSpecialEntitlementRevision(item));
+      return { promotion, revisions: retained, historicalFeatureEligible: false as const };
+    });
+  }
+
   async promote(
-    unparsedInput: PromoteAflTradeExternalCandidateInput
+    input: PromoteAflTradeExternalCandidateInput
+  ): Promise<PromotedAflTradeExternalCandidate> {
+    return this.promoteInternal(input, new Map());
+  }
+
+  private async promoteInternal(
+    unparsedInput: PromoteAflTradeExternalCandidateInput,
+    correctionStates: ReadonlyMap<
+      string,
+      z.infer<typeof specialEntitlementRevisionSchema>['content']['state']
+    >
   ): Promise<PromotedAflTradeExternalCandidate> {
     let input: z.infer<typeof promotionInputSchema>;
     try {
@@ -600,6 +881,43 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidate,
         proposal: approval.proposal,
       });
+      // Revalidate award authority before replay as well as before new writes.
+      const rights = candidate.content.transfers.filter(
+        (record) => record.asset.kind === 'special_entitlement'
+      );
+      await lockKeys(
+        transaction,
+        rights.flatMap((record) =>
+          record.asset.kind === 'special_entitlement'
+            ? [`special-entitlement-custody:${record.asset.entitlementId}`]
+            : []
+        )
+      );
+      async function authenticateRightSources(): Promise<void> {
+        for (const record of rights) {
+          const state =
+            record.asset.kind === 'special_entitlement'
+              ? correctionStates.get(record.asset.entitlementId)
+              : undefined;
+          if (state) {
+            await transaction.query(
+              'SELECT authenticate_outcome_special_corrected_custody_source($1,$2,$3::jsonb,$4)',
+              [
+                candidate.candidateId,
+                record.transferId,
+                canonicalizeAflTradeJson(state.award.award),
+                state.award.approvalDecisionId,
+              ]
+            );
+          } else {
+            await transaction.query('SELECT authenticate_outcome_special_custody_source($1,$2)', [
+              candidate.candidateId,
+              record.transferId,
+            ]);
+          }
+        }
+      }
+      await authenticateRightSources();
       const request = createAflTradeExternalCanonicalPromotionRequest({
         candidateId: candidate.candidateId,
         proposalId: approval.proposal.proposalId,
@@ -665,7 +983,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       );
       const promotedTransactions = content.transactions.map((record) => {
         const occurredOn = reviewedTransactionDateById.get(record.transactionId);
-        if (!occurredOn) {
+        if (occurredOn === undefined) {
           throw new AflTradeExternalCanonicalPromotionError(
             'CANDIDATE_UNAVAILABLE',
             `Transaction ${record.transactionId} has no reviewed occurrence date.`
@@ -744,33 +1062,42 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       );
 
       const importRunByCapture = new Map<string, string>();
-      for (const [index, capture] of evidence.captures.entries()) {
-        await transaction.query(
-          `INSERT INTO outcome_source_capture_season (capture_id,competition,season_year)
+      async function persistCaptureImports(): Promise<void> {
+        for (const [index, capture] of evidence.captures.entries()) {
+          await transaction.query(
+            `INSERT INTO outcome_source_capture_season (capture_id,competition,season_year)
            SELECT $1,$2,$3 WHERE NOT EXISTS (
              SELECT 1 FROM outcome_source_capture_season
              WHERE capture_id=$1 AND competition=$2 AND season_year=$3
            ) ON CONFLICT DO NOTHING`,
-          [capture.capture_id, content.competition, Number(capture.anchor_season_year)]
-        );
-        const importRunId = createAflTradeContentAddress('external-canonical-import', {
-          promotionId: request.promotionId,
-          captureId: capture.capture_id,
-        });
-        importRunByCapture.set(capture.capture_id, importRunId);
-        await transaction.query(
-          `INSERT INTO outcome_import_run
+            [capture.capture_id, content.competition, Number(capture.anchor_season_year)]
+          );
+          const importRunId = createAflTradeContentAddress('external-canonical-import', {
+            promotionId: request.promotionId,
+            captureId: capture.capture_id,
+          });
+          importRunByCapture.set(capture.capture_id, importRunId);
+          await transaction.query(
+            `INSERT INTO outcome_import_run
             (import_run_id,capture_id,import_kind,parser_version,started_at,completed_at,status,manifest_json,idempotency_scope)
            VALUES ($1,$2,'external_canonical_promotion','external-promotion/v1',$3,$3,
                    'approved'::"OutcomeRecordStatus",$4::jsonb,$5)`,
-          [importRunId, capture.capture_id, approval.promotedAt, receiptCanonical, request.promotionId]
-        );
-        await transaction.query(
-          `INSERT INTO outcome_external_canonical_promotion_import_run
+            [
+              importRunId,
+              capture.capture_id,
+              approval.promotedAt,
+              receiptCanonical,
+              request.promotionId,
+            ]
+          );
+          await transaction.query(
+            `INSERT INTO outcome_external_canonical_promotion_import_run
             (promotion_id,ordinal,import_run_id,capture_id) VALUES ($1,$2,$3,$4)`,
-          [request.promotionId, index + 1, importRunId, capture.capture_id]
-        );
+            [request.promotionId, index + 1, importRunId, capture.capture_id]
+          );
+        }
       }
+      await persistCaptureImports();
 
       const sourceRows: SourceRow[] = [];
       const sourceRowByKey = new Map<string, SourceRow>();
@@ -846,401 +1173,472 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         return row;
       };
 
-      for (const definition of definitions.values()) {
-        const kind = mapDraftKind(definition.draftType);
-        await transaction.query(
-          `INSERT INTO outcome_draft_pick
+      async function persistPickDefinitions(): Promise<void> {
+        for (const definition of definitions.values()) {
+          const kind = mapDraftKind(definition.draftType);
+          await transaction.query(
+            `INSERT INTO outcome_draft_pick
             (pick_id,draft_season_year,draft_kind,nominal_round,nominal_pick,original_club_id,status)
            VALUES ($1,$2,$3::"OutcomeEventKind",$4,$5,$6,'approved'::"OutcomeRecordStatus")
            ON CONFLICT (pick_id) DO NOTHING`,
-          [
-            definition.pickId,
-            definition.draftYear,
-            kind.eventKind,
-            definition.nominalRound,
-            definition.nominalPick,
-            definition.originalClubId,
-          ]
-        );
-        const exact = await transaction.query(
-          `SELECT pick_id FROM outcome_draft_pick
+            [
+              definition.pickId,
+              definition.draftYear,
+              kind.eventKind,
+              definition.nominalRound,
+              definition.nominalPick,
+              definition.originalClubId,
+            ]
+          );
+          const exact = await transaction.query(
+            `SELECT pick_id FROM outcome_draft_pick
             WHERE pick_id=$1 AND draft_season_year=$2 AND draft_kind=$3::"OutcomeEventKind"
               AND nominal_round IS NOT DISTINCT FROM $4 AND nominal_pick IS NOT DISTINCT FROM $5
               AND original_club_id IS NOT DISTINCT FROM $6 AND status='approved'::"OutcomeRecordStatus"
             FOR SHARE`,
-          [
-            definition.pickId,
-            definition.draftYear,
-            kind.eventKind,
-            definition.nominalRound,
-            definition.nominalPick,
-            definition.originalClubId,
-          ]
-        );
-        if (exact.rows.length !== 1) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'IMMUTABLE_CONFLICT',
-            `Pick ${definition.pickId} already has different canonical facts.`
+            [
+              definition.pickId,
+              definition.draftYear,
+              kind.eventKind,
+              definition.nominalRound,
+              definition.nominalPick,
+              definition.originalClubId,
+            ]
           );
+          if (exact.rows.length !== 1) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              `Pick ${definition.pickId} already has different canonical facts.`
+            );
+          }
         }
       }
+      await persistPickDefinitions();
 
       const promotionRecords: PromotionRecord[] = [];
       const eventVersionByTransaction = new Map<string, string>();
-      for (const record of promotedTransactions) {
-        const row = await sourceRow({
-          key: `transaction:${record.transactionId}`,
-          recordKind: 'external_transaction',
-          sourceRecordId: record.transactionId,
-          seasonYear: record.seasonYear,
-          evidenceIds: record.evidenceIds,
-          record,
-        });
-        await ensureEventRoot(transaction, {
-          eventId: record.transactionId,
-          competition: content.competition,
-          seasonYear: record.seasonYear,
-          stableKey: `external-transaction:${record.providerEventId}`,
-        });
-        const predecessor = await currentEventVersion(transaction, record.transactionId);
-        if (predecessor && predecessor.recordedAt > approval.promotedAt) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'IMMUTABLE_CONFLICT',
-            'Promotion cannot backdate an event correction.'
+      async function persistTransactionEvents(): Promise<void> {
+        for (const record of promotedTransactions) {
+          const row = await sourceRow({
+            key: `transaction:${record.transactionId}`,
+            recordKind: 'external_transaction',
+            sourceRecordId: record.transactionId,
+            seasonYear: record.seasonYear,
+            evidenceIds: record.evidenceIds,
+            record,
+          });
+          await ensureEventRoot(transaction, {
+            eventId: record.transactionId,
+            competition: content.competition,
+            seasonYear: record.seasonYear,
+            stableKey: `external-transaction:${record.providerEventId}`,
+          });
+          const predecessor = await currentEventVersion(transaction, record.transactionId);
+          if (predecessor && predecessor.recordedAt > approval.promotedAt) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              'Promotion cannot backdate an event correction.'
+            );
+          }
+          const { version, eventVersionId } = plannedTradeVersion(
+            request.promotionId,
+            record,
+            predecessor
           );
-        }
-        const version = (predecessor?.version ?? 0) + 1;
-        const eventVersionId = createAflTradeContentAddress('event-version', {
-          promotionId: request.promotionId,
-          eventId: record.transactionId,
-          version,
-          supersedesVersionId: predecessor?.eventVersionId ?? null,
-          record,
-        });
-        const kind = transactionKind(record);
-        await transaction.query(
-          `INSERT INTO outcome_event_version
+          const kind = transactionKind(record);
+          await transaction.query(
+            `INSERT INTO outcome_event_version
             (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
              official_name,status,source_import_row_id,supersedes_version_id,recorded_at)
            VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
                    'approved'::"OutcomeRecordStatus",$8,$9,$10)`,
-          [
-            eventVersionId,
-            record.transactionId,
-            version,
-            kind.eventKind,
-            kind.mechanism,
-            record.occurredOn,
-            record.title,
-            row.importRowId,
-            predecessor?.eventVersionId ?? null,
-            approval.promotedAt,
-          ]
-        );
-        for (const [ordinal, clubId] of [...record.parties].sort().entries()) {
-          await transaction.query(
-            `INSERT INTO outcome_event_party
+            [
+              eventVersionId,
+              record.transactionId,
+              version,
+              kind.eventKind,
+              kind.mechanism,
+              record.occurredOn,
+              record.title,
+              row.importRowId,
+              predecessor?.eventVersionId ?? null,
+              approval.promotedAt,
+            ]
+          );
+          for (const [ordinal, clubId] of [...record.parties].sort().entries()) {
+            await transaction.query(
+              `INSERT INTO outcome_event_party
               (event_version_id,club_id,source_import_row_id,role,ordinal)
              VALUES ($1,$2,$3,'party',$4)`,
-            [eventVersionId, clubId, row.importRowId, ordinal + 1]
-          );
+              [eventVersionId, clubId, row.importRowId, ordinal + 1]
+            );
+          }
+          eventVersionByTransaction.set(record.transactionId, eventVersionId);
+          promotionRecords.push({
+            recordKind: 'transaction',
+            sourceRecordId: record.transactionId,
+            canonicalRecordId: eventVersionId,
+            sourceRow: row,
+          });
         }
-        eventVersionByTransaction.set(record.transactionId, eventVersionId);
-        promotionRecords.push({
-          recordKind: 'transaction',
-          sourceRecordId: record.transactionId,
-          canonicalRecordId: eventVersionId,
-          sourceRow: row,
-        });
       }
+      await persistTransactionEvents();
 
       const assetByTransfer = new Map<string, string>();
-      for (const record of content.transfers) {
-        const sourceTransaction = promotedTransactions.find(
-          ({ transactionId }) => transactionId === record.transactionId
+      const pendingTransfers = [...content.transfers];
+      const orderedTransfers: typeof pendingTransfers = [];
+      const pendingIds = new Set(pendingTransfers.map((record) => record.transferId));
+      while (pendingTransfers.length) {
+        const index = pendingTransfers.findIndex(
+          (record) =>
+            record.asset.kind !== 'special_entitlement' ||
+            record.asset.predecessorTransferId === null ||
+            !pendingIds.has(record.asset.predecessorTransferId)
         );
-        const eventVersionId = eventVersionByTransaction.get(record.transactionId);
-        if (!sourceTransaction || !eventVersionId || !record.fromClubId || !record.toClubId) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'CANDIDATE_UNAVAILABLE',
-            `Transfer ${record.transferId} is incomplete.`
-          );
-        }
-        const row = await sourceRow({
-          key: `transfer:${record.transferId}`,
-          recordKind: 'external_transfer',
-          sourceRecordId: record.transferId,
-          seasonYear: sourceTransaction.seasonYear,
-          evidenceIds: record.evidenceIds,
-          record,
-        });
-        const assetVersionId = createAflTradeContentAddress('event-asset-version', {
-          promotionId: request.promotionId,
-          eventVersionId,
-          transferId: record.transferId,
-        });
-        const player = record.asset.kind === 'player' ? record.asset.playerId : null;
-        const identityDecision = player ? identityDecisionByPlayer.get(player) : null;
-        const pick = record.asset.kind === 'pick_entitlement' ? record.asset.pickId : null;
-        const assetKind =
-          record.asset.kind === 'player'
+        if (index < 0) throw new TypeError('Special-entitlement custody contains a cycle.');
+        const record = pendingTransfers.splice(index, 1)[0]!;
+        pendingIds.delete(record.transferId);
+        orderedTransfers.push(record);
+      }
+      type PromotedAsset = Exclude<
+        (typeof content.transfers)[number]['asset'],
+        { kind: 'special_pick' }
+      >;
+      function transferAssetKind(asset: PromotedAsset, seasonYear: number) {
+        return asset.kind === 'special_entitlement'
+          ? 'list_right'
+          : asset.kind === 'player'
             ? 'player'
-            : record.asset.draftYear > sourceTransaction.seasonYear
+            : asset.draftYear > seasonYear
               ? 'future_pick'
               : 'current_pick';
-        const rawDescription =
-          record.asset.kind === 'player'
-            ? record.asset.recordedName
-            : (record.asset.recordedLabel ??
-              `${record.asset.draftYear} ${record.asset.draftType} pick ${record.asset.nominalPick ?? `round ${record.asset.nominalRound ?? '?'}`}`);
-        await transaction.query(
-          `INSERT INTO outcome_event_asset
-            (asset_version_id,event_version_id,asset_key,kind,player_id,player_identity_id,
-             external_identity_decision_id,pick_id,from_club_id,to_club_id,source_import_row_id,
-             raw_description,status)
-           VALUES ($1,$2,$3,$4::"OutcomeAssetKind",$5,NULL,$6,$7,$8,$9,$10,$11,
-                   'approved'::"OutcomeRecordStatus")`,
-          [
-            assetVersionId,
-            eventVersionId,
-            record.transferId,
-            assetKind,
-            player,
-            identityDecision,
-            pick,
-            record.fromClubId,
-            record.toClubId,
-            row.importRowId,
-            rawDescription,
-          ]
-        );
-        assetByTransfer.set(record.transferId, assetVersionId);
-        promotionRecords.push({
-          recordKind: 'transfer',
-          sourceRecordId: record.transferId,
-          canonicalRecordId: assetVersionId,
-          sourceRow: row,
-        });
       }
-
-      const canonicalSelectionBySource = new Map<string, string>();
-      for (const coverage of approval.proposal.content.draftEventCoverage) {
-        const selections = content.draftSelections
-          .filter(
-            ({ draftYear, draftType, selectionId }) =>
-              draftYear === coverage.draftYear &&
-              draftType === coverage.draftType &&
-              coverage.selectionIds.includes(selectionId)
-          )
-          .sort((left, right) => left.selectionNumber - right.selectionNumber);
-        const evidenceIds = sortedUnique([
-          ...selections.flatMap(({ evidenceIds }) => evidenceIds),
-          ...('evidenceIds' in coverage ? coverage.evidenceIds : []),
-        ]);
-        const coverageId = createAflTradeContentAddress('draft-event-coverage', coverage);
-        const eventRow = await sourceRow({
-          key: `draft-event:${coverageId}`,
-          recordKind: 'external_draft_event',
-          sourceRecordId: coverageId,
-          seasonYear: coverage.draftYear,
-          evidenceIds,
-          record: coverage,
-        });
-        const eventId = createAflTradeContentAddress('draft-event', {
-          competition: content.competition,
-          draftYear: coverage.draftYear,
-          draftType: coverage.draftType,
-          ...('sessionOrdinal' in coverage ? { sessionOrdinal: coverage.sessionOrdinal } : {}),
-        });
-        await ensureEventRoot(transaction, {
-          eventId,
-          competition: content.competition,
-          seasonYear: coverage.draftYear,
-          stableKey: `external-draft:${content.competition}:${coverage.draftYear}:${coverage.draftType}${'sessionOrdinal' in coverage ? `:session:${coverage.sessionOrdinal}` : ''}`,
-        });
-        const predecessor = await currentEventVersion(transaction, eventId);
-        if (predecessor && predecessor.recordedAt > approval.promotedAt) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'IMMUTABLE_CONFLICT',
-            'Promotion cannot backdate a draft-event correction.'
+      function transferDescription(asset: PromotedAsset) {
+        return asset.kind === 'special_entitlement'
+          ? asset.sourceAsset.kind === 'special_pick'
+            ? asset.sourceAsset.sourceLabel
+            : (asset.sourceAsset.recordedLabel ?? 'Special draft entitlement')
+          : asset.kind === 'player'
+            ? asset.recordedName
+            : (asset.recordedLabel ??
+              `${asset.draftYear} ${asset.draftType} pick ${asset.nominalPick ?? `round ${asset.nominalRound ?? '?'}`}`);
+      }
+      async function persistTransferAssets(): Promise<void> {
+        for (const record of orderedTransfers) {
+          const sourceTransaction = promotedTransactions.find(
+            ({ transactionId }) => transactionId === record.transactionId
           );
-        }
-        const version = (predecessor?.version ?? 0) + 1;
-        const eventVersionId = createAflTradeContentAddress('event-version', {
-          promotionId: request.promotionId,
-          eventId,
-          version,
-          supersedesVersionId: predecessor?.eventVersionId ?? null,
-          coverage,
-        });
-        const draftKind = mapDraftKind(coverage.draftType);
-        await transaction.query(
-          `INSERT INTO outcome_event_version
-            (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
-             official_name,status,source_import_row_id,supersedes_version_id,recorded_at)
-           VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
-                   'approved'::"OutcomeRecordStatus",$8,$9,$10)`,
-          [
-            eventVersionId,
-            eventId,
-            version,
-            draftKind.eventKind,
-            draftKind.mechanism,
-            coverage.eventDate,
-            coverage.officialName,
-            eventRow.importRowId,
-            predecessor?.eventVersionId ?? null,
-            approval.promotedAt,
-          ]
-        );
-        const selectingClubs = sortedUnique(
-          selections.flatMap(({ clubId }) => (clubId ? [clubId] : []))
-        );
-        for (const [ordinal, clubId] of selectingClubs.entries()) {
-          const selection = selections.find((value) => value.clubId === clubId);
-          if (!selection) throw new TypeError('Draft party source selection is missing.');
-          const row = await sourceRow({
-            key: `selection:${selection.selectionId}`,
-            recordKind: 'external_draft_selection',
-            sourceRecordId: selection.selectionId,
-            seasonYear: selection.draftYear,
-            evidenceIds: selection.evidenceIds,
-            record: selection,
-          });
-          await transaction.query(
-            `INSERT INTO outcome_event_party
-              (event_version_id,club_id,source_import_row_id,role,ordinal)
-             VALUES ($1,$2,$3,'selecting_club',$4)`,
-            [eventVersionId, clubId, row.importRowId, ordinal + 1]
-          );
-        }
-        for (const selection of selections) {
-          if (!selection.playerId || !selection.clubId) {
+          const eventVersionId = eventVersionByTransaction.get(record.transactionId);
+          if (!sourceTransaction || !eventVersionId || !record.fromClubId || !record.toClubId) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
-              `Selection ${selection.selectionId} has incomplete identities.`
+              `Transfer ${record.transferId} is incomplete.`
             );
           }
           const row = await sourceRow({
-            key: `selection:${selection.selectionId}`,
-            recordKind: 'external_draft_selection',
-            sourceRecordId: selection.selectionId,
-            seasonYear: selection.draftYear,
-            evidenceIds: selection.evidenceIds,
-            record: selection,
+            key: `transfer:${record.transferId}`,
+            recordKind: 'external_transfer',
+            sourceRecordId: record.transferId,
+            seasonYear: sourceTransaction.seasonYear,
+            evidenceIds: record.evidenceIds,
+            record,
           });
-          const identityDecision = identityDecisionByPlayer.get(selection.playerId);
-          if (!identityDecision) throw new TypeError('Selection identity decision is missing.');
-          const canonicalSelectionId = createAflTradeContentAddress('draft-selection', {
-            promotionId: request.promotionId,
+          const assetVersionId = plannedTradeAsset(
+            request.promotionId,
             eventVersionId,
-            sourceSelectionId: selection.selectionId,
-          });
+            record.transferId
+          );
+          if (record.asset.kind === 'special_pick') {
+            throw new TypeError(
+              'Unresolved special entitlement cannot be persisted as an ordinary pick.'
+            );
+          }
+          const player = record.asset.kind === 'player' ? record.asset.playerId : null;
+          const identityDecision = player ? identityDecisionByPlayer.get(player) : null;
+          const pick = record.asset.kind === 'pick_entitlement' ? record.asset.pickId : null;
+          const assetKind = transferAssetKind(record.asset, sourceTransaction.seasonYear);
+          const rawDescription = transferDescription(record.asset);
           await transaction.query(
-            `INSERT INTO outcome_draft_selection
+            `INSERT INTO outcome_event_asset
+            (asset_version_id,event_version_id,asset_key,kind,player_id,player_identity_id,
+             external_identity_decision_id,pick_id,from_club_id,to_club_id,source_import_row_id,
+             raw_description,status,special_entitlement_id)
+           VALUES ($1,$2,$3,$4::"OutcomeAssetKind",$5,NULL,$6,$7,$8,$9,$10,$11,
+                   'approved'::"OutcomeRecordStatus",$12)`,
+            [
+              assetVersionId,
+              eventVersionId,
+              record.transferId,
+              assetKind,
+              player,
+              identityDecision,
+              pick,
+              record.fromClubId,
+              record.toClubId,
+              row.importRowId,
+              rawDescription,
+              record.asset.kind === 'special_entitlement' ? record.asset.entitlementId : null,
+            ]
+          );
+          if (
+            record.asset.kind === 'special_entitlement' &&
+            !correctionStates.has(record.asset.entitlementId)
+          ) {
+            await transaction.query(
+              `INSERT INTO outcome_special_entitlement_custody
+            (transfer_id,entitlement_id,asset_version_id,predecessor_transfer_id)
+            VALUES ($1,$2,$3,$4)`,
+              [
+                record.transferId,
+                record.asset.entitlementId,
+                assetVersionId,
+                record.asset.predecessorTransferId,
+              ]
+            );
+          }
+          assetByTransfer.set(record.transferId, assetVersionId);
+          promotionRecords.push({
+            recordKind: 'transfer',
+            sourceRecordId: record.transferId,
+            canonicalRecordId: assetVersionId,
+            sourceRow: row,
+          });
+        }
+      }
+      await persistTransferAssets();
+
+      const canonicalSelectionBySource = new Map<string, string>();
+      type DraftCoverage = (typeof approval.proposal.content.draftEventCoverage)[number];
+      function draftCoverageEvidence(
+        selections: typeof content.draftSelections,
+        coverage: DraftCoverage
+      ): string[] {
+        return sortedUnique([
+          ...selections.flatMap(({ evidenceIds }) => evidenceIds),
+          ...('evidenceIds' in coverage ? coverage.evidenceIds : []),
+        ]);
+      }
+      async function persistDraftEventsAndSelections(): Promise<void> {
+        for (const coverage of approval.proposal.content.draftEventCoverage) {
+          const selections = content.draftSelections
+            .filter(
+              ({ draftYear, draftType, selectionId }) =>
+                draftYear === coverage.draftYear &&
+                draftType === coverage.draftType &&
+                coverage.selectionIds.includes(selectionId)
+            )
+            .sort((left, right) => left.selectionNumber - right.selectionNumber);
+          const evidenceIds = draftCoverageEvidence(selections, coverage);
+          const coverageId = createAflTradeContentAddress('draft-event-coverage', coverage);
+          const eventRow = await sourceRow({
+            key: `draft-event:${coverageId}`,
+            recordKind: 'external_draft_event',
+            sourceRecordId: coverageId,
+            seasonYear: coverage.draftYear,
+            evidenceIds,
+            record: coverage,
+          });
+          const eventId = createAflTradeContentAddress('draft-event', {
+            competition: content.competition,
+            draftYear: coverage.draftYear,
+            draftType: coverage.draftType,
+            ...('sessionOrdinal' in coverage ? { sessionOrdinal: coverage.sessionOrdinal } : {}),
+          });
+          await ensureEventRoot(transaction, {
+            eventId,
+            competition: content.competition,
+            seasonYear: coverage.draftYear,
+            stableKey: `external-draft:${content.competition}:${coverage.draftYear}:${coverage.draftType}${'sessionOrdinal' in coverage ? `:session:${coverage.sessionOrdinal}` : ''}`,
+          });
+          const predecessor = await currentEventVersion(transaction, eventId);
+          if (predecessor && predecessor.recordedAt > approval.promotedAt) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              'Promotion cannot backdate a draft-event correction.'
+            );
+          }
+          const version = (predecessor?.version ?? 0) + 1;
+          const eventVersionId = createAflTradeContentAddress('event-version', {
+            promotionId: request.promotionId,
+            eventId,
+            version,
+            supersedesVersionId: predecessor?.eventVersionId ?? null,
+            coverage,
+          });
+          const draftKind = mapDraftKind(coverage.draftType);
+          await transaction.query(
+            `INSERT INTO outcome_event_version
+            (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
+             official_name,status,source_import_row_id,supersedes_version_id,recorded_at)
+           VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
+                   'approved'::"OutcomeRecordStatus",$8,$9,$10)`,
+            [
+              eventVersionId,
+              eventId,
+              version,
+              draftKind.eventKind,
+              draftKind.mechanism,
+              coverage.eventDate,
+              coverage.officialName,
+              eventRow.importRowId,
+              predecessor?.eventVersionId ?? null,
+              approval.promotedAt,
+            ]
+          );
+          const selectingClubs = sortedUnique(
+            selections.flatMap(({ clubId }) => (clubId ? [clubId] : []))
+          );
+          for (const [ordinal, clubId] of selectingClubs.entries()) {
+            const selection = selections.find((value) => value.clubId === clubId);
+            if (!selection) throw new TypeError('Draft party source selection is missing.');
+            const row = await sourceRow({
+              key: `selection:${selection.selectionId}`,
+              recordKind: 'external_draft_selection',
+              sourceRecordId: selection.selectionId,
+              seasonYear: selection.draftYear,
+              evidenceIds: selection.evidenceIds,
+              record: selection,
+            });
+            await transaction.query(
+              `INSERT INTO outcome_event_party
+              (event_version_id,club_id,source_import_row_id,role,ordinal)
+             VALUES ($1,$2,$3,'selecting_club',$4)`,
+              [eventVersionId, clubId, row.importRowId, ordinal + 1]
+            );
+          }
+          async function persistSelectedPlayer(
+            selection: (typeof content.draftSelections)[number]
+          ): Promise<void> {
+            if (!selection.playerId || !selection.clubId) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'CANDIDATE_UNAVAILABLE',
+                `Selection ${selection.selectionId} has incomplete identities.`
+              );
+            }
+            const row = await sourceRow({
+              key: `selection:${selection.selectionId}`,
+              recordKind: 'external_draft_selection',
+              sourceRecordId: selection.selectionId,
+              seasonYear: selection.draftYear,
+              evidenceIds: selection.evidenceIds,
+              record: selection,
+            });
+            const identityDecision = identityDecisionByPlayer.get(selection.playerId);
+            if (!identityDecision) throw new TypeError('Selection identity decision is missing.');
+            const canonicalSelectionId = createAflTradeContentAddress('draft-selection', {
+              promotionId: request.promotionId,
+              eventVersionId,
+              sourceSelectionId: selection.selectionId,
+            });
+            await transaction.query(
+              `INSERT INTO outcome_draft_selection
               (selection_id,event_version_id,selection_number,pick_id,player_id,player_identity_id,
                external_identity_decision_id,club_id,source_import_row_id,status)
              VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,'approved'::"OutcomeRecordStatus")`,
-            [
-              canonicalSelectionId,
+              [
+                canonicalSelectionId,
+                eventVersionId,
+                selection.selectionNumber,
+                selection.pickId,
+                selection.playerId,
+                identityDecision,
+                selection.clubId,
+                row.importRowId,
+              ]
+            );
+            const playerAssetVersionId = createAflTradeContentAddress('event-asset-version', {
+              promotionId: request.promotionId,
               eventVersionId,
-              selection.selectionNumber,
-              selection.pickId,
-              selection.playerId,
-              identityDecision,
-              selection.clubId,
-              row.importRowId,
-            ]
-          );
-          const playerAssetVersionId = createAflTradeContentAddress('event-asset-version', {
-            promotionId: request.promotionId,
-            eventVersionId,
-            sourceSelectionId: selection.selectionId,
-            kind: 'selected_player',
-          });
-          await transaction.query(
-            `INSERT INTO outcome_event_asset
+              sourceSelectionId: selection.selectionId,
+              kind: 'selected_player',
+            });
+            await transaction.query(
+              `INSERT INTO outcome_event_asset
               (asset_version_id,event_version_id,asset_key,kind,player_id,player_identity_id,
                external_identity_decision_id,pick_id,from_club_id,to_club_id,source_import_row_id,
                raw_description,status)
              VALUES ($1,$2,$3,'player'::"OutcomeAssetKind",$4,NULL,$5,NULL,NULL,$6,$7,$8,
                      'approved'::"OutcomeRecordStatus")`,
-            [
-              playerAssetVersionId,
-              eventVersionId,
-              `selected-player:${selection.selectionId}`,
-              selection.playerId,
-              identityDecision,
-              selection.clubId,
-              row.importRowId,
-              `Selected with pick ${selection.selectionNumber}`,
-            ]
-          );
-          canonicalSelectionBySource.set(selection.selectionId, canonicalSelectionId);
-          promotionRecords.push(
-            {
-              recordKind: 'draft_selection',
-              sourceRecordId: selection.selectionId,
-              canonicalRecordId: canonicalSelectionId,
-              sourceRow: row,
-            },
-            {
-              recordKind: 'draft_player_asset',
-              sourceRecordId: selection.selectionId,
-              canonicalRecordId: playerAssetVersionId,
-              sourceRow: row,
-            }
-          );
+              [
+                playerAssetVersionId,
+                eventVersionId,
+                `selected-player:${selection.selectionId}`,
+                selection.playerId,
+                identityDecision,
+                selection.clubId,
+                row.importRowId,
+                `Selected with pick ${selection.selectionNumber}`,
+              ]
+            );
+            canonicalSelectionBySource.set(selection.selectionId, canonicalSelectionId);
+            promotionRecords.push(
+              {
+                recordKind: 'draft_selection',
+                sourceRecordId: selection.selectionId,
+                canonicalRecordId: canonicalSelectionId,
+                sourceRow: row,
+              },
+              {
+                recordKind: 'draft_player_asset',
+                sourceRecordId: selection.selectionId,
+                canonicalRecordId: playerAssetVersionId,
+                sourceRow: row,
+              }
+            );
+          }
+          for (const selection of selections) await persistSelectedPlayer(selection);
+          promotionRecords.push({
+            recordKind: 'draft_event',
+            sourceRecordId: coverageId,
+            canonicalRecordId: eventVersionId,
+            sourceRow: eventRow,
+          });
         }
-        promotionRecords.push({
-          recordKind: 'draft_event',
-          sourceRecordId: coverageId,
-          canonicalRecordId: eventVersionId,
-          sourceRow: eventRow,
-        });
       }
+      await persistDraftEventsAndSelections();
 
-      for (const record of content.pickCustody) {
-        if (!record.originalClubId || !record.currentClubId) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'CANDIDATE_UNAVAILABLE',
-            `Custody ${record.custodyId} has incomplete clubs.`
-          );
-        }
-        const row = await sourceRow({
-          key: `custody:${record.custodyId}`,
-          recordKind: 'external_pick_custody',
-          sourceRecordId: record.custodyId,
-          seasonYear: record.draftYear,
-          evidenceIds: record.evidenceIds,
-          record,
-        });
-        const kind = mapDraftKind(record.draftType);
-        await transaction.query(
-          `INSERT INTO outcome_pick_custody_observation
+      async function persistPickCustody(): Promise<void> {
+        for (const record of content.pickCustody) {
+          if (!record.originalClubId || !record.currentClubId) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'CANDIDATE_UNAVAILABLE',
+              `Custody ${record.custodyId} has incomplete clubs.`
+            );
+          }
+          const row = await sourceRow({
+            key: `custody:${record.custodyId}`,
+            recordKind: 'external_pick_custody',
+            sourceRecordId: record.custodyId,
+            seasonYear: record.draftYear,
+            evidenceIds: record.evidenceIds,
+            record,
+          });
+          const kind = mapDraftKind(record.draftType);
+          await transaction.query(
+            `INSERT INTO outcome_pick_custody_observation
             (custody_observation_id,pick_id,observed_at,draft_season_year,draft_kind,
              recorded_round,recorded_pick,original_club_id,current_club_id,source_import_row_id,
              status,evidence_json,recorded_at)
            VALUES ($1,$2,$3,$4,$5::"OutcomeEventKind",$6,$7,$8,$9,$10,
                    'approved'::"OutcomeRecordStatus",$11::jsonb,$12)
            ON CONFLICT (custody_observation_id) DO NOTHING`,
-          [
-            record.custodyId,
-            record.pickId,
-            record.observedAt,
-            record.draftYear,
-            kind.eventKind,
-            record.roundNumber,
-            record.recordedPickNumber,
-            record.originalClubId,
-            record.currentClubId,
-            row.importRowId,
-            canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
-            approval.promotedAt,
-          ]
-        );
-        const exactCustody = await transaction.query(
-          `SELECT custody_observation_id FROM outcome_pick_custody_observation
+            [
+              record.custodyId,
+              record.pickId,
+              record.observedAt,
+              record.draftYear,
+              kind.eventKind,
+              record.roundNumber,
+              record.recordedPickNumber,
+              record.originalClubId,
+              record.currentClubId,
+              row.importRowId,
+              canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
+              approval.promotedAt,
+            ]
+          );
+          const exactCustody = await transaction.query(
+            `SELECT custody_observation_id FROM outcome_pick_custody_observation
             WHERE custody_observation_id=$1 AND pick_id=$2 AND observed_at=$3
               AND draft_season_year=$4 AND draft_kind=$5::"OutcomeEventKind"
               AND recorded_round IS NOT DISTINCT FROM $6
@@ -1249,83 +1647,88 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               AND source_import_row_id=$10 AND status='approved'::"OutcomeRecordStatus"
               AND evidence_json=$11::jsonb AND recorded_at=$12
             FOR SHARE`,
-          [
-            record.custodyId,
-            record.pickId,
-            record.observedAt,
-            record.draftYear,
-            kind.eventKind,
-            record.roundNumber,
-            record.recordedPickNumber,
-            record.originalClubId,
-            record.currentClubId,
-            row.importRowId,
-            canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
-            approval.promotedAt,
-          ]
-        );
-        if (exactCustody.rows.length !== 1) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'IMMUTABLE_CONFLICT',
-            `Pick custody ${record.custodyId} already has different canonical facts.`
+            [
+              record.custodyId,
+              record.pickId,
+              record.observedAt,
+              record.draftYear,
+              kind.eventKind,
+              record.roundNumber,
+              record.recordedPickNumber,
+              record.originalClubId,
+              record.currentClubId,
+              row.importRowId,
+              canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
+              approval.promotedAt,
+            ]
           );
+          if (exactCustody.rows.length !== 1) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              `Pick custody ${record.custodyId} already has different canonical facts.`
+            );
+          }
+          promotionRecords.push({
+            recordKind: 'pick_custody',
+            sourceRecordId: record.custodyId,
+            canonicalRecordId: record.custodyId,
+            sourceRow: row,
+          });
         }
-        promotionRecords.push({
-          recordKind: 'pick_custody',
-          sourceRecordId: record.custodyId,
-          canonicalRecordId: record.custodyId,
-          sourceRow: row,
-        });
       }
+      await persistPickCustody();
 
-      for (const record of content.pickLineage) {
-        const transferAssetVersionId = assetByTransfer.get(record.transferId);
-        const draftSelectionId = canonicalSelectionBySource.get(record.selectionId);
-        const selection = content.draftSelections.find(
-          ({ selectionId }) => selectionId === record.selectionId
-        );
-        if (!transferAssetVersionId || !draftSelectionId || !selection) {
-          throw new AflTradeExternalCanonicalPromotionError(
-            'CANDIDATE_UNAVAILABLE',
-            `Pick realization ${record.lineageId} has incomplete canonical endpoints.`
+      async function persistPickRealizations(): Promise<void> {
+        for (const record of content.pickLineage) {
+          const transferAssetVersionId = assetByTransfer.get(record.transferId);
+          const draftSelectionId = canonicalSelectionBySource.get(record.selectionId);
+          const selection = content.draftSelections.find(
+            ({ selectionId }) => selectionId === record.selectionId
           );
-        }
-        const row = await sourceRow({
-          key: `realization:${record.lineageId}`,
-          recordKind: 'external_pick_realization',
-          sourceRecordId: record.lineageId,
-          seasonYear: selection.draftYear,
-          evidenceIds: record.evidenceIds,
-          record,
-        });
-        const realizationId = createAflTradeContentAddress('pick-realization', {
-          promotionId: request.promotionId,
-          sourceLineageId: record.lineageId,
-          transferAssetVersionId,
-          draftSelectionId,
-        });
-        await transaction.query(
-          `INSERT INTO outcome_pick_realization
+          if (!transferAssetVersionId || !draftSelectionId || !selection) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'CANDIDATE_UNAVAILABLE',
+              `Pick realization ${record.lineageId} has incomplete canonical endpoints.`
+            );
+          }
+          const row = await sourceRow({
+            key: `realization:${record.lineageId}`,
+            recordKind: 'external_pick_realization',
+            sourceRecordId: record.lineageId,
+            seasonYear: selection.draftYear,
+            evidenceIds: record.evidenceIds,
+            record,
+          });
+          const realizationId = createAflTradeContentAddress('pick-realization', {
+            promotionId: request.promotionId,
+            sourceLineageId: record.lineageId,
+            transferAssetVersionId,
+            draftSelectionId,
+          });
+          await transaction.query(
+            `INSERT INTO outcome_pick_realization
             (realization_id,pick_id,transfer_asset_version_id,draft_selection_id,
              source_import_row_id,relation_kind,status,evidence_json,recorded_at)
            VALUES ($1,$2,$3,$4,$5,'exercised_as','approved'::"OutcomeRecordStatus",$6::jsonb,$7)`,
-          [
-            realizationId,
-            record.pickId,
-            transferAssetVersionId,
-            draftSelectionId,
-            row.importRowId,
-            canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
-            approval.promotedAt,
-          ]
-        );
-        promotionRecords.push({
-          recordKind: 'pick_realization',
-          sourceRecordId: record.lineageId,
-          canonicalRecordId: realizationId,
-          sourceRow: row,
-        });
+            [
+              realizationId,
+              record.pickId,
+              transferAssetVersionId,
+              draftSelectionId,
+              row.importRowId,
+              canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
+              approval.promotedAt,
+            ]
+          );
+          promotionRecords.push({
+            recordKind: 'pick_realization',
+            sourceRecordId: record.lineageId,
+            canonicalRecordId: realizationId,
+            sourceRow: row,
+          });
+        }
       }
+      await persistPickRealizations();
 
       const partitionGroups = new Map<string, SourceRow[]>();
       sourceRows.forEach((row) => {
@@ -1334,75 +1737,81 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         values.push(row);
         partitionGroups.set(key, values);
       });
-      for (const [key, rows] of partitionGroups) {
-        rows.sort((left, right) => left.sourceOrdinal - right.sourceOrdinal);
-        const [importRunId, seasonYearText] = key.split('|');
-        const seasonYear = Number(seasonYearText);
-        const rowIds = rows.map(({ importRowId }) => importRowId);
-        const partitionId = createAflTradeContentAddress('external-canonical-partition', {
-          promotionId: request.promotionId,
-          importRunId,
-          competition: content.competition,
-          seasonYear,
-          rowIds,
-        });
-        const partition = {
-          schemaVersion: 'afl-trade-external-canonical-partition/v1',
-          promotionId: request.promotionId,
-          rowIds,
-        };
-        await transaction.query(
-          `INSERT INTO outcome_import_partition
+      async function persistSourcePartitions(): Promise<void> {
+        for (const [key, rows] of partitionGroups) {
+          rows.sort((left, right) => left.sourceOrdinal - right.sourceOrdinal);
+          const [importRunId, seasonYearText] = key.split('|');
+          const seasonYear = Number(seasonYearText);
+          const rowIds = rows.map(({ importRowId }) => importRowId);
+          const partitionId = createAflTradeContentAddress('external-canonical-partition', {
+            promotionId: request.promotionId,
+            importRunId,
+            competition: content.competition,
+            seasonYear,
+            rowIds,
+          });
+          const partition = {
+            schemaVersion: 'afl-trade-external-canonical-partition/v1',
+            promotionId: request.promotionId,
+            rowIds,
+          };
+          await transaction.query(
+            `INSERT INTO outcome_import_partition
             (import_partition_id,import_run_id,partition_key,partition_kind,competition,
              season_year,row_count,rows_sha256,partition_json)
            VALUES ($1,$2,$3,'external_canonical_promotion',$4,$5,$6,$7,$8::jsonb)`,
-          [
-            partitionId,
-            importRunId,
-            `external-canonical:${request.promotionId}:${seasonYear}`,
-            content.competition,
-            seasonYear,
-            rows.length,
-            sha256AflTradeCanonicalJson(rowIds),
-            canonicalizeAflTradeJson(partition),
-          ]
-        );
-        for (const [ordinal, row] of rows.entries()) {
-          await transaction.query(
-            `INSERT INTO outcome_import_partition_row
+            [
+              partitionId,
+              importRunId,
+              `external-canonical:${request.promotionId}:${seasonYear}`,
+              content.competition,
+              seasonYear,
+              rows.length,
+              sha256AflTradeCanonicalJson(rowIds),
+              canonicalizeAflTradeJson(partition),
+            ]
+          );
+          for (const [ordinal, row] of rows.entries()) {
+            await transaction.query(
+              `INSERT INTO outcome_import_partition_row
               (import_partition_id,import_row_id,import_run_id,ordinal)
              VALUES ($1,$2,$3,$4)`,
-            [partitionId, row.importRowId, importRunId, ordinal]
-          );
+              [partitionId, row.importRowId, importRunId, ordinal]
+            );
+          }
         }
       }
+      await persistSourcePartitions();
 
       promotionRecords.sort(
         (left, right) =>
           left.recordKind.localeCompare(right.recordKind) ||
           left.sourceRecordId.localeCompare(right.sourceRecordId)
       );
-      for (const [index, record] of promotionRecords.entries()) {
-        const recordCanonical = canonicalizeAflTradeJson(record.sourceRow.record);
-        await transaction.query(
-          `INSERT INTO outcome_external_canonical_promotion_record
+      async function persistPromotionRecordIndex(): Promise<void> {
+        for (const [index, record] of promotionRecords.entries()) {
+          const recordCanonical = canonicalizeAflTradeJson(record.sourceRow.record);
+          await transaction.query(
+            `INSERT INTO outcome_external_canonical_promotion_record
             (promotion_id,ordinal,record_kind,source_record_id,canonical_record_id,
              source_import_row_id,record_sha256,record_canonical_json,evidence_ids,record_json)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)`,
-          [
-            request.promotionId,
-            index + 1,
-            record.recordKind,
-            record.sourceRecordId,
-            record.canonicalRecordId,
-            record.sourceRow.importRowId,
-            record.sourceRow.recordSha256,
-            recordCanonical,
-            canonicalizeAflTradeJson(record.sourceRow.evidenceIds),
-            recordCanonical,
-          ]
-        );
+            [
+              request.promotionId,
+              index + 1,
+              record.recordKind,
+              record.sourceRecordId,
+              record.canonicalRecordId,
+              record.sourceRow.importRowId,
+              record.sourceRow.recordSha256,
+              recordCanonical,
+              canonicalizeAflTradeJson(record.sourceRow.evidenceIds),
+              recordCanonical,
+            ]
+          );
+        }
       }
+      await persistPromotionRecordIndex();
 
       const finalized = await transaction.query(
         `UPDATE outcome_external_canonical_promotion

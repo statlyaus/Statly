@@ -91,6 +91,7 @@
     "outcomes:modeling:record-private-evaluation-authority": "tsx Scripts/dev/record-local-afl-trade-private-valuation-evaluation.ts",
     "outcomes:modeling:record-private-reviewed-evaluation-authority": "tsx Scripts/dev/record-local-afl-trade-private-reviewed-evaluation.ts",
     "outcomes:valuation:preflight-genuine-local": "tsx Scripts/dev/preflight-local-afl-private-valuation-rehearsal.ts",
+    "outcomes:valuation:inspect-local": "tsx Scripts/dev/inspect-local-afl-private-valuation.ts",
     "outcomes:valuation:run-local": "tsx Scripts/dev/run-local-afl-private-valuation.ts",
     "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
     "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",

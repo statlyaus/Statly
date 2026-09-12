@@ -1,3 +1,4 @@
+import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
 
 import {
@@ -182,6 +183,7 @@ interface CanonicalTransaction {
 }
 
 type CanonicalTransferAsset =
+  | SpecialDraftEntitlement
   | {
       kind: 'player';
       playerId: string | null;
@@ -504,28 +506,31 @@ function reconcileDirectedTransfer(input: {
     input.row.evidenceId
   );
   const asset =
-    claim.asset.kind === 'player'
-      ? playerTransferAsset({ row: input.row, claim, resolve: input.resolve })
-      : claim.asset.kind === 'future_pick'
-        ? futurePickTransferAsset({
-            row: input.row,
-            claim,
-            resolve: input.resolve,
-            pickCustody: input.pickCustody,
-            toClubId,
-          })
-        : currentPickTransferAsset({
-            claim,
-            transactionClaimsByNativeEventId: input.transactionClaimsByNativeEventId,
-            pickCustody: input.pickCustody,
-            fromClubId,
-            toClubId,
-          });
+    claim.asset.kind === 'special_pick'
+      ? claim.asset
+      : claim.asset.kind === 'player'
+        ? playerTransferAsset({ row: input.row, claim, resolve: input.resolve })
+        : claim.asset.kind === 'future_pick'
+          ? futurePickTransferAsset({
+              row: input.row,
+              claim,
+              resolve: input.resolve,
+              pickCustody: input.pickCustody,
+              toClubId,
+            })
+          : currentPickTransferAsset({
+              claim,
+              transactionClaimsByNativeEventId: input.transactionClaimsByNativeEventId,
+              pickCustody: input.pickCustody,
+              fromClubId,
+              toClubId,
+            });
   const custodyResolved =
-    asset.kind !== 'pick_entitlement' ||
-    input.pickCustody.some(
-      (custody) => custody.pickId === asset.pickId && isUsableCustody(custody)
-    );
+    asset.kind !== 'special_pick' &&
+    (asset.kind !== 'pick_entitlement' ||
+      input.pickCustody.some(
+        (custody) => custody.pickId === asset.pickId && isUsableCustody(custody)
+      ));
   const status: ReconciliationStatus =
     !fromClubId || !toClubId || (asset.kind === 'player' && !asset.playerId) || !custodyResolved
       ? 'unresolved'
@@ -1136,6 +1141,17 @@ export function reconcileAflTradeExternalEvidence(input: {
 
   const pickLineage: CanonicalPickLineage[] = [];
   transfers.forEach((transfer) => {
+    if (transfer.asset.kind === 'special_pick') {
+      issues.push({
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `lineage:${transfer.transferId}`,
+        detail:
+          'Special entitlement requires independently resolved award, activation and custody evidence.',
+        evidenceIds: transfer.evidenceIds,
+      });
+      return;
+    }
     if (transfer.asset.kind !== 'pick_entitlement') return;
     if (transfer.status === 'unresolved' || transfer.status === 'disputed') {
       issues.push({

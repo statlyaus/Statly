@@ -132,7 +132,7 @@ const onTradeRealization = {
   transferAssetVersionId: onTradedTransfer.assetVersionId,
 } satisfies AflTradePromotionBackedPublicArchiveRecordInput;
 
-function archiveReader() {
+function archiveReader(yearOnly = false) {
   const readRecords = vi.fn(
     async (
       _selection: AflTradePromotionBackedArchiveSelection,
@@ -147,7 +147,12 @@ function archiveReader() {
       if (query.recordKinds.includes('transfer'))
         return [transfer, realization, onTradedTransfer, onTradeRealization];
       if (query.recordKinds.length === 1 && query.recordKinds[0] === 'transaction')
-        return [trade, onTrade];
+        return yearOnly
+          ? [
+              { ...trade, occurredOn: null },
+              { ...onTrade, occurredOn: null },
+            ]
+          : [trade, onTrade];
       return [];
     }
   );
@@ -161,8 +166,8 @@ function archiveReader() {
 }
 
 describe('PostgreSQL AFL draft-history reads', () => {
-  it('maps selections and follows stable pick identity across years to its trade', async () => {
-    const archiveRepository = archiveReader();
+  it.each([false, true])('maps stable pick lineage with year-only dates: %s', async (yearOnly) => {
+    const archiveRepository = archiveReader(yearOnly);
     const repository = createPostgresAflDraftHistoryRepository({ archiveRepository });
 
     await expect(repository.listYears(selection)).resolves.toEqual([

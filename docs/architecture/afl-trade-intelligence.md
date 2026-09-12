@@ -2471,6 +2471,12 @@ Unavailable factual refreshes remain unavailable, while substantive no-change di
 existing batch reuse path. The command-line composition does not yet supply genuine construction
 configuration, and this wiring does not complete native PAV execution or the genuine-data rehearsal.
 
+The `outcomes:valuation:inspect-local` command reads an existing admitted loopback database using
+the existing inventory owner. Runtime identity and inventory share one repeatable-read, read-only
+transaction. This command has no dispatch or provisioning dependency and reports inventory-only
+status, never genuine readiness. Its season-based registered-spell count is not a computation of
+the authenticated cohort's acquisition requirements over the evaluation horizon.
+
 Target-cohort authority is independent of both model-training releases. For admitted-player v2,
 private preparation selects one existing finalized corpus-factual-lineage admission under the live
 dispatch claim. An immutable request binding retains the exact promotion-backed corpus, dormant
@@ -2533,6 +2539,31 @@ owner now also supplies exact retained selection, and `localPrivateValuationCons
 composes the sealed reader, bundle constructor and artifact custody within the prepared-cohort
 transaction. Evidence-derived per-trade input assembly and full worker composition remain required.
 Replaying a retained fixture manifest proves none of this genuine fresh-construction evidence.
+
+### Retained construction compatibility assessment
+
+`valuation/constructionCompatibility.ts` compares exact retained compatibility-policy and input
+metadata through the existing immutable private artifact repository. The caller selects the policy
+reference and component runs through current authority independently of the proposed inputs. The
+assessment checks exact trade/bundle scope, complete root-asset/view membership, selected runs and
+units, calendar windows, receiving-club/spell attribution, pick pathway/access and draft timing,
+and prediction/knowledge/recording chronology. Missing evidence is unavailable; mismatched inputs
+produce ordered per-asset/view issues; corrupted or foreign evidence throws. Fixture custody cannot
+be used for a non-production assessment. A compatible result always has `qualificationGranted: false`.
+
+`constructAflTradeCompatibleCurrentValuationTrade` invokes this assessment before the existing
+low-level authenticated packager. The original packager remains available for already constructed
+inputs and existing replay. The command/worker does not yet select compatibility policy/evidence;
+that genuine assembly integration remains outstanding. No existing training observation is treated
+as a forecast merely because it carries PAV values. The new metadata contracts are construction
+requirements and evidence descriptions, not a second model registry or scientific approval route.
+
+Byte integrity is not source permission, proof of historical knowledge, current model authority or
+method approval. The upstream owner must authenticate those facts before selecting these references;
+a supplied earlier `knownAt` cannot establish historical knowledge by itself. Pick entitlements may
+lack a realized receiving spell, but must still match the selected receiving-club attribution policy
+and explicit seasons. Across-spell outcomes cannot pass as receiving-spell contributions. Genuine
+policy retention, metadata production and future-pick horizon review remain outstanding.
 
 ### Fresh construction method proposal and required evidence
 
@@ -3304,6 +3335,27 @@ inferred: trade-package distributions and qualification/publication eligibility 
 or false. Acceptance thresholds, score-difference precision, subgroup validation, genuine source
 coverage and governed execution remain subsequent work, not implied by these calculations.
 
+`admittedPlayerPavAcceptance.ts` supplies a conditional numerical diagnostic for the proposed
+acceptance tolerances. Its versioned criteria content can be retained through the existing protocol's
+acceptance-criteria artifact reference; constructing it grants no scientific review or run authority.
+It checks cumulative CRPS improvement of at least 5%, nominal 80% interval coverage within 75%–85%,
+and MAE ratios no greater than 1.05 across all annual and cumulative horizons. Passing requires both
+the point estimate and supplied simultaneous bounds to meet each tolerance. Bounds wholly outside a
+tolerance fail; overlapping or absent precision is inconclusive, and a supported failure takes
+precedence while preserving every individual result. Zero baseline errors remain undefined and retain their raw candidate/reference scores rather
+than being replaced with epsilon; non-finite arithmetic and malformed horizon/bound records fail
+validation. Arithmetic-derived point ratios allow roundoff of eight machine epsilons scaled by the larger of
+one and the absolute estimate; supplied confidence bounds and coverage points receive no allowance.
+These tolerances are proposed product criteria, not empirically validated AFL thresholds.
+
+The diagnostic does not estimate confidence or establish that caller-supplied bounds have the
+specified joint 95% coverage. A syntactically valid method reference is not authenticated authority.
+Callers must independently authenticate paired membership, frozen baseline selection, nominal
+coverage, report/run ancestry and a reviewed simultaneous precision procedure before using the
+result in existing qualification review. The diagnostic is not wired to that review or the genuine
+worker and always returns `qualificationGranted: false`. Numerical pass never supplies source,
+method, model or publication approval, cross-player dependence, or an October forecast origin.
+
 The native pre-final numerical seam now reuses separately fitted, content-addressed empirical
 calibration state. It authenticates exact candidate and calibration-configuration bytes, opens
 selected calibration/validation targets, and produces validation-only forecasts and diagnostics.
@@ -3802,3 +3854,43 @@ unavailable when their own requirements do not pass.
 - [Product design principles](../product/design-principles.md)
 - [Player identity consolidation](../runbooks/player-identity.md)
 - [Public AFL Draft & Trade Outcomes operations](../runbooks/afl-trade-intelligence-operations.md)
+
+### Special-entitlement factual dates and corrections
+
+Reviewed external promotion preserves year-only trade occurrences as a null day plus the retained
+season year. Factual archive readers retain that precision; valuation construction does not invent a
+day to admit an otherwise ineligible historical feature. The existing canonical event-version owner
+remains responsible for promotions and supersession.
+
+Migrations `0152` through `0159` add reviewed issuing awards, canonical custody, activation/exercise,
+complete-state revisions, and explicit old-identity/new-identity replacement. The source owner is
+`src/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository.ts`.
+Awards, lifecycle facts, revisions and replacement relationships retain their exact scoped approvals
+and source-capture evidence. A current selection claim prevents competing exercises. Same-right
+corrections append complete revisions; identity corrections require their separate reviewed
+relationship and retire the old identity against further writes. An unused award can be replaced
+without inventing custody or lifecycle records.
+Migration `0160` separates live entitlement authority from cutoff-selected historical provenance.
+Historical reads authenticate the latest revision or current replacement identity first, then return
+only the retained facts available by the requested cutoff, including the baseline award approval.
+Archive realization filtering follows both its trade event and its selection's draft event within
+the selected immutable archive.
+
+`promoteWithSpecialEntitlementRevisions` commits canonical corrections and all dependent right
+revisions in one transaction. `replaceSpecialEntitlementIdentity` additionally retires the source,
+transfers the current reservation and retains the old snapshots. A deferred database constraint
+rejects canonical supersession that strands current custody or exercise. Dependency authentication
+and event insertion share the canonical event lock so concurrent admission cannot evade this check.
+Contended dependency authentication or recursive history readback raises SQLSTATE `40001`; the
+caller must roll back and retry the whole operation, never continue a partially failed transaction.
+
+Private factual release assembly retains historical snapshots and follows reviewed identity chains
+to current facts. Withdrawn current authority prevents fresh assembly; it cannot revive an old
+approval. Already sealed archives remain immutable. Public selected-archive reads select the latest
+version within that archive, rather than using mutable global currentness to rewrite an old archive.
+Private entitlement approvals and lifecycle details are not added to the public projection.
+
+These persistence and fixture checks do not establish genuine admission, public activation or
+scientific eligibility. Genuine data must still pass the existing target, provenance, source,
+review, corpus and release gates. The parameterized PostgreSQL regression is
+`tests/outcomes-integration/afl-external-canonical-promotion-postgres.test.ts`.

@@ -70,7 +70,9 @@ function buildBundle(
   const transactions = recordsByKind(records, 'transaction').sort(
     (left, right) =>
       right.seasonYear - left.seasonYear ||
-      left.occurredOn.localeCompare(right.occurredOn) ||
+      // Unknown days sort after dated rows within the year, without assigning an occurrence.
+      Number(left.occurredOn === null) - Number(right.occurredOn === null) ||
+      (left.occurredOn ?? '').localeCompare(right.occurredOn ?? '') ||
       left.eventId.localeCompare(right.eventId)
   );
   const transfersByEvent = new Map<string, Transfer[]>();
