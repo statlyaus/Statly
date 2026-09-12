@@ -493,28 +493,74 @@ const draftTypeByLabel: Readonly<
 export function parseDraftguruYearSelections(
   html: string,
   input: { capture: SourceCapture; draftYear: number }
-): DraftguruTradeParseResult {
+): DraftguruTradeParseResult & {
+  scopeSummary: {
+    observedRows: number;
+    includedRows: number;
+    excludedByPathway: Record<string, number>;
+    invalidRows: number;
+  };
+} {
   assertYear(input.draftYear, 'draftYear');
   const $ = load(html);
   const rows: AflTradeExternalEvidenceEnvelope[] = [];
   const issues: DraftguruParseIssue[] = [];
-  $('table.big-pick-movements tbody tr').each((rowIndex, row) => {
+  const scopeSummary = {
+    observedRows: 0,
+    includedRows: 0,
+    excludedByPathway: {} as Record<string, number>,
+    invalidRows: 0,
+  };
+  const tables = $('table.big-pick-movements');
+  if (tables.length !== 1) {
+    return {
+      evidence: [],
+      issues: [
+        {
+          code: 'invalid_page',
+          sourceKey: 'year-table',
+          detail: 'Expected exactly one year table.',
+        },
+      ],
+      scopeSummary,
+    };
+  }
+  const excludedLabels = new Set([
+    'Trade',
+    'Free Agency',
+    'Pre-Draft',
+    'Post-Draft',
+    'Training Squad Selection',
+  ]);
+  tables.find('tbody tr').each((rowIndex, row) => {
+    scopeSummary.observedRows++;
     const wrapped = $(row);
     const draftLabel = normalizeText(wrapped.find('td.draft').text());
-    const draftType = draftTypeByLabel[draftLabel] as
-      'national' | 'rookie' | 'pre_season' | 'mid_season' | 'mini_draft' | undefined;
-    const selectionNumber = Number.parseInt(normalizeText(wrapped.find('td.number').text()), 10);
+    if (excludedLabels.has(draftLabel)) {
+      scopeSummary.excludedByPathway[draftLabel] =
+        (scopeSummary.excludedByPathway[draftLabel] ?? 0) + 1;
+      return;
+    }
+    const draftType = (
+      Object.hasOwn(draftTypeByLabel, draftLabel) ? draftTypeByLabel[draftLabel] : undefined
+    ) as 'national' | 'rookie' | 'pre_season' | 'mid_season' | 'mini_draft' | undefined;
+    const numberCells = wrapped.find('td.number');
+    const numberText = normalizeText(numberCells.text());
+    const selectionNumber = Number(numberText);
     const playerCell = wrapped.find('td.player').first();
     const clubCell = wrapped.find('td.club').first();
     const playerName = normalizeText(playerCell.text());
     const clubName = normalizeText(clubCell.text());
     if (
       !draftType ||
-      !Number.isInteger(selectionNumber) ||
+      numberCells.length !== 1 ||
+      !/^[1-9]\d*$/.test(numberText) ||
+      !Number.isSafeInteger(selectionNumber) ||
       selectionNumber <= 0 ||
       !playerName ||
       !clubName
     ) {
+      scopeSummary.invalidRows++;
       issues.push({
         code: 'unsupported_row',
         sourceKey: `year-row:${rowIndex + 1}`,
@@ -522,6 +568,7 @@ export function parseDraftguruYearSelections(
       });
       return;
     }
+    scopeSummary.includedRows++;
     rows.push(
       createAflTradeExternalEvidenceEnvelope({
         schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
@@ -550,7 +597,13 @@ export function parseDraftguruYearSelections(
       })
     );
   });
-  return { evidence: rows, issues };
+  if (rows.length === 0)
+    issues.push({
+      code: 'invalid_page',
+      sourceKey: 'year-table',
+      detail: 'No supported draft selections were present.',
+    });
+  return { evidence: rows, issues, scopeSummary };
 }
 
 /** A separate reviewed capability; other known pathways are counted, never recast as national picks. */
