@@ -437,8 +437,12 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `afl_trade_canonical_promoter` authority, record the review with
    `npm run outcomes:sources:review-external-promotion -- --candidate <candidate-id> --draft-events <reviewed-json-path> --transaction-dates <reviewed-json-path> --decision approved --rationale <text> --authority-evidence <governed-evidence-id> --reviewer <principal-ref> --decided-at <UTC-millisecond-instant>`.
    The transaction-date file must exactly cover every candidate transaction. A source-recorded date
-   must be repeated exactly; an undated Draftguru transaction requires an independently reviewed date
-   here. The content-addressed proposal and approval bind those dates before canonical promotion.
+   must be repeated exactly. For an undated transaction, supply an independently supported day or
+   explicit `occurredOn: null` to retain year-only factual precision. Do not invent a completion day.
+   A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
+   reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
+   and approval bind that coverage before canonical promotion. Year-only factual admission does not
+   grant eligibility for historical valuation that requires an exact trade day.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
    content-addressed decision rather than manufacture a successor.
    PostgreSQL derives and authenticates the proposal, appends one typed decision, and advances its
