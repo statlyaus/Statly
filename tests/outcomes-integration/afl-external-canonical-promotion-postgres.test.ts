@@ -937,7 +937,15 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
           draftSelections: [],
           pickCustody: [],
           pickLineage: [],
-          issues: [],
+          issues: transferIds.map((transferId, index) => ({
+            code: 'lineage_unresolved' as const,
+            severity: 'blocking' as const,
+            subjectKey: `lineage:${transferId}`,
+            detail: index === 1 && award.content.asset.entitlementType === 'expansion_compensation'
+              ? 'The transferred pick entitlement is not uniquely resolved to stable custody.'
+              : 'Special entitlement requires independently resolved award, activation and custody evidence.',
+            evidenceIds: [rightEvidenceId],
+          })).sort((a, b) => a.subjectKey.localeCompare(b.subjectKey)),
           reconciledAt: '2026-08-09T12:02:00Z',
         });
         const reconciliation = new PostgresAflTradeExternalReconciliationRepository(
@@ -1138,7 +1146,7 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             sourceBatchIds: [selectionBatchId],
             reconciledAt: '2026-08-09T12:05:00.000Z',
             identityResolutionIds: [resolution.resolutionId],
-            transactions: [], transfers: [], pickCustody: [], pickLineage: [],
+            transactions: [], transfers: [], pickCustody: [], pickLineage: [], issues: [],
             draftSelections: [{
               selectionId: sourceSelectionId, draftYear: selectionYear, draftType,
               selectionNumber: 1, roundNumber: 1,

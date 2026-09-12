@@ -1,4 +1,7 @@
-import { parseAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
+import {
+  createAflTradeExternalReconciliationCandidate,
+  parseAflTradeExternalReconciliationCandidate,
+} from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import { resolveSpecialEntitlementCustody } from '@/server/aflTradeIntelligence/source/resolveSpecialEntitlementCustody';
 import { createSpecialEntitlementAward } from '@/server/aflTradeIntelligence/source/specialEntitlementAwardContracts';
 import { describe, expect, it } from 'vitest';
@@ -451,6 +454,53 @@ describe('resolved special custody candidates', () => {
     ).toBe(false);
     expect(f.candidate.content.transfers[0]!.asset.kind).toBe('special_pick');
   });
+  it('supersedes ordinary-pick lineage only for the exact right-bound transfer', () => {
+    const f = custodyFixture();
+    const original = f.candidate.content.transfers[0]!;
+    const ordinary = {
+      kind: 'pick_entitlement' as const,
+      pickId: `draft-pick:${'7'.repeat(64)}`,
+      draftYear: 2013,
+      draftType: 'national',
+      nominalRound: 1,
+      nominalPick: 7,
+      originalClubId: 'a',
+      recordedLabel: 'Pick 7',
+    };
+    const originalLineage = f.candidate.content.issues.find(
+      (issue) => issue.code === 'lineage_unresolved'
+    )!;
+    const preserved = f.candidate.content.issues.filter(
+      (issue) => issue.code !== 'lineage_unresolved'
+    );
+    const unrelated = { ...originalLineage, subjectKey: 'lineage:unrelated' };
+    const source = createAflTradeExternalReconciliationCandidate({
+      ...f.candidate.content,
+      transfers: [{ ...original, asset: ordinary }],
+      issues: [
+        ...preserved,
+        {
+          ...originalLineage,
+          detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
+        },
+        unrelated,
+      ],
+    });
+    const resolved = resolveSpecialEntitlementCustody({
+      candidate: source,
+      bindings: [f.binding],
+      reconciledAt: f.input.reconciledAt,
+    });
+    expect(resolved.content.issues).toEqual([...preserved, unrelated]);
+    expect(resolved.content.transfers[0]!.asset).toMatchObject({
+      kind: 'special_entitlement',
+      sourceAsset: ordinary,
+      sourceCandidateId: source.candidateId,
+    });
+    expect(source.content.issues).toHaveLength(preserved.length + 2);
+    expect(resolved.content.pickLineage).toEqual([]);
+  });
+
   it('rejects duplicate bindings, cross-scope awards and self-predecessors', () => {
     const f = custodyFixture();
     for (const bindings of [

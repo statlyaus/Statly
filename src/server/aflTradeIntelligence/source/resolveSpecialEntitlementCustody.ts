@@ -80,9 +80,7 @@ export function resolveSpecialEntitlementCustody(input: {
       (issue) =>
         !(
           issue.code === 'lineage_unresolved' &&
-          issue.detail ===
-            'Special entitlement requires independently resolved award, activation and custody evidence.' &&
-          bindings.some((binding) => issue.subjectKey === `lineage:${binding.transferId}`)
+          [...resolved].some((transferId) => issue.subjectKey === `lineage:${transferId}`)
         )
     ),
     reconciledAt: input.reconciledAt,
