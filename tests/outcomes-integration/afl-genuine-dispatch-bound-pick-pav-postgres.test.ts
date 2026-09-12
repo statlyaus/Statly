@@ -1076,7 +1076,11 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
       });
       return reference;
     };
-    let modelTimestamp: string | undefined;
+    const modelTimestamp = (
+      await pool.query<{ trusted_at: Date }>(
+        `SELECT date_trunc('milliseconds',transaction_timestamp()) AS trusted_at`
+      )
+    ).rows[0]!.trusted_at.toISOString();
     let successfulWorkRetentions = 0;
     const executor = createPostgresGenuineDispatchBoundPickPavExecutor({
       client: restrictedClient,
@@ -1086,7 +1090,7 @@ describe.sequential('genuine dispatch-bound pick-PAV PostgreSQL tracer', () => {
         successfulWorkRetentions += 1;
         return retainArtifact(value);
       },
-      clock: { now: () => (modelTimestamp ??= new Date().toISOString()) },
+      clock: { now: () => modelTimestamp },
     });
     const execution = {
       exactInput,

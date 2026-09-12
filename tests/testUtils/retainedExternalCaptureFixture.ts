@@ -65,7 +65,7 @@ export async function createRetainedExternalCaptureFixture(
   const scopeDocument = { syntheticSourceAndReviewerEvidence: true, provider, createdAt: at };
   const scope = createAflTradeCanonicalJsonArtifactRef(scopeDocument, at);
   await metadata.putIfAbsent(scope, new TextEncoder().encode(canonical(scopeDocument)));
-  const readback = await verifyAflTradeArtifactReadback(metadata, scope, now(), 2097152);
+  const readback = await verifyAflTradeArtifactReadback(metadata, scope, at, 2097152);
   await sql.query(
     `INSERT INTO outcome_artifact_custody
     (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,environment,created_at,verified_at,custody_json)
@@ -300,7 +300,7 @@ export async function createRetainedExternalCaptureFixture(
     accessMechanism: 'automated_web',
     capabilityId: content.acquisition.capabilityId,
     sourceUrl,
-    capturedAt: now(),
+    capturedAt: at,
     effectiveAt: '2024-11-21T00:00:00.000Z',
     parserVersion: content.acquisition.clientVersion,
     fieldManifestSha256: sha(rights.content.fields),

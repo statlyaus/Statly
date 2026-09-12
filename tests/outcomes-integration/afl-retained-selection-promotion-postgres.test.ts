@@ -31,15 +31,13 @@ const schema = `retained_selection_${process.pid}_${Date.now()}`;
 const admin = new Pool({ connectionString: url });
 const pool = new Pool({ connectionString: url, options: `-c search_path=${schema}` });
 const sql = createPgAflOutcomeSqlClient(pool);
-// Owners persist JavaScript millisecond instants; advance past the prior SQL microsecond.
-const databaseInstant = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 3));
-  return (
+const databaseInstant = async () =>
+  (
     await pool.query<{ at: string }>(
-      `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
+      `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
     )
   ).rows[0]!.at;
-};
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schema}"`);
   const scoped = new URL(url);
@@ -55,10 +53,20 @@ afterAll(async () => {
 it('promotes all retained dated selections through public reconciliation without inventing pick ancestry', async () => {
   const draft = await createRetainedExternalCaptureFixture(sql, false, 'test_fixture', 27);
   const official = await createRetainedExternalCaptureFixture(sql, true);
+  const plannedAt = (
+    await pool.query<{ at: string }>(
+      `SELECT to_char(
+         date_trunc('milliseconds',GREATEST(clock_timestamp(),max(finalized_at)))+interval '1 millisecond',
+         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
+       FROM outcome_external_evidence_batch WHERE batch_id=ANY($1::text[])`,
+      [[draft.target.evidenceBatchId, official.target.evidenceBatchId]]
+    )
+  ).rows[0]!.at;
+  await new Promise((resolve) => setTimeout(resolve, 5));
   const plan = createAflTradeRetainedExternalCapturePlan({
     environment: 'test_fixture',
     competition: 'AFLM',
-    plannedAt: await databaseInstant(),
+    plannedAt,
     scopeEvidence: [...draft.scopeEvidence, ...official.scopeEvidence].sort((a, b) =>
       a.artifactId.localeCompare(b.artifactId)
     ),
@@ -80,7 +88,7 @@ it('promotes all retained dated selections through public reconciliation without
   const reviewRepository = new PostgresAflTradeExternalIdentityReviewRepository(sql);
   const actor = 'synthetic-retained-selection-reviewer';
   async function authority(role: string, provider: string, capabilityId: string) {
-    const at = new Date().toISOString();
+    const at = await databaseInstant();
     const document = {
       evidenceKind: 'reviewer_authority_evidence',
       environment: 'test_fixture',
@@ -133,6 +141,7 @@ it('promotes all retained dated selections through public reconciliation without
     { source, reviewRepository }
   );
   expect(queue.items).toHaveLength(28);
+  const identityReviewedAt = await databaseInstant();
   for (const [index, item] of queue.items.entries()) {
     const canonicalId = `synthetic-selection-${item.entityKind}-${index}`;
     // Canonical targets are synthetic fixture setup; decisions use the public owner.
@@ -155,7 +164,7 @@ it('promotes all retained dated selections through public reconciliation without
         rationale: 'Synthetic exact native identity',
         authorityEvidenceId: identityAuthority,
         decidedBy: actor,
-        decidedAt: new Date().toISOString(),
+        decidedAt: identityReviewedAt,
       },
       { source, reviewRepository }
     );

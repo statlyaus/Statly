@@ -57,7 +57,7 @@ it('registers an explicitly reviewed absent native person, then replays and reus
   const plan = createAflTradeRetainedExternalCapturePlan({
     environment: 'non_production',
     competition: 'AFLM',
-    plannedAt: new Date().toISOString(),
+    plannedAt: new Date(new Date(fixture.target.request.capturedAt).getTime() + 1).toISOString(),
     scopeEvidence: fixture.scopeEvidence,
     targets: [fixture.target],
   });
@@ -85,18 +85,18 @@ it('registers an explicitly reviewed absent native person, then replays and reus
   const player = work.content.items.find(
     (i) => i.workItem.content.subject.content.entityKind === 'player'
   )!.workItem;
-  const at = new Date().toISOString();
+  const at = (
+    await pool.query<{ at: string }>(
+      `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
+    )
+  ).rows[0]!.at;
   async function govern(document: Record<string, unknown>, prefix: string) {
     const ref = createAflTradeCanonicalJsonArtifactRef(document, at);
     const referenceId = address(prefix, document);
     const digest = sha(document);
     await fixture.metadata.putIfAbsent(ref, new TextEncoder().encode(canonical(document)));
-    const readback = await verifyAflTradeArtifactReadback(
-      fixture.metadata,
-      ref,
-      new Date().toISOString(),
-      2097152
-    );
+    const readback = await verifyAflTradeArtifactReadback(fixture.metadata, ref, at, 2097152);
     await sql.transaction(async (tx) => {
       await tx.query(
         `INSERT INTO outcome_artifact_custody
@@ -196,7 +196,7 @@ it('registers an explicitly reviewed absent native person, then replays and reus
       },
       supportingEvidence: fixture.scopeEvidence,
       rationale: 'Synthetic source native ID reviewed; no existing matching person.',
-      decidedAt: new Date().toISOString(),
+      decidedAt: at,
     };
     const registration = aflTradeExternalCanonicalTargetRegistrationSchema.parse({
       registrationDecisionId: address('canonical-target-registration', content),

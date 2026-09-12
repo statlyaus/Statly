@@ -33,6 +33,9 @@ beforeAll(async () => {
   scoped.searchParams.set('schema', schema);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
   await admin.query(
+    `DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='afl_trade_nonproduction_governance_registry_writer') THEN CREATE ROLE afl_trade_nonproduction_governance_registry_writer NOLOGIN; END IF; END $$`
+  );
+  await admin.query(
     `GRANT USAGE ON SCHEMA "${schema}" TO afl_trade_nonproduction_governance_registry_writer`
   );
   await admin.query(

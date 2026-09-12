@@ -36,18 +36,23 @@ afterAll(async () => {
 it('completes genuine-shaped retained capture through public owners with no scheduler or trade index', async () => {
   const fixture = await createRetainedExternalCaptureFixture(sql);
   const official = await createRetainedExternalCaptureFixture(sql, true);
-  // Plan instants share the database clock used by current-source guards.
-  await new Promise((resolve) => setTimeout(resolve, 3));
   const plannedAt = (
     await pool.query<{ at: string }>(
-      `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
+      `SELECT to_char(
+         date_trunc('milliseconds',GREATEST(clock_timestamp(),max(finalized_at)))+interval '1 millisecond',
+         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
+       FROM outcome_external_evidence_batch WHERE batch_id=ANY($1::text[])`,
+      [[fixture.target.evidenceBatchId, official.target.evidenceBatchId]]
     )
   ).rows[0]!.at;
+  await new Promise((resolve) => setTimeout(resolve, 5));
   const plan = createAflTradeRetainedExternalCapturePlan({
     environment: 'test_fixture',
     competition: 'AFLM',
     plannedAt,
-    scopeEvidence: [...fixture.scopeEvidence, ...official.scopeEvidence],
+    scopeEvidence: [...fixture.scopeEvidence, ...official.scopeEvidence].sort((left, right) =>
+      left.artifactId.localeCompare(right.artifactId)
+    ),
     targets: [fixture.target, official.target],
   });
   const repository = new PostgresAflTradeExternalDiscoveryRepository(sql);
