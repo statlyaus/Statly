@@ -1166,6 +1166,18 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0136_retained_capture_private_use_renewal',
       '0137_hpn_source_assessment_field_order',
       '0138_canonical_text_factual_batch_receipt',
+      '0139_canonical_text_reconciliation_receipt',
+      '0140_reconciled_match_metric_appearance_scope',
+      '0141_hpn_retained_payload_scalar',
+      '0142_acquisition_spell_registration',
+      '0143_draft_session_promotion',
+      '0144_retained_external_capture_completion',
+      '0145_external_canonical_target_registration',
+      '0146_combined_draft_session_evidence',
+      '0147_draft_session_boundary_identity_review',
+      '0148_draft_session_boundary_identity_kind',
+      '0149_official_2017_combined_draft_session_evidence',
+      '0150_official_2016_combined_draft_session_evidence',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

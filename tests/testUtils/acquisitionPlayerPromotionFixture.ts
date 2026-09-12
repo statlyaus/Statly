@@ -164,6 +164,18 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     );
     return result.rows[0]!.at.toISOString();
   }
+  async function nextIdentityRevision(subjectId: string) {
+    const result = await outcomesPool.query<{ decision_id: string; revision: number }>(
+      `SELECT decision_id,revision FROM outcome_external_identity_resolution_head
+        WHERE subject_id=$1`,
+      [subjectId]
+    );
+    const head = result.rows[0];
+    return {
+      revision: head === undefined ? 1 : Number(head.revision) + 1,
+      supersedesDecisionId: head?.decision_id ?? null,
+    };
+  }
 
   function evidenceBatch() {
     const capture = {
@@ -334,7 +346,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       player: {
         nativeId: reviewedOfficialCombinedDraft
           ? `official-${seasonYear}-player-${selectionNumber}`
-          : `player-${selectionNumber}`,
+          : `draft-player-${selectionNumber}`,
         recordedName: reviewedOfficialCombinedDraft
           ? selectionNumber === 1
             ? seasonYear === 2016
@@ -351,7 +363,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       selectedByClub: {
         nativeId: reviewedOfficialCombinedDraft
           ? `official-${seasonYear}-club-${selectionNumber}`
-          : `club-${selectionNumber}`,
+          : `draft-club-${selectionNumber}`,
         recordedName: reviewedOfficialCombinedDraft
           ? selectionNumber === 1
             ? targets.toClubName
@@ -382,7 +394,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 player: { nativeId: nativePlayerId, recordedName: targets.playerName },
               },
             }
-          : draftSelectionClaim(options.combinedDraftSessions ? 1 : index + 1),
+          : draftSelectionClaim(hasDraftSessions ? 1 : index + 1),
       publicationEligible: false,
     });
     const targetEvidence = [evidence];
@@ -1025,7 +1037,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       if (row.content.claim.kind !== 'draft_selection')
         throw new Error('Expected draft selection.');
       const claim = row.content.claim;
-      const draftTarget = options.existingDraftTargets?.[index];
+      const draftTarget = options.existingDraftTargets?.[claim.selectionNumber - 1];
       const draftPlayerId = draftTarget?.playerId ?? `${fixtureNamespace}-draft-player-${index}`;
       const item = reviewPackage.content.items.find(
         ({ workItem }) =>
@@ -1052,8 +1064,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           [draftPlayerId, claim.player.recordedName]
         );
       }
+      const revision = await nextIdentityRevision(item.content.subject.subjectId);
       const decision = createAflTradeExternalIdentityReviewDecision({
         ...identityDecision.content,
+        ...revision,
         subject: item.content.subject,
         workItemId: item.workItemId,
         workItemSha256: item.workItemId.split(':')[1]!,
@@ -1087,8 +1101,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               claim.selectedByClub.nativeId
         )?.workItem;
         if (!clubItem) throw new Error('Missing combined-proof club identity work item.');
+        const revision = await nextIdentityRevision(clubItem.content.subject.subjectId);
         const clubDecision = createAflTradeExternalIdentityReviewDecision({
           ...identityDecision.content,
+          ...revision,
           subject: clubItem.content.subject,
           workItemId: clubItem.workItemId,
           workItemSha256: clubItem.workItemId.split(':')[1]!,

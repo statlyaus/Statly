@@ -613,7 +613,7 @@ export async function seedPlayerPavSourceAuthorityFixture(
             candidate_sha256: fact.content.source.candidateDigests.match,
             candidate_digests_json: fact.content.source.candidateDigests,
             fact_sha256: fact.factSha256,
-            fact_json: fact,
+            fact_json: fact.content,
           });
           await put('outcome_factual_reconciliation_match_input', {
             factual_run_id: universe.factualRunId,
@@ -690,7 +690,7 @@ export async function seedPlayerPavSourceAuthorityFixture(
             candidate_sha256: fact.content.appearanceCandidate.candidateSha256,
             candidate_digests_json: fact.content.source.candidateDigests,
             fact_sha256: fact.factSha256,
-            fact_json: fact,
+            fact_json: fact.content,
           });
           await put('outcome_factual_reconciliation_appearance_input', {
             factual_run_id: universe.factualRunId,
@@ -935,6 +935,16 @@ async function seedFixtureResolutionRows(
     const decisionId = addressed('provider-resolution-decision', `${kind}:${suffix}`);
     const assignmentCaseId = addressed('provider-identity-assignment-case', `${kind}:${suffix}`);
     const identityId = addressed(`provider-${entity}-identity`, `${kind}:${suffix}`);
+    await insertFixtureRecord(sql, 'outcome_review_decision', {
+      decision_id: decisionId,
+      subject_type: `provider_${entity}_resolution`,
+      subject_id: resolutionCaseId,
+      decision: 'approved',
+      rationale: 'Synthetic current assignment continuity fixture.',
+      evidence_json: { fixture: true },
+      decided_by: 'synthetic-pav-fixture-reviewer',
+      decided_at: custodyAt,
+    });
     await insertFixtureRecord(sql, 'outcome_provider_identity_assignment_head', {
       assignment_case_id: assignmentCaseId,
       entity_kind: entity,

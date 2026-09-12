@@ -24,6 +24,7 @@ beforeAll(async () => {
     'outcome_private_valuation_model_operation',
     'outcome_private_valuation_factual_output',
     'outcome_hpn_pav_calculation',
+    'outcome_private_valuation_hpn_factual_binding',
     'outcome_private_valuation_model_request_binding',
   ]) {
     await pool.query(`CREATE TABLE "${seamSchema}"."${table}" AS
