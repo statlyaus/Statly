@@ -1035,6 +1035,19 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
           transactionCount: 2,
           transferCount: 2,
         });
+        const baselineAsset = (await outcomesPool.query<{ asset_version_id: string }>(
+          'SELECT asset_version_id FROM outcome_special_entitlement_custody WHERE entitlement_id=$1 ORDER BY transfer_id LIMIT 1',
+          [award.entitlementId]
+        )).rows[0]!.asset_version_id;
+        await expect.soft(outcomesPool.query(
+          'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
+          [award.entitlementId, baselineAsset, '2026-08-09T11:59:59.999Z', [rightCaptureId]]
+        )).rejects.toThrow(/cutoff/);
+        expect((await outcomesPool.query<{ fact: unknown }>(
+          'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
+          [award.entitlementId, baselineAsset, '2026-08-09T12:00:00Z', [rightCaptureId]]
+        )).rows[0]!.fact).toMatchObject({ award });
+
         await expect(
           repository.promote({
             candidateId: resolved.candidateId,
@@ -1549,7 +1562,8 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
                 ),
               },
             });
-            const custodyInput = await approveRevision(custodyRevision);
+            const beforeCustodyCorrection = currentRevision;
+            const custodyInput = await approveRevision(custodyRevision, '2026-08-09T12:06:40Z');
             await expect(
               repository.promoteWithSpecialEntitlementRevisions({
                 promotion: promotionInput,
@@ -1576,6 +1590,12 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             expect(atomicReplay.promotion.idempotentReplay).toBe(true);
             expect(atomicReplay.revisions[0]!.idempotentReplay).toBe(true);
             currentRevision = custodyRevision;
+            await expect.soft(outcomesPool.query<{ fact: unknown }>(
+              'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
+              [award.entitlementId, beforeCustodyCorrection.content.state.custody[0]!.assetVersionId,
+                '2026-08-09T12:06:35Z', [rightCaptureId]]
+            )).resolves.toMatchObject({ rows: [{ fact: { revision: beforeCustodyCorrection } }] });
+
             const correctedRead = await outcomesPool.query<{
               fact: { revision: unknown; lifecycle: { exercise: unknown } };
             }>(
@@ -1889,6 +1909,12 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
                 state: { ...chainRevision.content.state, exercise: null } });
               const laterInput = await approveRevision(laterRevision, '2026-08-09T12:12:30Z');
               await restarted.registerSpecialEntitlementRevision(laterInput);
+              expect((await outcomesPool.query<{ fact: unknown }>(
+                'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
+                [award.entitlementId, beforeCustodyCorrection.content.state.custody[0]!.assetVersionId,
+                  '2026-08-09T12:06:35Z', [rightCaptureId]]
+              )).rows[0]!.fact).toMatchObject({ revision: beforeCustodyCorrection });
+
               const chainRead = await outcomesPool.query<{ fact: unknown }>(
                 'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
                 [award.entitlementId, currentAssetId, '2026-08-09T12:13:00Z', [rightCaptureId]]
@@ -1904,6 +1930,10 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
               );
               await expect(outcomesPool.query('SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
                 [award.entitlementId, currentAssetId, '2026-08-09T12:14:00Z', [rightCaptureId]])).rejects.toThrow(/current reviewed approval/);
+              await expect(outcomesPool.query('SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
+                [award.entitlementId, beforeCustodyCorrection.content.state.custody[0]!.assetVersionId,
+                  '2026-08-09T12:06:35Z', [rightCaptureId]])).rejects.toThrow(/current reviewed approval/);
+
 
             });
             revisionWithdrawalChecks.push(async () => {

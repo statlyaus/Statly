@@ -1187,6 +1187,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0157_special_entitlement_historical_readback',
       '0158_special_entitlement_identity_replacement',
       '0159_special_entitlement_correction_dependencies',
+      '0160_special_entitlement_historical_authority',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

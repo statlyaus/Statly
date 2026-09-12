@@ -2591,6 +2591,12 @@ obtain approvals for the proposed complete state through the existing scoped rev
 - Rebuild factual corpus/release evidence through the existing owners. Check oldest-asset historical
   readback, replacement reservation ownership and selected-archive current-version behavior. Keep
   immutable source revisions and previously sealed archives; do not edit them to match current facts.
+  Historical reads authenticate the actual live entitlement head, following current identity
+  replacements even when they postdate the requested cutoff. Returned facts remain selected at the
+  cutoff; later approval evidence must not be inserted into the historical snapshot. Baseline award
+  approvals must also exist at or before that cutoff. Withdrawal of current authority still blocks
+  reconstruction. Within a selected archive, a pick realization is hidden if either its trade event
+  or its linked draft-selection event has a successor in that same archive.
 
 Use a disposable `AFL_OUTCOMES_TEST_DATABASE_URL` for the canonical-promotion PostgreSQL test suite.
 The day/year cases cover correction rollback/replay, reservation transfer, chained identities,

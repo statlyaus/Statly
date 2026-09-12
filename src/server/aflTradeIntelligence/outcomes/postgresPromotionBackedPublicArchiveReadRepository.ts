@@ -143,6 +143,17 @@ export function createPostgresAflTradePromotionBackedPublicArchiveReadRepository
                AND successor.record_kind IN ('transaction','draft_event')
                AND successor.record_json#>>'{record,supersedesVersionId}'=current_record.event_version_id
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM outcome_public_factual_archive_record draft_selection
+            JOIN outcome_public_factual_archive_record draft_successor
+              ON draft_successor.archive_id=draft_selection.archive_id
+             AND draft_successor.record_kind='draft_event'
+             AND draft_successor.record_json#>>'{record,supersedesVersionId}'=draft_selection.event_version_id
+            WHERE current_record.record_kind='pick_realization'
+              AND draft_selection.archive_id=current_record.archive_id
+              AND draft_selection.record_kind='draft_selection'
+              AND draft_selection.record_json#>>'{record,selectionId}'=current_record.record_json#>>'{record,draftSelectionId}'
+          )
           AND ordinal>$8
         ORDER BY ordinal LIMIT $9`,
       [

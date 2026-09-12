@@ -3870,6 +3870,11 @@ and source-capture evidence. A current selection claim prevents competing exerci
 corrections append complete revisions; identity corrections require their separate reviewed
 relationship and retire the old identity against further writes. An unused award can be replaced
 without inventing custody or lifecycle records.
+Migration `0160` separates live entitlement authority from cutoff-selected historical provenance.
+Historical reads authenticate the latest revision or current replacement identity first, then return
+only the retained facts available by the requested cutoff, including the baseline award approval.
+Archive realization filtering follows both its trade event and its selection's draft event within
+the selected immutable archive.
 
 `promoteWithSpecialEntitlementRevisions` commits canonical corrections and all dependent right
 revisions in one transaction. `replaceSpecialEntitlementIdentity` additionally retires the source,
