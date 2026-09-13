@@ -2746,3 +2746,8 @@ it canonically or publish it; remaining blocking issues still prevent promotion.
 every movement to its exact existing transfer, preserving predecessor order and ordinary-labelled
 downstream legs. Missing/ambiguous awards or extra inputs fail closed. This pure assembly helper
 does not authenticate approvals: registration and promotion must use the governed database owners.
+
+Migration0170 corrects receipt paths in award, lifecycle, revision-lifecycle and identity-replacement
+source checks. Genuine execution receipts wrap their payload in `executionReceipt.content`.
+The correction preserves exact rights/proposal matching and current approval, expiry and supersession
+checks; it does not create source permission or broaden capture-year coverage.
