@@ -152,3 +152,85 @@ it('allows different proof kinds across drafts while rejecting mixed proofs with
       } as never)
     ).toThrow();
 });
+
+function windowContent() {
+  return {
+    ...content,
+    schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v7' as const,
+    proposedAt: '2024-11-30T00:00:00.000Z',
+    draftEventCoverage: content.draftEventCoverage.map((s, i) => ({
+      ...s,
+      proofKind: 'combined_session_facts' as const,
+      ...(i
+        ? {
+            eventDate: null,
+            datePrecision: {
+              precision: 'window' as const,
+              eventDate: null,
+              earliestDate: '2024-11-21',
+              latestDate: '2024-11-25',
+            },
+          }
+        : {}),
+    })),
+  };
+}
+it('v7 preserves null exact day and explicit window bounds with reviewed subset ordinals', () => {
+  const input = windowContent();
+  const proposal = createAflTradeExternalCanonicalPromotionProposal(input);
+  expect(proposal.content).toEqual(input);
+  expect(() =>
+    createAflTradeExternalCanonicalPromotionProposal({
+      ...input,
+      schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v6',
+    } as never)
+  ).toThrow();
+});
+it('v7 rejects false precision, invalid bounds, overlaps, future dates and repeated selections', () => {
+  const input = windowContent(),
+    last = input.draftEventCoverage[1]!;
+  for (const patch of [
+    { eventDate: '2024-11-25' },
+    { datePrecision: undefined },
+    {
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-20',
+        latestDate: '2024-11-25',
+      },
+    },
+    {
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-26',
+        latestDate: '2024-11-25',
+      },
+    },
+    {
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-21',
+        latestDate: '2024-12-01',
+      },
+    },
+    { selectionIds: [selection('1')] },
+    { expectedSelectionCount: 2 },
+    { proofKind: 'direct_session_claim' },
+  ]) {
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...input,
+        draftEventCoverage: [input.draftEventCoverage[0]!, { ...last, ...patch } as never],
+      })
+    ).toThrow();
+  }
+  expect(() =>
+    createAflTradeExternalCanonicalPromotionProposal({
+      ...input,
+      draftEventCoverage: [{ ...input.draftEventCoverage[0]! }],
+    })
+  ).toThrow('explicit session window');
+});
