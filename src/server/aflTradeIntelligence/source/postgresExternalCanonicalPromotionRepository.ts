@@ -1631,10 +1631,10 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       async function persistPickCustody(): Promise<void> {
         for (const record of content.pickCustody) {
           const date = pickCustodyDateColumns(record.observedAt);
-          if (!record.originalClubId || !record.currentClubId) {
+          if (!record.currentClubId) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
-              `Custody ${record.custodyId} has incomplete clubs.`
+              `Custody ${record.custodyId} has no observed current club.`
             );
           }
           const row = await sourceRow({
@@ -1677,7 +1677,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               AND draft_season_year=$4 AND draft_kind=$5::"OutcomeEventKind"
               AND recorded_round IS NOT DISTINCT FROM $6
               AND recorded_pick IS NOT DISTINCT FROM $7
-              AND original_club_id=$8 AND current_club_id=$9
+              AND original_club_id IS NOT DISTINCT FROM $8 AND current_club_id=$9
               AND source_import_row_id=$10 AND status='approved'::"OutcomeRecordStatus"
               AND evidence_json=$11::jsonb AND recorded_at=$12
               AND observed_date IS NOT DISTINCT FROM $13::jsonb

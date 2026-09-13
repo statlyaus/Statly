@@ -169,6 +169,18 @@ function proposal(selectionIds: string[] = [selectionId], source = candidate()) 
 }
 
 describe('external canonical promotion contracts', () => {
+  it('accepts an unknown origin while still requiring the observed holder', () => {
+    const original = candidate();
+    const source = createAflTradeExternalReconciliationCandidate({...original.content,
+      pickCustody: original.content.pickCustody.map(row => ({...row, originalClubId:null})),
+    });
+    expect(() => authenticateAflTradeExternalCanonicalPromotionProposal({candidate:source, proposal:proposal([selectionId],source)})).not.toThrow();
+    const missingHolder = createAflTradeExternalReconciliationCandidate({...source.content,
+      pickCustody: source.content.pickCustody.map(row => ({...row,currentClubId:null})),
+    });
+    expect(() => authenticateAflTradeExternalCanonicalPromotionProposal({candidate:missingHolder, proposal:proposal([selectionId],missingHolder)})).toThrow(/canonical identities/);
+  });
+
   it('derives scope, counts and exact selection membership from the candidate', () => {
     const source = candidate();
     const derived = deriveAflTradeExternalCanonicalPromotionProposal({

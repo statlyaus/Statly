@@ -591,7 +591,7 @@ function assertPromotionFactIdentities(content: PromotionCandidateContent): void
     ) ||
     content.draftSelections.some(({ playerId, clubId }) => playerId === null || clubId === null) ||
     content.pickCustody.some(
-      ({ originalClubId, currentClubId }) => originalClubId === null || currentClubId === null
+      ({ currentClubId }) => currentClubId === null
     )
   ) {
     throw new TypeError('Promoted facts require complete reviewed canonical identities and dates.');

@@ -3411,14 +3411,14 @@ model OutcomePickCustodyObservation {
   draftKind            OutcomeEventKind            @map("draft_kind")
   recordedRound        Int?                        @map("recorded_round")
   recordedPick         Int?                        @map("recorded_pick")
-  originalClubId       String                      @map("original_club_id")
+  originalClubId       String?                     @map("original_club_id")
   currentClubId        String                      @map("current_club_id")
   sourceImportRowId    String                      @map("source_import_row_id")
   status               OutcomeRecordStatus
   evidenceJson         Json                        @map("evidence_json")
   recordedAt           DateTime                    @map("recorded_at") @outcomes.Timestamptz(3)
   pick                 OutcomeDraftPick            @relation(fields: [pickId], references: [pickId], onDelete: Restrict)
-  originalClub         OutcomeClub                 @relation("OutcomePickCustodyOriginalClub", fields: [originalClubId], references: [clubId], onDelete: Restrict)
+  originalClub         OutcomeClub?                @relation("OutcomePickCustodyOriginalClub", fields: [originalClubId], references: [clubId], onDelete: Restrict)
   currentClub          OutcomeClub                 @relation("OutcomePickCustodyCurrentClub", fields: [currentClubId], references: [clubId], onDelete: Restrict)
   sourceImportRow      OutcomeImportRow            @relation(fields: [sourceImportRowId], references: [importRowId], onDelete: Restrict)
   releaseMembers       OutcomeReleasePickCustody[]

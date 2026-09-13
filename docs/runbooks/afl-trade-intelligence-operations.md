@@ -2716,3 +2716,8 @@ candidate persistence and promotion authenticate the scope against both stored c
 current review and source authority; altered trade facts or removed relevant issues fail closed.
 Scoping is a pre-correction operation: it does not resolve custody, special rights, rookie elevation
 or session coverage and cannot turn a blocking reviewed issue into a promotion approval.
+
+Migration0168 permits an unknown originating club on canonical custody observations. The observed
+current holder remains mandatory and club foreign keys still validate supplied identities. Promotion,
+archive and draft-history reads preserve null origins; the first known holder is not substituted for
+an unknown origin. Reviewed records with null origins therefore do not require invented club facts.

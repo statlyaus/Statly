@@ -214,7 +214,7 @@ const pickCustodyRecordSchema = z
     draftKind: z.string().trim().min(1).max(80),
     recordedRound: z.number().int().positive().nullable(),
     recordedPick: z.number().int().positive().nullable(),
-    originalClub: clubSchema,
+    originalClub: clubSchema.nullable(),
     currentClub: clubSchema,
   })
   .strict()

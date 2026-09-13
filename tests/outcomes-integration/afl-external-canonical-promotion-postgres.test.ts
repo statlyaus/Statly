@@ -139,7 +139,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
             draftType: 'national',
             nominalRound: 1,
             nominalPick: 14,
-            originalClubId: 'club-gws',
+            originalClubId: precision === 'year' ? null : 'club-gws',
             recordedLabel: 'Pick 14',
           },
           status: 'single_source',
@@ -156,7 +156,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
           draftType: 'national',
           roundNumber: 1,
           recordedPickNumber: 14,
-          originalClubId: 'club-gws',
+          originalClubId: precision === 'year' ? null : 'club-gws',
           currentClubId: 'club-western-bulldogs',
           status: 'single_source',
           evidenceIds: [evidenceId],
@@ -676,6 +676,10 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
       else { expect(storedCustody.observed_at).toBeNull(); expect(storedCustody.observed_date).toEqual(candidate.content.pickCustody[0].observedAt); }
       const archiveCustody = (await outcomesPool.query<{record_json:{record:unknown}}>("SELECT record_json FROM outcome_public_factual_archive_record WHERE record_kind='pick_custody'")).rows;
       expect(archiveCustody[0].record_json.record).toMatchObject({observedAt:candidate.content.pickCustody[0].observedAt});
+      if (precision === 'year') {
+        expect(archiveCustody[0].record_json.record).toMatchObject({originalClub:null});
+        expect((await outcomesPool.query('SELECT original_club_id,current_club_id FROM outcome_pick_custody_observation')).rows).toEqual([{original_club_id:null,current_club_id:'club-western-bulldogs'}]);
+      }
       const counts = await outcomesPool.query<{
         promotions: string;
         corpora: string;

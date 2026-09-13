@@ -108,7 +108,7 @@ function selectionRows(
     const observations = selection.pickId ? (custodyByPick.get(selection.pickId) ?? []) : [];
     const custody = observations.every(value => typeof value.observedAt === 'string')
       ? observations.sort((left, right) => String(right.observedAt).localeCompare(String(left.observedAt)))[0]
-      : new Set(observations.map(value => value.originalClub.clubId)).size === 1 ? observations[0] : undefined;
+      : new Set(observations.map(value => value.originalClub?.clubId ?? null)).size === 1 ? observations[0] : undefined;
     const originalClub = transfer?.pick?.originalClub ?? custody?.originalClub ?? null;
     return {
       selectionId: selection.selectionId,

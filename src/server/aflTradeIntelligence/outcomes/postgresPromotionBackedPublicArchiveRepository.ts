@@ -91,7 +91,7 @@ const custodySchema = z
     draftKind: z.string().min(1),
     recordedRound: z.number().int().positive().nullable(),
     recordedPick: z.number().int().positive().nullable(),
-    originalClubId: z.string().min(1),
+    originalClubId: z.string().min(1).nullable(),
     currentClubId: z.string().min(1),
   })
   .passthrough();
@@ -281,7 +281,7 @@ async function buildRecords(
       if (selection.pickId) pickIds.add(selection.pickId);
     } else if (value.record_kind === 'pick_custody') {
       const custody = custodySchema.parse(value.record);
-      clubIds.add(custody.originalClubId);
+      if (custody.originalClubId) clubIds.add(custody.originalClubId);
       clubIds.add(custody.currentClubId);
     }
   }
@@ -436,7 +436,7 @@ async function buildRecords(
         draftKind: value.draftKind,
         recordedRound: value.recordedRound,
         recordedPick: value.recordedPick,
-        originalClub: club(value.originalClubId),
+        originalClub: value.originalClubId ? club(value.originalClubId) : null,
         currentClub: club(value.currentClubId),
       };
     }
@@ -486,7 +486,7 @@ function dimensions(
     pickId = record.pickId;
   } else if (record.recordKind === 'pick_custody') {
     seasonYear = record.draftSeasonYear;
-    clubIds.add(record.originalClub.clubId);
+    if (record.originalClub) clubIds.add(record.originalClub.clubId);
     clubIds.add(record.currentClub.clubId);
     pickId = record.pickId;
   } else {
