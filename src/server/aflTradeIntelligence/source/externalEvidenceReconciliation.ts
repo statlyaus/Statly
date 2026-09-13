@@ -381,7 +381,17 @@ function futurePickTransferAsset(input: {
     pickId:
       custodyMatches.length === 1
         ? custodyMatches[0].pickId
-        : pickId(futurePick.draftYear, futurePick.draftType, null, futurePick.roundNumber),
+        : createAflTradeContentAddress(
+            'draft-pick',
+            originalClubId === null
+              ? { unresolvedTransferEvidenceId: input.row.evidenceId }
+              : {
+                  draftYear: futurePick.draftYear,
+                  draftType: futurePick.draftType,
+                  roundNumber: futurePick.roundNumber,
+                  originalClubId,
+                }
+          ),
     draftYear: futurePick.draftYear,
     draftType: futurePick.draftType,
     nominalRound: futurePick.roundNumber,

@@ -916,14 +916,14 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
               fromClubId: index === 0 ? 'club-gws' : 'club-western-bulldogs',
               toClubId: index === 0 ? 'club-western-bulldogs' : 'club-gws',
               asset:
-                index === 1 && award.content.asset.entitlementType === 'expansion_compensation'
+                index === 1 && ['expansion_compensation', 'mini_draft'].includes(award.content.asset.entitlementType)
                   ? {
                       kind: 'pick_entitlement' as const,
                       pickId: createAflTradeContentAddress('draft-pick', {
                         fixtureRight: award.entitlementId,
                       }),
-                      draftYear: year + 1,
-                      draftType: 'national',
+                      draftYear: award.content.asset.draftYear ?? year + 1,
+                      draftType: award.content.asset.entitlementType === 'mini_draft' ? 'mini_draft' : 'national',
                       nominalRound: 1,
                       nominalPick: 27,
                       originalClubId: 'club-gws',
@@ -937,7 +937,15 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
           draftSelections: [],
           pickCustody: [],
           pickLineage: [],
-          issues: [],
+          issues: transferIds.map((transferId, index) => ({
+            code: 'lineage_unresolved' as const,
+            severity: 'blocking' as const,
+            subjectKey: `lineage:${transferId}`,
+            detail: index === 1 && award.content.asset.entitlementType === 'expansion_compensation'
+              ? 'The transferred pick entitlement is not uniquely resolved to stable custody.'
+              : 'Special entitlement requires independently resolved award, activation and custody evidence.',
+            evidenceIds: [rightEvidenceId],
+          })).sort((a, b) => a.subjectKey.localeCompare(b.subjectKey)),
           reconciledAt: '2026-08-09T12:02:00Z',
         });
         const reconciliation = new PostgresAflTradeExternalReconciliationRepository(
@@ -1138,7 +1146,7 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             sourceBatchIds: [selectionBatchId],
             reconciledAt: '2026-08-09T12:05:00.000Z',
             identityResolutionIds: [resolution.resolutionId],
-            transactions: [], transfers: [], pickCustody: [], pickLineage: [],
+            transactions: [], transfers: [], pickCustody: [], pickLineage: [], issues: [],
             draftSelections: [{
               selectionId: sourceSelectionId, draftYear: selectionYear, draftType,
               selectionNumber: 1, roundNumber: 1,
@@ -1200,11 +1208,20 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             entitlementId: award.entitlementId,
             evidence: award.content.evidence,
           };
+          const terminalSource = sourceCandidate.content.transfers.find((transfer) => transfer.transferId === transferIds[1])!.asset;
+          const renumbering = terminalSource.kind === 'pick_entitlement' ? [{
+            transferId: transferIds[1], sourcePickId: terminalSource.pickId,
+            targetPickId: selectionCandidate.content.draftSelections[0]!.pickId,
+            occurredAt: precision === 'year' ? { precision: 'year', year: selectionYear }
+              : { precision: 'day', date: `${selectionYear}-11-20` },
+            evidenceCaptureIds: [rightCaptureId],
+          }] : undefined;
           const exercise = {
             ...base,
             kind: 'exercise',
             selectionId,
             terminalTransferId: transferIds[1],
+            ...(renumbering ? { renumbering } : {}),
           };
           const exerciseInput = await reviewed(exercise);
           const activation = {
@@ -1231,6 +1248,24 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             await expect(
               repository.registerSpecialEntitlementLifecycle(activationInput)
             ).rejects.toThrow(/only to reviewed compensation/);
+          }
+          if (renumbering) {
+            await expect(repository.registerSpecialEntitlementLifecycle(await reviewed({
+              ...exercise,
+              evidence: [...exercise.evidence, { ...exercise.evidence[0], captureId: selectionCaptureId }],
+              renumbering: [{ ...renumbering[0], evidenceCaptureIds: [selectionCaptureId] }],
+            }))).rejects.toThrow(/retained transfer evidence/);
+            for (const change of [
+              { sourcePickId: `draft-pick:${digest('9')}` },
+              { targetPickId: `draft-pick:${digest('8')}` },
+              { transferId: transferIds[0] },
+              { occurredAt: { precision: 'year', year: selectionYear + 1 } },
+              { evidenceCaptureIds: [selectionCaptureId] },
+            ]) {
+              await expect(repository.registerSpecialEntitlementLifecycle(await reviewed({
+                ...exercise, renumbering: [{ ...renumbering[0], ...change }],
+              }))).rejects.toThrow();
+            }
           }
           await expect(
             repository.registerSpecialEntitlementLifecycle(
@@ -1964,6 +1999,21 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
               ).rows[0].count
             ).toBe(1);
             await repository.registerSpecialEntitlementRevision(removalInput);
+            const releasedExercise = currentRevision.content.state.exercise!.record;
+            const alternativeAward = createSpecialEntitlementAward({
+              ...currentRevision.content.state.award.award.content,
+              issuingAwardId: `released-selection-claim:${award.entitlementId}`,
+            });
+            const alternativeApproval = await approve(alternativeAward);
+            // A released historical claim must not block another right. This claimant
+            // deliberately has no custody, so authentication must reach that later guard.
+            await expect(createPgAflOutcomeSqlClient(outcomesPool).transaction(async (tx) => {
+              await tx.query('SELECT * FROM register_outcome_special_entitlement_award($1::jsonb,$2)',
+                [canonicalizeAflTradeJson(alternativeAward), alternativeApproval]);
+              await tx.query('SELECT authenticate_outcome_special_entitlement_lifecycle($1::jsonb,$2)',
+                [canonicalizeAflTradeJson({ ...releasedExercise, entitlementId: alternativeAward.entitlementId }),
+                  currentRevision.content.state.exercise!.approvalDecisionId]);
+            })).rejects.toThrow(/terminal custody holder/);
             expect(
               (
                 await outcomesPool.query(

@@ -74,6 +74,18 @@ export const specialEntitlementLinkInputSchema = z
           .strict()
       )
       .min(1),
+    renumbering: z
+      .array(
+        event
+          .extend({
+            transferId: id,
+            sourcePickId: aflTradeContentAddressedIdSchema('draft-pick'),
+            targetPickId: aflTradeContentAddressedIdSchema('draft-pick'),
+          })
+          .strict()
+      )
+      .max(10000)
+      .optional(),
     selection: event
       .extend({
         draftYear: z.number().int().min(1988).max(2200),
@@ -155,6 +167,31 @@ function validateCustodyChain(bundle: LinkBundle, issues: Set<string>): void {
   if (holder !== selection.clubId) issues.add('selection_holder_mismatch');
 }
 
+function validateRenumbering(bundle: LinkBundle, issues: Set<string>): void {
+  const seen = new Set<string>();
+  const targets = new Map<string, string>();
+  const selectionDate = specialEntitlementDateBounds(bundle.selection.occurredAt);
+  for (const binding of bundle.renumbering ?? []) {
+    const custody = bundle.custody.find((edge) => edge.transferId === binding.transferId);
+    if (!custody || seen.has(binding.transferId) || binding.sourcePickId === binding.targetPickId) {
+      issues.add('renumbering_binding_invalid');
+    }
+    seen.add(binding.transferId);
+    const prior = targets.get(binding.sourcePickId);
+    if (prior !== undefined && prior !== binding.targetPickId)
+      issues.add('renumbering_successor_conflict');
+    targets.set(binding.sourcePickId, binding.targetPickId);
+    const date = specialEntitlementDateBounds(binding.occurredAt);
+    if (
+      date.year !== bundle.selection.draftYear ||
+      date.earliest > selectionDate.latest ||
+      (custody && date.latest < specialEntitlementDateBounds(custody.occurredAt).earliest)
+    ) {
+      issues.add('renumbering_chronology_invalid');
+    }
+  }
+}
+
 function validateCaptureBindings(events: readonly LinkEvent[], issues: Set<string>): void {
   const captureBindings = new Map<string, string>();
   for (const item of events) {
@@ -179,10 +216,17 @@ export function validateSpecialEntitlementLink(input: unknown) {
   }
   const bundle = parsed.data;
   const { award, activation, custody, selection } = bundle;
-  const events = [award, ...(activation ? [activation] : []), ...custody, selection];
+  const events = [
+    award,
+    ...(activation ? [activation] : []),
+    ...custody,
+    ...(bundle.renumbering ?? []),
+    selection,
+  ];
   const issues = new Set<string>();
   validateAwardAndSelection(bundle, events, issues);
   validateCustodyChain(bundle, issues);
+  validateRenumbering(bundle, issues);
   validateCaptureBindings(events, issues);
   return {
     status: issues.size ? ('blocked' as const) : ('internally_consistent' as const),
