@@ -2699,3 +2699,11 @@ chronology while allowing explicitly ordered movements within the same year. Exi
 uniqueness remains intact. Promotion writes and factual/archive readback preserve date precision and
 predecessors; old records without predecessors retain their prior serialized shape. This storage
 support does not resolve candidate issues, supply draft sessions or admit the genuine reviewed set.
+
+Migration0166 adds typed non-player pick realizations: `passed`, `not_exercised`, and
+`incorporated_into_later_package`. These require `terminal_outcome` and no draft-selection row;
+`exercised_as` retains its selection reference. The candidate, canonical writer and archive preserve
+this distinction. Database guards reject conflicting terminal/selected realizations for one transfer.
+Draft-history reads exclude non-player outcomes from player selections and preserve partial-date
+custody without inventing timestamps. Apply through the normal migration owner in an owned restored
+checkpoint before genuine admission; fixture verification alone does not admit the reviewed73.

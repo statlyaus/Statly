@@ -70,6 +70,7 @@ function selectionRows(
   }
   const realizationsBySelection = new Map<string, PickRealization[]>();
   for (const realization of recordsByKind(records, 'pick_realization')) {
+    if (realization.draftSelectionId === null) continue;
     const values = realizationsBySelection.get(realization.draftSelectionId) ?? [];
     values.push(realization);
     realizationsBySelection.set(realization.draftSelectionId, values);
@@ -104,11 +105,10 @@ function selectionRows(
       throw new Error(`Released draft selection ${selection.selectionId} repeats a trade lineage.`);
     }
     const transfer = lineage[0]?.transfer;
-    const custody = selection.pickId
-      ? (custodyByPick.get(selection.pickId) ?? []).sort((left, right) =>
-          right.observedAt.localeCompare(left.observedAt)
-        )[0]
-      : undefined;
+    const observations = selection.pickId ? (custodyByPick.get(selection.pickId) ?? []) : [];
+    const custody = observations.every(value => typeof value.observedAt === 'string')
+      ? observations.sort((left, right) => String(right.observedAt).localeCompare(String(left.observedAt)))[0]
+      : new Set(observations.map(value => value.originalClub.clubId)).size === 1 ? observations[0] : undefined;
     const originalClub = transfer?.pick?.originalClub ?? custody?.originalClub ?? null;
     return {
       selectionId: selection.selectionId,

@@ -1,3 +1,4 @@
+import { nonPlayerPickOutcomeSchema } from './nonPlayerPickOutcome';
 import { pickCustodyDateSchema } from './pickCustodyDate';
 import {
   canonicalPickEntitlementSchema,
@@ -121,11 +122,12 @@ const lineageSchema = z
     lineageId: aflTradeContentAddressedIdSchema('external-pick-lineage'),
     pickId: aflTradeContentAddressedIdSchema('draft-pick'),
     transferId: aflTradeContentAddressedIdSchema('external-transfer'),
-    selectionId: aflTradeContentAddressedIdSchema('external-draft-selection'),
+    selectionId: aflTradeContentAddressedIdSchema('external-draft-selection').nullable(),
+    terminalOutcome: nonPlayerPickOutcomeSchema.optional(),
     status: statusSchema,
     evidenceIds: evidenceIdsSchema,
   })
-  .strict();
+  .strict().refine(record => (record.selectionId === null) === (record.terminalOutcome !== undefined), 'Non-player outcomes require no selection; selected outcomes require a selection.');
 
 const issueSchema = z
   .object({
@@ -300,22 +302,25 @@ const contentSchema = z
       const hasUsableCustody = content.pickCustody.some(
         (custody) => custody.pickId === lineage.pickId && usable(custody.status)
       );
-      if (!transfer || transfer.asset.kind !== 'pick_entitlement' || !selection) {
+      if (!transfer || transfer.asset.kind !== 'pick_entitlement' || (!selection && !lineage.terminalOutcome)) {
         context.addIssue({
           code: 'custom',
           path: ['pickLineage', index],
           message: 'Lineage must reference a pick transfer and draft selection in this candidate.',
         });
-      } else if (lineage.pickId !== transfer.asset.pickId || lineage.pickId !== selection.pickId) {
+      } else if (lineage.pickId !== transfer.asset.pickId || (selection !== undefined && lineage.pickId !== selection.pickId)) {
         context.addIssue({
           code: 'custom',
           path: ['pickLineage', index, 'pickId'],
           message: 'Lineage pick identity must match both transfer and selection.',
         });
+      } else if (lineage.terminalOutcome && lineage.terminalOutcome.kind !== 'incorporated_into_later_package'
+        && (lineage.terminalOutcome.draftYear !== transfer.asset.draftYear || lineage.terminalOutcome.draftType !== transfer.asset.draftType)) {
+        context.addIssue({code:'custom',path:['pickLineage',index],message:'Non-player outcome must match the transferred pick draft.'});
       } else if (
         !usable(lineage.status) ||
         !usable(transfer.status) ||
-        !usable(selection.status) ||
+        (selection !== undefined && !usable(selection.status)) ||
         !hasUsableCustody
       ) {
         context.addIssue({

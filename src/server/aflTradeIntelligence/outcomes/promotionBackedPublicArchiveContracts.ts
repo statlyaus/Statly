@@ -1,3 +1,4 @@
+import { nonPlayerPickOutcomeSchema } from '../source/nonPlayerPickOutcome';
 import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { z } from 'zod';
 
@@ -230,11 +231,15 @@ const pickRealizationRecordSchema = z
     realizationId: boundedIdSchema,
     pickId: boundedIdSchema,
     transferAssetVersionId: boundedIdSchema,
-    draftSelectionId: boundedIdSchema,
-    relationKind: z.literal('exercised_as'),
+    draftSelectionId: boundedIdSchema.nullable(),
+    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package']),
+    terminalOutcome: nonPlayerPickOutcomeSchema.optional(),
   })
   .strict()
   .superRefine((record, context) => {
+    if ((record.draftSelectionId === null) !== (record.terminalOutcome !== undefined)
+      || (record.terminalOutcome ? record.relationKind !== record.terminalOutcome.kind : record.relationKind !== 'exercised_as'))
+      context.addIssue({code:'custom',message:'Pick realization must retain its typed endpoint without a fabricated selection.'});
     if (record.recordId !== record.realizationId) {
       context.addIssue({ code: 'custom', message: 'Pick realization identity is invalid.' });
     }
@@ -430,8 +435,8 @@ function validateRecordClosure(
       }
     } else if (record.recordKind === 'pick_realization') {
       const transfer = transfers.get(record.transferAssetVersionId);
-      const selection = selections.get(record.draftSelectionId);
-      if (transfer?.pick?.pickId !== record.pickId || selection?.pickId !== record.pickId) {
+      const selection = record.draftSelectionId === null ? undefined : selections.get(record.draftSelectionId);
+      if (transfer?.pick?.pickId !== record.pickId || (record.draftSelectionId !== null && selection?.pickId !== record.pickId)) {
         context.addIssue({ code: 'custom', message: 'Pick realization endpoints do not close.' });
       }
     }

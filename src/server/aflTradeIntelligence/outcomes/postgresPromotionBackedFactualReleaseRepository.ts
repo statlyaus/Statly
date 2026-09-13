@@ -425,6 +425,8 @@ async function loadCanonicalMembers(
                 'sourceImportRowId',realization.source_import_row_id,
                 'relationKind',realization.relation_kind,'status',realization.status,
                 'evidence',realization.evidence_json,'recordedAt',realization.recorded_at)
+              || CASE WHEN realization.terminal_outcome IS NULL THEN '{}'::jsonb
+                 ELSE jsonb_build_object('terminalOutcome',realization.terminal_outcome) END
          FROM requested_member requested
          JOIN outcome_pick_realization realization
            ON realization.realization_id=requested.canonical_record_id

@@ -1,3 +1,4 @@
+import { nonPlayerPickOutcomeSchema } from '../source/nonPlayerPickOutcome';
 import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
 import { z } from 'zod';
@@ -99,8 +100,9 @@ const realizationSchema = z
     realizationId: z.string().min(1),
     pickId: z.string().min(1),
     transferAssetVersionId: z.string().min(1),
-    draftSelectionId: z.string().min(1),
-    relationKind: z.literal('exercised_as'),
+    draftSelectionId: z.string().min(1).nullable(),
+    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package']),
+    terminalOutcome: nonPlayerPickOutcomeSchema.optional(),
   })
   .passthrough();
 const snapshotSchema = z
@@ -447,6 +449,7 @@ async function buildRecords(
       transferAssetVersionId: value.transferAssetVersionId,
       draftSelectionId: value.draftSelectionId,
       relationKind: value.relationKind,
+      ...(value.terminalOutcome ? {terminalOutcome:value.terminalOutcome} : {}),
     };
   });
 }

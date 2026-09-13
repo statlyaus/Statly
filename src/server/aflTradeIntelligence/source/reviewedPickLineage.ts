@@ -1,3 +1,4 @@
+import { nonPlayerPickOutcomeSchema } from './nonPlayerPickOutcome';
 import { z } from 'zod';
 import {
   aflTradeArtifactRefSchema,
@@ -28,31 +29,7 @@ const playerEndpoint = {
 export const reviewedPickEndpointSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('selected'), ...playerEndpoint }).strict(),
   z.object({ kind: z.literal('rookie_elevation'), ...playerEndpoint }).strict(),
-  z
-    .object({
-      kind: z.literal('passed'),
-      draftYear: year,
-      draftType: z.string().trim().min(1).max(80),
-      livePick: pick,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('not_exercised'),
-      draftYear: year,
-      draftType: z.string().trim().min(1).max(80),
-      recordedPick: pick,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('incorporated_into_later_package'),
-      onwardTransactionIds: z
-        .array(aflTradeContentAddressedIdSchema('external-transaction'))
-        .max(100),
-      packageDescription: z.string().trim().min(1).max(4000),
-    })
-    .strict(),
+  ...nonPlayerPickOutcomeSchema.options,
 ]);
 
 const movementSchema = z

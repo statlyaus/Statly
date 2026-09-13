@@ -643,7 +643,7 @@ model OutcomeExternalReconciliationPickLineage {
   ordinal     Int
   lineageId   String                                 @map("lineage_id")
   transferId  String                                 @map("transfer_id")
-  selectionId String                                 @map("selection_id")
+  selectionId String?                                 @map("selection_id")
   pickId      String                                 @map("pick_id")
   status      String
   lineageJson Json                                   @map("lineage_json")
@@ -3432,15 +3432,16 @@ model OutcomePickRealization {
   realizationId          String                          @id @map("realization_id")
   pickId                 String                          @map("pick_id")
   transferAssetVersionId String                          @map("transfer_asset_version_id")
-  draftSelectionId       String                          @map("draft_selection_id")
+  draftSelectionId       String?                          @map("draft_selection_id")
   sourceImportRowId      String                          @map("source_import_row_id")
+  terminalOutcome Json? @map("terminal_outcome")
   relationKind           String                          @map("relation_kind")
   status                 OutcomeRecordStatus
   evidenceJson           Json                            @map("evidence_json")
   recordedAt             DateTime                        @map("recorded_at") @outcomes.Timestamptz(3)
   pick                   OutcomeDraftPick                @relation(fields: [pickId], references: [pickId], onDelete: Restrict)
   transferAsset          OutcomeEventAsset               @relation(fields: [transferAssetVersionId], references: [assetVersionId], onDelete: Restrict)
-  draftSelection         OutcomeDraftSelection           @relation(fields: [draftSelectionId], references: [selectionId], onDelete: Restrict)
+  draftSelection         OutcomeDraftSelection?           @relation(fields: [draftSelectionId], references: [selectionId], onDelete: Restrict)
   sourceImportRow        OutcomeImportRow                @relation(fields: [sourceImportRowId], references: [importRowId], onDelete: Restrict)
   releaseMembers         OutcomeReleasePickRealization[]
 

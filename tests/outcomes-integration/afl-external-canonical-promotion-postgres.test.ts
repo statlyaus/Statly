@@ -162,7 +162,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
           evidenceIds: [evidenceId],
         },
       ],
-      pickLineage: [],
+      pickLineage: [{lineageId:createAflTradeContentAddress('external-pick-lineage',{fixture:precision}),pickId,transferId,selectionId:null,status:'single_source',evidenceIds:[evidenceId],terminalOutcome:precision==='instant' ? {kind:'passed',draftYear:2025,draftType:'national',livePick:14} : precision==='day' ? {kind:'not_exercised',draftYear:2025,draftType:'national',recordedPick:14} : {kind:'incorporated_into_later_package',onwardTransactionIds:[],packageDescription:'Included in the subsequent package; no individual player attribution.'}}],
       issues: [],
       reconciledAt: '2026-08-09T11:00:00.000Z',
       publicationEligible: false,
@@ -521,7 +521,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
         status: 'finalized',
         idempotentReplay: false,
         promotionCount: 1,
-        memberCount: 3,
+        memberCount: 4,
       });
       await expect(corpusRepository.build(corpusRequest)).resolves.toEqual({
         ...corpus,
@@ -540,7 +540,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
         corpusId: corpus.corpusId,
         status: 'finalized',
         idempotentReplay: false,
-        canonicalMemberCount: 3,
+        canonicalMemberCount: 4,
       });
       await expect(releaseRepository.build(releaseRequest)).resolves.toEqual({
         ...release,
@@ -560,13 +560,13 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
           content: {
             releaseId: release.releaseId,
             factualCandidateId: release.candidateId,
-            recordCount: 3,
-            recordCounts: { transaction: 1, transfer: 1, pick_custody: 1 },
+            recordCount: 4,
+            recordCounts: { transaction: 1, transfer: 1, pick_custody: 1, pick_realization: 1 },
           },
         },
         projection: {
           content: {
-            publicRecordCount: 3,
+            publicRecordCount: 4,
             publicArchiveId: publicArchive.archive.archiveId,
           },
         },
@@ -667,6 +667,10 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
           [release.releaseId, digest('f')]
         )
       ).rejects.toThrow(/finalized (?:release|promotion-backed) candidate|registered release/i);
+      const outcome = candidate.content.pickLineage[0].terminalOutcome!;
+      expect((await outcomesPool.query('SELECT draft_selection_id,relation_kind,terminal_outcome FROM outcome_pick_realization')).rows).toEqual([{draft_selection_id:null,relation_kind:outcome.kind,terminal_outcome:outcome}]);
+      expect((await outcomesPool.query("SELECT record_json FROM outcome_public_factual_archive_record WHERE record_kind='pick_realization'")).rows[0].record_json).toMatchObject({record:{draftSelectionId:null,relationKind:outcome.kind,terminalOutcome:outcome}});
+      expect((await outcomesPool.query('SELECT count(*)::int AS count FROM outcome_draft_selection')).rows[0].count).toBe(0);
       const storedCustody = (await outcomesPool.query('SELECT observed_at,observed_date FROM outcome_pick_custody_observation WHERE custody_observation_id=$1',[custodyId])).rows[0];
       if (precision === 'instant') { expect(storedCustody.observed_at).not.toBeNull(); expect(storedCustody.observed_date).toBeNull(); }
       else { expect(storedCustody.observed_at).toBeNull(); expect(storedCustody.observed_date).toEqual(candidate.content.pickCustody[0].observedAt); }
@@ -719,7 +723,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
         gate2_admissions: '1',
         registry_events: '1',
         public_archives: '1',
-        public_archive_records: '3',
+        public_archive_records: '4',
         valuations: '0',
       });
     });

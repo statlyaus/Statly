@@ -1717,21 +1717,25 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       async function persistPickRealizations(): Promise<void> {
         for (const record of content.pickLineage) {
           const transferAssetVersionId = assetByTransfer.get(record.transferId);
-          const draftSelectionId = canonicalSelectionBySource.get(record.selectionId);
+          const draftSelectionId = record.selectionId === null ? null : canonicalSelectionBySource.get(record.selectionId);
           const selection = content.draftSelections.find(
             ({ selectionId }) => selectionId === record.selectionId
           );
-          if (!transferAssetVersionId || !draftSelectionId || !selection) {
+          if (!transferAssetVersionId || (!record.terminalOutcome && (!draftSelectionId || !selection))) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
               `Pick realization ${record.lineageId} has incomplete canonical endpoints.`
             );
           }
+          const transfer = content.transfers.find(value => value.transferId === record.transferId)!;
+          const event = content.transactions.find(value => value.transactionId === transfer.transactionId)!;
+          const outcome = record.terminalOutcome;
+          const outcomeYear = outcome && outcome.kind !== 'incorporated_into_later_package' ? outcome.draftYear : event.seasonYear;
           const row = await sourceRow({
             key: `realization:${record.lineageId}`,
             recordKind: 'external_pick_realization',
             sourceRecordId: record.lineageId,
-            seasonYear: selection.draftYear,
+            seasonYear: selection?.draftYear ?? outcomeYear,
             evidenceIds: record.evidenceIds,
             record,
           });
@@ -1740,12 +1744,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             sourceLineageId: record.lineageId,
             transferAssetVersionId,
             draftSelectionId,
+            ...(outcome ? {terminalOutcome:outcome} : {}),
           });
           await transaction.query(
             `INSERT INTO outcome_pick_realization
             (realization_id,pick_id,transfer_asset_version_id,draft_selection_id,
-             source_import_row_id,relation_kind,status,evidence_json,recorded_at)
-           VALUES ($1,$2,$3,$4,$5,'exercised_as','approved'::"OutcomeRecordStatus",$6::jsonb,$7)`,
+             source_import_row_id,relation_kind,status,evidence_json,recorded_at,terminal_outcome)
+           VALUES ($1,$2,$3,$4,$5,$8,'approved'::"OutcomeRecordStatus",$6::jsonb,$7,$9::jsonb)`,
             [
               realizationId,
               record.pickId,
@@ -1754,6 +1759,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
               approval.promotedAt,
+              outcome?.kind ?? 'exercised_as',
+              outcome ? canonicalizeAflTradeJson(outcome) : null,
             ]
           );
           promotionRecords.push({
