@@ -258,6 +258,31 @@ describe('combined draft-session evidence', () => {
     ).toThrow('boundary identity');
   });
 
+  it.each(['first', 'last'] as const)(
+    'rejects unresolved %s boundary identities even when both sources agree',
+    (boundary) => {
+      const selectionNumber = boundary === 'first' ? 1 : 77;
+      for (const field of ['playerId', 'clubId'] as const) {
+        for (const missing of ['', '   ']) {
+          expect(() =>
+            resolve2016(
+              selections2016.map((selection) =>
+                selection.selectionNumber === selectionNumber
+                  ? { ...selection, [field]: missing }
+                  : selection
+              ),
+              facts2016.map((fact) =>
+                fact.kind === 'session_boundary' && fact.boundary === boundary
+                  ? { ...fact, [field]: missing }
+                  : fact
+              )
+            )
+          ).toThrow('boundary identity');
+        }
+      }
+    }
+  );
+
   it.each(['captureId', 'artifactId'] as const)(
     'rejects 2016 total evidence sharing the terminal %s',
     (field) => {

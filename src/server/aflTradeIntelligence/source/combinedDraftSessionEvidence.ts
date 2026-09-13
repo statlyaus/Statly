@@ -149,7 +149,12 @@ export function resolveCombinedDraftSessionEvidence(input: {
       throw new TypeError('Combined draft evidence contains a contradictory session boundary.');
     }
     const selection = orderedSelections[boundary.selectionNumber - 1];
-    if (selection?.playerId !== boundary.playerId || selection.clubId !== boundary.clubId) {
+    if (
+      !boundary.playerId.trim() ||
+      !boundary.clubId.trim() ||
+      selection?.playerId !== boundary.playerId ||
+      selection.clubId !== boundary.clubId
+    ) {
       throw new TypeError('A session boundary identity disagrees with the complete inventory.');
     }
   }
