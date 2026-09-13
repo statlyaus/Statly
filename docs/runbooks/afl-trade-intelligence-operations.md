@@ -2951,6 +2951,9 @@ Reviewed session projection v2 and promotion v7 preserve an explicit date window
 exact event date. Migration0193 validates same-year bounds, disjoint session chronology and
 unchanged inventory/subset membership in reviewed transitions. It preserves exact-day legacy
 formats and all ancestor projections. This structural check grants no source authority or
-canonical admission: window source authentication, promotion storage and lifecycle ordering must
-also be implemented and verified before admitting window evidence. Do not substitute a window
+canonical admission. Migration0194 authenticates window claims against retained source evidence
+through a distinct combined-inventory validator, preserving legacy validators, completion/boundary
+requirements, independent totals and current-source checks. Window correction persistence, readback,
+replay and revocation are fixture-verified. Promotion storage and lifecycle ordering still require
+implementation and verification before canonical admission. Do not substitute a window
 endpoint for the unknown selection day.

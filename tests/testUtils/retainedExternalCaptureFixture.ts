@@ -48,7 +48,8 @@ export async function createRetainedExternalCaptureFixture(
   enumerated = false,
   multiDocument = false,
   supplementalSelection = false,
-  rookieExclusion = false
+  rookieExclusion = false,
+  sessionWindow = false
 ) {
   if (rookieExclusion && (!multiDocument || environment !== 'test_fixture'))
     throw new Error('Rookie exclusion requires synthetic multi-document proof.');
@@ -157,6 +158,19 @@ export async function createRetainedExternalCaptureFixture(
         boundary(1, 1, 'first'),
         { ...common, kind: 'draft_completed_total', selectionCount: 71 },
       ];
+  if (sessionWindow && official && secondSession) {
+    sessionFacts[0] = {
+      ...common,
+      kind: 'draft_session_window',
+      sessionOrdinal: 2,
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-21',
+        latestDate: '2024-11-25',
+      },
+    };
+  }
   if (multiDocument && official) {
     if (secondSession) {
       const index = sessionFacts.findIndex((claim) => claim.kind === 'draft_completed_inventory');

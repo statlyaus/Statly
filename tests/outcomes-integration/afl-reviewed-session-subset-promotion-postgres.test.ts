@@ -43,39 +43,49 @@ import { deriveReviewedSessionCanonicalPromotionProposal } from '@/server/aflTra
 import { createAflTradeExternalCanonicalPromotionReviewDecision } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionReviewContracts';
 import { createRetainedExternalCaptureFixture } from '../testUtils/retainedExternalCaptureFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
-describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_selection', 'rookie_exclusion'])(
-  'reviewed retained subset (%s)',
-  (mode) => {
-    const enumerated = mode !== 'consecutive';
-    const multiDocument = mode === 'multi_document' || mode === 'rookie_exclusion';
-    const rookieExclusion = mode === 'rookie_exclusion';
-    const supplementalSelection = mode === 'supplemental_selection';
-    const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
-    if (!url) throw new Error('Disposable PostgreSQL required.');
-    const schema = `reviewed_subset_${mode}_${process.pid}_${Date.now()}`;
-    const admin = new Pool({ connectionString: url });
-    const pool = new Pool({ connectionString: url, options: `-c search_path=${schema}` });
-    const sql = createPgAflOutcomeSqlClient(pool);
-    const databaseInstant = async () =>
-      (
-        await pool.query<{ at: string }>(
-          `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
+describe.each([
+  'consecutive',
+  'enumerated',
+  'multi_document',
+  'supplemental_selection',
+  'rookie_exclusion',
+  'window',
+])('reviewed retained subset (%s)', (mode) => {
+  const sessionWindow = mode === 'window';
+  const enumerated = mode !== 'consecutive';
+  const multiDocument = mode === 'multi_document' || mode === 'rookie_exclusion';
+  const rookieExclusion = mode === 'rookie_exclusion';
+  const supplementalSelection = mode === 'supplemental_selection';
+  const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
+  if (!url) throw new Error('Disposable PostgreSQL required.');
+  const schema = `reviewed_subset_${mode}_${process.pid}_${Date.now()}`;
+  const admin = new Pool({ connectionString: url });
+  const pool = new Pool({ connectionString: url, options: `-c search_path=${schema}` });
+  const sql = createPgAflOutcomeSqlClient(pool);
+  const databaseInstant = async () =>
+    (
+      await pool.query<{ at: string }>(
+        `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
-        )
-      ).rows[0]!.at;
-    beforeAll(async () => {
-      await admin.query(`CREATE SCHEMA "${schema}"`);
-      const scoped = new URL(url);
-      scoped.searchParams.set('schema', schema);
-      runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
-    }, 120000);
-    afterAll(async () => {
-      await pool.end();
-      await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
-      await admin.end();
-    });
+      )
+    ).rows[0]!.at;
+  beforeAll(async () => {
+    await admin.query(`CREATE SCHEMA "${schema}"`);
+    const scoped = new URL(url);
+    scoped.searchParams.set('schema', schema);
+    runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
+  }, 120000);
+  afterAll(async () => {
+    await pool.end();
+    await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
+    await admin.end();
+  });
 
-    it('promotes one reviewed selection from complete retained inventory with exact replay', async () => {
+  it(
+    sessionWindow
+      ? 'persists a reviewed window correction with replay and revocation'
+      : 'promotes one reviewed selection from complete retained inventory with exact replay',
+    async () => {
       const draft = await createRetainedExternalCaptureFixture(
         sql,
         false,
@@ -87,7 +97,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         enumerated,
         multiDocument,
         supplementalSelection,
-        rookieExclusion
+        rookieExclusion,
+        sessionWindow
       );
       const trade = await createRetainedExternalCaptureFixture(
         sql,
@@ -100,7 +111,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         enumerated,
         multiDocument,
         supplementalSelection,
-        rookieExclusion
+        rookieExclusion,
+        sessionWindow
       );
       const official = await createRetainedExternalCaptureFixture(
         sql,
@@ -113,7 +125,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         enumerated,
         multiDocument,
         supplementalSelection,
-        rookieExclusion
+        rookieExclusion,
+        sessionWindow
       );
       const second = await createRetainedExternalCaptureFixture(
         sql,
@@ -126,7 +139,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         enumerated,
         multiDocument,
         supplementalSelection,
-        rookieExclusion
+        rookieExclusion,
+        sessionWindow
       );
       const plannedAt = (
         await pool.query<{ at: string }>(
@@ -501,6 +515,48 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
       expect(
         candidate.content.reviewedSessionCorrection!.projections[0].inventorySelectionIds
       ).toHaveLength(71);
+      if (sessionWindow) {
+        expect(candidate.content.reviewedSessionCorrection!.projections[0].schemaVersion).toBe(
+          'afl-trade-combined-draft-session-projection/v2'
+        );
+        expect(await reviews.loadCandidate(candidate.candidateId)).toEqual(candidate);
+        await candidateRepository.persistCandidate({ candidate, identityResolutions: resolutions });
+        const check = async (document: unknown) =>
+          (
+            await pool.query(
+              'SELECT outcome_reviewed_session_inventory_exact($1::jsonb,$2::jsonb) AS valid',
+              [canonical(document), canonical(resolutions)]
+            )
+          ).rows[0].valid;
+        expect(await check(candidate)).toBe(true);
+        const altered = JSON.parse(JSON.stringify(candidate));
+        const projection = altered.content.reviewedSessionCorrection.projections[0];
+        projection.inventorySessions[1].datePrecision.latestDate = '2024-11-26';
+        projection.selectedSessions[0].datePrecision.latestDate = '2024-11-26';
+        expect(await check(altered)).toBe(false);
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query('SET LOCAL session_replication_role=replica');
+          await client.query(
+            "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
+            [second.target.captureId]
+          );
+          expect(
+            (
+              await client.query(
+                'SELECT outcome_reviewed_session_inventory_exact($1::jsonb,$2::jsonb) AS valid',
+                [canonical(candidate), canonical(resolutions)]
+              )
+            ).rows[0].valid
+          ).toBe(false);
+        } finally {
+          await client.query('ROLLBACK');
+          client.release();
+        }
+        expect(await check(candidate)).toBe(true);
+        return;
+      }
       const proposal = deriveReviewedSessionCanonicalPromotionProposal({
         candidate,
         proposedAt: await databaseInstant(),
@@ -600,6 +656,6 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
       expect(
         (await pool.query('SELECT DISTINCT original_club_id FROM outcome_draft_pick')).rows
       ).toEqual([{ original_club_id: null }]);
-    });
-  }
-);
+    }
+  );
+});
