@@ -421,7 +421,7 @@ export async function prepareReviewedSessionCorrection(
   );
   if (!loaded.rows[0]?.current) throw new TypeError('Session correction requires a current finalized parent.');
   const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
-  if (!parent.content.reviewedCorrection || parent.content.reviewedSessionCorrection || parent.content.environment !== input.environment)
+  if (!parent.content.reviewedCorrection || parent.content.environment !== input.environment)
     throw new TypeError('Session correction requires its exact private reviewed parent.');
   await authenticateReviewedAdmissionScope(transaction, parent);
   const client = { query: transaction.query.bind(transaction), transaction: <T>(work: (tx: AflOutcomeSqlTransaction) => Promise<T>) => work(transaction) };

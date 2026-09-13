@@ -2771,6 +2771,9 @@ The reviewed subset fixture exercises pick71 alone from a71-selection inventory,
 public custody/selection promotion, replay and acquisition invalidation/recovery for both session sources.
 Migration0179 preserves completion target order in its hash while comparing candidate batch membership
 in sorted order; never rewrite an immutable completion just to match candidate ordering.
+Migration0180 permits a further session successor only when it adds draft groups and preserves every
+prior projection exactly. It recursively authenticates the current parent chain; each edge must extend
+the source set. Existing evidence, corrected facts and ancestor identity approvals remain required.
 
 `prepareReviewedSessionCorrection` reconstructs a private reviewed successor from its finalized
 parent, current historical completion and approved identity records. It preserves accepted custody,

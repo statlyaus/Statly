@@ -80,3 +80,23 @@ export const reviewedSessionCorrectionSchema = z
         message: 'Session projection groups must be unique and sorted.',
       });
   });
+
+/** A later session correction adds groups without rewriting a previously authenticated proof. */
+export function assertReviewedSessionProjectionExtension(
+  previous: z.infer<typeof reviewedSessionCorrectionSchema> | undefined,
+  projections: z.infer<typeof retainedDraftSessionProjectionSchema>[]
+): void {
+  if (!previous) return;
+  if (
+    projections.length <= previous.projections.length ||
+    previous.projections.some(
+      (prior) =>
+        !projections.some(
+          (next) => canonicalizeAflTradeJson(next) === canonicalizeAflTradeJson(prior)
+        )
+    )
+  )
+    throw new TypeError(
+      'Session successor must add groups and preserve every prior projection exactly.'
+    );
+}

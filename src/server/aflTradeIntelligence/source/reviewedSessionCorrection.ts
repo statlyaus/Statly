@@ -18,7 +18,10 @@ import {
   projectReportedDraftSessionEvidence,
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
-import { retainedDraftSessionProjectionSchema } from './reviewedSessionCorrectionContracts';
+import {
+  assertReviewedSessionProjectionExtension,
+  retainedDraftSessionProjectionSchema,
+} from './reviewedSessionCorrectionContracts';
 
 /** Deterministic construction only. Persistence must authenticate parent, source and identity decisions. */
 export function buildReviewedSessionCorrection(input: {
@@ -31,7 +34,6 @@ export function buildReviewedSessionCorrection(input: {
   if (
     !parent.content.reviewedScope ||
     !parent.content.reviewedCorrection ||
-    parent.content.reviewedSessionCorrection ||
     parent.content.environment === 'production'
   )
     throw new TypeError('Session correction requires an unchanged private reviewed parent.');
@@ -213,6 +215,7 @@ export function buildReviewedSessionCorrection(input: {
       })
     );
   });
+  assertReviewedSessionProjectionExtension(parent.content.reviewedSessionCorrection, projections);
   const content = structuredClone(parent.content);
   for (const projection of projections)
     for (const session of projection.selectedSessions)

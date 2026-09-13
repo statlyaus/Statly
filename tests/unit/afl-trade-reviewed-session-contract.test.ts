@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { projectReportedDraftSessionEvidence } from '@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence';
 import {
+  assertReviewedSessionProjectionExtension,
   retainedDraftSessionProjectionSchema,
   reviewedSessionCorrectionSchema,
 } from '@/server/aflTradeIntelligence/source/reviewedSessionCorrectionContracts';
@@ -67,4 +68,29 @@ it('rejects duplicated draft groups in a versioned correction', () => {
   expect(
     reviewedSessionCorrectionSchema.safeParse({ ...marker, projections: [p, p] }).success
   ).toBe(false);
+});
+
+it('extends session coverage while preserving each prior proof exactly', () => {
+  const prior = proof();
+  const marker = reviewedSessionCorrectionSchema.parse({
+    schemaVersion: 'afl-trade-reviewed-session-correction/v1',
+    parentCandidateId: id('external-reconciliation', 1),
+    sourceCompletionId: id('external-historical-capture-completion', 1),
+    projections: [prior],
+  });
+  const added = structuredClone(prior);
+  for (const session of [...added.inventorySessions, ...added.selectedSessions]) {
+    session.draftYear = 2022;
+    session.eventDate = session.eventDate.replace('2021', '2022');
+  }
+  expect(() => assertReviewedSessionProjectionExtension(marker, [prior, added])).not.toThrow();
+  expect(() => assertReviewedSessionProjectionExtension(marker, [prior])).toThrow(/add groups/);
+  const changed = structuredClone(prior);
+  changed.inventorySessions[0]!.officialName = 'Altered prior proof';
+  expect(() => assertReviewedSessionProjectionExtension(marker, [changed, added])).toThrow(
+    /preserve/
+  );
+  expect(() => assertReviewedSessionProjectionExtension(marker, [added, added])).toThrow(
+    /preserve/
+  );
 });
