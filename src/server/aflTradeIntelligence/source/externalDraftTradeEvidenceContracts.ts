@@ -334,7 +334,19 @@ const draftCompletedTotalClaimSchema = z
   })
   .strict();
 
+const issuingAwardReferenceSchema = z
+  .object({
+    kind: z.literal('issuing_award_reference'),
+    grantYear: yearSchema,
+    scheme: z.enum(['gws_mini_draft', 'gold_coast_expansion_compensation']),
+    recordedOriginalHolder: boundedText,
+    componentCount: positiveOrdinalSchema,
+    sourceDescription: boundedText,
+  })
+  .strict();
+
 const claimSchema = z.discriminatedUnion('kind', [
+  issuingAwardReferenceSchema,
   draftSessionClaimSchema,
   draftSessionDateClaimSchema,
   draftSessionCompletionClaimSchema,
@@ -371,6 +383,7 @@ const allowedKindsByProvider = {
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([
+    'issuing_award_reference',
     'pick_custody',
     'draft_session',
     'draft_session_date',
