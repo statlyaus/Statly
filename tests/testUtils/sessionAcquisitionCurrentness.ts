@@ -3,6 +3,9 @@ import { expect } from 'vitest';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   createAflTradeAcquisitionSpellRegistration,
+  createAflTradeWindowAcquisitionSpellRegistration,
+  createAflTradeWindowAcquisitionSpellRegistrationRule,
+  type AflTradeAcquisitionSpellRegistration,
   createAflTradeAcquisitionSpellRegistrationRule,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
@@ -12,8 +15,13 @@ export async function verifySessionAcquisitionCurrentness(
   pool: Pool,
   promoted: Pick<
     Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>,
-    'retainedArtifacts' | 'sourceArtifact' | 'draftEntries' | 'clubId' | 'candidate'
-  >
+    'retainedArtifacts' | 'sourceArtifact' | 'clubId' | 'candidate'
+  > & {
+    draftEntries: Array<{
+      player_id: string;
+      entry: AflTradeAcquisitionSpellRegistration['content']['entry'];
+    }>;
+  }
 ): Promise<void> {
   const at = async () =>
     (
@@ -40,7 +48,13 @@ export async function verifySessionAcquisitionCurrentness(
     );
     return decisionId;
   };
-  const rule = createAflTradeAcquisitionSpellRegistrationRule({
+  const entry = promoted.draftEntries[0]!;
+  const window = entry.entry.eventDate === null;
+  const rule = (
+    window
+      ? createAflTradeWindowAcquisitionSpellRegistrationRule
+      : createAflTradeAcquisitionSpellRegistrationRule
+  )({
     ...scope,
     ruleVersion: 'combined-session-public-path-v1',
     evidence: [promoted.sourceArtifact],
@@ -51,8 +65,7 @@ export async function verifySessionAcquisitionCurrentness(
     await approve('acquisition_spell_rule', rule.ruleId, rule),
     scope
   );
-  const entry = promoted.draftEntries[0]!;
-  const spell = createAflTradeAcquisitionSpellRegistration({
+  const spellInput = {
     ...scope,
     playerId: entry.player_id,
     clubId: promoted.clubId,
@@ -64,12 +77,30 @@ export async function verifySessionAcquisitionCurrentness(
     observedThrough: '2025-09-27',
     continuityEvidence: [promoted.sourceArtifact],
     createdAt: await at(),
-  });
+  };
+  const spell =
+    entry.entry.eventDate === null
+      ? createAflTradeWindowAcquisitionSpellRegistration(spellInput)
+      : createAflTradeAcquisitionSpellRegistration({ ...spellInput, entry: entry.entry });
   const spellApprovalId = await approve(
     'acquisition_spell_registration',
     spell.spellVersionId,
     spell
   );
+  expect(
+    (
+      await pool.query(
+        `SELECT outcome_acquisition_registration_event_current($1::jsonb,$2,$3,'test_fixture','AFLM',TRUE,$4,clock_timestamp()) AS valid`,
+        [
+          JSON.stringify(spell.content.entry),
+          spell.content.playerId,
+          spell.content.clubId,
+          spell.content.createdAt,
+        ]
+      )
+    ).rows[0].valid,
+    'Promoted acquisition entry must retain current authority'
+  ).toBe(true);
   await expect(repository.registerReviewedSpell(spell, spellApprovalId, scope)).resolves.toEqual(
     spell
   );
@@ -88,6 +119,53 @@ export async function verifySessionAcquisitionCurrentness(
     spell.spellVersionId
   );
 
+  if (window) {
+    expect(
+      (
+        await pool.query(
+          `SELECT start_date,end_date,end_reason,
+      outcome_acquisition_possible_membership(spell)::TEXT AS possible
+      FROM outcome_acquisition_spell_version spell WHERE spell_version_id=$1`,
+          [spell.spellVersionId]
+        )
+      ).rows
+    ).toEqual([{ start_date: null, end_date: null, end_reason: null, possible: '[2024-11-21,)' }]);
+    const duplicate = createAflTradeWindowAcquisitionSpellRegistration({
+      ...spell.content,
+      createdAt: await at(),
+    });
+    await expect(
+      repository.registerReviewedSpell(
+        duplicate,
+        await approve('acquisition_spell_registration', duplicate.spellVersionId, duplicate),
+        scope
+      )
+    ).rejects.toThrow('cannot overlap');
+    if (spell.content.entry.eventDate !== null) throw new Error('Expected explicit window entry');
+    const altered = createAflTradeWindowAcquisitionSpellRegistration({
+      ...spell.content,
+      version: 2,
+      supersedesSpellVersionId: spell.spellVersionId,
+      entry: {
+        ...spell.content.entry,
+        datePrecision: { ...spell.content.entry.datePrecision, latestDate: '2024-11-26' },
+      },
+      createdAt: await at(),
+    });
+    await expect(
+      repository.registerReviewedSpell(
+        altered,
+        await approve('acquisition_spell_registration', altered.spellVersionId, altered),
+        scope
+      )
+    ).rejects.toThrow('exact current review');
+    await expect(
+      pool.query('INSERT INTO outcome_acquisition_spell_metric(spell_version_id) VALUES($1)', [
+        spell.spellVersionId,
+      ])
+    ).rejects.toThrow('interval-aware metric and release qualification');
+  }
+
   const requiredCaptures = (
     await pool.query<{ capture_id: string }>(
       `SELECT DISTINCT capture.capture_id
@@ -96,7 +174,7 @@ export async function verifySessionAcquisitionCurrentness(
        JOIN outcome_external_evidence_batch batch USING(batch_id)
        JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
        WHERE source.candidate_id=$1 AND row.claim_kind IN
-         ('draft_session','draft_session_date','draft_session_completion','draft_session_boundary','draft_completed_total')
+         ('draft_session','draft_session_date','draft_session_window','draft_session_completion','draft_session_boundary','draft_completed_total')
        ORDER BY capture.capture_id`,
       [promoted.candidate.candidateId]
     )

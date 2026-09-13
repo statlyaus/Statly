@@ -2979,5 +2979,9 @@ Acquisition registration v2 and its versioned rule preserve event windows with n
 `deriveAflTradeAcquisitionMembershipBounds` distinguishes possible membership (earliest entry through
 the day before latest departure) from certain membership (latest entry through the day before earliest
 departure), bounded by the reviewed observation date. It validates disjoint chronology and preserves
-legacy exact-day results. These constructors grant no authority; v2 SQL rule/spell storage, currentness
-and overlap checks still require implementation before window-spell registration.
+legacy exact-day results. Migration0197 persists v2 through the reviewed acquisition repository;
+immutable registration JSON retains the bounds while exact columns remain null when unknown.
+Currentness authenticates the matching v2 rule, promotion, reviewed source bounds and evidence.
+Overlap checks use possible membership, with continuing spells unbounded beyond observedThrough.
+Exact-day metric, valuation and release consumers reject v2 explicitly until their interval-aware
+qualification is implemented. Fixture registration does not establish genuine admission or grading.

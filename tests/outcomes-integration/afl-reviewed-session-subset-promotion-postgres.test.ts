@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from '@/server/aflTradeIntelligence/source/draftSessionDatePrecision';
 import { verifyWindowSpecialExercise } from '../testUtils/windowSpecialExercise';
 import { buildReviewedSessionCorrection } from '@/server/aflTradeIntelligence/source/reviewedSessionCorrection';
 import {
@@ -656,7 +657,6 @@ describe.each([
           authorityId: promoterAuthority,
           actor,
         });
-        return;
       }
       const retainedArtifacts = new Map();
       for (const fixture of [draft, trade, official, second]) {
@@ -667,13 +667,14 @@ describe.each([
       }
       const assets = (
         await pool.query<{
-          event_date: string;
+          event_date: string | null;
+          date_precision: unknown;
           event_id: string;
           event_version_id: string;
           asset_version_id: string;
           player_id: string;
         }>(
-          `SELECT event.event_date::TEXT,event.event_id,event.event_version_id,asset.asset_version_id,asset.player_id
+          `SELECT event.event_date::TEXT,event.date_precision,event.event_id,event.event_version_id,asset.asset_version_id,asset.player_id
      FROM outcome_external_canonical_promotion_record member JOIN outcome_event_asset asset ON asset.asset_version_id=member.canonical_record_id
      JOIN outcome_event_version event ON event.event_version_id=asset.event_version_id WHERE member.promotion_id=$1 AND member.record_kind='draft_player_asset'`,
           [result.promotionId]
@@ -696,7 +697,12 @@ describe.each([
             promotionId: result.promotionId,
             eventVersionId: asset.event_version_id,
             assetVersionId: asset.asset_version_id,
-            eventDate: asset.event_date,
+            ...(asset.event_date === null
+              ? {
+                  eventDate: null,
+                  datePrecision: draftSessionDateWindowSchema.parse(asset.date_precision),
+                }
+              : { eventDate: asset.event_date }),
             evidence: refs.map((r) => {
               const retained = retainedArtifacts.get(r.artifact_id);
               if (!retained) throw new Error('Missing promoted evidence');

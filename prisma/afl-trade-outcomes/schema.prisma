@@ -3576,7 +3576,7 @@ model OutcomeAcquisitionSpellVersion {
   clubId                   String                                 @map("club_id")
   startEventVersionId      String                                 @map("start_event_version_id")
   startAssetVersionId      String                                 @map("start_asset_version_id")
-  startDate                DateTime                               @map("start_date") @outcomes.Date
+  startDate                DateTime?                              @map("start_date") @outcomes.Date
   endDate                  DateTime?                              @map("end_date") @outcomes.Date
   endReason                String?                                @map("end_reason")
   ruleId                   String                                 @map("rule_id")
