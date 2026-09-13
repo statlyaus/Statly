@@ -10,7 +10,10 @@ import type { createSyntheticAcquisitionPlayerPromotion } from './acquisitionPla
 
 export async function verifySessionAcquisitionCurrentness(
   pool: Pool,
-  promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>
+  promoted: Pick<
+    Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>,
+    'retainedArtifacts' | 'sourceArtifact' | 'draftEntries' | 'clubId' | 'candidate'
+  >
 ): Promise<void> {
   const at = async () =>
     (

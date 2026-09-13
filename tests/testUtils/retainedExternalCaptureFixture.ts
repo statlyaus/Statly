@@ -22,7 +22,10 @@ import {
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { parseOfficialAflDraftSession } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
-import { parseDraftguruNationalYearSelections } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
+import {
+  parseDraftguruNationalYearSelections,
+  parseDraftguruTradeDetail,
+} from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 import type { PersistAflTradeExternalCaptureInput } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import { ingestAuthorizedAflTradeExternalPage } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { PostgresAflTradeExternalCaptureRegistry } from '@/server/aflTradeIntelligence/source/postgresExternalCaptureRegistry';
@@ -35,17 +38,28 @@ export async function createRetainedExternalCaptureFixture(
   official = false,
   environment: 'test_fixture' | 'non_production' = 'test_fixture',
   selectionCount = 1,
-  nullableTerms = false
+  nullableTerms = false,
+  tradeDetail = false,
+  secondSession = false
 ) {
+  if (secondSession && !official) throw new Error('Second session requires official profile.');
+  if (tradeDetail && official)
+    throw new Error('Trade fixture cannot use the official session profile.');
   await sql.query(`INSERT INTO outcome_competition_season (competition,season_year)
     VALUES ('AFLM',2024) ON CONFLICT DO NOTHING`);
   const provider = official ? ('official_afl' as const) : ('draftguru' as const);
   const capabilityId = official
     ? 'official-afl-completed-draft-session'
-    : 'draftguru-national-year-page';
+    : tradeDetail
+      ? 'draftguru-trade-detail'
+      : 'draftguru-national-year-page';
   const sourceUrl = official
-    ? 'https://www.afl.com.au/news/1257161/new-tiger-king-richmond-snares-powerful-mid-sam-lalor-at-no1/amp'
-    : 'https://www.draftguru.com.au/years/2024';
+    ? secondSession
+      ? 'https://www.afl.com.au/news/1257674/afl-draft-night-two-tigers-hold-firm-to-pounce-on-199cm-forward-dogs-pick-twice/amp'
+      : 'https://www.afl.com.au/news/1257161/new-tiger-king-richmond-snares-powerful-mid-sam-lalor-at-no1/amp'
+    : tradeDetail
+      ? 'https://www.draftguru.com.au/trades/2024-synthetic-pick-trade'
+      : 'https://www.draftguru.com.au/years/2024';
   const at = new Date(Date.now() - 10_000).toISOString();
   const now = () => new Date().toISOString();
   const expires = new Date(Date.now() + 3600_000).toISOString();
@@ -93,17 +107,40 @@ export async function createRetainedExternalCaptureFixture(
     ? ['draftType', 'draftYear', 'eventDate', 'officialName', 'selectionNumbers', 'sessionOrdinal']
         .map((f) => 'draft_session.' + f)
         .sort()
-    : [
-        'draftYear',
-        'draftType',
-        'selectionNumber',
-        'player.nativeId',
-        'player.recordedName',
-        'selectedByClub.nativeId',
-        'selectedByClub.recordedName',
-      ]
-        .map((f) => 'draft_selection.' + f)
-        .sort();
+    : tradeDetail
+      ? [
+          'transaction.nativeEventId',
+          'transaction.seasonYear',
+          'transaction.occurredOn',
+          'transaction.transactionType',
+          'transaction.title',
+          'transaction_party.nativeEventId',
+          'transaction_party.nativePartyId',
+          'transaction_party.club.nativeId',
+          'transaction_party.club.recordedName',
+          'directed_transfer.nativeEventId',
+          'directed_transfer.nativeTransferId',
+          'directed_transfer.fromClub.nativeId',
+          'directed_transfer.fromClub.recordedName',
+          'directed_transfer.toClub.nativeId',
+          'directed_transfer.toClub.recordedName',
+          'directed_transfer.asset.kind',
+          'directed_transfer.asset.draftYear',
+          'directed_transfer.asset.draftType',
+          'directed_transfer.asset.recordedPickNumber',
+          'directed_transfer.asset.recordedLabel',
+        ].sort()
+      : [
+          'draftYear',
+          'draftType',
+          'selectionNumber',
+          'player.nativeId',
+          'player.recordedName',
+          'selectedByClub.nativeId',
+          'selectedByClub.recordedName',
+        ]
+          .map((f) => 'draft_selection.' + f)
+          .sort();
   const content = {
     schemaVersion: 'afl-trade-source-rights/v2',
     registerId: 'synthetic-retained-' + provider + '-' + at,
@@ -295,7 +332,7 @@ export async function createRetainedExternalCaptureFixture(
     competition: 'AFLM',
     anchorSeasonYear: 2024,
     discoveryFromSeasonYear: null,
-    draftPathway: 'national' as const,
+    draftPathway: tradeDetail ? null : ('national' as const),
     dataset: content.dataset,
     datasetVersion: content.datasetVersion,
     accessMechanism: 'automated_web',
@@ -308,11 +345,22 @@ export async function createRetainedExternalCaptureFixture(
     maximumBytes: 2097152,
   };
   const raw = repository('raw_source');
-  const officialHtml = `<div class="amp-article__date">Nov 20, 2024</div><div class="article-body"><p>Selections completed in Wednesday night's opening round; the last pick was No.27.</p><h4>2024 Telstra AFL Draft – First Round</h4><p>${Array.from({ length: 27 }, (_, i) => `${i + 1}. Synthetic player (Synthetic club)`).join('<br>')}</p></div>`;
+  const officialHtml = `<div class="amp-article__date">Nov ${secondSession ? 21 : 20}, 2024</div><div class="article-body"><p>${secondSession ? 'Thursday night, night two finished with a total of 71 selections.' : "Selections completed in Wednesday night's opening round; the last pick was No.27."}</p><h4>2024 Telstra AFL Draft – First Round</h4><p>${Array.from({ length: 27 }, (_, i) => `${i + 1}. Synthetic player (Synthetic club)`).join('<br>')}</p>${secondSession ? '<h4>Second Round</h4><p>' + Array.from({ length: 44 }, (_, i) => `${i + 28}. Synthetic player (Synthetic club)`).join('<br>') + '</p>' : ''}</div>`;
+  const tradeHtml = `<h2 class="heading">2024 Synthetic Club and Synthetic Other Club Trade for Draft Picks</h2>
+<table class="individual-trade">
+<tr class="club-header"><td>Synthetic Other Club</td></tr>
+<tr class="club-subheader"><td colspan="5">What Other Gave</td><td colspan="5">What Other Got</td></tr>
+<tr class="movement"><td class="pick-name actual-asset">Pick ${selectionCount}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr class="club-header"><td>Synthetic Club</td></tr>
+<tr class="club-subheader"><td colspan="5">What Club Gave</td><td colspan="5">What Club Got</td></tr>
+<tr class="movement"><td></td><td></td><td></td><td></td><td></td><td class="pick-name actual-asset">Pick ${selectionCount}</td><td></td><td></td><td></td><td></td></tr>
+</table>`;
   const bytes = new TextEncoder().encode(
     official
       ? officialHtml
-      : `<table class="big-pick-movements"><tbody>${Array.from({ length: selectionCount }, (_, i) => `<tr><td class="draft">National</td><td class="number">${i + 1}</td><td class="player"><a href="/players/synthetic-player${i === 0 ? '' : '-' + i}">Synthetic Player${i === 0 ? '' : ' ' + i}</a></td><td class="club"><a href="/clubs/synthetic-club">Synthetic Club</a></td></tr>`).join('')}</tbody></table>`
+      : tradeDetail
+        ? tradeHtml
+        : `<table class="big-pick-movements"><tbody>${Array.from({ length: selectionCount }, (_, i) => `<tr><td class="draft">National</td><td class="number">${i + 1}</td><td class="player"><a href="/players/synthetic-player${i === 0 ? '' : '-' + i}">Synthetic Player${i === 0 ? '' : ' ' + i}</a></td><td class="club"><a href="/clubs/synthetic-club">Synthetic Club</a></td></tr>`).join('')}</tbody></table>`
   );
   const sourceArtifact = createAflTradeByteArtifactRef(bytes, 'text/html', request.capturedAt);
   const captures = new PostgresAflTradeExternalCaptureRegistry(sql);
@@ -391,7 +439,13 @@ export async function createRetainedExternalCaptureFixture(
         parsePage: ({ html, capture }) =>
           official
             ? parseOfficialAflDraftSession(html, { capture })
-            : parseDraftguruNationalYearSelections(html, { capture, draftYear: 2024 }),
+            : tradeDetail
+              ? parseDraftguruTradeDetail(html, {
+                  capture,
+                  draftYear: 2024,
+                  effectiveAt: request.effectiveAt,
+                })
+              : parseDraftguruNationalYearSelections(html, { capture, draftYear: 2024 }),
       },
     }
   );

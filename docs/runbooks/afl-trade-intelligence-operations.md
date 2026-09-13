@@ -2767,6 +2767,10 @@ original ordinals even when earlier sessions have no selected members. Migration
 review, write, session-finalization and acquisition-currentness gates. Every candidate selection must
 be covered; partial coverage and unresolved factual records still prevent promotion. Validate public
 promotion, readback/replay and source-revocation behavior before claiming a completed v6 delivery.
+The reviewed subset fixture exercises pick71 alone from a71-selection inventory, original session2,
+public custody/selection promotion, replay and acquisition invalidation/recovery for both session sources.
+Migration0179 preserves completion target order in its hash while comparing candidate batch membership
+in sorted order; never rewrite an immutable completion just to match candidate ordering.
 
 `prepareReviewedSessionCorrection` reconstructs a private reviewed successor from its finalized
 parent, current historical completion and approved identity records. It preserves accepted custody,

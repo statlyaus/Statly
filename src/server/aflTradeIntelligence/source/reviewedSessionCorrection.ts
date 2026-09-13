@@ -39,12 +39,13 @@ export function buildReviewedSessionCorrection(input: {
     input.sourceAuthority
   );
   const batches = input.sourceBatches.map(parseAflTradeExternalEvidenceBatch),
-    ids = batches.map((b) => b.batchId).sort();
+    completionIds = batches.map((b) => b.batchId),
+    ids = [...completionIds].sort();
   if (
     new Set(ids).size !== ids.length ||
     parent.content.sourceBatchIds.some((id) => !ids.includes(id)) ||
     authority.candidateSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(ids) ||
-    authority.completionSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(ids)
+    authority.completionSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(completionIds)
   )
     throw new TypeError('Session correction requires its complete extended source set.');
   const sessionKinds = new Set([

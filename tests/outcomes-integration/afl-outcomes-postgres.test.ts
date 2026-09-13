@@ -1206,6 +1206,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0176_partial_date_draft_sessions',
       '0177_reviewed_session_projection',
       '0178_reviewed_session_subset_promotion',
+      '0179_reviewed_session_completion_order',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
