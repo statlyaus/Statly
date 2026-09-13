@@ -44,7 +44,8 @@ describe('external AFL draft and trade evidence contracts', () => {
   it('retains bounded Official AFL session facts without turning them into whole-session claims', () => {
     const officialCapture = {
       ...capture,
-      sourceUrl: 'https://www.afl.com.au/news/99499/draft-talking-points-racing-royalty-and-bluebloods',
+      sourceUrl:
+        'https://www.afl.com.au/news/99499/draft-talking-points-racing-royalty-and-bluebloods',
     };
     const claims = [
       {
@@ -90,6 +91,46 @@ describe('external AFL draft and trade evidence contracts', () => {
         })
       )
     ).toHaveLength(4);
+  });
+
+  it('retains exact enumerated inventory as a separate Official AFL claim', () => {
+    const content = {
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl' as const,
+      capture: { ...capture, sourceUrl: 'https://www.afl.com.au/news/117263/review' },
+      sourceRow: { ordinal: 1, sourceKey: '2013-completed-inventory' },
+      claim: {
+        kind: 'draft_completed_inventory' as const,
+        draftYear: 2013,
+        draftType: 'national' as const,
+        selectionNumbers: [1, 2, 62, 97],
+      },
+      publicationEligible: false as const,
+    };
+    const envelope = createAflTradeExternalEvidenceEnvelope(content);
+    expect(parseAflTradeExternalEvidenceEnvelope(envelope).content.claim).toEqual(content.claim);
+    for (const selectionNumbers of [[], [1, 1], [2, 1], [0, 1], [1, 1.5]]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({
+          ...content,
+          claim: { ...content.claim, selectionNumbers },
+        })
+      ).toThrow();
+    }
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...content,
+        provider: 'draftguru',
+        capture,
+      })
+    ).toThrow();
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...content,
+        // @ts-expect-error Membership evidence cannot assert a session date.
+        claim: { ...content.claim, eventDate: '2013-11-21' },
+      })
+    ).toThrow();
   });
 
   it('content-addresses provider-native transaction and directed-transfer claims', () => {

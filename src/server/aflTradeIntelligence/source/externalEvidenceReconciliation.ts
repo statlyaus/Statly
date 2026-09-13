@@ -1010,6 +1010,7 @@ export function reconcileAflTradeExternalEvidence(input: {
       'draft_session_completion',
       'draft_session_boundary',
       'draft_completed_total',
+      'draft_completed_inventory',
     ].includes(content.claim.kind)
   );
   const partialSessionKeys = sortedUnique(
@@ -1021,7 +1022,8 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_date'
             | 'draft_session_completion'
             | 'draft_session_boundary'
-            | 'draft_completed_total';
+            | 'draft_completed_total'
+            | 'draft_completed_inventory';
         }
       >;
       return `${claim.draftYear}|${claim.draftType}`;
@@ -1038,7 +1040,8 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_date'
             | 'draft_session_completion'
             | 'draft_session_boundary'
-            | 'draft_completed_total';
+            | 'draft_completed_total'
+            | 'draft_completed_inventory';
         }
       >;
       return claim.draftYear === draftYear && claim.draftType === draftType;
@@ -1073,6 +1076,13 @@ export function reconcileAflTradeExternalEvidence(input: {
         }
         if (claim.kind === 'draft_completed_total') {
           return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
+        }
+        if (claim.kind === 'draft_completed_inventory') {
+          return {
+            ...source,
+            kind: 'completed_draft_inventory',
+            selectionNumbers: claim.selectionNumbers,
+          };
         }
         if (claim.kind !== 'draft_session_boundary') {
           throw new TypeError('Unexpected combined draft-session evidence kind.');

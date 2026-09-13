@@ -334,6 +334,22 @@ const draftCompletedTotalClaimSchema = z
   })
   .strict();
 
+const draftCompletedInventoryClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_inventory'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    selectionNumbers: z
+      .array(positiveOrdinalSchema)
+      .min(1)
+      .max(500)
+      .refine(
+        (numbers) => numbers.every((value, index) => index === 0 || numbers[index - 1]! < value),
+        'Completed inventory numbers must be unique and ascending.'
+      ),
+  })
+  .strict();
+
 const issuingAwardReferenceSchema = z
   .object({
     kind: z.literal('issuing_award_reference'),
@@ -352,6 +368,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSessionCompletionClaimSchema,
   draftSessionBoundaryClaimSchema,
   draftCompletedTotalClaimSchema,
+  draftCompletedInventoryClaimSchema,
   tradeDetailLinkClaimSchema,
   transactionClaimSchema,
   transactionPartyClaimSchema,
@@ -368,6 +385,7 @@ const allowedKindsByProvider = {
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
+    'draft_completed_inventory',
     'transaction',
     'transaction_party',
     'directed_transfer',
@@ -390,6 +408,7 @@ const allowedKindsByProvider = {
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
+    'draft_completed_inventory',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
 } as const;

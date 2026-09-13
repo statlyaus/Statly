@@ -56,6 +56,7 @@ export function buildReviewedSessionCorrection(input: {
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
+    'draft_completed_inventory',
   ]);
   const added = batches.filter((b) => !parent.content.sourceBatchIds.includes(b.batchId));
   if (
@@ -195,6 +196,12 @@ export function buildReviewedSessionCorrection(input: {
         return { ...source, kind: 'completed_session', sessionOrdinal: c.sessionOrdinal };
       if (c.kind === 'draft_completed_total')
         return { ...source, kind: 'completed_draft_total', selectionCount: c.selectionCount };
+      if (c.kind === 'draft_completed_inventory')
+        return {
+          ...source,
+          kind: 'completed_draft_inventory',
+          selectionNumbers: c.selectionNumbers,
+        };
       if (c.kind !== 'draft_session_boundary')
         throw new TypeError('Invalid partial session claim.');
       return {
