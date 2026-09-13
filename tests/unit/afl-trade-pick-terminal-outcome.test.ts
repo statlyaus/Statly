@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { nonPlayerPickOutcomeSchema } from '@/server/aflTradeIntelligence/source/nonPlayerPickOutcome';
 import { pickTerminalOutcomeSchema } from '@/server/aflTradeIntelligence/source/pickTerminalOutcome';
+import { aflTradePromotionBackedPublicArchiveRecordInputSchema } from '@/server/aflTradeIntelligence/outcomes/promotionBackedPublicArchiveContracts';
 
 const elevation = {
   kind: 'rookie_elevation',
@@ -14,6 +15,22 @@ const elevation = {
 };
 
 describe('pick terminal outcomes', () => {
+  it('retains elevation in the archive with no selection and rejects inconsistent realization kinds', () => {
+    const record = {
+      recordKind: 'pick_realization',
+      recordId: 'realization-fixture',
+      realizationId: 'realization-fixture',
+      pickId: 'pick-fixture',
+      transferAssetVersionId: 'asset-fixture',
+      draftSelectionId: null,
+      relationKind: 'rookie_elevation',
+      terminalOutcome: elevation,
+    };
+    expect(aflTradePromotionBackedPublicArchiveRecordInputSchema.parse(record)).toEqual(record);
+    for (const change of [{ draftSelectionId: 'invented' }, { relationKind: 'exercised_as' }, { relationKind: 'passed' }]) {
+      expect(aflTradePromotionBackedPublicArchiveRecordInputSchema.safeParse({ ...record, ...change }).success).toBe(false);
+    }
+  });
   it('preserves player-bearing elevation without treating it as a non-player outcome', () => {
     expect(pickTerminalOutcomeSchema.parse(elevation)).toEqual(elevation);
     expect(nonPlayerPickOutcomeSchema.safeParse(elevation).success).toBe(false);

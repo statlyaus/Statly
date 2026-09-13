@@ -1,4 +1,4 @@
-import { nonPlayerPickOutcomeSchema } from '../source/nonPlayerPickOutcome';
+import { pickTerminalOutcomeSchema } from '../source/pickTerminalOutcome';
 import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { z } from 'zod';
 
@@ -232,8 +232,8 @@ const pickRealizationRecordSchema = z
     pickId: boundedIdSchema,
     transferAssetVersionId: boundedIdSchema,
     draftSelectionId: boundedIdSchema.nullable(),
-    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package']),
-    terminalOutcome: nonPlayerPickOutcomeSchema.optional(),
+    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package','rookie_elevation']),
+    terminalOutcome: pickTerminalOutcomeSchema.optional(),
   })
   .strict()
   .superRefine((record, context) => {

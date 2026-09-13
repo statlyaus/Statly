@@ -1,4 +1,4 @@
-import { nonPlayerPickOutcomeSchema } from './nonPlayerPickOutcome';
+import { pickTerminalOutcomeSchema } from './pickTerminalOutcome';
 import { pickCustodyDateSchema } from './pickCustodyDate';
 import {
   canonicalPickEntitlementSchema,
@@ -125,7 +125,7 @@ const lineageSchema = z
     pickId: aflTradeContentAddressedIdSchema('draft-pick'),
     transferId: aflTradeContentAddressedIdSchema('external-transfer'),
     selectionId: aflTradeContentAddressedIdSchema('external-draft-selection').nullable(),
-    terminalOutcome: nonPlayerPickOutcomeSchema.optional(),
+    terminalOutcome: pickTerminalOutcomeSchema.optional(),
     status: statusSchema,
     evidenceIds: evidenceIdsSchema,
   })
@@ -383,6 +383,23 @@ const contentSchema = z
       const hasUsableCustody = content.pickCustody.some(
         (custody) => custody.pickId === lineage.pickId && usable(custody.status)
       );
+      if (lineage.terminalOutcome?.kind === 'rookie_elevation') {
+        const endpoint = lineage.terminalOutcome;
+        const history = content.pickCustody.filter((custody) => custody.pickId === lineage.pickId);
+        const predecessors = new Set(history.map((custody) => custody.predecessorCustodyId));
+        const terminalCustody = history.filter((custody) => !predecessors.has(custody.custodyId));
+        if (
+          terminalCustody.length !== 1 ||
+          terminalCustody[0].currentClubId !== endpoint.exercisingClubId ||
+          !usable(terminalCustody[0].status)
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['pickLineage', index, 'terminalOutcome'],
+            message: 'Rookie elevation requires one usable terminal custody holder matching its club.',
+          });
+        }
+      }
       if (
         !transfer ||
         transfer.asset.kind !== 'pick_entitlement' ||
@@ -411,7 +428,7 @@ const contentSchema = z
         context.addIssue({
           code: 'custom',
           path: ['pickLineage', index],
-          message: 'Non-player outcome must match the transferred pick draft.',
+          message: 'Terminal outcome must match the transferred pick draft.',
         });
       } else if (
         !usable(lineage.status) ||

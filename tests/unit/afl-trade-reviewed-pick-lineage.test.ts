@@ -371,6 +371,26 @@ describe('reviewed pick lineage', () => {
     ).toThrow(/registered award/);
   });
 
+  it('requires the elevation club to match the unique usable terminal custody holder', () => {
+    const value = record();
+    value.endpoint = { kind: 'passed', draftYear: 2012, draftType: 'national', livePick: 55 };
+    const registered = registration([value]);
+    const original = candidate();
+    const scope = buildReviewedAdmissionScope({ sourceCandidate: original, originalCandidate: original, registration: registered });
+    const corrected = buildReviewedOrdinaryCorrection({ scopeCandidate: scope, registration: registered, movementEvidence: [] }).candidate;
+    const content = structuredClone(corrected.content);
+    content.pickLineage[0].terminalOutcome = {
+      kind: 'rookie_elevation', playerId: 'fixture-player', recordedPlayerName: 'Kyal Horsley',
+      exercisingClubId: 'gold-coast', draftYear: 2012, draftType: 'national', livePick: 55,
+    };
+    expect(createAflTradeExternalReconciliationCandidate(content).content.draftSelections).toEqual([]);
+    content.pickLineage[0].terminalOutcome.exercisingClubId = 'geelong';
+    expect(() => createAflTradeExternalReconciliationCandidate(content)).toThrow(/terminal custody holder/);
+    content.pickLineage[0].terminalOutcome.exercisingClubId = 'gold-coast';
+    content.pickCustody.push({ ...content.pickCustody[0], custodyId: `external-pick-custody:${'f'.repeat(64)}` });
+    expect(() => createAflTradeExternalReconciliationCandidate(content)).toThrow(/terminal custody holder/);
+  });
+
   it('corrects a reviewed non-player endpoint without inventing a selection or mutating its scope', () => {
     const value = record();
     value.endpoint = { kind: 'passed', draftYear: 2012, draftType: 'national', livePick: 67 };

@@ -46,7 +46,7 @@ import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/se
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
-describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision: %s', (precision) => {
+describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence precision: %s', (precision) => {
   const reviewedDate = precision === 'day' ? '2025-10-15' : null;
   const databaseUrl =
     process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -162,7 +162,7 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
           evidenceIds: [evidenceId],
         },
       ],
-      pickLineage: [{lineageId:createAflTradeContentAddress('external-pick-lineage',{fixture:precision}),pickId,transferId,selectionId:null,status:'single_source',evidenceIds:[evidenceId],terminalOutcome:precision==='instant' ? {kind:'passed',draftYear:2025,draftType:'national',livePick:14} : precision==='day' ? {kind:'not_exercised',draftYear:2025,draftType:'national',recordedPick:14} : {kind:'incorporated_into_later_package',onwardTransactionIds:[],packageDescription:'Included in the subsequent package; no individual player attribution.'}}],
+      pickLineage: [{lineageId:createAflTradeContentAddress('external-pick-lineage',{fixture:precision}),pickId,transferId,selectionId:null,status:'single_source',evidenceIds:[evidenceId],terminalOutcome:precision==='rookie' ? {kind:'rookie_elevation',playerId:'fixture-elevated-player',recordedPlayerName:'Fixture elevated player',exercisingClubId:'club-western-bulldogs',draftYear:2025,draftType:'national',livePick:14} : precision==='instant' ? {kind:'passed',draftYear:2025,draftType:'national',livePick:14} : precision==='day' ? {kind:'not_exercised',draftYear:2025,draftType:'national',recordedPick:14} : {kind:'incorporated_into_later_package',onwardTransactionIds:[],packageDescription:'Included in the subsequent package; no individual player attribution.'}}],
       issues: [],
       reconciledAt: '2026-08-09T11:00:00.000Z',
       publicationEligible: false,
@@ -170,6 +170,8 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
   }
 
   async function seedCaptureAndEvidence(): Promise<void> {
+    if (precision !== 'rookie') await outcomesPool.query(`INSERT INTO outcome_player(player_id,display_name,status)
+      VALUES ('fixture-elevated-player','Fixture elevated player','approved')`);
     await outcomesPool.query(
       `INSERT INTO outcome_competition_season (competition,season_year)
      VALUES ('AFLM',2010),('AFLM',2011),('AFLM',2012),('AFLM',2019),('AFLM',2020),('AFLM',2025)`
@@ -494,6 +496,18 @@ describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision
       const repository = new PostgresAflTradeExternalCanonicalPromotionRepository(
         createPgAflOutcomeSqlClient(outcomesPool)
       );
+
+      if (precision === 'rookie') {
+        await expect(repository.promote({ candidateId: candidate.candidateId, approvalDecisionId })).rejects.toThrow();
+        expect((await outcomesPool.query('SELECT count(*)::int AS count FROM outcome_pick_realization')).rows[0].count).toBe(0);
+        expect((await outcomesPool.query('SELECT count(*)::int AS count FROM outcome_event_asset')).rows[0].count).toBe(0);
+        await outcomesPool.query(`INSERT INTO outcome_player(player_id,display_name,status)
+          VALUES ('fixture-elevated-player','Fixture elevated player','approved')`);
+        const endpoint = candidate.content.pickLineage[0].terminalOutcome!;
+        for (const invalid of [null, {}, { ...endpoint, playerId: null }, { ...endpoint, exercisingClubId: ' ' }, { ...endpoint, livePick: 0 }, { ...endpoint, draftYear: 2012.5 }, { ...endpoint, selectionId: 'invented' }]) {
+          expect((await outcomesPool.query('SELECT outcome_rookie_elevation_shape_valid($1::jsonb) AS valid', [JSON.stringify(invalid)])).rows[0].valid).toBe(false);
+        }
+      }
 
       const [left, right] = await Promise.all([
         repository.promote({ candidateId: candidate.candidateId, approvalDecisionId }),

@@ -1,4 +1,4 @@
-import { nonPlayerPickOutcomeSchema } from '../source/nonPlayerPickOutcome';
+import { pickTerminalOutcomeSchema } from '../source/pickTerminalOutcome';
 import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
 import { z } from 'zod';
@@ -101,8 +101,8 @@ const realizationSchema = z
     pickId: z.string().min(1),
     transferAssetVersionId: z.string().min(1),
     draftSelectionId: z.string().min(1).nullable(),
-    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package']),
-    terminalOutcome: nonPlayerPickOutcomeSchema.optional(),
+    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package','rookie_elevation']),
+    terminalOutcome: pickTerminalOutcomeSchema.optional(),
   })
   .passthrough();
 const snapshotSchema = z

@@ -2779,3 +2779,12 @@ registered histories/awards/predecessors and current completion. Only referenced
 may extend source-year scope. Source custody accepts precisely that validated batch extension.
 Preparation alone does not persist or admit facts; verify genuine persistence/readback, tamper rejection
 and independent restore before proceeding to canonical promotion, lifecycle/exercise and session coverage.
+
+Rookie elevation uses the player-bearing `pickTerminalOutcome.ts` contract. It requires a resolved
+player, exercising club, draft coordinates and live slot; trade-time numbering remains in custody.
+Migration0174 permits a `rookie_elevation` realization with a null draft-selection reference, verifies
+approved player/club identities and matching terminal custody, and preserves prior realization checks.
+Candidate and archive contracts retain this endpoint; promotion and factual release carry it without
+creating a draft selection. These capabilities do not authenticate a reviewed correction successor:
+that successor must still bind its unchanged special parent and exact current reviewed registration
+before genuine persistence, readback and independent restore can be claimed.
