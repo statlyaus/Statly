@@ -2672,3 +2672,8 @@ presence is not current source authority. The preview always leaves admission an
 eligibility false and does not remove candidate issues. Complete scoped source registration,
 identity review, partial-date persistence and authenticated promotion before claiming admission;
 verify independent database restore and factual readback through the existing owners.
+
+`createReviewedPickLineageRegistration` binds the candidate, environment, complete player endpoints,
+ordered custody and evidence into an immutable approval subject. `reviewedPickLineageApprovalEvidence`
+derives the exact payload for a future retained review; it does not issue or authenticate approval.
+Database registration must check current authority, source custody and replay conflicts before writes.

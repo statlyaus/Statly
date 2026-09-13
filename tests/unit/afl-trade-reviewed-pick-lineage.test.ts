@@ -1,6 +1,11 @@
 import { previewReviewedPickLineage } from '@/server/aflTradeIntelligence/source/reviewedPickLineageReadiness';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { describe, expect, it } from 'vitest';
+import {
+  createReviewedPickLineageRegistration,
+  reviewedPickLineageRegistrationSchema,
+  reviewedPickLineageApprovalEvidence,
+} from '@/server/aflTradeIntelligence/source/reviewedPickLineageRegistrationContracts';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
@@ -101,6 +106,59 @@ function record(): ReviewedPickLineage {
   };
 }
 describe('reviewed pick lineage', () => {
+  function registrationRecord() {
+    const value = record();
+    if (value.endpoint.kind === 'rookie_elevation') value.endpoint.playerId = 'fixture-player';
+    value.movements[0].source = {
+      nativeEventId: 'fixture-caddy',
+      sourceUrl: 'https://example.test/caddy',
+      retainedAssetLabel: 'Pick 55',
+      artifact: value.evidence[0],
+      rowOrdinals: [1],
+    };
+    return value;
+  }
+  function registration(records = [registrationRecord()]) {
+    return createReviewedPickLineageRegistration({
+      candidate: candidate(),
+      records,
+      proposedAt: '2026-09-13T12:00:00Z',
+    });
+  }
+  it('binds exact facts and partial dates without creating authority', () => {
+    const result = registration();
+    expect(result.content.records[0]).toEqual(registrationRecord());
+    expect(reviewedPickLineageApprovalEvidence(result)).toEqual({
+      schemaVersion: 'afl-trade-reviewed-pick-lineage-approval/v1',
+      registrationId: result.registrationId,
+      candidateId: candidate().candidateId,
+      environment: 'test_fixture',
+      publicationEligible: false,
+    });
+  });
+  it.each(['environment', 'endpoint', 'date', 'evidence'])(
+    'rejects stale approval subject after %s changes',
+    (field) => {
+      const result = registration();
+      if (field === 'environment') result.content.environment = 'production';
+      if (field === 'endpoint') result.content.records[0].acceptedTradeTimePick = 58;
+      if (field === 'date')
+        result.content.records[0].movements[0].occurredAt = {
+          precision: 'day',
+          date: '2012-10-01',
+        };
+      if (field === 'evidence') result.content.records[0].movements[0].source!.rowOrdinals = [2];
+      expect(reviewedPickLineageRegistrationSchema.safeParse(result).success).toBe(false);
+      expect(() => reviewedPickLineageApprovalEvidence(result)).toThrow();
+    }
+  );
+  it('rejects incomplete endpoint and duplicate transfer before registration', () => {
+    const missingPlayer = registrationRecord();
+    if (missingPlayer.endpoint.kind === 'rookie_elevation') missingPlayer.endpoint.playerId = null;
+    expect(() => registration([missingPlayer])).toThrow();
+    expect(() => registration([registrationRecord(), registrationRecord()])).toThrow();
+    expect(() => registration([])).toThrow();
+  });
   it('preserves trade-time and live picks, rookie outcome and year precision without admitting facts', () => {
     const result = bindReviewedPickLineage(candidate(), [record()]);
     expect(result.canonicalAdmission).toBe(false);
