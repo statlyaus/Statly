@@ -498,7 +498,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
    membership, then enforces session finalization and current acquisition evidence. Combined proofs
    require complete inventory and authenticated boundary identities. Migration0182 additionally accepts
    nonconsecutive original numbers when authenticated `draft_completed_inventory` claims enumerate
-   exactly every member; absent enumeration, the inventory must remain contiguous. A scoped
+   exactly every member; migration0184 also accepts the authenticated named-roster join described below.
+   Without either membership proof, the inventory must remain contiguous. A scoped
    correction candidate cannot use a partial inventory as full-draft proof. The existing metadata-only
    review command remains on its v1/v4 path; v5 requires the session-aware programmatic owner.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
@@ -2814,6 +2815,15 @@ each covered selection must retain the membership evidence ID. Missing, addition
 renumbered members fail. Membership evidence alone does not establish a session date or authorize
 an identity alias. Source parsers must attest only facts present in their own scoped documents;
 source-specific support and genuine admission require separate verification.
+
+Migration0184 supports a complete `draft_completed_membership_roster` with explicit null numbers
+for named members, joined to separate `draft_completed_member_number` evidence by exact recorded
+name and draft year/type. The join cannot infer numbers from the retained inventory. Every unnumbered
+member requires exactly one binding from a different document, capture and artifact; duplicate names,
+extra bindings, duplicate numbers and incomplete inventories fail. All joined evidence IDs must remain
+in the proposal and selected records, and existing source-currentness gates apply. Existing complete
+inventory claims must still match independently. This support does not authorize source parsers,
+register player aliases, or establish genuine session coverage without the normal retained proof.
 
 ### Original issuing award references
 

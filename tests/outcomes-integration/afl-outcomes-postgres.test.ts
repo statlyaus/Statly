@@ -1211,6 +1211,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0181_official_2015_session_proof',
       '0182_enumerated_session_inventory',
       '0183_official_2013_session_proof',
+      '0184_multi_document_membership',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

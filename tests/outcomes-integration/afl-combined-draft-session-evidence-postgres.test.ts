@@ -438,6 +438,68 @@ it('reconstructs combined sessions, rejects downgrades, and fails after dependen
       );
       expect(await checkEnumerated(enumeratedProposal)).toBe(false);
     }
+    const rosterClaim = {
+      kind: 'draft_completed_membership_roster',
+      draftYear: 2024,
+      draftType: 'national',
+      members: [
+        { recordedName: 'One', selectionNumber: 1 },
+        { recordedName: 'Two', selectionNumber: 2 },
+        { recordedName: 'Academy', selectionNumber: null },
+        { recordedName: 'Last', selectionNumber: 97 },
+      ],
+    };
+    await enumeratedClient.query(
+      `UPDATE outcome_external_evidence_row SET claim_kind='draft_completed_membership_roster',
+      evidence_json=jsonb_set(evidence_json,'{content,claim}',$2::jsonb) WHERE evidence_id=$1`,
+      [memberId, JSON.stringify(rosterClaim)]
+    );
+    expect(await checkEnumerated(enumeratedProposal)).toBe(false);
+    const bindingId = `external-evidence:${hex('f')}`;
+    const bindingClaim = {
+      kind: 'draft_completed_member_number',
+      draftYear: 2024,
+      draftType: 'national',
+      recordedName: 'Academy',
+      selectionNumber: 7,
+    };
+    await enumeratedClient.query(
+      `INSERT INTO outcome_external_evidence_row
+      (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
+      VALUES($1,$2,100,'member-number','draft_completed_member_number',$3::jsonb)`,
+      [
+        bindingId,
+        `external-evidence-batch:${hex('2')}`,
+        JSON.stringify({ content: { provider: 'official_afl', claim: bindingClaim } }),
+      ]
+    );
+    const joinedProposal = {
+      ...enumeratedProposal,
+      draftEventCoverage: enumeratedProposal.draftEventCoverage.map((session) => ({
+        ...session,
+        evidenceIds: [...session.evidenceIds, bindingId].sort(),
+      })),
+    };
+    expect(await checkEnumerated(joinedProposal)).toBe(false);
+    await enumeratedClient.query(
+      `UPDATE outcome_external_reconciliation_draft_selection SET selection_json=jsonb_set(
+      selection_json,'{evidenceIds}',(selection_json->'evidenceIds') || to_jsonb($2::text)) WHERE candidate_id=$1`,
+      [candidateId, bindingId]
+    );
+    expect(await checkEnumerated(joinedProposal)).toBe(true);
+    for (const changed of [
+      { ...bindingClaim, recordedName: 'Other' },
+      { ...bindingClaim, selectionNumber: 2 },
+      { ...bindingClaim, draftYear: 2023 },
+      { ...bindingClaim, draftType: 'rookie' },
+    ]) {
+      await enumeratedClient.query(
+        `UPDATE outcome_external_evidence_row SET evidence_json=jsonb_set(evidence_json,
+        '{content,claim}',$2::jsonb) WHERE evidence_id=$1`,
+        [bindingId, JSON.stringify(changed)]
+      );
+      expect(await checkEnumerated(joinedProposal)).toBe(false);
+    }
   } finally {
     await enumeratedClient.query('ROLLBACK');
     enumeratedClient.release();
@@ -2076,4 +2138,90 @@ it('binds boundary identity reviews to the matching entity kind and draft year',
       'ALTER TABLE outcome_external_identity_review_decision ENABLE TRIGGER outcome_external_retained_identity_source_guard'
     );
   }
+});
+
+it('rejects malformed and ambiguous multi-document membership joins in SQL', async () => {
+  const roster = {
+    evidenceId: 'roster',
+    captureId: 'capture1',
+    artifactId: 'artifact1',
+    documentId: 'doc1',
+    claim: {
+      kind: 'draft_completed_membership_roster',
+      draftYear: 2014,
+      draftType: 'national',
+      members: [
+        { recordedName: 'One', selectionNumber: 1 },
+        { recordedName: 'Academy', selectionNumber: null },
+      ],
+    },
+  };
+  const binding = {
+    evidenceId: 'binding',
+    captureId: 'capture2',
+    artifactId: 'artifact2',
+    documentId: 'doc2',
+    claim: {
+      kind: 'draft_completed_member_number',
+      draftYear: 2014,
+      draftType: 'national',
+      recordedName: 'Academy',
+      selectionNumber: 85,
+    },
+  };
+  const verify = async (facts: unknown, numbers: unknown = [1, 85]) =>
+    (
+      await pool.query(
+        "SELECT outcome_completed_membership_exact($1::jsonb,$2::jsonb,2014,'national') AS valid",
+        [JSON.stringify(facts), JSON.stringify(numbers)]
+      )
+    ).rows[0].valid;
+  expect(await verify([roster, binding])).toBe(true);
+  for (const changed of [
+    [],
+    [{ recordedName: 'One', selectionNumber: 1 }],
+    [
+      { recordedName: 'One', selectionNumber: 1 },
+      { recordedName: 'One', selectionNumber: null },
+    ],
+    [{ recordedName: 'One', selectionNumber: 1 }, { recordedName: 'Academy' }],
+    [
+      { recordedName: 'One', selectionNumber: 1 },
+      { recordedName: 'Academy', selectionNumber: 85 },
+    ],
+  ])
+    expect(
+      await verify([{ ...roster, claim: { ...roster.claim, members: changed } }, binding])
+    ).toBe(false);
+  for (const changed of [
+    { ...binding, captureId: 'capture1' },
+    { ...binding, artifactId: 'artifact1' },
+    { ...binding, documentId: 'doc1' },
+    { ...binding, evidenceId: '' },
+    { ...binding, claim: { ...binding.claim, selectionNumber: 1 } },
+    { ...binding, claim: { ...binding.claim, selectionNumber: 85.5 } },
+    { ...binding, claim: { ...binding.claim, recordedName: 'Other' } },
+    { ...binding, claim: { ...binding.claim, draftYear: 2013 } },
+    { ...binding, claim: { ...binding.claim, draftType: 'rookie' } },
+  ])
+    expect(await verify([roster, changed])).toBe(false);
+  expect(await verify([roster])).toBe(false);
+  expect(await verify([binding])).toBe(false);
+  expect(
+    await verify([
+      {
+        ...roster,
+        claim: {
+          ...roster.claim,
+          members: [
+            { recordedName: 'One', selectionNumber: 1 },
+            { recordedName: 'Academy', selectionNumber: 85 },
+          ],
+        },
+      },
+      { ...binding, claim: {} },
+    ])
+  ).toBe(false);
+  expect(await verify([roster, binding, { ...binding, evidenceId: 'duplicate' }])).toBe(false);
+  expect(await verify([roster, binding], [1, 2])).toBe(false);
 });
