@@ -1013,6 +1013,8 @@ export function reconcileAflTradeExternalEvidence(input: {
       'draft_session_boundary',
       'draft_completed_total',
       'draft_completed_inventory',
+      'draft_completed_membership_roster',
+      'draft_completed_member_number',
     ].includes(content.claim.kind)
   );
   const partialSessionKeys = sortedUnique(
@@ -1025,7 +1027,9 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_completion'
             | 'draft_session_boundary'
             | 'draft_completed_total'
-            | 'draft_completed_inventory';
+            | 'draft_completed_inventory'
+            | 'draft_completed_membership_roster'
+            | 'draft_completed_member_number';
         }
       >;
       return `${claim.draftYear}|${claim.draftType}`;
@@ -1043,7 +1047,9 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_completion'
             | 'draft_session_boundary'
             | 'draft_completed_total'
-            | 'draft_completed_inventory';
+            | 'draft_completed_inventory'
+            | 'draft_completed_membership_roster'
+            | 'draft_completed_member_number';
         }
       >;
       return claim.draftYear === draftYear && claim.draftType === draftType;
@@ -1084,6 +1090,25 @@ export function reconcileAflTradeExternalEvidence(input: {
             ...source,
             kind: 'completed_draft_inventory',
             selectionNumbers: claim.selectionNumbers,
+          };
+        }
+        if (claim.kind === 'draft_completed_membership_roster') {
+          return {
+            ...source,
+            kind: 'completed_draft_membership_roster',
+            draftYear: claim.draftYear,
+            draftType: claim.draftType,
+            members: claim.members,
+          };
+        }
+        if (claim.kind === 'draft_completed_member_number') {
+          return {
+            ...source,
+            kind: 'completed_draft_member_number',
+            draftYear: claim.draftYear,
+            draftType: claim.draftType,
+            recordedName: claim.recordedName,
+            selectionNumber: claim.selectionNumber,
           };
         }
         if (claim.kind !== 'draft_session_boundary') {

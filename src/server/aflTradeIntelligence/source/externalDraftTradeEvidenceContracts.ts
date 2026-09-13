@@ -350,6 +350,45 @@ const draftCompletedInventoryClaimSchema = z
   })
   .strict();
 
+const draftCompletedMembershipRosterClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_membership_roster'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    members: z
+      .array(
+        z
+          .object({
+            recordedName: boundedText,
+            selectionNumber: positiveOrdinalSchema.nullable(),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(500)
+      .refine(
+        (members) =>
+          new Set(members.map((member) => member.recordedName)).size === members.length &&
+          new Set(
+            members.flatMap((member) =>
+              member.selectionNumber === null ? [] : [member.selectionNumber]
+            )
+          ).size === members.filter((member) => member.selectionNumber !== null).length,
+        'Completed membership must have unique names and known selection numbers.'
+      ),
+  })
+  .strict();
+
+const draftCompletedMemberNumberClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_member_number'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    recordedName: boundedText,
+    selectionNumber: positiveOrdinalSchema,
+  })
+  .strict();
+
 const issuingAwardReferenceSchema = z
   .object({
     kind: z.literal('issuing_award_reference'),
@@ -369,6 +408,8 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSessionBoundaryClaimSchema,
   draftCompletedTotalClaimSchema,
   draftCompletedInventoryClaimSchema,
+  draftCompletedMembershipRosterClaimSchema,
+  draftCompletedMemberNumberClaimSchema,
   tradeDetailLinkClaimSchema,
   transactionClaimSchema,
   transactionPartyClaimSchema,
@@ -386,6 +427,8 @@ const allowedKindsByProvider = {
     'draft_session_boundary',
     'draft_completed_total',
     'draft_completed_inventory',
+    'draft_completed_membership_roster',
+    'draft_completed_member_number',
     'transaction',
     'transaction_party',
     'directed_transfer',
@@ -409,6 +452,8 @@ const allowedKindsByProvider = {
     'draft_session_boundary',
     'draft_completed_total',
     'draft_completed_inventory',
+    'draft_completed_membership_roster',
+    'draft_completed_member_number',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
 } as const;

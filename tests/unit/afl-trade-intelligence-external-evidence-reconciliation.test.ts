@@ -1650,6 +1650,47 @@ it('reconciles only the reviewed 2016 one-session article identities outside fix
       reconciledAt: capturedAt,
     });
 
+  const rosterClaim: AflTradeExternalEvidenceContent['claim'] = {
+    kind: 'draft_completed_membership_roster',
+    draftYear: 2016,
+    draftType: 'national',
+    members: selectionClaims.map((claim) => ({
+      recordedName: claim.player.recordedName,
+      selectionNumber: claim.selectionNumber === 77 ? null : claim.selectionNumber,
+    })),
+  };
+  const numberClaim: AflTradeExternalEvidenceContent['claim'] = {
+    kind: 'draft_completed_member_number',
+    draftYear: 2016,
+    draftType: 'national',
+    recordedName: 'Jake Waterman',
+    selectionNumber: 77,
+  };
+  const roster = batch('official_afl', '5', [rosterClaim], wrapUrl);
+  const number = batch('official_afl', '6', [numberClaim], totalUrl);
+  const joined = reconcile2016([inventory, wrap, schedule, total, roster, number]);
+  expect(joined.content.issues).toEqual([]);
+  const joinedIds = [roster, number].flatMap((b) => b.content.evidence.map((e) => e.evidenceId));
+  for (const selected of joined.content.draftSelections) {
+    expect(selected.evidenceIds).toEqual(expect.arrayContaining(joinedIds));
+  }
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, roster]).content.issues.length
+  ).toBeGreaterThan(0);
+  const wrongName = batch(
+    'official_afl',
+    '7',
+    [{ ...numberClaim, recordedName: 'Unrelated Player' }],
+    totalUrl
+  );
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, roster, wrongName]).content.issues.length
+  ).toBeGreaterThan(0);
+  const wrongYear = batch('official_afl', '8', [{ ...numberClaim, draftYear: 2015 }], totalUrl);
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, roster, wrongYear]).content.issues.length
+  ).toBeGreaterThan(0);
+
   const candidate = reconcile2016([inventory, wrap, schedule, total]);
   expect(total.content.evidence[0]!.content.capture.effectiveAt).toBe('2019-11-28T11:30:00.000Z');
   expect(total.content.evidence[0]!.content.claim).toMatchObject({

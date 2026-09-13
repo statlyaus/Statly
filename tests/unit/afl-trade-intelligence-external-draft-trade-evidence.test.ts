@@ -133,6 +133,67 @@ describe('external AFL draft and trade evidence contracts', () => {
     ).toThrow();
   });
 
+  it('retains named membership and number corroboration as separate source claims', () => {
+    const content = {
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl' as const,
+      capture: { ...capture, sourceUrl: 'https://www.afl.com.au/news/149034/review' },
+      sourceRow: { ordinal: 1, sourceKey: '2014-membership' },
+      claim: {
+        kind: 'draft_completed_membership_roster' as const,
+        draftYear: 2014,
+        draftType: 'national' as const,
+        members: [
+          { recordedName: 'First Player', selectionNumber: 1 },
+          { recordedName: 'Academy Player', selectionNumber: null },
+        ],
+      },
+      publicationEligible: false as const,
+    };
+    const envelope = createAflTradeExternalEvidenceEnvelope(content);
+    expect(parseAflTradeExternalEvidenceEnvelope(envelope).content.claim).toEqual(content.claim);
+    const number = {
+      ...content,
+      claim: {
+        kind: 'draft_completed_member_number' as const,
+        draftYear: 2014,
+        draftType: 'national' as const,
+        recordedName: 'Academy Player',
+        selectionNumber: 85,
+      },
+    };
+    expect(
+      parseAflTradeExternalEvidenceEnvelope(createAflTradeExternalEvidenceEnvelope(number)).content
+        .claim
+    ).toEqual(number.claim);
+    for (const members of [
+      [],
+      [content.claim.members[0]!, content.claim.members[0]!],
+      [
+        { recordedName: 'One', selectionNumber: 1 },
+        { recordedName: 'Two', selectionNumber: 1 },
+      ],
+      [{ recordedName: '', selectionNumber: null }],
+      [{ recordedName: 'One', selectionNumber: 0 }],
+    ]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({ ...content, claim: { ...content.claim, members } })
+      ).toThrow();
+    }
+    for (const value of [content, number]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({ ...value, provider: 'draftguru', capture })
+      ).toThrow();
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({
+          ...value,
+          // @ts-expect-error Membership claims cannot invent session dates.
+          claim: { ...value.claim, eventDate: '2014-11-27' },
+        })
+      ).toThrow();
+    }
+  });
+
   it('content-addresses provider-native transaction and directed-transfer claims', () => {
     const transaction = transactionEnvelope();
     const transfer = createAflTradeExternalEvidenceEnvelope({
