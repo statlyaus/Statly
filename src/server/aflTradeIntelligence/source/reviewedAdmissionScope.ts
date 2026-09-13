@@ -1,3 +1,7 @@
+import { buildReviewedSessionCorrection } from './reviewedSessionCorrection';
+import { PostgresAflTradeExternalIdentityReviewRepository } from './postgresExternalIdentityReviewRepository';
+import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityReviewWorkBuilder';
+import { parseAflTradeExternalIdentityResolution } from './externalEvidenceReconciliation';
 import { buildReviewedRookieCorrection } from './reviewedRookieCorrection';
 import { buildReviewedSpecialCorrection } from './reviewedSpecialCorrection';
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from './postgresExternalHistoricalReconciliationSource';
@@ -136,6 +140,17 @@ export async function authenticateReviewedAdmissionScope(
   transaction: AflOutcomeSqlTransaction,
   candidate: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
 ) {
+  if (candidate.content.reviewedSessionCorrection) {
+    const marker = candidate.content.reviewedSessionCorrection;
+    const expected = await prepareReviewedSessionCorrection(transaction, {
+      parentCandidateId: marker.parentCandidateId,
+      completionId: marker.sourceCompletionId,
+      environment: candidate.content.environment,
+    });
+    if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
+      throw new TypeError('Session correction differs from its authenticated parent, sources or identities.');
+    return;
+  }
   if (candidate.content.reviewedRookieCorrection) {
     const expected = await prepareReviewedRookieCorrection(transaction, {
       parentCandidateId: candidate.content.reviewedRookieCorrection.parentCandidateId,
@@ -391,4 +406,35 @@ export async function prepareReviewedRookieCorrection(
   const registration = reviewedPickLineageRegistrationSchema.parse(stored.rows[0]?.registration);
   const movementEvidence = await loadReviewedMovementEvidence(transaction, parent);
   return buildReviewedRookieCorrection({ candidate: parent, registration, movementEvidence });
+}
+
+/** Reconstruct session membership from current retained sources without replacing accepted corrections. */
+export async function prepareReviewedSessionCorrection(
+  transaction: AflOutcomeSqlTransaction,
+  input: { parentCandidateId: string; completionId: string; environment: string }
+) {
+  if (input.environment === 'production') throw new TypeError('Session correction requires a private environment.');
+  const loaded = await transaction.query<{ candidate_json: unknown; current: boolean }>(
+    `SELECT candidate_json,outcome_external_candidate_retained_sources_current(candidate_id,clock_timestamp()) AS current
+     FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 AND status='finalized' FOR SHARE`,
+    [input.parentCandidateId]
+  );
+  if (!loaded.rows[0]?.current) throw new TypeError('Session correction requires a current finalized parent.');
+  const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
+  if (!parent.content.reviewedCorrection || parent.content.reviewedSessionCorrection || parent.content.environment !== input.environment)
+    throw new TypeError('Session correction requires its exact private reviewed parent.');
+  await authenticateReviewedAdmissionScope(transaction, parent);
+  const client = { query: transaction.query.bind(transaction), transaction: <T>(work: (tx: AflOutcomeSqlTransaction) => Promise<T>) => work(transaction) };
+  const source = await new PostgresAflTradeExternalHistoricalReconciliationSource(client).load(input.completionId);
+  if (source.environment !== parent.content.environment || source.competition !== parent.content.competition)
+    throw new TypeError('Session completion differs from parent scope.');
+  const current = await new PostgresAflTradeExternalIdentityReviewRepository(client).loadCurrentResolutions(buildAflTradeExternalIdentityReviewPackage(source));
+  const retained = await transaction.query<{resolution_json: unknown}>(
+    'SELECT resolution_json FROM outcome_external_reconciliation_identity_resolution WHERE candidate_id=$1 FOR SHARE', [parent.candidateId]
+  );
+  const ancestor = retained.rows.map(row => parseAflTradeExternalIdentityResolution(row.resolution_json));
+  if (canonicalizeAflTradeJson(ancestor.map(r=>r.resolutionId).sort()) !== canonicalizeAflTradeJson([...parent.content.identityResolutionIds].sort()))
+    throw new TypeError('Session correction is missing authenticated ancestor resolutions.');
+  return buildReviewedSessionCorrection({candidate:parent,sourceAuthority:source.sourceAuthority,sourceBatches:source.sourceBatches,
+    identityResolutions:[...new Map([...ancestor,...current].map(r=>[r.resolutionId,r])).values()]});
 }

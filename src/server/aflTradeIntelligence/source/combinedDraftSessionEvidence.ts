@@ -92,6 +92,119 @@ export function projectCombinedDraftSessionEvidence(
 
 const unique = <T>(values: T[]) => [...new Set(values)];
 
+export interface ReportedDraftSessionProjection extends Omit<
+  CombinedDraftSessionProjection,
+  'schemaVersion'
+> {
+  schemaVersion: 'afl-trade-reported-draft-session-projection/v1';
+}
+
+/** Direct session claims must partition the retained inventory before selecting candidate members. */
+export function projectReportedDraftSessionEvidence(input: {
+  draftYear: number;
+  draftType: string;
+  selections: { selectionId: string; selectionNumber: number }[];
+  sessions: {
+    sessionOrdinal: number;
+    eventDate: string;
+    officialName: string;
+    selectionNumbers: readonly number[];
+    evidenceIds: readonly string[];
+  }[];
+  selectedSelectionIds: readonly string[];
+}): ReportedDraftSessionProjection {
+  const byNumber = new Map(
+    input.selections.map((selection) => [selection.selectionNumber, selection])
+  );
+  const inventorySelectionIds = input.selections.map(({ selectionId }) => selectionId).sort();
+  const selectedSelectionIds = [...input.selectedSelectionIds].sort();
+  if (
+    !inventorySelectionIds.length ||
+    byNumber.size !== inventorySelectionIds.length ||
+    new Set(inventorySelectionIds).size !== inventorySelectionIds.length ||
+    input.selections.some(
+      (s) => !s.selectionId || !Number.isInteger(s.selectionNumber) || s.selectionNumber < 1
+    ) ||
+    !selectedSelectionIds.length ||
+    new Set(selectedSelectionIds).size !== selectedSelectionIds.length ||
+    selectedSelectionIds.some((id) => !inventorySelectionIds.includes(id))
+  )
+    throw new TypeError(
+      'Reported session projection requires unique inventory and selected membership.'
+    );
+
+  const byOrdinal = new Map<number, CombinedDraftSessionCoverage>();
+  for (const claim of input.sessions) {
+    const numbers = [...claim.selectionNumbers].sort((a, b) => a - b);
+    if (
+      !numbers.length ||
+      unique(numbers).length !== numbers.length ||
+      numbers.some((number) => !byNumber.has(number)) ||
+      !claim.evidenceIds.length ||
+      claim.evidenceIds.some((id) => !id.trim()) ||
+      !claim.officialName.trim() ||
+      !Number.isInteger(claim.sessionOrdinal) ||
+      claim.sessionOrdinal < 1 ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(claim.eventDate) ||
+      !Number.isFinite(Date.parse(claim.eventDate)) ||
+      new Date(claim.eventDate).toISOString().slice(0, 10) !== claim.eventDate ||
+      Number(claim.eventDate.slice(0, 4)) !== input.draftYear
+    )
+      throw new TypeError(
+        'Reported session claim has invalid dates, evidence or inventory membership.'
+      );
+    const session: CombinedDraftSessionCoverage = {
+      draftYear: input.draftYear,
+      draftType: input.draftType,
+      sessionOrdinal: claim.sessionOrdinal,
+      eventDate: claim.eventDate,
+      officialName: claim.officialName,
+      selectionIds: numbers.map((number) => byNumber.get(number)!.selectionId).sort(),
+      evidenceIds: unique([...claim.evidenceIds]).sort(),
+    };
+    const prior = byOrdinal.get(claim.sessionOrdinal);
+    if (prior) {
+      if (
+        prior.eventDate !== session.eventDate ||
+        prior.officialName !== session.officialName ||
+        JSON.stringify(prior.selectionIds) !== JSON.stringify(session.selectionIds)
+      )
+        throw new TypeError('Reported session claims disagree on exact date or membership.');
+      session.evidenceIds = unique([...prior.evidenceIds, ...session.evidenceIds]).sort();
+    }
+    byOrdinal.set(claim.sessionOrdinal, session);
+  }
+  const inventorySessions = [...byOrdinal.values()].sort(
+    (a, b) => a.sessionOrdinal - b.sessionOrdinal
+  );
+  const members = inventorySessions.flatMap((session) => session.selectionIds).sort();
+  if (
+    JSON.stringify(members) !== JSON.stringify(inventorySelectionIds) ||
+    inventorySessions.some(
+      (session, index) =>
+        session.sessionOrdinal !== index + 1 ||
+        (index > 0 && session.eventDate < inventorySessions[index - 1]!.eventDate)
+    )
+  )
+    throw new TypeError(
+      'Reported sessions must completely partition the inventory in chronological order.'
+    );
+  const selected = new Set(selectedSelectionIds);
+  return {
+    schemaVersion: 'afl-trade-reported-draft-session-projection/v1',
+    inventorySelectionIds,
+    selectedSelectionIds,
+    inventorySessions,
+    selectedSessions: inventorySessions
+      .map((session) => ({
+        ...session,
+        selectionIds: session.selectionIds.filter((id) => selected.has(id)),
+        evidenceIds: [...session.evidenceIds],
+      }))
+      .filter((session) => session.selectionIds.length > 0),
+  };
+}
+
 function requireOne<T>(values: T[], message: string): T {
   if (values.length !== 1) throw new TypeError(message);
   return values[0]!;

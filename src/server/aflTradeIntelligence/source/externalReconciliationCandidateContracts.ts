@@ -1,3 +1,4 @@
+import { reviewedSessionCorrectionSchema } from './reviewedSessionCorrectionContracts';
 import { pickTerminalOutcomeSchema } from './pickTerminalOutcome';
 import { pickCustodyDateSchema } from './pickCustodyDate';
 import {
@@ -213,17 +214,29 @@ const contentSchema = z
       })
       .strict()
       .optional(),
-    reviewedRookieCorrection: z.object({
-      schemaVersion: z.literal('afl-trade-reviewed-rookie-correction/v1'),
-      parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
-      registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
-      correctionGraphId: aflTradeContentAddressedIdSchema('reviewed-lineage-correction-graph'),
-      bindings: z.array(z.object({
-        transferId: aflTradeContentAddressedIdSchema('external-transfer'),
-        lineageId: aflTradeContentAddressedIdSchema('external-pick-lineage'),
-        custodyIds: z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1),
-      }).strict()).min(1),
-    }).strict().optional(),
+    reviewedRookieCorrection: z
+      .object({
+        schemaVersion: z.literal('afl-trade-reviewed-rookie-correction/v1'),
+        parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+        registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
+        correctionGraphId: aflTradeContentAddressedIdSchema('reviewed-lineage-correction-graph'),
+        bindings: z
+          .array(
+            z
+              .object({
+                transferId: aflTradeContentAddressedIdSchema('external-transfer'),
+                lineageId: aflTradeContentAddressedIdSchema('external-pick-lineage'),
+                custodyIds: z
+                  .array(aflTradeContentAddressedIdSchema('external-pick-custody'))
+                  .min(1),
+              })
+              .strict()
+          )
+          .min(1),
+      })
+      .strict()
+      .optional(),
+    reviewedSessionCorrection: reviewedSessionCorrectionSchema.optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),
@@ -238,12 +251,45 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
-    if (content.reviewedRookieCorrection && (
-      !content.reviewedCorrection || content.environment === 'production' ||
-      content.reviewedRookieCorrection.registrationId !== content.reviewedCorrection.registrationId ||
-      content.reviewedRookieCorrection.correctionGraphId !== content.reviewedCorrection.correctionGraphId
-    )) context.addIssue({ code: 'custom', path: ['reviewedRookieCorrection'],
-      message: 'Rookie corrections require the same private reviewed registration and correction graph.' });
+    if (content.reviewedSessionCorrection) {
+      const marker = content.reviewedSessionCorrection;
+      if (
+        !content.reviewedScope ||
+        content.environment === 'production' ||
+        !content.sourceAuthority ||
+        !('completionId' in content.sourceAuthority) ||
+        content.sourceAuthority.completionId !== marker.sourceCompletionId ||
+        marker.projections.some((proof) => {
+          const group = proof.inventorySessions[0]!;
+          const selected = content.draftSelections
+            .filter((s) => s.draftYear === group.draftYear && s.draftType === group.draftType)
+            .map((s) => s.selectionId)
+            .sort();
+          return JSON.stringify(selected) !== JSON.stringify(proof.selectedSelectionIds);
+        })
+      )
+        context.addIssue({
+          code: 'custom',
+          path: ['reviewedSessionCorrection'],
+          message:
+            'Session correction must bind its private scope, source completion and exact candidate selections.',
+        });
+    }
+    if (
+      content.reviewedRookieCorrection &&
+      (!content.reviewedCorrection ||
+        content.environment === 'production' ||
+        content.reviewedRookieCorrection.registrationId !==
+          content.reviewedCorrection.registrationId ||
+        content.reviewedRookieCorrection.correctionGraphId !==
+          content.reviewedCorrection.correctionGraphId)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['reviewedRookieCorrection'],
+        message:
+          'Rookie corrections require the same private reviewed registration and correction graph.',
+      });
     if (
       content.reviewedSpecialCorrection &&
       (!content.reviewedCorrection ||
@@ -413,7 +459,8 @@ const contentSchema = z
           context.addIssue({
             code: 'custom',
             path: ['pickLineage', index, 'terminalOutcome'],
-            message: 'Rookie elevation requires one usable terminal custody holder matching its club.',
+            message:
+              'Rookie elevation requires one usable terminal custody holder matching its club.',
           });
         }
       }
