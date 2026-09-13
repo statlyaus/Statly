@@ -1,3 +1,7 @@
+import {
+  createAflTradeExternalEvidenceEnvelope,
+  type AflTradeExternalEvidenceContent,
+} from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,8 +44,11 @@ export async function createRetainedExternalCaptureFixture(
   selectionCount = 1,
   nullableTerms = false,
   tradeDetail = false,
-  secondSession = false
+  secondSession = false,
+  enumerated = false
 ) {
+  if (enumerated && environment !== 'test_fixture')
+    throw new Error('Enumerated synthetic claims require test_fixture.');
   if (secondSession && !official) throw new Error('Second session requires official profile.');
   if (tradeDetail && official)
     throw new Error('Trade fixture cannot use the official session profile.');
@@ -103,44 +110,105 @@ export async function createRetainedExternalCaptureFixture(
     'metadata_hash_retention',
     'internal_quality_evaluation',
   ] as const;
-  const fields = official
-    ? ['draftType', 'draftYear', 'eventDate', 'officialName', 'selectionNumbers', 'sessionOrdinal']
-        .map((f) => 'draft_session.' + f)
-        .sort()
-    : tradeDetail
+  const originalNumbers = Array.from({ length: selectionCount }, (_, i) =>
+    enumerated && i === selectionCount - 1 ? 97 : i + 1
+  );
+  const common = { draftYear: 2024, draftType: 'national' as const };
+  const boundary = (
+    n: number,
+    ordinal: number,
+    side: 'first' | 'last'
+  ): AflTradeExternalEvidenceContent['claim'] => ({
+    ...common,
+    kind: 'draft_session_boundary',
+    sessionOrdinal: ordinal,
+    boundary: side,
+    selectionNumber: n === 71 ? 97 : n,
+    player: {
+      nativeId: null,
+      recordedName: n === 1 ? 'Synthetic Player' : `Synthetic Player ${n - 1}`,
+    },
+    selectedByClub: { nativeId: null, recordedName: 'Synthetic Club' },
+  });
+  const sessionFacts: AflTradeExternalEvidenceContent['claim'][] = secondSession
+    ? [
+        { ...common, kind: 'draft_session_date', sessionOrdinal: 2, eventDate: '2024-11-21' },
+        { ...common, kind: 'draft_session_completion', sessionOrdinal: 2 },
+        boundary(28, 2, 'first'),
+        boundary(71, 2, 'last'),
+        {
+          ...common,
+          kind: 'draft_completed_inventory',
+          selectionNumbers: Array.from({ length: 71 }, (_, i) => (i === 70 ? 97 : i + 1)),
+        },
+      ]
+    : [
+        { ...common, kind: 'draft_session_date', sessionOrdinal: 1, eventDate: '2024-11-20' },
+        { ...common, kind: 'draft_session_completion', sessionOrdinal: 1 },
+        boundary(1, 1, 'first'),
+        { ...common, kind: 'draft_completed_total', selectionCount: 71 },
+      ];
+  const fields =
+    official && enumerated
       ? [
-          'transaction.nativeEventId',
-          'transaction.seasonYear',
-          'transaction.occurredOn',
-          'transaction.transactionType',
-          'transaction.title',
-          'transaction_party.nativeEventId',
-          'transaction_party.nativePartyId',
-          'transaction_party.club.nativeId',
-          'transaction_party.club.recordedName',
-          'directed_transfer.nativeEventId',
-          'directed_transfer.nativeTransferId',
-          'directed_transfer.fromClub.nativeId',
-          'directed_transfer.fromClub.recordedName',
-          'directed_transfer.toClub.nativeId',
-          'directed_transfer.toClub.recordedName',
-          'directed_transfer.asset.kind',
-          'directed_transfer.asset.draftYear',
-          'directed_transfer.asset.draftType',
-          'directed_transfer.asset.recordedPickNumber',
-          'directed_transfer.asset.recordedLabel',
+          ...new Set(
+            sessionFacts.flatMap((claim) =>
+              Object.keys(claim)
+                .filter((key) => key !== 'kind')
+                .flatMap((key) => {
+                  const value = (claim as unknown as Record<string, unknown>)[key];
+                  return value && typeof value === 'object' && !Array.isArray(value)
+                    ? Object.keys(value).map((child) => `${claim.kind}.${key}.${child}`)
+                    : [`${claim.kind}.${key}`];
+                })
+            )
+          ),
         ].sort()
-      : [
-          'draftYear',
-          'draftType',
-          'selectionNumber',
-          'player.nativeId',
-          'player.recordedName',
-          'selectedByClub.nativeId',
-          'selectedByClub.recordedName',
-        ]
-          .map((f) => 'draft_selection.' + f)
-          .sort();
+      : official
+        ? [
+            'draftType',
+            'draftYear',
+            'eventDate',
+            'officialName',
+            'selectionNumbers',
+            'sessionOrdinal',
+          ]
+            .map((f) => 'draft_session.' + f)
+            .sort()
+        : tradeDetail
+          ? [
+              'transaction.nativeEventId',
+              'transaction.seasonYear',
+              'transaction.occurredOn',
+              'transaction.transactionType',
+              'transaction.title',
+              'transaction_party.nativeEventId',
+              'transaction_party.nativePartyId',
+              'transaction_party.club.nativeId',
+              'transaction_party.club.recordedName',
+              'directed_transfer.nativeEventId',
+              'directed_transfer.nativeTransferId',
+              'directed_transfer.fromClub.nativeId',
+              'directed_transfer.fromClub.recordedName',
+              'directed_transfer.toClub.nativeId',
+              'directed_transfer.toClub.recordedName',
+              'directed_transfer.asset.kind',
+              'directed_transfer.asset.draftYear',
+              'directed_transfer.asset.draftType',
+              'directed_transfer.asset.recordedPickNumber',
+              'directed_transfer.asset.recordedLabel',
+            ].sort()
+          : [
+              'draftYear',
+              'draftType',
+              'selectionNumber',
+              'player.nativeId',
+              'player.recordedName',
+              'selectedByClub.nativeId',
+              'selectedByClub.recordedName',
+            ]
+              .map((f) => 'draft_selection.' + f)
+              .sort();
   const content = {
     schemaVersion: 'afl-trade-source-rights/v2',
     registerId: 'synthetic-retained-' + provider + '-' + at,
@@ -350,17 +418,19 @@ export async function createRetainedExternalCaptureFixture(
 <table class="individual-trade">
 <tr class="club-header"><td>Synthetic Other Club</td></tr>
 <tr class="club-subheader"><td colspan="5">What Other Gave</td><td colspan="5">What Other Got</td></tr>
-<tr class="movement"><td class="pick-name actual-asset">Pick ${selectionCount}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr class="movement"><td class="pick-name actual-asset">Pick ${originalNumbers.at(-1)}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
 <tr class="club-header"><td>Synthetic Club</td></tr>
 <tr class="club-subheader"><td colspan="5">What Club Gave</td><td colspan="5">What Club Got</td></tr>
-<tr class="movement"><td></td><td></td><td></td><td></td><td></td><td class="pick-name actual-asset">Pick ${selectionCount}</td><td></td><td></td><td></td><td></td></tr>
+<tr class="movement"><td></td><td></td><td></td><td></td><td></td><td class="pick-name actual-asset">Pick ${originalNumbers.at(-1)}</td><td></td><td></td><td></td><td></td></tr>
 </table>`;
   const bytes = new TextEncoder().encode(
     official
-      ? officialHtml
+      ? enumerated
+        ? JSON.stringify(sessionFacts)
+        : officialHtml
       : tradeDetail
         ? tradeHtml
-        : `<table class="big-pick-movements"><tbody>${Array.from({ length: selectionCount }, (_, i) => `<tr><td class="draft">National</td><td class="number">${i + 1}</td><td class="player"><a href="/players/synthetic-player${i === 0 ? '' : '-' + i}">Synthetic Player${i === 0 ? '' : ' ' + i}</a></td><td class="club"><a href="/clubs/synthetic-club">Synthetic Club</a></td></tr>`).join('')}</tbody></table>`
+        : `<table class="big-pick-movements"><tbody>${Array.from({ length: selectionCount }, (_, i) => `<tr><td class="draft">National</td><td class="number">${originalNumbers[i]}</td><td class="player"><a href="/players/synthetic-player${i === 0 ? '' : '-' + i}">Synthetic Player${i === 0 ? '' : ' ' + i}</a></td><td class="club"><a href="/clubs/synthetic-club">Synthetic Club</a></td></tr>`).join('')}</tbody></table>`
   );
   const sourceArtifact = createAflTradeByteArtifactRef(bytes, 'text/html', request.capturedAt);
   const captures = new PostgresAflTradeExternalCaptureRegistry(sql);
@@ -438,7 +508,25 @@ export async function createRetainedExternalCaptureFixture(
         }),
         parsePage: ({ html, capture }) =>
           official
-            ? parseOfficialAflDraftSession(html, { capture })
+            ? enumerated
+              ? {
+                  evidence: (JSON.parse(html) as AflTradeExternalEvidenceContent['claim'][]).map(
+                    (claim, index) =>
+                      createAflTradeExternalEvidenceEnvelope({
+                        schemaVersion: 'afl-trade-external-evidence/v1',
+                        provider: 'official_afl',
+                        capture,
+                        sourceRow: {
+                          ordinal: index + 1,
+                          sourceKey: `synthetic-enumerated:${index}`,
+                        },
+                        claim,
+                        publicationEligible: false,
+                      })
+                  ),
+                  issues: [],
+                }
+              : parseOfficialAflDraftSession(html, { capture })
             : tradeDetail
               ? parseDraftguruTradeDetail(html, {
                   capture,
