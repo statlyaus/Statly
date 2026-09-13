@@ -398,7 +398,11 @@ supersede production Gate authority, and production execution cannot reuse non-p
    IDs in every target. Use the actual plan/completion creation times; do not backdate these records
    or manufacture an index inventory or scheduler occurrence. Both initial registration and replay
    require current source authority, and plan replay verifies retained bytes again. This is a
-   repository operation under the reviewed execution runbook, not a new public CLI command.
+   repository operation under the reviewed execution runbook, not a new public CLI command. A replacement
+   retained plan may reuse unchanged finalized batches from earlier completions alongside newly
+   captured batches. Each batch appears at most once per completion; prior completions remain
+   immutable. Reuse still requires exact target evidence and current authority for every batch.
+   Scheduled results retain their separate single-completion batch constraint.
 6. Turn the finalized plan into a private reconciliation review candidate with
    `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion-id>`.
    PostgreSQL loads the exact immutable completion, plan and issue-free evidence batches; the command
