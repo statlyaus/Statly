@@ -1,8 +1,16 @@
 import { buildReviewedLineageCorrectionGraph } from './reviewedLineageCorrectionGraph';
-import { authenticateReviewedAdmissionScope, prepareReviewedOrdinaryCorrection, prepareReviewedSpecialCorrection, prepareReviewedRookieCorrection } from './reviewedAdmissionScope';
+import {
+  authenticateReviewedAdmissionScope,
+  prepareReviewedOrdinaryCorrection,
+  prepareReviewedSpecialCorrection,
+  prepareReviewedRookieCorrection,
+} from './reviewedAdmissionScope';
 import { pickCustodyDateColumns } from './pickCustodyDate';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
-import { registerReviewedPickLineage, readReviewedPickLineage } from './postgresReviewedPickLineageRegistration';
+import {
+  registerReviewedPickLineage,
+  readReviewedPickLineage,
+} from './postgresReviewedPickLineageRegistration';
 import { previewReviewedPickLineage } from './reviewedPickLineageReadiness';
 import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
 import { specialEntitlementRevisionSchema } from './specialEntitlementRevisionContracts';
@@ -605,38 +613,58 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
     candidateId: string;
     environment: 'test_fixture' | 'non_production';
   }) {
-    return this.client.transaction(transaction => bindRegisteredLineageForPromotion(transaction, input));
+    return this.client.transaction((transaction) =>
+      bindRegisteredLineageForPromotion(transaction, input)
+    );
   }
 
   async prepareReviewedLineageCorrectionGraph(input: {
-    registrationId: string; candidateId: string; environment: 'test_fixture' | 'non_production';
+    registrationId: string;
+    candidateId: string;
+    environment: 'test_fixture' | 'non_production';
   }) {
-    return this.client.transaction(async transaction => {
+    return this.client.transaction(async (transaction) => {
       const binding = await bindRegisteredLineageForPromotion(transaction, input);
-      const records = binding.content.facts.map(({custody,...fact}) => ({
-        schemaVersion:'afl-trade-reviewed-pick-lineage/v1', candidateId:binding.content.candidateId,
-        ...fact, movements:custody.map(({ordinal:_ordinal,...movement})=>movement),
+      const records = binding.content.facts.map(({ custody, ...fact }) => ({
+        schemaVersion: 'afl-trade-reviewed-pick-lineage/v1',
+        candidateId: binding.content.candidateId,
+        ...fact,
+        movements: custody.map(({ ordinal: _ordinal, ...movement }) => movement),
       }));
-      return {...buildReviewedLineageCorrectionGraph(records), registrationId:binding.content.registrationId,
-        bindingId:binding.bindingId, reviewAuthorityAuthenticated:true, sourceAuthorityAuthenticated:true};
+      return {
+        ...buildReviewedLineageCorrectionGraph(records),
+        registrationId: binding.content.registrationId,
+        bindingId: binding.bindingId,
+        reviewAuthorityAuthenticated: true,
+        sourceAuthorityAuthenticated: true,
+      };
     });
   }
 
   async prepareReviewedOrdinaryCorrection(input: {
-    scopeCandidateId: string; environment: 'test_fixture' | 'non_production';
+    scopeCandidateId: string;
+    environment: 'test_fixture' | 'non_production';
   }) {
-    return this.client.transaction(transaction => prepareReviewedOrdinaryCorrection(transaction, input));
+    return this.client.transaction((transaction) =>
+      prepareReviewedOrdinaryCorrection(transaction, input)
+    );
   }
 
   async prepareReviewedRookieCorrection(input: { parentCandidateId: string; environment: string }) {
-    return this.client.transaction(transaction => prepareReviewedRookieCorrection(transaction, input));
+    return this.client.transaction((transaction) =>
+      prepareReviewedRookieCorrection(transaction, input)
+    );
   }
 
   async prepareReviewedSpecialCorrection(input: {
-    parentCandidateId:string; completionId:string; entitlementIds:readonly string[];
-    environment:'test_fixture'|'non_production';
+    parentCandidateId: string;
+    completionId: string;
+    entitlementIds: readonly string[];
+    environment: 'test_fixture' | 'non_production';
   }) {
-    return this.client.transaction(transaction=>prepareReviewedSpecialCorrection(transaction,input));
+    return this.client.transaction((transaction) =>
+      prepareReviewedSpecialCorrection(transaction, input)
+    );
   }
 
   async registerReviewedPickLineage(input: { registration: unknown; approvalDecisionId: string }) {
@@ -1532,9 +1560,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           await transaction.query(
             `INSERT INTO outcome_event_version
             (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
-             official_name,status,source_import_row_id,supersedes_version_id,recorded_at)
+             official_name,status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
            VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
-                   'approved'::"OutcomeRecordStatus",$8,$9,$10)`,
+                   'approved'::"OutcomeRecordStatus",$8,$9,$10,$11::jsonb)`,
             [
               eventVersionId,
               eventId,
@@ -1546,6 +1574,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               eventRow.importRowId,
               predecessor?.eventVersionId ?? null,
               approval.promotedAt,
+              'datePrecision' in coverage && coverage.datePrecision
+                ? JSON.stringify(coverage.datePrecision)
+                : null,
             ]
           );
           const selectingClubs = sortedUnique(
@@ -1751,20 +1782,31 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       async function persistPickRealizations(): Promise<void> {
         for (const record of content.pickLineage) {
           const transferAssetVersionId = assetByTransfer.get(record.transferId);
-          const draftSelectionId = record.selectionId === null ? null : canonicalSelectionBySource.get(record.selectionId);
+          const draftSelectionId =
+            record.selectionId === null ? null : canonicalSelectionBySource.get(record.selectionId);
           const selection = content.draftSelections.find(
             ({ selectionId }) => selectionId === record.selectionId
           );
-          if (!transferAssetVersionId || (!record.terminalOutcome && (!draftSelectionId || !selection))) {
+          if (
+            !transferAssetVersionId ||
+            (!record.terminalOutcome && (!draftSelectionId || !selection))
+          ) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
               `Pick realization ${record.lineageId} has incomplete canonical endpoints.`
             );
           }
-          const transfer = content.transfers.find(value => value.transferId === record.transferId)!;
-          const event = content.transactions.find(value => value.transactionId === transfer.transactionId)!;
+          const transfer = content.transfers.find(
+            (value) => value.transferId === record.transferId
+          )!;
+          const event = content.transactions.find(
+            (value) => value.transactionId === transfer.transactionId
+          )!;
           const outcome = record.terminalOutcome;
-          const outcomeYear = outcome && outcome.kind !== 'incorporated_into_later_package' ? outcome.draftYear : event.seasonYear;
+          const outcomeYear =
+            outcome && outcome.kind !== 'incorporated_into_later_package'
+              ? outcome.draftYear
+              : event.seasonYear;
           const row = await sourceRow({
             key: `realization:${record.lineageId}`,
             recordKind: 'external_pick_realization',
@@ -1778,7 +1820,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             sourceLineageId: record.lineageId,
             transferAssetVersionId,
             draftSelectionId,
-            ...(outcome ? {terminalOutcome:outcome} : {}),
+            ...(outcome ? { terminalOutcome: outcome } : {}),
           });
           await transaction.query(
             `INSERT INTO outcome_pick_realization

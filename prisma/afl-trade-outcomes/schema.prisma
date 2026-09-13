@@ -3256,6 +3256,7 @@ model OutcomeEventVersion {
   kind                 OutcomeEventKind
   acquisitionMechanism OutcomeAcquisitionMechanism      @map("acquisition_mechanism")
   eventDate            DateTime?                        @map("event_date") @outcomes.Date
+  datePrecision        Json?                            @map("date_precision")
   officialName         String                           @map("official_name")
   status               OutcomeRecordStatus
   sourceImportRowId    String                           @map("source_import_row_id")

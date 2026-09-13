@@ -2954,6 +2954,9 @@ formats and all ancestor projections. This structural check grants no source aut
 canonical admission. Migration0194 authenticates window claims against retained source evidence
 through a distinct combined-inventory validator, preserving legacy validators, completion/boundary
 requirements, independent totals and current-source checks. Window correction persistence, readback,
-replay and revocation are fixture-verified. Promotion storage and lifecycle ordering still require
-implementation and verification before canonical admission. Do not substitute a window
+replay and revocation are fixture-verified. Migration0195 adds v7 canonical promotion and explicit
+`outcome_event_version.date_precision` storage. Exact event days remain null for windows; finalization
+matches both null day and bounds to the reviewed coverage. Public promotion/replay/readback and
+Prisma/SQL agreement are fixture-verified. Lifecycle ordering for window selections still requires
+implementation and verification before genuine admission. Do not substitute a window
 endpoint for the unknown selection day.

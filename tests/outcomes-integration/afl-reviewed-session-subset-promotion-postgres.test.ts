@@ -555,7 +555,6 @@ describe.each([
           client.release();
         }
         expect(await check(candidate)).toBe(true);
-        return;
       }
       const proposal = deriveReviewedSessionCanonicalPromotionProposal({
         candidate,
@@ -598,6 +597,28 @@ describe.each([
       expect((await reviews.loadCandidate(candidate.candidateId)).content.pickCustody).toHaveLength(
         1
       );
+      if (sessionWindow) {
+        const stored = (
+          await pool.query(
+            `SELECT event.event_date,event.date_precision FROM outcome_event_version event
+          JOIN outcome_external_canonical_promotion_record record ON record.canonical_record_id=event.event_version_id
+          WHERE record.record_kind='draft_event' AND record.promotion_id=$1`,
+            [result.promotionId]
+          )
+        ).rows;
+        expect(stored).toEqual([
+          {
+            event_date: null,
+            date_precision: {
+              precision: 'window',
+              eventDate: null,
+              earliestDate: '2024-11-21',
+              latestDate: '2024-11-25',
+            },
+          },
+        ]);
+        return;
+      }
       const retainedArtifacts = new Map();
       for (const fixture of [draft, trade, official, second]) {
         const ref = fixture.target.sourceArtifact;
