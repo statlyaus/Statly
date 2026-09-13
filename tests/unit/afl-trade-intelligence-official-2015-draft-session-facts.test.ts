@@ -1,3 +1,4 @@
+import { combinedDraftDocumentId } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { expect, it } from 'vitest';
 import {
   isReviewedOfficialAflDraftSessionUrl,
@@ -35,4 +36,16 @@ it('does not derive session facts from date metadata or plausible substituted pr
     expect(result.evidence).toEqual([]);
     expect(result.issues).toHaveLength(1);
   }
+});
+
+it('uses distinct reviewed document identities for the 2015 wrap and total', () => {
+  expect(combinedDraftDocumentId('official_afl', wrap, 'non_production')).toBe(
+    'official_afl:news:78408'
+  );
+  expect(combinedDraftDocumentId('official_afl', total, 'non_production')).toBe(
+    'official_afl:news:39972'
+  );
+  expect(() =>
+    combinedDraftDocumentId('official_afl', wrap.replace('78408', '78409'), 'non_production')
+  ).toThrow();
 });
