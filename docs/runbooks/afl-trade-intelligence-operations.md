@@ -2762,6 +2762,12 @@ checks; it does not create source permission or broaden capture-year coverage.
 
 ### Reviewed session evidence successors
 
+Promotion proposal v6 binds coverage exactly to the saved selected-session projection, preserving
+original ordinals even when earlier sessions have no selected members. Migration0178 extends the
+review, write, session-finalization and acquisition-currentness gates. Every candidate selection must
+be covered; partial coverage and unresolved factual records still prevent promotion. Validate public
+promotion, readback/replay and source-revocation behavior before claiming a completed v6 delivery.
+
 `prepareReviewedSessionCorrection` reconstructs a private reviewed successor from its finalized
 parent, current historical completion and approved identity records. It preserves accepted custody,
 endpoints and partial trade dates while adding session evidence for the selected draft members.
