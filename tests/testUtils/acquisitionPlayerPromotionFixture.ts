@@ -47,6 +47,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   options: {
     draftSessions?: boolean;
     sessionProposalV5?: boolean;
+    mixedDraftSessionProofs?: boolean;
     partialTransactionDates?: boolean;
     combinedDraftSessions?: boolean;
     official2017CombinedDraft?: boolean;
@@ -71,6 +72,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error(
       'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
     );
+  if (
+    options.mixedDraftSessionProofs &&
+    (!options.sessionProposalV5 ||
+      !options.combinedDraftSessions ||
+      options.officialCombinedDraftYear ||
+      options.official2017CombinedDraft)
+  )
+    throw new Error('Mixed proof fixture requires synthetic v5 combined-session profile.');
   const hasDraftSessions = options.draftSessions || options.combinedDraftSessions;
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
@@ -346,8 +355,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     const draftSelectionClaim = (selectionNumber: number) => ({
       kind: 'draft_selection' as const,
       draftYear: request.anchorSeasonYear,
-      draftType: 'national' as const,
-      selectionNumber,
+      draftType:
+        options.mixedDraftSessionProofs && selectionNumber === 3
+          ? ('rookie' as const)
+          : ('national' as const),
+      selectionNumber:
+        options.mixedDraftSessionProofs && selectionNumber === 3 ? 1 : selectionNumber,
       roundNumber: 1,
       player: {
         nativeId: reviewedOfficialCombinedDraft
@@ -405,7 +418,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     });
     const targetEvidence = [evidence];
     if (hasDraftSessions && evidence.content.claim.kind === 'draft_selection') {
-      const selectionCount = officialSelectionCount ?? 2;
+      const selectionCount = options.mixedDraftSessionProofs ? 3 : (officialSelectionCount ?? 2);
       for (let selectionNumber = 2; selectionNumber <= selectionCount; selectionNumber += 1) {
         targetEvidence.push(
           createAflTradeExternalEvidenceEnvelope({
@@ -1165,14 +1178,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }
       const selectionId = createAflTradeContentAddress('external-draft-selection', {
         draftYear: seasonYear,
-        draftType: 'national',
+        draftType: claim.draftType,
         selectionNumber: claim.selectionNumber,
       });
-      if (options.combinedDraftSessions) {
+      if (options.combinedDraftSessions && claim.draftType === 'national') {
         draftSelections.push({
           selectionId,
           draftYear: seasonYear,
-          draftType: 'national',
+          draftType: claim.draftType,
           selectionNumber: claim.selectionNumber,
           roundNumber: claim.roundNumber,
           pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
@@ -1205,8 +1218,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         claim: {
           kind: 'draft_session',
           draftYear: seasonYear,
-          draftType: 'national',
-          sessionOrdinal: index + 1,
+          draftType: claim.draftType,
+          sessionOrdinal: claim.draftType === 'rookie' ? 1 : index + 1,
           eventDate: date,
           officialName: `Synthetic session ${index + 1}`,
           selectionNumbers: [claim.selectionNumber],
@@ -1288,7 +1301,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       draftSelections.push({
         selectionId,
         draftYear: seasonYear,
-        draftType: 'national',
+        draftType: claim.draftType,
         selectionNumber: claim.selectionNumber,
         roundNumber: claim.roundNumber,
         pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
@@ -1300,8 +1313,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       });
       draftEventCoverage.push({
         draftYear: seasonYear,
-        draftType: 'national',
-        sessionOrdinal: index + 1,
+        draftType: claim.draftType,
+        sessionOrdinal: claim.draftType === 'rookie' ? 1 : index + 1,
         eventDate: date,
         officialName: `Synthetic session ${index + 1}`,
         expectedSelectionCount: 1,
@@ -1311,12 +1324,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       });
     }
     if (options.combinedDraftSessions) {
-      const selectionRows = draftBatch.batch.content.evidence.map((row) => {
-        if (row.content.claim.kind !== 'draft_selection') {
-          throw new Error('Expected combined-proof draft selection.');
-        }
-        return row.content.claim;
-      });
+      const selectionRows = draftBatch.batch.content.evidence
+        .map((row) => {
+          if (row.content.claim.kind !== 'draft_selection') {
+            throw new Error('Expected combined-proof draft selection.');
+          }
+          return row.content.claim;
+        })
+        .filter((claim) => claim.draftType === 'national');
       const first = selectionRows[0]!;
       const last = selectionRows.at(-1)!;
       const combinedFactGroups = reviewedOfficialCombinedDraft
@@ -1665,7 +1680,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         sourceBatchIds.push(factBatch.batchId);
       }
       combinedEvidenceIds.sort();
-      for (const selection of draftSelections) {
+      for (const selection of draftSelections.filter(
+        (selection) => selection.draftType === 'national'
+      )) {
         selection.evidenceIds = [...selection.evidenceIds, ...combinedEvidenceIds].sort();
       }
       if (reviewedOfficialCombinedDraft) {
@@ -1683,18 +1700,20 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         });
       } else {
         draftEventCoverage.push(
-          ...draftSelections.map((selection, index) => ({
-            draftYear: seasonYear,
-            draftType: 'national',
-            sessionOrdinal: index + 1,
-            eventDate: `${seasonYear}-11-${20 + index}`,
-            officialName: `Synthetic combined session ${index + 1}`,
-            expectedSelectionCount: 1,
-            selectionIds: [selection.selectionId],
-            evidenceIds: combinedEvidenceIds,
-            status: 'complete' as const,
-            proofKind: 'combined_session_facts' as const,
-          }))
+          ...draftSelections
+            .filter((selection) => selection.draftType === 'national')
+            .map((selection, index) => ({
+              draftYear: seasonYear,
+              draftType: 'national',
+              sessionOrdinal: index + 1,
+              eventDate: `${seasonYear}-11-${20 + index}`,
+              officialName: `Synthetic combined session ${index + 1}`,
+              expectedSelectionCount: 1,
+              selectionIds: [selection.selectionId],
+              evidenceIds: combinedEvidenceIds,
+              status: 'complete' as const,
+              proofKind: 'combined_session_facts' as const,
+            }))
         );
       }
     }
@@ -1830,6 +1849,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     candidate,
     identityResolutions: allResolutions,
   });
+  draftEventCoverage.sort(
+    (a, b) =>
+      a.draftYear - b.draftYear ||
+      a.draftType.localeCompare(b.draftType) ||
+      a.sessionOrdinal - b.sessionOrdinal
+  );
   const proposalInput = {
     candidateId: candidate.candidateId,
     candidateSha256: candidate.candidateId.split(':')[1]!,
@@ -1851,9 +1876,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5',
         draftEventCoverage: draftEventCoverage.map((coverage) => ({
           ...coverage,
-          proofKind: options.combinedDraftSessions
-            ? ('combined_session_facts' as const)
-            : ('direct_session_claim' as const),
+          proofKind:
+            options.combinedDraftSessions && coverage.draftType === 'national'
+              ? ('combined_session_facts' as const)
+              : ('direct_session_claim' as const),
         })),
       })
     : options.combinedDraftSessions

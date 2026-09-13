@@ -285,10 +285,11 @@ it('promotes two evidenced sessions of one draft with separate exact dates and s
   ).toBe(true);
 });
 
-it.each([false, true])(
+it.each(['direct', 'combined', 'mixed'] as const)(
   'promotes v5 session proof with year-only trades through review, finalization and replay (combined=%s)',
-  async (combined) => {
-    const scopedName = `${schema}_v5_${combined ? 'combined' : 'direct'}`;
+  async (profile) => {
+    const combined = profile !== 'direct';
+    const scopedName = `${schema}_v5_${profile}`;
     await admin.query(`CREATE SCHEMA "${scopedName}"`);
     const scopedUrl = new URL(url!);
     scopedUrl.searchParams.set('schema', scopedName);
@@ -299,12 +300,21 @@ it.each([false, true])(
         draftSessions: !combined,
         combinedDraftSessions: combined,
         sessionProposalV5: true,
+        mixedDraftSessionProofs: profile === 'mixed',
         partialTransactionDates: true,
       });
       expect(promoted.proposal.content.schemaVersion).toBe(
         'afl-trade-external-canonical-promotion-proposal/v5'
       );
-      expect(promoted.draftAssets).toHaveLength(2);
+      expect(promoted.draftAssets).toHaveLength(profile === 'mixed' ? 3 : 2);
+      if (profile === 'mixed')
+        expect(
+          new Set(
+            promoted.proposal.content.draftEventCoverage.map((coverage) =>
+              'proofKind' in coverage ? coverage.proofKind : null
+            )
+          )
+        ).toEqual(new Set(['direct_session_claim', 'combined_session_facts']));
       expect(
         promoted.proposal.content.transactionDateCoverage.every((date) => date.occurredOn === null)
       ).toBe(true);
