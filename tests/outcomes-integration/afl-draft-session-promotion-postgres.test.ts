@@ -1,3 +1,4 @@
+import { verifySessionAcquisitionCurrentness } from '../testUtils/sessionAcquisitionCurrentness';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
@@ -329,6 +330,7 @@ it.each([false, true])(
           )
         ).rows[0].status
       ).toBe('finalized');
+      await verifySessionAcquisitionCurrentness(isolated, promoted);
     } finally {
       await isolated.end();
       await admin.query(`DROP SCHEMA "${scopedName}" CASCADE`);
