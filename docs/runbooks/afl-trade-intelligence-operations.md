@@ -2786,5 +2786,8 @@ Migration0174 permits a `rookie_elevation` realization with a null draft-selecti
 approved player/club identities and matching terminal custody, and preserves prior realization checks.
 Candidate and archive contracts retain this endpoint; promotion and factual release carry it without
 creating a draft selection. These capabilities do not authenticate a reviewed correction successor:
-that successor must still bind its unchanged special parent and exact current reviewed registration
-before genuine persistence, readback and independent restore can be claimed.
+`prepareReviewedRookieCorrection` rebuilds the versioned successor from the current finalized parent,
+registered review and retained movement evidence in one transaction. Authentication compares the
+entire rebuilt candidate, preserving special/ordinary records and source authority. Its preparation
+result explicitly reports persistence/admission false. The database successor validator and genuine
+persistence/readback/independent restore remain required before that status may change.

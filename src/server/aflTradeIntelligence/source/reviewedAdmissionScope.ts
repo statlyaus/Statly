@@ -1,3 +1,4 @@
+import { buildReviewedRookieCorrection } from './reviewedRookieCorrection';
 import { buildReviewedSpecialCorrection } from './reviewedSpecialCorrection';
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from './postgresExternalHistoricalReconciliationSource';
 import {
@@ -135,6 +136,15 @@ export async function authenticateReviewedAdmissionScope(
   transaction: AflOutcomeSqlTransaction,
   candidate: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
 ) {
+  if (candidate.content.reviewedRookieCorrection) {
+    const expected = await prepareReviewedRookieCorrection(transaction, {
+      parentCandidateId: candidate.content.reviewedRookieCorrection.parentCandidateId,
+      environment: candidate.content.environment,
+    });
+    if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
+      throw new TypeError('Rookie correction differs from its authenticated parent, review or retained evidence.');
+    return;
+  }
   if (candidate.content.reviewedSpecialCorrection) {
     const correction = candidate.content.reviewedSpecialCorrection;
     const authority = candidate.content.sourceAuthority;
@@ -225,62 +235,7 @@ export async function prepareReviewedOrdinaryCorrection(
     [scope.content.reviewedScope.registrationId]
   );
   const registration = reviewedPickLineageRegistrationSchema.parse(stored.rows[0]?.registration);
-  const parent = await transaction.query<{ candidate_json: unknown }>(
-    'SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE',
-    [scope.content.reviewedScope.sourceCandidateId]
-  );
-  const expanded = parseAflTradeExternalReconciliationCandidate(parent.rows[0]?.candidate_json);
-  const retained = await transaction.query<{
-    artifact_id: string;
-    source_url: string;
-    evidence_json: unknown;
-  }>(
-    `SELECT c.source_artifact_id AS artifact_id,c.manifest_json->>'sourceUrl' AS source_url,r.evidence_json
-     FROM outcome_external_evidence_row r JOIN outcome_external_evidence_batch b ON b.batch_id=r.batch_id
-     JOIN outcome_source_capture c ON c.capture_id=b.capture_id WHERE b.batch_id=ANY($1::text[])`,
-    [scope.content.sourceBatchIds]
-  );
-  const evidence = retained.rows.map((row) => ({
-    ...row,
-    evidence: parseAflTradeExternalEvidenceEnvelope(row.evidence_json),
-  }));
-  const movementEvidence: ReviewedMovementEvidence[] = [];
-  for (const transfer of expanded.content.transfers) {
-    if (transfer.asset.kind !== 'pick_entitlement' && transfer.asset.kind !== 'special_pick')
-      continue;
-    const event = expanded.content.transactions.find(
-      (t) => t.transactionId === transfer.transactionId
-    )!;
-    for (const row of evidence.filter((r) =>
-      transfer.evidenceIds.includes(r.evidence.evidenceId)
-    )) {
-      const claim = row.evidence.content.claim;
-      if (claim.kind !== 'directed_transfer' || claim.nativeEventId !== event.providerEventId)
-        continue;
-      const asset = transfer.asset;
-      const label =
-        asset.kind === 'special_pick'
-          ? asset.sourceLabel
-          : (asset.recordedLabel ??
-            (asset.nominalPick !== null
-              ? `Pick ${asset.nominalPick}`
-              : claim.asset.kind === 'future_pick'
-                ? `${claim.asset.draftYear}R${claim.asset.roundNumber} (${claim.asset.originalClub.recordedName})`
-                : null));
-      if (!transfer.fromClubId || !transfer.toClubId)
-        throw new TypeError('Reviewed movement requires resolved directed clubs.');
-      movementEvidence.push({
-        artifactId: row.artifact_id,
-        sourceUrl: row.source_url,
-        nativeEventId: claim.nativeEventId,
-        transferId: transfer.transferId,
-        fromClubId: transfer.fromClubId,
-        toClubId: transfer.toClubId,
-        retainedAssetLabel: label ?? '',
-        evidenceId: row.evidence.evidenceId,
-      });
-    }
-  }
+  const movementEvidence = await loadReviewedMovementEvidence(transaction, scope);
   return buildReviewedOrdinaryCorrection({ scopeCandidate: scope, registration, movementEvidence });
 }
 
@@ -349,4 +304,91 @@ export async function prepareReviewedSpecialCorrection(
     sourceAuthority: source.sourceAuthority,
     sourceBatches: source.sourceBatches,
   });
+}
+
+async function loadReviewedMovementEvidence(
+  transaction: AflOutcomeSqlTransaction,
+  scope: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
+): Promise<ReviewedMovementEvidence[]> {
+  const parent = await transaction.query<{ candidate_json: unknown }>(
+    'SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE',
+    [scope.content.reviewedScope!.sourceCandidateId]
+  );
+  const expanded = parseAflTradeExternalReconciliationCandidate(parent.rows[0]?.candidate_json);
+  const retained = await transaction.query<{
+    artifact_id: string;
+    source_url: string;
+    evidence_json: unknown;
+  }>(
+    `SELECT c.source_artifact_id AS artifact_id,c.manifest_json->>'sourceUrl' AS source_url,r.evidence_json
+     FROM outcome_external_evidence_row r JOIN outcome_external_evidence_batch b ON b.batch_id=r.batch_id
+     JOIN outcome_source_capture c ON c.capture_id=b.capture_id WHERE b.batch_id=ANY($1::text[])`,
+    [scope.content.sourceBatchIds]
+  );
+  const evidence = retained.rows.map((row) => ({
+    ...row,
+    evidence: parseAflTradeExternalEvidenceEnvelope(row.evidence_json),
+  }));
+  const movementEvidence: ReviewedMovementEvidence[] = [];
+  for (const transfer of expanded.content.transfers) {
+    if (transfer.asset.kind !== 'pick_entitlement' && transfer.asset.kind !== 'special_pick')
+      continue;
+    const event = expanded.content.transactions.find(
+      (t) => t.transactionId === transfer.transactionId
+    )!;
+    for (const row of evidence.filter((r) =>
+      transfer.evidenceIds.includes(r.evidence.evidenceId)
+    )) {
+      const claim = row.evidence.content.claim;
+      if (claim.kind !== 'directed_transfer' || claim.nativeEventId !== event.providerEventId)
+        continue;
+      const asset = transfer.asset;
+      const label =
+        asset.kind === 'special_pick'
+          ? asset.sourceLabel
+          : (asset.recordedLabel ??
+            (asset.nominalPick !== null
+              ? `Pick ${asset.nominalPick}`
+              : claim.asset.kind === 'future_pick'
+                ? `${claim.asset.draftYear}R${claim.asset.roundNumber} (${claim.asset.originalClub.recordedName})`
+                : null));
+      if (!transfer.fromClubId || !transfer.toClubId)
+        throw new TypeError('Reviewed movement requires resolved directed clubs.');
+      movementEvidence.push({
+        artifactId: row.artifact_id,
+        sourceUrl: row.source_url,
+        nativeEventId: claim.nativeEventId,
+        transferId: transfer.transferId,
+        fromClubId: transfer.fromClubId,
+        toClubId: transfer.toClubId,
+        retainedAssetLabel: label ?? '',
+        evidenceId: row.evidence.evidenceId,
+      });
+    }
+  }
+  return movementEvidence;
+}
+
+export async function prepareReviewedRookieCorrection(
+  transaction: AflOutcomeSqlTransaction,
+  input: { parentCandidateId: string; environment: string }
+) {
+  const loaded = await transaction.query<{ candidate_json: unknown; current: boolean }>(
+    `SELECT candidate_json,outcome_external_candidate_retained_sources_current(candidate_id,clock_timestamp()) AS current
+     FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 AND status='finalized' FOR SHARE`,
+    [input.parentCandidateId]
+  );
+  if (!loaded.rows[0]?.current) throw new TypeError('Rookie correction requires a current finalized parent.');
+  const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
+  if (!parent.content.reviewedCorrection || parent.content.reviewedRookieCorrection ||
+    parent.content.environment !== input.environment || input.environment === 'production')
+    throw new TypeError('Rookie correction requires its exact private reviewed parent.');
+  await authenticateReviewedAdmissionScope(transaction, parent);
+  const stored = await transaction.query<{ registration: unknown }>(
+    'SELECT read_outcome_reviewed_pick_lineage($1) AS registration',
+    [parent.content.reviewedCorrection.registrationId]
+  );
+  const registration = reviewedPickLineageRegistrationSchema.parse(stored.rows[0]?.registration);
+  const movementEvidence = await loadReviewedMovementEvidence(transaction, parent);
+  return buildReviewedRookieCorrection({ candidate: parent, registration, movementEvidence });
 }

@@ -213,6 +213,17 @@ const contentSchema = z
       })
       .strict()
       .optional(),
+    reviewedRookieCorrection: z.object({
+      schemaVersion: z.literal('afl-trade-reviewed-rookie-correction/v1'),
+      parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+      registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
+      correctionGraphId: aflTradeContentAddressedIdSchema('reviewed-lineage-correction-graph'),
+      bindings: z.array(z.object({
+        transferId: aflTradeContentAddressedIdSchema('external-transfer'),
+        lineageId: aflTradeContentAddressedIdSchema('external-pick-lineage'),
+        custodyIds: z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1),
+      }).strict()).min(1),
+    }).strict().optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),
@@ -227,6 +238,12 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
+    if (content.reviewedRookieCorrection && (
+      !content.reviewedCorrection || content.environment === 'production' ||
+      content.reviewedRookieCorrection.registrationId !== content.reviewedCorrection.registrationId ||
+      content.reviewedRookieCorrection.correctionGraphId !== content.reviewedCorrection.correctionGraphId
+    )) context.addIssue({ code: 'custom', path: ['reviewedRookieCorrection'],
+      message: 'Rookie corrections require the same private reviewed registration and correction graph.' });
     if (
       content.reviewedSpecialCorrection &&
       (!content.reviewedCorrection ||

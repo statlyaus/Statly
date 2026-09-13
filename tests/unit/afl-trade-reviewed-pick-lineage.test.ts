@@ -1,4 +1,5 @@
 import { buildReviewedSpecialCorrection } from '@/server/aflTradeIntelligence/source/reviewedSpecialCorrection';
+import { buildReviewedRookieCorrection } from '@/server/aflTradeIntelligence/source/reviewedRookieCorrection';
 import {
   createAflTradeExternalEvidenceEnvelope,
   createAflTradeExternalEvidenceBatch,
@@ -369,6 +370,34 @@ describe('reviewed pick lineage', () => {
         awards: [{ award, approvalDecisionId: '' }],
       })
     ).toThrow(/registered award/);
+  });
+
+  it('builds a deterministic rookie successor without rewriting its ordinary parent', () => {
+    const value = record();
+    if (value.endpoint.kind === 'rookie_elevation') value.endpoint.playerId = 'fixture-player';
+    const registered = registration([value]);
+    const original = candidate();
+    const scope = buildReviewedAdmissionScope({ sourceCandidate: original, originalCandidate: original, registration: registered });
+    const parent = buildReviewedOrdinaryCorrection({ scopeCandidate: scope, registration: registered, movementEvidence: [] }).candidate;
+    const snapshot = structuredClone(parent);
+    const input = { candidate: parent, registration: registered, movementEvidence: [] };
+    const successor = buildReviewedRookieCorrection(input);
+    expect(buildReviewedRookieCorrection(input)).toEqual(successor);
+    expect(parent).toEqual(snapshot);
+    expect(successor).toMatchObject({ appliedTransferIds: [transferId], persisted: false, canonicalAdmission: false });
+    expect(successor.candidate.content).toMatchObject({
+      reviewedCorrection: parent.content.reviewedCorrection,
+      reviewedRookieCorrection: { parentCandidateId: parent.candidateId, registrationId: registered.registrationId },
+      draftSelections: [],
+      pickCustody: [{ recordedPickNumber: 57, currentClubId: 'gold-coast' }],
+      pickLineage: [{ selectionId: null, terminalOutcome: value.endpoint }],
+    });
+    expect(successor.candidate.content.transactions).toEqual(parent.content.transactions);
+    expect(successor.candidate.content.sourceBatchIds).toEqual(parent.content.sourceBatchIds);
+    expect(() => buildReviewedRookieCorrection({ ...input, candidate: successor.candidate })).toThrow(/unchanged private reviewed parent/);
+    const wrongRegistration = structuredClone(registered);
+    wrongRegistration.registrationId = `reviewed-pick-lineage-registration:${'f'.repeat(64)}`;
+    expect(() => buildReviewedRookieCorrection({ ...input, registration: wrongRegistration })).toThrow();
   });
 
   it('requires the elevation club to match the unique usable terminal custody holder', () => {
