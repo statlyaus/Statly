@@ -2903,3 +2903,12 @@ and exact rookie review, custody, terminal endpoint and content-addressed identi
 prior records and source-evidence conservation. Persistence/replay must pass through that validator.
 Verify readback, SQL tamper rejection and independent restore before recording a completed correction;
 canonical admission, special lifecycle/exercise and draft-session coverage remain separate exits.
+
+The reviewed 2012 national-session adapter (v13) preserves all 74 retrospective roster entries.
+The independent list-lodgement report supplies four explicit rookie-elevation exclusions; the
+completed-event release supplies 70 national selections (66 live, three father-son, one local
+talent), separately from 24 rookie elevations. The retrospective also supplies Michael Osborne
+at original selection 70 and the terminal selection 88. Migration 0188 recognizes these three
+reviewed documents and requires the completed total (AFL453360) to be independent of the terminal
+roster source (AFL87166). AFL38163 is classification evidence, not a completed-session date.
+This capability does not establish genuine capture, identity approval or canonical admission.

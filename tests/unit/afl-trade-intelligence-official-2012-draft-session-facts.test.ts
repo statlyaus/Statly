@@ -1,3 +1,4 @@
+import { combinedDraftDocumentId } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { describe, expect, it } from 'vitest';
 import {
   OFFICIAL_AFL_2012_SESSION_URLS,
@@ -24,6 +25,28 @@ describe('reviewed 2012 session source scope', () => {
       expect(isReviewedOfficialAflDraftSessionUrl(url, 2013)).toBe(false);
       expect(reviewedOfficialAflDraft2012EffectiveYear(url + '?other=1')).toBeNull();
     }
+  });
+  it('recognizes the three reviewed source identities and rejects unknown articles', () => {
+    for (const [key, id] of [
+      ['membership', '87166'],
+      ['event', '453360'],
+      ['classifications', '38163'],
+    ] as const) {
+      expect(
+        combinedDraftDocumentId(
+          'official_afl',
+          OFFICIAL_AFL_2012_SESSION_URLS[key],
+          'non_production'
+        )
+      ).toBe(`official_afl:news:${id}`);
+    }
+    expect(() =>
+      combinedDraftDocumentId(
+        'official_afl',
+        'https://www.afl.com.au/news/999999/unreviewed',
+        'non_production'
+      )
+    ).toThrow();
   });
   it('does not infer inventory or date from an article shell', () => {
     for (const sourceUrl of Object.values(OFFICIAL_AFL_2012_SESSION_URLS)) {
