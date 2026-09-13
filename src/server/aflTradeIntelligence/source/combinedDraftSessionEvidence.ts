@@ -1,3 +1,4 @@
+import { parseDraftSessionDatePrecision, draftSessionDefinitelyPrecedes, type DraftSessionDatePrecision } from './draftSessionDatePrecision';
 import {
   resolveCompletedDraftMembership,
   type CompletedDraftMembershipRoster,
@@ -27,6 +28,11 @@ export type CombinedDraftSessionFact =
       kind: 'completed_session_date';
       sessionOrdinal: number;
       eventDate: string;
+    })
+  | (CombinedDraftFactBase & {
+      kind: 'completed_session_window';
+      sessionOrdinal: number;
+      datePrecision: Extract<DraftSessionDatePrecision, {precision: 'window'}>;
     })
   | (CombinedDraftFactBase & {
       kind: 'completed_session';
@@ -224,13 +230,61 @@ function requireOne<T>(values: T[], message: string): T {
   return values[0]!;
 }
 
-export function resolveCombinedDraftSessionEvidence(input: {
+export type PrecisionDraftSessionCoverage = Omit<CombinedDraftSessionCoverage, 'eventDate'> & {
+  eventDate: string | null;
+  datePrecision?: Extract<DraftSessionDatePrecision, {precision: 'window'}>;
+};
+
+interface CombinedDraftSessionInput {
   draftYear: number;
   draftType: string;
   officialName: string;
   selections: CombinedDraftSelection[];
   facts: CombinedDraftSessionFact[];
-}): CombinedDraftSessionCoverage[] {
+}
+
+export interface PrecisionDraftSessionProjection {
+  schemaVersion: 'afl-trade-combined-draft-session-projection/v2';
+  inventorySelectionIds: string[];
+  selectedSelectionIds: string[];
+  inventorySessions: PrecisionDraftSessionCoverage[];
+  selectedSessions: PrecisionDraftSessionCoverage[];
+}
+
+/** A versioned proof preserves date bounds when projecting a verified full inventory. */
+export function projectPrecisionDraftSessionEvidence(
+  input: CombinedDraftSessionInput & {selectedSelectionIds: readonly string[]}
+): PrecisionDraftSessionProjection {
+  const inventorySessions = resolvePrecisionDraftSessionEvidence(input);
+  const inventorySelectionIds = input.selections.map(s => s.selectionId).sort();
+  const selectedSelectionIds = [...input.selectedSelectionIds].sort();
+  const inventory = new Set(inventorySelectionIds);
+  if (!selectedSelectionIds.length || new Set(selectedSelectionIds).size !== selectedSelectionIds.length ||
+      selectedSelectionIds.some(id => !inventory.has(id))) {
+    throw new TypeError('Session projection requires a nonempty unique subset of the proved inventory.');
+  }
+  const selected = new Set(selectedSelectionIds);
+  return {
+    schemaVersion: 'afl-trade-combined-draft-session-projection/v2',
+    inventorySelectionIds, selectedSelectionIds, inventorySessions,
+    selectedSessions: inventorySessions.map(session => ({...session,
+      selectionIds: session.selectionIds.filter(id => selected.has(id)),
+      evidenceIds: [...session.evidenceIds],
+      ...(session.datePrecision ? {datePrecision: {...session.datePrecision}} : {}),
+    })).filter(session => session.selectionIds.length > 0),
+  };
+}
+
+/** Legacy consumers must explicitly opt into window-aware proof handling. */
+export function resolveCombinedDraftSessionEvidence(input: CombinedDraftSessionInput): CombinedDraftSessionCoverage[] {
+  return resolvePrecisionDraftSessionEvidence(input).map(session => {
+    if (session.eventDate === null || session.datePrecision !== undefined)
+      throw new TypeError('Session window requires a precision-aware projection and promotion owner.');
+    return {...session, eventDate: session.eventDate};
+  });
+}
+
+export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSessionInput): PrecisionDraftSessionCoverage[] {
   const orderedSelections = [...input.selections].sort(
     (left, right) => left.selectionNumber - right.selectionNumber
   );
@@ -309,8 +363,8 @@ export function resolveCombinedDraftSessionEvidence(input: {
       fact.kind === 'session_boundary'
   );
   const dates = input.facts.filter(
-    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_session_date' }> =>
-      fact.kind === 'completed_session_date'
+    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_session_date' | 'completed_session_window' }> =>
+      fact.kind === 'completed_session_date' || fact.kind === 'completed_session_window'
   );
   const completions = input.facts.filter(
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_session' }> =>
@@ -396,28 +450,20 @@ export function resolveCombinedDraftSessionEvidence(input: {
   }
 
   const evidenceIds = unique(input.facts.map(({ evidenceId }) => evidenceId)).sort();
+  const precisionByOrdinal = new Map(ordinals.map(sessionOrdinal => {
+    const claims = dates.filter(fact => fact.sessionOrdinal === sessionOrdinal).map(fact =>
+      parseDraftSessionDatePrecision(fact.kind === 'completed_session_date'
+        ? {precision: 'day', eventDate: fact.eventDate} : fact.datePrecision, input.draftYear));
+    const agreed = requireOne(unique(claims.map(value => JSON.stringify(value))),
+      'Every combined draft session requires one agreed date precision.');
+    const precision = claims.find(value => JSON.stringify(value) === agreed)!;
+    return [sessionOrdinal, precision] as const;
+  }));
   return ordinals.map((sessionOrdinal, index) => {
-    const date = requireOne(
-      unique(
-        dates
-          .filter((fact) => fact.sessionOrdinal === sessionOrdinal)
-          .map(({ eventDate }) => eventDate)
-      ),
-      'Every combined draft session requires one agreed completed date.'
-    );
-    const priorDate =
-      index > 0
-        ? requireOne(
-            unique(
-              dates
-                .filter((fact) => fact.sessionOrdinal === sessionOrdinal - 1)
-                .map(({ eventDate }) => eventDate)
-            ),
-            'Every combined draft session requires one agreed completed date.'
-          )
-        : null;
-    if (priorDate && date <= priorDate) {
-      throw new TypeError('Combined draft session dates must be strictly increasing.');
+    const precision = precisionByOrdinal.get(sessionOrdinal)!;
+    const prior = index > 0 ? precisionByOrdinal.get(ordinals[index - 1]!)! : null;
+    if (prior && !draftSessionDefinitelyPrecedes(prior, precision)) {
+      throw new TypeError('Combined draft session date bounds must be strictly increasing without overlap.');
     }
     const first = starts[index]!.selectionNumber;
     const nextStart = starts[index + 1];
@@ -427,7 +473,8 @@ export function resolveCombinedDraftSessionEvidence(input: {
       draftType: input.draftType,
       officialName: input.officialName,
       sessionOrdinal,
-      eventDate: date,
+      eventDate: precision.eventDate,
+      ...(precision.precision === 'window' ? {datePrecision: precision} : {}),
       selectionIds: orderedSelections
         .filter(({ selectionNumber }) => selectionNumber >= first && selectionNumber <= last)
         .map(({ selectionId }) => selectionId)

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   resolveCombinedDraftSessionEvidence,
+  resolvePrecisionDraftSessionEvidence,
+  projectPrecisionDraftSessionEvidence,
   projectCombinedDraftSessionEvidence,
 } from '@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence';
 import type { CombinedDraftSessionFact } from '@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence';
@@ -542,5 +544,57 @@ describe('explicit completed inventory', () => {
     const boundary = wrong.facts.find((fact) => fact.kind === 'session_boundary')!;
     if (boundary.kind === 'session_boundary') boundary.playerId = 'wrong';
     expect(() => resolveCombinedDraftSessionEvidence(wrong)).toThrow('boundary identity');
+  });
+});
+
+
+describe('combined session date windows', () => {
+  const input = {draftYear: 2018, draftType: 'national', officialName: '2018 draft', selections, facts};
+  const windowFacts = (): CombinedDraftSessionFact[] => facts.map(fact => fact.kind === 'completed_session_date' && fact.sessionOrdinal === 2
+    ? {kind: 'completed_session_window', evidenceId: fact.evidenceId, captureId: fact.captureId,
+        artifactId: fact.artifactId, documentId: fact.documentId, sessionOrdinal: 2,
+        datePrecision: {precision: 'window', eventDate: null, earliestDate: '2018-11-23', latestDate: '2018-11-25'}}
+    : {...fact});
+
+  it('preserves the exact-day resolver output without introducing precision fields', () => {
+    expect(resolvePrecisionDraftSessionEvidence(input)).toEqual(resolveCombinedDraftSessionEvidence(input));
+    expect(resolvePrecisionDraftSessionEvidence(input).every(session => !('datePrecision' in session))).toBe(true);
+  });
+  it('keeps the complete inventory and provenance with null exact day for a proved window', () => {
+    const result = resolvePrecisionDraftSessionEvidence({...input, facts: windowFacts()});
+    expect(result[1]).toMatchObject({eventDate: null, datePrecision: {earliestDate: '2018-11-23', latestDate: '2018-11-25'}});
+    expect(result.flatMap(session => session.selectionIds)).toHaveLength(78);
+    expect(result[1]!.evidenceIds).toEqual(resolveCombinedDraftSessionEvidence(input)[1]!.evidenceIds);
+    expect(() => resolveCombinedDraftSessionEvidence({...input, facts: windowFacts()})).toThrow('precision-aware');
+  });
+  it('projects a versioned subset without dropping the complete inventory or date bounds', () => {
+    const selectedSelectionIds = [selections[77]!.selectionId];
+    const proof = projectPrecisionDraftSessionEvidence({...input, facts: windowFacts(), selectedSelectionIds});
+    expect(proof.schemaVersion).toBe('afl-trade-combined-draft-session-projection/v2');
+    expect(proof.inventorySelectionIds).toHaveLength(78);
+    expect(proof.inventorySessions).toHaveLength(2);
+    expect(proof.selectedSessions).toHaveLength(1);
+    expect(proof.selectedSessions[0]).toMatchObject({sessionOrdinal: 2, eventDate: null, selectionIds: selectedSelectionIds});
+    expect(proof.selectedSessions[0]!.datePrecision).toEqual(proof.inventorySessions[1]!.datePrecision);
+    for (const ids of [[], ['not-in-inventory'], [...selectedSelectionIds, ...selectedSelectionIds]]) {
+      expect(() => projectPrecisionDraftSessionEvidence({...input, facts: windowFacts(), selectedSelectionIds: ids})).toThrow('subset');
+    }
+  });
+  it('rejects a window overlapping the prior session and conflicting precision evidence', () => {
+    const altered = windowFacts();
+    const window = altered.find(f => f.kind === 'completed_session_window')!;
+    if (window.kind !== 'completed_session_window') throw new Error('fixture');
+    window.datePrecision.earliestDate = '2018-11-22';
+    expect(() => resolvePrecisionDraftSessionEvidence({...input, facts: altered})).toThrow('overlap');
+    expect(() => resolvePrecisionDraftSessionEvidence({...input, facts: [...windowFacts(), facts[4]!]})).toThrow('agreed');
+  });
+  it('still requires independent totals, completed-session evidence and correct boundary identity', () => {
+    expect(() => resolvePrecisionDraftSessionEvidence({...input, facts: windowFacts().filter(f => f.kind !== 'completed_session')})).toThrow('completed-session');
+    const shared = windowFacts();
+    const total = shared.find(f => f.kind === 'completed_draft_total')!;
+    const terminal = shared.find(f => f.kind === 'session_boundary' && f.boundary === 'last')!;
+    total.documentId = terminal.documentId;
+    expect(() => resolvePrecisionDraftSessionEvidence({...input, facts: shared})).toThrow('independent');
+    expect(() => resolvePrecisionDraftSessionEvidence({...input, selections: selections.map((s, i) => i === 77 ? {...s, playerId: 'wrong'} : s), facts: windowFacts()})).toThrow('identity');
   });
 });
