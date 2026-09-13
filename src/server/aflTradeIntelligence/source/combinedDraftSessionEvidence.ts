@@ -1,3 +1,9 @@
+import {
+  resolveCompletedDraftMembership,
+  type CompletedDraftMembershipRoster,
+  type CompletedDraftMemberNumber,
+} from './completedDraftMembership';
+
 export interface CombinedDraftSelection {
   selectionId: string;
   selectionNumber: number;
@@ -13,6 +19,8 @@ interface CombinedDraftFactBase {
 }
 
 export type CombinedDraftSessionFact =
+  | CompletedDraftMembershipRoster
+  | CompletedDraftMemberNumber
   | (CombinedDraftFactBase & {
       kind: 'completed_session_date';
       sessionOrdinal: number;
@@ -245,7 +253,28 @@ export function resolveCombinedDraftSessionEvidence(input: {
   ) {
     throw new TypeError('Combined draft proof requires a complete unique inventory.');
   }
-  if (enumerations.length === 0) {
+  const rosters = input.facts.filter(
+    (fact): fact is CompletedDraftMembershipRoster =>
+      fact.kind === 'completed_draft_membership_roster'
+  );
+  const bindings = input.facts.filter(
+    (fact): fact is CompletedDraftMemberNumber => fact.kind === 'completed_draft_member_number'
+  );
+  if (rosters.length > 1 || (bindings.length > 0 && rosters.length !== 1)) {
+    throw new TypeError(
+      'Member-number evidence requires one explicit completed membership roster.'
+    );
+  }
+  if (rosters.length === 1) {
+    resolveCompletedDraftMembership({
+      draftYear: input.draftYear,
+      draftType: input.draftType,
+      inventoryNumbers,
+      roster: rosters[0]!,
+      bindings,
+    });
+  }
+  if (enumerations.length === 0 && rosters.length === 0) {
     if (inventoryNumbers.some((number, index) => number !== index + 1)) {
       throw new TypeError(
         'A noncontiguous inventory requires explicit completed membership evidence.'
