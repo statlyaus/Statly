@@ -2,6 +2,7 @@ import {
   resolveCompletedDraftMembership,
   type CompletedDraftMembershipRoster,
   type CompletedDraftMemberNumber,
+  type CompletedDraftMemberExclusion,
 } from './completedDraftMembership';
 
 export interface CombinedDraftSelection {
@@ -21,6 +22,7 @@ interface CombinedDraftFactBase {
 export type CombinedDraftSessionFact =
   | CompletedDraftMembershipRoster
   | CompletedDraftMemberNumber
+  | CompletedDraftMemberExclusion
   | (CombinedDraftFactBase & {
       kind: 'completed_session_date';
       sessionOrdinal: number;
@@ -260,7 +262,14 @@ export function resolveCombinedDraftSessionEvidence(input: {
   const bindings = input.facts.filter(
     (fact): fact is CompletedDraftMemberNumber => fact.kind === 'completed_draft_member_number'
   );
-  if (rosters.length > 1 || (bindings.length > 0 && rosters.length !== 1)) {
+  const exclusions = input.facts.filter(
+    (fact): fact is CompletedDraftMemberExclusion =>
+      fact.kind === 'completed_draft_member_exclusion'
+  );
+  if (
+    rosters.length > 1 ||
+    ((bindings.length > 0 || exclusions.length > 0) && rosters.length !== 1)
+  ) {
     throw new TypeError(
       'Member-number evidence requires one explicit completed membership roster.'
     );
@@ -272,6 +281,7 @@ export function resolveCombinedDraftSessionEvidence(input: {
       inventoryNumbers,
       roster: rosters[0]!,
       bindings,
+      exclusions,
     });
   }
   if (enumerations.length === 0 && rosters.length === 0) {

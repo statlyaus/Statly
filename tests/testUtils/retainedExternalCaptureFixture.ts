@@ -47,8 +47,11 @@ export async function createRetainedExternalCaptureFixture(
   secondSession = false,
   enumerated = false,
   multiDocument = false,
-  supplementalSelection = false
+  supplementalSelection = false,
+  rookieExclusion = false
 ) {
+  if (rookieExclusion && (!multiDocument || environment !== 'test_fixture'))
+    throw new Error('Rookie exclusion requires synthetic multi-document proof.');
   if (supplementalSelection && (!enumerated || environment !== 'test_fixture'))
     throw new Error('Supplemental synthetic selection requires enumerated test_fixture.');
   if (multiDocument && !enumerated)
@@ -182,6 +185,22 @@ export async function createRetainedExternalCaptureFixture(
       player: { nativeId: null, recordedName: 'Synthetic Player 34' },
       selectedByClub: { nativeId: null, recordedName: 'Synthetic Club' },
     });
+  }
+  if (rookieExclusion && official) {
+    if (secondSession) {
+      const roster = sessionFacts.find(
+        (claim) => claim.kind === 'draft_completed_membership_roster'
+      );
+      if (!roster || roster.kind !== 'draft_completed_membership_roster')
+        throw new Error('Roster required.');
+      roster.members.push({ recordedName: 'Elevated Rookie', selectionNumber: 85 });
+    } else
+      sessionFacts.push({
+        ...common,
+        kind: 'draft_completed_member_exclusion',
+        recordedName: 'Elevated Rookie',
+        reason: 'rookie_elevation',
+      });
   }
   const fields =
     official && enumerated

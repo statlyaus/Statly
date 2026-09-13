@@ -1020,6 +1020,7 @@ export function reconcileAflTradeExternalEvidence(input: {
       'draft_completed_inventory',
       'draft_completed_membership_roster',
       'draft_completed_member_number',
+      'draft_completed_member_exclusion',
     ].includes(content.claim.kind)
   );
   const partialSessionKeys = sortedUnique(
@@ -1034,7 +1035,8 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_completed_total'
             | 'draft_completed_inventory'
             | 'draft_completed_membership_roster'
-            | 'draft_completed_member_number';
+            | 'draft_completed_member_number'
+            | 'draft_completed_member_exclusion';
         }
       >;
       return `${claim.draftYear}|${claim.draftType}`;
@@ -1054,7 +1056,8 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_completed_total'
             | 'draft_completed_inventory'
             | 'draft_completed_membership_roster'
-            | 'draft_completed_member_number';
+            | 'draft_completed_member_number'
+            | 'draft_completed_member_exclusion';
         }
       >;
       return claim.draftYear === draftYear && claim.draftType === draftType;
@@ -1114,6 +1117,16 @@ export function reconcileAflTradeExternalEvidence(input: {
             draftType: claim.draftType,
             recordedName: claim.recordedName,
             selectionNumber: claim.selectionNumber,
+          };
+        }
+        if (claim.kind === 'draft_completed_member_exclusion') {
+          return {
+            ...source,
+            kind: 'completed_draft_member_exclusion',
+            draftYear: claim.draftYear,
+            draftType: claim.draftType,
+            recordedName: claim.recordedName,
+            reason: claim.reason,
           };
         }
         if (claim.kind !== 'draft_session_boundary') {

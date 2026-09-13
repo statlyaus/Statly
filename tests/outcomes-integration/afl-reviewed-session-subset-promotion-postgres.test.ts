@@ -43,11 +43,12 @@ import { deriveReviewedSessionCanonicalPromotionProposal } from '@/server/aflTra
 import { createAflTradeExternalCanonicalPromotionReviewDecision } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionReviewContracts';
 import { createRetainedExternalCaptureFixture } from '../testUtils/retainedExternalCaptureFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
-describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_selection'])(
+describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_selection', 'rookie_exclusion'])(
   'reviewed retained subset (%s)',
   (mode) => {
     const enumerated = mode !== 'consecutive';
-    const multiDocument = mode === 'multi_document';
+    const multiDocument = mode === 'multi_document' || mode === 'rookie_exclusion';
+    const rookieExclusion = mode === 'rookie_exclusion';
     const supplementalSelection = mode === 'supplemental_selection';
     const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
     if (!url) throw new Error('Disposable PostgreSQL required.');
@@ -85,7 +86,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         false,
         enumerated,
         multiDocument,
-        supplementalSelection
+        supplementalSelection,
+        rookieExclusion
       );
       const trade = await createRetainedExternalCaptureFixture(
         sql,
@@ -97,7 +99,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         false,
         enumerated,
         multiDocument,
-        supplementalSelection
+        supplementalSelection,
+        rookieExclusion
       );
       const official = await createRetainedExternalCaptureFixture(
         sql,
@@ -109,7 +112,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         false,
         enumerated,
         multiDocument,
-        supplementalSelection
+        supplementalSelection,
+        rookieExclusion
       );
       const second = await createRetainedExternalCaptureFixture(
         sql,
@@ -121,7 +125,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_sele
         true,
         enumerated,
         multiDocument,
-        supplementalSelection
+        supplementalSelection,
+        rookieExclusion
       );
       const plannedAt = (
         await pool.query<{ at: string }>(

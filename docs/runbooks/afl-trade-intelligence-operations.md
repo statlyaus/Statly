@@ -2843,6 +2843,15 @@ The supplemental-selection fixture removes an interior member from Draftguru and
 an official batch; complete-inventory, subset-promotion and source-revocation checks still apply.
 Provider claim support does not extend Gate permissions or authorize a new parser/source route.
 
+Migration0187 permits a source-explicit `draft_completed_member_exclusion` only for a named
+`rookie_elevation` in a national-draft roster. The classification must match the roster's exact
+recorded name and year/type, come from a different document/capture/artifact, and refer to a numbered
+member absent from the national inventory. One classification is required per excluded member.
+The resulting membership must exactly equal the retained inventory, preserving original numbers;
+classifications remain in the session's evidence set. Duplicate, unrelated, missing or conflicting
+classifications fail in both preparation and SQL. A pre-draft classification is not a completed-session
+date or count. Source routes and genuine execution remain separately scoped and verified.
+
 Migration0184 supports a complete `draft_completed_membership_roster` with explicit null numbers
 for named members, joined to separate `draft_completed_member_number` evidence by exact recorded
 name and draft year/type. The join cannot infer numbers from the retained inventory. Every unnumbered

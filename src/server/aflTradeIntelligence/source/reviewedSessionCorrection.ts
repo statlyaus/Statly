@@ -59,6 +59,7 @@ export function buildReviewedSessionCorrection(input: {
     'draft_completed_inventory',
     'draft_completed_membership_roster',
     'draft_completed_member_number',
+    'draft_completed_member_exclusion',
   ]);
   const added = batches.filter((b) => !parent.content.sourceBatchIds.includes(b.batchId));
   if (
@@ -242,6 +243,15 @@ export function buildReviewedSessionCorrection(input: {
           draftType: c.draftType,
           recordedName: c.recordedName,
           selectionNumber: c.selectionNumber,
+        };
+      if (c.kind === 'draft_completed_member_exclusion')
+        return {
+          ...source,
+          kind: 'completed_draft_member_exclusion',
+          draftYear: c.draftYear,
+          draftType: c.draftType,
+          recordedName: c.recordedName,
+          reason: c.reason,
         };
       if (c.kind !== 'draft_session_boundary')
         throw new TypeError('Invalid partial session claim.');

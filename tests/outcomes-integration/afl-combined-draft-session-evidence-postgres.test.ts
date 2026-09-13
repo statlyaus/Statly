@@ -2225,3 +2225,74 @@ it('rejects malformed and ambiguous multi-document membership joins in SQL', asy
   expect(await verify([roster, binding, { ...binding, evidenceId: 'duplicate' }])).toBe(false);
   expect(await verify([roster, binding], [1, 2])).toBe(false);
 });
+
+it('requires exact independent rookie-elevation classifications before excluding roster members', async () => {
+  const roster = {
+    evidenceId: 'roster',
+    captureId: 'capture1',
+    artifactId: 'artifact1',
+    documentId: 'doc1',
+    claim: {
+      kind: 'draft_completed_membership_roster',
+      draftYear: 2012,
+      draftType: 'national',
+      members: [
+        { recordedName: 'First', selectionNumber: 1 },
+        { recordedName: 'Elevated', selectionNumber: 57 },
+        { recordedName: 'Last', selectionNumber: 88 },
+      ],
+    },
+  };
+  const exclusion = {
+    evidenceId: 'classification',
+    captureId: 'capture2',
+    artifactId: 'artifact2',
+    documentId: 'doc2',
+    claim: {
+      kind: 'draft_completed_member_exclusion',
+      draftYear: 2012,
+      draftType: 'national',
+      recordedName: 'Elevated',
+      reason: 'rookie_elevation',
+    },
+  };
+  const verify = async (facts: unknown, numbers: unknown = [1, 88]) =>
+    (
+      await pool.query(
+        "SELECT outcome_completed_membership_exact($1::jsonb,$2::jsonb,2012,'national') AS valid",
+        [JSON.stringify(facts), JSON.stringify(numbers)]
+      )
+    ).rows[0].valid;
+  expect(await verify([roster, exclusion])).toBe(true);
+  expect(await verify([roster])).toBe(false);
+  expect(await verify([exclusion])).toBe(false);
+  expect(await verify([roster, exclusion, { ...exclusion, evidenceId: 'duplicate' }])).toBe(false);
+  for (const changed of [
+    { ...exclusion, captureId: 'capture1' },
+    { ...exclusion, artifactId: 'artifact1' },
+    { ...exclusion, documentId: 'doc1' },
+    { ...exclusion, evidenceId: '' },
+    { ...exclusion, claim: { ...exclusion.claim, recordedName: 'Other' } },
+    { ...exclusion, claim: { ...exclusion.claim, recordedName: null } },
+    { ...exclusion, claim: { ...exclusion.claim, reason: 'passed' } },
+    { ...exclusion, claim: { ...exclusion.claim, reason: null } },
+    { ...exclusion, claim: { ...exclusion.claim, draftYear: 2011 } },
+    { ...exclusion, claim: { ...exclusion.claim, draftType: 'rookie' } },
+    { ...exclusion, claim: { ...exclusion.claim, kind: null } },
+  ])
+    expect(await verify([roster, changed])).toBe(false);
+  for (const number of [null, 0, 88, 57.5]) {
+    const changed = {
+      ...roster,
+      claim: {
+        ...roster.claim,
+        members: roster.claim.members.map((m) =>
+          m.recordedName === 'Elevated' ? { ...m, selectionNumber: number } : m
+        ),
+      },
+    };
+    expect(await verify([changed, exclusion])).toBe(false);
+  }
+  expect(await verify([roster, exclusion], [1, 57])).toBe(false);
+  expect(await verify([roster, exclusion], [1, 2])).toBe(false);
+});

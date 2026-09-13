@@ -18,6 +18,12 @@ export interface CompletedDraftMemberNumber extends CompletedDraftMembershipSour
   selectionNumber: number;
 }
 
+export interface CompletedDraftMemberExclusion extends CompletedDraftMembershipSource {
+  kind: 'completed_draft_member_exclusion';
+  recordedName: string;
+  reason: 'rookie_elevation';
+}
+
 /** Join explicit names across source documents; never derive missing numbers from the inventory. */
 export function resolveCompletedDraftMembership(input: {
   draftYear: number;
@@ -25,12 +31,13 @@ export function resolveCompletedDraftMembership(input: {
   inventoryNumbers: readonly number[];
   roster: CompletedDraftMembershipRoster;
   bindings: readonly CompletedDraftMemberNumber[];
+  exclusions?: readonly CompletedDraftMemberExclusion[];
 }): {
   schemaVersion: 'afl-trade-completed-draft-membership/v1';
   selectionNumbers: number[];
   evidenceIds: string[];
 } {
-  const { roster, bindings } = input;
+  const { roster, bindings, exclusions = [] } = input;
   const fail = (): never => {
     throw new TypeError(
       'Completed membership requires exact, unique, source-bound member numbers.'
@@ -38,7 +45,7 @@ export function resolveCompletedDraftMembership(input: {
   };
   const validNumber = (n: number) => Number.isInteger(n) && n > 0;
   const validName = (name: string) => name.length > 0 && name.trim() === name;
-  const sources = [roster, ...bindings];
+  const sources = [roster, ...bindings, ...exclusions];
   if (
     !Number.isInteger(input.draftYear) ||
     !input.draftType ||
@@ -52,14 +59,40 @@ export function resolveCompletedDraftMembership(input: {
     ) ||
     new Set(sources.map((source) => source.evidenceId)).size !== sources.length ||
     roster.members.length === 0 ||
-    roster.members.length !== input.inventoryNumbers.length ||
+    roster.members.length !== input.inventoryNumbers.length + exclusions.length ||
     roster.members.some((member) => !validName(member.recordedName)) ||
     new Set(roster.members.map((member) => member.recordedName)).size !== roster.members.length ||
     bindings.some((binding) => !validName(binding.recordedName)) ||
     new Set(bindings.map((binding) => binding.recordedName)).size !== bindings.length
   )
     fail();
-  const unnumbered = roster.members.filter((member) => member.selectionNumber === null);
+  const recordedNumbers = roster.members.flatMap((member) =>
+    member.selectionNumber === null ? [] : [member.selectionNumber]
+  );
+  if (new Set(recordedNumbers).size !== recordedNumbers.length) fail();
+  const excludedNames = new Set(exclusions.map((exclusion) => exclusion.recordedName));
+  if (
+    excludedNames.size !== exclusions.length ||
+    exclusions.some((exclusion) => {
+      const member = roster.members.find((row) => row.recordedName === exclusion.recordedName);
+      return (
+        !validName(exclusion.recordedName) ||
+        exclusion.reason !== 'rookie_elevation' ||
+        input.draftType !== 'national' ||
+        !member ||
+        member.selectionNumber === null ||
+        !validNumber(member.selectionNumber) ||
+        input.inventoryNumbers.includes(member.selectionNumber) ||
+        exclusion.documentId === roster.documentId ||
+        exclusion.captureId === roster.captureId ||
+        exclusion.artifactId === roster.artifactId
+      );
+    })
+  )
+    fail();
+  const included = roster.members.filter((member) => !excludedNames.has(member.recordedName));
+  if (included.length === 0) fail();
+  const unnumbered = included.filter((member) => member.selectionNumber === null);
   if (
     bindings.length !== unnumbered.length ||
     bindings.some(
@@ -71,7 +104,7 @@ export function resolveCompletedDraftMembership(input: {
     )
   )
     fail();
-  const numbers = roster.members
+  const numbers = included
     .map((member) => {
       const number =
         member.selectionNumber ??

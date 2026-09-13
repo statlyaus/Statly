@@ -1691,6 +1691,52 @@ it('reconciles only the reviewed 2016 one-session article identities outside fix
     reconcile2016([inventory, wrap, schedule, total, roster, wrongYear]).content.issues.length
   ).toBeGreaterThan(0);
 
+  const mixedRoster = batch(
+    'official_afl',
+    'a',
+    [
+      {
+        ...rosterClaim,
+        members: [...rosterClaim.members, { recordedName: 'Elevated Rookie', selectionNumber: 90 }],
+      },
+    ],
+    wrapUrl
+  );
+  const exclusionClaim = {
+    kind: 'draft_completed_member_exclusion' as const,
+    draftYear: 2016,
+    draftType: 'national' as const,
+    recordedName: 'Elevated Rookie',
+    reason: 'rookie_elevation' as const,
+  };
+  const exclusion = batch('official_afl', 'b', [exclusionClaim], totalUrl);
+  const classified = reconcile2016([
+    inventory,
+    wrap,
+    schedule,
+    total,
+    mixedRoster,
+    number,
+    exclusion,
+  ]);
+  expect(classified.content.issues).toEqual([]);
+  for (const selection of classified.content.draftSelections) {
+    expect(selection.evidenceIds).toContain(exclusion.content.evidence[0]!.evidenceId);
+  }
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, mixedRoster, number]).content.issues.length
+  ).toBeGreaterThan(0);
+  const unrelatedExclusion = batch(
+    'official_afl',
+    'c',
+    [{ ...exclusionClaim, recordedName: 'Other' }],
+    totalUrl
+  );
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, mixedRoster, number, unrelatedExclusion])
+      .content.issues.length
+  ).toBeGreaterThan(0);
+
   const candidate = reconcile2016([inventory, wrap, schedule, total]);
   expect(total.content.evidence[0]!.content.capture.effectiveAt).toBe('2019-11-28T11:30:00.000Z');
   expect(total.content.evidence[0]!.content.claim).toMatchObject({

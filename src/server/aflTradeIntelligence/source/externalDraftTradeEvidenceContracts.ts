@@ -389,6 +389,16 @@ const draftCompletedMemberNumberClaimSchema = z
   })
   .strict();
 
+const draftCompletedMemberExclusionClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_member_exclusion'),
+    draftYear: yearSchema,
+    draftType: z.literal('national'),
+    recordedName: boundedText,
+    reason: z.literal('rookie_elevation'),
+  })
+  .strict();
+
 const issuingAwardReferenceSchema = z
   .object({
     kind: z.literal('issuing_award_reference'),
@@ -410,6 +420,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftCompletedInventoryClaimSchema,
   draftCompletedMembershipRosterClaimSchema,
   draftCompletedMemberNumberClaimSchema,
+  draftCompletedMemberExclusionClaimSchema,
   tradeDetailLinkClaimSchema,
   transactionClaimSchema,
   transactionPartyClaimSchema,
@@ -429,6 +440,7 @@ const allowedKindsByProvider = {
     'draft_completed_inventory',
     'draft_completed_membership_roster',
     'draft_completed_member_number',
+    'draft_completed_member_exclusion',
     'transaction',
     'transaction_party',
     'directed_transfer',
@@ -455,6 +467,7 @@ const allowedKindsByProvider = {
     'draft_completed_inventory',
     'draft_completed_membership_roster',
     'draft_completed_member_number',
+    'draft_completed_member_exclusion',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
 } as const;
