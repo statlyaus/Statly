@@ -1223,6 +1223,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0193_reviewed_session_window_structure',
       '0194_reviewed_session_window_sources',
       '0195_reviewed_window_promotion',
+      '0196_window_lifecycle_chronology',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

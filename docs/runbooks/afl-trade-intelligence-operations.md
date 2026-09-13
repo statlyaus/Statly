@@ -2960,3 +2960,11 @@ matches both null day and bounds to the reviewed coverage. Public promotion/repl
 Prisma/SQL agreement are fixture-verified. Lifecycle ordering for window selections still requires
 implementation and verification before genuine admission. Do not substitute a window
 endpoint for the unknown selection day.
+
+Migration0196 reads lifecycle date bounds from canonical events. A window is usable only while its
+finalized v7 promotion and source-authenticated coverage match the stored bounds. Custody and
+activation provenance still establish sequence; date comparisons reject events after the latest
+possible selection day. This is a consistency check, not proof of an exact exercise day. Existing
+exact-day lifecycle, revision and renumbering rules retain their prior meaning. Acquisition-spell
+registration still requires an exact day; add a versioned partial-date contract and storage before
+registering a window-based spell, rather than substituting a bound as its start date.

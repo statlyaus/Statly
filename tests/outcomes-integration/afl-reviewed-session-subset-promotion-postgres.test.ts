@@ -617,6 +617,37 @@ describe.each([
             },
           },
         ]);
+        const bounds = async () =>
+          (
+            await pool.query(
+              `SELECT outcome_event_evidenced_date_bounds(canonical_record_id)::text AS bounds
+          FROM outcome_external_canonical_promotion_record WHERE promotion_id=$1 AND record_kind='draft_event'`,
+              [result.promotionId]
+            )
+          ).rows[0].bounds;
+        expect(await bounds()).toBe('[2024-11-21,2024-11-26)');
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query('SET LOCAL session_replication_role=replica');
+          await client.query(
+            "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
+            [second.target.captureId]
+          );
+          expect(
+            (
+              await client.query(
+                `SELECT outcome_event_evidenced_date_bounds(canonical_record_id) AS bounds
+            FROM outcome_external_canonical_promotion_record WHERE promotion_id=$1 AND record_kind='draft_event'`,
+                [result.promotionId]
+              )
+            ).rows[0].bounds
+          ).toBeNull();
+        } finally {
+          await client.query('ROLLBACK');
+          client.release();
+        }
+        expect(await bounds()).toBe('[2024-11-21,2024-11-26)');
         return;
       }
       const retainedArtifacts = new Map();
