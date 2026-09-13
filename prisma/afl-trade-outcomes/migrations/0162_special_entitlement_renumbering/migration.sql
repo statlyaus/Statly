@@ -8,7 +8,7 @@ BEGIN
   IF fact->>'kind' IS DISTINCT FROM 'exercise' OR jsonb_typeof(fact->'renumbering') IS DISTINCT FROM 'array'
     OR jsonb_array_length(fact->'renumbering') NOT BETWEEN 1 AND 10000
   THEN RAISE EXCEPTION 'Renumbering requires a nonempty exercise binding set'; END IF;
-  SELECT s.*,e.season_year,v.event_date INTO selection FROM outcome_draft_selection s
+  SELECT s.*,e.season_year,v.event_date,v.acquisition_mechanism INTO selection FROM outcome_draft_selection s
     JOIN outcome_event_version v USING(event_version_id) JOIN outcome_event e USING(event_id)
     WHERE s.selection_id=fact->>'selectionId' FOR SHARE OF s,v,e;
   IF NOT FOUND THEN RAISE EXCEPTION 'Renumbering requires its canonical selection'; END IF;
@@ -38,7 +38,8 @@ BEGIN
     IF NOT FOUND OR source.source_asset->>'kind' IS DISTINCT FROM 'pick_entitlement'
       OR source.source_asset->>'pickId' IS DISTINCT FROM binding->>'sourcePickId'
       OR (source.source_asset->>'draftYear')::INTEGER IS DISTINCT FROM selection.season_year
-      OR source.source_asset->>'draftType' IS DISTINCT FROM 'national'
+      OR source.source_asset->>'draftType' IS DISTINCT FROM (CASE selection.acquisition_mechanism
+        WHEN 'national_draft' THEN 'national' WHEN 'mini_draft' THEN 'mini_draft' ELSE NULL END)
     THEN RAISE EXCEPTION 'Renumbering differs from retained right custody'; END IF;
     IF binding#>>'{occurredAt,precision}'='year' THEN
       IF jsonb_typeof(binding#>'{occurredAt,year}') IS DISTINCT FROM 'number'
@@ -146,7 +147,7 @@ BEGIN
     THEN RAISE EXCEPTION 'Exercise requires retained canonical selection provenance and current identity'; END IF;
     fact_year:=selection.season_year; earliest:=selection.event_date; latest:=selection.event_date;
     -- Canonical event+ordinal uniqueness also catches competing claims across event versions.
-    IF EXISTS (SELECT 1 FROM outcome_special_entitlement_lifecycle used
+    IF EXISTS (SELECT 1 FROM outcome_special_entitlement_current_exercise used
       JOIN outcome_draft_selection s ON s.selection_id=used.selection_id
       JOIN outcome_event_version v USING(event_version_id)
       WHERE used.entitlement_id<>award.entitlement_id AND v.event_id=selection.event_id

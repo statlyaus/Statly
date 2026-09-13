@@ -916,14 +916,14 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
               fromClubId: index === 0 ? 'club-gws' : 'club-western-bulldogs',
               toClubId: index === 0 ? 'club-western-bulldogs' : 'club-gws',
               asset:
-                index === 1 && award.content.asset.entitlementType === 'expansion_compensation'
+                index === 1 && ['expansion_compensation', 'mini_draft'].includes(award.content.asset.entitlementType)
                   ? {
                       kind: 'pick_entitlement' as const,
                       pickId: createAflTradeContentAddress('draft-pick', {
                         fixtureRight: award.entitlementId,
                       }),
-                      draftYear: year + 1,
-                      draftType: 'national',
+                      draftYear: award.content.asset.draftYear ?? year + 1,
+                      draftType: award.content.asset.entitlementType === 'mini_draft' ? 'mini_draft' : 'national',
                       nominalRound: 1,
                       nominalPick: 27,
                       originalClubId: 'club-gws',
@@ -1999,6 +1999,21 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
               ).rows[0].count
             ).toBe(1);
             await repository.registerSpecialEntitlementRevision(removalInput);
+            const releasedExercise = currentRevision.content.state.exercise!.record;
+            const alternativeAward = createSpecialEntitlementAward({
+              ...currentRevision.content.state.award.award.content,
+              issuingAwardId: `released-selection-claim:${award.entitlementId}`,
+            });
+            const alternativeApproval = await approve(alternativeAward);
+            // A released historical claim must not block another right. This claimant
+            // deliberately has no custody, so authentication must reach that later guard.
+            await expect(createPgAflOutcomeSqlClient(outcomesPool).transaction(async (tx) => {
+              await tx.query('SELECT * FROM register_outcome_special_entitlement_award($1::jsonb,$2)',
+                [canonicalizeAflTradeJson(alternativeAward), alternativeApproval]);
+              await tx.query('SELECT authenticate_outcome_special_entitlement_lifecycle($1::jsonb,$2)',
+                [canonicalizeAflTradeJson({ ...releasedExercise, entitlementId: alternativeAward.entitlementId }),
+                  currentRevision.content.state.exercise!.approvalDecisionId]);
+            })).rejects.toThrow(/terminal custody holder/);
             expect(
               (
                 await outcomesPool.query(
