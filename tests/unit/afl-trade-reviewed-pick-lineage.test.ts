@@ -1,3 +1,4 @@
+import { buildReviewedAdmissionScope } from '@/server/aflTradeIntelligence/source/reviewedAdmissionScope';
 import { bindRegisteredLineageForPromotion } from '@/server/aflTradeIntelligence/source/reviewedPickLineagePromotionBinding';
 import type { AflOutcomeSqlTransaction } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { previewReviewedPickLineage } from '@/server/aflTradeIntelligence/source/reviewedPickLineageReadiness';
@@ -127,6 +128,41 @@ describe('reviewed pick lineage', () => {
       proposedAt: '2026-09-13T12:00:00Z',
     });
   }
+  it('scopes unrelated selections while preserving all original trade legs and blocking issues', () => {
+    const original = candidate();
+    const unrelated = `external-evidence:${'1'.repeat(64)}`;
+    const relevant = {code:'lineage_unresolved' as const,severity:'blocking' as const,subjectKey:`lineage:${transferId}`,detail:'Still requires custody',evidenceIds};
+    const source = createAflTradeExternalReconciliationCandidate({...original.content,
+      draftSelections:[{selectionId:`external-draft-selection:${'2'.repeat(64)}`,draftYear:2012,draftType:'national',selectionNumber:99,roundNumber:null,pickId:`draft-pick:${'3'.repeat(64)}`,playerId:null,clubId:null,status:'unresolved',supportingProviders:['statly_local_fixture'],evidenceIds:[unrelated]}],
+      issues:[relevant,{...relevant,code:'identity_unresolved',subjectKey:'unrelated',evidenceIds:[unrelated]}],
+    });
+    const scoped = buildReviewedAdmissionScope({sourceCandidate:source,originalCandidate:original,registration:registration()});
+    expect(scoped.content.transfers).toEqual(original.content.transfers);
+    expect(scoped.content.transactions).toEqual(original.content.transactions);
+    expect(scoped.content.draftSelections).toEqual([]);
+    expect(scoped.content.issues).toEqual([relevant]);
+    expect(scoped.content.reviewedScope?.deferredEvidenceIds).toEqual([unrelated]);
+    expect(source.content.issues).toHaveLength(2);
+  });
+  it('keeps ambiguous issues and transitive shared-evidence issues blocking', () => {
+    const original=candidate();const other=`external-evidence:${'4'.repeat(64)}`;
+    const issue={code:'identity_unresolved' as const,severity:'blocking' as const,subjectKey:'unknown',detail:'Unresolved'};
+    const source=createAflTradeExternalReconciliationCandidate({...original.content,issues:[{...issue,evidenceIds:[other]},{...issue,evidenceIds:[...evidenceIds,other]},{...issue,evidenceIds:[]}]});
+    expect(buildReviewedAdmissionScope({sourceCandidate:source,originalCandidate:original,registration:registration()}).content.issues).toEqual(source.content.issues);
+  });
+  it('rejects changed trade facts, environment changes, and recursive scopes', () => {
+    const original=candidate();const input={originalCandidate:original,registration:registration()};
+    const changed=createAflTradeExternalReconciliationCandidate({...original.content,transfers:original.content.transfers.map(t=>({...t,fromClubId:'other'}))});
+    expect(()=>buildReviewedAdmissionScope({...input,sourceCandidate:changed})).toThrow(/transfer changed/);
+    const wrong=createAflTradeExternalReconciliationCandidate({...original.content,competition:'other'});
+    expect(()=>buildReviewedAdmissionScope({...input,sourceCandidate:wrong})).toThrow(/competition/);
+    const scoped=buildReviewedAdmissionScope({...input,sourceCandidate:original});
+    expect(()=>buildReviewedAdmissionScope({...input,sourceCandidate:scoped})).toThrow(/unscoped/);
+  });
+  it('does not scope away a missing reviewed selected endpoint', () => {
+    const original=candidate();const value=registrationRecord();value.endpoint={...value.endpoint,kind:'selected'} as typeof value.endpoint;
+    expect(()=>buildReviewedAdmissionScope({sourceCandidate:original,originalCandidate:original,registration:registration([value])})).toThrow(/exact retained selection/);
+  });
   function promotionTransaction(
     options: { candidateCurrent?: boolean; captureCurrent?: boolean; withdrawn?: boolean } = {}
   ) {

@@ -1,3 +1,4 @@
+import { authenticateReviewedAdmissionScope } from './reviewedAdmissionScope';
 import { pickCustodyDateColumns } from './pickCustodyDate';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
 import { registerReviewedPickLineage, readReviewedPickLineage } from './postgresReviewedPickLineageRegistration';
@@ -307,6 +308,7 @@ async function loadCandidate(
   try {
     const candidate = parseAflTradeExternalReconciliationCandidate(row.candidate_json);
     if (candidate.candidateId !== candidateId) throw new TypeError('Candidate identity mismatch.');
+    await authenticateReviewedAdmissionScope(transaction, candidate);
     return candidate;
   } catch (error) {
     throw new AflTradeExternalCanonicalPromotionError(

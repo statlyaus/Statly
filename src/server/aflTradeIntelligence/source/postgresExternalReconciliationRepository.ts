@@ -1,3 +1,4 @@
+import { authenticateReviewedAdmissionScope } from './reviewedAdmissionScope';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -136,7 +137,7 @@ async function requireSourceEvidenceMembership(
     ...candidate.content.pickLineage,
     ...candidate.content.issues,
   ];
-  const evidenceIds = [...new Set(records.flatMap(({ evidenceIds }) => evidenceIds))].sort();
+  const evidenceIds = [...new Set([...records.flatMap(({ evidenceIds }) => evidenceIds), ...(candidate.content.reviewedScope?.deferredEvidenceIds ?? [])])].sort();
   for (const evidenceId of evidenceIds) {
     const membership = await transaction.query(
       `SELECT evidence.evidence_id
@@ -204,6 +205,7 @@ export class PostgresAflTradeExternalReconciliationRepository {
         `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
       );
 
+      await authenticateReviewedAdmissionScope(transaction, candidate);
       const existing = await transaction.query<{
         status: string;
         finalized_at: string | Date | null;

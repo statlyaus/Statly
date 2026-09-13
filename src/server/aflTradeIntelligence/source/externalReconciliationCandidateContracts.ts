@@ -159,6 +159,11 @@ const contentSchema = z
       z.array(aflTradeContentAddressedIdSchema('external-evidence-batch')).min(1)
     ),
     sourceAuthority: aflTradeExternalReconciliationSourceAuthoritySchema.optional(),
+    reviewedScope: z.object({
+      sourceCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+      registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
+      deferredEvidenceIds: sortedUniqueIdsSchema.pipe(z.array(evidenceIdSchema)),
+    }).strict().optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),

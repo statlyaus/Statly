@@ -2707,3 +2707,12 @@ this distinction. Database guards reject conflicting terminal/selected realizati
 Draft-history reads exclude non-player outcomes from player selections and preserve partial-date
 custody without inventing timestamps. Apply through the normal migration owner in an owned restored
 checkpoint before genuine admission; fixture verification alone does not admit the reviewed73.
+
+Reviewed admission scopes bind a retained expanded candidate to its original reviewed registration.
+The scope keeps whole original trade transactions, exact selected endpoints, and all issues sharing
+active evidence (including transitive links and issues with no evidence). Other evidence IDs are
+explicitly deferred in the candidate JSON and still count toward source-row conservation. Existing
+candidate persistence and promotion authenticate the scope against both stored candidates, the
+current review and source authority; altered trade facts or removed relevant issues fail closed.
+Scoping is a pre-correction operation: it does not resolve custody, special rights, rookie elevation
+or session coverage and cannot turn a blocking reviewed issue into a promotion approval.

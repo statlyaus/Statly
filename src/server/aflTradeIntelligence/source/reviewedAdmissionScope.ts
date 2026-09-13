@@ -1,0 +1,77 @@
+import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleaseRepository';
+import { createAflTradeExternalReconciliationCandidate, parseAflTradeExternalReconciliationCandidate } from './externalReconciliationCandidateContracts';
+import { bindReviewedPickLineage } from './reviewedPickLineage';
+import { reviewedPickLineageRegistrationSchema } from './reviewedPickLineageRegistrationContracts';
+import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
+
+/** Deterministic pre-correction scope. Whole trades and every relevant issue remain intact. */
+export function buildReviewedAdmissionScope(input: { sourceCandidate: unknown; originalCandidate: unknown; registration: unknown }) {
+  const source = parseAflTradeExternalReconciliationCandidate(input.sourceCandidate);
+  const original = parseAflTradeExternalReconciliationCandidate(input.originalCandidate);
+  const registration = reviewedPickLineageRegistrationSchema.parse(input.registration);
+  if (source.content.reviewedScope || source.content.pickCustody.length || source.content.pickLineage.length)
+    throw new TypeError('Admission scoping requires an unscoped pre-correction source candidate.');
+  if (registration.content.candidateId !== original.candidateId || registration.content.environment !== source.content.environment || original.content.environment !== source.content.environment || original.content.competition !== source.content.competition)
+    throw new TypeError('Admission scope must preserve registered candidate environment and competition.');
+  const { records } = bindReviewedPickLineage(original, registration.content.records);
+  const roots = new Set(records.map(r => original.content.transfers.find(t => t.transferId === r.transferId)!.transactionId));
+  const transactions = source.content.transactions.filter(t => roots.has(t.transactionId));
+  const transfers = source.content.transfers.filter(t => roots.has(t.transactionId));
+  for (const transaction of original.content.transactions.filter(t => roots.has(t.transactionId))) {
+    if (canonicalizeAflTradeJson(transactions.find(t => t.transactionId === transaction.transactionId)) !== canonicalizeAflTradeJson(transaction))
+      throw new TypeError('Scoped original transaction changed.');
+  }
+  for (const transfer of original.content.transfers.filter(t => roots.has(t.transactionId))) {
+    if (canonicalizeAflTradeJson(transfers.find(t => t.transferId === transfer.transferId)) !== canonicalizeAflTradeJson(transfer))
+      throw new TypeError('Scoped original transfer changed.');
+  }
+  const selectionIds = new Set<string>();
+  for (const record of records) {
+    const endpoint = record.endpoint;
+    if (endpoint.kind !== 'selected') continue;
+    const matches = source.content.draftSelections.filter(s => s.playerId === endpoint.playerId && s.clubId === endpoint.exercisingClubId && s.draftYear === endpoint.draftYear && s.draftType === endpoint.draftType && s.selectionNumber === endpoint.livePick);
+    if (matches.length !== 1) throw new TypeError('Scoped selected endpoint requires one exact retained selection.');
+    selectionIds.add(matches[0].selectionId);
+  }
+  const draftSelections = source.content.draftSelections.filter(s => selectionIds.has(s.selectionId));
+  const activeEvidence = new Set([...transactions, ...transfers, ...draftSelections].flatMap(r => r.evidenceIds));
+  const transferIds = new Set(transfers.map(t => t.transferId));
+  // Empty/ambiguous evidence stays blocking; shared evidence cannot be classified as unrelated.
+  const retainedIssues = new Set<number>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    source.content.issues.forEach((issue, index) => {
+      if (retainedIssues.has(index)) return;
+      if (issue.evidenceIds.length === 0 || issue.evidenceIds.some(id => activeEvidence.has(id)) || (issue.subjectKey.startsWith('lineage:') && transferIds.has(issue.subjectKey.slice('lineage:'.length)))) {
+        retainedIssues.add(index);
+        for (const id of issue.evidenceIds) activeEvidence.add(id);
+        grew = true;
+      }
+    });
+  }
+  const issues = source.content.issues.filter((_, index) => retainedIssues.has(index));
+  const allEvidence = new Set([...source.content.transactions, ...source.content.transfers, ...source.content.draftSelections, ...source.content.issues].flatMap(r => r.evidenceIds));
+  const deferredEvidenceIds = [...allEvidence].filter(id => !activeEvidence.has(id)).sort();
+  return createAflTradeExternalReconciliationCandidate({
+    ...source.content, transactions, transfers, draftSelections, issues,
+    reviewedScope: { sourceCandidateId: source.candidateId, registrationId: registration.registrationId, deferredEvidenceIds },
+  });
+}
+
+/** Repeat under the same transaction as persistence/promotion, including current review and sources. */
+export async function authenticateReviewedAdmissionScope(transaction: AflOutcomeSqlTransaction, candidate: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>) {
+  const scope = candidate.content.reviewedScope;
+  if (!scope) return;
+  const stored = await transaction.query<{ registration: unknown }>('SELECT read_outcome_reviewed_pick_lineage($1) AS registration', [scope.registrationId]);
+  const registration = reviewedPickLineageRegistrationSchema.parse(stored.rows[0]?.registration);
+  if (candidate.content.environment === 'production') throw new TypeError('Reviewed scope is restricted to private environments.');
+  await bindRegisteredLineageForPromotion(transaction, { registrationId: scope.registrationId, candidateId: registration.content.candidateId, environment: candidate.content.environment });
+  const inputs = await transaction.query<{ candidate_id: string; candidate_json: unknown; current: boolean }>(`SELECT candidate_id,candidate_json,outcome_external_candidate_retained_sources_current(candidate_id,clock_timestamp()) AS current FROM outcome_external_reconciliation_candidate WHERE candidate_id=ANY($1::text[]) FOR SHARE`, [[scope.sourceCandidateId, registration.content.candidateId]]);
+  const source = inputs.rows.find(r => r.candidate_id === scope.sourceCandidateId);
+  const original = inputs.rows.find(r => r.candidate_id === registration.content.candidateId);
+  if (!source?.current || !original?.current) throw new TypeError('Scoped source candidates require current source authority.');
+  const expected = buildReviewedAdmissionScope({ sourceCandidate: source.candidate_json, originalCandidate: original.candidate_json, registration });
+  if (canonicalizeAflTradeJson(expected) !== canonicalizeAflTradeJson(candidate)) throw new TypeError('Reviewed admission scope differs from its exact retained records and issues.');
+}
