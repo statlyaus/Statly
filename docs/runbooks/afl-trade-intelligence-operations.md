@@ -2652,3 +2652,23 @@ withdrawal, historical archive readback and identity/event lock contention. Fixt
 satisfy genuine source admission or scientific acceptance. Apply migrations and genuine writes only
 under the existing reviewed target runbook and authorization, and record commit, push, PR/CI, merge,
 main synchronization, deployment and admission outcomes separately.
+
+### Preparing reviewed pick lineage
+
+`reviewedPickLineage.ts` validates separately evidenced corrections against an exact retained
+candidate. Preserve the scraped asset label alongside the accepted trade-time number and final
+live number. Keep national and mini-draft selections distinct. A rookie elevation, passed pick,
+unused pick or later package is a distinct endpoint; it must not manufacture a player acquisition.
+
+Each onward movement carries connected holders, explicit predecessor order and the supported
+instant, day or year. Supplementary movements outside the candidate require retained source bytes,
+asset labels and row references. A year is an interval for consistency checking, never an invented
+January 1 observation. Binding rejects contradictory dates, identities and source references.
+
+Use `PostgresAflTradeExternalCanonicalPromotionRepository.previewReviewedPickLineage` to inspect
+these records against a finalized candidate in the requested environment. The read-only preview
+reports absent approved player identities and source artifacts without registered captures. Capture
+presence is not current source authority. The preview always leaves admission and promotion
+eligibility false and does not remove candidate issues. Complete scoped source registration,
+identity review, partial-date persistence and authenticated promotion before claiming admission;
+verify independent database restore and factual readback through the existing owners.

@@ -1,3 +1,4 @@
+import { previewReviewedPickLineage } from './reviewedPickLineageReadiness';
 import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
 import { specialEntitlementRevisionSchema } from './specialEntitlementRevisionContracts';
 import { specialEntitlementLifecycleSchema } from './specialEntitlementLifecycleContracts';
@@ -592,6 +593,15 @@ function plannedTradeAsset(promotionId: string, eventVersionId: string, transfer
 
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
+
+  /** Inspect exact retained lineage dependencies without changing candidate issues or approving facts. */
+  async previewReviewedPickLineage(input: {
+    candidateId: string;
+    environment: 'test_fixture' | 'non_production' | 'production';
+    records: readonly unknown[];
+  }) {
+    return previewReviewedPickLineage(this.client, input);
+  }
 
   /** Persists a reviewed award only; this does not admit its custody trades or exercise. */
   async registerSpecialEntitlementAward(input: { award: unknown; approvalDecisionId: string }) {
