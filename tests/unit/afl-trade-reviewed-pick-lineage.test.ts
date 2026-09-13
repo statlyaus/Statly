@@ -1,3 +1,4 @@
+import { buildReviewedLineageCorrectionGraph } from '@/server/aflTradeIntelligence/source/reviewedLineageCorrectionGraph';
 import { buildReviewedAdmissionScope } from '@/server/aflTradeIntelligence/source/reviewedAdmissionScope';
 import { bindRegisteredLineageForPromotion } from '@/server/aflTradeIntelligence/source/reviewedPickLineagePromotionBinding';
 import type { AflOutcomeSqlTransaction } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
@@ -162,6 +163,50 @@ describe('reviewed pick lineage', () => {
   it('does not scope away a missing reviewed selected endpoint', () => {
     const original=candidate();const value=registrationRecord();value.endpoint={...value.endpoint,kind:'selected'} as typeof value.endpoint;
     expect(()=>buildReviewedAdmissionScope({sourceCandidate:original,originalCandidate:original,registration:registration([value])})).toThrow(/exact retained selection/);
+  });
+  it('merges shared custody movements and preserves unknown origins', () => {
+    const first = registrationRecord();
+    const secondId=`external-transfer:${'5'.repeat(64)}`;
+    const onward={...first.movements[0], transferId:secondId,fromClubId:'gold-coast',toClubId:'adelaide',predecessorOrdinal:0,
+      source:{...first.movements[0].source!,nativeEventId:'onward',sourceUrl:'https://example.test/onward',retainedAssetLabel:'Pick 57'},
+    };
+    first.movements.push(onward);
+    first.attribution='ultimate';
+    first.endpoint={...first.endpoint,exercisingClubId:'adelaide'} as typeof first.endpoint;
+    const second={...structuredClone(first),transferId:secondId,retainedSourceLabel:'Pick 57',movements:[{...onward,predecessorOrdinal:null}]};
+    const graph=buildReviewedLineageCorrectionGraph([first,second]);
+    expect(graph.content.chains).toHaveLength(1);
+    expect(graph.content.movements).toHaveLength(2);
+    expect(graph.content.chains[0].transferIds).toHaveLength(2);
+    expect(graph.content.chains[0].originalClubId).toBeNull();
+    expect(graph.content.movements.filter(m=>m.predecessorMovementId!==null)).toHaveLength(1);
+    expect(buildReviewedLineageCorrectionGraph([second,first])).toEqual(graph);
+    expect(first.movements[1].predecessorOrdinal).toBe(0);
+  });
+  it('rejects contradictory shared endpoints and duplicate reviewed records', () => {
+    const first=registrationRecord();
+    expect(()=>buildReviewedLineageCorrectionGraph([first,first])).toThrow(/unique records/);
+    const second={...structuredClone(first),transferId:`external-transfer:${'6'.repeat(64)}`};
+    second.movements[0].transferId=second.transferId;
+    second.endpoint={...second.endpoint,recordedPlayerName:'Different player'} as typeof second.endpoint;
+    expect(()=>buildReviewedLineageCorrectionGraph([first,second])).toThrow(/contradictory endpoints/);
+  });
+  it('does not merge independent histories merely because the player endpoint matches', () => {
+    const first=registrationRecord();const second=structuredClone(first);
+    second.transferId=`external-transfer:${'7'.repeat(64)}`;second.movements[0].transferId=second.transferId;
+    const artifact=createAflTradeByteArtifactRef(new TextEncoder().encode('Independent retained trade'),'text/plain','2026-09-13T00:00:00Z');
+    second.evidence=[artifact];second.movements[0].source={...second.movements[0].source!,artifact};
+    expect(buildReviewedLineageCorrectionGraph([first,second]).content.chains).toHaveLength(2);
+  });
+  it('rejects branching histories even when each reviewed record is internally connected', () => {
+    const first=registrationRecord();first.attribution='ultimate';
+    const onward={...structuredClone(first.movements[0]),transferId:`external-transfer:${'8'.repeat(64)}`,fromClubId:'gold-coast',toClubId:'adelaide',predecessorOrdinal:0};
+    onward.source!.retainedAssetLabel='Pick 57';first.movements.push(onward);
+    first.endpoint={...first.endpoint,exercisingClubId:'adelaide'} as typeof first.endpoint;
+    const branch=structuredClone(first);branch.transferId=`external-transfer:${'9'.repeat(64)}`;branch.retainedSourceLabel='Pick 58';
+    branch.movements[1].transferId=branch.transferId;branch.movements[1].toClubId='melbourne';branch.movements[1].source!.retainedAssetLabel='Pick 58';
+    branch.endpoint={...branch.endpoint,exercisingClubId:'melbourne'} as typeof branch.endpoint;
+    expect(()=>buildReviewedLineageCorrectionGraph([first,branch])).toThrow(/branch/);
   });
   function promotionTransaction(
     options: { candidateCurrent?: boolean; captureCurrent?: boolean; withdrawn?: boolean } = {}

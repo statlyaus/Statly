@@ -2721,3 +2721,11 @@ Migration0168 permits an unknown originating club on canonical custody observati
 current holder remains mandatory and club foreign keys still validate supplied identities. Promotion,
 archive and draft-history reads preserve null origins; the first known holder is not substituted for
 an unknown origin. Reviewed records with null origins therefore do not require invented club facts.
+
+`prepareReviewedLineageCorrectionGraph` rechecks the registered review and current source authority,
+then consolidates custody histories by exact retained movement identity. It never merges histories
+merely because they reach the same player. Exact registered transfer references cover movements
+already represented by the original candidate; supplementary movements require retained source
+references. Branches, cycles, incompatible dates, disconnected holders and conflicting endpoints or
+known origins fail closed. Shared movements retain their source rows and explicit predecessors.
+The returned correction graph is preparation; it does not alter candidates or admit canonical facts.

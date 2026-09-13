@@ -1,3 +1,4 @@
+import { buildReviewedLineageCorrectionGraph } from './reviewedLineageCorrectionGraph';
 import { authenticateReviewedAdmissionScope } from './reviewedAdmissionScope';
 import { pickCustodyDateColumns } from './pickCustodyDate';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
@@ -605,6 +606,20 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
     environment: 'test_fixture' | 'non_production';
   }) {
     return this.client.transaction(transaction => bindRegisteredLineageForPromotion(transaction, input));
+  }
+
+  async prepareReviewedLineageCorrectionGraph(input: {
+    registrationId: string; candidateId: string; environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction(async transaction => {
+      const binding = await bindRegisteredLineageForPromotion(transaction, input);
+      const records = binding.content.facts.map(({custody,...fact}) => ({
+        schemaVersion:'afl-trade-reviewed-pick-lineage/v1', candidateId:binding.content.candidateId,
+        ...fact, movements:custody.map(({ordinal:_ordinal,...movement})=>movement),
+      }));
+      return {...buildReviewedLineageCorrectionGraph(records), registrationId:binding.content.registrationId,
+        bindingId:binding.bindingId, reviewAuthorityAuthenticated:true, sourceAuthorityAuthenticated:true};
+    });
   }
 
   async registerReviewedPickLineage(input: { registration: unknown; approvalDecisionId: string }) {
