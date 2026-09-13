@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import {
@@ -11,6 +14,7 @@ import {
   createAflTradeExternalCanonicalPromotionRequest,
   deriveAflTradeExternalCanonicalPromotionProposal,
   deriveDraftSessionCanonicalPromotionProposal,
+  deriveReviewedSessionCanonicalPromotionProposal,
   deriveCombinedDraftSessionCanonicalPromotionProposal,
 } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionContracts';
 
@@ -514,4 +518,121 @@ describe('session promotion with reviewed year-only transactions', () => {
       ).toThrow();
     }
   });
+});
+
+function reviewedSubsetCandidate() {
+  const original = candidate({ undated: true });
+  const fullFirst = createAflTradeContentAddress('external-draft-selection', {
+    draftYear: 2025,
+    draftType: 'national',
+    selectionNumber: 1,
+  });
+  const sessions = [
+    {
+      draftYear: 2025,
+      draftType: 'national',
+      officialName: 'Synthetic draft',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-19',
+      selectionIds: [fullFirst],
+      evidenceIds: [evidenceId],
+    },
+    {
+      draftYear: 2025,
+      draftType: 'national',
+      officialName: 'Synthetic draft',
+      sessionOrdinal: 2,
+      eventDate: '2025-11-20',
+      selectionIds: [selectionId],
+      evidenceIds: [evidenceId],
+    },
+  ];
+  return createAflTradeExternalReconciliationCandidate({
+    ...original.content,
+    schemaVersion: 'afl-trade-external-reconciliation/v2',
+    reviewedScope: {
+      sourceCandidateId: original.candidateId,
+      registrationId: createAflTradeContentAddress('reviewed-pick-lineage-registration', {}),
+      deferredEvidenceIds: [],
+    },
+    sourceAuthority: {
+      schemaVersion: 'afl-trade-external-reconciliation-source-authority/v1',
+      kind: 'historical_plan_completion',
+      completionId: `external-historical-capture-completion:${'f'.repeat(64)}`,
+      completionSha256: 'f'.repeat(64),
+      planId: `external-historical-capture-plan:${'d'.repeat(64)}`,
+      planSha256: 'd'.repeat(64),
+      targetSetSha256: 'e'.repeat(64),
+      resultSetSha256: 'e'.repeat(64),
+      completionSourceBatchSetSha256: 'e'.repeat(64),
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson(original.content.sourceBatchIds),
+      completedAt: original.content.reconciledAt,
+    },
+    reviewedSessionCorrection: {
+      schemaVersion: 'afl-trade-reviewed-session-correction/v1',
+      parentCandidateId: original.candidateId,
+      sourceCompletionId: `external-historical-capture-completion:${'f'.repeat(64)}`,
+      projections: [
+        {
+          schemaVersion: 'afl-trade-reported-draft-session-projection/v1',
+          inventorySelectionIds: [fullFirst, selectionId].sort(),
+          selectedSelectionIds: [selectionId],
+          inventorySessions: sessions,
+          selectedSessions: [sessions[1]!],
+        },
+      ],
+    },
+  });
+}
+
+it('derives reviewed subset promotion with original session two and year-only trade precision', () => {
+  const c = reviewedSubsetCandidate();
+  const p = deriveReviewedSessionCanonicalPromotionProposal({
+    candidate: c,
+    proposedAt: '2026-08-10T00:00:00.000Z',
+    transactionDates: [{ transactionId, occurredOn: null }],
+  });
+  expect(p.content.schemaVersion).toBe('afl-trade-external-canonical-promotion-proposal/v6');
+  if (p.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v6')
+    throw new Error('Expected v6');
+  expect(p.content.draftEventCoverage[0]).toMatchObject({
+    sessionOrdinal: 2,
+    selectionIds: [selectionId],
+  });
+  expect(p.content.transactionDateCoverage[0]!.occurredOn).toBeNull();
+  expect(
+    authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: c, proposal: p })
+      .draftSelectionCount
+  ).toBe(1);
+  for (const change of [
+    { sessionOrdinal: 1 },
+    { eventDate: '2025-11-21' },
+    { proofKind: 'combined_session_facts' as const },
+  ]) {
+    const forged = createAflTradeExternalCanonicalPromotionProposal({
+      ...p.content,
+      draftEventCoverage: [{ ...p.content.draftEventCoverage[0]!, ...change }],
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: c, proposal: forged })
+    ).toThrow('exactly match');
+  }
+});
+it('rejects subset derivation without a reviewed projection or with unresolved factual records', () => {
+  expect(() =>
+    deriveReviewedSessionCanonicalPromotionProposal({
+      candidate: candidate(),
+      proposedAt: '2026-08-10T00:00:00.000Z',
+      transactionDates: [{ transactionId, occurredOn: null }],
+    })
+  ).toThrow('reviewed session correction');
+  const c = reviewedSubsetCandidate();
+  c.content.transactions[0]!.status = 'disputed';
+  expect(() =>
+    deriveReviewedSessionCanonicalPromotionProposal({
+      candidate: createAflTradeExternalReconciliationCandidate(c.content),
+      proposedAt: '2026-08-10T00:00:00.000Z',
+      transactionDates: [{ transactionId, occurredOn: null }],
+    })
+  ).toThrow('usable');
 });

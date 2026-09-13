@@ -5,6 +5,7 @@ import {
   aflTradeContentAddressedIdSchema,
   aflTradeSha256Schema,
   createAflTradeContentAddress,
+  canonicalizeAflTradeJson,
 } from '../artifacts/contentAddress';
 import {
   parseAflTradeExternalReconciliationCandidate,
@@ -124,6 +125,11 @@ const proposalContentSchema = z
   .union([
     proposalBaseSchema,
     proposalBaseSchema.extend({
+      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v6'),
+      draftEventCoverage: z.array(reviewedDraftSessionCoverageSchema).max(100),
+      transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+    }),
+    proposalBaseSchema.extend({
       schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v5'),
       draftEventCoverage: z.array(reviewedDraftSessionCoverageSchema).max(100),
       transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
@@ -170,7 +176,8 @@ const proposalContentSchema = z
     if (
       proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v2' ||
       proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v3' ||
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5'
+      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5' ||
+      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
     ) {
       const seenSelections = new Set<string>();
       const previous = new Map<string, { ordinal: number; date: string }>();
@@ -178,7 +185,9 @@ const proposalContentSchema = z
         const key = `${session.draftYear}|${session.draftType}`;
         const prior = previous.get(key);
         if (
-          session.sessionOrdinal !== (prior?.ordinal ?? 0) + 1 ||
+          (proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
+            ? session.sessionOrdinal <= (prior?.ordinal ?? 0)
+            : session.sessionOrdinal !== (prior?.ordinal ?? 0) + 1) ||
           (prior && session.eventDate < prior.date) ||
           Number(session.eventDate.slice(0, 4)) !== session.draftYear ||
           session.eventDate > proposal.proposedAt.slice(0, 10) ||
@@ -196,7 +205,10 @@ const proposalContentSchema = z
         session.selectionIds.forEach((id) => seenSelections.add(id));
       }
     }
-    if (proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5') {
+    if (
+      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5' ||
+      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
+    ) {
       const proofByDraft = new Map<string, string>();
       for (const session of proposal.draftEventCoverage) {
         const key = `${session.draftYear}|${session.draftType}`;
@@ -497,6 +509,33 @@ export function deriveDraftSessionCanonicalPromotionProposal(
   return deriveSessionProposal(input, false);
 }
 
+/** Uses persisted projection membership; authentication still requires complete usable candidate facts. */
+export function deriveReviewedSessionCanonicalPromotionProposal(
+  input: Omit<DraftSessionProposalInput, 'draftSessions'>
+): AflTradeExternalCanonicalPromotionProposal {
+  const candidate = parseAflTradeExternalReconciliationCandidate(input.candidate);
+  return deriveSessionProposal(
+    { ...input, draftSessions: reviewedProjectedSessions(candidate.content) },
+    false,
+    true
+  );
+}
+
+function reviewedProjectedSessions(content: PromotionCandidateContent) {
+  const marker = content.reviewedSessionCorrection;
+  if (!marker || content.environment === 'production')
+    throw new TypeError('Subset promotion requires its private reviewed session correction.');
+  return marker.projections.flatMap((projection) =>
+    projection.selectedSessions.map((session) => ({
+      ...session,
+      proofKind:
+        projection.schemaVersion === 'afl-trade-combined-draft-session-projection/v1'
+          ? ('combined_session_facts' as const)
+          : ('direct_session_claim' as const),
+    }))
+  );
+}
+
 export function deriveCombinedDraftSessionCanonicalPromotionProposal(
   input: Omit<DraftSessionProposalInput, 'draftSessions'> & {
     draftSessions: readonly Omit<DraftSessionProposalInput['draftSessions'][number], 'proofKind'>[];
@@ -516,7 +555,8 @@ export function deriveCombinedDraftSessionCanonicalPromotionProposal(
 
 function deriveSessionProposal(
   input: DraftSessionProposalInput,
-  legacyCombined: boolean
+  legacyCombined: boolean,
+  reviewedSubset = false
 ): AflTradeExternalCanonicalPromotionProposal {
   const candidate = parseAflTradeExternalReconciliationCandidate(input.candidate);
   const eventMetadata = new Map<string, z.input<typeof draftEventMetadataSchema>>();
@@ -543,9 +583,10 @@ function deriveSessionProposal(
   const proposal = createAflTradeExternalCanonicalPromotionProposal(
     proposalContentSchema.parse({
       ...base.content,
-      schemaVersion:
-        legacyCombined &&
-        base.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4'
+      schemaVersion: reviewedSubset
+        ? 'afl-trade-external-canonical-promotion-proposal/v6'
+        : legacyCombined &&
+            base.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4'
           ? 'afl-trade-external-canonical-promotion-proposal/v3'
           : 'afl-trade-external-canonical-promotion-proposal/v5',
       draftEventCoverage: input.draftSessions
@@ -739,6 +780,18 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   const proposal = parseAflTradeExternalCanonicalPromotionProposal(input.proposal);
   const content = candidate.content;
 
+  if (proposal.content.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6') {
+    const expected = reviewedProjectedSessions(content).map((session) => ({
+      ...session,
+      expectedSelectionCount: session.selectionIds.length,
+      status: 'complete' as const,
+    }));
+    if (
+      canonicalizeAflTradeJson(expected) !==
+      canonicalizeAflTradeJson(proposal.content.draftEventCoverage)
+    )
+      throw new TypeError('Subset promotion must exactly match its reviewed session projection.');
+  }
   assertPromotionCandidateScope(candidate, proposal);
   assertPromotionFactIdentities(content);
   const expectedCoverage = reviewedDraftCoverage(content, proposal);
