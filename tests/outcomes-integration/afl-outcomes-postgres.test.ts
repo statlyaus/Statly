@@ -1191,6 +1191,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0161_retained_capture_nullable_terms',
       '0162_special_entitlement_renumbering',
       '0163_retained_completion_batch_reuse',
+      '0164_reviewed_lineage_registration',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

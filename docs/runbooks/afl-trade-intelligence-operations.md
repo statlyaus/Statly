@@ -2676,4 +2676,11 @@ verify independent database restore and factual readback through the existing ow
 `createReviewedPickLineageRegistration` binds the candidate, environment, complete player endpoints,
 ordered custody and evidence into an immutable approval subject. `reviewedPickLineageApprovalEvidence`
 derives the exact payload for a future retained review; it does not issue or authenticate approval.
-Database registration must check current authority, source custody and replay conflicts before writes.
+Migration0164 stores one immutable reviewed registration per retained candidate. The promotion owner's
+`registerReviewedPickLineage` and `readReviewedPickLineage` authenticate the exact current review and
+scoped promoter authority. Retries must match both content and decision; withdrawn reviews fail on
+retry and readback. Changed facts require a new candidate rather than overwriting retained history.
+Day/year precision and non-player endpoints remain in the approved JSON; candidate issues and
+canonical custody are untouched. These methods explicitly report source authority and canonical
+admission as false. Current source-permission checks, draft sessions, canonical promotion and archive
+readback are still required before these reviewed records can support admitted facts.

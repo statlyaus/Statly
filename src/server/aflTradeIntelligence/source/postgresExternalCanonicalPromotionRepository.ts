@@ -1,3 +1,4 @@
+import { registerReviewedPickLineage, readReviewedPickLineage } from './postgresReviewedPickLineageRegistration';
 import { previewReviewedPickLineage } from './reviewedPickLineageReadiness';
 import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
 import { specialEntitlementRevisionSchema } from './specialEntitlementRevisionContracts';
@@ -593,6 +594,14 @@ function plannedTradeAsset(promotionId: string, eventVersionId: string, transfer
 
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
+
+  async registerReviewedPickLineage(input: { registration: unknown; approvalDecisionId: string }) {
+    return registerReviewedPickLineage(this.client, input);
+  }
+
+  async readReviewedPickLineage(registrationId: string) {
+    return readReviewedPickLineage(this.client, registrationId);
+  }
 
   /** Inspect exact retained lineage dependencies without changing candidate issues or approving facts. */
   async previewReviewedPickLineage(input: {

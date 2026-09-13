@@ -1,3 +1,5 @@
+import { createReviewedPickLineageRegistration, reviewedPickLineageApprovalEvidence } from '@/server/aflTradeIntelligence/source/reviewedPickLineageRegistrationContracts';
+import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createSpecialEntitlementIdentityReplacement } from '@/server/aflTradeIntelligence/source/specialEntitlementIdentityReplacementContracts';
 import { aflTradePromotionBackedArchiveSelectionSchema } from '@/server/aflTradeIntelligence/outcomes/promotionBackedArchiveSelection';
 import { createPostgresAflTradePromotionBackedPublicArchiveReadRepository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedPublicArchiveReadRepository';
@@ -715,6 +717,53 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
         public_archive_records: '3',
         valuations: '0',
       });
+    });
+    it('persists reviewed partial custody and non-player endpoints with current approval and immutable replay', async () => {
+      const candidate = candidateFixture();
+      const owner = new PostgresAflTradeExternalCanonicalPromotionRepository(createPgAflOutcomeSqlClient(outcomesPool));
+      const authority = (await outcomesPool.query("SELECT * FROM outcome_operational_principal_authority WHERE role='afl_trade_canonical_promoter'")).rows[0];
+      const registration = createReviewedPickLineageRegistration({ candidate, proposedAt: '2026-08-09T12:00:00Z', records: [{
+        schemaVersion: 'afl-trade-reviewed-pick-lineage/v1', candidateId: candidate.candidateId, transferId,
+        retainedSourceLabel: 'Pick 14', acceptedTradeTimePick: 14, originalClubId: 'club-gws',
+        movements: [{transferId, fromClubId: 'club-gws', toClubId: 'club-western-bulldogs',
+          occurredAt: precision === 'day' ? {precision:'day',date:'2025-10-15'} : {precision:'year',year:2025}, predecessorOrdinal:null}],
+        endpoint: {kind:'passed',draftYear:2025,draftType:'national',livePick:14}, attribution:'direct',
+        evidence: [createAflTradeByteArtifactRef(new TextEncoder().encode('Reviewed fixture source'), 'text/plain', '2026-08-09T11:00:00Z')],
+      }] });
+      async function approve(value: typeof registration, authorityEvidenceId = authority.authority_evidence_id) {
+        const evidence = {...reviewedPickLineageApprovalEvidence(value),authorityEvidenceId};
+        const decisionId = createAflTradeContentAddress('review-decision', evidence);
+        await outcomesPool.query(`INSERT INTO outcome_review_decision
+          (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+          VALUES ($1,'reviewed_pick_lineage_registration',$2,'approved','Fixture lineage review',$3::jsonb,$4,'2026-08-09T12:01:00Z')`,
+          [decisionId,value.registrationId,canonicalizeAflTradeJson(evidence),authority.principal_ref]);
+        return decisionId;
+      }
+      const before = (await outcomesPool.query('SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1',[candidate.candidateId])).rows;
+      const badApproval = await approve(registration,'absent-authority');
+      await expect(owner.registerReviewedPickLineage({registration,approvalDecisionId:badApproval})).rejects.toThrow(/scoped authority/);
+      const contradictory = structuredClone(registration);
+      contradictory.content.records[0].movements[0].occurredAt = {precision:'year',year:2024};
+      contradictory.registrationId = createAflTradeContentAddress('reviewed-pick-lineage-registration',contradictory.content);
+      await expect(outcomesPool.query('SELECT * FROM register_outcome_reviewed_pick_lineage($1::jsonb,$2)',
+        [canonicalizeAflTradeJson(contradictory),await approve(contradictory)])).rejects.toThrow(/candidate date/);
+      const approvalDecisionId = await approve(registration);
+      const input = {registration,approvalDecisionId};
+      const results = await Promise.all([owner.registerReviewedPickLineage(input),owner.registerReviewedPickLineage(input)]);
+      expect(results.map(r=>r.idempotentReplay).sort()).toEqual([false,true]);
+      expect(results[0]).toMatchObject({registration,reviewAuthorityAuthenticated:true,sourceAuthorityAuthenticated:false,canonicalAdmission:false});
+      expect((await owner.readReviewedPickLineage(registration.registrationId)).registration).toEqual(registration);
+      const changed = createReviewedPickLineageRegistration({candidate,records:registration.content.records,proposedAt:'2026-08-09T12:00:01Z'});
+      await expect(owner.registerReviewedPickLineage({registration:changed,approvalDecisionId:await approve(changed)})).rejects.toThrow(/immutable conflict/);
+      await expect(outcomesPool.query("UPDATE outcome_reviewed_pick_lineage_registration SET registration_json='{}'")).rejects.toThrow();
+      await expect(outcomesPool.query('DELETE FROM outcome_reviewed_pick_lineage_registration')).rejects.toThrow();
+      await outcomesPool.query(`INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at,supersedes_decision_id)
+        VALUES ($1,'reviewed_pick_lineage_registration',$2,'withdrawn','Fixture withdrawal','{}',$3,'2026-08-09T12:02:00Z',$4)`,
+        [createAflTradeContentAddress('review-decision',{withdraw:approvalDecisionId}),registration.registrationId,authority.principal_ref,approvalDecisionId]);
+      await expect(owner.registerReviewedPickLineage(input)).rejects.toThrow(/current approval/);
+      await expect(owner.readReviewedPickLineage(registration.registrationId)).rejects.toThrow(/current approval/);
+      expect((await outcomesPool.query('SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1',[candidate.candidateId])).rows).toEqual(before);
     });
     it('registers reviewed awards independently of exercise, replays, and rejects invalid authority and provenance', async () => {
       const authority = (
