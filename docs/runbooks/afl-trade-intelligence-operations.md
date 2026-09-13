@@ -2760,6 +2760,19 @@ source checks. Genuine execution receipts wrap their payload in `executionReceip
 The correction preserves exact rights/proposal matching and current approval, expiry and supersession
 checks; it does not create source permission or broaden capture-year coverage.
 
+### Reviewed session evidence successors
+
+`prepareReviewedSessionCorrection` reconstructs a private reviewed successor from its finalized
+parent, current historical completion and approved identity records. It preserves accepted custody,
+endpoints and partial trade dates while adding session evidence for the selected draft members.
+Migration0177 validates exact corrected-fact conservation and reconstructs complete draft inventories
+from retained selection claims. The existing direct and combined session validators check those
+inventories, including boundary identities and independent documents, before accepting the subset.
+Unrelated draft selections are never inserted into the reviewed candidate. Persist through
+`PostgresAflTradeExternalReconciliationRepository.persistCandidate`; verify exact readback, replay,
+current sources and independent restore. Session preparation or candidate persistence does not clear
+readiness statuses, provide missing draft groups, or constitute canonical promotion or admission.
+
 ### Original issuing award references
 
 `official-afl-issuing-award` captures the two exact reviewed Official AFL/GWS articles through the
