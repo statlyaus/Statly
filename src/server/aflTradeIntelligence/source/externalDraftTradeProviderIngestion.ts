@@ -1,3 +1,7 @@
+import {
+  isReviewedOfficialIssuingAwardUrl,
+  OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
+} from './officialAflIssuingAwardAdapter';
 import { DRAFTGURU_YEAR_PARSER_VERSION } from './draftguruEventYear';
 import {
   createAflTradeContentAddress,
@@ -142,6 +146,19 @@ export function validateAflTradeExternalCaptureScope(
       url.search ||
       url.hash ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'official-afl-issuing-award') {
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION ||
+      !isReviewedOfficialIssuingAwardUrl(request.sourceUrl, request.anchorSeasonYear) ||
+      !Number.isFinite(Date.parse(request.effectiveAt)) ||
+      new Date(request.effectiveAt).getUTCFullYear() < request.anchorSeasonYear
     )
       invalid();
     return;

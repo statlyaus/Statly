@@ -2751,3 +2751,15 @@ Migration0170 corrects receipt paths in award, lifecycle, revision-lifecycle and
 source checks. Genuine execution receipts wrap their payload in `executionReceipt.content`.
 The correction preserves exact rights/proposal matching and current approval, expiry and supersession
 checks; it does not create source permission or broaden capture-year coverage.
+
+### Original issuing award references
+
+`official-afl-issuing-award` captures the two exact reviewed Official AFL/GWS articles through the
+existing source/Gate, field manifest and bounded-fetch owners. Scope uses the original grant year
+(2009 for the four mini-draft rights;2010 for the Ablett compensation component), separately from
+the actual retrospective observation timestamp. `officialAflIssuingAwardAdapter.ts` emits only an
+`issuing_award_reference`; migration0171 permits this evidence kind without granting draft-session,
+custody, activation, expiry or canonical-admission status. The capture fetch seam remains available
+as `captureOfficialAflPage` from the runtime and from `source/officialAflPageCapture.ts`.
+Register current issuing-year capture/reviewer coverage before invoking the existing award owner.
+Retained article bytes and parser verification alone are not registered capture or award evidence.

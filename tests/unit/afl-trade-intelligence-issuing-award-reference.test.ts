@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { captureOfficialAflPage } from '@/server/aflTradeIntelligence/source/officialAflPageCapture';
+import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
+import type { IngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ABLETT_COMPONENT_URL,
   GWS_MINI_GRANT_URL,
@@ -89,5 +92,79 @@ describe('retrospective issuing award references', () => {
         capture: capture(GWS_MINI_GRANT_URL + '?other'),
       })
     ).toThrow();
+  });
+});
+
+const request: IngestAflTradeExternalPageRequest = {
+  ...capture(GWS_MINI_GRANT_URL),
+  environment: 'non_production',
+  provider: 'official_afl',
+  competition: 'AFLM',
+  anchorSeasonYear: 2009,
+  discoveryFromSeasonYear: null,
+  draftPathway: null,
+  dataset: 'issuing references',
+  datasetVersion: 'v1',
+  accessMechanism: 'public_html',
+  capabilityId: 'official-afl-issuing-award',
+  maximumBytes: 1000000,
+};
+describe('issuing reference capture scope', () => {
+  it('accepts exact original-grant scope with later observation time', () => {
+    expect(() => validateAflTradeExternalCaptureScope(request)).not.toThrow();
+    expect(() =>
+      validateAflTradeExternalCaptureScope({
+        ...request,
+        sourceUrl: ABLETT_COMPONENT_URL,
+        anchorSeasonYear: 2010,
+      })
+    ).not.toThrow();
+  });
+  it.each([
+    { provider: 'draftguru' },
+    { draftPathway: 'national' },
+    { discoveryFromSeasonYear: 2009 },
+    { anchorSeasonYear: 2011 },
+    { sourceUrl: GWS_MINI_GRANT_URL + '/amp' },
+    { parserVersion: 'unreviewed/v1' },
+    { effectiveAt: '2008-01-01T00:00:00.000Z' },
+    { effectiveAt: 'invalid' },
+  ] as Partial<IngestAflTradeExternalPageRequest>[])('rejects scope mutation %j', (mutation) => {
+    expect(() => validateAflTradeExternalCaptureScope({ ...request, ...mutation })).toThrow();
+  });
+});
+
+describe('official article fetch boundary', () => {
+  const settings = { validators: null, maximumBytes: 100, timeoutMs: 1000 };
+  it('allows the reviewed GWS article and forbids other club pages before fetching', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(
+        async () => new Response('article', { headers: { 'content-type': 'text/html' } })
+      );
+    await expect(
+      captureOfficialAflPage({ ...settings, url: GWS_MINI_GRANT_URL, fetchImpl })
+    ).resolves.toMatchObject({ status: 'captured' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    for (const url of [
+      GWS_MINI_GRANT_URL + '/amp',
+      GWS_MINI_GRANT_URL + '?x=1',
+      GWS_MINI_GRANT_URL.replace('/777331/', '/1/'),
+      GWS_MINI_GRANT_URL.replace('https:', 'http:'),
+    ]) {
+      await expect(captureOfficialAflPage({ ...settings, url, fetchImpl })).rejects.toThrow();
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({ redirect: 'error', method: 'GET' });
+  });
+  it('enforces actual decoded byte limits', async () => {
+    await expect(
+      captureOfficialAflPage({
+        ...settings,
+        url: GWS_MINI_GRANT_URL,
+        fetchImpl: async () =>
+          new Response('x'.repeat(101), { headers: { 'content-type': 'text/html' } }),
+      })
+    ).rejects.toThrow('byte limit');
   });
 });
