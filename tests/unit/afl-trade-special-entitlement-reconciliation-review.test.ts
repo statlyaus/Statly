@@ -1,3 +1,4 @@
+import { specialEntitlementLifecycleSchema } from '@/server/aflTradeIntelligence/source/specialEntitlementLifecycleContracts';
 import {
   createAflTradeExternalReconciliationCandidate,
   parseAflTradeExternalReconciliationCandidate,
@@ -196,7 +197,21 @@ function fixture(
 }
 
 describe('entitlement reconciliation binding', () => {
-  it('binds evidenced renumbering without changing trade-time picks or inventing dates', () => {
+  it('omits an empty optional renumbering set from the proposed lifecycle', () => {
+    const f = fixture();
+    const result = reviewSpecialEntitlementReconciliation({
+      ...f,
+      links: [{ ...f.link, renumbering: [] }],
+    });
+    expect(result.content.bindingStatus).toBe('candidate_bound');
+    expect(result.content.results[0].proposedResolution?.retrospectiveExercise.renumbering).toBeUndefined();
+  });
+
+  it.each([
+    { precision: 'year', year: 2013 },
+    { precision: 'day', date: '2013-10-15' },
+    '2013-10-15T00:00:00Z',
+  ])('binds renumbering through the lifecycle contract with precision %j', (occurredAt) => {
     const f = fixture(null, 'p', 'CMP1 (Synthetic)', true);
     const later = f.candidate.content.transfers.find(
       (transfer) => transfer.asset.kind === 'pick_entitlement'
@@ -207,7 +222,7 @@ describe('entitlement reconciliation binding', () => {
       transferId: later.transferId,
       sourcePickId: later.asset.pickId,
       targetPickId: f.candidate.content.draftSelections[0].pickId,
-      occurredAt: { precision: 'year', year: 2013 },
+      occurredAt,
       evidence: f.link.selection.evidence,
     };
     const review = (renumbering: unknown[]) =>
@@ -221,7 +236,62 @@ describe('entitlement reconciliation binding', () => {
     expect(
       result.content.results[0].proposedResolution?.retrospectiveExercise.renumbering?.[0]
         .occurredAt
-    ).toEqual({ precision: 'year', year: 2013 });
+    ).toEqual(
+      typeof occurredAt === 'string' ? { precision: 'day', date: '2013-10-15' } : occurredAt
+    );
+    expect(
+      specialEntitlementLifecycleSchema.safeParse({
+        schemaVersion: 'afl-trade-special-entitlement-lifecycle/v1',
+        kind: 'exercise',
+        entitlementId: result.content.results[0].proposedResolution?.entitlementId,
+        evidence: binding.evidence,
+        selectionId: f.candidate.content.draftSelections[0].selectionId,
+        terminalTransferId: later.transferId,
+        renumbering:
+          result.content.results[0].proposedResolution?.retrospectiveExercise.renumbering,
+      }).success
+    ).toBe(true);
+    const firstContent = f.sourceBatches[0].content.evidence[0].content;
+    const unrelatedCapture = {
+      ...firstContent.capture,
+      captureId: `source-capture:${'9'.repeat(64)}`,
+    };
+    const unrelatedBatch = createAflTradeExternalEvidenceBatch({
+      schemaVersion: 'afl-trade-external-evidence-batch/v1',
+      provider: firstContent.provider,
+      captureId: unrelatedCapture.captureId,
+      finalizedAt: f.input.reconciledAt,
+      publicationEligible: false,
+      evidence: [
+        createAflTradeExternalEvidenceEnvelope({ ...firstContent, capture: unrelatedCapture }),
+      ],
+    });
+    const unrelatedReview = reviewSpecialEntitlementReconciliation({
+      candidate: createAflTradeExternalReconciliationCandidate({
+        ...f.candidate.content,
+        sourceBatchIds: [...f.candidate.content.sourceBatchIds, unrelatedBatch.batchId].sort(),
+      }),
+      sourceBatches: [...f.sourceBatches, unrelatedBatch],
+      links: [
+        {
+          ...f.link,
+          renumbering: [
+            {
+              ...binding,
+              evidence: [
+                {
+                  ...binding.evidence[0],
+                  captureId: unrelatedCapture.captureId,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(unrelatedReview.content.results[0].issues).toContain(
+      'renumbering_transfer_evidence_mismatch'
+    );
     expect(later.asset.nominalPick).toBe(7);
     expect(f.candidate.content.draftSelections[0].selectionNumber).toBe(9);
     expect(result.content.promotionEligible).toBe(false);

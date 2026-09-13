@@ -28,7 +28,8 @@ BEGIN
       OR jsonb_typeof(binding->'occurredAt') IS DISTINCT FROM 'object'
       OR (SELECT count(*) FROM jsonb_object_keys(binding->'occurredAt'))<>2
     THEN RAISE EXCEPTION 'Invalid exact renumbering pick binding'; END IF;
-    SELECT r.raw_payload#>'{asset,sourceAsset}' AS source_asset,v.event_date,e.season_year INTO source
+    SELECT r.raw_payload#>'{asset,sourceAsset}' AS source_asset,
+      r.raw_payload->'evidenceIds' AS evidence_ids,v.event_date,e.season_year INTO source
       FROM jsonb_array_elements(custody) edge
       JOIN outcome_event_asset a ON a.asset_version_id=edge->>'assetVersionId'
       JOIN outcome_import_row r ON r.import_row_id=a.source_import_row_id
@@ -63,6 +64,16 @@ BEGIN
         WHERE jsonb_typeof(item) IS DISTINCT FROM 'string' OR NOT EXISTS
           (SELECT 1 FROM jsonb_array_elements(fact->'evidence') reference WHERE to_jsonb(reference->>'captureId')=item))
     THEN RAISE EXCEPTION 'Renumbering requires exact authenticated lifecycle evidence'; END IF;
+    -- General lifecycle evidence may also describe the award or final selection. Each
+    -- renumbering capture must additionally contribute to this exact retained transfer.
+    IF jsonb_typeof(source.evidence_ids) IS DISTINCT FROM 'array'
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(binding->'evidenceCaptureIds') AS bound_capture(capture_id)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(source.evidence_ids) AS source_evidence(evidence_id)
+          JOIN outcome_external_evidence_row evidence ON evidence.evidence_id=source_evidence.evidence_id
+          JOIN outcome_external_evidence_batch batch ON batch.batch_id=evidence.batch_id
+          WHERE batch.capture_id=bound_capture.capture_id AND batch.status='finalized'))
+    THEN RAISE EXCEPTION 'Renumbering requires retained transfer evidence'; END IF;
   END LOOP;
 END $$;
 

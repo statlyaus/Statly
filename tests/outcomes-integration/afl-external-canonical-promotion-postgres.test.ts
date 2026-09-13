@@ -1250,6 +1250,11 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
             ).rejects.toThrow(/only to reviewed compensation/);
           }
           if (renumbering) {
+            await expect(repository.registerSpecialEntitlementLifecycle(await reviewed({
+              ...exercise,
+              evidence: [...exercise.evidence, { ...exercise.evidence[0], captureId: selectionCaptureId }],
+              renumbering: [{ ...renumbering[0], evidenceCaptureIds: [selectionCaptureId] }],
+            }))).rejects.toThrow(/retained transfer evidence/);
             for (const change of [
               { sourcePickId: `draft-pick:${digest('9')}` },
               { targetPickId: `draft-pick:${digest('8')}` },

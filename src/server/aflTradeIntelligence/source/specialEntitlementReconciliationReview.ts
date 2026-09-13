@@ -127,6 +127,9 @@ export function reviewSpecialEntitlementReconciliation(input: {
         );
         if (asset?.kind === 'pick_entitlement' && asset.pickId !== selections[0].pickId) {
           const binding = renumbering[0];
+          const transfer = transfersById.get(edge.transferId)!;
+          if (binding && !referencesMatch(binding.evidence, transfer.evidenceIds))
+            issues.add('renumbering_transfer_evidence_mismatch');
           if (
             renumbering.length !== 1 ||
             !binding ||
@@ -195,7 +198,25 @@ export function reviewSpecialEntitlementReconciliation(input: {
               custody: bundle.custody.map((edge) => ({ ...edge, entitlementId })),
               retrospectiveExercise: {
                 activation: bundle.activation,
-                ...(bundle.renumbering ? { renumbering: bundle.renumbering } : {}),
+                ...(bundle.renumbering?.length
+                  ? {
+                      renumbering: bundle.renumbering.map((binding) => ({
+                        transferId: binding.transferId,
+                        sourcePickId: binding.sourcePickId,
+                        targetPickId: binding.targetPickId,
+                        occurredAt:
+                          typeof binding.occurredAt === 'string'
+                            ? {
+                                precision: 'day' as const,
+                                date: specialEntitlementDateBounds(binding.occurredAt).day!,
+                              }
+                            : binding.occurredAt,
+                        evidenceCaptureIds: [
+                          ...new Set(binding.evidence.map(({ captureId }) => captureId)),
+                        ].sort(),
+                      })),
+                    }
+                  : {}),
                 selection: bundle.selection,
                 scope: 'retrospective_only' as const,
                 historicalFeatureEligible: false as const,
