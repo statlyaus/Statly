@@ -2816,6 +2816,15 @@ renumbered members fail. Membership evidence alone does not establish a session 
 an identity alias. Source parsers must attest only facts present in their own scoped documents;
 source-specific support and genuine admission require separate verification.
 
+The reviewed2014 parser route uses five exact Official AFL documents:149034 supplies the named
+membership roster and terminal86/Josh Clayton/Brisbane;68212 supplies the November27 session and
+first1/Patrick McCartin/St Kilda;162070 supplies total76;156041 and56745 separately supply
+Steele24 and Finlayson85. Keep the two roster numbers null until the authenticated membership join.
+Publication years remain2019/2014/2016/2016/2018, separately from anchor2014. Parser v12 checks
+scoped paragraph hashes and article timestamps; it does not emit the conflicting adjacent2013 total.
+Migration0185 recognizes those document IDs and the independent2014 total/terminal pair. Source scope,
+boundary identity decisions and public retained promotion/revocation still require separate verification.
+
 Migration0184 supports a complete `draft_completed_membership_roster` with explicit null numbers
 for named members, joined to separate `draft_completed_member_number` evidence by exact recorded
 name and draft year/type. The join cannot infer numbers from the retained inventory. Every unnumbered
