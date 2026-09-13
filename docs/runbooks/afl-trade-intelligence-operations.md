@@ -2974,3 +2974,10 @@ transfers, activation, renumbering, exercise and an award correction through pub
 Exercise/revision replay and readback pass; missing activation, renumbering after the window and
 revoked selection evidence are rejected. These synthetic checks do not constitute genuine mini-draft
 admission or acquisition-spell registration.
+
+Acquisition registration v2 and its versioned rule preserve event windows with null exact dates.
+`deriveAflTradeAcquisitionMembershipBounds` distinguishes possible membership (earliest entry through
+the day before latest departure) from certain membership (latest entry through the day before earliest
+departure), bounded by the reviewed observation date. It validates disjoint chronology and preserves
+legacy exact-day results. These constructors grant no authority; v2 SQL rule/spell storage, currentness
+and overlap checks still require implementation before window-spell registration.
