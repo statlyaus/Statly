@@ -2912,3 +2912,13 @@ at original selection 70 and the terminal selection 88. Migration 0188 recognize
 reviewed documents and requires the completed total (AFL453360) to be independent of the terminal
 roster source (AFL87166). AFL38163 is classification evidence, not a completed-session date.
 This capability does not establish genuine capture, identity approval or canonical admission.
+
+Migration 0189 and the completed-membership resolver retain a reviewed 2011 national-draft
+number discrepancy without rewriting either source: AFL506746 reports Cameron Sutcliffe at72,
+whereas the club's completed-draft report AFL75034 explicitly records him at71 and a pass at72.
+Only this exact year, pathway, name, pair of document IDs and pair of reported numbers may use
+an independent number binding for an already numbered roster member. Both authenticated evidence
+references remain required; source revocation is still enforced by the surrounding owners.
+Unknown conflicts, shared capture/artifact provenance, duplicate roster numbers and mismatched
+inventory fail closed. The raw roster remains72 and the club binding remains71. This reviewed
+source-choice rule grants no new capture, identity, publication or canonical admission authority.

@@ -24,6 +24,27 @@ export interface CompletedDraftMemberExclusion extends CompletedDraftMembershipS
   reason: 'rookie_elevation';
 }
 
+// Reviewed source discrepancy: the club's completed-draft report explicitly places
+// Sutcliffe at 71 and the pass at 72; the full list transposes those two entries.
+// Keep the roster's 72 and both evidence references; resolve only this exact pair.
+function reviewedNumberCorrection(
+  roster: CompletedDraftMembershipRoster,
+  member: CompletedDraftMembershipRoster['members'][number],
+  binding: CompletedDraftMemberNumber | undefined
+): binding is CompletedDraftMemberNumber {
+  return Boolean(
+    binding &&
+    roster.draftYear === 2011 &&
+    roster.draftType === 'national' &&
+    roster.documentId === 'official_afl:news:506746' &&
+    binding.documentId === 'official_afl:news:75034' &&
+    member.recordedName === 'Cameron Sutcliffe' &&
+    binding.recordedName === member.recordedName &&
+    member.selectionNumber === 72 &&
+    binding.selectionNumber === 71
+  );
+}
+
 /** Join explicit names across source documents; never derive missing numbers from the inventory. */
 export function resolveCompletedDraftMembership(input: {
   draftYear: number;
@@ -92,12 +113,25 @@ export function resolveCompletedDraftMembership(input: {
     fail();
   const included = roster.members.filter((member) => !excludedNames.has(member.recordedName));
   if (included.length === 0) fail();
-  const unnumbered = included.filter((member) => member.selectionNumber === null);
+  const requiringBindings = included.filter(
+    (member) =>
+      member.selectionNumber === null ||
+      reviewedNumberCorrection(
+        roster,
+        member,
+        bindings.find((binding) => binding.recordedName === member.recordedName)
+      )
+  );
+  const correctedNames = new Set(
+    requiringBindings
+      .filter((member) => member.selectionNumber !== null)
+      .map((member) => member.recordedName)
+  );
   if (
-    bindings.length !== unnumbered.length ||
+    bindings.length !== requiringBindings.length ||
     bindings.some(
       (binding) =>
-        !unnumbered.some((member) => member.recordedName === binding.recordedName) ||
+        !requiringBindings.some((member) => member.recordedName === binding.recordedName) ||
         binding.documentId === roster.documentId ||
         binding.captureId === roster.captureId ||
         binding.artifactId === roster.artifactId
@@ -106,9 +140,10 @@ export function resolveCompletedDraftMembership(input: {
     fail();
   const numbers = included
     .map((member) => {
-      const number =
-        member.selectionNumber ??
-        bindings.find((binding) => binding.recordedName === member.recordedName)?.selectionNumber;
+      const binding = bindings.find((item) => item.recordedName === member.recordedName);
+      const number = correctedNames.has(member.recordedName)
+        ? binding?.selectionNumber
+        : (member.selectionNumber ?? binding?.selectionNumber);
       if (number === undefined || !validNumber(number)) return fail();
       return number;
     })

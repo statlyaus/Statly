@@ -2296,3 +2296,125 @@ it('requires exact independent rookie-elevation classifications before excluding
   expect(await verify([roster, exclusion], [1, 57])).toBe(false);
   expect(await verify([roster, exclusion], [1, 2])).toBe(false);
 });
+
+const discrepancyFixture = () => ({
+  draftYear: 2011,
+  draftType: 'national',
+  inventoryNumbers: [1, 71],
+  roster: {
+    kind: 'completed_draft_membership_roster' as const,
+    draftYear: 2011,
+    draftType: 'national',
+    evidenceId: 'roster-evidence',
+    captureId: 'roster-capture',
+    artifactId: 'roster-artifact',
+    documentId: 'official_afl:news:506746',
+    members: [
+      { recordedName: 'Jonathon Patton', selectionNumber: 1 },
+      { recordedName: 'Cameron Sutcliffe', selectionNumber: 72 },
+    ],
+  },
+  bindings: [
+    {
+      kind: 'completed_draft_member_number' as const,
+      draftYear: 2011,
+      draftType: 'national',
+      evidenceId: 'club-evidence',
+      captureId: 'club-capture',
+      artifactId: 'club-artifact',
+      documentId: 'official_afl:news:75034',
+      recordedName: 'Cameron Sutcliffe',
+      selectionNumber: 71,
+    },
+  ],
+});
+
+it('authenticates only the reviewed 2011 membership number pair in SQL', async () => {
+  const exact = async (input: ReturnType<typeof discrepancyFixture>) => {
+    const fact = ({
+      kind,
+      draftYear,
+      draftType,
+      ...source
+    }: typeof input.roster | (typeof input.bindings)[number]) => {
+      const { evidenceId, captureId, artifactId, documentId, ...values } = source;
+      return {
+        evidenceId,
+        captureId,
+        artifactId,
+        documentId,
+        claim: {
+          kind:
+            kind === 'completed_draft_membership_roster'
+              ? 'draft_completed_membership_roster'
+              : 'draft_completed_member_number',
+          draftYear,
+          draftType,
+          ...values,
+        },
+      };
+    };
+    return (
+      await pool.query(
+        'SELECT outcome_completed_membership_exact($1::jsonb,$2::jsonb,$3,$4) AS valid',
+        [
+          JSON.stringify([fact(input.roster), ...input.bindings.map(fact)]),
+          JSON.stringify(input.inventoryNumbers),
+          input.draftYear,
+          input.draftType,
+        ]
+      )
+    ).rows[0].valid;
+  };
+  expect(await exact(discrepancyFixture())).toBe(true);
+  for (const mode of [
+    'year',
+    'type',
+    'roster-document',
+    'binding-document',
+    'name',
+    'reported-number',
+    'selected-number',
+    'capture',
+    'artifact',
+    'evidence',
+    'missing',
+    'duplicate',
+    'raw-duplicate',
+    'inventory',
+  ] as const) {
+    const input = discrepancyFixture();
+    if (mode === 'year') {
+      input.draftYear = 2012;
+      input.roster.draftYear = 2012;
+      input.bindings[0]!.draftYear = 2012;
+    }
+    if (mode === 'type') {
+      input.draftType = 'rookie';
+      input.roster.draftType = 'rookie';
+      input.bindings[0]!.draftType = 'rookie';
+    }
+    if (mode === 'roster-document') input.roster.documentId = 'official_afl:news:75034';
+    if (mode === 'binding-document') input.bindings[0]!.documentId = 'official_afl:news:unknown';
+    if (mode === 'name') {
+      input.roster.members[1]!.recordedName = 'Another Player';
+      input.bindings[0]!.recordedName = 'Another Player';
+    }
+    if (mode === 'reported-number') input.roster.members[1]!.selectionNumber = 73;
+    if (mode === 'selected-number') {
+      input.bindings[0]!.selectionNumber = 70;
+      input.inventoryNumbers = [1, 70];
+    }
+    if (mode === 'capture') input.bindings[0]!.captureId = input.roster.captureId;
+    if (mode === 'artifact') input.bindings[0]!.artifactId = input.roster.artifactId;
+    if (mode === 'evidence') input.bindings[0]!.evidenceId = input.roster.evidenceId;
+    if (mode === 'missing') input.bindings = [];
+    if (mode === 'duplicate') input.bindings.push({ ...input.bindings[0]!, evidenceId: 'another' });
+    if (mode === 'raw-duplicate') {
+      input.roster.members[0]!.selectionNumber = 72;
+      input.inventoryNumbers = [71, 72];
+    }
+    if (mode === 'inventory') input.inventoryNumbers = [1, 72];
+    expect(await exact(input), mode).toBe(false);
+  }
+});
