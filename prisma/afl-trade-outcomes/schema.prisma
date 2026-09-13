@@ -431,7 +431,7 @@ model OutcomeExternalEvidenceBatch {
   evidenceRows               OutcomeExternalEvidenceRow[]
   issues                     OutcomeExternalEvidenceIssue[]
   reconciliationMembers      OutcomeExternalReconciliationSourceBatch[]
-  historicalCompletionResult OutcomeExternalHistoricalCaptureCompletionResult?
+  historicalCompletionResults OutcomeExternalHistoricalCaptureCompletionResult[]
 
   @@index([provider, status, finalizedAt], map: "outcome_external_evidence_batch_provider_status_idx")
   @@map("outcome_external_evidence_batch")
@@ -4890,7 +4890,7 @@ model OutcomeExternalHistoricalCaptureCompletionResult {
   captureMode        String                                     @map("capture_mode") @outcomes.Text
   resultId           String                                     @map("result_id") @outcomes.Text
   captureId          String                                     @map("capture_id") @outcomes.Text
-  evidenceBatchId    String                                     @unique @map("evidence_batch_id") @outcomes.Text
+  evidenceBatchId    String                                     @map("evidence_batch_id") @outcomes.Text
   evidenceCount      Int                                        @map("evidence_count")
   finalizedAt        DateTime                                   @map("finalized_at") @outcomes.Timestamptz(3)
   resultJson         Json                                       @map("result_json")
@@ -4907,6 +4907,7 @@ model OutcomeExternalHistoricalCaptureCompletionResult {
   @@unique([planId, targetId], map: "outcome_external_historical_completion_target")
   @@index([scheduleId, ordinal], map: "outcome_external_historical_completion_schedule")
   @@map("outcome_external_historical_capture_completion_result")
+  @@unique([completionId, evidenceBatchId], map: "outcome_external_completion_batch_unique")
 }
 
 model OutcomeExternalCaptureScheduleEvent {
@@ -4958,7 +4959,7 @@ model OutcomeExternalCaptureOccurrence {
   lastClaim                  OutcomeExternalCaptureAttempt?                    @relation("OutcomeExternalCaptureLastClaim", fields: [lastClaimId], references: [claimId], onDelete: Restrict)
   event                      OutcomeExternalCaptureOccurrenceEvent             @relation("OutcomeExternalCaptureOccurrenceHead", fields: [eventId], references: [eventId], onDelete: Restrict)
   events                     OutcomeExternalCaptureOccurrenceEvent[]           @relation("OutcomeExternalCaptureOccurrenceEvents")
-  historicalCompletionResult OutcomeExternalHistoricalCaptureCompletionResult?
+  historicalCompletionResults OutcomeExternalHistoricalCaptureCompletionResult[]
 
   @@unique([scheduleId, dueAt], map: "outcome_external_capture_occurrence_schedule_due_key")
   @@index([status, availableAt, dueAt], map: "outcome_external_capture_occurrence_due_idx")
@@ -4998,7 +4999,7 @@ model OutcomeExternalCaptureOccurrenceEvent {
   currentHead                OutcomeExternalCaptureOccurrence?                 @relation("OutcomeExternalCaptureOccurrenceHead")
   previousEvent              OutcomeExternalCaptureOccurrenceEvent?            @relation("OutcomeExternalCaptureOccurrenceEventChain", fields: [previousEventId], references: [eventId], onDelete: Restrict)
   nextEvent                  OutcomeExternalCaptureOccurrenceEvent?            @relation("OutcomeExternalCaptureOccurrenceEventChain")
-  historicalCompletionResult OutcomeExternalHistoricalCaptureCompletionResult?
+  historicalCompletionResults OutcomeExternalHistoricalCaptureCompletionResult[]
 
   @@unique([dispatchKey, revision], map: "outcome_external_capture_occurrence_event_revision_key")
   @@index([dispatchKey, occurredAt], map: "outcome_external_capture_occurrence_event_time_idx")
