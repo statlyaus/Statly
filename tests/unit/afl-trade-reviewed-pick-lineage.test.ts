@@ -1,3 +1,5 @@
+import { bindRegisteredLineageForPromotion } from '@/server/aflTradeIntelligence/source/reviewedPickLineagePromotionBinding';
+import type { AflOutcomeSqlTransaction } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { previewReviewedPickLineage } from '@/server/aflTradeIntelligence/source/reviewedPickLineageReadiness';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { describe, expect, it } from 'vitest';
@@ -125,6 +127,70 @@ describe('reviewed pick lineage', () => {
       proposedAt: '2026-09-13T12:00:00Z',
     });
   }
+  function promotionTransaction(
+    options: { candidateCurrent?: boolean; captureCurrent?: boolean; withdrawn?: boolean } = {}
+  ) {
+    const value = registration();
+    return {
+      query: async (sql: string) => {
+        if (sql.includes('read_outcome_reviewed_pick_lineage')) {
+          if (options.withdrawn)
+            throw new Error('Reviewed lineage requires exact current approval');
+          return { rows: [{ registration: value }] };
+        }
+        if (sql.includes('outcome_external_reconciliation_candidate'))
+          return {
+            rows: [{ candidate_json: candidate(), current: options.candidateCurrent ?? true }],
+          };
+        if (sql.includes('outcome_source_capture'))
+          return {
+            rows: [
+              {
+                source_artifact_id: value.content.records[0].evidence[0].artifactId,
+                source_url: 'https://example.test/caddy',
+                batch_id: 'fixture-batch',
+                current: options.captureCurrent ?? true,
+              },
+            ],
+          };
+        return { rows: [] };
+      },
+    } as unknown as AflOutcomeSqlTransaction;
+  }
+  it('binds stored reviewed facts for promotion with current source checks and original date precision', async () => {
+    const value = registration();
+    const bound = await bindRegisteredLineageForPromotion(promotionTransaction(), {
+      registrationId: value.registrationId,
+      candidateId: candidate().candidateId,
+      environment: 'test_fixture',
+    });
+    expect(bound).toMatchObject({
+      reviewAuthorityAuthenticated: true,
+      sourceAuthorityAuthenticated: true,
+      canonicalAdmission: false,
+    });
+    expect(bound.content.facts[0].custody[0].occurredAt).toEqual({ precision: 'year', year: 2012 });
+    expect(bound.content.facts[0].endpoint).toEqual(value.content.records[0].endpoint);
+    await expect(
+      bindRegisteredLineageForPromotion(promotionTransaction(), {
+        registrationId: value.registrationId,
+        candidateId: candidate().candidateId,
+        environment: 'non_production',
+      })
+    ).rejects.toThrow(/environment/);
+  });
+  it.each([{ candidateCurrent: false }, { captureCurrent: false }, { withdrawn: true }])(
+    'rejects non-current review or sources: %j',
+    async (options) => {
+      await expect(
+        bindRegisteredLineageForPromotion(promotionTransaction(options), {
+          registrationId: registration().registrationId,
+          candidateId: candidate().candidateId,
+          environment: 'test_fixture',
+        })
+      ).rejects.toThrow(/current/);
+    }
+  );
   it('binds exact facts and partial dates without creating authority', () => {
     const result = registration();
     expect(result.content.records[0]).toEqual(registrationRecord());

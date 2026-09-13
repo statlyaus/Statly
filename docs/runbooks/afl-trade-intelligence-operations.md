@@ -2684,3 +2684,10 @@ Day/year precision and non-player endpoints remain in the approved JSON; candida
 canonical custody are untouched. These methods explicitly report source authority and canonical
 admission as false. Current source-permission checks, draft sessions, canonical promotion and archive
 readback are still required before these reviewed records can support admitted facts.
+
+`prepareReviewedPickLineagePromotion` loads the persisted registration through the promotion owner,
+checks current review and candidate/capture source authority in the same transaction, and binds
+ordered custody plus typed endpoints without replacing partial dates with timestamps. Its result
+is preparation, not canonical admission or approval. Do not reuse a saved source check as authority;
+canonical writes must repeat this binding inside their own transaction. Existing candidate issues,
+special-right resolution and draft-session requirements remain until canonical integration completes.

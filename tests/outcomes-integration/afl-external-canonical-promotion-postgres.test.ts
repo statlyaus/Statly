@@ -753,6 +753,8 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
       expect(results.map(r=>r.idempotentReplay).sort()).toEqual([false,true]);
       expect(results[0]).toMatchObject({registration,reviewAuthorityAuthenticated:true,sourceAuthorityAuthenticated:false,canonicalAdmission:false});
       expect((await owner.readReviewedPickLineage(registration.registrationId)).registration).toEqual(registration);
+      const promotionInput = {registrationId:registration.registrationId,candidateId:candidate.candidateId,environment:'test_fixture' as const};
+      expect(await owner.prepareReviewedPickLineagePromotion(promotionInput)).toMatchObject({sourceAuthorityAuthenticated:true,canonicalAdmission:false,content:{facts:[{endpoint:{kind:'passed'}}]}});
       const changed = createReviewedPickLineageRegistration({candidate,records:registration.content.records,proposedAt:'2026-08-09T12:00:01Z'});
       await expect(owner.registerReviewedPickLineage({registration:changed,approvalDecisionId:await approve(changed)})).rejects.toThrow(/immutable conflict/);
       await expect(outcomesPool.query("UPDATE outcome_reviewed_pick_lineage_registration SET registration_json='{}'")).rejects.toThrow();
@@ -763,6 +765,7 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
         [createAflTradeContentAddress('review-decision',{withdraw:approvalDecisionId}),registration.registrationId,authority.principal_ref,approvalDecisionId]);
       await expect(owner.registerReviewedPickLineage(input)).rejects.toThrow(/current approval/);
       await expect(owner.readReviewedPickLineage(registration.registrationId)).rejects.toThrow(/current approval/);
+      await expect(owner.prepareReviewedPickLineagePromotion(promotionInput)).rejects.toThrow(/current approval/);
       expect((await outcomesPool.query('SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1',[candidate.candidateId])).rows).toEqual(before);
     });
     it('registers reviewed awards independently of exercise, replays, and rejects invalid authority and provenance', async () => {

@@ -1,3 +1,4 @@
+import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
 import { registerReviewedPickLineage, readReviewedPickLineage } from './postgresReviewedPickLineageRegistration';
 import { previewReviewedPickLineage } from './reviewedPickLineageReadiness';
 import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
@@ -594,6 +595,14 @@ function plannedTradeAsset(promotionId: string, eventVersionId: string, transfer
 
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
+
+  async prepareReviewedPickLineagePromotion(input: {
+    registrationId: string;
+    candidateId: string;
+    environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction(transaction => bindRegisteredLineageForPromotion(transaction, input));
+  }
 
   async registerReviewedPickLineage(input: { registration: unknown; approvalDecisionId: string }) {
     return registerReviewedPickLineage(this.client, input);
