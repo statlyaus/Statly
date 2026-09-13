@@ -2418,3 +2418,35 @@ it('authenticates only the reviewed 2011 membership number pair in SQL', async (
     expect(await exact(input), mode).toBe(false);
   }
 });
+
+it('scopes reviewed mini-draft club document keys to exact URLs and2011 pathway', async () => {
+  const urls = [
+    'https://www.goldcoastfc.com.au/news/114828/final-mini-draft-explained',
+    'https://www.goldcoastfc.com.au/news/751451/young-star-ready-to-shine',
+    'https://www.afc.com.au/news/776103/crouch-crows-wooed-me-at-final',
+  ];
+  for (const source of urls) {
+    const key = async (url: string, year: number, type: string) =>
+      (
+        await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [
+          url,
+          year,
+          type,
+        ])
+      ).rows[0].key;
+    expect(await key(source, 2011, 'mini_draft')).toBe(source);
+    expect(await key(source, 2012, 'mini_draft')).toBeNull();
+    expect(await key(source, 2011, 'national')).toBeNull();
+    expect(await key(source + '?unreviewed=1', 2011, 'mini_draft')).toBeNull();
+    expect(
+      await key(source.replace(new URL(source).hostname, 'unreviewed.example'), 2011, 'mini_draft')
+    ).toBeNull();
+  }
+  expect(
+    (
+      await pool.query(
+        "SELECT outcome_official_mini_2011_document_key('https://www.afl.com.au/news/506746/national-draft-all-the-picks',2011,'national') AS key"
+      )
+    ).rows[0].key
+  ).toBe('506746');
+});

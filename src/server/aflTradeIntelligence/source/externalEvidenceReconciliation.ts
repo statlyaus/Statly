@@ -1,3 +1,4 @@
+import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -69,6 +70,8 @@ export function combinedDraftDocumentId(
   environment: 'test_fixture' | 'non_production' | 'production'
 ): string {
   if (provider === 'official_afl') {
+    // Exact club URLs retain host-qualified identity, matching SQL's URL fallback.
+    if (reviewedOfficialAflMiniDraft2011EffectiveYear(sourceUrl) !== null) return sourceUrl;
     try {
       const parsed = new URL(sourceUrl);
       const articleId = /^\/news\/(\d+)(?:\/|$)/.exec(parsed.pathname)?.[1];

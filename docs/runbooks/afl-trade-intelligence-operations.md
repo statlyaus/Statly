@@ -2936,3 +2936,13 @@ Migration0191 aligns both authenticated SQL membership callers with TypeScript's
 `official_afl:news:<id>` document identity. Bare article numbers cannot satisfy the reviewed
 2011 discrepancy rule; preserve that rule and normalize provenance when constructing the SQL
 facts. Non-AFL document URL identity and current-source authentication remain unchanged.
+
+The2011 mini-draft parser uses exact Gold Coast114828 membership/boundaries, Gold Coast751451
+independent completed total and Adelaide776103 completed-day evidence. Retrospective publication
+years remain source years while the claims belong to2011 and the `mini_draft` pathway.
+Migration0192 permits these exact club URLs only for that event and keeps full URLs as document
+identities. It preserves separate capture/artifact requirements and the reviewed total/terminal
+pair. Parser/routing and migration verification do not establish genuine capture, boundary
+registration, session correction or canonical admission; execute those through their existing owners.
+The2012 mini-draft permitted selections during a window; do not reuse this2011 dated-session
+proof or infer a common2012 selection date from the closing date of the trade period.
