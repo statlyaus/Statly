@@ -2968,3 +2968,9 @@ possible selection day. This is a consistency check, not proof of an exact exerc
 exact-day lifecycle, revision and renumbering rules retain their prior meaning. Acquisition-spell
 registration still requires an exact day; add a versioned partial-date contract and storage before
 registering a window-based spell, rather than substituting a bound as its start date.
+
+The retained-window integration fixture now runs compensation award registration, two custody
+transfers, activation, renumbering, exercise and an award correction through public repositories.
+Exercise/revision replay and readback pass; missing activation, renumbering after the window and
+revoked selection evidence are rejected. These synthetic checks do not constitute genuine mini-draft
+admission or acquisition-spell registration.

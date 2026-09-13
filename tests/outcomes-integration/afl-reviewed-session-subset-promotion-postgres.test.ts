@@ -1,3 +1,4 @@
+import { verifyWindowSpecialExercise } from '../testUtils/windowSpecialExercise';
 import { buildReviewedSessionCorrection } from '@/server/aflTradeIntelligence/source/reviewedSessionCorrection';
 import {
   createAflTradeExternalEvidenceBatch,
@@ -648,6 +649,13 @@ describe.each([
           client.release();
         }
         expect(await bounds()).toBe('[2024-11-21,2024-11-26)');
+        await verifyWindowSpecialExercise(pool, {
+          promotionId: result.promotionId,
+          windowCaptureId: second.target.captureId,
+          batchId: trade.target.evidenceBatchId,
+          authorityId: promoterAuthority,
+          actor,
+        });
         return;
       }
       const retainedArtifacts = new Map();
