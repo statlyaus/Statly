@@ -496,7 +496,9 @@ supersede production Gate authority, and production execution cannot reuse non-p
    their reviewed day/year precision. Different drafts may use different proof kinds; one draft
    cannot mix them. Migration0176 checks each draft's retained proof and exact overall selection
    membership, then enforces session finalization and current acquisition evidence. Combined proofs
-   still require a complete contiguous inventory and authenticated boundary identities. A scoped
+   require complete inventory and authenticated boundary identities. Migration0182 additionally accepts
+   nonconsecutive original numbers when authenticated `draft_completed_inventory` claims enumerate
+   exactly every member; absent enumeration, the inventory must remain contiguous. A scoped
    correction candidate cannot use a partial inventory as full-draft proof. The existing metadata-only
    review command remains on its v1/v4 path; v5 requires the session-aware programmatic owner.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
@@ -2793,6 +2795,14 @@ Unrelated draft selections are never inserted into the reviewed candidate. Persi
 `PostgresAflTradeExternalReconciliationRepository.persistCandidate`; verify exact readback, replay,
 current sources and independent restore. Session preparation or candidate persistence does not clear
 readiness statuses, provide missing draft groups, or constitute canonical promotion or admission.
+
+Migration0182 applies enumerated-membership validation to candidate and retained-inventory proofs.
+Every supplied enumeration must exactly match the ordered original selection numbers. Independent
+completed totals, completed-session dates, boundary identities and source currentness remain required;
+each covered selection must retain the membership evidence ID. Missing, additional, duplicate or
+renumbered members fail. Membership evidence alone does not establish a session date or authorize
+an identity alias. Source parsers must attest only facts present in their own scoped documents;
+source-specific support and genuine admission require separate verification.
 
 ### Original issuing award references
 

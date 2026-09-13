@@ -370,6 +370,78 @@ it('reconstructs combined sessions, rejects downgrades, and fails after dependen
   expect(await exact(proposal)).toBe(true);
   const v5 = { ...proposal, schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5' };
   expect(await exact(v5)).toBe(true);
+  const enumeratedClient = await pool.connect();
+  try {
+    await enumeratedClient.query('BEGIN');
+    await enumeratedClient.query('SET LOCAL session_replication_role=replica');
+    await enumeratedClient.query(
+      `UPDATE outcome_external_reconciliation_draft_selection
+       SET selection_number=CASE selection_number WHEN 3 THEN 7 WHEN 4 THEN 97 ELSE selection_number END
+       WHERE candidate_id=$1`,
+      [candidateId]
+    );
+    await enumeratedClient.query(
+      `UPDATE outcome_external_evidence_row SET evidence_json=jsonb_set(evidence_json,
+        '{content,claim,selectionNumber}',to_jsonb(CASE (evidence_json#>>'{content,claim,selectionNumber}')::INTEGER
+          WHEN 3 THEN 7 WHEN 4 THEN 97 ELSE (evidence_json#>>'{content,claim,selectionNumber}')::INTEGER END))
+       WHERE claim_kind='draft_session_boundary' AND evidence_json#>>'{content,claim,draftYear}'='2024'`
+    );
+    const checkEnumerated = async (value: unknown) =>
+      (
+        await enumeratedClient.query(
+          "SELECT outcome_external_combined_draft_group_exact($1,$2::jsonb,2024,'national') AS valid",
+          [candidateId, JSON.stringify(value)]
+        )
+      ).rows[0].valid;
+    expect(await checkEnumerated(proposal)).toBe(false);
+    const memberId = `external-evidence:${hex('e')}`;
+    await enumeratedClient.query(
+      `INSERT INTO outcome_external_evidence_row
+       (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
+       VALUES($1,$2,99,'complete-membership','draft_completed_inventory',$3::jsonb)`,
+      [
+        memberId,
+        `external-evidence-batch:${hex('1')}`,
+        JSON.stringify({
+          content: {
+            provider: 'official_afl',
+            claim: {
+              kind: 'draft_completed_inventory',
+              draftYear: 2024,
+              draftType: 'national',
+              selectionNumbers: [1, 2, 7, 97],
+            },
+          },
+        }),
+      ]
+    );
+    const enumeratedProposal = proposalIncluding(memberId);
+    expect(await checkEnumerated(enumeratedProposal)).toBe(false);
+    await enumeratedClient.query(
+      `UPDATE outcome_external_reconciliation_draft_selection SET selection_json=jsonb_set(
+        selection_json,'{evidenceIds}',(selection_json->'evidenceIds') || to_jsonb($2::text))
+       WHERE candidate_id=$1`,
+      [candidateId, memberId]
+    );
+    expect(await checkEnumerated(enumeratedProposal)).toBe(true);
+    for (const numbers of [
+      [1, 2, 7],
+      [1, 2, 7, 97, 98],
+      [1, 2, 7, 7],
+      [1, 2, 3, 97],
+      [97, 7, 2, 1],
+    ]) {
+      await enumeratedClient.query(
+        `UPDATE outcome_external_evidence_row SET evidence_json=jsonb_set(evidence_json,
+          '{content,claim,selectionNumbers}',$2::jsonb) WHERE evidence_id=$1`,
+        [memberId, JSON.stringify(numbers)]
+      );
+      expect(await checkEnumerated(enumeratedProposal)).toBe(false);
+    }
+  } finally {
+    await enumeratedClient.query('ROLLBACK');
+    enumeratedClient.release();
+  }
   const mixedClient = await pool.connect();
   try {
     await mixedClient.query('BEGIN');
