@@ -2772,6 +2772,14 @@ rights and Gate scope to the exact 2015 URLs/fields before execution. Migration0
 reviewed wrap article78408 and independent total39972 into the 2015 combined-proof relationship,
 including retained-inventory validation; all existing source/currentness requirements still apply.
 
+The 2013 adapter keeps the event-year request explicit: article452467 provides the completed
+November21 session and first selection; retrospective117263 provides complete numbered membership
+and terminal zone selection97, excluding only explicitly identified rookie upgrades. Article149290
+provides the independent62-player total. Its existing2016 route remains separate and unchanged.
+Publication years remain2013/2018/2019 respectively. Migration0183 binds the reviewed2013 source
+relationship in candidate and retained-inventory validation. Technical parsing does not substitute for
+governed capture, identity decisions, public persistence verification or genuine canonical admission.
+
 Promotion proposal v6 binds coverage exactly to the saved selected-session projection, preserving
 original ordinals even when earlier sessions have no selected members. Migration0178 extends the
 review, write, session-finalization and acquisition-currentness gates. Every candidate selection must

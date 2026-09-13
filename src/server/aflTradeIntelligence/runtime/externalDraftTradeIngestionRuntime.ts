@@ -187,7 +187,10 @@ export function createAflTradeExternalIngestionRuntime(
           case 'official-afl-issuing-award':
             return parseOfficialAflIssuingAward(html, { capture });
           case 'official-afl-completed-draft-session':
-            return parseOfficialAflDraftSession(html, { capture });
+            return parseOfficialAflDraftSession(html, {
+              capture,
+              anchorSeasonYear: command.request.anchorSeasonYear,
+            });
           default:
             throw new TypeError('External ingestion capability is not implemented.');
         }
