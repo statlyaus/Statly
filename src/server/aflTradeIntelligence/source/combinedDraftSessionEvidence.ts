@@ -45,6 +45,51 @@ export interface CombinedDraftSessionCoverage {
   evidenceIds: string[];
 }
 
+export interface CombinedDraftSessionProjection {
+  schemaVersion: 'afl-trade-combined-draft-session-projection/v1';
+  inventorySelectionIds: string[];
+  selectedSelectionIds: string[];
+  inventorySessions: CombinedDraftSessionCoverage[];
+  selectedSessions: CombinedDraftSessionCoverage[];
+}
+
+/** Prove the complete inventory before projecting the selections required by a candidate.
+ * Source and identity authority must still be authenticated by the persistence owner.
+ */
+export function projectCombinedDraftSessionEvidence(
+  input: Parameters<typeof resolveCombinedDraftSessionEvidence>[0] & {
+    selectedSelectionIds: readonly string[];
+  }
+): CombinedDraftSessionProjection {
+  const inventorySessions = resolveCombinedDraftSessionEvidence(input);
+  const inventorySelectionIds = input.selections.map(({ selectionId }) => selectionId).sort();
+  const selectedSelectionIds = [...input.selectedSelectionIds].sort();
+  const inventory = new Set(inventorySelectionIds);
+  if (
+    selectedSelectionIds.length === 0 ||
+    new Set(selectedSelectionIds).size !== selectedSelectionIds.length ||
+    selectedSelectionIds.some((id) => !inventory.has(id))
+  ) {
+    throw new TypeError(
+      'Session projection requires a nonempty unique subset of the proved inventory.'
+    );
+  }
+  const selected = new Set(selectedSelectionIds);
+  return {
+    schemaVersion: 'afl-trade-combined-draft-session-projection/v1',
+    inventorySelectionIds,
+    selectedSelectionIds,
+    inventorySessions,
+    selectedSessions: inventorySessions
+      .map((session) => ({
+        ...session,
+        selectionIds: session.selectionIds.filter((id) => selected.has(id)),
+        evidenceIds: [...session.evidenceIds],
+      }))
+      .filter(({ selectionIds }) => selectionIds.length > 0),
+  };
+}
+
 const unique = <T>(values: T[]) => [...new Set(values)];
 
 function requireOne<T>(values: T[], message: string): T {
@@ -125,9 +170,7 @@ export function resolveCombinedDraftSessionEvidence(input: {
   }
   const finalOrdinal = ordinals.at(-1);
   const finalBoundary = requireOne(
-    boundaries.filter(
-      (fact) => fact.sessionOrdinal === finalOrdinal && fact.boundary === 'last'
-    ),
+    boundaries.filter((fact) => fact.sessionOrdinal === finalOrdinal && fact.boundary === 'last'),
     'The final combined draft session requires one explicit terminal boundary.'
   );
   if (finalBoundary.selectionNumber !== total) {
@@ -203,9 +246,7 @@ export function resolveCombinedDraftSessionEvidence(input: {
       sessionOrdinal,
       eventDate: date,
       selectionIds: orderedSelections
-        .filter(
-          ({ selectionNumber }) => selectionNumber >= first && selectionNumber <= last
-        )
+        .filter(({ selectionNumber }) => selectionNumber >= first && selectionNumber <= last)
         .map(({ selectionId }) => selectionId)
         .sort(),
       evidenceIds,

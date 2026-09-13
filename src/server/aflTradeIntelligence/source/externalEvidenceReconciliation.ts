@@ -47,7 +47,7 @@ const reviewedCombinedDraftArticleIds = new Set([
   '149290',
 ]);
 
-function combinedDraftDocumentId(
+export function combinedDraftDocumentId(
   provider: Provider,
   sourceUrl: string,
   environment: 'test_fixture' | 'non_production' | 'production'

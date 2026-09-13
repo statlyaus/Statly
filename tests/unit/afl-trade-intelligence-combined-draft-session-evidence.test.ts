@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveCombinedDraftSessionEvidence } from '@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence';
+import {
+  resolveCombinedDraftSessionEvidence,
+  projectCombinedDraftSessionEvidence,
+} from '@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence';
 import type { CombinedDraftSessionFact } from '@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence';
 
 const id = (kind: string, character: string) => `${kind}:${character.repeat(64)}`;
@@ -396,5 +399,58 @@ describe('combined draft-session evidence', () => {
         ),
       })
     ).toThrow('independent authenticated document');
+  });
+});
+
+describe('complete-inventory session projection', () => {
+  const input = {
+    draftYear: 2018,
+    draftType: 'national',
+    officialName: '2018 NAB AFL Draft',
+    selections,
+    facts,
+  };
+  it('keeps the complete proof and original session ordinal when only the later session is selected', () => {
+    const before = structuredClone(input);
+    const selectedSelectionIds = [selections[50]!.selectionId, selections[30]!.selectionId];
+    const proof = projectCombinedDraftSessionEvidence({ ...input, selectedSelectionIds });
+    expect(proof.inventorySelectionIds).toHaveLength(78);
+    expect(proof.inventorySessions.map((s) => s.selectionIds.length)).toEqual([22, 56]);
+    expect(proof.selectedSessions).toEqual([
+      { ...proof.inventorySessions[1], selectionIds: [...selectedSelectionIds].sort() },
+    ]);
+    expect(proof.selectedSessions[0]!.sessionOrdinal).toBe(2);
+    expect(input).toEqual(before);
+    expect(proof.selectedSelectionIds).toEqual([...selectedSelectionIds].sort());
+  });
+  it('proves full inventory even when selected members do not include a boundary', () => {
+    const selectedSelectionIds = [selections[30]!.selectionId];
+    for (const changed of [
+      { selections: selections.filter((s) => s.selectionNumber !== 1) },
+      { selections: selections.filter((s) => s.selectionNumber !== 50) },
+      { facts: facts.filter((f) => f.kind !== 'completed_draft_total') },
+      {
+        facts: facts.map((f) =>
+          f.kind === 'session_boundary' && f.boundary === 'last' ? { ...f, playerId: 'wrong' } : f
+        ),
+      },
+    ])
+      expect(() =>
+        projectCombinedDraftSessionEvidence({ ...input, ...changed, selectedSelectionIds })
+      ).toThrow();
+  });
+  it.each(
+    [[], ['outside'], [selections[0]!.selectionId, selections[0]!.selectionId]].map((ids) => [ids])
+  )('rejects invalid projected membership %j', (selectedSelectionIds) => {
+    expect(() => projectCombinedDraftSessionEvidence({ ...input, selectedSelectionIds })).toThrow(
+      'unique subset'
+    );
+  });
+  it('returns full coverage unchanged when every member is selected', () => {
+    const proof = projectCombinedDraftSessionEvidence({
+      ...input,
+      selectedSelectionIds: selections.map((s) => s.selectionId),
+    });
+    expect(proof.selectedSessions).toEqual(proof.inventorySessions);
   });
 });
