@@ -364,6 +364,28 @@ describe('authorized external provider ingestion', () => {
     ).toThrow(/outside the reviewed/i);
   });
 
+  it('rejects an old general-year parser version before authority lookup, lease or capture', async () => {
+    const fixture = fixtureDependencies();
+    const capturePage = vi.spyOn(fixture.dependencies.ingestion, 'capturePage');
+    await expect(
+      ingestAuthorizedAflTradeExternalPage(
+        {
+          request: {
+            ...request,
+            capabilityId: 'draftguru-year-page',
+            sourceUrl: 'https://www.draftguru.com.au/years/2026',
+            parserVersion: 'draftguru-year-parser/v1',
+          },
+          gateRequest,
+        },
+        fixture.dependencies
+      )
+    ).rejects.toThrow(/parser version/);
+    expect(fixture.dependencies.resolveAuthorization).not.toHaveBeenCalled();
+    expect(fixture.dependencies.admission.acquire).not.toHaveBeenCalled();
+    expect(capturePage).not.toHaveBeenCalled();
+  });
+
   it('rejects substitution of another capability under valid provider rights', async () => {
     const fixture = fixtureDependencies();
 

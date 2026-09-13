@@ -8,7 +8,7 @@ const capture = {
   sourceUrl: 'https://www.draftguru.com.au/years/2011',
   capturedAt: '2026-09-13T00:00:00.000Z',
   effectiveAt: '2026-09-13T00:00:00.000Z',
-  parserVersion: 'test',
+  parserVersion: 'draftguru-event-year/v2',
   fieldManifestSha256: '3'.repeat(64),
 };
 const row = (label: string, number = '1') =>

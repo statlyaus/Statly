@@ -25,6 +25,22 @@ export function requireAflTradeExternalEvidenceFieldAuthority(input: {
   sourceRights: AflTradeSourceRightsProposal;
   gate0aReceipt: AflTradeGate0AReceipt;
 }): void {
+  // A page's acquisition year need not equal the event year of every selection it contains.
+  // Field permission alone cannot extend the approved factual season scope.
+  const unsupportedSelectionYears = input.evidence.flatMap(({ content }) => {
+    const claim = content.claim;
+    if (claim.kind !== 'draft_selection') return [];
+    return input.sourceRights.content.scope.seasonRanges.some(
+      ({ from, to }) => from <= claim.draftYear && claim.draftYear <= to
+    )
+      ? []
+      : [claim.draftYear];
+  });
+  if (unsupportedSelectionYears.length > 0) {
+    throw new TypeError(
+      `Draft selection event years outside approved source scope: ${[...new Set(unsupportedSelectionYears)].sort((a, b) => a - b).join(', ')}`
+    );
+  }
   const fieldsByNormalizedPath = new Map(
     input.sourceRights.content.fields.map((field) => [field.normalizedField, field] as const)
   );

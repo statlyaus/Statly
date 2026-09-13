@@ -285,6 +285,13 @@ Run these lanes independently. Each produces source claims, not canonical facts:
    pages and linked transaction detail pages. Capture only transaction identity/date/type, parties,
    directed packages, pick/selection facts, stable source identifiers and source URLs. Do not import
    Draftguru grades, games, pick points or other derived values.
+   General year-page acquisition requires parser version `draftguru-event-year/v2`. Old schedules
+   must be replaced by a newly approved schedule/run; they cannot execute changed semantics under
+   an old parser identity. National-only capture retains its separate parser/version contract.
+   The reviewed 2020 page's 22 mid-season slots resolve to 2021 using exact ordinal/player/club
+   bindings. Unmatched mid-season slots on that anomalous page remain issues; ordinary annual
+   pages retain their page-year behavior. Emitted selection years must fall within the approved
+   source-rights season ranges, independently of the page's acquisition anchor.
    The general year-page parser retains National, Rookie, Pre-Season, Mid-Season and Mini-Draft
    selections. Its `scopeSummary` accounts for every observed row as included, invalid or excluded
    under the reviewed Trade, Free Agency, Pre-Draft, Post-Draft and Training Squad Selection labels.
