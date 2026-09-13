@@ -2931,3 +2931,8 @@ date and the absent supplemental Jason Blake76 selection. Migration0190 recogniz
 documents and pairs the total with the independent roster terminal. The2013 publication year
 of the total report does not change the2011 event year. Governed capture, required boundary
 identity binding and genuine session correction must still execute before admission.
+
+Migration0191 aligns both authenticated SQL membership callers with TypeScript's canonical
+`official_afl:news:<id>` document identity. Bare article numbers cannot satisfy the reviewed
+2011 discrepancy rule; preserve that rule and normalize provenance when constructing the SQL
+facts. Non-AFL document URL identity and current-source authentication remain unchanged.
