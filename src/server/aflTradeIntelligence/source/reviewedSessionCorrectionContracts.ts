@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema, draftSessionDatePrecisionSchema, draftSessionDefinitelyPrecedes } from './draftSessionDatePrecision';
 import { z } from 'zod';
 import {
   aflTradeContentAddressedIdSchema,
@@ -24,7 +25,7 @@ const sessionSchema = z
     evidenceIds: sortedIds('external-evidence'),
   })
   .strict();
-export const retainedDraftSessionProjectionSchema = z
+const legacyRetainedDraftSessionProjectionSchema = z
   .object({
     schemaVersion: z.enum([
       'afl-trade-combined-draft-session-projection/v1',
@@ -62,6 +63,51 @@ export const retainedDraftSessionProjectionSchema = z
           'Session projection must preserve exact complete inventory, chronology and selected membership.',
       });
   });
+const precisionSessionSchema = sessionSchema.extend({
+  eventDate: z.iso.date().nullable(),
+  datePrecision: draftSessionDateWindowSchema.optional(),
+}).superRefine((session, context) => {
+  if (session.eventDate === null
+      ? !session.datePrecision || Number(session.datePrecision.earliestDate.slice(0, 4)) !== session.draftYear
+      : session.datePrecision !== undefined || Number(session.eventDate.slice(0, 4)) !== session.draftYear) {
+    context.addIssue({code: 'custom', message: 'Window sessions require null exact day and same-year bounds; exact days cannot carry a window.'});
+  }
+});
+
+export const retainedPrecisionDraftSessionProjectionSchema = z.object({
+  schemaVersion: z.literal('afl-trade-combined-draft-session-projection/v2'),
+  inventorySelectionIds: sortedIds('external-draft-selection'),
+  selectedSelectionIds: sortedIds('external-draft-selection'),
+  inventorySessions: z.array(precisionSessionSchema).min(1).max(100),
+  selectedSessions: z.array(precisionSessionSchema).min(1).max(100),
+}).strict().superRefine((proof, context) => {
+  const first = proof.inventorySessions[0]!;
+  const selected = new Set(proof.selectedSelectionIds);
+  const members = proof.inventorySessions.flatMap(s => s.selectionIds).sort();
+  const projected = proof.inventorySessions.map(s => ({...s, selectionIds: s.selectionIds.filter(id => selected.has(id))})).filter(s => s.selectionIds.length);
+  const invalidChronology = proof.inventorySessions.some((session, index) => {
+    if (session.draftYear !== first.draftYear || session.draftType !== first.draftType || session.sessionOrdinal !== index + 1) return true;
+    if (!index) return false;
+    const previous = proof.inventorySessions[index - 1]!;
+    const left = previous.eventDate === null ? previous.datePrecision : {precision: 'day' as const, eventDate: previous.eventDate};
+    const right = session.eventDate === null ? session.datePrecision : {precision: 'day' as const, eventDate: session.eventDate};
+    const validLeft = draftSessionDatePrecisionSchema.safeParse(left);
+    const validRight = draftSessionDatePrecisionSchema.safeParse(right);
+    if (!validLeft.success || !validRight.success) return true;
+    return !draftSessionDefinitelyPrecedes(validLeft.data, validRight.data);
+  });
+  if (invalidChronology || canonicalizeAflTradeJson(members) !== canonicalizeAflTradeJson(proof.inventorySelectionIds) ||
+      proof.selectedSelectionIds.some(id => !proof.inventorySelectionIds.includes(id)) ||
+      canonicalizeAflTradeJson(projected) !== canonicalizeAflTradeJson(proof.selectedSessions)) {
+    context.addIssue({code: 'custom', message: 'Window projection must preserve complete inventory, disjoint chronology, bounds and exact selected membership.'});
+  }
+});
+
+export const retainedDraftSessionProjectionSchema = z.union([
+  legacyRetainedDraftSessionProjectionSchema,
+  retainedPrecisionDraftSessionProjectionSchema,
+]);
+
 export const reviewedSessionCorrectionSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-reviewed-session-correction/v1'),

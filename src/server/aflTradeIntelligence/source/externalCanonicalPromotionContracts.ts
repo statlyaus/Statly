@@ -525,15 +525,17 @@ function reviewedProjectedSessions(content: PromotionCandidateContent) {
   const marker = content.reviewedSessionCorrection;
   if (!marker || content.environment === 'production')
     throw new TypeError('Subset promotion requires its private reviewed session correction.');
-  return marker.projections.flatMap((projection) =>
-    projection.selectedSessions.map((session) => ({
+  return marker.projections.flatMap((projection) => {
+    if (projection.schemaVersion === 'afl-trade-combined-draft-session-projection/v2')
+      throw new TypeError('Window session promotion requires versioned storage and lifecycle authentication.');
+    return projection.selectedSessions.map((session) => ({
       ...session,
       proofKind:
         projection.schemaVersion === 'afl-trade-combined-draft-session-projection/v1'
           ? ('combined_session_facts' as const)
           : ('direct_session_claim' as const),
-    }))
-  );
+    }));
+  });
 }
 
 export function deriveCombinedDraftSessionCanonicalPromotionProposal(

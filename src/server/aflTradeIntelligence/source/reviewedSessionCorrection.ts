@@ -15,6 +15,7 @@ import {
 import { createAflTradeHistoricalCompletionReconciliationAuthority } from './externalReconciliationSourceAuthorityContracts';
 import {
   projectCombinedDraftSessionEvidence,
+  projectPrecisionDraftSessionEvidence,
   projectReportedDraftSessionEvidence,
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
@@ -53,6 +54,7 @@ export function buildReviewedSessionCorrection(input: {
   const sessionKinds = new Set([
     'draft_session',
     'draft_session_date',
+    'draft_session_window',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
@@ -217,6 +219,8 @@ export function buildReviewedSessionCorrection(input: {
           sessionOrdinal: c.sessionOrdinal,
           eventDate: c.eventDate,
         };
+      if (c.kind === 'draft_session_window')
+        return {...source, kind: 'completed_session_window', sessionOrdinal: c.sessionOrdinal, datePrecision: c.datePrecision};
       if (c.kind === 'draft_session_completion')
         return { ...source, kind: 'completed_session', sessionOrdinal: c.sessionOrdinal };
       if (c.kind === 'draft_completed_total')
@@ -266,7 +270,8 @@ export function buildReviewedSessionCorrection(input: {
       };
     });
     return retainedDraftSessionProjectionSchema.parse(
-      projectCombinedDraftSessionEvidence({
+      (facts.some(fact => fact.kind === 'completed_session_window')
+        ? projectPrecisionDraftSessionEvidence : projectCombinedDraftSessionEvidence)({
         ...common,
         officialName: `${draftYear} AFL Draft`,
         facts,
