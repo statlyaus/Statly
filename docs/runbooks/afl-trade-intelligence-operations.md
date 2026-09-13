@@ -2761,5 +2761,7 @@ the actual retrospective observation timestamp. `officialAflIssuingAwardAdapter.
 `issuing_award_reference`; migration0171 permits this evidence kind without granting draft-session,
 custody, activation, expiry or canonical-admission status. The capture fetch seam remains available
 as `captureOfficialAflPage` from the runtime and from `source/officialAflPageCapture.ts`.
-Register current issuing-year capture/reviewer coverage before invoking the existing award owner.
+Migration0172 allows issuing references in retained completions only. Include their batches in the
+exact candidate source set before canonical custody; source capture alone does not extend a prior
+completion. Register current issuing-year capture/reviewer coverage before invoking the award owner.
 Retained article bytes and parser verification alone are not registered capture or award evidence.
