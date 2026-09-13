@@ -2774,5 +2774,8 @@ versioned successor covering every connected special history, including ordinary
 legs. Its source set is exactly the parent batches plus registered award evidence; newly added batches
 must contain issuing references with matching grant years. Added evidence remains explicitly accounted
 for in the reviewed scope. Ordinary custody/lineage and unrelated facts are preserved.
-Preparation and exact replay do not persist or admit the successor. Database special-successor
-validation and the exact parent-to-successor source extension remain required before persistence.
+Migration0173 validates special-successor persistence against the immutable ordinary parent, exact
+registered histories/awards/predecessors and current completion. Only referenced issuing-year evidence
+may extend source-year scope. Source custody accepts precisely that validated batch extension.
+Preparation alone does not persist or admit facts; verify genuine persistence/readback, tamper rejection
+and independent restore before proceeding to canonical promotion, lifecycle/exercise and session coverage.

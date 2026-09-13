@@ -99,14 +99,24 @@ async function requireFinalizedSourceBatches(
       competition: string;
       anchor_season_year: number;
       issue_count: number | string;
+      reviewed_award_year: boolean;
     }>(
       `SELECT batch.status,batch.finalized_at,capture.environment,capture.competition,
-              capture.anchor_season_year,batch.issue_count
+              capture.anchor_season_year,batch.issue_count,
+              EXISTS(SELECT 1 FROM jsonb_array_elements($2::jsonb) binding
+                JOIN outcome_special_entitlement_award award ON award.entitlement_id=binding->>'entitlementId'
+                CROSS JOIN LATERAL jsonb_array_elements(award.award_json#>'{content,evidence}') ref
+                WHERE ref->>'captureId'=capture.capture_id
+                AND award.award_json#>>'{content,awardYear}'=capture.anchor_season_year::text
+                AND award.approval_decision_id=binding->>'awardApprovalDecisionId') AS reviewed_award_year
          FROM outcome_external_evidence_batch batch
          JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
         WHERE batch.batch_id=$1
         FOR SHARE`,
-      [batchId]
+      [
+        batchId,
+        canonicalizeAflTradeJson(candidate.content.reviewedSpecialCorrection?.bindings ?? []),
+      ]
     );
     if (
       source.rows.length !== 1 ||
@@ -115,7 +125,8 @@ async function requireFinalizedSourceBatches(
       Number(source.rows[0].issue_count) !== 0 ||
       source.rows[0].environment !== candidate.content.environment ||
       source.rows[0].competition !== candidate.content.competition ||
-      !allowedSeasonYears.has(Number(source.rows[0].anchor_season_year))
+      (!allowedSeasonYears.has(Number(source.rows[0].anchor_season_year)) &&
+        !source.rows[0].reviewed_award_year)
     ) {
       throw new AflTradeExternalReconciliationPersistenceError(
         'SOURCE_BATCH_UNAVAILABLE',
@@ -137,7 +148,12 @@ async function requireSourceEvidenceMembership(
     ...candidate.content.pickLineage,
     ...candidate.content.issues,
   ];
-  const evidenceIds = [...new Set([...records.flatMap(({ evidenceIds }) => evidenceIds), ...(candidate.content.reviewedScope?.deferredEvidenceIds ?? [])])].sort();
+  const evidenceIds = [
+    ...new Set([
+      ...records.flatMap(({ evidenceIds }) => evidenceIds),
+      ...(candidate.content.reviewedScope?.deferredEvidenceIds ?? []),
+    ]),
+  ].sort();
   for (const evidenceId of evidenceIds) {
     const membership = await transaction.query(
       `SELECT evidence.evidence_id
