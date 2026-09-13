@@ -2740,3 +2740,9 @@ conservation remains mandatory. Any connected history containing a special right
 special-right owner, even when downstream transfers have ordinary pick labels. Rookie elevation and
 draft-session coverage require their own handling. Persisting a correction candidate does not admit
 it canonically or publish it; remaining blocking issues still prevent promotion.
+
+`buildReviewedSpecialCustodyBindings` converts the registered shared graph into inputs for
+`resolveSpecialEntitlementCustody`. It requires one distinct award component per history and maps
+every movement to its exact existing transfer, preserving predecessor order and ordinary-labelled
+downstream legs. Missing/ambiguous awards or extra inputs fail closed. This pure assembly helper
+does not authenticate approvals: registration and promotion must use the governed database owners.

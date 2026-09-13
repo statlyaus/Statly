@@ -1,3 +1,5 @@
+import { buildReviewedSpecialCustodyBindings } from '@/server/aflTradeIntelligence/source/reviewedSpecialCustodyBindings';
+import { createSpecialEntitlementAward } from '@/server/aflTradeIntelligence/source/specialEntitlementAwardContracts';
 import { buildReviewedOrdinaryCorrection } from '@/server/aflTradeIntelligence/source/reviewedOrdinaryCorrection';
 import { buildReviewedLineageCorrectionGraph } from '@/server/aflTradeIntelligence/source/reviewedLineageCorrectionGraph';
 import { buildReviewedAdmissionScope } from '@/server/aflTradeIntelligence/source/reviewedAdmissionScope';
@@ -130,6 +132,129 @@ describe('reviewed pick lineage', () => {
       proposedAt: '2026-09-13T12:00:00Z',
     });
   }
+  it('keeps ordinary downstream transfers in one special award history', () => {
+    const base = candidate();
+    const secondId = `external-transfer:${'f'.repeat(64)}`;
+    const asset = {
+      kind: 'special_pick' as const,
+      entitlementType: 'expansion_compensation' as const,
+      draftYear: null,
+      selectionOrdinal: null,
+      sourceLabel: 'CMP3 (Nathan Bock)',
+    };
+    const original = createAflTradeExternalReconciliationCandidate({
+      ...base.content,
+      transactions: [
+        {
+          ...base.content.transactions[0],
+          parties: ['geelong', 'gold-coast', 'melbourne'],
+          transferIds: [transferId, secondId].sort(),
+        },
+      ],
+      transfers: [
+        { ...base.content.transfers[0], asset },
+        {
+          ...base.content.transfers[0],
+          transferId: secondId,
+          fromClubId: 'gold-coast',
+          toClubId: 'melbourne',
+        },
+      ],
+    });
+    const first = record();
+    first.candidateId = original.candidateId;
+    first.attribution = 'ultimate';
+    first.retainedSourceLabel = asset.sourceLabel;
+    first.acceptedTradeTimePick = null;
+    first.endpoint = {
+      kind: 'selected',
+      playerId: 'fixture-player',
+      recordedPlayerName: 'Fixture Player',
+      draftYear: 2012,
+      draftType: 'national',
+      livePick: 27,
+      exercisingClubId: 'melbourne',
+    };
+    first.movements.push({
+      transferId: secondId,
+      fromClubId: 'gold-coast',
+      toClubId: 'melbourne',
+      occurredAt: { precision: 'year', year: 2012 },
+      predecessorOrdinal: 0,
+    });
+    const second = {
+      ...first,
+      transferId: secondId,
+      retainedSourceLabel: 'Pick 55',
+      movements: [{ ...first.movements[1], predecessorOrdinal: null }],
+    };
+    const registered = createReviewedPickLineageRegistration({
+      candidate: original,
+      records: [first, second],
+      proposedAt: '2026-09-13T12:00:00Z',
+    });
+    const graph = buildReviewedLineageCorrectionGraph(registered.content.records);
+    const successor = createAflTradeExternalReconciliationCandidate({
+      ...original.content,
+      reviewedScope: {
+        sourceCandidateId: original.candidateId,
+        registrationId: registered.registrationId,
+        deferredEvidenceIds: [],
+      },
+      reviewedCorrection: {
+        schemaVersion: 'afl-trade-reviewed-ordinary-correction/v1',
+        scopeCandidateId: original.candidateId,
+        registrationId: registered.registrationId,
+        correctionGraphId: graph.correctionGraphId,
+        bindings: [],
+      },
+    });
+    const award = createSpecialEntitlementAward({
+      schemaVersion: 'afl-trade-special-entitlement-award/v1',
+      environment: 'test_fixture',
+      competition: 'AFL',
+      issuingAwardId: 'fixture-issuing-award',
+      component: asset.sourceLabel,
+      asset,
+      holderClubId: 'geelong',
+      awardYear: 2010,
+      awardedOn: null,
+      evidence: [
+        {
+          captureId: `source-capture:${'1'.repeat(64)}`,
+          contentSha256: '2'.repeat(64),
+          sourceUrl: 'https://example.test/award',
+        },
+      ],
+    });
+    const result = buildReviewedSpecialCustodyBindings({
+      candidate: successor,
+      registration: registered,
+      awards: [{ award, approvalDecisionId: 'fixture-approval' }],
+    });
+    expect(result.historyCount).toBe(1);
+    expect(result.bindings.map((b) => [b.transferId, b.predecessorTransferId])).toEqual([
+      [transferId, null],
+      [secondId, transferId],
+    ]);
+    expect(result.bindings.every((b) => b.award.entitlementId === award.entitlementId)).toBe(true);
+    expect(result.canonicalAdmission).toBe(false);
+    expect(() =>
+      buildReviewedSpecialCustodyBindings({
+        candidate: successor,
+        registration: registered,
+        awards: [],
+      })
+    ).toThrow(/registered award/);
+    expect(() =>
+      buildReviewedSpecialCustodyBindings({
+        candidate: successor,
+        registration: registered,
+        awards: [{ award, approvalDecisionId: '' }],
+      })
+    ).toThrow(/registered award/);
+  });
+
   it('corrects a reviewed non-player endpoint without inventing a selection or mutating its scope', () => {
     const value = record();
     value.endpoint = { kind: 'passed', draftYear: 2012, draftType: 'national', livePick: 67 };
