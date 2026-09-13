@@ -1,3 +1,7 @@
+import {
+  isReviewedOfficialAflDraft2015SessionFactUrl,
+  parseOfficialAflDraft2015SessionFacts,
+} from './officialAflDraft2015SessionFacts';
 import { load } from 'cheerio';
 import {
   createAflTradeExternalEvidenceEnvelope,
@@ -22,7 +26,7 @@ import {
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
 
-export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v9';
+export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v10';
 
 // Exact reviewed completed reports: contextual date, event-day narrative and full
 // selection coverage must agree. Publication time alone is never an event date.
@@ -179,6 +183,7 @@ const reviewedReports = [
 ] as const;
 
 export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: number): boolean {
+  if (seasonYear === 2015 && isReviewedOfficialAflDraft2015SessionFactUrl(url)) return true;
   if (seasonYear === 2016 && isReviewedOfficialAflDraft2016SessionFactUrl(url)) return true;
   if (seasonYear === 2017 && isReviewedOfficialAflDraft2017SessionFactUrl(url)) return true;
   if (seasonYear === 2018 && isReviewedOfficialAflDraft2018SessionFactUrl(url)) return true;
@@ -190,6 +195,8 @@ export function parseOfficialAflDraftSession(
   html: string,
   input: { capture: AflTradeExternalEvidenceContent['capture'] }
 ): { evidence: AflTradeExternalEvidenceEnvelope[]; issues: AflTradeExternalPageIssue[] } {
+  if (isReviewedOfficialAflDraft2015SessionFactUrl(input.capture.sourceUrl))
+    return parseOfficialAflDraft2015SessionFacts(html, input);
   if (isReviewedOfficialAflDraft2016SessionFactUrl(input.capture.sourceUrl))
     return parseOfficialAflDraft2016SessionFacts(html, input);
   if (isReviewedOfficialAflDraft2017SessionFactUrl(input.capture.sourceUrl))

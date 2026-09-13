@@ -2762,6 +2762,12 @@ checks; it does not create source permission or broaden capture-year coverage.
 
 ### Reviewed session evidence successors
 
+The 2015 partial-session adapter binds two exact AFL report URLs, contextual publication dates and
+ordered normalized-paragraph digests. The completed wrap supplies one dated session and first/last
+selection boundaries; the separate retrospective supplies the 70-player total. Changed, duplicated or
+out-of-body evidence fails closed. Parser support does not authorize a capture: bind current source
+rights and Gate scope to the exact 2015 URLs/fields before execution.
+
 Promotion proposal v6 binds coverage exactly to the saved selected-session projection, preserving
 original ordinals even when earlier sessions have no selected members. Migration0178 extends the
 review, write, session-finalization and acquisition-currentness gates. Every candidate selection must
