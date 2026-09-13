@@ -444,6 +444,7 @@ const allowedKindsByProvider = {
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([
+    'draft_selection',
     'issuing_award_reference',
     'pick_custody',
     'draft_session',

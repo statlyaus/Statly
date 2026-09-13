@@ -46,8 +46,11 @@ export async function createRetainedExternalCaptureFixture(
   tradeDetail = false,
   secondSession = false,
   enumerated = false,
-  multiDocument = false
+  multiDocument = false,
+  supplementalSelection = false
 ) {
+  if (supplementalSelection && (!enumerated || environment !== 'test_fixture'))
+    throw new Error('Supplemental synthetic selection requires enumerated test_fixture.');
   if (multiDocument && !enumerated)
     throw new Error('Multi-document proof requires enumerated fixture.');
   if (enumerated && environment !== 'test_fixture')
@@ -169,6 +172,16 @@ export async function createRetainedExternalCaptureFixture(
         recordedName: 'Synthetic Player 70',
         selectionNumber: 97,
       });
+  }
+  if (supplementalSelection && official && !secondSession) {
+    sessionFacts.push({
+      ...common,
+      kind: 'draft_selection',
+      selectionNumber: 35,
+      roundNumber: null,
+      player: { nativeId: null, recordedName: 'Synthetic Player 34' },
+      selectedByClub: { nativeId: null, recordedName: 'Synthetic Club' },
+    });
   }
   const fields =
     official && enumerated
@@ -460,7 +473,7 @@ export async function createRetainedExternalCaptureFixture(
         : officialHtml
       : tradeDetail
         ? tradeHtml
-        : `<table class="big-pick-movements"><tbody>${Array.from({ length: selectionCount }, (_, i) => `<tr><td class="draft">National</td><td class="number">${originalNumbers[i]}</td><td class="player"><a href="/players/synthetic-player${i === 0 ? '' : '-' + i}">Synthetic Player${i === 0 ? '' : ' ' + i}</a></td><td class="club"><a href="/clubs/synthetic-club">Synthetic Club</a></td></tr>`).join('')}</tbody></table>`
+        : `<table class="big-pick-movements"><tbody>${Array.from({ length: selectionCount }, (_, i) => (supplementalSelection && i === 34 ? '' : `<tr><td class="draft">National</td><td class="number">${originalNumbers[i]}</td><td class="player"><a href="/players/synthetic-player${i === 0 ? '' : '-' + i}">Synthetic Player${i === 0 ? '' : ' ' + i}</a></td><td class="club"><a href="/clubs/synthetic-club">Synthetic Club</a></td></tr>`)).join('')}</tbody></table>`
   );
   const sourceArtifact = createAflTradeByteArtifactRef(bytes, 'text/html', request.capturedAt);
   const captures = new PostgresAflTradeExternalCaptureRegistry(sql);

@@ -2832,6 +2832,17 @@ revocation/recovery checks. Nested roster fields require explicit Gate field map
 `members` does not grant `members.recordedName` or `members.selectionNumber`. Fixtures do not
 establish genuine2014 scope or canonical admission.
 
+Official AFL evidence may retain an explicit `draft_selection` independently of session or custody
+claims. When a retained provider inventory omits a selection, use a separately scoped source claim;
+do not edit prior captures or reduce the completed total. The reviewed-session owner unions selection
+claims across authenticated batches and rejects conflicting claims at the same original number.
+Migration0186 and the TypeScript successor guard permit supplemental official selections only for
+a relevant year/type and a number absent from all parent source selections. Existing claims, candidate
+selections and prior session projections remain immutable; complete membership must still be proved.
+The supplemental-selection fixture removes an interior member from Draftguru and supplies it through
+an official batch; complete-inventory, subset-promotion and source-revocation checks still apply.
+Provider claim support does not extend Gate permissions or authorize a new parser/source route.
+
 Migration0184 supports a complete `draft_completed_membership_roster` with explicit null numbers
 for named members, joined to separate `draft_completed_member_number` evidence by exact recorded
 name and draft year/type. The join cannot infer numbers from the retained inventory. Every unnumbered

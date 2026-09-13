@@ -66,10 +66,32 @@ export function buildReviewedSessionCorrection(input: {
     added.some(
       (b) =>
         !b.content.evidence.length ||
-        b.content.evidence.some((e) => !sessionKinds.has(e.content.claim.kind))
+        b.content.evidence.some((e) => {
+          const claim = e.content.claim;
+          if (sessionKinds.has(claim.kind)) return false;
+          if (e.content.provider !== 'official_afl' || claim.kind !== 'draft_selection')
+            return true;
+          const relevant = parent.content.draftSelections.some(
+            (s) => s.draftYear === claim.draftYear && s.draftType === claim.draftType
+          );
+          const alreadyRetained = batches
+            .filter((source) => parent.content.sourceBatchIds.includes(source.batchId))
+            .some((source) =>
+              source.content.evidence.some(
+                ({ content }) =>
+                  content.claim.kind === 'draft_selection' &&
+                  content.claim.draftYear === claim.draftYear &&
+                  content.claim.draftType === claim.draftType &&
+                  content.claim.selectionNumber === claim.selectionNumber
+              )
+            );
+          return !relevant || alreadyRetained;
+        })
     )
   )
-    throw new TypeError('Session source extension may add only retained session claims.');
+    throw new TypeError(
+      'Session source extension requires session claims or absent official selections in relevant drafts.'
+    );
   const resolutions = input.identityResolutions.map(parseAflTradeExternalIdentityResolution);
   const resolutionIds = resolutions.map((r) => r.resolutionId).sort();
   if (

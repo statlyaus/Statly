@@ -1,3 +1,8 @@
+import { buildReviewedSessionCorrection } from '@/server/aflTradeIntelligence/source/reviewedSessionCorrection';
+import {
+  createAflTradeExternalEvidenceBatch,
+  createAflTradeExternalEvidenceEnvelope,
+} from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
 import { verifySessionAcquisitionCurrentness } from '../testUtils/sessionAcquisitionCurrentness';
 import {
   createAflTradeExternalReconciliationCandidate,
@@ -38,11 +43,12 @@ import { deriveReviewedSessionCanonicalPromotionProposal } from '@/server/aflTra
 import { createAflTradeExternalCanonicalPromotionReviewDecision } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionReviewContracts';
 import { createRetainedExternalCaptureFixture } from '../testUtils/retainedExternalCaptureFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
-describe.each(['consecutive', 'enumerated', 'multi_document'])(
+describe.each(['consecutive', 'enumerated', 'multi_document', 'supplemental_selection'])(
   'reviewed retained subset (%s)',
   (mode) => {
     const enumerated = mode !== 'consecutive';
     const multiDocument = mode === 'multi_document';
+    const supplementalSelection = mode === 'supplemental_selection';
     const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
     if (!url) throw new Error('Disposable PostgreSQL required.');
     const schema = `reviewed_subset_${mode}_${process.pid}_${Date.now()}`;
@@ -78,7 +84,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
         false,
         false,
         enumerated,
-        multiDocument
+        multiDocument,
+        supplementalSelection
       );
       const trade = await createRetainedExternalCaptureFixture(
         sql,
@@ -89,7 +96,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
         true,
         false,
         enumerated,
-        multiDocument
+        multiDocument,
+        supplementalSelection
       );
       const official = await createRetainedExternalCaptureFixture(
         sql,
@@ -100,7 +108,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
         false,
         false,
         enumerated,
-        multiDocument
+        multiDocument,
+        supplementalSelection
       );
       const second = await createRetainedExternalCaptureFixture(
         sql,
@@ -111,7 +120,8 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
         false,
         true,
         enumerated,
-        multiDocument
+        multiDocument,
+        supplementalSelection
       );
       const plannedAt = (
         await pool.query<{ at: string }>(
@@ -211,7 +221,9 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
         { completionId: completion.completionId },
         { source, reviewRepository }
       );
-      expect(queue.items.filter((i) => i.entityKind === 'player')).toHaveLength(71);
+      expect(queue.items.filter((i) => i.entityKind === 'player')).toHaveLength(
+        supplementalSelection ? 70 : 71
+      );
       const targetIds = new Map<string, string>();
       const identityReviewedAt = await databaseInstant();
       for (const [index, item] of queue.items.entries()) {
@@ -392,6 +404,15 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
         );
         for (const item of boundaryQueue.items.filter((item) => item.provider === 'official_afl')) {
           const canonicalId = targetIds.get(item.entityKind + '|' + item.observedNames[0]);
+          if (
+            supplementalSelection &&
+            item.entityKind === 'player' &&
+            item.observedNames[0] === 'Synthetic Player 34'
+          ) {
+            // Interior inventory evidence does not require an unrelated canonical player target.
+            expect(canonicalId).toBeUndefined();
+            continue;
+          }
           expect(canonicalId).toBeDefined();
           await recordAflTradeExternalIdentityReviewDecision(
             {
@@ -417,6 +438,40 @@ describe.each(['consecutive', 'enumerated', 'multi_document'])(
       expect(expandedSource.sourceAuthority.completionSourceBatchSetSha256).toBe(
         sha(expandedSource.sourceBatches.map((b) => b.batchId))
       );
+      if (supplementalSelection) {
+        for (const patch of [
+          { selectionNumber: 34 },
+          { draftYear: 2023 },
+          { draftType: 'rookie' as const },
+        ]) {
+          const changed = expandedSource.sourceBatches.map((batch) => {
+            if (batch.batchId !== official.target.evidenceBatchId) return batch;
+            return createAflTradeExternalEvidenceBatch({
+              ...batch.content,
+              evidence: batch.content.evidence.map((row) =>
+                row.content.claim.kind === 'draft_selection'
+                  ? createAflTradeExternalEvidenceEnvelope({
+                      ...row.content,
+                      claim: { ...row.content.claim, ...patch },
+                    })
+                  : row
+              ),
+            });
+          });
+          expect(() =>
+            buildReviewedSessionCorrection({
+              candidate: ordinary.candidate,
+              sourceBatches: changed,
+              sourceAuthority: {
+                ...expandedSource.sourceAuthority,
+                candidateSourceBatchSetSha256: sha(changed.map((b) => b.batchId).sort()),
+                completionSourceBatchSetSha256: sha(changed.map((b) => b.batchId)),
+              },
+              identityResolutions: originalResolutions,
+            })
+          ).toThrow(/absent official selections in relevant drafts/);
+        }
+      }
       const built = await sql.transaction((tx) =>
         prepareReviewedSessionCorrection(tx, {
           parentCandidateId: ordinary.candidate.candidateId,

@@ -269,6 +269,54 @@ describe('external AFL draft and trade evidence contracts', () => {
     expect(custody.content.claim.kind).toBe('pick_custody');
   });
 
+  it('retains an official supplemental selection without inferring custody or session coverage', () => {
+    const input = {
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl' as const,
+      capture: {
+        ...capture,
+        sourceUrl: 'https://www.afl.com.au/news/87166/the-class-of-2012-draft-report-card',
+        effectiveAt: '2012-11-22T00:00:00.000Z',
+        parserVersion: 'official-afl-supplemental-selection-test/v1',
+      },
+      sourceRow: { ordinal: 1, sourceKey: '2012:national:70' },
+      claim: {
+        kind: 'draft_selection' as const,
+        draftYear: 2012,
+        draftType: 'national' as const,
+        selectionNumber: 70,
+        roundNumber: null,
+        player: { nativeId: null, recordedName: 'Michael Osborne' },
+        selectedByClub: { nativeId: null, recordedName: 'Hawthorn' },
+      },
+      publicationEligible: false as const,
+    };
+    const envelope = createAflTradeExternalEvidenceEnvelope(input);
+    expect(parseAflTradeExternalEvidenceEnvelope(envelope)).toEqual(envelope);
+    expect(envelope.content.claim).toEqual(input.claim);
+    expect(envelope.content.publicationEligible).toBe(false);
+    for (const claim of [
+      { ...input.claim, selectionNumber: 0 },
+      { ...input.claim, player: { nativeId: null, recordedName: '' } },
+      { ...input.claim, selectedByClub: null },
+      { ...input.claim, originalClub: input.claim.selectedByClub },
+      { ...input.claim, sessionOrdinal: 1 },
+    ]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({
+          ...input,
+          claim: claim as unknown as typeof input.claim,
+        })
+      ).toThrow();
+    }
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...input,
+        provider: 'fitzroy_official_afl_player_details',
+      })
+    ).toThrow();
+  });
+
   it('preserves unknown original club and round on point-in-time custody evidence', () => {
     const custody = createAflTradeExternalEvidenceEnvelope({
       schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
