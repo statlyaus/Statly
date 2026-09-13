@@ -2922,3 +2922,12 @@ references remain required; source revocation is still enforced by the surroundi
 Unknown conflicts, shared capture/artifact provenance, duplicate roster numbers and mismatched
 inventory fail closed. The raw roster remains72 and the club binding remains71. This reviewed
 source-choice rule grants no new capture, identity, publication or canonical admission authority.
+
+The reviewed 2011 parser (v14) emits 75 national members from AFL506746's 96 slots,
+excluding its 13 explicitly promoted rookies and eight passes while retaining local-talent
+selections. It preserves Sutcliffe72 in that roster and emits71 independently from AFL75034.
+AFL453197 supplies the independent75 total; AFL469214 supplies the completed24 November2011
+date and the absent supplemental Jason Blake76 selection. Migration0190 recognizes those four
+documents and pairs the total with the independent roster terminal. The2013 publication year
+of the total report does not change the2011 event year. Governed capture, required boundary
+identity binding and genuine session correction must still execute before admission.
