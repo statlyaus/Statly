@@ -28,7 +28,7 @@ import { z } from 'zod';
 
 type ExternalProvider = AflTradeExternalEvidenceContent['provider'];
 export type AflTradeExternalDraftPathway =
-  'national' | 'rookie' | 'pre_season' | 'mid_season' | null;
+  'national' | 'rookie' | 'pre_season' | 'mid_season' | 'mini_draft' | null;
 
 export const AFL_TRADE_EXTERNAL_CAPTURE_EXECUTION_SCHEMA_VERSION =
   'afl-trade-external-capture-execution/v2' as const;
@@ -84,7 +84,7 @@ const executionRequestSchema = z
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     discoveryFromSeasonYear: z.number().int().min(1988).max(2200).nullable().optional(),
-    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season']).nullable(),
+    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft']).nullable(),
     dataset: z.string().trim().min(1).max(160),
     datasetVersion: z.string().trim().min(1).max(160),
     accessMechanism: z.string().trim().min(1).max(160),
@@ -289,7 +289,7 @@ const ingestionRequestSchema = z
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     discoveryFromSeasonYear: z.number().int().min(1988).max(2200).nullable().optional(),
-    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season']).nullable(),
+    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft']).nullable(),
     dataset: z.string().trim().min(1).max(160),
     datasetVersion: z.string().trim().min(1).max(160),
     accessMechanism: z.string().trim().min(1).max(160),

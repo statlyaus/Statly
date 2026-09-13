@@ -31,7 +31,7 @@ const primitiveInputSchema = z
     ]),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
-    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season']).nullable(),
+    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft']).nullable(),
     dataset: z.string().trim().min(1).max(160),
     datasetVersion: z.string().trim().min(1).max(160),
     accessMechanism: z.string().trim().min(1).max(160),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseIngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import {
   OFFICIAL_AFL_MINI_2011_SOURCES,
   reviewedOfficialAflMiniDraft2011EffectiveYear,
@@ -21,7 +22,15 @@ describe('2011 mini-draft exact source routing', () => {
       expect(combinedDraftDocumentId('official_afl', source.url, 'non_production')).toBe(
         source.url
       );
-      const request = {
+      const request = parseIngestAflTradeExternalPageRequest({
+        environment: 'non_production',
+        competition: 'AFLM',
+        dataset: 'Historical completed draft sessions',
+        datasetVersion: 'mini-2011',
+        accessMechanism: 'automated_web',
+        capturedAt: '2026-09-14T00:00:00Z',
+        fieldManifestSha256: 'a'.repeat(64),
+        maximumBytes: 2097152,
         capabilityId: 'official-afl-completed-draft-session',
         provider: 'official_afl',
         sourceUrl: source.url,
@@ -30,10 +39,11 @@ describe('2011 mini-draft exact source routing', () => {
         discoveryFromSeasonYear: null,
         effectiveAt: source.time,
         parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
-      };
-      expect(() => validateAflTradeExternalCaptureScope(request as never)).not.toThrow();
+      });
+      expect(() => validateAflTradeExternalCaptureScope(request)).not.toThrow();
       for (const patch of [
         { draftPathway: 'national' },
+        { provider: 'footywire', capabilityId: 'footywire-draft-results', sourceUrl: 'https://www.footywire.com/afl/footy/ft_drafts?year=2011&t=N' },
         { draftPathway: 'rookie' },
         { anchorSeasonYear: 2012 },
         { sourceUrl: source.url + '?x=1' },

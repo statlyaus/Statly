@@ -130,6 +130,7 @@ export function validateAflTradeExternalCaptureScope(
     if (
       request.provider !== 'footywire' ||
       request.draftPathway === null ||
+      request.draftPathway === 'mini_draft' ||
       request.discoveryFromSeasonYear != null ||
       url.hostname !== 'www.footywire.com' ||
       url.pathname !== '/afl/footy/ft_drafts' ||
