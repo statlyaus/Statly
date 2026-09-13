@@ -2789,5 +2789,8 @@ creating a draft selection. These capabilities do not authenticate a reviewed co
 `prepareReviewedRookieCorrection` rebuilds the versioned successor from the current finalized parent,
 registered review and retained movement evidence in one transaction. Authentication compares the
 entire rebuilt candidate, preserving special/ordinary records and source authority. Its preparation
-result explicitly reports persistence/admission false. The database successor validator and genuine
-persistence/readback/independent restore remain required before that status may change.
+result explicitly reports persistence/admission false. Migration0175 authenticates the existing parent
+and exact rookie review, custody, terminal endpoint and content-addressed identifiers while preserving
+prior records and source-evidence conservation. Persistence/replay must pass through that validator.
+Verify readback, SQL tamper rejection and independent restore before recording a completed correction;
+canonical admission, special lifecycle/exercise and draft-session coverage remain separate exits.

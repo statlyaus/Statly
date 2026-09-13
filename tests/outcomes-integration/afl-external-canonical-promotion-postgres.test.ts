@@ -1,3 +1,5 @@
+import { createAflTradeExternalEvidenceEnvelope } from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
+import { buildReviewedAdmissionScope } from '@/server/aflTradeIntelligence/source/reviewedAdmissionScope';
 import { createReviewedPickLineageRegistration, reviewedPickLineageApprovalEvidence } from '@/server/aflTradeIntelligence/source/reviewedPickLineageRegistrationContracts';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createSpecialEntitlementIdentityReplacement } from '@/server/aflTradeIntelligence/source/specialEntitlementIdentityReplacementContracts';
@@ -68,9 +70,17 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
   }
 
   const digest = (character: string) => character.repeat(64);
-  const evidenceId = `external-evidence:${digest('e')}`;
   const batchId = `external-evidence-batch:${digest('b')}`;
   const captureId = `source-capture:${digest('c')}`;
+  const evidence = createAflTradeExternalEvidenceEnvelope({
+    schemaVersion:'afl-trade-external-evidence/v1',provider:'draftguru',publicationEligible:false,
+    capture:{captureId,artifactId:`artifact:${digest('1')}`,contentSha256:digest('1'),mediaType:'text/html',
+      sourceUrl:'https://www.draftguru.com.au/trades/promotion-fixture',capturedAt:'2025-11-01T00:00:00.000Z',
+      effectiveAt:'2025-11-01T00:00:00.000Z',parserVersion:'draftguru/v1',fieldManifestSha256:digest('4')},
+    sourceRow:{ordinal:1,sourceKey:'fixture-trade'},
+    claim:{kind:'transaction',nativeEventId:'promotion-fixture',seasonYear:2025,occurredOn:reviewedDate,transactionType:'trade',title:null},
+  });
+  const evidenceId = evidence.evidenceId;
   const transactionId = createAflTradeContentAddress('external-transaction', {
     provider: 'draftguru',
     nativeEventId: 'promotion-fixture',
@@ -185,7 +195,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
       `INSERT INTO outcome_artifact_custody
       (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
        environment,created_at,verified_at,custody_json)
-     VALUES ('artifact-promotion-source',$1,$2,'text/html',1,'raw_source','test_fixture',
+     VALUES ('artifact:${digest('1')}',$1,$2,'text/html',1,'raw_source','test_fixture',
              '2025-11-01T00:00:00.000Z','2025-11-01T00:00:01.000Z','{}'::jsonb)`,
       [digest('1'), `artifact://sha256/${digest('1')}`]
     );
@@ -200,7 +210,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
       (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,
        dataset_version,access_mechanism,capability_id,competition,anchor_season_year,effective_at,
        captured_at,status,manifest_json)
-     VALUES ($1,'attempt-promotion',$2,'artifact-promotion-source','test_fixture',
+     VALUES ($1,'attempt-promotion',$2,'artifact:${digest('1')}','test_fixture',
              'draftguru','trades','2025','automated_web','draftguru-trade-detail','AFLM',2025,
              '2025-10-15T00:00:00.000Z','2025-11-01T00:00:01.000Z','approved',$3::jsonb)`,
       [
@@ -227,8 +237,8 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
     await outcomesPool.query(
       `INSERT INTO outcome_external_evidence_row
       (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
-     VALUES ($1,$2,1,'fixture-trade','transaction','{}'::jsonb)`,
-      [evidenceId, batchId]
+     VALUES ($1,$2,1,'fixture-trade','transaction',$3::jsonb)`,
+      [evidenceId, batchId, canonicalizeAflTradeJson(evidence)]
     );
     await outcomesPool.query(
       `UPDATE outcome_external_evidence_batch
@@ -754,7 +764,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
         retainedSourceLabel: 'Pick 14', acceptedTradeTimePick: 14, originalClubId: 'club-gws',
         movements: [{transferId, fromClubId: 'club-gws', toClubId: 'club-western-bulldogs',
           occurredAt: precision === 'day' ? {precision:'day',date:'2025-10-15'} : {precision:'year',year:2025}, predecessorOrdinal:null}],
-        endpoint: {kind:'passed',draftYear:2025,draftType:'national',livePick:14}, attribution:'direct',
+        endpoint: precision === 'rookie' ? candidate.content.pickLineage[0].terminalOutcome! : {kind:'passed',draftYear:2025,draftType:'national',livePick:14}, attribution:'direct',
         evidence: [createAflTradeByteArtifactRef(new TextEncoder().encode('Reviewed fixture source'), 'text/plain', '2026-08-09T11:00:00Z')],
       }] });
       async function approve(value: typeof registration, authorityEvidenceId = authority.authority_evidence_id) {
@@ -781,7 +791,33 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
       expect(results[0]).toMatchObject({registration,reviewAuthorityAuthenticated:true,sourceAuthorityAuthenticated:false,canonicalAdmission:false});
       expect((await owner.readReviewedPickLineage(registration.registrationId)).registration).toEqual(registration);
       const promotionInput = {registrationId:registration.registrationId,candidateId:candidate.candidateId,environment:'test_fixture' as const};
-      expect(await owner.prepareReviewedPickLineagePromotion(promotionInput)).toMatchObject({sourceAuthorityAuthenticated:true,canonicalAdmission:false,content:{facts:[{endpoint:{kind:'passed'}}]}});
+      expect(await owner.prepareReviewedPickLineagePromotion(promotionInput)).toMatchObject({sourceAuthorityAuthenticated:true,canonicalAdmission:false,content:{facts:[{endpoint:{kind:precision === 'rookie' ? 'rookie_elevation' : 'passed'}}]}});
+      if (precision === 'rookie') {
+        const reconciliation = new PostgresAflTradeExternalReconciliationRepository(createPgAflOutcomeSqlClient(outcomesPool));
+        const unscoped = createAflTradeExternalReconciliationCandidate({...candidate.content,pickCustody:[],pickLineage:[]});
+        await reconciliation.persistCandidate({candidate:unscoped,identityResolutions:[]});
+        const scope = buildReviewedAdmissionScope({ sourceCandidate: unscoped, originalCandidate: candidate, registration });
+        await reconciliation.persistCandidate({candidate:scope,identityResolutions:[]});
+        const ordinary = await owner.prepareReviewedOrdinaryCorrection({scopeCandidateId:scope.candidateId,environment:'test_fixture'});
+        await reconciliation.persistCandidate({candidate:ordinary.candidate,identityResolutions:[]});
+        const rookie = await owner.prepareReviewedRookieCorrection({parentCandidateId:ordinary.candidate.candidateId,environment:'test_fixture'});
+        const request = {candidate:rookie.candidate,identityResolutions:[]};
+        expect((await reconciliation.persistCandidate(request)).idempotentReplay).toBe(false);
+        expect((await reconciliation.persistCandidate(request)).idempotentReplay).toBe(true);
+        expect(rookie.candidate.content.draftSelections).toEqual([]);
+        const binding = rookie.candidate.content.reviewedRookieCorrection!.bindings[0];
+        const tamperCases = [
+          (v: typeof rookie.candidate) => { v.content.reviewedRookieCorrection!.bindings = []; },
+          (v: typeof rookie.candidate) => { v.content.transfers[0].toClubId = 'invented-club'; },
+          (v: typeof rookie.candidate) => { v.content.transactions[0].title = 'invented-title'; },
+          (v: typeof rookie.candidate) => { const row = v.content.pickLineage.find(row => row.lineageId === binding.lineageId)!; if (row.terminalOutcome?.kind === 'rookie_elevation') row.terminalOutcome.playerId = 'invented-player'; },
+        ];
+        for (const mutate of tamperCases) {
+          const forged = structuredClone(rookie.candidate); mutate(forged);
+          await expect(outcomesPool.query('SELECT validate_outcome_reviewed_admission_scope($1::jsonb)',[canonicalizeAflTradeJson(forged)])).rejects.toThrow();
+        }
+        expect((await outcomesPool.query('SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1',[ordinary.candidate.candidateId])).rows[0].candidate_json).toEqual(ordinary.candidate);
+      }
       const changed = createReviewedPickLineageRegistration({candidate,records:registration.content.records,proposedAt:'2026-08-09T12:00:01Z'});
       await expect(owner.registerReviewedPickLineage({registration:changed,approvalDecisionId:await approve(changed)})).rejects.toThrow(/immutable conflict/);
       await expect(outcomesPool.query("UPDATE outcome_reviewed_pick_lineage_registration SET registration_json='{}'")).rejects.toThrow();

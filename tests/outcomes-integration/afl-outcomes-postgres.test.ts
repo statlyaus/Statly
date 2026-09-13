@@ -1202,6 +1202,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0172_retained_issuing_award_capability',
       '0173_reviewed_special_correction',
       '0174_rookie_elevation_terminal',
+      '0175_reviewed_rookie_correction',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
