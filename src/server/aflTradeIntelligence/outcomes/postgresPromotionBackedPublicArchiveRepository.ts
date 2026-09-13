@@ -1,3 +1,4 @@
+import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
 import { z } from 'zod';
 
@@ -83,7 +84,8 @@ const custodySchema = z
   .object({
     custodyObservationId: z.string().min(1),
     pickId: z.string().min(1),
-    observedAt: z.string().min(1),
+    observedAt: pickCustodyDateSchema,
+    predecessorCustodyId: z.string().min(1).nullable().optional(),
     draftSeasonYear: z.number().int(),
     draftKind: z.string().min(1),
     recordedRound: z.number().int().positive().nullable(),
@@ -425,8 +427,9 @@ async function buildRecords(
         recordKind: 'pick_custody',
         recordId: value.custodyObservationId,
         custodyObservationId: value.custodyObservationId,
+        ...(value.predecessorCustodyId ? { predecessorCustodyId: value.predecessorCustodyId } : {}),
         pickId: value.pickId,
-        observedAt: new Date(value.observedAt).toISOString(),
+        observedAt: typeof value.observedAt === 'string' ? new Date(value.observedAt).toISOString() : value.observedAt,
         draftSeasonYear: value.draftSeasonYear,
         draftKind: value.draftKind,
         recordedRound: value.recordedRound,

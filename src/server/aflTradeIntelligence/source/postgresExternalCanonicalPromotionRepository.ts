@@ -1,3 +1,4 @@
+import { pickCustodyDateColumns } from './pickCustodyDate';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
 import { registerReviewedPickLineage, readReviewedPickLineage } from './postgresReviewedPickLineageRegistration';
 import { previewReviewedPickLineage } from './reviewedPickLineageReadiness';
@@ -1627,6 +1628,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       async function persistPickCustody(): Promise<void> {
         for (const record of content.pickCustody) {
+          const date = pickCustodyDateColumns(record.observedAt);
           if (!record.originalClubId || !record.currentClubId) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
@@ -1646,14 +1648,14 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             `INSERT INTO outcome_pick_custody_observation
             (custody_observation_id,pick_id,observed_at,draft_season_year,draft_kind,
              recorded_round,recorded_pick,original_club_id,current_club_id,source_import_row_id,
-             status,evidence_json,recorded_at)
+             status,evidence_json,recorded_at,observed_date,predecessor_custody_id)
            VALUES ($1,$2,$3,$4,$5::"OutcomeEventKind",$6,$7,$8,$9,$10,
-                   'approved'::"OutcomeRecordStatus",$11::jsonb,$12)
+                   'approved'::"OutcomeRecordStatus",$11::jsonb,$12,$13::jsonb,$14)
            ON CONFLICT (custody_observation_id) DO NOTHING`,
             [
               record.custodyId,
               record.pickId,
-              record.observedAt,
+              date.observedAt,
               record.draftYear,
               kind.eventKind,
               record.roundNumber,
@@ -1663,22 +1665,26 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
               approval.promotedAt,
+              date.observedDate === null ? null : canonicalizeAflTradeJson(date.observedDate),
+              record.predecessorCustodyId ?? null,
             ]
           );
           const exactCustody = await transaction.query(
             `SELECT custody_observation_id FROM outcome_pick_custody_observation
-            WHERE custody_observation_id=$1 AND pick_id=$2 AND observed_at=$3
+            WHERE custody_observation_id=$1 AND pick_id=$2 AND observed_at IS NOT DISTINCT FROM $3
               AND draft_season_year=$4 AND draft_kind=$5::"OutcomeEventKind"
               AND recorded_round IS NOT DISTINCT FROM $6
               AND recorded_pick IS NOT DISTINCT FROM $7
               AND original_club_id=$8 AND current_club_id=$9
               AND source_import_row_id=$10 AND status='approved'::"OutcomeRecordStatus"
               AND evidence_json=$11::jsonb AND recorded_at=$12
+              AND observed_date IS NOT DISTINCT FROM $13::jsonb
+              AND predecessor_custody_id IS NOT DISTINCT FROM $14
             FOR SHARE`,
             [
               record.custodyId,
               record.pickId,
-              record.observedAt,
+              date.observedAt,
               record.draftYear,
               kind.eventKind,
               record.roundNumber,
@@ -1688,6 +1694,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
               approval.promotedAt,
+              date.observedDate === null ? null : canonicalizeAflTradeJson(date.observedDate),
+              record.predecessorCustodyId ?? null,
             ]
           );
           if (exactCustody.rows.length !== 1) {

@@ -1,3 +1,4 @@
+import { pickCustodyDateSchema } from './pickCustodyDate';
 import {
   canonicalPickEntitlementSchema,
   resolvedSpecialEntitlementSchema,
@@ -102,7 +103,8 @@ const custodySchema = z
   .object({
     custodyId: aflTradeContentAddressedIdSchema('external-pick-custody'),
     pickId: aflTradeContentAddressedIdSchema('draft-pick'),
-    observedAt: instantSchema,
+    observedAt: pickCustodyDateSchema,
+    predecessorCustodyId: aflTradeContentAddressedIdSchema('external-pick-custody').nullable().optional(),
     draftYear: z.number().int().min(1897).max(2200),
     draftType: z.string().trim().min(1).max(80),
     roundNumber: z.number().int().positive().nullable(),

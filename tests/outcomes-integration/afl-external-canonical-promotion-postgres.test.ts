@@ -46,7 +46,7 @@ import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/se
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
-describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (precision) => {
+describe.each(['instant', 'day', 'year'] as const)('factual occurrence precision: %s', (precision) => {
   const reviewedDate = precision === 'day' ? '2025-10-15' : null;
   const databaseUrl =
     process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -151,7 +151,7 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
         {
           custodyId,
           pickId,
-          observedAt: '2025-11-01T00:00:00.000Z',
+          observedAt: precision === 'instant' ? '2025-11-01T00:00:00.000Z' : precision === 'day' ? {precision:'day',date:'2025-11-01'} : {precision:'year',year:2025},
           draftYear: 2025,
           draftType: 'national',
           roundNumber: 1,
@@ -667,6 +667,11 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
           [release.releaseId, digest('f')]
         )
       ).rejects.toThrow(/finalized (?:release|promotion-backed) candidate|registered release/i);
+      const storedCustody = (await outcomesPool.query('SELECT observed_at,observed_date FROM outcome_pick_custody_observation WHERE custody_observation_id=$1',[custodyId])).rows[0];
+      if (precision === 'instant') { expect(storedCustody.observed_at).not.toBeNull(); expect(storedCustody.observed_date).toBeNull(); }
+      else { expect(storedCustody.observed_at).toBeNull(); expect(storedCustody.observed_date).toEqual(candidate.content.pickCustody[0].observedAt); }
+      const archiveCustody = (await outcomesPool.query<{record_json:{record:unknown}}>("SELECT record_json FROM outcome_public_factual_archive_record WHERE record_kind='pick_custody'")).rows;
+      expect(archiveCustody[0].record_json.record).toMatchObject({observedAt:candidate.content.pickCustody[0].observedAt});
       const counts = await outcomesPool.query<{
         promotions: string;
         corpora: string;
@@ -767,6 +772,23 @@ describe.each(['day', 'year'] as const)('factual occurrence precision: %s', (pre
       await expect(owner.readReviewedPickLineage(registration.registrationId)).rejects.toThrow(/current approval/);
       await expect(owner.prepareReviewedPickLineagePromotion(promotionInput)).rejects.toThrow(/current approval/);
       expect((await outcomesPool.query('SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1',[candidate.candidateId])).rows).toEqual(before);
+    });
+    it('rejects backwards and cyclic canonical custody predecessors', async () => {
+      const client = await outcomesPool.connect();
+      const insert = async (id: string, predecessor: string, year: number) => client.query(`INSERT INTO outcome_pick_custody_observation
+        (custody_observation_id,pick_id,observed_at,observed_date,predecessor_custody_id,draft_season_year,draft_kind,recorded_round,recorded_pick,original_club_id,current_club_id,source_import_row_id,status,evidence_json,recorded_at)
+        SELECT $1,pick_id,NULL,jsonb_build_object('precision','year','year',$3::int),$2,draft_season_year,draft_kind,recorded_round,recorded_pick,original_club_id,current_club_id,source_import_row_id,status,evidence_json,recorded_at
+        FROM outcome_pick_custody_observation WHERE custody_observation_id=$4`,[createAflTradeContentAddress('external-pick-custody',{fixture:id}),predecessor.startsWith('external-pick-custody:') ? predecessor : createAflTradeContentAddress('external-pick-custody',{fixture:predecessor}),year,custodyId]);
+      try {
+        await client.query('BEGIN');
+        await insert('backwards-custody',custodyId,2024);
+        await expect(client.query('SET CONSTRAINTS ALL IMMEDIATE')).rejects.toThrow(/chronological/);
+        await client.query('ROLLBACK');
+        await client.query('BEGIN');
+        await insert('cycle-one','cycle-two',2025);
+        await insert('cycle-two','cycle-one',2025);
+        await expect(client.query('SET CONSTRAINTS ALL IMMEDIATE')).rejects.toThrow(/cycle/);
+      } finally { await client.query('ROLLBACK'); client.release(); }
     });
     it('registers reviewed awards independently of exercise, replays, and rejects invalid authority and provenance', async () => {
       const authority = (

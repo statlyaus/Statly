@@ -3402,7 +3402,11 @@ model OutcomePickLineageEdge {
 model OutcomePickCustodyObservation {
   custodyObservationId String                      @id @map("custody_observation_id")
   pickId               String                      @map("pick_id")
-  observedAt           DateTime                    @map("observed_at") @outcomes.Timestamptz(3)
+  observedAt           DateTime?                    @map("observed_at") @outcomes.Timestamptz(3)
+  observedDate Json? @map("observed_date")
+  predecessorCustodyId String? @map("predecessor_custody_id")
+  predecessor OutcomePickCustodyObservation? @relation("PickCustodyPredecessor", fields: [predecessorCustodyId], references: [custodyObservationId], onDelete: Restrict, onUpdate: NoAction, map: "outcome_pick_custody_predecessor_fk")
+  successors OutcomePickCustodyObservation[] @relation("PickCustodyPredecessor")
   draftSeasonYear      Int                         @map("draft_season_year")
   draftKind            OutcomeEventKind            @map("draft_kind")
   recordedRound        Int?                        @map("recorded_round")

@@ -404,11 +404,14 @@ async function loadCanonicalMembers(
        SELECT requested.record_kind,custody.custody_observation_id,
               jsonb_build_object(
                 'custodyObservationId',custody.custody_observation_id,'pickId',custody.pick_id,
-                'observedAt',custody.observed_at,'draftSeasonYear',custody.draft_season_year,
+                'observedAt',COALESCE(custody.observed_date,to_jsonb(custody.observed_at)),
+                'draftSeasonYear',custody.draft_season_year,
                 'draftKind',custody.draft_kind,'recordedRound',custody.recorded_round,
                 'recordedPick',custody.recorded_pick,'originalClubId',custody.original_club_id,
                 'currentClubId',custody.current_club_id,'sourceImportRowId',custody.source_import_row_id,
                 'status',custody.status,'evidence',custody.evidence_json,'recordedAt',custody.recorded_at)
+              || CASE WHEN custody.predecessor_custody_id IS NULL THEN '{}'::jsonb
+                 ELSE jsonb_build_object('predecessorCustodyId',custody.predecessor_custody_id) END
          FROM requested_member requested
          JOIN outcome_pick_custody_observation custody
            ON custody.custody_observation_id=requested.canonical_record_id

@@ -1,3 +1,4 @@
+import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { z } from 'zod';
 
 import { AFL_DRAFT_TRADE_OUTCOME_PUBLIC_ASSET_BOUNDARY } from '@/types/aflDraftTradeOutcomes';
@@ -206,7 +207,8 @@ const pickCustodyRecordSchema = z
     recordId: boundedIdSchema,
     custodyObservationId: boundedIdSchema,
     pickId: boundedIdSchema,
-    observedAt: instantSchema,
+    observedAt: pickCustodyDateSchema,
+    predecessorCustodyId: z.string().min(1).nullable().optional(),
     draftSeasonYear: seasonSchema,
     draftKind: z.string().trim().min(1).max(80),
     recordedRound: z.number().int().positive().nullable(),

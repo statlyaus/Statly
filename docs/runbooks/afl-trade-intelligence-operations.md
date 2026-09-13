@@ -2691,3 +2691,11 @@ ordered custody plus typed endpoints without replacing partial dates with timest
 is preparation, not canonical admission or approval. Do not reuse a saved source check as authority;
 canonical writes must repeat this binding inside their own transaction. Existing candidate issues,
 special-right resolution and draft-session requirements remain until canonical integration completes.
+
+Migration0165 extends canonical pick custody with `observed_date` (an exact day/year object) and
+`predecessor_custody_id`. `observed_at` remains populated only for actual instants; exactly one date
+representation is required. Deferred predecessor checks reject different picks, cycles and impossible
+chronology while allowing explicitly ordered movements within the same year. Existing instant
+uniqueness remains intact. Promotion writes and factual/archive readback preserve date precision and
+predecessors; old records without predecessors retain their prior serialized shape. This storage
+support does not resolve candidate issues, supply draft sessions or admit the genuine reviewed set.
