@@ -398,7 +398,39 @@ supersede production Gate authority, and production execution cannot reuse non-p
    IDs in every target. Use the actual plan/completion creation times; do not backdate these records
    or manufacture an index inventory or scheduler occurrence. Both initial registration and replay
    require current source authority, and plan replay verifies retained bytes again. This is a
-   repository operation under the reviewed execution runbook, not a new public CLI command.
+   repository operation under the reviewed execution runbook, not a new public CLI command. A replacement
+   retained plan may reuse unchanged finalized batches from earlier completions alongside newly
+   captured batches. Each batch appears at most once per completion; prior completions remain
+   immutable. Reuse still requires exact target evidence and current authority for every batch.
+   Scheduled results retain their separate single-completion batch constraint.
+
+   **Migration 0163 maintenance procedure:** Before applying
+   `0163_retained_completion_batch_reuse` to a populated outcomes database, the database operator
+   must schedule a maintenance window for historical completion reads and writes. Its `ALTER TABLE`
+   constraints and ordinary unique-index creation acquire locks and can block concurrent traffic.
+   Pause historical discovery/completion workers and application entry points that access
+   `outcome_external_historical_capture_completion_result`, drain in-flight transactions, and verify
+   that no other completion writer remains active. Keep those controls in place until verification
+   finishes; this procedure is separate from the SQLite-to-PostgreSQL cutover.
+
+   Take and verify a recoverable backup, record the current migration state, and inspect active
+   transactions/locks on the completion-result table before starting. Apply the checked-in migration
+   through the normal outcomes migration runner with operator-selected finite lock and statement
+   timeouts appropriate to the measured table size and maintenance window. Do not replace it with an
+   unreviewed concurrent-index variant or run it against live writers. If a timeout or DDL error
+   occurs, retain the traffic pause, inspect both the migration record and actual constraints/indexes,
+   and reconcile any partially applied statements through the reviewed migration-recovery process
+   before retrying. Do not mark a failed migration successful merely to unblock deployment.
+
+   Before resuming traffic, verify that migration 0163 finished, the global batch uniqueness was
+   removed, `outcome_external_completion_batch_unique` enforces `(completion_id, evidence_batch_id)`,
+   and `outcome_external_scheduled_completion_batch_unique` is valid and unique with the predicate
+   `capture_mode <> 'retained'`. Confirm that historical completion rows are unchanged and run the
+   retained-reuse and scheduled-uniqueness checks against an owned disposable restore. Resume workers
+   and application traffic only after these checks pass. Reverting to global uniqueness after reused
+   batches exist is not a safe rollback; keep traffic paused and use a reviewed forward repair or
+   restore the verified pre-migration backup with its corresponding application version.
+
 6. Turn the finalized plan into a private reconciliation review candidate with
    `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion-id>`.
    PostgreSQL loads the exact immutable completion, plan and issue-free evidence batches; the command

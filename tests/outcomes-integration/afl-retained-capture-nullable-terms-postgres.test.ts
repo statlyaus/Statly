@@ -51,6 +51,44 @@ it('completes retained captures with unspecified terms dates under current Gate 
     sql
   ).completeRetainedPlan(plan.planId);
   expect(result).toMatchObject({ targetCount: 1, sourceBatchCount: 1, publicationEligible: false });
+  const original = (
+    await pool.query(
+      'SELECT to_jsonb(c) AS row FROM outcome_external_historical_capture_completion c WHERE completion_id=$1',
+      [result.completionId]
+    )
+  ).rows;
+  const nextPlan = createAflTradeRetainedExternalCapturePlan({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    plannedAt: (
+      await pool.query<{ at: Date }>("SELECT date_trunc('milliseconds',clock_timestamp()) AS at")
+    ).rows[0]!.at.toISOString(),
+    scopeEvidence: fixture.scopeEvidence,
+    targets: [fixture.target],
+  });
+  expect(nextPlan.planId).not.toBe(plan.planId);
+  await new PostgresAflTradeExternalDiscoveryRepository(sql).persistRetainedPlan(nextPlan, reader);
+  const reused = await new PostgresAflTradeExternalHistoricalCaptureCompletionRepository(
+    sql
+  ).completeRetainedPlan(nextPlan.planId);
+  expect(reused).toMatchObject({ targetCount: 1, sourceBatchCount: 1, publicationEligible: false });
+  expect(reused.completionId).not.toBe(result.completionId);
+  expect(
+    (
+      await pool.query(
+        'SELECT to_jsonb(c) AS row FROM outcome_external_historical_capture_completion c WHERE completion_id=$1',
+        [result.completionId]
+      )
+    ).rows
+  ).toEqual(original);
+  expect(
+    (
+      await pool.query(
+        'SELECT count(*)::int AS count FROM outcome_external_historical_capture_completion_result WHERE evidence_batch_id=$1',
+        [fixture.target.evidenceBatchId]
+      )
+    ).rows[0].count
+  ).toBe(2);
   expect(
     (
       await pool.query<{ current: boolean }>(
