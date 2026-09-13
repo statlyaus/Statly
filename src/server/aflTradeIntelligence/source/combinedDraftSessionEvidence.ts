@@ -33,6 +33,10 @@ export type CombinedDraftSessionFact =
   | (CombinedDraftFactBase & {
       kind: 'completed_draft_total';
       selectionCount: number;
+    })
+  | (CombinedDraftFactBase & {
+      kind: 'completed_draft_inventory';
+      selectionNumbers: readonly number[];
     });
 
 export interface CombinedDraftSessionCoverage {
@@ -228,12 +232,37 @@ export function resolveCombinedDraftSessionEvidence(input: {
     unique(totals.map(({ selectionCount }) => selectionCount)),
     'Combined draft proof requires one agreed completed selection total.'
   );
+  const inventoryNumbers = orderedSelections.map(({ selectionNumber }) => selectionNumber);
+  const enumerations = input.facts.filter(
+    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_draft_inventory' }> =>
+      fact.kind === 'completed_draft_inventory'
+  );
   if (
     orderedSelections.length !== total ||
-    orderedSelections.some((selection, index) => selection.selectionNumber !== index + 1) ||
+    inventoryNumbers.some((number) => !Number.isInteger(number) || number < 1) ||
+    unique(inventoryNumbers).length !== total ||
     unique(orderedSelections.map(({ selectionId }) => selectionId)).length !== total
   ) {
-    throw new TypeError('Combined draft proof requires a complete unique contiguous inventory.');
+    throw new TypeError('Combined draft proof requires a complete unique inventory.');
+  }
+  if (enumerations.length === 0) {
+    if (inventoryNumbers.some((number, index) => number !== index + 1)) {
+      throw new TypeError(
+        'A noncontiguous inventory requires explicit completed membership evidence.'
+      );
+    }
+  } else if (
+    enumerations.some(({ selectionNumbers }) => {
+      const numbers = [...selectionNumbers].sort((a, b) => a - b);
+      return (
+        numbers.length !== total ||
+        numbers.some((number, index) => number !== inventoryNumbers[index])
+      );
+    })
+  ) {
+    throw new TypeError(
+      'Completed membership must match every original inventory selection number.'
+    );
   }
 
   const boundaries = input.facts.filter(
@@ -286,8 +315,8 @@ export function resolveCombinedDraftSessionEvidence(input: {
     boundaries.filter((fact) => fact.sessionOrdinal === finalOrdinal && fact.boundary === 'last'),
     'The final combined draft session requires one explicit terminal boundary.'
   );
-  if (finalBoundary.selectionNumber !== total) {
-    throw new TypeError('The terminal boundary must agree with the completed draft total.');
+  if (finalBoundary.selectionNumber !== inventoryNumbers.at(-1)) {
+    throw new TypeError('The terminal boundary must agree with the complete inventory.');
   }
   for (const boundary of boundaries) {
     const sessionIndex = ordinals.indexOf(boundary.sessionOrdinal);
@@ -299,12 +328,14 @@ export function resolveCombinedDraftSessionEvidence(input: {
       boundary.boundary === 'first'
         ? starts[sessionIndex]!.selectionNumber
         : nextStart
-          ? nextStart.selectionNumber - 1
-          : total;
+          ? inventoryNumbers[inventoryNumbers.indexOf(nextStart.selectionNumber) - 1]
+          : inventoryNumbers.at(-1);
     if (boundary.selectionNumber !== expectedNumber) {
       throw new TypeError('Combined draft evidence contains a contradictory session boundary.');
     }
-    const selection = orderedSelections[boundary.selectionNumber - 1];
+    const selection = orderedSelections.find(
+      ({ selectionNumber }) => selectionNumber === boundary.selectionNumber
+    );
     if (
       !boundary.playerId.trim() ||
       !boundary.clubId.trim() ||

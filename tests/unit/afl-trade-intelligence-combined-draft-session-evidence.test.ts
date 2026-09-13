@@ -202,7 +202,7 @@ describe('combined draft-session evidence', () => {
       ),
     ],
   ])('rejects a 2016 inventory with a %s', (_, selected) => {
-    expect(() => resolve2016(selected)).toThrow('complete unique contiguous inventory');
+    expect(() => resolve2016(selected)).toThrow(/inventory/);
   });
 
   it.each([76, 78])('rejects terminal selection number %s against total 77', (selectionNumber) => {
@@ -452,5 +452,95 @@ describe('complete-inventory session projection', () => {
       selectedSelectionIds: selections.map((s) => s.selectionId),
     });
     expect(proof.selectedSessions).toEqual(proof.inventorySessions);
+  });
+});
+
+describe('explicit completed inventory', () => {
+  function gappedInput() {
+    const number = (value: number) => (value < 23 ? value : value + 10);
+    return {
+      draftYear: 2018,
+      draftType: 'national',
+      officialName: '2018 national draft',
+      selections: selections.map((selection) => ({
+        ...selection,
+        selectionNumber: number(selection.selectionNumber),
+      })),
+      facts: [
+        ...facts.map((fact) =>
+          fact.kind === 'session_boundary'
+            ? { ...fact, selectionNumber: number(fact.selectionNumber) }
+            : { ...fact }
+        ),
+        {
+          kind: 'completed_draft_inventory',
+          evidenceId: id('external-evidence', 'i'),
+          captureId: id('source-capture', 'i'),
+          artifactId: id('artifact', 'i'),
+          documentId: 'official_afl:news:complete-membership',
+          selectionNumbers: selections.map((selection) => number(selection.selectionNumber)),
+        },
+      ] as CombinedDraftSessionFact[],
+    };
+  }
+
+  it('partitions original nonconsecutive numbers across dated sessions before projection', () => {
+    const input = gappedInput();
+    const result = projectCombinedDraftSessionEvidence({
+      ...input,
+      selectedSelectionIds: [input.selections.at(-1)!.selectionId],
+    });
+    expect(result.inventorySessions.map((session) => session.selectionIds.length)).toEqual([
+      22, 56,
+    ]);
+    expect(result.selectedSessions).toHaveLength(1);
+    expect(result.selectedSessions[0]?.sessionOrdinal).toBe(2);
+    expect(result.selectedSessions[0]?.evidenceIds).toContain(id('external-evidence', 'i'));
+  });
+
+  it.each(['missing', 'added', 'duplicate', 'renumbered'] as const)(
+    'rejects %s membership even when retained inventory is unchanged',
+    (change) => {
+      const input = gappedInput();
+      const inventory = input.facts.find((fact) => fact.kind === 'completed_draft_inventory')!;
+      const numbers = [...inventory.selectionNumbers];
+      if (change === 'missing') numbers.pop();
+      if (change === 'added') numbers.push(89);
+      if (change === 'duplicate') numbers[1] = numbers[0]!;
+      if (change === 'renumbered') numbers[22] = 23;
+      inventory.selectionNumbers = numbers;
+      expect(() => resolveCombinedDraftSessionEvidence(input)).toThrow('Completed membership');
+    }
+  );
+
+  it('does not permit gaps without explicit membership', () => {
+    const input = gappedInput();
+    input.facts = input.facts.filter((fact) => fact.kind !== 'completed_draft_inventory');
+    expect(() => resolveCombinedDraftSessionEvidence(input)).toThrow(
+      'explicit completed membership'
+    );
+  });
+
+  it('rejects a contradictory second membership report', () => {
+    const input = gappedInput();
+    const inventory = input.facts.find((fact) => fact.kind === 'completed_draft_inventory')!;
+    input.facts.push({ ...inventory, selectionNumbers: inventory.selectionNumbers.slice(1) });
+    expect(() => resolveCombinedDraftSessionEvidence(input)).toThrow('Completed membership');
+  });
+
+  it('still requires independent total evidence and accurate boundary identities', () => {
+    const input = gappedInput();
+    const last = input.facts.find(
+      (fact) => fact.kind === 'session_boundary' && fact.boundary === 'last'
+    )!;
+    const total = input.facts.find((fact) => fact.kind === 'completed_draft_total')!;
+    total.documentId = last.documentId;
+    expect(() => resolveCombinedDraftSessionEvidence(input)).toThrow(
+      'independent authenticated document'
+    );
+    const wrong = gappedInput();
+    const boundary = wrong.facts.find((fact) => fact.kind === 'session_boundary')!;
+    if (boundary.kind === 'session_boundary') boundary.playerId = 'wrong';
+    expect(() => resolveCombinedDraftSessionEvidence(wrong)).toThrow('boundary identity');
   });
 });
