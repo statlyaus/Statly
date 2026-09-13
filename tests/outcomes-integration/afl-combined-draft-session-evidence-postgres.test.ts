@@ -367,6 +367,102 @@ it('reconstructs combined sessions, rejects downgrades, and fails after dependen
   });
 
   expect(await exact(proposal)).toBe(true);
+  const v5 = { ...proposal, schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5' };
+  expect(await exact(v5)).toBe(true);
+  const mixedClient = await pool.connect();
+  try {
+    await mixedClient.query('BEGIN');
+    await mixedClient.query('SET LOCAL session_replication_role=replica');
+    const directId = `external-evidence:${hex('c')}`;
+    const directSelection = `external-draft-selection:${hex('c')}`;
+    const direct = {
+      draftYear: 2025,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-20',
+      officialName: '2025 AFL Draft',
+      expectedSelectionCount: 1,
+      selectionIds: [directSelection],
+      evidenceIds: [directId],
+      status: 'complete',
+      proofKind: 'direct_session_claim',
+    };
+    await mixedClient.query(
+      `INSERT INTO outcome_external_reconciliation_draft_selection
+      (candidate_id,ordinal,selection_id,draft_year,draft_type,selection_number,pick_id,status,selection_json)
+      VALUES($1,5,$2,2025,'national',1,$3,'single_source',$4::jsonb)`,
+      [
+        candidateId,
+        directSelection,
+        `draft-pick:${hex('c')}`,
+        JSON.stringify({ playerId: 'player-1', clubId: 'club-1', evidenceIds: [directId] }),
+      ]
+    );
+    await mixedClient.query(
+      `INSERT INTO outcome_external_evidence_row
+      (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
+      VALUES($1,$2,99,'v5-direct','draft_session',$3::jsonb)`,
+      [
+        directId,
+        `external-evidence-batch:${hex('1')}`,
+        JSON.stringify({
+          content: {
+            provider: 'official_afl',
+            claim: {
+              kind: 'draft_session',
+              draftYear: 2025,
+              draftType: 'national',
+              sessionOrdinal: 1,
+              eventDate: direct.eventDate,
+              officialName: direct.officialName,
+              selectionNumbers: [1],
+            },
+          },
+        }),
+      ]
+    );
+    await mixedClient.query('SET LOCAL session_replication_role=origin');
+    const mixed = {
+      ...v5,
+      proposedAt: '2025-11-22T12:00:00.000Z',
+      draftEventCoverage: [...v5.draftEventCoverage, direct],
+    };
+    const verify = async (value: unknown) =>
+      (
+        await mixedClient.query<{ valid: boolean }>(
+          'SELECT outcome_external_draft_sessions_exact($1,$2::jsonb) AS valid',
+          [candidateId, JSON.stringify(value)]
+        )
+      ).rows[0]!.valid;
+    expect(await verify(mixed)).toBe(true);
+    expect(
+      await verify({ ...mixed, draftEventCoverage: mixed.draftEventCoverage.slice(0, 2) })
+    ).toBe(false);
+    for (const changed of [
+      { ...direct, selectionIds: [selectionIds[0]] },
+      { ...direct, evidenceIds: [evidenceIds[0]] },
+      { ...direct, proofKind: 'combined_session_facts' },
+      { ...direct, sessionOrdinal: 2 },
+      { ...direct, eventDate: '2025-11-21' },
+    ])
+      expect(
+        await verify({ ...mixed, draftEventCoverage: [...v5.draftEventCoverage, changed] })
+      ).toBe(false);
+    expect(
+      await verify({
+        ...mixed,
+        draftEventCoverage: [
+          { ...v5.draftEventCoverage[0], proofKind: 'direct_session_claim' },
+          v5.draftEventCoverage[1],
+          direct,
+        ],
+      })
+    ).toBe(false);
+  } finally {
+    await mixedClient.query('ROLLBACK');
+    mixedClient.release();
+  }
+
   const identityGuard = await pool.query<{ definition: string }>(
     `SELECT pg_get_functiondef('validate_outcome_external_identity_review_insert()'::regprocedure)
        AS definition`

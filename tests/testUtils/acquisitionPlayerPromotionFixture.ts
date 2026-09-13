@@ -46,6 +46,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   outcomesPool: Pool,
   options: {
     draftSessions?: boolean;
+    sessionProposalV5?: boolean;
+    partialTransactionDates?: boolean;
     combinedDraftSessions?: boolean;
     official2017CombinedDraft?: boolean;
     officialCombinedDraftYear?: 2016 | 2017;
@@ -65,6 +67,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     };
   } = {}
 ) {
+  if (options.partialTransactionDates && (!options.sessionProposalV5 || options.lifecycle))
+    throw new Error(
+      'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
+    );
   const hasDraftSessions = options.draftSessions || options.combinedDraftSessions;
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
@@ -424,7 +430,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             kind: 'transaction',
             nativeEventId: providerEventId,
             seasonYear,
-            occurredOn: `${seasonYear}-10-15`,
+            occurredOn: options.partialTransactionDates ? null : `${seasonYear}-10-15`,
             transactionType: 'trade',
             title: 'Synthetic player entry',
           },
@@ -1706,7 +1712,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         transactionId,
         providerEventId,
         seasonYear,
-        occurredOn: `${seasonYear}-10-15`,
+        occurredOn: options.partialTransactionDates ? null : `${seasonYear}-10-15`,
         transactionType: 'trade' as const,
         title: 'Synthetic player entry',
         parties: [targets.fromClubId, targets.toClubId].sort(),
@@ -1839,26 +1845,37 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     proposedAt: reviewedAt,
     publicationEligible: false as const,
   };
-  const proposal = options.combinedDraftSessions
+  const proposal = options.sessionProposalV5
     ? createAflTradeExternalCanonicalPromotionProposal({
         ...proposalInput,
-        schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+        schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5',
         draftEventCoverage: draftEventCoverage.map((coverage) => ({
           ...coverage,
-          proofKind: 'combined_session_facts' as const,
+          proofKind: options.combinedDraftSessions
+            ? ('combined_session_facts' as const)
+            : ('direct_session_claim' as const),
         })),
       })
-    : hasDraftSessions
+    : options.combinedDraftSessions
       ? createAflTradeExternalCanonicalPromotionProposal({
           ...proposalInput,
-          schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v2',
-          draftEventCoverage,
+          schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+          draftEventCoverage: draftEventCoverage.map((coverage) => ({
+            ...coverage,
+            proofKind: 'combined_session_facts' as const,
+          })),
         })
-      : createAflTradeExternalCanonicalPromotionProposal({
-          ...proposalInput,
-          schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
-          draftEventCoverage: [],
-        });
+      : hasDraftSessions
+        ? createAflTradeExternalCanonicalPromotionProposal({
+            ...proposalInput,
+            schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v2',
+            draftEventCoverage,
+          })
+        : createAflTradeExternalCanonicalPromotionProposal({
+            ...proposalInput,
+            schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
+            draftEventCoverage: [],
+          });
   const approvalDecisionId = await seedPromotionAuthority(candidate.candidateId, proposal);
   const receipt = await new PostgresAflTradeExternalCanonicalPromotionRepository(sql).promote({
     candidateId: candidate.candidateId,
@@ -1961,7 +1978,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       promotionId: receipt.promotionId,
       eventVersionId: assets.rows[0]!.event_version_id,
       assetVersionId: assets.rows[0]!.asset_version_id,
-      eventDate: `${seasonYear}-10-15`,
+      get eventDate(): string {
+        if (options.partialTransactionDates)
+          throw new Error('Year-only trade has no exact-day spell entry.');
+        return `${seasonYear}-10-15`;
+      },
       evidence: [sourceArtifact],
     },
   };

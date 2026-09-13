@@ -491,6 +491,14 @@ supersede production Gate authority, and production execution cannot reuse non-p
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not
    grant eligibility for historical valuation that requires an exact trade day.
+   For retained session proofs, `deriveDraftSessionCanonicalPromotionProposal` produces v5:
+   each draft declares `direct_session_claim` or `combined_session_facts`, while trade dates retain
+   their reviewed day/year precision. Different drafts may use different proof kinds; one draft
+   cannot mix them. Migration0176 checks each draft's retained proof and exact overall selection
+   membership, then enforces session finalization and current acquisition evidence. Combined proofs
+   still require a complete contiguous inventory and authenticated boundary identities. A scoped
+   correction candidate cannot use a partial inventory as full-draft proof. The existing metadata-only
+   review command remains on its v1/v4 path; v5 requires the session-aware programmatic owner.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
    content-addressed decision rather than manufacture a successor.
    PostgreSQL derives and authenticates the proposal, appends one typed decision, and advances its
