@@ -2765,3 +2765,14 @@ Migration0172 allows issuing references in retained completions only. Include th
 exact candidate source set before canonical custody; source capture alone does not extend a prior
 completion. Register current issuing-year capture/reviewer coverage before invoking the award owner.
 Retained article bytes and parser verification alone are not registered capture or award evidence.
+
+### Reviewed special-custody successors
+
+`prepareReviewedSpecialCorrection` authenticates the finalized ordinary parent, registered lineage,
+issuing awards and retained completion in one transaction. `reviewedSpecialCorrection.ts` builds a
+versioned successor covering every connected special history, including ordinary-labelled downstream
+legs. Its source set is exactly the parent batches plus registered award evidence; newly added batches
+must contain issuing references with matching grant years. Added evidence remains explicitly accounted
+for in the reviewed scope. Ordinary custody/lineage and unrelated facts are preserved.
+Preparation and exact replay do not persist or admit the successor. Database special-successor
+validation and the exact parent-to-successor source extension remain required before persistence.

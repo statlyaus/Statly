@@ -191,6 +191,28 @@ const contentSchema = z
       })
       .strict()
       .optional(),
+    reviewedSpecialCorrection: z
+      .object({
+        schemaVersion: z.literal('afl-trade-reviewed-special-correction/v1'),
+        parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+        registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
+        correctionGraphId: aflTradeContentAddressedIdSchema('reviewed-lineage-correction-graph'),
+        bindings: z
+          .array(
+            z
+              .object({
+                transferId: aflTradeContentAddressedIdSchema('external-transfer'),
+                entitlementId: aflTradeContentAddressedIdSchema('special-draft-entitlement'),
+                awardApprovalDecisionId: z.string().min(1),
+                predecessorTransferId:
+                  aflTradeContentAddressedIdSchema('external-transfer').nullable(),
+              })
+              .strict()
+          )
+          .min(1),
+      })
+      .strict()
+      .optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),
@@ -205,6 +227,22 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
+    if (
+      content.reviewedSpecialCorrection &&
+      (!content.reviewedCorrection ||
+        content.reviewedSpecialCorrection.registrationId !==
+          content.reviewedCorrection.registrationId ||
+        content.reviewedSpecialCorrection.correctionGraphId !==
+          content.reviewedCorrection.correctionGraphId ||
+        content.environment === 'production' ||
+        content.sourceAuthority?.kind !== 'historical_plan_completion')
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['reviewedSpecialCorrection'],
+        message:
+          'Special corrections require their private ordinary parent registration and historical source authority.',
+      });
     if (
       content.reviewedCorrection &&
       (!content.reviewedScope ||

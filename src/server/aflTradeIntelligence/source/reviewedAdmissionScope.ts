@@ -1,3 +1,5 @@
+import { buildReviewedSpecialCorrection } from './reviewedSpecialCorrection';
+import { PostgresAflTradeExternalHistoricalReconciliationSource } from './postgresExternalHistoricalReconciliationSource';
 import {
   buildReviewedOrdinaryCorrection,
   type ReviewedMovementEvidence,
@@ -133,6 +135,23 @@ export async function authenticateReviewedAdmissionScope(
   transaction: AflOutcomeSqlTransaction,
   candidate: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
 ) {
+  if (candidate.content.reviewedSpecialCorrection) {
+    const correction = candidate.content.reviewedSpecialCorrection;
+    const authority = candidate.content.sourceAuthority;
+    if (authority?.kind !== 'historical_plan_completion')
+      throw new TypeError('Special correction requires its retained completion.');
+    const expected = await prepareReviewedSpecialCorrection(transaction, {
+      parentCandidateId: correction.parentCandidateId,
+      completionId: authority.completionId,
+      entitlementIds: [...new Set(correction.bindings.map((b) => b.entitlementId))],
+      environment: candidate.content.environment,
+    });
+    if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
+      throw new TypeError(
+        'Special correction differs from its authenticated parent, registered awards or exact completion.'
+      );
+    return;
+  }
   if (candidate.content.reviewedCorrection) {
     const expected = await prepareReviewedOrdinaryCorrection(transaction, {
       scopeCandidateId: candidate.content.reviewedCorrection.scopeCandidateId,
@@ -263,4 +282,71 @@ export async function prepareReviewedOrdinaryCorrection(
     }
   }
   return buildReviewedOrdinaryCorrection({ scopeCandidate: scope, registration, movementEvidence });
+}
+
+/** Load and authenticate every dependency inside the caller's persistence transaction. */
+export async function prepareReviewedSpecialCorrection(
+  transaction: AflOutcomeSqlTransaction,
+  input: {
+    parentCandidateId: string;
+    completionId: string;
+    entitlementIds: readonly string[];
+    environment: string;
+  }
+) {
+  if (
+    input.environment === 'production' ||
+    !input.entitlementIds.length ||
+    new Set(input.entitlementIds).size !== input.entitlementIds.length
+  )
+    throw new TypeError('Special correction requires unique awards and a private environment.');
+  const loaded = await transaction.query<{ candidate_json: unknown; current: boolean }>(
+    `SELECT candidate_json,outcome_external_candidate_retained_sources_current(candidate_id,clock_timestamp()) AS current
+     FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 AND status='finalized' FOR SHARE`,
+    [input.parentCandidateId]
+  );
+  if (!loaded.rows[0]?.current)
+    throw new TypeError('Special correction requires a current finalized ordinary parent.');
+  const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
+  if (
+    !parent.content.reviewedCorrection ||
+    parent.content.reviewedSpecialCorrection ||
+    parent.content.environment !== input.environment
+  )
+    throw new TypeError('Special correction parent is not the exact ordinary scope.');
+  await authenticateReviewedAdmissionScope(transaction, parent);
+  const stored = await transaction.query<{ registration: unknown }>(
+    'SELECT read_outcome_reviewed_pick_lineage($1) AS registration',
+    [parent.content.reviewedCorrection.registrationId]
+  );
+  const retained = await transaction.query<{ award_json: unknown; approval_decision_id: string }>(
+    'SELECT award_json,approval_decision_id FROM outcome_special_entitlement_award WHERE entitlement_id=ANY($1::text[]) FOR SHARE',
+    [input.entitlementIds]
+  );
+  if (retained.rows.length !== input.entitlementIds.length)
+    throw new TypeError('Every requested special award must be registered.');
+  for (const award of retained.rows)
+    await transaction.query('SELECT authenticate_outcome_special_entitlement_award($1::jsonb,$2)', [
+      canonicalizeAflTradeJson(award.award_json),
+      award.approval_decision_id,
+    ]);
+  const source = await new PostgresAflTradeExternalHistoricalReconciliationSource({
+    query: transaction.query.bind(transaction),
+    transaction: (work) => work(transaction),
+  }).load(input.completionId);
+  if (
+    source.environment !== parent.content.environment ||
+    source.competition !== parent.content.competition
+  )
+    throw new TypeError('Special correction completion differs from parent scope.');
+  return buildReviewedSpecialCorrection({
+    candidate: parent,
+    registration: stored.rows[0]?.registration,
+    awards: retained.rows.map((a) => ({
+      award: a.award_json,
+      approvalDecisionId: a.approval_decision_id,
+    })),
+    sourceAuthority: source.sourceAuthority,
+    sourceBatches: source.sourceBatches,
+  });
 }

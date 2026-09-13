@@ -1,3 +1,9 @@
+import { buildReviewedSpecialCorrection } from '@/server/aflTradeIntelligence/source/reviewedSpecialCorrection';
+import {
+  createAflTradeExternalEvidenceEnvelope,
+  createAflTradeExternalEvidenceBatch,
+} from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
+import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { buildReviewedSpecialCustodyBindings } from '@/server/aflTradeIntelligence/source/reviewedSpecialCustodyBindings';
 import { createSpecialEntitlementAward } from '@/server/aflTradeIntelligence/source/specialEntitlementAwardContracts';
 import { buildReviewedOrdinaryCorrection } from '@/server/aflTradeIntelligence/source/reviewedOrdinaryCorrection';
@@ -133,7 +139,56 @@ describe('reviewed pick lineage', () => {
     });
   }
   it('keeps ordinary downstream transfers in one special award history', () => {
-    const base = candidate();
+    const batch = (captureLetter: string, digestLetter: string) =>
+      createAflTradeExternalEvidenceBatch({
+        schemaVersion: 'afl-trade-external-evidence-batch/v1',
+        provider: 'official_afl',
+        captureId: `source-capture:${captureLetter.repeat(64)}`,
+        finalizedAt: '2026-09-13T12:00:00.000Z',
+        publicationEligible: false,
+        evidence: [
+          createAflTradeExternalEvidenceEnvelope({
+            schemaVersion: 'afl-trade-external-evidence/v1',
+            provider: 'official_afl',
+            capture: {
+              captureId: `source-capture:${captureLetter.repeat(64)}`,
+              artifactId: `artifact:${digestLetter.repeat(64)}`,
+              contentSha256: digestLetter.repeat(64),
+              mediaType: 'text/html',
+              sourceUrl: 'https://example.test/award',
+              capturedAt: '2026-09-13T12:00:00.000Z',
+              effectiveAt: '2010-01-01T00:00:00.000Z',
+              parserVersion: 'fixture/v1',
+              fieldManifestSha256: '3'.repeat(64),
+            },
+            sourceRow: { ordinal: 1, sourceKey: 'award' },
+            claim: {
+              kind: 'issuing_award_reference',
+              grantYear: 2010,
+              scheme: 'gold_coast_expansion_compensation',
+              recordedOriginalHolder: 'Geelong',
+              componentCount: 1,
+              sourceDescription: 'Fixture award reference',
+            },
+            publicationEligible: false,
+          }),
+        ],
+      });
+    const parentBatch = batch('9', '9'),
+      awardBatch = batch('1', '2');
+    const base = createAflTradeExternalReconciliationCandidate({
+      ...candidate().content,
+      sourceBatchIds: [parentBatch.batchId],
+      schemaVersion: 'afl-trade-external-reconciliation/v2',
+      sourceAuthority: {
+        schemaVersion: 'afl-trade-external-reconciliation-source-authority/v1',
+        kind: 'reviewed_batch_set',
+        reviewDecisionId: `review-decision:${'8'.repeat(64)}`,
+        reviewDecisionSha256: '8'.repeat(64),
+        candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([parentBatch.batchId]),
+        decidedAt: '2026-09-13T12:00:00.000Z',
+      },
+    });
     const secondId = `external-transfer:${'f'.repeat(64)}`;
     const asset = {
       kind: 'special_pick' as const,
@@ -191,7 +246,7 @@ describe('reviewed pick lineage', () => {
     const registered = createReviewedPickLineageRegistration({
       candidate: original,
       records: [first, second],
-      proposedAt: '2026-09-13T12:00:00Z',
+      proposedAt: '2026-09-13T12:00:00.000Z',
     });
     const graph = buildReviewedLineageCorrectionGraph(registered.content.records);
     const successor = createAflTradeExternalReconciliationCandidate({
@@ -239,6 +294,67 @@ describe('reviewed pick lineage', () => {
     ]);
     expect(result.bindings.every((b) => b.award.entitlementId === award.entitlementId)).toBe(true);
     expect(result.canonicalAdmission).toBe(false);
+    const ids = [parentBatch.batchId, awardBatch.batchId].sort();
+    const correctionInput = {
+      candidate: successor,
+      registration: registered,
+      awards: [{ award, approvalDecisionId: 'fixture-approval' }],
+      sourceBatches: [parentBatch, awardBatch],
+      sourceAuthority: {
+        schemaVersion: 'afl-trade-external-reconciliation-source-authority/v1' as const,
+        kind: 'historical_plan_completion' as const,
+        completionId: `external-historical-capture-completion:${'4'.repeat(64)}`,
+        completionSha256: '4'.repeat(64),
+        planId: `external-historical-capture-plan:${'5'.repeat(64)}`,
+        planSha256: '5'.repeat(64),
+        targetSetSha256: '6'.repeat(64),
+        resultSetSha256: '7'.repeat(64),
+        completionSourceBatchSetSha256: sha256AflTradeCanonicalJson(ids),
+        candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson(ids),
+        completedAt: '2026-09-13T13:00:00Z',
+      },
+    };
+    const corrected = buildReviewedSpecialCorrection(correctionInput);
+    expect(corrected.candidate.content.sourceBatchIds).toEqual(ids);
+    expect(corrected.candidate.content.reviewedSpecialCorrection?.parentCandidateId).toBe(
+      successor.candidateId
+    );
+    expect(corrected.candidate.content.reviewedScope?.deferredEvidenceIds).toEqual(
+      awardBatch.content.evidence.map((e) => e.evidenceId)
+    );
+    expect(corrected.candidate.content.pickCustody).toEqual(successor.content.pickCustody);
+    expect(corrected.candidate.content.pickLineage).toEqual(successor.content.pickLineage);
+    expect(
+      corrected.candidate.content.transfers.every((t) => t.asset.kind === 'special_entitlement')
+    ).toBe(true);
+    expect(buildReviewedSpecialCorrection(correctionInput)).toEqual(corrected);
+    expect(corrected.persisted).toBe(false);
+    expect(() =>
+      buildReviewedSpecialCorrection({ ...correctionInput, candidate: corrected.candidate })
+    ).toThrow(/ordinary-correction parent/);
+    expect(() =>
+      buildReviewedSpecialCorrection({ ...correctionInput, sourceBatches: [parentBatch] })
+    ).toThrow(/exact completed/);
+    expect(() =>
+      buildReviewedSpecialCorrection({
+        ...correctionInput,
+        sourceBatches: [parentBatch, awardBatch, awardBatch],
+      })
+    ).toThrow(/exact completed/);
+    const unrelated = batch('8', '8'),
+      extraIds = [...ids, unrelated.batchId].sort();
+    expect(() =>
+      buildReviewedSpecialCorrection({
+        ...correctionInput,
+        sourceBatches: [parentBatch, awardBatch, unrelated],
+        sourceAuthority: {
+          ...correctionInput.sourceAuthority,
+          completionSourceBatchSetSha256: sha256AflTradeCanonicalJson(extraIds),
+          candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson(extraIds),
+        },
+      })
+    ).toThrow(/add only award evidence/);
+
     expect(() =>
       buildReviewedSpecialCustodyBindings({
         candidate: successor,
