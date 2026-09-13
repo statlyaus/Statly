@@ -1,3 +1,4 @@
+import { resolveDraftguruEventYear } from './draftguruEventYear';
 import {
   parseSpecialDraftEntitlement,
   type SpecialDraftEntitlement,
@@ -570,6 +571,23 @@ export function parseDraftguruYearSelections(
       });
       return;
     }
+    const eventYear = resolveDraftguruEventYear({
+      pageYear: input.draftYear,
+      sourceUrl: input.capture.sourceUrl,
+      draftType,
+      selectionNumber,
+      playerNativeId: sourceNativeId(playerCell.find('a').attr('href'), '/players/'),
+      clubNativeId: sourceNativeId(clubCell.find('a').attr('href'), '/clubs/'),
+    });
+    if (eventYear === null) {
+      scopeSummary.invalidRows++;
+      issues.push({
+        code: 'unsupported_row',
+        sourceKey: `year-row:${rowIndex + 1}`,
+        detail: 'No reviewed event-year mapping matches this draft slot, player and club.',
+      });
+      return;
+    }
     scopeSummary.includedRows++;
     rows.push(
       createAflTradeExternalEvidenceEnvelope({
@@ -578,11 +596,11 @@ export function parseDraftguruYearSelections(
         capture: input.capture,
         sourceRow: {
           ordinal: rows.length + 1,
-          sourceKey: `${input.draftYear}:${draftType}:${selectionNumber}`,
+          sourceKey: `${eventYear}:${draftType}:${selectionNumber}`,
         },
         claim: {
           kind: 'draft_selection',
-          draftYear: input.draftYear,
+          draftYear: eventYear,
           draftType,
           selectionNumber,
           roundNumber: null,
