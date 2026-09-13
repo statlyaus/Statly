@@ -1,3 +1,4 @@
+import { buildReviewedOrdinaryCorrection } from '@/server/aflTradeIntelligence/source/reviewedOrdinaryCorrection';
 import { buildReviewedLineageCorrectionGraph } from '@/server/aflTradeIntelligence/source/reviewedLineageCorrectionGraph';
 import { buildReviewedAdmissionScope } from '@/server/aflTradeIntelligence/source/reviewedAdmissionScope';
 import { bindRegisteredLineageForPromotion } from '@/server/aflTradeIntelligence/source/reviewedPickLineagePromotionBinding';
@@ -129,15 +130,92 @@ describe('reviewed pick lineage', () => {
       proposedAt: '2026-09-13T12:00:00Z',
     });
   }
+  it('corrects a reviewed non-player endpoint without inventing a selection or mutating its scope', () => {
+    const value = record();
+    value.endpoint = { kind: 'passed', draftYear: 2012, draftType: 'national', livePick: 67 };
+    const registered = registration([value]);
+    const original = candidate();
+    const scope = buildReviewedAdmissionScope({
+      sourceCandidate: original,
+      originalCandidate: original,
+      registration: registered,
+    });
+    const snapshot = structuredClone(scope);
+    const result = buildReviewedOrdinaryCorrection({
+      scopeCandidate: scope,
+      registration: registered,
+      movementEvidence: [],
+    });
+    expect(scope).toEqual(snapshot);
+    expect(result.appliedTransferIds).toEqual([transferId]);
+    expect(result.pendingTransferIds).toEqual([]);
+    expect(result.candidate.content.draftSelections).toEqual([]);
+    expect(result.candidate.content.pickLineage[0].terminalOutcome).toEqual(value.endpoint);
+    expect(result.candidate.content.pickCustody[0]).toMatchObject({
+      originalClubId: null,
+      currentClubId: 'gold-coast',
+      observedAt: { precision: 'year', year: 2012 },
+      evidenceIds,
+    });
+    expect(result.persisted).toBe(false);
+    expect(result.canonicalAdmission).toBe(false);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...result.candidate.content,
+        reviewedScope: undefined,
+      })
+    ).toThrow(/matching registered admission scope/);
+    expect(() =>
+      buildReviewedOrdinaryCorrection({
+        scopeCandidate: result.candidate,
+        registration: registered,
+        movementEvidence: [],
+      })
+    ).toThrow(/pre-correction scope/);
+  });
+
   it('scopes unrelated selections while preserving all original trade legs and blocking issues', () => {
     const original = candidate();
     const unrelated = `external-evidence:${'1'.repeat(64)}`;
-    const relevant = {code:'lineage_unresolved' as const,severity:'blocking' as const,subjectKey:`lineage:${transferId}`,detail:'Still requires custody',evidenceIds};
-    const source = createAflTradeExternalReconciliationCandidate({...original.content,
-      draftSelections:[{selectionId:`external-draft-selection:${'2'.repeat(64)}`,draftYear:2012,draftType:'national',selectionNumber:99,roundNumber:null,pickId:`draft-pick:${'3'.repeat(64)}`,playerId:null,clubId:null,status:'unresolved',supportingProviders:['statly_local_fixture'],evidenceIds:[unrelated]}],
-      issues:[relevant,{...relevant,code:'identity_unresolved',subjectKey:'unrelated',evidenceIds:[unrelated]}],
+    const relevant = {
+      code: 'lineage_unresolved' as const,
+      severity: 'blocking' as const,
+      subjectKey: `lineage:${transferId}`,
+      detail: 'Still requires custody',
+      evidenceIds,
+    };
+    const source = createAflTradeExternalReconciliationCandidate({
+      ...original.content,
+      draftSelections: [
+        {
+          selectionId: `external-draft-selection:${'2'.repeat(64)}`,
+          draftYear: 2012,
+          draftType: 'national',
+          selectionNumber: 99,
+          roundNumber: null,
+          pickId: `draft-pick:${'3'.repeat(64)}`,
+          playerId: null,
+          clubId: null,
+          status: 'unresolved',
+          supportingProviders: ['statly_local_fixture'],
+          evidenceIds: [unrelated],
+        },
+      ],
+      issues: [
+        relevant,
+        {
+          ...relevant,
+          code: 'identity_unresolved',
+          subjectKey: 'unrelated',
+          evidenceIds: [unrelated],
+        },
+      ],
     });
-    const scoped = buildReviewedAdmissionScope({sourceCandidate:source,originalCandidate:original,registration:registration()});
+    const scoped = buildReviewedAdmissionScope({
+      sourceCandidate: source,
+      originalCandidate: original,
+      registration: registration(),
+    });
     expect(scoped.content.transfers).toEqual(original.content.transfers);
     expect(scoped.content.transactions).toEqual(original.content.transactions);
     expect(scoped.content.draftSelections).toEqual([]);
@@ -146,67 +224,149 @@ describe('reviewed pick lineage', () => {
     expect(source.content.issues).toHaveLength(2);
   });
   it('keeps ambiguous issues and transitive shared-evidence issues blocking', () => {
-    const original=candidate();const other=`external-evidence:${'4'.repeat(64)}`;
-    const issue={code:'identity_unresolved' as const,severity:'blocking' as const,subjectKey:'unknown',detail:'Unresolved'};
-    const source=createAflTradeExternalReconciliationCandidate({...original.content,issues:[{...issue,evidenceIds:[other]},{...issue,evidenceIds:[...evidenceIds,other]},{...issue,evidenceIds:[]}]});
-    expect(buildReviewedAdmissionScope({sourceCandidate:source,originalCandidate:original,registration:registration()}).content.issues).toEqual(source.content.issues);
+    const original = candidate();
+    const other = `external-evidence:${'4'.repeat(64)}`;
+    const issue = {
+      code: 'identity_unresolved' as const,
+      severity: 'blocking' as const,
+      subjectKey: 'unknown',
+      detail: 'Unresolved',
+    };
+    const source = createAflTradeExternalReconciliationCandidate({
+      ...original.content,
+      issues: [
+        { ...issue, evidenceIds: [other] },
+        { ...issue, evidenceIds: [...evidenceIds, other] },
+        { ...issue, evidenceIds: [] },
+      ],
+    });
+    expect(
+      buildReviewedAdmissionScope({
+        sourceCandidate: source,
+        originalCandidate: original,
+        registration: registration(),
+      }).content.issues
+    ).toEqual(source.content.issues);
   });
   it('rejects changed trade facts, environment changes, and recursive scopes', () => {
-    const original=candidate();const input={originalCandidate:original,registration:registration()};
-    const changed=createAflTradeExternalReconciliationCandidate({...original.content,transfers:original.content.transfers.map(t=>({...t,fromClubId:'other'}))});
-    expect(()=>buildReviewedAdmissionScope({...input,sourceCandidate:changed})).toThrow(/transfer changed/);
-    const wrong=createAflTradeExternalReconciliationCandidate({...original.content,competition:'other'});
-    expect(()=>buildReviewedAdmissionScope({...input,sourceCandidate:wrong})).toThrow(/competition/);
-    const scoped=buildReviewedAdmissionScope({...input,sourceCandidate:original});
-    expect(()=>buildReviewedAdmissionScope({...input,sourceCandidate:scoped})).toThrow(/unscoped/);
+    const original = candidate();
+    const input = { originalCandidate: original, registration: registration() };
+    const changed = createAflTradeExternalReconciliationCandidate({
+      ...original.content,
+      transfers: original.content.transfers.map((t) => ({ ...t, fromClubId: 'other' })),
+    });
+    expect(() => buildReviewedAdmissionScope({ ...input, sourceCandidate: changed })).toThrow(
+      /transfer changed/
+    );
+    const wrong = createAflTradeExternalReconciliationCandidate({
+      ...original.content,
+      competition: 'other',
+    });
+    expect(() => buildReviewedAdmissionScope({ ...input, sourceCandidate: wrong })).toThrow(
+      /competition/
+    );
+    const scoped = buildReviewedAdmissionScope({ ...input, sourceCandidate: original });
+    expect(() => buildReviewedAdmissionScope({ ...input, sourceCandidate: scoped })).toThrow(
+      /unscoped/
+    );
   });
   it('does not scope away a missing reviewed selected endpoint', () => {
-    const original=candidate();const value=registrationRecord();value.endpoint={...value.endpoint,kind:'selected'} as typeof value.endpoint;
-    expect(()=>buildReviewedAdmissionScope({sourceCandidate:original,originalCandidate:original,registration:registration([value])})).toThrow(/exact retained selection/);
+    const original = candidate();
+    const value = registrationRecord();
+    value.endpoint = { ...value.endpoint, kind: 'selected' } as typeof value.endpoint;
+    expect(() =>
+      buildReviewedAdmissionScope({
+        sourceCandidate: original,
+        originalCandidate: original,
+        registration: registration([value]),
+      })
+    ).toThrow(/exact retained selection/);
   });
   it('merges shared custody movements and preserves unknown origins', () => {
     const first = registrationRecord();
-    const secondId=`external-transfer:${'5'.repeat(64)}`;
-    const onward={...first.movements[0], transferId:secondId,fromClubId:'gold-coast',toClubId:'adelaide',predecessorOrdinal:0,
-      source:{...first.movements[0].source!,nativeEventId:'onward',sourceUrl:'https://example.test/onward',retainedAssetLabel:'Pick 57'},
+    const secondId = `external-transfer:${'5'.repeat(64)}`;
+    const onward = {
+      ...first.movements[0],
+      transferId: secondId,
+      fromClubId: 'gold-coast',
+      toClubId: 'adelaide',
+      predecessorOrdinal: 0,
+      source: {
+        ...first.movements[0].source!,
+        nativeEventId: 'onward',
+        sourceUrl: 'https://example.test/onward',
+        retainedAssetLabel: 'Pick 57',
+      },
     };
     first.movements.push(onward);
-    first.attribution='ultimate';
-    first.endpoint={...first.endpoint,exercisingClubId:'adelaide'} as typeof first.endpoint;
-    const second={...structuredClone(first),transferId:secondId,retainedSourceLabel:'Pick 57',movements:[{...onward,predecessorOrdinal:null}]};
-    const graph=buildReviewedLineageCorrectionGraph([first,second]);
+    first.attribution = 'ultimate';
+    first.endpoint = { ...first.endpoint, exercisingClubId: 'adelaide' } as typeof first.endpoint;
+    const second = {
+      ...structuredClone(first),
+      transferId: secondId,
+      retainedSourceLabel: 'Pick 57',
+      movements: [{ ...onward, predecessorOrdinal: null }],
+    };
+    const graph = buildReviewedLineageCorrectionGraph([first, second]);
     expect(graph.content.chains).toHaveLength(1);
     expect(graph.content.movements).toHaveLength(2);
     expect(graph.content.chains[0].transferIds).toHaveLength(2);
     expect(graph.content.chains[0].originalClubId).toBeNull();
-    expect(graph.content.movements.filter(m=>m.predecessorMovementId!==null)).toHaveLength(1);
-    expect(buildReviewedLineageCorrectionGraph([second,first])).toEqual(graph);
+    expect(graph.content.movements.filter((m) => m.predecessorMovementId !== null)).toHaveLength(1);
+    expect(buildReviewedLineageCorrectionGraph([second, first])).toEqual(graph);
     expect(first.movements[1].predecessorOrdinal).toBe(0);
   });
   it('rejects contradictory shared endpoints and duplicate reviewed records', () => {
-    const first=registrationRecord();
-    expect(()=>buildReviewedLineageCorrectionGraph([first,first])).toThrow(/unique records/);
-    const second={...structuredClone(first),transferId:`external-transfer:${'6'.repeat(64)}`};
-    second.movements[0].transferId=second.transferId;
-    second.endpoint={...second.endpoint,recordedPlayerName:'Different player'} as typeof second.endpoint;
-    expect(()=>buildReviewedLineageCorrectionGraph([first,second])).toThrow(/contradictory endpoints/);
+    const first = registrationRecord();
+    expect(() => buildReviewedLineageCorrectionGraph([first, first])).toThrow(/unique records/);
+    const second = { ...structuredClone(first), transferId: `external-transfer:${'6'.repeat(64)}` };
+    second.movements[0].transferId = second.transferId;
+    second.endpoint = {
+      ...second.endpoint,
+      recordedPlayerName: 'Different player',
+    } as typeof second.endpoint;
+    expect(() => buildReviewedLineageCorrectionGraph([first, second])).toThrow(
+      /contradictory endpoints/
+    );
   });
   it('does not merge independent histories merely because the player endpoint matches', () => {
-    const first=registrationRecord();const second=structuredClone(first);
-    second.transferId=`external-transfer:${'7'.repeat(64)}`;second.movements[0].transferId=second.transferId;
-    const artifact=createAflTradeByteArtifactRef(new TextEncoder().encode('Independent retained trade'),'text/plain','2026-09-13T00:00:00Z');
-    second.evidence=[artifact];second.movements[0].source={...second.movements[0].source!,artifact};
-    expect(buildReviewedLineageCorrectionGraph([first,second]).content.chains).toHaveLength(2);
+    const first = registrationRecord();
+    const second = structuredClone(first);
+    second.transferId = `external-transfer:${'7'.repeat(64)}`;
+    second.movements[0].transferId = second.transferId;
+    const artifact = createAflTradeByteArtifactRef(
+      new TextEncoder().encode('Independent retained trade'),
+      'text/plain',
+      '2026-09-13T00:00:00Z'
+    );
+    second.evidence = [artifact];
+    second.movements[0].source = { ...second.movements[0].source!, artifact };
+    expect(buildReviewedLineageCorrectionGraph([first, second]).content.chains).toHaveLength(2);
   });
   it('rejects branching histories even when each reviewed record is internally connected', () => {
-    const first=registrationRecord();first.attribution='ultimate';
-    const onward={...structuredClone(first.movements[0]),transferId:`external-transfer:${'8'.repeat(64)}`,fromClubId:'gold-coast',toClubId:'adelaide',predecessorOrdinal:0};
-    onward.source!.retainedAssetLabel='Pick 57';first.movements.push(onward);
-    first.endpoint={...first.endpoint,exercisingClubId:'adelaide'} as typeof first.endpoint;
-    const branch=structuredClone(first);branch.transferId=`external-transfer:${'9'.repeat(64)}`;branch.retainedSourceLabel='Pick 58';
-    branch.movements[1].transferId=branch.transferId;branch.movements[1].toClubId='melbourne';branch.movements[1].source!.retainedAssetLabel='Pick 58';
-    branch.endpoint={...branch.endpoint,exercisingClubId:'melbourne'} as typeof branch.endpoint;
-    expect(()=>buildReviewedLineageCorrectionGraph([first,branch])).toThrow(/branch/);
+    const first = registrationRecord();
+    first.attribution = 'ultimate';
+    const onward = {
+      ...structuredClone(first.movements[0]),
+      transferId: `external-transfer:${'8'.repeat(64)}`,
+      fromClubId: 'gold-coast',
+      toClubId: 'adelaide',
+      predecessorOrdinal: 0,
+    };
+    onward.source!.retainedAssetLabel = 'Pick 57';
+    first.movements.push(onward);
+    first.endpoint = { ...first.endpoint, exercisingClubId: 'adelaide' } as typeof first.endpoint;
+    const branch = structuredClone(first);
+    branch.transferId = `external-transfer:${'9'.repeat(64)}`;
+    branch.retainedSourceLabel = 'Pick 58';
+    branch.movements[1].transferId = branch.transferId;
+    branch.movements[1].toClubId = 'melbourne';
+    branch.movements[1].source!.retainedAssetLabel = 'Pick 58';
+    branch.endpoint = {
+      ...branch.endpoint,
+      exercisingClubId: 'melbourne',
+    } as typeof branch.endpoint;
+    expect(() => buildReviewedLineageCorrectionGraph([first, branch])).toThrow(/branch/);
   });
   function promotionTransaction(
     options: { candidateCurrent?: boolean; captureCurrent?: boolean; withdrawn?: boolean } = {}

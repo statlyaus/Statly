@@ -1196,6 +1196,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0166_non_player_pick_outcomes',
   '0167_reviewed_admission_scope',
   '0168_nullable_custody_origin',
+  '0169_reviewed_ordinary_correction',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

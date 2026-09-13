@@ -105,7 +105,9 @@ const custodySchema = z
     custodyId: aflTradeContentAddressedIdSchema('external-pick-custody'),
     pickId: aflTradeContentAddressedIdSchema('draft-pick'),
     observedAt: pickCustodyDateSchema,
-    predecessorCustodyId: aflTradeContentAddressedIdSchema('external-pick-custody').nullable().optional(),
+    predecessorCustodyId: aflTradeContentAddressedIdSchema('external-pick-custody')
+      .nullable()
+      .optional(),
     draftYear: z.number().int().min(1897).max(2200),
     draftType: z.string().trim().min(1).max(80),
     roundNumber: z.number().int().positive().nullable(),
@@ -127,7 +129,11 @@ const lineageSchema = z
     status: statusSchema,
     evidenceIds: evidenceIdsSchema,
   })
-  .strict().refine(record => (record.selectionId === null) === (record.terminalOutcome !== undefined), 'Non-player outcomes require no selection; selected outcomes require a selection.');
+  .strict()
+  .refine(
+    (record) => (record.selectionId === null) === (record.terminalOutcome !== undefined),
+    'Non-player outcomes require no selection; selected outcomes require a selection.'
+  );
 
 const issueSchema = z
   .object({
@@ -159,11 +165,32 @@ const contentSchema = z
       z.array(aflTradeContentAddressedIdSchema('external-evidence-batch')).min(1)
     ),
     sourceAuthority: aflTradeExternalReconciliationSourceAuthoritySchema.optional(),
-    reviewedScope: z.object({
-      sourceCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
-      registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
-      deferredEvidenceIds: sortedUniqueIdsSchema.pipe(z.array(evidenceIdSchema)),
-    }).strict().optional(),
+    reviewedScope: z
+      .object({
+        sourceCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+        registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
+        deferredEvidenceIds: sortedUniqueIdsSchema.pipe(z.array(evidenceIdSchema)),
+      })
+      .strict()
+      .optional(),
+    reviewedCorrection: z
+      .object({
+        schemaVersion: z.literal('afl-trade-reviewed-ordinary-correction/v1'),
+        scopeCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+        registrationId: aflTradeContentAddressedIdSchema('reviewed-pick-lineage-registration'),
+        correctionGraphId: aflTradeContentAddressedIdSchema('reviewed-lineage-correction-graph'),
+        bindings: z.array(
+          z
+            .object({
+              transferId: aflTradeContentAddressedIdSchema('external-transfer'),
+              lineageId: aflTradeContentAddressedIdSchema('external-pick-lineage'),
+              custodyIds: z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1),
+            })
+            .strict()
+        ),
+      })
+      .strict()
+      .optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),
@@ -178,6 +205,17 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
+    if (
+      content.reviewedCorrection &&
+      (!content.reviewedScope ||
+        content.reviewedCorrection.registrationId !== content.reviewedScope.registrationId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['reviewedCorrection'],
+        message: 'Reviewed corrections require their matching registered admission scope.',
+      });
+    }
     if (
       content.environment !== 'test_fixture' &&
       content.draftSelections.some(({ supportingProviders }) =>
@@ -307,21 +345,36 @@ const contentSchema = z
       const hasUsableCustody = content.pickCustody.some(
         (custody) => custody.pickId === lineage.pickId && usable(custody.status)
       );
-      if (!transfer || transfer.asset.kind !== 'pick_entitlement' || (!selection && !lineage.terminalOutcome)) {
+      if (
+        !transfer ||
+        transfer.asset.kind !== 'pick_entitlement' ||
+        (!selection && !lineage.terminalOutcome)
+      ) {
         context.addIssue({
           code: 'custom',
           path: ['pickLineage', index],
           message: 'Lineage must reference a pick transfer and draft selection in this candidate.',
         });
-      } else if (lineage.pickId !== transfer.asset.pickId || (selection !== undefined && lineage.pickId !== selection.pickId)) {
+      } else if (
+        lineage.pickId !== transfer.asset.pickId ||
+        (selection !== undefined && lineage.pickId !== selection.pickId)
+      ) {
         context.addIssue({
           code: 'custom',
           path: ['pickLineage', index, 'pickId'],
           message: 'Lineage pick identity must match both transfer and selection.',
         });
-      } else if (lineage.terminalOutcome && lineage.terminalOutcome.kind !== 'incorporated_into_later_package'
-        && (lineage.terminalOutcome.draftYear !== transfer.asset.draftYear || lineage.terminalOutcome.draftType !== transfer.asset.draftType)) {
-        context.addIssue({code:'custom',path:['pickLineage',index],message:'Non-player outcome must match the transferred pick draft.'});
+      } else if (
+        lineage.terminalOutcome &&
+        lineage.terminalOutcome.kind !== 'incorporated_into_later_package' &&
+        (lineage.terminalOutcome.draftYear !== transfer.asset.draftYear ||
+          lineage.terminalOutcome.draftType !== transfer.asset.draftType)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['pickLineage', index],
+          message: 'Non-player outcome must match the transferred pick draft.',
+        });
       } else if (
         !usable(lineage.status) ||
         !usable(transfer.status) ||

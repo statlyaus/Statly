@@ -2729,3 +2729,14 @@ already represented by the original candidate; supplementary movements require r
 references. Branches, cycles, incompatible dates, disconnected holders and conflicting endpoints or
 known origins fail closed. Shared movements retain their source rows and explicit predecessors.
 The returned correction graph is preparation; it does not alter candidates or admit canonical facts.
+
+`prepareReviewedOrdinaryCorrection` materializes ordinary histories from a finalized reviewed scope
+inside the existing promotion owner. Persistence and promotion independently rebuild the exact
+candidate using current registered review, source authority and retained directed-transfer claims.
+HTML row references remain provenance; they are not interchangeable with parsed claim ordinals.
+Migration0169 validates the immutable scope first, then checks eligible histories, accepted endpoints,
+complete custody paths, exact movement evidence and unchanged unrelated facts/issues. Source-evidence
+conservation remains mandatory. Any connected history containing a special right stays with the
+special-right owner, even when downstream transfers have ordinary pick labels. Rookie elevation and
+draft-session coverage require their own handling. Persisting a correction candidate does not admit
+it canonically or publish it; remaining blocking issues still prevent promotion.

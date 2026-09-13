@@ -1,5 +1,5 @@
 import { buildReviewedLineageCorrectionGraph } from './reviewedLineageCorrectionGraph';
-import { authenticateReviewedAdmissionScope } from './reviewedAdmissionScope';
+import { authenticateReviewedAdmissionScope, prepareReviewedOrdinaryCorrection } from './reviewedAdmissionScope';
 import { pickCustodyDateColumns } from './pickCustodyDate';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
 import { registerReviewedPickLineage, readReviewedPickLineage } from './postgresReviewedPickLineageRegistration';
@@ -620,6 +620,12 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       return {...buildReviewedLineageCorrectionGraph(records), registrationId:binding.content.registrationId,
         bindingId:binding.bindingId, reviewAuthorityAuthenticated:true, sourceAuthorityAuthenticated:true};
     });
+  }
+
+  async prepareReviewedOrdinaryCorrection(input: {
+    scopeCandidateId: string; environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction(transaction => prepareReviewedOrdinaryCorrection(transaction, input));
   }
 
   async registerReviewedPickLineage(input: { registration: unknown; approvalDecisionId: string }) {
