@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { captureOfficialAflPage } from '@/server/aflTradeIntelligence/source/officialAflPageCapture';
 import { parseIngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import {
   OFFICIAL_AFL_MINI_2011_SOURCES,
@@ -56,6 +57,28 @@ describe('2011 mini-draft exact source routing', () => {
       }
       const otherHost = source.url.replace(new URL(source.url).hostname, 'unreviewed.example');
       expect(() => combinedDraftDocumentId('official_afl', otherHost, 'non_production')).toThrow();
+    });
+  }
+});
+
+
+describe('reviewed mini-draft HTTP capture boundary', () => {
+  for (const source of Object.values(OFFICIAL_AFL_MINI_2011_SOURCES)) {
+    it(`captures only the approved club URL ${source.url}`, async () => {
+      const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () =>
+        new Response('<html>retained fixture</html>', {headers: {'content-type': 'text/html'}}));
+      const input = {url: source.url, validators: null, maximumBytes: 1024, timeoutMs: 1000, fetchImpl};
+      const result = await captureOfficialAflPage(input);
+      expect(result.status).toBe('captured');
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(fetchImpl).toHaveBeenCalledWith(source.url, expect.objectContaining({redirect: 'error', method: 'GET'}));
+      for (const url of [source.url + '?x=1', source.url + '#fragment', source.url + '-unreviewed',
+        source.url.replace('https:', 'http:'), source.url.replace(new URL(source.url).hostname, 'unreviewed.example'),
+        source.url.replace('/news/', ':8443/news/')]) {
+        await expect(captureOfficialAflPage({...input, url})).rejects.toThrow('outside the approved article path');
+      }
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await expect(captureOfficialAflPage({...input, maximumBytes: 2})).rejects.toThrow('byte limit');
     });
   }
 });

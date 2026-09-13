@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AflTradeExternalPageCapture } from './externalDraftTradeIngestion';
 import { GWS_MINI_GRANT_URL } from './officialAflIssuingAwardAdapter';
+import { OFFICIAL_AFL_MINI_2011_SOURCES } from './officialAflMiniDraft2011SessionFacts';
 
 async function readBounded(response: Response, maximumBytes: number): Promise<Uint8Array> {
   if (!response.body) throw new Error('External source response body is absent.');
@@ -40,7 +41,9 @@ export async function captureOfficialAflPage(input: {
   const url = new URL(input.url);
   if (
     url.protocol !== 'https:' ||
-    (url.hostname !== 'www.afl.com.au' && url.href !== GWS_MINI_GRANT_URL) ||
+    (url.hostname !== 'www.afl.com.au' &&
+      url.href !== GWS_MINI_GRANT_URL &&
+      !Object.values(OFFICIAL_AFL_MINI_2011_SOURCES).some((source) => source.url === url.href)) ||
     !/^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) ||
     url.search ||
     url.hash
