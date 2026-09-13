@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from './draftSessionDatePrecision';
 import { specialDraftEntitlementSchema } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -303,6 +304,17 @@ const draftSessionDateClaimSchema = z
     'Draft session date must belong to its draft year.'
   );
 
+const draftSessionWindowClaimSchema = z.object({
+  kind: z.literal('draft_session_window'),
+  draftYear: yearSchema,
+  draftType: draftTypeSchema,
+  sessionOrdinal: z.number().int().min(1).max(100),
+  datePrecision: draftSessionDateWindowSchema,
+}).strict().refine(
+  claim => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.draftYear,
+  'Draft session window must belong to its draft year.'
+);
+
 const draftSessionCompletionClaimSchema = z
   .object({
     kind: z.literal('draft_session_completion'),
@@ -414,6 +426,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   issuingAwardReferenceSchema,
   draftSessionClaimSchema,
   draftSessionDateClaimSchema,
+  draftSessionWindowClaimSchema,
   draftSessionCompletionClaimSchema,
   draftSessionBoundaryClaimSchema,
   draftCompletedTotalClaimSchema,
@@ -434,6 +447,7 @@ const allowedKindsByProvider = {
   statly_local_fixture: new Set([
     'draft_session',
     'draft_session_date',
+    'draft_session_window',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
@@ -461,6 +475,7 @@ const allowedKindsByProvider = {
     'pick_custody',
     'draft_session',
     'draft_session_date',
+    'draft_session_window',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
