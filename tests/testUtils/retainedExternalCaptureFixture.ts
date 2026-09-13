@@ -45,8 +45,11 @@ export async function createRetainedExternalCaptureFixture(
   nullableTerms = false,
   tradeDetail = false,
   secondSession = false,
-  enumerated = false
+  enumerated = false,
+  multiDocument = false
 ) {
+  if (multiDocument && !enumerated)
+    throw new Error('Multi-document proof requires enumerated fixture.');
   if (enumerated && environment !== 'test_fixture')
     throw new Error('Enumerated synthetic claims require test_fixture.');
   if (secondSession && !official) throw new Error('Second session requires official profile.');
@@ -148,6 +151,25 @@ export async function createRetainedExternalCaptureFixture(
         boundary(1, 1, 'first'),
         { ...common, kind: 'draft_completed_total', selectionCount: 71 },
       ];
+  if (multiDocument && official) {
+    if (secondSession) {
+      const index = sessionFacts.findIndex((claim) => claim.kind === 'draft_completed_inventory');
+      sessionFacts[index] = {
+        ...common,
+        kind: 'draft_completed_membership_roster',
+        members: Array.from({ length: 71 }, (_, i) => ({
+          recordedName: i === 0 ? 'Synthetic Player' : `Synthetic Player ${i}`,
+          selectionNumber: i === 70 ? null : i + 1,
+        })),
+      };
+    } else
+      sessionFacts.push({
+        ...common,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Synthetic Player 70',
+        selectionNumber: 97,
+      });
+  }
   const fields =
     official && enumerated
       ? [
@@ -157,6 +179,14 @@ export async function createRetainedExternalCaptureFixture(
                 .filter((key) => key !== 'kind')
                 .flatMap((key) => {
                   const value = (claim as unknown as Record<string, unknown>)[key];
+                  if (
+                    Array.isArray(value) &&
+                    value.some((item) => item && typeof item === 'object')
+                  ) {
+                    return value.flatMap((item) =>
+                      Object.keys(item).map((child) => `${claim.kind}.${key}.${child}`)
+                    );
+                  }
                   return value && typeof value === 'object' && !Array.isArray(value)
                     ? Object.keys(value).map((child) => `${claim.kind}.${key}.${child}`)
                     : [`${claim.kind}.${key}`];

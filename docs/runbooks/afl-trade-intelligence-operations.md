@@ -2825,6 +2825,13 @@ scoped paragraph hashes and article timestamps; it does not emit the conflicting
 Migration0185 recognizes those document IDs and the independent2014 total/terminal pair. Source scope,
 boundary identity decisions and public retained promotion/revocation still require separate verification.
 
+The retained subset fixture covers a multi-document roster with a null member number and a separate
+source-bound number claim, in addition to consecutive and enumerated inventories. Both required
+sources pass public capture, preparation, persistence, promotion/readback/replay and individual
+revocation/recovery checks. Nested roster fields require explicit Gate field mappings; allowing only
+`members` does not grant `members.recordedName` or `members.selectionNumber`. Fixtures do not
+establish genuine2014 scope or canonical admission.
+
 Migration0184 supports a complete `draft_completed_membership_roster` with explicit null numbers
 for named members, joined to separate `draft_completed_member_number` evidence by exact recorded
 name and draft year/type. The join cannot infer numbers from the retained inventory. Every unnumbered
