@@ -220,7 +220,11 @@ describe('Draftguru source adapter', () => {
         <tr><td class="category">Trade</td><td class="draft"></td><td class="number"></td><td class="club">Carlton</td><td></td><td class="player">Liam Reidy</td><td></td><td></td><td></td><td class="grade">D</td><td class="games">4</td></tr>
       </tbody></table>`;
     const result = parseDraftguruYearSelections(html, {
-      capture: { ...capture, sourceUrl: 'https://www.draftguru.com.au/years/2025' },
+      capture: {
+        ...capture,
+        sourceUrl: 'https://www.draftguru.com.au/years/2025',
+        parserVersion: 'draftguru-event-year/v2',
+      },
       draftYear: 2025,
     });
     expect(result.evidence).toHaveLength(1);

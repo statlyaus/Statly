@@ -1,3 +1,4 @@
+import { DRAFTGURU_YEAR_PARSER_VERSION } from './draftguruEventYear';
 import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
@@ -286,6 +287,15 @@ export async function ingestAuthorizedAflTradeExternalPage(
     );
   }
   validateAflTradeExternalCaptureScope(command.request);
+  if (
+    command.request.capabilityId === 'draftguru-year-page' &&
+    command.request.parserVersion !== DRAFTGURU_YEAR_PARSER_VERSION
+  ) {
+    throw new AflTradeExternalProviderIngestionError(
+      'INVALID_SCOPE',
+      `General Draftguru year parser version must be ${DRAFTGURU_YEAR_PARSER_VERSION}; create a new approved schedule and run.`
+    );
+  }
   await authorize(command, dependencies, dependencies.clock.now());
   const executionPolicy = dependencies.policyFor(provider);
   const requestSha256 = sha256AflTradeCanonicalJson(command.request);

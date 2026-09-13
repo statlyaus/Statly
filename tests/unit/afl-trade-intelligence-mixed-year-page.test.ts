@@ -8,7 +8,7 @@ const capture = {
   sourceUrl: 'https://www.draftguru.com.au/years/2011',
   capturedAt: '2026-09-13T00:00:00.000Z',
   effectiveAt: '2026-09-13T00:00:00.000Z',
-  parserVersion: 'test',
+  parserVersion: 'draftguru-event-year/v2',
   fieldManifestSha256: '3'.repeat(64),
 };
 const row = (label: string, number = '1') =>
@@ -16,7 +16,7 @@ const row = (label: string, number = '1') =>
 const table = (rows: string) => `<table class="big-pick-movements"><tbody>${rows}</tbody></table>`;
 const parse = (html: string) => parseDraftguruYearSelections(html, { capture, draftYear: 2011 });
 describe('mixed year-page conservation', () => {
-  it('conserves supported, unsupported and excluded rows without guessing event years', () => {
+  it('retains all selection pathways and accounts for reviewed non-selection rows', () => {
     const selections = ['National', 'Mini-Draft', 'Rookie', 'Pre-Season', 'Mid-Season'];
     const excluded = [
       'Trade',
@@ -26,18 +26,16 @@ describe('mixed year-page conservation', () => {
       'Training Squad Selection',
     ];
     const result = parse(table([...selections, ...excluded].map((label) => row(label)).join('')));
-    expect(result.issues).toEqual([
-      expect.objectContaining({ code: 'unsupported_row', sourceKey: 'year-row:5' }),
-    ]);
+    expect(result.issues).toEqual([]);
     expect(
       result.evidence.map(
         (e) => e.content.claim.kind === 'draft_selection' && e.content.claim.draftType
       )
-    ).toEqual(['national', 'mini_draft', 'rookie', 'pre_season']);
+    ).toEqual(['national', 'mini_draft', 'rookie', 'pre_season', 'mid_season']);
     expect(result.scopeSummary).toEqual({
       observedRows: 10,
-      includedRows: 4,
-      invalidRows: 1,
+      includedRows: 5,
+      invalidRows: 0,
       excludedByPathway: Object.fromEntries(excluded.map((label) => [label, 1])),
     });
   });

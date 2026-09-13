@@ -16,13 +16,35 @@ const capture = {
   sourceUrl: 'https://www.draftguru.com.au/years/2020',
   capturedAt: '2026-09-12T20:58:21.066Z',
   effectiveAt: '2026-09-12T20:58:21.065Z',
-  parserVersion: 'test-event-year/v2',
+  parserVersion: 'draftguru-event-year/v2',
   fieldManifestSha256: '3'.repeat(64),
 };
 const parse = (body = html, year = 2020, sourceUrl = capture.sourceUrl) =>
   parseDraftguruYearSelections(body, { draftYear: year, capture: { ...capture, sourceUrl } });
 
 describe('Draftguru event year provenance', () => {
+  it('preserves ordinary annual mid-season page years outside the reviewed anomaly', () => {
+    const result = parse(html, 2019, 'https://www.draftguru.com.au/years/2019');
+    expect(result.issues).toEqual([]);
+    const rows = result.evidence.filter(
+      (row) =>
+        row.content.claim.kind === 'draft_selection' && row.content.claim.draftType === 'mid_season'
+    );
+    expect(rows).toHaveLength(22);
+    expect(
+      rows.every((row) => 'draftYear' in row.content.claim && row.content.claim.draftYear === 2019)
+    ).toBe(true);
+  });
+
+  it('rejects old general-year parser identities instead of reusing them for changed semantics', () => {
+    expect(() =>
+      parseDraftguruYearSelections(html, {
+        draftYear: 2020,
+        capture: { ...capture, parserVersion: 'draftguru-year-parser/v1' },
+      })
+    ).toThrow(/parser version/i);
+  });
+
   it('corrects the reviewed 22 mid-season selections while preserving the 75 other claims', () => {
     const result = parse();
     expect(result.issues).toEqual([]);
@@ -54,7 +76,10 @@ describe('Draftguru event year provenance', () => {
   });
 
   it('preserves national-only delegation and its 59 complete evidence records', () => {
-    const result = parseDraftguruNationalYearSelections(html, { capture, draftYear: 2020 });
+    const result = parseDraftguruNationalYearSelections(html, {
+      capture: { ...capture, parserVersion: 'draftguru-national-year-parser/v1' },
+      draftYear: 2020,
+    });
     expect(result.issues).toEqual([]);
     expect(result.evidence).toHaveLength(59);
     expect(result.evidence.map((row) => row.content.claim)).toEqual(
@@ -69,7 +94,6 @@ describe('Draftguru event year provenance', () => {
   });
 
   it.each([
-    [2019, 'https://www.draftguru.com.au/years/2019'],
     [2020, 'https://example.com/years/2020'],
     [2020, 'https://www.draftguru.com.au/years/2021'],
   ])('does not generalize the reviewed mapping to year %s and URL %s', (year, url) => {

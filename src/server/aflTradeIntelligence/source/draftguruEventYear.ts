@@ -1,3 +1,13 @@
+export const DRAFTGURU_YEAR_PARSER_VERSION = 'draftguru-event-year/v2';
+
+export function assertDraftguruYearParserVersion(version: string): void {
+  if (version !== DRAFTGURU_YEAR_PARSER_VERSION) {
+    throw new TypeError(
+      `General Draftguru year parser version must be ${DRAFTGURU_YEAR_PARSER_VERSION}; create a new approved schedule and run.`
+    );
+  }
+}
+
 /**
  * The 2020 year page embeds the 2021 mid-season draft. These exact source slots were
  * compared with the completed AFL report, rather than inferring a universal year offset:
@@ -39,9 +49,8 @@ export function resolveDraftguruEventYear(input: {
   clubNativeId: string | null;
 }): number | null {
   if (input.draftType !== 'mid_season') return input.pageYear;
-  if (input.pageYear !== 2020 || input.sourceUrl !== 'https://www.draftguru.com.au/years/2020') {
-    return null;
-  }
+  if (input.sourceUrl !== `https://www.draftguru.com.au/years/${input.pageYear}`) return null;
+  if (input.pageYear !== 2020) return input.pageYear;
   const slot = reviewed2021MidseasonSlots[input.selectionNumber - 1];
   return slot && slot[0] === input.playerNativeId && slot[1] === input.clubNativeId ? 2021 : null;
 }

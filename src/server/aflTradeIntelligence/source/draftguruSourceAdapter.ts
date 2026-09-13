@@ -1,4 +1,4 @@
-import { resolveDraftguruEventYear } from './draftguruEventYear';
+import { assertDraftguruYearParserVersion, resolveDraftguruEventYear } from './draftguruEventYear';
 import {
   parseSpecialDraftEntitlement,
   type SpecialDraftEntitlement,
@@ -494,6 +494,14 @@ const draftTypeByLabel: Readonly<
 export function parseDraftguruYearSelections(
   html: string,
   input: { capture: SourceCapture; draftYear: number }
+) {
+  assertDraftguruYearParserVersion(input.capture.parserVersion);
+  return parseDraftguruYearSelectionRows(html, input);
+}
+
+function parseDraftguruYearSelectionRows(
+  html: string,
+  input: { capture: SourceCapture; draftYear: number }
 ): DraftguruTradeParseResult & {
   scopeSummary: {
     observedRows: number;
@@ -690,7 +698,7 @@ export function parseDraftguruNationalYearSelections(
     $(row).remove();
   });
   if (issues.length) return { evidence: [], issues, scopeSummary: summary };
-  const result = parseDraftguruYearSelections($.html(), input);
+  const result = parseDraftguruYearSelectionRows($.html(), input);
   if (!summary.includedRows)
     result.issues.push({
       code: 'unsupported_row',
