@@ -2946,3 +2946,11 @@ pair. Parser/routing and migration verification do not establish genuine capture
 registration, session correction or canonical admission; execute those through their existing owners.
 The2012 mini-draft permitted selections during a window; do not reuse this2011 dated-session
 proof or infer a common2012 selection date from the closing date of the trade period.
+
+Reviewed session projection v2 and promotion v7 preserve an explicit date window with a null
+exact event date. Migration0193 validates same-year bounds, disjoint session chronology and
+unchanged inventory/subset membership in reviewed transitions. It preserves exact-day legacy
+formats and all ancestor projections. This structural check grants no source authority or
+canonical admission: window source authentication, promotion storage and lifecycle ordering must
+also be implemented and verified before admitting window evidence. Do not substitute a window
+endpoint for the unknown selection day.

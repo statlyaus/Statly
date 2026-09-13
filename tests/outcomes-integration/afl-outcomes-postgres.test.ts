@@ -1220,6 +1220,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0190_official_2011_session_proof',
       '0191_membership_document_identity',
       '0192_official_mini_2011_session_proof',
+      '0193_reviewed_session_window_structure',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

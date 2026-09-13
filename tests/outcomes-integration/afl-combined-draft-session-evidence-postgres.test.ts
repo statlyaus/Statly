@@ -2450,3 +2450,138 @@ it('scopes reviewed mini-draft club document keys to exact URLs and2011 pathway'
     ).rows[0].key
   ).toBe('506746');
 });
+
+it('validates SQL date windows without manufacturing an exact day or permitting legacy windows', async () => {
+  const exact = { draftYear: 2012, eventDate: '2012-10-08' };
+  const datePrecision = {
+    precision: 'window',
+    eventDate: null,
+    earliestDate: '2012-10-08',
+    latestDate: '2012-10-26',
+  };
+  const session = { ...exact, eventDate: null, datePrecision };
+  const bounds = async (value: unknown, allow = true) =>
+    (
+      await pool.query('SELECT outcome_session_precision_bounds($1::jsonb,$2)::text AS bounds', [
+        JSON.stringify(value),
+        allow,
+      ])
+    ).rows[0].bounds;
+  expect(await bounds(session)).toBe('[2012-10-08,2012-10-27)');
+  expect(await bounds(exact, false)).toBe('[2012-10-08,2012-10-09)');
+  expect(await bounds(session, false)).toBeNull();
+  for (const value of [
+    { ...session, eventDate: '2012-10-26' },
+    { ...session, datePrecision: null },
+    { ...session, draftYear: 2011 },
+    { ...session, datePrecision: { ...datePrecision, extra: true } },
+    ...['2012-10-08', '2012-10-07', '2013-01-01', '2012-02-30', 'infinity'].map((latestDate) => ({
+      ...session,
+      datePrecision: { ...datePrecision, latestDate },
+    })),
+  ])
+    expect(await bounds(value)).toBeNull();
+});
+
+it('preserves window bounds and membership across SQL reviewed transitions', async () => {
+  const selection = {
+    selectionId: 'selection',
+    draftYear: 2012,
+    draftType: 'mini_draft',
+    evidenceIds: ['evidence'],
+  };
+  const parent = {
+    candidateId: 'parent',
+    content: {
+      environment: 'test_fixture',
+      reviewedCorrection: {},
+      reviewedScope: { deferredEvidenceIds: [] },
+      draftSelections: [selection],
+      sourceBatchIds: ['old'],
+      identityResolutionIds: [],
+      reconciledAt: '2026-01-01T00:00:00Z',
+    },
+  };
+  const datePrecision = {
+    precision: 'window',
+    eventDate: null,
+    earliestDate: '2012-10-08',
+    latestDate: '2012-10-26',
+  };
+  const session = {
+    draftYear: 2012,
+    draftType: 'mini_draft',
+    officialName: 'Synthetic mini draft',
+    sessionOrdinal: 1,
+    eventDate: null,
+    datePrecision,
+    selectionIds: ['selection'],
+    evidenceIds: ['evidence'],
+  };
+  const projection = {
+    schemaVersion: 'afl-trade-combined-draft-session-projection/v2',
+    inventorySelectionIds: ['selection'],
+    selectedSelectionIds: ['selection'],
+    inventorySessions: [session],
+    selectedSessions: [session],
+  };
+  const successor = {
+    content: {
+      ...parent.content,
+      sourceBatchIds: ['old', 'new'],
+      sourceAuthority: { completionId: 'completion' },
+      reviewedSessionCorrection: {
+        schemaVersion: 'afl-trade-reviewed-session-correction/v1',
+        parentCandidateId: 'parent',
+        sourceCompletionId: 'completion',
+        projections: [projection],
+      },
+    },
+  };
+  const valid = async (document: unknown) =>
+    (
+      await pool.query(
+        'SELECT outcome_reviewed_session_transition_exact($1::jsonb,$2::jsonb) AS valid',
+        [JSON.stringify(parent), JSON.stringify(document)]
+      )
+    ).rows[0].valid;
+  expect(await valid(successor)).toBe(true);
+  for (const change of [
+    (p: typeof projection) => {
+      p.schemaVersion = 'afl-trade-combined-draft-session-projection/v1';
+    },
+    (p: typeof projection) => {
+      p.selectedSessions[0]!.datePrecision.latestDate = '2012-10-27';
+    },
+    (p: typeof projection) => {
+      p.inventorySessions[0]!.selectionIds = ['different'];
+    },
+    (p: typeof projection) => {
+      p.inventorySessions[0]!.sessionOrdinal = 2;
+    },
+  ]) {
+    const changed = JSON.parse(JSON.stringify(successor)) as typeof successor;
+    change(changed.content.reviewedSessionCorrection.projections[0]!);
+    expect(await valid(changed)).toBe(false);
+  }
+  const ordered = JSON.parse(JSON.stringify(successor)) as typeof successor;
+  const group = ordered.content.reviewedSessionCorrection.projections[0]!;
+  group.inventorySelectionIds = ['earlier', 'selection'];
+  const later = {
+    ...session,
+    sessionOrdinal: 2,
+    datePrecision: { ...datePrecision, earliestDate: '2012-10-11' },
+  };
+  group.inventorySessions = [
+    {
+      ...session,
+      selectionIds: ['earlier'],
+      datePrecision: { ...datePrecision, latestDate: '2012-10-10' },
+    },
+    later,
+  ];
+  group.selectedSessions = [later];
+  expect(await valid(ordered)).toBe(true);
+  later.datePrecision.earliestDate = '2012-10-10';
+  expect(await valid(ordered)).toBe(false);
+});
