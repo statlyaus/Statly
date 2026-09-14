@@ -139,6 +139,31 @@ export interface ReportedDraftSessionProjection extends Omit<
   schemaVersion: 'afl-trade-reported-draft-session-projection/v1';
 }
 
+function validateReportedSessionClaim(
+  claim: Parameters<typeof projectReportedDraftSessionEvidence>[0]['sessions'][number],
+  numbers: number[],
+  byNumber: Map<number, { selectionId: string; selectionNumber: number }>,
+  draftYear: number
+) {
+  if (
+    !numbers.length ||
+    unique(numbers).length !== numbers.length ||
+    numbers.some((number) => !byNumber.has(number)) ||
+    !claim.evidenceIds.length ||
+    claim.evidenceIds.some((id) => !id.trim()) ||
+    !claim.officialName.trim() ||
+    !Number.isInteger(claim.sessionOrdinal) ||
+    claim.sessionOrdinal < 1 ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(claim.eventDate) ||
+    !Number.isFinite(Date.parse(claim.eventDate)) ||
+    new Date(claim.eventDate).toISOString().slice(0, 10) !== claim.eventDate ||
+    Number(claim.eventDate.slice(0, 4)) !== draftYear
+  )
+    throw new TypeError(
+      'Reported session claim has invalid dates, evidence or inventory membership.'
+    );
+}
+
 /** Direct session claims must partition the retained inventory before selecting candidate members. */
 export function projectReportedDraftSessionEvidence(input: {
   draftYear: number;
@@ -176,23 +201,7 @@ export function projectReportedDraftSessionEvidence(input: {
   const byOrdinal = new Map<number, CombinedDraftSessionCoverage>();
   for (const claim of input.sessions) {
     const numbers = [...claim.selectionNumbers].sort((a, b) => a - b);
-    if (
-      !numbers.length ||
-      unique(numbers).length !== numbers.length ||
-      numbers.some((number) => !byNumber.has(number)) ||
-      !claim.evidenceIds.length ||
-      claim.evidenceIds.some((id) => !id.trim()) ||
-      !claim.officialName.trim() ||
-      !Number.isInteger(claim.sessionOrdinal) ||
-      claim.sessionOrdinal < 1 ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(claim.eventDate) ||
-      !Number.isFinite(Date.parse(claim.eventDate)) ||
-      new Date(claim.eventDate).toISOString().slice(0, 10) !== claim.eventDate ||
-      Number(claim.eventDate.slice(0, 4)) !== input.draftYear
-    )
-      throw new TypeError(
-        'Reported session claim has invalid dates, evidence or inventory membership.'
-      );
+    validateReportedSessionClaim(claim, numbers, byNumber, input.draftYear);
     const session: CombinedDraftSessionCoverage = {
       draftYear: input.draftYear,
       draftType: input.draftType,
@@ -318,17 +327,11 @@ export function resolveCombinedDraftSessionEvidence(
   });
 }
 
-export function resolvePrecisionDraftSessionEvidence(
-  input: CombinedDraftSessionInput
-): PrecisionDraftSessionCoverage[] {
-  const orderedSelections = [...input.selections].sort(
-    (left, right) => left.selectionNumber - right.selectionNumber
-  );
+function resolveInventoryTotal(input: CombinedDraftSessionInput, inventoryNumbers: number[]) {
   const totals = input.facts.filter(
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_draft_total' }> =>
       fact.kind === 'completed_draft_total'
   );
-  const inventoryNumbers = orderedSelections.map(({ selectionNumber }) => selectionNumber);
   const capacities = input.facts.filter(
     (fact): fact is CompletedDraftSelectionCapacity => fact.kind === 'draft_selection_capacity'
   );
@@ -394,6 +397,16 @@ export function resolvePrecisionDraftSessionEvidence(
       'Combined draft proof requires one agreed completed selection total.'
     );
   }
+  return { total, totals, capacities, listTotals, additions, slots };
+}
+
+function validateInventoryMembership(
+  input: CombinedDraftSessionInput,
+  orderedSelections: CombinedDraftSelection[],
+  inventoryNumbers: number[],
+  population: ReturnType<typeof resolveInventoryTotal>
+) {
+  const { total, listTotals, additions, slots } = population;
   const enumerations = input.facts.filter(
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_draft_inventory' }> =>
       fact.kind === 'completed_draft_inventory'
@@ -450,7 +463,100 @@ export function resolvePrecisionDraftSessionEvidence(
       exclusions,
     });
   }
-  if (enumerations.length === 0 && rosters.length === 0 && !numberedUnion) {
+  validateInventoryEnumeration(
+    enumerations,
+    rosters.length,
+    numberedUnion,
+    inventoryNumbers,
+    total
+  );
+  return unionProof;
+}
+
+type SessionBoundary = Extract<CombinedDraftSessionFact, { kind: 'session_boundary' }>;
+function addDerivedTerminalBoundary(
+  input: CombinedDraftSessionInput,
+  unionProof: ReturnType<typeof resolveCompletedDraftNumberedUnion> | undefined,
+  ordinals: number[],
+  finalOrdinal: number | undefined,
+  boundaries: SessionBoundary[]
+) {
+  const memberIdentities = input.facts.filter(
+    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'session_member_identity' }> =>
+      fact.kind === 'session_member_identity'
+  );
+  if (memberIdentities.length) {
+    if (
+      !unionProof ||
+      ordinals.length !== 1 ||
+      finalOrdinal !== 1 ||
+      boundaries.some((b) => b.boundary === 'last')
+    )
+      throw new TypeError(
+        'Derived terminal identity requires one complete numbered-union session and no reported-last claim.'
+      );
+    const identity = requireOne(
+      memberIdentities,
+      'Derived terminal requires one source member identity.'
+    );
+    const member = unionProof.terminalMember;
+    if (
+      identity.sessionOrdinal !== 1 ||
+      identity.selectionNumber !== member.selectionNumber ||
+      identity.documentId !== member.documentId ||
+      identity.captureId !== member.captureId ||
+      identity.artifactId !== member.artifactId ||
+      identity.evidenceId === member.evidenceId
+    )
+      throw new TypeError('Derived terminal identity must bind the exact terminal member source.');
+    boundaries.push({ ...identity, kind: 'session_boundary', boundary: 'last' });
+  }
+}
+
+function validateSessionBoundaries(
+  boundaries: SessionBoundary[],
+  ordinals: number[],
+  starts: SessionBoundary[],
+  inventoryNumbers: number[],
+  orderedSelections: CombinedDraftSelection[]
+) {
+  for (const boundary of boundaries) {
+    const sessionIndex = ordinals.indexOf(boundary.sessionOrdinal);
+    if (sessionIndex === -1) {
+      throw new TypeError('A boundary refers to an unknown combined draft session.');
+    }
+    const nextStart = starts[sessionIndex + 1];
+    const expectedNumber =
+      boundary.boundary === 'first'
+        ? starts[sessionIndex]!.selectionNumber
+        : nextStart
+          ? inventoryNumbers[inventoryNumbers.indexOf(nextStart.selectionNumber) - 1]
+          : inventoryNumbers.at(-1);
+    if (boundary.selectionNumber !== expectedNumber) {
+      throw new TypeError('Combined draft evidence contains a contradictory session boundary.');
+    }
+    const selection = orderedSelections.find(
+      ({ selectionNumber }) => selectionNumber === boundary.selectionNumber
+    );
+    if (
+      !boundary.playerId.trim() ||
+      !boundary.clubId.trim() ||
+      selection?.playerId !== boundary.playerId ||
+      selection.clubId !== boundary.clubId
+    ) {
+      throw new TypeError('A session boundary identity disagrees with the complete inventory.');
+    }
+  }
+}
+
+function validateInventoryEnumeration(
+  enumerations: Extract<CombinedDraftSessionFact, { kind: 'completed_draft_inventory' }>[],
+  rosterCount: number,
+  numberedUnion: boolean,
+  inventoryNumbers: number[],
+  total: number
+) {
+  if (enumerations.length === 0 && rosterCount === 0 && !numberedUnion) {
     if (inventoryNumbers.some((number, index) => number !== index + 1)) {
       throw new TypeError(
         'A noncontiguous inventory requires explicit completed membership evidence.'
@@ -469,6 +575,23 @@ export function resolvePrecisionDraftSessionEvidence(
       'Completed membership must match every original inventory selection number.'
     );
   }
+}
+
+export function resolvePrecisionDraftSessionEvidence(
+  input: CombinedDraftSessionInput
+): PrecisionDraftSessionCoverage[] {
+  const orderedSelections = [...input.selections].sort(
+    (left, right) => left.selectionNumber - right.selectionNumber
+  );
+  const inventoryNumbers = orderedSelections.map(({ selectionNumber }) => selectionNumber);
+  const population = resolveInventoryTotal(input, inventoryNumbers);
+  const { totals, capacities, listTotals } = population;
+  const unionProof = validateInventoryMembership(
+    input,
+    orderedSelections,
+    inventoryNumbers,
+    population
+  );
 
   const boundaries = input.facts.filter(
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'session_boundary' }> =>
@@ -520,36 +643,7 @@ export function resolvePrecisionDraftSessionEvidence(
     throw new TypeError('Combined draft session boundaries must be strictly increasing.');
   }
   const finalOrdinal = ordinals.at(-1);
-  const memberIdentities = input.facts.filter(
-    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'session_member_identity' }> =>
-      fact.kind === 'session_member_identity'
-  );
-  if (memberIdentities.length) {
-    if (
-      !unionProof ||
-      ordinals.length !== 1 ||
-      finalOrdinal !== 1 ||
-      boundaries.some((b) => b.boundary === 'last')
-    )
-      throw new TypeError(
-        'Derived terminal identity requires one complete numbered-union session and no reported-last claim.'
-      );
-    const identity = requireOne(
-      memberIdentities,
-      'Derived terminal requires one source member identity.'
-    );
-    const member = unionProof.terminalMember;
-    if (
-      identity.sessionOrdinal !== 1 ||
-      identity.selectionNumber !== member.selectionNumber ||
-      identity.documentId !== member.documentId ||
-      identity.captureId !== member.captureId ||
-      identity.artifactId !== member.artifactId ||
-      identity.evidenceId === member.evidenceId
-    )
-      throw new TypeError('Derived terminal identity must bind the exact terminal member source.');
-    boundaries.push({ ...identity, kind: 'session_boundary', boundary: 'last' });
-  }
+  addDerivedTerminalBoundary(input, unionProof, ordinals, finalOrdinal, boundaries);
   const finalBoundary = requireOne(
     boundaries.filter((fact) => fact.sessionOrdinal === finalOrdinal && fact.boundary === 'last'),
     'The final combined draft session requires one explicit terminal boundary.'
@@ -557,33 +651,7 @@ export function resolvePrecisionDraftSessionEvidence(
   if (finalBoundary.selectionNumber !== inventoryNumbers.at(-1)) {
     throw new TypeError('The terminal boundary must agree with the complete inventory.');
   }
-  for (const boundary of boundaries) {
-    const sessionIndex = ordinals.indexOf(boundary.sessionOrdinal);
-    if (sessionIndex === -1) {
-      throw new TypeError('A boundary refers to an unknown combined draft session.');
-    }
-    const nextStart = starts[sessionIndex + 1];
-    const expectedNumber =
-      boundary.boundary === 'first'
-        ? starts[sessionIndex]!.selectionNumber
-        : nextStart
-          ? inventoryNumbers[inventoryNumbers.indexOf(nextStart.selectionNumber) - 1]
-          : inventoryNumbers.at(-1);
-    if (boundary.selectionNumber !== expectedNumber) {
-      throw new TypeError('Combined draft evidence contains a contradictory session boundary.');
-    }
-    const selection = orderedSelections.find(
-      ({ selectionNumber }) => selectionNumber === boundary.selectionNumber
-    );
-    if (
-      !boundary.playerId.trim() ||
-      !boundary.clubId.trim() ||
-      selection?.playerId !== boundary.playerId ||
-      selection.clubId !== boundary.clubId
-    ) {
-      throw new TypeError('A session boundary identity disagrees with the complete inventory.');
-    }
-  }
+  validateSessionBoundaries(boundaries, ordinals, starts, inventoryNumbers, orderedSelections);
   if (
     [...totals, ...capacities, ...listTotals].every(
       (fact) =>
