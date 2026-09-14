@@ -3103,3 +3103,11 @@ existing registered identity review guard. Wrong URL/year/pathway reject. The Co
 is exact-URL only. Gate field authorization remains unchanged: every emitted field still requires an
 explicit reviewed mapping and archive request. Genuine governance preparation and public capture /
 identity / promotion verification remain pending; parser eligibility is not source permission.
+
+Migration0204 requires session boundary and member-identity approvals to retain the exact source
+observation, entity and season. A same-name approval from another season cannot substitute for it.
+The identity loader preserves distinct subjects when collecting resolutions. Existing candidates
+that omitted a required season-specific resolution must be rebuilt through authenticated successor
+construction; registration alone does not repair their immutable resolution sets. Verify rejected
+source/identity authority and exact replay before admission. No new source capture is needed when
+the reviewed observations and approved subject decisions are already retained.

@@ -3089,11 +3089,50 @@ it('authenticates derived2010 inventory and rejects revoked terminal identities'
           JSON.stringify({ content: { provider: 'official_afl', claim: f.claim } }),
         ]
       );
-    for (const identity of identities)
+    for (const identity of identities) {
+      const content = identity.content;
+      const observations = facts.flatMap((fact, i) => {
+        const claim = fact.claim as Record<string, unknown>;
+        const sourceIdentity = claim[content.entityKind === 'player' ? 'player' : 'selectedByClub'];
+        return JSON.stringify(sourceIdentity) === JSON.stringify(content.sourceIdentity)
+          ? [{ evidenceId: evidenceIds[i], seasonYear: 2010, sourceIdentity }]
+          : [];
+      });
+      expect(observations).toHaveLength(1);
+      const decisionDocument = { content: {
+        decision: 'approved', subject: { content: { provider: 'official_afl', entityKind: content.entityKind,
+          identityScope: { kind: 'exact_recorded_name', recordedName: content.sourceIdentity.recordedName, seasonYear: 2010 } } },
+        canonicalTarget: { entityKind: content.entityKind, canonicalId: content.canonicalId },
+        workItem: { content: { observations } },
+      } };
       await client.query(
         `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at) VALUES($1,'external_identity','fixture','approved','fixture','{}','fixture','2026-09-13')`,
-        [identity.content.reviewDecisionId]
+        [content.reviewDecisionId]
       );
+      // Direct SQL inventory fixture: typed observations are required even with setup triggers disabled.
+      const digest = content.reviewDecisionId.split(':')[1];
+      await client.query(`INSERT INTO outcome_external_identity_review_decision
+        (decision_id,subject_id,historical_completion_id,review_package_id,work_item_id,work_item_sha256,
+         work_item_canonical_json,revision,outcome,canonical_target_kind,canonical_target_id,
+         canonical_target_snapshot_sha256,canonical_target_canonical_json,authority_evidence_id,
+         supersedes_decision_id,decision_sha256,decision_canonical_json,decision_json,decided_at)
+        VALUES($1,$1,'fixture',$2,$3,$4,'{}',1,'approved',$5,$6,$4,'{}','fixture',NULL,$4,$7::text,($7::text)::jsonb,'2026-09-13')`,
+        [content.reviewDecisionId, 'external-identity-review-package:' + digest,
+          'external-identity-review-work-item:' + digest, digest, content.entityKind, content.canonicalId, JSON.stringify(decisionDocument)]);
+      const evidenceIndex = evidenceIds.indexOf(observations[0]!.evidenceId);
+      const evidenceDocument = { content: { provider: 'official_afl', claim: facts[evidenceIndex]!.claim } };
+      const matches = async (decision: unknown, evidenceKey = observations[0]!.evidenceId) =>
+        (await client.query('SELECT outcome_session_identity_observation_matches($1::jsonb,$2::jsonb,$3,$4,$5) AS valid',
+          [JSON.stringify(decision), JSON.stringify(evidenceDocument), evidenceKey, content.entityKind, content.canonicalId])).rows[0].valid;
+      expect(await matches(decisionDocument)).toBe(true);
+      const wrongSeason = structuredClone(decisionDocument);
+      wrongSeason.content.subject.content.identityScope.seasonYear = 2012;
+      expect(await matches(wrongSeason)).toBe(false);
+      expect(await matches(decisionDocument, 'external-evidence:' + hash('wrong-observation'))).toBe(false);
+      const wrongObservationSeason = structuredClone(decisionDocument);
+      wrongObservationSeason.content.workItem.content.observations[0]!.seasonYear = 2012;
+      expect(await matches(wrongObservationSeason)).toBe(false);
+    }
     await client.query('SET LOCAL session_replication_role=origin');
     const check = async (owner: string) =>
       (
