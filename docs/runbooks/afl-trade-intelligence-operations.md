@@ -3123,3 +3123,7 @@ and replay. Status readiness does not establish canonical admission or entitleme
 For future picks, custody source provenance follows the recorded observation year, while
 `draft_season_year` remains the pick's target draft year. Do not require a later draft-year capture
 for an earlier evidenced transfer or replace partial observation dates with invented timestamps.
+
+The historical draft/trade reader accepts typed passed, unused, later-package and rookie-elevation
+pick endpoints without a draft-selection row. It leaves drafted-player and actual-pick fields empty
+and continues rejecting missing or mismatched selected endpoints and pick identities.

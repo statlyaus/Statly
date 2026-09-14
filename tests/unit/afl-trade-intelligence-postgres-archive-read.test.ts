@@ -121,9 +121,9 @@ function activeSelector(active = true) {
   return { capture } as AflTradePromotionBackedArchiveSelector & { capture: typeof capture };
 }
 
-function archiveReader() {
-  const listRecords = vi.fn(async () => records);
-  const listAllRecords = vi.fn(async () => records);
+function archiveReader(inputRecords: AflTradePromotionBackedPublicArchiveRecordInput[] = records) {
+  const listRecords = vi.fn(async () => inputRecords);
+  const listAllRecords = vi.fn(async () => inputRecords);
   return {
     listRecords,
     listAllRecords,
@@ -254,6 +254,39 @@ describe('PostgreSQL AFL draft and trade archive reads', () => {
     ]);
     expect(archiveRepository.listAllRecords).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['passed', 'not_exercised', 'incorporated_into_later_package', 'rookie_elevation'] as const)(
+    'reads a %s endpoint without inventing a drafted player', async (kind) => {
+      const terminalOutcome = kind === 'passed'
+        ? { kind, draftYear: 2025, draftType: 'national' as const, livePick: 50 }
+        : kind === 'not_exercised'
+          ? { kind, draftYear: 2025, draftType: 'national' as const, recordedPick: 50 }
+          : kind === 'rookie_elevation'
+            ? { kind, playerId: 'player-reidy', recordedPlayerName: 'Liam Reidy', exercisingClubId: fremantle.clubId, draftYear: 2025, draftType: 'national' as const, livePick: 50 }
+            : { kind, onwardTransactionIds: [], packageDescription: 'Included in a later package.' };
+      const endpoint = { ...realization, draftSelectionId: null, relationKind: kind, terminalOutcome };
+      const repository = createPostgresDraftTradeReadRepository({
+        archiveSelector: activeSelector(),
+        archiveRepository: archiveReader([transaction, pickAsset, endpoint]),
+      });
+      const detail = await repository.getById(transaction.eventId);
+      expect(detail?.assets).toHaveLength(1);
+      expect(detail?.assets[0]).toMatchObject({ draftedPlayer: null, pick: { numberActual: null, numberGiven: 50 } });
+    }
+  );
+
+  it.each(['missing_selection', 'wrong_selection_pick', 'wrong_realization_pick'] as const)(
+    'rejects a broken selected endpoint: %s', async (mode) => {
+      const fixture = [transaction, pickAsset,
+        { ...selected, pickId: mode === 'wrong_selection_pick' ? 'different-pick' : selected.pickId },
+        { ...realization, draftSelectionId: mode === 'missing_selection' ? 'missing' : selected.selectionId,
+          pickId: mode === 'wrong_realization_pick' ? 'different-pick' : realization.pickId }];
+      const repository = createPostgresDraftTradeReadRepository({
+        archiveSelector: activeSelector(), archiveRepository: archiveReader(fixture),
+      });
+      await expect(repository.getById(transaction.eventId)).rejects.toThrow(/incomplete pick realization/);
+    }
+  );
 
   it('applies existing public filters to one cached immutable archive', async () => {
     const archiveRepository = archiveReader();
