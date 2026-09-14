@@ -2877,8 +2877,10 @@ Retained article bytes and parser verification alone are not registered capture 
 
 ### Compensation lifecycle references
 
-`official-afl-compensation-lifecycle` uses the exact reviewed URLs, anchor years and parser version
-in `officialAflCompensationSourceScope.ts`. The article and PDF parsers emit separate
+`official-afl-compensation-lifecycle` uses the exact reviewed URLs in
+`officialAflCompensationSourceScope.ts`; `officialAflCompensationArticleFacts.ts` and
+`officialAflCompensationPdfFacts.ts` bind allowed anchor years, parser version and byte hashes.
+The article and PDF parsers emit separate
 `compensation_activation_reference` and `compensation_rule_reference` facts; migration0209 permits
 both in the existing immutable evidence staging owner. Retain use-year, recorded player/holder and
 selection position separately from original award year, expiry and nomination rules. Preserve absent
