@@ -231,9 +231,19 @@ async function loadSourceAncestry(
   const expectedPromotions = new Set(
     corpus.content.promotions.map(({ promotionId }) => promotionId)
   );
-  const captureById = new Map<string, Pick<CaptureRow,
-    'capture_id' | 'source_snapshot_id' | 'environment' | 'competition' |
-    'anchor_season_year' | 'captured_at' | 'manifest_json'>>();
+  const captureById = new Map<
+    string,
+    Pick<
+      CaptureRow,
+      | 'capture_id'
+      | 'source_snapshot_id'
+      | 'environment'
+      | 'competition'
+      | 'anchor_season_year'
+      | 'captured_at'
+      | 'manifest_json'
+    >
+  >();
   const captureIdsByPromotion = new Map<string, Set<string>>();
   for (const row of result.rows) {
     if (
@@ -366,7 +376,8 @@ async function loadCanonicalMembers(
                   'clubId',party.club_id,'sourceImportRowId',party.source_import_row_id,
                   'role',party.role,'ordinal',party.ordinal) ORDER BY party.ordinal)
                   FROM outcome_event_party party WHERE party.event_version_id=version.event_version_id),'[]'::jsonb)
-              ) AS canonical_record_json
+              ) || CASE WHEN version.date_precision IS NULL THEN '{}'::jsonb
+                   ELSE jsonb_build_object('datePrecision',version.date_precision) END AS canonical_record_json
          FROM requested_member requested
          JOIN outcome_event_version version ON version.event_version_id=requested.canonical_record_id
          JOIN outcome_event event ON event.event_id=version.event_id
@@ -404,11 +415,14 @@ async function loadCanonicalMembers(
        SELECT requested.record_kind,custody.custody_observation_id,
               jsonb_build_object(
                 'custodyObservationId',custody.custody_observation_id,'pickId',custody.pick_id,
-                'observedAt',custody.observed_at,'draftSeasonYear',custody.draft_season_year,
+                'observedAt',COALESCE(custody.observed_date,to_jsonb(custody.observed_at)),
+                'draftSeasonYear',custody.draft_season_year,
                 'draftKind',custody.draft_kind,'recordedRound',custody.recorded_round,
                 'recordedPick',custody.recorded_pick,'originalClubId',custody.original_club_id,
                 'currentClubId',custody.current_club_id,'sourceImportRowId',custody.source_import_row_id,
                 'status',custody.status,'evidence',custody.evidence_json,'recordedAt',custody.recorded_at)
+              || CASE WHEN custody.predecessor_custody_id IS NULL THEN '{}'::jsonb
+                 ELSE jsonb_build_object('predecessorCustodyId',custody.predecessor_custody_id) END
          FROM requested_member requested
          JOIN outcome_pick_custody_observation custody
            ON custody.custody_observation_id=requested.canonical_record_id
@@ -422,6 +436,8 @@ async function loadCanonicalMembers(
                 'sourceImportRowId',realization.source_import_row_id,
                 'relationKind',realization.relation_kind,'status',realization.status,
                 'evidence',realization.evidence_json,'recordedAt',realization.recorded_at)
+              || CASE WHEN realization.terminal_outcome IS NULL THEN '{}'::jsonb
+                 ELSE jsonb_build_object('terminalOutcome',realization.terminal_outcome) END
          FROM requested_member requested
          JOIN outcome_pick_realization realization
            ON realization.realization_id=requested.canonical_record_id

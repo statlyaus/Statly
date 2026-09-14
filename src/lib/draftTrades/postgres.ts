@@ -121,8 +121,15 @@ function buildBundle(
     });
     const assets: DraftTradeAssetItem[] = transferRows.map((asset, index) => {
       const realization = realizationByTransfer.get(asset.assetVersionId);
-      const selected = realization ? selections.get(realization.draftSelectionId) : undefined;
-      if (realization && (!selected || selected.pickId !== asset.pick?.pickId)) {
+      const selected = realization?.draftSelectionId
+        ? selections.get(realization.draftSelectionId)
+        : undefined;
+      if (realization && (
+        realization.pickId !== asset.pick?.pickId ||
+        (realization.draftSelectionId !== null
+          ? !selected || selected.pickId !== asset.pick?.pickId
+          : !realization.terminalOutcome || realization.relationKind !== realization.terminalOutcome.kind)
+      )) {
         throw new Error(
           `Released trade asset ${asset.assetVersionId} has incomplete pick realization.`
         );

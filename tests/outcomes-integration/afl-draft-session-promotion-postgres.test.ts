@@ -1,3 +1,4 @@
+import { verifySessionAcquisitionCurrentness } from '../testUtils/sessionAcquisitionCurrentness';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
@@ -283,3 +284,67 @@ it('promotes two evidenced sessions of one draft with separate exact dates and s
     ).idempotentReplay
   ).toBe(true);
 });
+
+it.each(['direct', 'combined', 'mixed'] as const)(
+  'promotes v5 session proof with year-only trades through review, finalization and replay (combined=%s)',
+  async (profile) => {
+    const combined = profile !== 'direct';
+    const scopedName = `${schema}_v5_${profile}`;
+    await admin.query(`CREATE SCHEMA "${scopedName}"`);
+    const scopedUrl = new URL(url!);
+    scopedUrl.searchParams.set('schema', scopedName);
+    const isolated = new Pool({ connectionString: url, options: `-c search_path=${scopedName}` });
+    try {
+      runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedUrl.toString() });
+      const promoted = await createSyntheticAcquisitionPlayerPromotion(isolated, {
+        draftSessions: !combined,
+        combinedDraftSessions: combined,
+        sessionProposalV5: true,
+        mixedDraftSessionProofs: profile === 'mixed',
+        partialTransactionDates: true,
+      });
+      expect(promoted.proposal.content.schemaVersion).toBe(
+        'afl-trade-external-canonical-promotion-proposal/v5'
+      );
+      expect(promoted.draftAssets).toHaveLength(profile === 'mixed' ? 3 : 2);
+      if (profile === 'mixed')
+        expect(
+          new Set(
+            promoted.proposal.content.draftEventCoverage.map((coverage) =>
+              'proofKind' in coverage ? coverage.proofKind : null
+            )
+          )
+        ).toEqual(new Set(['direct_session_claim', 'combined_session_facts']));
+      expect(
+        promoted.proposal.content.transactionDateCoverage.every((date) => date.occurredOn === null)
+      ).toBe(true);
+      const trade = await isolated.query(
+        `SELECT event.event_date,root.season_year FROM outcome_event_version event JOIN outcome_event root USING(event_id) WHERE event.event_version_id=$1`,
+        [promoted.entry.eventVersionId]
+      );
+      expect(trade.rows).toEqual([{ event_date: null, season_year: 2024 }]);
+      expect(() => promoted.entry.eventDate).toThrow('no exact-day');
+
+      const replay = await new PostgresAflTradeExternalCanonicalPromotionRepository(
+        createPgAflOutcomeSqlClient(isolated)
+      ).promote({
+        candidateId: promoted.candidate.candidateId,
+        approvalDecisionId: promoted.approvalDecisionId,
+      });
+      expect(replay.promotionId).toBe(promoted.entry.promotionId);
+      expect(
+        (
+          await isolated.query(
+            'SELECT status FROM outcome_external_canonical_promotion WHERE promotion_id=$1',
+            [replay.promotionId]
+          )
+        ).rows[0].status
+      ).toBe('finalized');
+      await verifySessionAcquisitionCurrentness(isolated, promoted);
+    } finally {
+      await isolated.end();
+      await admin.query(`DROP SCHEMA "${scopedName}" CASCADE`);
+    }
+  },
+  120_000
+);

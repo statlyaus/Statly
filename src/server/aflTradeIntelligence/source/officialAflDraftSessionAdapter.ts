@@ -1,3 +1,37 @@
+import {
+  reviewedOfficialAflDraft2010Source,
+  OFFICIAL_AFL_2010_ADDITIONS_URL,
+} from './officialAflDraft2010SourceScope';
+import { parseOfficialAflDraft2010SessionFacts } from './officialAflDraft2010SessionFacts';
+import { parseOfficialAflDraft2010ListFacts } from './officialAflDraft2010ListFacts';
+import {
+  reviewedOfficialAflMiniDraft2012EffectiveYear,
+  parseOfficialAflMiniDraft2012SessionFacts,
+} from './officialAflMiniDraft2012SessionFacts';
+import {
+  reviewedOfficialAflMiniDraft2011EffectiveYear,
+  parseOfficialAflMiniDraft2011SessionFacts,
+} from './officialAflMiniDraft2011SessionFacts';
+import {
+  reviewedOfficialAflDraft2011EffectiveYear,
+  parseOfficialAflDraft2011SessionFacts,
+} from './officialAflDraft2011SessionFacts';
+import {
+  reviewedOfficialAflDraft2012EffectiveYear,
+  parseOfficialAflDraft2012SessionFacts,
+} from './officialAflDraft2012SessionFacts';
+import {
+  reviewedOfficialAflDraft2014EffectiveYear,
+  parseOfficialAflDraft2014SessionFacts,
+} from './officialAflDraft2014SessionFacts';
+import {
+  reviewedOfficialAflDraft2013EffectiveYear,
+  parseOfficialAflDraft2013SessionFacts,
+} from './officialAflDraft2013SessionFacts';
+import {
+  isReviewedOfficialAflDraft2015SessionFactUrl,
+  parseOfficialAflDraft2015SessionFacts,
+} from './officialAflDraft2015SessionFacts';
 import { load } from 'cheerio';
 import {
   createAflTradeExternalEvidenceEnvelope,
@@ -22,7 +56,7 @@ import {
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
 
-export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v9';
+export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v18';
 
 // Exact reviewed completed reports: contextual date, event-day narrative and full
 // selection coverage must agree. Publication time alone is never an event date.
@@ -178,18 +212,72 @@ const reviewedReports = [
   },
 ] as const;
 
+const reviewedSessionUrlChecks = new Map<number, (url: string) => boolean>([
+  [2010, (url) => Boolean(reviewedOfficialAflDraft2010Source(url))],
+  [2011, (url) =>
+    reviewedOfficialAflMiniDraft2011EffectiveYear(url) !== null ||
+    reviewedOfficialAflDraft2011EffectiveYear(url) !== null],
+  [2012, (url) =>
+    reviewedOfficialAflMiniDraft2012EffectiveYear(url) !== null ||
+    reviewedOfficialAflDraft2012EffectiveYear(url) !== null],
+  [2013, (url) => reviewedOfficialAflDraft2013EffectiveYear(url) !== null],
+  [2014, (url) => reviewedOfficialAflDraft2014EffectiveYear(url) !== null],
+  [2015, isReviewedOfficialAflDraft2015SessionFactUrl],
+  [2016, isReviewedOfficialAflDraft2016SessionFactUrl],
+  [2017, isReviewedOfficialAflDraft2017SessionFactUrl],
+  [2018, isReviewedOfficialAflDraft2018SessionFactUrl],
+]);
+
 export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: number): boolean {
-  if (seasonYear === 2016 && isReviewedOfficialAflDraft2016SessionFactUrl(url)) return true;
-  if (seasonYear === 2017 && isReviewedOfficialAflDraft2017SessionFactUrl(url)) return true;
-  if (seasonYear === 2018 && isReviewedOfficialAflDraft2018SessionFactUrl(url)) return true;
+  if (reviewedSessionUrlChecks.get(seasonYear)?.(url)) return true;
   if (url === OFFICIAL_AFL_2019_CLUB_REVIEW_URL) return seasonYear === 2019;
   return reviewedReports.some((report) => report.year === seasonYear && report.url === url);
 }
 
 export function parseOfficialAflDraftSession(
   html: string,
-  input: { capture: AflTradeExternalEvidenceContent['capture'] }
+  input: { capture: AflTradeExternalEvidenceContent['capture']; anchorSeasonYear?: number }
 ): { evidence: AflTradeExternalEvidenceEnvelope[]; issues: AflTradeExternalPageIssue[] } {
+  if (
+    input.anchorSeasonYear === 2010 &&
+    reviewedOfficialAflDraft2010Source(input.capture.sourceUrl)?.mediaType === 'text/html'
+  )
+    return input.capture.sourceUrl === OFFICIAL_AFL_2010_ADDITIONS_URL
+      ? parseOfficialAflDraft2010ListFacts(html, input)
+      : parseOfficialAflDraft2010SessionFacts(html, input);
+  if (
+    input.anchorSeasonYear === 2012 &&
+    reviewedOfficialAflMiniDraft2012EffectiveYear(input.capture.sourceUrl) !== null
+  )
+    return parseOfficialAflMiniDraft2012SessionFacts(html, input);
+  if (
+    input.anchorSeasonYear === 2011 &&
+    reviewedOfficialAflMiniDraft2011EffectiveYear(input.capture.sourceUrl) !== null
+  )
+    return parseOfficialAflMiniDraft2011SessionFacts(html, input);
+  if (
+    input.anchorSeasonYear === 2011 &&
+    reviewedOfficialAflDraft2011EffectiveYear(input.capture.sourceUrl) !== null
+  )
+    return parseOfficialAflDraft2011SessionFacts(html, input);
+  if (
+    input.anchorSeasonYear === 2012 &&
+    reviewedOfficialAflDraft2012EffectiveYear(input.capture.sourceUrl) !== null
+  )
+    return parseOfficialAflDraft2012SessionFacts(html, input);
+  if (
+    input.anchorSeasonYear === 2014 &&
+    reviewedOfficialAflDraft2014EffectiveYear(input.capture.sourceUrl) !== null
+  ) {
+    return parseOfficialAflDraft2014SessionFacts(html, input);
+  }
+  if (
+    input.anchorSeasonYear === 2013 &&
+    reviewedOfficialAflDraft2013EffectiveYear(input.capture.sourceUrl) !== null
+  )
+    return parseOfficialAflDraft2013SessionFacts(html, input);
+  if (isReviewedOfficialAflDraft2015SessionFactUrl(input.capture.sourceUrl))
+    return parseOfficialAflDraft2015SessionFacts(html, input);
   if (isReviewedOfficialAflDraft2016SessionFactUrl(input.capture.sourceUrl))
     return parseOfficialAflDraft2016SessionFacts(html, input);
   if (isReviewedOfficialAflDraft2017SessionFactUrl(input.capture.sourceUrl))

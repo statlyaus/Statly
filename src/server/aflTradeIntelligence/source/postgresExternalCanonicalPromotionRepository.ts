@@ -1,3 +1,17 @@
+import { buildReviewedLineageCorrectionGraph } from './reviewedLineageCorrectionGraph';
+import {
+  authenticateReviewedAdmissionScope,
+  prepareReviewedOrdinaryCorrection,
+  prepareReviewedSpecialCorrection,
+  prepareReviewedRookieCorrection,
+} from './reviewedAdmissionScope';
+import { pickCustodyDateColumns, pickCustodyObservationYear } from './pickCustodyDate';
+import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
+import {
+  registerReviewedPickLineage,
+  readReviewedPickLineage,
+} from './postgresReviewedPickLineageRegistration';
+import { previewReviewedPickLineage } from './reviewedPickLineageReadiness';
 import { specialEntitlementIdentityReplacementSchema } from './specialEntitlementIdentityReplacementContracts';
 import { specialEntitlementRevisionSchema } from './specialEntitlementRevisionContracts';
 import { specialEntitlementLifecycleSchema } from './specialEntitlementLifecycleContracts';
@@ -303,6 +317,7 @@ async function loadCandidate(
   try {
     const candidate = parseAflTradeExternalReconciliationCandidate(row.candidate_json);
     if (candidate.candidateId !== candidateId) throw new TypeError('Candidate identity mismatch.');
+    await authenticateReviewedAdmissionScope(transaction, candidate);
     return candidate;
   } catch (error) {
     throw new AflTradeExternalCanonicalPromotionError(
@@ -593,6 +608,82 @@ function plannedTradeAsset(promotionId: string, eventVersionId: string, transfer
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
+  async prepareReviewedPickLineagePromotion(input: {
+    registrationId: string;
+    candidateId: string;
+    environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction((transaction) =>
+      bindRegisteredLineageForPromotion(transaction, input)
+    );
+  }
+
+  async prepareReviewedLineageCorrectionGraph(input: {
+    registrationId: string;
+    candidateId: string;
+    environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction(async (transaction) => {
+      const binding = await bindRegisteredLineageForPromotion(transaction, input);
+      const records = binding.content.facts.map(({ custody, ...fact }) => ({
+        schemaVersion: 'afl-trade-reviewed-pick-lineage/v1',
+        candidateId: binding.content.candidateId,
+        ...fact,
+        movements: custody.map(({ ordinal: _ordinal, ...movement }) => movement),
+      }));
+      return {
+        ...buildReviewedLineageCorrectionGraph(records),
+        registrationId: binding.content.registrationId,
+        bindingId: binding.bindingId,
+        reviewAuthorityAuthenticated: true,
+        sourceAuthorityAuthenticated: true,
+      };
+    });
+  }
+
+  async prepareReviewedOrdinaryCorrection(input: {
+    scopeCandidateId: string;
+    environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction((transaction) =>
+      prepareReviewedOrdinaryCorrection(transaction, input)
+    );
+  }
+
+  async prepareReviewedRookieCorrection(input: { parentCandidateId: string; environment: string }) {
+    return this.client.transaction((transaction) =>
+      prepareReviewedRookieCorrection(transaction, input)
+    );
+  }
+
+  async prepareReviewedSpecialCorrection(input: {
+    parentCandidateId: string;
+    completionId: string;
+    entitlementIds: readonly string[];
+    environment: 'test_fixture' | 'non_production';
+  }) {
+    return this.client.transaction((transaction) =>
+      prepareReviewedSpecialCorrection(transaction, input)
+    );
+  }
+
+  async registerReviewedPickLineage(input: { registration: unknown; approvalDecisionId: string }) {
+    return registerReviewedPickLineage(this.client, input);
+  }
+
+  async readReviewedPickLineage(registrationId: string) {
+    return readReviewedPickLineage(this.client, registrationId);
+  }
+
+  /** Inspect exact retained lineage dependencies without changing candidate issues or approving facts. */
+  async previewReviewedPickLineage(input: {
+    candidateId: string;
+    environment: 'test_fixture' | 'non_production' | 'production';
+    records: readonly unknown[];
+  }) {
+    return previewReviewedPickLineage(this.client, input);
+  }
+
   /** Persists a reviewed award only; this does not admit its custody trades or exercise. */
   async registerSpecialEntitlementAward(input: { award: unknown; approvalDecisionId: string }) {
     const award = specialEntitlementAwardSchema.parse(input.award);
@@ -881,6 +972,20 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidate,
         proposal: approval.proposal,
       });
+      if (
+        'draftEventCoverage' in approval.proposal.content &&
+        approval.proposal.content.draftEventCoverage.length > 0
+      ) {
+        const sessionProof = await transaction.query<{ exact: boolean }>(
+          'SELECT outcome_external_draft_sessions_exact($1,$2::jsonb) AS exact',
+          [candidate.candidateId, canonicalizeAflTradeJson(approval.proposal.content)]
+        );
+        if (sessionProof.rows[0]?.exact !== true)
+          throw new AflTradeExternalCanonicalPromotionError(
+            'INVALID_INPUT',
+            'Canonical promotion requires exact current draft-session evidence, including replay.'
+          );
+      }
       // Revalidate award authority before replay as well as before new writes.
       const rights = candidate.content.transfers.filter(
         (record) => record.asset.kind === 'special_entitlement'
@@ -1469,9 +1574,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           await transaction.query(
             `INSERT INTO outcome_event_version
             (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
-             official_name,status,source_import_row_id,supersedes_version_id,recorded_at)
+             official_name,status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
            VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
-                   'approved'::"OutcomeRecordStatus",$8,$9,$10)`,
+                   'approved'::"OutcomeRecordStatus",$8,$9,$10,$11::jsonb)`,
             [
               eventVersionId,
               eventId,
@@ -1483,6 +1588,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               eventRow.importRowId,
               predecessor?.eventVersionId ?? null,
               approval.promotedAt,
+              'datePrecision' in coverage && coverage.datePrecision
+                ? JSON.stringify(coverage.datePrecision)
+                : null,
             ]
           );
           const selectingClubs = sortedUnique(
@@ -1599,17 +1707,18 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       async function persistPickCustody(): Promise<void> {
         for (const record of content.pickCustody) {
-          if (!record.originalClubId || !record.currentClubId) {
+          const date = pickCustodyDateColumns(record.observedAt);
+          if (!record.currentClubId) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
-              `Custody ${record.custodyId} has incomplete clubs.`
+              `Custody ${record.custodyId} has no observed current club.`
             );
           }
           const row = await sourceRow({
             key: `custody:${record.custodyId}`,
             recordKind: 'external_pick_custody',
             sourceRecordId: record.custodyId,
-            seasonYear: record.draftYear,
+            seasonYear: pickCustodyObservationYear(record.observedAt),
             evidenceIds: record.evidenceIds,
             record,
           });
@@ -1618,14 +1727,14 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             `INSERT INTO outcome_pick_custody_observation
             (custody_observation_id,pick_id,observed_at,draft_season_year,draft_kind,
              recorded_round,recorded_pick,original_club_id,current_club_id,source_import_row_id,
-             status,evidence_json,recorded_at)
+             status,evidence_json,recorded_at,observed_date,predecessor_custody_id)
            VALUES ($1,$2,$3,$4,$5::"OutcomeEventKind",$6,$7,$8,$9,$10,
-                   'approved'::"OutcomeRecordStatus",$11::jsonb,$12)
+                   'approved'::"OutcomeRecordStatus",$11::jsonb,$12,$13::jsonb,$14)
            ON CONFLICT (custody_observation_id) DO NOTHING`,
             [
               record.custodyId,
               record.pickId,
-              record.observedAt,
+              date.observedAt,
               record.draftYear,
               kind.eventKind,
               record.roundNumber,
@@ -1635,22 +1744,26 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
               approval.promotedAt,
+              date.observedDate === null ? null : canonicalizeAflTradeJson(date.observedDate),
+              record.predecessorCustodyId ?? null,
             ]
           );
           const exactCustody = await transaction.query(
             `SELECT custody_observation_id FROM outcome_pick_custody_observation
-            WHERE custody_observation_id=$1 AND pick_id=$2 AND observed_at=$3
+            WHERE custody_observation_id=$1 AND pick_id=$2 AND observed_at IS NOT DISTINCT FROM $3
               AND draft_season_year=$4 AND draft_kind=$5::"OutcomeEventKind"
               AND recorded_round IS NOT DISTINCT FROM $6
               AND recorded_pick IS NOT DISTINCT FROM $7
-              AND original_club_id=$8 AND current_club_id=$9
+              AND original_club_id IS NOT DISTINCT FROM $8 AND current_club_id=$9
               AND source_import_row_id=$10 AND status='approved'::"OutcomeRecordStatus"
               AND evidence_json=$11::jsonb AND recorded_at=$12
+              AND observed_date IS NOT DISTINCT FROM $13::jsonb
+              AND predecessor_custody_id IS NOT DISTINCT FROM $14
             FOR SHARE`,
             [
               record.custodyId,
               record.pickId,
-              record.observedAt,
+              date.observedAt,
               record.draftYear,
               kind.eventKind,
               record.roundNumber,
@@ -1660,6 +1773,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
               approval.promotedAt,
+              date.observedDate === null ? null : canonicalizeAflTradeJson(date.observedDate),
+              record.predecessorCustodyId ?? null,
             ]
           );
           if (exactCustody.rows.length !== 1) {
@@ -1681,21 +1796,36 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       async function persistPickRealizations(): Promise<void> {
         for (const record of content.pickLineage) {
           const transferAssetVersionId = assetByTransfer.get(record.transferId);
-          const draftSelectionId = canonicalSelectionBySource.get(record.selectionId);
+          const draftSelectionId =
+            record.selectionId === null ? null : canonicalSelectionBySource.get(record.selectionId);
           const selection = content.draftSelections.find(
             ({ selectionId }) => selectionId === record.selectionId
           );
-          if (!transferAssetVersionId || !draftSelectionId || !selection) {
+          if (
+            !transferAssetVersionId ||
+            (!record.terminalOutcome && (!draftSelectionId || !selection))
+          ) {
             throw new AflTradeExternalCanonicalPromotionError(
               'CANDIDATE_UNAVAILABLE',
               `Pick realization ${record.lineageId} has incomplete canonical endpoints.`
             );
           }
+          const transfer = content.transfers.find(
+            (value) => value.transferId === record.transferId
+          )!;
+          const event = content.transactions.find(
+            (value) => value.transactionId === transfer.transactionId
+          )!;
+          const outcome = record.terminalOutcome;
+          const outcomeYear =
+            outcome && outcome.kind !== 'incorporated_into_later_package'
+              ? outcome.draftYear
+              : event.seasonYear;
           const row = await sourceRow({
             key: `realization:${record.lineageId}`,
             recordKind: 'external_pick_realization',
             sourceRecordId: record.lineageId,
-            seasonYear: selection.draftYear,
+            seasonYear: selection?.draftYear ?? outcomeYear,
             evidenceIds: record.evidenceIds,
             record,
           });
@@ -1704,12 +1834,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             sourceLineageId: record.lineageId,
             transferAssetVersionId,
             draftSelectionId,
+            ...(outcome ? { terminalOutcome: outcome } : {}),
           });
           await transaction.query(
             `INSERT INTO outcome_pick_realization
             (realization_id,pick_id,transfer_asset_version_id,draft_selection_id,
-             source_import_row_id,relation_kind,status,evidence_json,recorded_at)
-           VALUES ($1,$2,$3,$4,$5,'exercised_as','approved'::"OutcomeRecordStatus",$6::jsonb,$7)`,
+             source_import_row_id,relation_kind,status,evidence_json,recorded_at,terminal_outcome)
+           VALUES ($1,$2,$3,$4,$5,$8,'approved'::"OutcomeRecordStatus",$6::jsonb,$7,$9::jsonb)`,
             [
               realizationId,
               record.pickId,
@@ -1718,6 +1849,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               canonicalizeAflTradeJson({ evidenceIds: record.evidenceIds }),
               approval.promotedAt,
+              outcome?.kind ?? 'exercised_as',
+              outcome ? canonicalizeAflTradeJson(outcome) : null,
             ]
           );
           promotionRecords.push({

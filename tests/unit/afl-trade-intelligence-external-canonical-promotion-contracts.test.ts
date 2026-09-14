@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import {
@@ -10,6 +13,9 @@ import {
   createAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionRequest,
   deriveAflTradeExternalCanonicalPromotionProposal,
+  deriveDraftSessionCanonicalPromotionProposal,
+  deriveReviewedSessionCanonicalPromotionProposal,
+  deriveCombinedDraftSessionCanonicalPromotionProposal,
 } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionContracts';
 
 const evidenceId = `external-evidence:${'e'.repeat(64)}`;
@@ -144,7 +150,7 @@ function candidate(overrides?: {
 }
 
 function proposal(selectionIds: string[] = [selectionId], source = candidate()) {
-  return createAflTradeExternalCanonicalPromotionProposal({
+  const result = createAflTradeExternalCanonicalPromotionProposal({
     schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
     candidateId: source.candidateId,
     candidateSha256: source.candidateId.split(':')[1],
@@ -166,9 +172,59 @@ function proposal(selectionIds: string[] = [selectionId], source = candidate()) 
     proposedAt: '2026-08-09T07:31:00.000Z',
     publicationEligible: false,
   });
+  if (
+    result.content.schemaVersion !== AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION
+  )
+    throw new Error('Expected exact-day v1 fixture');
+  return { ...result, content: result.content };
 }
 
 describe('external canonical promotion contracts', () => {
+  it.each(['transactions', 'transfers', 'draftSelections', 'pickCustody', 'pickLineage'] as const)(
+    'rejects duplicate IDs in candidate %s before promotion',
+    (collection) => {
+      const content = structuredClone(candidate().content);
+      const rows = content[collection];
+      // Duplicate an otherwise valid row; no source facts or membership claims change.
+      Object.assign(content, { [collection]: [...rows, structuredClone(rows[0])] });
+      let failure: unknown;
+      try {
+        createAflTradeExternalReconciliationCandidate(content);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: [collection], message: 'IDs must be unique.' }),
+        ]),
+      });
+    }
+  );
+
+  it('accepts an unknown origin while still requiring the observed holder', () => {
+    const original = candidate();
+    const source = createAflTradeExternalReconciliationCandidate({
+      ...original.content,
+      pickCustody: original.content.pickCustody.map((row) => ({ ...row, originalClubId: null })),
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate: source,
+        proposal: proposal([selectionId], source),
+      })
+    ).not.toThrow();
+    const missingHolder = createAflTradeExternalReconciliationCandidate({
+      ...source.content,
+      pickCustody: source.content.pickCustody.map((row) => ({ ...row, currentClubId: null })),
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate: missingHolder,
+        proposal: proposal([selectionId], missingHolder),
+      })
+    ).toThrow(/canonical identities/);
+  });
+
   it('derives scope, counts and exact selection membership from the candidate', () => {
     const source = candidate();
     const derived = deriveAflTradeExternalCanonicalPromotionProposal({
@@ -263,6 +319,9 @@ describe('external canonical promotion contracts', () => {
       schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v4',
       transactionDateCoverage: [{ transactionId, seasonYear: 2025, occurredOn: null }],
     });
+    if (partial.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4')
+      throw new Error('Expected partial-trade v4 fixture');
+    const partialContent = partial.content;
     expect(
       authenticateAflTradeExternalCanonicalPromotionProposal({
         candidate: source,
@@ -318,7 +377,7 @@ describe('external canonical promotion contracts', () => {
     ).toThrow(/conflicts with exact source evidence/);
     expect(() =>
       createAflTradeExternalCanonicalPromotionProposal({
-        ...partial.content,
+        ...partialContent,
         schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v4',
         transactionDateCoverage: [{ transactionId, seasonYear: 2027, occurredOn: null }],
       })
@@ -415,4 +474,253 @@ describe('external canonical promotion contracts', () => {
     expect(second).toEqual(first);
     expect(first.promotionId).toMatch(/^external-canonical-promotion:[a-f0-9]{64}$/);
   });
+});
+
+describe('session promotion with reviewed year-only transactions', () => {
+  const session = {
+    draftYear: 2025,
+    draftType: 'national',
+    sessionOrdinal: 1,
+    eventDate: '2025-11-20',
+    officialName: '2025 AFL Draft',
+    selectionIds: [selectionId],
+    evidenceIds: [evidenceId],
+  };
+  const input = () => ({
+    candidate: candidate({ undated: true }),
+    proposedAt: '2026-08-10T00:00:00.000Z',
+    transactionDates: [{ transactionId, occurredOn: null }],
+  });
+
+  it.each(['direct_session_claim', 'combined_session_facts'] as const)(
+    'preserves year precision through the public %s derivation',
+    (proofKind) => {
+      const proposal = deriveDraftSessionCanonicalPromotionProposal({
+        ...input(),
+        draftSessions: [{ ...session, proofKind }],
+      });
+      expect(proposal.content.schemaVersion).toBe(
+        'afl-trade-external-canonical-promotion-proposal/v5'
+      );
+      expect(proposal.content.transactionDateCoverage).toEqual([
+        { transactionId, seasonYear: 2025, occurredOn: null },
+      ]);
+      expect(proposal.content.draftEventCoverage).toEqual([
+        expect.objectContaining({ proofKind, eventDate: session.eventDate }),
+      ]);
+      expect(
+        authenticateAflTradeExternalCanonicalPromotionProposal({
+          candidate: input().candidate,
+          proposal,
+        }).draftSelectionCount
+      ).toBe(1);
+    }
+  );
+
+  it('retains the legacy exact-date combined version and derives v5 for reviewed partial dates', () => {
+    const exact = deriveCombinedDraftSessionCanonicalPromotionProposal({
+      candidate: candidate(),
+      proposedAt: input().proposedAt,
+      draftSessions: [session],
+    });
+    expect(exact.content.schemaVersion).toBe('afl-trade-external-canonical-promotion-proposal/v3');
+    const partial = deriveCombinedDraftSessionCanonicalPromotionProposal({
+      ...input(),
+      draftSessions: [session],
+    });
+    expect(partial.content.schemaVersion).toBe(
+      'afl-trade-external-canonical-promotion-proposal/v5'
+    );
+  });
+
+  it('still requires exact retained session evidence and candidate membership', () => {
+    for (const changed of [
+      { evidenceIds: [`external-evidence:${'f'.repeat(64)}`] },
+      { selectionIds: [`external-draft-selection:${'f'.repeat(64)}`] },
+      { sessionOrdinal: 2 },
+    ]) {
+      expect(() =>
+        deriveDraftSessionCanonicalPromotionProposal({
+          ...input(),
+          draftSessions: [{ ...session, ...changed, proofKind: 'combined_session_facts' }],
+        })
+      ).toThrow();
+    }
+  });
+});
+
+function reviewedSubsetCandidate() {
+  const original = candidate({ undated: true });
+  const fullFirst = createAflTradeContentAddress('external-draft-selection', {
+    draftYear: 2025,
+    draftType: 'national',
+    selectionNumber: 1,
+  });
+  const sessions = [
+    {
+      draftYear: 2025,
+      draftType: 'national',
+      officialName: 'Synthetic draft',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-19',
+      selectionIds: [fullFirst],
+      evidenceIds: [evidenceId],
+    },
+    {
+      draftYear: 2025,
+      draftType: 'national',
+      officialName: 'Synthetic draft',
+      sessionOrdinal: 2,
+      eventDate: '2025-11-20',
+      selectionIds: [selectionId],
+      evidenceIds: [evidenceId],
+    },
+  ];
+  return createAflTradeExternalReconciliationCandidate({
+    ...original.content,
+    schemaVersion: 'afl-trade-external-reconciliation/v2',
+    reviewedScope: {
+      sourceCandidateId: original.candidateId,
+      registrationId: createAflTradeContentAddress('reviewed-pick-lineage-registration', {}),
+      deferredEvidenceIds: [],
+    },
+    sourceAuthority: {
+      schemaVersion: 'afl-trade-external-reconciliation-source-authority/v1',
+      kind: 'historical_plan_completion',
+      completionId: `external-historical-capture-completion:${'f'.repeat(64)}`,
+      completionSha256: 'f'.repeat(64),
+      planId: `external-historical-capture-plan:${'d'.repeat(64)}`,
+      planSha256: 'd'.repeat(64),
+      targetSetSha256: 'e'.repeat(64),
+      resultSetSha256: 'e'.repeat(64),
+      completionSourceBatchSetSha256: 'e'.repeat(64),
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson(original.content.sourceBatchIds),
+      completedAt: original.content.reconciledAt,
+    },
+    reviewedSessionCorrection: {
+      schemaVersion: 'afl-trade-reviewed-session-correction/v1',
+      parentCandidateId: original.candidateId,
+      sourceCompletionId: `external-historical-capture-completion:${'f'.repeat(64)}`,
+      projections: [
+        {
+          schemaVersion: 'afl-trade-reported-draft-session-projection/v1',
+          inventorySelectionIds: [fullFirst, selectionId].sort(),
+          selectedSelectionIds: [selectionId],
+          inventorySessions: sessions,
+          selectedSessions: [sessions[1]!],
+        },
+      ],
+    },
+  });
+}
+
+it('derives reviewed subset promotion with original session two and year-only trade precision', () => {
+  const c = reviewedSubsetCandidate();
+  const p = deriveReviewedSessionCanonicalPromotionProposal({
+    candidate: c,
+    proposedAt: '2026-08-10T00:00:00.000Z',
+    transactionDates: [{ transactionId, occurredOn: null }],
+  });
+  expect(p.content.schemaVersion).toBe('afl-trade-external-canonical-promotion-proposal/v6');
+  if (p.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v6')
+    throw new Error('Expected v6');
+  expect(p.content.draftEventCoverage[0]).toMatchObject({
+    sessionOrdinal: 2,
+    selectionIds: [selectionId],
+  });
+  expect(p.content.transactionDateCoverage[0]!.occurredOn).toBeNull();
+  expect(
+    authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: c, proposal: p })
+      .draftSelectionCount
+  ).toBe(1);
+  for (const change of [
+    { sessionOrdinal: 1 },
+    { eventDate: '2025-11-21' },
+    { proofKind: 'combined_session_facts' as const },
+  ]) {
+    const forged = createAflTradeExternalCanonicalPromotionProposal({
+      ...p.content,
+      draftEventCoverage: [{ ...p.content.draftEventCoverage[0]!, ...change }],
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: c, proposal: forged })
+    ).toThrow('exactly match');
+  }
+});
+it('rejects subset derivation without a reviewed projection or with unresolved factual records', () => {
+  expect(() =>
+    deriveReviewedSessionCanonicalPromotionProposal({
+      candidate: candidate(),
+      proposedAt: '2026-08-10T00:00:00.000Z',
+      transactionDates: [{ transactionId, occurredOn: null }],
+    })
+  ).toThrow('reviewed session correction');
+  const c = reviewedSubsetCandidate();
+  c.content.transactions[0]!.status = 'disputed';
+  expect(() =>
+    deriveReviewedSessionCanonicalPromotionProposal({
+      candidate: createAflTradeExternalReconciliationCandidate(c.content),
+      proposedAt: '2026-08-10T00:00:00.000Z',
+      transactionDates: [{ transactionId, occurredOn: null }],
+    })
+  ).toThrow('usable');
+});
+
+it('authenticates reviewed window promotion and rejects substituted bounds or provenance', () => {
+  const prior = reviewedSubsetCandidate();
+  const marker = prior.content.reviewedSessionCorrection!;
+  const original = marker.projections[0]!;
+  const datePrecision = {
+    precision: 'window' as const,
+    eventDate: null,
+    earliestDate: '2025-11-20',
+    latestDate: '2025-11-26',
+  };
+  const windowSession = { ...original.selectedSessions[0]!, eventDate: null, datePrecision };
+  const c = createAflTradeExternalReconciliationCandidate({
+    ...prior.content,
+    reviewedSessionCorrection: {
+      ...marker,
+      projections: [
+        {
+          ...original,
+          schemaVersion: 'afl-trade-combined-draft-session-projection/v2',
+          inventorySessions: [original.inventorySessions[0]!, windowSession],
+          selectedSessions: [windowSession],
+        },
+      ],
+    },
+  });
+  const p = deriveReviewedSessionCanonicalPromotionProposal({
+    candidate: c,
+    proposedAt: '2026-08-10T00:00:00.000Z',
+    transactionDates: [{ transactionId, occurredOn: null }],
+  });
+  expect(p.content.schemaVersion).toBe('afl-trade-external-canonical-promotion-proposal/v7');
+  if (p.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v7')
+    throw new Error('Expected v7');
+  expect(p.content.draftEventCoverage[0]).toMatchObject({
+    eventDate: null,
+    datePrecision,
+    sessionOrdinal: 2,
+  });
+  expect(
+    authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: c, proposal: p })
+      .draftSelectionCount
+  ).toBe(1);
+  for (const patch of [
+    { datePrecision: { ...datePrecision, latestDate: '2025-11-27' } },
+    { datePrecision: { ...datePrecision, earliestDate: '2025-11-21' } },
+    { evidenceIds: [`external-evidence:${'1'.repeat(64)}`] },
+    { sessionOrdinal: 3 },
+    { proofKind: 'direct_session_claim' as const },
+  ]) {
+    const forged = createAflTradeExternalCanonicalPromotionProposal({
+      ...p.content,
+      draftEventCoverage: [{ ...p.content.draftEventCoverage[0]!, ...patch }],
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: c, proposal: forged })
+    ).toThrow('exactly match');
+  }
 });

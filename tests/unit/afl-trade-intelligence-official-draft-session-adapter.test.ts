@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseOfficialAflDraftSession } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
+import {
+  parseOfficialAflDraftSession,
+  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+} from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { parseDraftguruNationalYearSelections } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import type { IngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
@@ -169,6 +172,7 @@ describe('bounded completed official draft sessions', () => {
         parseOfficialAflDraftSession(report.html, {
           capture: {
             ...capture(1),
+            parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
             sourceUrl:
               'https://www.afl.com.au/news/870365/draft-talking-points-swans-moves-dons-easy-path-corey-s-chance',
           },
@@ -179,6 +183,7 @@ describe('bounded completed official draft sessions', () => {
   it('admits only the exact reviewed article/year/pathway and national year-page capabilities', () => {
     const request: IngestAflTradeExternalPageRequest = {
       ...capture(1),
+      parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
       environment: 'non_production',
       provider: 'official_afl',
       competition: 'AFLM',
@@ -192,6 +197,7 @@ describe('bounded completed official draft sessions', () => {
     };
     expect(() => validateAflTradeExternalCaptureScope(request)).not.toThrow();
     for (const change of [
+      { parserVersion: 'official-afl-completed-draft-session/v1' },
       { anchorSeasonYear: 2025 },
       { sourceUrl: urls[0] + '?other=true' },
       { draftPathway: null },
@@ -277,6 +283,7 @@ describe('bounded completed official draft sessions', () => {
     const parsed = parseOfficialAflDraftSession(page(1), {
       capture: {
         ...capture(1),
+        parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
         sourceUrl:
           'https://www.afl.com.au/news/1110249/afl-confirms-dates-for-2024-free-agency-trade-and-draft-period',
       },

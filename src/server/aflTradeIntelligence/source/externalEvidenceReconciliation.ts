@@ -1,3 +1,5 @@
+import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
+import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -23,6 +25,72 @@ import {
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
 
+/** Project source facts without resolving boundary identities or changing retained attribution. */
+function projectCombinedSessionSourceFact(
+  claim: Claim,
+  source: Pick<CombinedDraftSessionFact, 'evidenceId' | 'captureId' | 'artifactId' | 'documentId'>
+): CombinedDraftSessionFact | undefined {
+  if (claim.kind === 'draft_session_date') {
+    return {
+      ...source,
+      kind: 'completed_session_date',
+      sessionOrdinal: claim.sessionOrdinal,
+      eventDate: claim.eventDate,
+    };
+  }
+  if (claim.kind === 'draft_session_completion') {
+    return {
+      ...source,
+      kind: 'completed_session',
+      sessionOrdinal: claim.sessionOrdinal,
+    };
+  }
+  if (claim.kind === 'draft_completed_list_total')
+    return { ...source, ...claim, kind: 'completed_draft_list_total' };
+  if (claim.kind === 'draft_rookie_list_additions' || claim.kind === 'draft_rookie_promotion_slots')
+    return { ...source, ...claim };
+  if (claim.kind === 'draft_completed_total') {
+    return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
+  }
+  if (claim.kind === 'draft_completed_inventory') {
+    return {
+      ...source,
+      kind: 'completed_draft_inventory',
+      selectionNumbers: claim.selectionNumbers,
+    };
+  }
+  if (claim.kind === 'draft_completed_membership_roster') {
+    return {
+      ...source,
+      kind: 'completed_draft_membership_roster',
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      members: claim.members,
+    };
+  }
+  if (claim.kind === 'draft_completed_member_number') {
+    return {
+      ...source,
+      kind: 'completed_draft_member_number',
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      recordedName: claim.recordedName,
+      selectionNumber: claim.selectionNumber,
+    };
+  }
+  if (claim.kind === 'draft_completed_member_exclusion') {
+    return {
+      ...source,
+      kind: 'completed_draft_member_exclusion',
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      recordedName: claim.recordedName,
+      reason: claim.reason,
+    };
+  }
+  return undefined;
+}
+
 export const AFL_TRADE_EXTERNAL_IDENTITY_RESOLUTION_SCHEMA_VERSION =
   'afl-trade-external-identity-resolution/v1' as const;
 export const AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION =
@@ -34,6 +102,9 @@ type RecordedEntity = Extract<Claim, { kind: 'transaction_party' }>['club'];
 type Evidence = AflTradeExternalEvidenceBatch['content']['evidence'][number];
 
 const reviewedCombinedDraftArticleIds = new Set([
+  '114795',
+  '45435',
+  '469544',
   '53184',
   '39763',
   '99499',
@@ -45,14 +116,38 @@ const reviewedCombinedDraftArticleIds = new Set([
   '157359',
   '49872',
   '149290',
+  '78408',
+  '39972',
+  '117263',
+  '452467',
+  '149034',
+  '68212',
+  '162070',
+  '156041',
+  '56745',
+  '87166',
+  '453360',
+  '38163',
+  '506746',
+  '75034',
+  '453197',
+  '469214',
+  '453694',
 ]);
 
-function combinedDraftDocumentId(
+export function combinedDraftDocumentId(
   provider: Provider,
   sourceUrl: string,
   environment: 'test_fixture' | 'non_production' | 'production'
 ): string {
   if (provider === 'official_afl') {
+    if (
+      sourceUrl === OFFICIAL_AFL_2010_REPORT.url ||
+      sourceUrl === 'https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are'
+    )
+      return sourceUrl;
+    // Exact club URLs retain host-qualified identity, matching SQL's URL fallback.
+    if (reviewedOfficialAflMiniDraft2011EffectiveYear(sourceUrl) !== null) return sourceUrl;
     try {
       const parsed = new URL(sourceUrl);
       const articleId = /^\/news\/(\d+)(?:\/|$)/.exec(parsed.pathname)?.[1];
@@ -1007,7 +1102,15 @@ export function reconcileAflTradeExternalEvidence(input: {
       'draft_session_date',
       'draft_session_completion',
       'draft_session_boundary',
+      'draft_session_member_identity',
       'draft_completed_total',
+      'draft_completed_list_total',
+      'draft_rookie_list_additions',
+      'draft_rookie_promotion_slots',
+      'draft_completed_inventory',
+      'draft_completed_membership_roster',
+      'draft_completed_member_number',
+      'draft_completed_member_exclusion',
     ].includes(content.claim.kind)
   );
   const partialSessionKeys = sortedUnique(
@@ -1019,7 +1122,15 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_date'
             | 'draft_session_completion'
             | 'draft_session_boundary'
-            | 'draft_completed_total';
+            | 'draft_session_member_identity'
+            | 'draft_completed_total'
+            | 'draft_completed_list_total'
+            | 'draft_rookie_list_additions'
+            | 'draft_rookie_promotion_slots'
+            | 'draft_completed_inventory'
+            | 'draft_completed_membership_roster'
+            | 'draft_completed_member_number'
+            | 'draft_completed_member_exclusion';
         }
       >;
       return `${claim.draftYear}|${claim.draftType}`;
@@ -1036,7 +1147,15 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_date'
             | 'draft_session_completion'
             | 'draft_session_boundary'
-            | 'draft_completed_total';
+            | 'draft_session_member_identity'
+            | 'draft_completed_total'
+            | 'draft_completed_list_total'
+            | 'draft_rookie_list_additions'
+            | 'draft_rookie_promotion_slots'
+            | 'draft_completed_inventory'
+            | 'draft_completed_membership_roster'
+            | 'draft_completed_member_number'
+            | 'draft_completed_member_exclusion';
         }
       >;
       return claim.draftYear === draftYear && claim.draftType === draftType;
@@ -1054,41 +1173,37 @@ export function reconcileAflTradeExternalEvidence(input: {
             input.environment
           ),
         };
-        if (claim.kind === 'draft_session_date') {
-          return {
-            ...source,
-            kind: 'completed_session_date',
-            sessionOrdinal: claim.sessionOrdinal,
-            eventDate: claim.eventDate,
-          };
-        }
-        if (claim.kind === 'draft_session_completion') {
-          return {
-            ...source,
-            kind: 'completed_session',
-            sessionOrdinal: claim.sessionOrdinal,
-          };
-        }
-        if (claim.kind === 'draft_completed_total') {
-          return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
-        }
-        if (claim.kind !== 'draft_session_boundary') {
+        const sourceFact = projectCombinedSessionSourceFact(claim, source);
+        if (sourceFact) return sourceFact;
+        if (
+          claim.kind !== 'draft_session_boundary' &&
+          claim.kind !== 'draft_session_member_identity'
+        ) {
           throw new TypeError('Unexpected combined draft-session evidence kind.');
         }
         const playerId = resolve(
           row.content.provider,
           'player',
           claim.player,
-          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.boundary}:player`,
+          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.kind === 'draft_session_boundary' ? claim.boundary : 'member'}:player`,
           row.evidenceId
         );
         const clubId = resolve(
           row.content.provider,
           'club',
           claim.selectedByClub,
-          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.boundary}:club`,
+          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.kind === 'draft_session_boundary' ? claim.boundary : 'member'}:club`,
           row.evidenceId
         );
+        if (claim.kind === 'draft_session_member_identity')
+          return {
+            ...source,
+            kind: 'session_member_identity',
+            sessionOrdinal: claim.sessionOrdinal,
+            selectionNumber: claim.selectionNumber,
+            playerId: playerId ?? '',
+            clubId: clubId ?? '',
+          };
         return {
           ...source,
           kind: 'session_boundary',

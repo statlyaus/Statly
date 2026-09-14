@@ -439,6 +439,7 @@ export class PostgresAflTradeExternalIdentityReviewRepository {
       if (target === null) return;
       workItem.content.observations.forEach(({ sourceIdentity }) => {
         const key = [
+          subjectId,
           workItem.content.subject.content.provider,
           workItem.content.subject.content.entityKind,
           sourceIdentity.nativeId ?? '',

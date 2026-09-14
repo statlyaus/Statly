@@ -102,7 +102,7 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
          SELECT $1,COALESCE((SELECT spell_id FROM outcome_acquisition_spell_version
                     WHERE spell_version_id=$2),$1),$3,$4,$5,$6,$7,$8::date,
            CASE WHEN $9::date IS NULL THEN NULL ELSE $9::date-1 END,
-           CASE WHEN $9::date IS NULL THEN NULL ELSE 'reviewed_departure' END,
+           CASE WHEN $12::text::jsonb->'departure'='null'::jsonb THEN NULL ELSE 'reviewed_departure' END,
            $10,'approved',$2,$11,$12,$13,date_trunc('milliseconds',transaction_timestamp())
          WHERE NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version WHERE spell_version_id=$1)
          ON CONFLICT (spell_version_id) DO NOTHING`,

@@ -1,3 +1,4 @@
+import { verifySessionAcquisitionCurrentness } from '../testUtils/sessionAcquisitionCurrentness';
 import { createHash } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -367,12 +368,242 @@ it('reconstructs combined sessions, rejects downgrades, and fails after dependen
   });
 
   expect(await exact(proposal)).toBe(true);
+  const v5 = { ...proposal, schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5' };
+  expect(await exact(v5)).toBe(true);
+  const enumeratedClient = await pool.connect();
+  try {
+    await enumeratedClient.query('BEGIN');
+    await enumeratedClient.query('SET LOCAL session_replication_role=replica');
+    await enumeratedClient.query(
+      `UPDATE outcome_external_reconciliation_draft_selection
+       SET selection_number=CASE selection_number WHEN 3 THEN 7 WHEN 4 THEN 97 ELSE selection_number END
+       WHERE candidate_id=$1`,
+      [candidateId]
+    );
+    await enumeratedClient.query(
+      `UPDATE outcome_external_evidence_row SET evidence_json=jsonb_set(evidence_json,
+        '{content,claim,selectionNumber}',to_jsonb(CASE (evidence_json#>>'{content,claim,selectionNumber}')::INTEGER
+          WHEN 3 THEN 7 WHEN 4 THEN 97 ELSE (evidence_json#>>'{content,claim,selectionNumber}')::INTEGER END))
+       WHERE claim_kind='draft_session_boundary' AND evidence_json#>>'{content,claim,draftYear}'='2024'`
+    );
+    const checkEnumerated = async (value: unknown) =>
+      (
+        await enumeratedClient.query(
+          "SELECT outcome_external_combined_draft_group_exact($1,$2::jsonb,2024,'national') AS valid",
+          [candidateId, JSON.stringify(value)]
+        )
+      ).rows[0].valid;
+    expect(await checkEnumerated(proposal)).toBe(false);
+    const memberId = `external-evidence:${hex('e')}`;
+    await enumeratedClient.query(
+      `INSERT INTO outcome_external_evidence_row
+       (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
+       VALUES($1,$2,99,'complete-membership','draft_completed_inventory',$3::jsonb)`,
+      [
+        memberId,
+        `external-evidence-batch:${hex('1')}`,
+        JSON.stringify({
+          content: {
+            provider: 'official_afl',
+            claim: {
+              kind: 'draft_completed_inventory',
+              draftYear: 2024,
+              draftType: 'national',
+              selectionNumbers: [1, 2, 7, 97],
+            },
+          },
+        }),
+      ]
+    );
+    const enumeratedProposal = proposalIncluding(memberId);
+    expect(await checkEnumerated(enumeratedProposal)).toBe(false);
+    await enumeratedClient.query(
+      `UPDATE outcome_external_reconciliation_draft_selection SET selection_json=jsonb_set(
+        selection_json,'{evidenceIds}',(selection_json->'evidenceIds') || to_jsonb($2::text))
+       WHERE candidate_id=$1`,
+      [candidateId, memberId]
+    );
+    expect(await checkEnumerated(enumeratedProposal)).toBe(true);
+    for (const numbers of [
+      [1, 2, 7],
+      [1, 2, 7, 97, 98],
+      [1, 2, 7, 7],
+      [1, 2, 3, 97],
+      [97, 7, 2, 1],
+    ]) {
+      await enumeratedClient.query(
+        `UPDATE outcome_external_evidence_row SET evidence_json=jsonb_set(evidence_json,
+          '{content,claim,selectionNumbers}',$2::jsonb) WHERE evidence_id=$1`,
+        [memberId, JSON.stringify(numbers)]
+      );
+      expect(await checkEnumerated(enumeratedProposal)).toBe(false);
+    }
+    const rosterClaim = {
+      kind: 'draft_completed_membership_roster',
+      draftYear: 2024,
+      draftType: 'national',
+      members: [
+        { recordedName: 'One', selectionNumber: 1 },
+        { recordedName: 'Two', selectionNumber: 2 },
+        { recordedName: 'Academy', selectionNumber: null },
+        { recordedName: 'Last', selectionNumber: 97 },
+      ],
+    };
+    await enumeratedClient.query(
+      `UPDATE outcome_external_evidence_row SET claim_kind='draft_completed_membership_roster',
+      evidence_json=jsonb_set(evidence_json,'{content,claim}',$2::jsonb) WHERE evidence_id=$1`,
+      [memberId, JSON.stringify(rosterClaim)]
+    );
+    expect(await checkEnumerated(enumeratedProposal)).toBe(false);
+    const bindingId = `external-evidence:${hex('f')}`;
+    const bindingClaim = {
+      kind: 'draft_completed_member_number',
+      draftYear: 2024,
+      draftType: 'national',
+      recordedName: 'Academy',
+      selectionNumber: 7,
+    };
+    await enumeratedClient.query(
+      `INSERT INTO outcome_external_evidence_row
+      (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
+      VALUES($1,$2,100,'member-number','draft_completed_member_number',$3::jsonb)`,
+      [
+        bindingId,
+        `external-evidence-batch:${hex('2')}`,
+        JSON.stringify({ content: { provider: 'official_afl', claim: bindingClaim } }),
+      ]
+    );
+    const joinedProposal = {
+      ...enumeratedProposal,
+      draftEventCoverage: enumeratedProposal.draftEventCoverage.map((session) => ({
+        ...session,
+        evidenceIds: [...session.evidenceIds, bindingId].sort(),
+      })),
+    };
+    expect(await checkEnumerated(joinedProposal)).toBe(false);
+    await enumeratedClient.query(
+      `UPDATE outcome_external_reconciliation_draft_selection SET selection_json=jsonb_set(
+      selection_json,'{evidenceIds}',(selection_json->'evidenceIds') || to_jsonb($2::text)) WHERE candidate_id=$1`,
+      [candidateId, bindingId]
+    );
+    expect(await checkEnumerated(joinedProposal)).toBe(true);
+    for (const changed of [
+      { ...bindingClaim, recordedName: 'Other' },
+      { ...bindingClaim, selectionNumber: 2 },
+      { ...bindingClaim, draftYear: 2023 },
+      { ...bindingClaim, draftType: 'rookie' },
+    ]) {
+      await enumeratedClient.query(
+        `UPDATE outcome_external_evidence_row SET evidence_json=jsonb_set(evidence_json,
+        '{content,claim}',$2::jsonb) WHERE evidence_id=$1`,
+        [bindingId, JSON.stringify(changed)]
+      );
+      expect(await checkEnumerated(joinedProposal)).toBe(false);
+    }
+  } finally {
+    await enumeratedClient.query('ROLLBACK');
+    enumeratedClient.release();
+  }
+  const mixedClient = await pool.connect();
+  try {
+    await mixedClient.query('BEGIN');
+    await mixedClient.query('SET LOCAL session_replication_role=replica');
+    const directId = `external-evidence:${hex('c')}`;
+    const directSelection = `external-draft-selection:${hex('c')}`;
+    const direct = {
+      draftYear: 2025,
+      draftType: 'national',
+      sessionOrdinal: 1,
+      eventDate: '2025-11-20',
+      officialName: '2025 AFL Draft',
+      expectedSelectionCount: 1,
+      selectionIds: [directSelection],
+      evidenceIds: [directId],
+      status: 'complete',
+      proofKind: 'direct_session_claim',
+    };
+    await mixedClient.query(
+      `INSERT INTO outcome_external_reconciliation_draft_selection
+      (candidate_id,ordinal,selection_id,draft_year,draft_type,selection_number,pick_id,status,selection_json)
+      VALUES($1,5,$2,2025,'national',1,$3,'single_source',$4::jsonb)`,
+      [
+        candidateId,
+        directSelection,
+        `draft-pick:${hex('c')}`,
+        JSON.stringify({ playerId: 'player-1', clubId: 'club-1', evidenceIds: [directId] }),
+      ]
+    );
+    await mixedClient.query(
+      `INSERT INTO outcome_external_evidence_row
+      (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
+      VALUES($1,$2,99,'v5-direct','draft_session',$3::jsonb)`,
+      [
+        directId,
+        `external-evidence-batch:${hex('1')}`,
+        JSON.stringify({
+          content: {
+            provider: 'official_afl',
+            claim: {
+              kind: 'draft_session',
+              draftYear: 2025,
+              draftType: 'national',
+              sessionOrdinal: 1,
+              eventDate: direct.eventDate,
+              officialName: direct.officialName,
+              selectionNumbers: [1],
+            },
+          },
+        }),
+      ]
+    );
+    await mixedClient.query('SET LOCAL session_replication_role=origin');
+    const mixed = {
+      ...v5,
+      proposedAt: '2025-11-22T12:00:00.000Z',
+      draftEventCoverage: [...v5.draftEventCoverage, direct],
+    };
+    const verify = async (value: unknown) =>
+      (
+        await mixedClient.query<{ valid: boolean }>(
+          'SELECT outcome_external_draft_sessions_exact($1,$2::jsonb) AS valid',
+          [candidateId, JSON.stringify(value)]
+        )
+      ).rows[0]!.valid;
+    expect(await verify(mixed)).toBe(true);
+    expect(
+      await verify({ ...mixed, draftEventCoverage: mixed.draftEventCoverage.slice(0, 2) })
+    ).toBe(false);
+    for (const changed of [
+      { ...direct, selectionIds: [selectionIds[0]] },
+      { ...direct, evidenceIds: [evidenceIds[0]] },
+      { ...direct, proofKind: 'combined_session_facts' },
+      { ...direct, sessionOrdinal: 2 },
+      { ...direct, eventDate: '2025-11-21' },
+    ])
+      expect(
+        await verify({ ...mixed, draftEventCoverage: [...v5.draftEventCoverage, changed] })
+      ).toBe(false);
+    expect(
+      await verify({
+        ...mixed,
+        draftEventCoverage: [
+          { ...v5.draftEventCoverage[0], proofKind: 'direct_session_claim' },
+          v5.draftEventCoverage[1],
+          direct,
+        ],
+      })
+    ).toBe(false);
+  } finally {
+    await mixedClient.query('ROLLBACK');
+    mixedClient.release();
+  }
+
   const identityGuard = await pool.query<{ definition: string }>(
     `SELECT pg_get_functiondef('validate_outcome_external_identity_review_insert()'::regprocedure)
        AS definition`
   );
   expect(identityGuard.rows[0]?.definition).toContain(
-    "ELSIF claim->>'kind'='draft_session_boundary' THEN"
+    "ELSIF claim->>'kind' IN ('draft_session_boundary','draft_session_member_identity') THEN"
   );
   expect(identityGuard.rows[0]?.definition).toContain(
     "(subject.entity_kind='player' AND claim->'player'=source_identity) OR"
@@ -531,118 +762,7 @@ it('promotes combined proof and invalidates its public acquisition read when a s
     '2024-11-21',
   ]);
 
-  const at = async () =>
-    (
-      await pool.query<{ at: Date }>("SELECT date_trunc('milliseconds',clock_timestamp()) AS at")
-    ).rows[0]!.at.toISOString();
-  const scope = { environment: 'test_fixture' as const, competition: 'AFLM' as const };
-  const repository = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
-    createPgAflOutcomeSqlClient(pool),
-    {
-      read: async (reference) => {
-        const retained = promoted.retainedArtifacts.get(reference.artifactId);
-        if (!retained) throw new Error('Missing retained fixture bytes.');
-        return retained.bytes;
-      },
-    }
-  );
-  const approve = async (subjectType: string, subjectId: string, evidence: unknown) => {
-    const decisionId = `synthetic-review:${subjectId}`;
-    await pool.query(
-      `INSERT INTO outcome_review_decision
-      (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
-      VALUES($1,$2,$3,'approved','Combined proof lifecycle fixture',$4::jsonb,'fixture-reviewer',$5)`,
-      [decisionId, subjectType, subjectId, JSON.stringify(evidence), await at()]
-    );
-    return decisionId;
-  };
-  const rule = createAflTradeAcquisitionSpellRegistrationRule({
-    ...scope,
-    ruleVersion: 'combined-session-public-path-v1',
-    evidence: [promoted.sourceArtifact],
-    createdAt: await at(),
-  });
-  await repository.registerReviewedRule(
-    rule,
-    await approve('acquisition_spell_rule', rule.ruleId, rule),
-    scope
-  );
-  const entry = promoted.draftEntries[0]!;
-  const spell = createAflTradeAcquisitionSpellRegistration({
-    ...scope,
-    playerId: entry.player_id,
-    clubId: promoted.clubId,
-    entry: entry.entry,
-    departure: null,
-    ruleId: rule.ruleId,
-    version: 1,
-    supersedesSpellVersionId: null,
-    observedThrough: '2025-09-27',
-    continuityEvidence: [promoted.sourceArtifact],
-    createdAt: await at(),
-  });
-  const spellApprovalId = await approve(
-    'acquisition_spell_registration',
-    spell.spellVersionId,
-    spell
-  );
-  await expect(repository.registerReviewedSpell(spell, spellApprovalId, scope)).resolves.toEqual(
-    spell
-  );
-  await expect(repository.registerReviewedSpell(spell, spellApprovalId, scope)).resolves.toEqual(
-    spell
-  );
-  expect(
-    (
-      await pool.query<{ count: string }>(
-        'SELECT count(*)::TEXT AS count FROM outcome_acquisition_spell_version WHERE spell_version_id=$1',
-        [spell.spellVersionId]
-      )
-    ).rows[0]!.count
-  ).toBe('1');
-  expect((await repository.loadCurrentExact(spell.spellVersionId, scope)).spellVersionId).toBe(
-    spell.spellVersionId
-  );
-
-  const requiredCaptures = (
-    await pool.query<{ capture_id: string }>(
-      `SELECT DISTINCT capture.capture_id
-       FROM outcome_external_reconciliation_source_batch source
-       JOIN outcome_external_evidence_row row USING(batch_id)
-       JOIN outcome_external_evidence_batch batch USING(batch_id)
-       JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
-       WHERE source.candidate_id=$1 AND row.claim_kind IN
-         ('draft_session_date','draft_session_completion','draft_session_boundary','draft_completed_total')
-       ORDER BY capture.capture_id`,
-      [promoted.candidate.candidateId]
-    )
-  ).rows.map(({ capture_id }) => capture_id);
-  const setStatus = async (captureId: string, status: 'approved' | 'rejected') => {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query('SET LOCAL session_replication_role=replica');
-      await client.query('UPDATE outcome_source_capture SET status=$2 WHERE capture_id=$1', [
-        captureId,
-        status,
-      ]);
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  };
-  expect(requiredCaptures).toHaveLength(3);
-  for (const captureId of requiredCaptures) {
-    await setStatus(captureId, 'rejected');
-    await expect(repository.loadCurrentExact(spell.spellVersionId, scope)).rejects.toThrow();
-    await setStatus(captureId, 'approved');
-    expect((await repository.loadCurrentExact(spell.spellVersionId, scope)).spellVersionId).toBe(
-      spell.spellVersionId
-    );
-  }
+  await verifySessionAcquisitionCurrentness(pool, promoted);
 });
 
 it('runs the reviewed 2016 proof through public promotion and current spell guards', async () => {
@@ -804,7 +924,7 @@ it('runs the reviewed 2016 proof through public promotion and current spell guar
       'rejected',
     ]);
     expect(await exactCurrentProof()).toBe(false);
-    await expect(replayPromotion()).resolves.toMatchObject({ idempotentReplay: true });
+    await expect(replayPromotion()).rejects.toThrow('exact current draft-session evidence');
     await expect(spells.loadCurrentExact(spell.spellVersionId, scope)).rejects.toThrow();
     await replicaUpdate('UPDATE outcome_source_capture SET status=$2 WHERE capture_id=$1', [
       captureId,
@@ -827,7 +947,7 @@ it('runs the reviewed 2016 proof through public promotion and current spell guar
     'rejected',
   ]);
   expect(await exactCurrentProof()).toBe(false);
-  await expect(replayPromotion()).resolves.toMatchObject({ idempotentReplay: true });
+  await expect(replayPromotion()).rejects.toThrow('exact current draft-session evidence');
   await expect(spells.loadCurrentExact(spell.spellVersionId, scope)).rejects.toThrow();
   await replicaUpdate('UPDATE outcome_review_decision SET decision=$2 WHERE decision_id=$1', [
     boundaryIdentity.content.reviewDecisionId,
@@ -2017,5 +2137,1060 @@ it('binds boundary identity reviews to the matching entity kind and draft year',
     await pool.query(
       'ALTER TABLE outcome_external_identity_review_decision ENABLE TRIGGER outcome_external_retained_identity_source_guard'
     );
+  }
+});
+
+it('rejects malformed and ambiguous multi-document membership joins in SQL', async () => {
+  const roster = {
+    evidenceId: 'roster',
+    captureId: 'capture1',
+    artifactId: 'artifact1',
+    documentId: 'doc1',
+    claim: {
+      kind: 'draft_completed_membership_roster',
+      draftYear: 2014,
+      draftType: 'national',
+      members: [
+        { recordedName: 'One', selectionNumber: 1 },
+        { recordedName: 'Academy', selectionNumber: null },
+      ],
+    },
+  };
+  const binding = {
+    evidenceId: 'binding',
+    captureId: 'capture2',
+    artifactId: 'artifact2',
+    documentId: 'doc2',
+    claim: {
+      kind: 'draft_completed_member_number',
+      draftYear: 2014,
+      draftType: 'national',
+      recordedName: 'Academy',
+      selectionNumber: 85,
+    },
+  };
+  const verify = async (facts: unknown, numbers: unknown = [1, 85]) =>
+    (
+      await pool.query(
+        "SELECT outcome_completed_membership_exact($1::jsonb,$2::jsonb,2014,'national') AS valid",
+        [JSON.stringify(facts), JSON.stringify(numbers)]
+      )
+    ).rows[0].valid;
+  expect(await verify([roster, binding])).toBe(true);
+  for (const changed of [
+    [],
+    [{ recordedName: 'One', selectionNumber: 1 }],
+    [
+      { recordedName: 'One', selectionNumber: 1 },
+      { recordedName: 'One', selectionNumber: null },
+    ],
+    [{ recordedName: 'One', selectionNumber: 1 }, { recordedName: 'Academy' }],
+    [
+      { recordedName: 'One', selectionNumber: 1 },
+      { recordedName: 'Academy', selectionNumber: 85 },
+    ],
+  ])
+    expect(
+      await verify([{ ...roster, claim: { ...roster.claim, members: changed } }, binding])
+    ).toBe(false);
+  for (const changed of [
+    { ...binding, captureId: 'capture1' },
+    { ...binding, artifactId: 'artifact1' },
+    { ...binding, documentId: 'doc1' },
+    { ...binding, evidenceId: '' },
+    { ...binding, claim: { ...binding.claim, selectionNumber: 1 } },
+    { ...binding, claim: { ...binding.claim, selectionNumber: 85.5 } },
+    { ...binding, claim: { ...binding.claim, recordedName: 'Other' } },
+    { ...binding, claim: { ...binding.claim, draftYear: 2013 } },
+    { ...binding, claim: { ...binding.claim, draftType: 'rookie' } },
+  ])
+    expect(await verify([roster, changed])).toBe(false);
+  expect(await verify([roster])).toBe(false);
+  expect(await verify([binding])).toBe(false);
+  expect(
+    await verify([
+      {
+        ...roster,
+        claim: {
+          ...roster.claim,
+          members: [
+            { recordedName: 'One', selectionNumber: 1 },
+            { recordedName: 'Academy', selectionNumber: 85 },
+          ],
+        },
+      },
+      { ...binding, claim: {} },
+    ])
+  ).toBe(false);
+  expect(await verify([roster, binding, { ...binding, evidenceId: 'duplicate' }])).toBe(false);
+  expect(await verify([roster, binding], [1, 2])).toBe(false);
+});
+
+it('requires exact independent rookie-elevation classifications before excluding roster members', async () => {
+  const roster = {
+    evidenceId: 'roster',
+    captureId: 'capture1',
+    artifactId: 'artifact1',
+    documentId: 'doc1',
+    claim: {
+      kind: 'draft_completed_membership_roster',
+      draftYear: 2012,
+      draftType: 'national',
+      members: [
+        { recordedName: 'First', selectionNumber: 1 },
+        { recordedName: 'Elevated', selectionNumber: 57 },
+        { recordedName: 'Last', selectionNumber: 88 },
+      ],
+    },
+  };
+  const exclusion = {
+    evidenceId: 'classification',
+    captureId: 'capture2',
+    artifactId: 'artifact2',
+    documentId: 'doc2',
+    claim: {
+      kind: 'draft_completed_member_exclusion',
+      draftYear: 2012,
+      draftType: 'national',
+      recordedName: 'Elevated',
+      reason: 'rookie_elevation',
+    },
+  };
+  const verify = async (facts: unknown, numbers: unknown = [1, 88]) =>
+    (
+      await pool.query(
+        "SELECT outcome_completed_membership_exact($1::jsonb,$2::jsonb,2012,'national') AS valid",
+        [JSON.stringify(facts), JSON.stringify(numbers)]
+      )
+    ).rows[0].valid;
+  expect(await verify([roster, exclusion])).toBe(true);
+  expect(await verify([roster])).toBe(false);
+  expect(await verify([exclusion])).toBe(false);
+  expect(await verify([roster, exclusion, { ...exclusion, evidenceId: 'duplicate' }])).toBe(false);
+  for (const changed of [
+    { ...exclusion, captureId: 'capture1' },
+    { ...exclusion, artifactId: 'artifact1' },
+    { ...exclusion, documentId: 'doc1' },
+    { ...exclusion, evidenceId: '' },
+    { ...exclusion, claim: { ...exclusion.claim, recordedName: 'Other' } },
+    { ...exclusion, claim: { ...exclusion.claim, recordedName: null } },
+    { ...exclusion, claim: { ...exclusion.claim, reason: 'passed' } },
+    { ...exclusion, claim: { ...exclusion.claim, reason: null } },
+    { ...exclusion, claim: { ...exclusion.claim, draftYear: 2011 } },
+    { ...exclusion, claim: { ...exclusion.claim, draftType: 'rookie' } },
+    { ...exclusion, claim: { ...exclusion.claim, kind: null } },
+  ])
+    expect(await verify([roster, changed])).toBe(false);
+  for (const number of [null, 0, 88, 57.5]) {
+    const changed = {
+      ...roster,
+      claim: {
+        ...roster.claim,
+        members: roster.claim.members.map((m) =>
+          m.recordedName === 'Elevated' ? { ...m, selectionNumber: number } : m
+        ),
+      },
+    };
+    expect(await verify([changed, exclusion])).toBe(false);
+  }
+  expect(await verify([roster, exclusion], [1, 57])).toBe(false);
+  expect(await verify([roster, exclusion], [1, 2])).toBe(false);
+});
+
+const discrepancyFixture = () => ({
+  draftYear: 2011,
+  draftType: 'national',
+  inventoryNumbers: [1, 71],
+  roster: {
+    kind: 'completed_draft_membership_roster' as const,
+    draftYear: 2011,
+    draftType: 'national',
+    evidenceId: 'roster-evidence',
+    captureId: 'roster-capture',
+    artifactId: 'roster-artifact',
+    documentId: 'official_afl:news:506746',
+    members: [
+      { recordedName: 'Jonathon Patton', selectionNumber: 1 },
+      { recordedName: 'Cameron Sutcliffe', selectionNumber: 72 },
+    ],
+  },
+  bindings: [
+    {
+      kind: 'completed_draft_member_number' as const,
+      draftYear: 2011,
+      draftType: 'national',
+      evidenceId: 'club-evidence',
+      captureId: 'club-capture',
+      artifactId: 'club-artifact',
+      documentId: 'official_afl:news:75034',
+      recordedName: 'Cameron Sutcliffe',
+      selectionNumber: 71,
+    },
+  ],
+});
+
+it('authenticates only the reviewed 2011 membership number pair in SQL', async () => {
+  const exact = async (input: ReturnType<typeof discrepancyFixture>) => {
+    const fact = ({
+      kind,
+      draftYear,
+      draftType,
+      ...source
+    }: typeof input.roster | (typeof input.bindings)[number]) => {
+      const { evidenceId, captureId, artifactId, documentId, ...values } = source;
+      return {
+        evidenceId,
+        captureId,
+        artifactId,
+        documentId,
+        claim: {
+          kind:
+            kind === 'completed_draft_membership_roster'
+              ? 'draft_completed_membership_roster'
+              : 'draft_completed_member_number',
+          draftYear,
+          draftType,
+          ...values,
+        },
+      };
+    };
+    return (
+      await pool.query(
+        'SELECT outcome_completed_membership_exact($1::jsonb,$2::jsonb,$3,$4) AS valid',
+        [
+          JSON.stringify([fact(input.roster), ...input.bindings.map(fact)]),
+          JSON.stringify(input.inventoryNumbers),
+          input.draftYear,
+          input.draftType,
+        ]
+      )
+    ).rows[0].valid;
+  };
+  expect(await exact(discrepancyFixture())).toBe(true);
+  for (const mode of [
+    'year',
+    'type',
+    'roster-document',
+    'binding-document',
+    'name',
+    'reported-number',
+    'selected-number',
+    'capture',
+    'artifact',
+    'evidence',
+    'missing',
+    'duplicate',
+    'raw-duplicate',
+    'inventory',
+  ] as const) {
+    const input = discrepancyFixture();
+    if (mode === 'year') {
+      input.draftYear = 2012;
+      input.roster.draftYear = 2012;
+      input.bindings[0]!.draftYear = 2012;
+    }
+    if (mode === 'type') {
+      input.draftType = 'rookie';
+      input.roster.draftType = 'rookie';
+      input.bindings[0]!.draftType = 'rookie';
+    }
+    if (mode === 'roster-document') input.roster.documentId = 'official_afl:news:75034';
+    if (mode === 'binding-document') input.bindings[0]!.documentId = 'official_afl:news:unknown';
+    if (mode === 'name') {
+      input.roster.members[1]!.recordedName = 'Another Player';
+      input.bindings[0]!.recordedName = 'Another Player';
+    }
+    if (mode === 'reported-number') input.roster.members[1]!.selectionNumber = 73;
+    if (mode === 'selected-number') {
+      input.bindings[0]!.selectionNumber = 70;
+      input.inventoryNumbers = [1, 70];
+    }
+    if (mode === 'capture') input.bindings[0]!.captureId = input.roster.captureId;
+    if (mode === 'artifact') input.bindings[0]!.artifactId = input.roster.artifactId;
+    if (mode === 'evidence') input.bindings[0]!.evidenceId = input.roster.evidenceId;
+    if (mode === 'missing') input.bindings = [];
+    if (mode === 'duplicate') input.bindings.push({ ...input.bindings[0]!, evidenceId: 'another' });
+    if (mode === 'raw-duplicate') {
+      input.roster.members[0]!.selectionNumber = 72;
+      input.inventoryNumbers = [71, 72];
+    }
+    if (mode === 'inventory') input.inventoryNumbers = [1, 72];
+    expect(await exact(input), mode).toBe(false);
+  }
+});
+
+it('scopes reviewed mini-draft document keys to exact URLs, years and pathway', async () => {
+  const urls = [
+    'https://www.goldcoastfc.com.au/news/114828/final-mini-draft-explained',
+    'https://www.goldcoastfc.com.au/news/751451/young-star-ready-to-shine',
+    'https://www.afc.com.au/news/776103/crouch-crows-wooed-me-at-final',
+  ];
+  for (const source of urls) {
+    const key = async (url: string, year: number, type: string) =>
+      (
+        await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [
+          url,
+          year,
+          type,
+        ])
+      ).rows[0].key;
+    expect(await key(source, 2011, 'mini_draft')).toBe(source);
+    expect(await key(source, 2012, 'mini_draft')).toBe(source === urls[0] ? source : null);
+    expect(await key(source, 2011, 'national')).toBeNull();
+    expect(await key(source + '?unreviewed=1', 2011, 'mini_draft')).toBeNull();
+    expect(
+      await key(source.replace(new URL(source).hostname, 'unreviewed.example'), 2011, 'mini_draft')
+    ).toBeNull();
+  }
+  expect(
+    (
+      await pool.query(
+        "SELECT outcome_official_mini_2011_document_key('https://www.afl.com.au/news/506746/national-draft-all-the-picks',2011,'national') AS key"
+      )
+    ).rows[0].key
+  ).toBe('506746');
+});
+
+it('validates SQL date windows without manufacturing an exact day or permitting legacy windows', async () => {
+  const exact = { draftYear: 2012, eventDate: '2012-10-08' };
+  const datePrecision = {
+    precision: 'window',
+    eventDate: null,
+    earliestDate: '2012-10-08',
+    latestDate: '2012-10-26',
+  };
+  const session = { ...exact, eventDate: null, datePrecision };
+  const bounds = async (value: unknown, allow = true) =>
+    (
+      await pool.query('SELECT outcome_session_precision_bounds($1::jsonb,$2)::text AS bounds', [
+        JSON.stringify(value),
+        allow,
+      ])
+    ).rows[0].bounds;
+  expect(await bounds(session)).toBe('[2012-10-08,2012-10-27)');
+  expect(await bounds(exact, false)).toBe('[2012-10-08,2012-10-09)');
+  expect(await bounds(session, false)).toBeNull();
+  for (const value of [
+    { ...session, eventDate: '2012-10-26' },
+    { ...session, datePrecision: null },
+    { ...session, draftYear: 2011 },
+    { ...session, datePrecision: { ...datePrecision, extra: true } },
+    ...['2012-10-08', '2012-10-07', '2013-01-01', '2012-02-30', 'infinity'].map((latestDate) => ({
+      ...session,
+      datePrecision: { ...datePrecision, latestDate },
+    })),
+  ])
+    expect(await bounds(value)).toBeNull();
+});
+
+it('preserves window bounds and membership across SQL reviewed transitions', async () => {
+  const selection = {
+    selectionId: 'selection',
+    draftYear: 2012,
+    draftType: 'mini_draft',
+    evidenceIds: ['evidence'],
+  };
+  const parent = {
+    candidateId: 'parent',
+    content: {
+      environment: 'test_fixture',
+      reviewedCorrection: {},
+      reviewedScope: { deferredEvidenceIds: [] },
+      draftSelections: [selection],
+      sourceBatchIds: ['old'],
+      identityResolutionIds: [],
+      reconciledAt: '2026-01-01T00:00:00Z',
+    },
+  };
+  const datePrecision = {
+    precision: 'window',
+    eventDate: null,
+    earliestDate: '2012-10-08',
+    latestDate: '2012-10-26',
+  };
+  const session = {
+    draftYear: 2012,
+    draftType: 'mini_draft',
+    officialName: 'Synthetic mini draft',
+    sessionOrdinal: 1,
+    eventDate: null,
+    datePrecision,
+    selectionIds: ['selection'],
+    evidenceIds: ['evidence'],
+  };
+  const projection = {
+    schemaVersion: 'afl-trade-combined-draft-session-projection/v2',
+    inventorySelectionIds: ['selection'],
+    selectedSelectionIds: ['selection'],
+    inventorySessions: [session],
+    selectedSessions: [session],
+  };
+  const successor = {
+    content: {
+      ...parent.content,
+      sourceBatchIds: ['old', 'new'],
+      sourceAuthority: { completionId: 'completion' },
+      reviewedSessionCorrection: {
+        schemaVersion: 'afl-trade-reviewed-session-correction/v1',
+        parentCandidateId: 'parent',
+        sourceCompletionId: 'completion',
+        projections: [projection],
+      },
+    },
+  };
+  const valid = async (document: unknown) =>
+    (
+      await pool.query(
+        'SELECT outcome_reviewed_session_transition_exact($1::jsonb,$2::jsonb) AS valid',
+        [JSON.stringify(parent), JSON.stringify(document)]
+      )
+    ).rows[0].valid;
+  expect(await valid(successor)).toBe(true);
+  for (const change of [
+    (p: typeof projection) => {
+      p.schemaVersion = 'afl-trade-combined-draft-session-projection/v1';
+    },
+    (p: typeof projection) => {
+      p.selectedSessions[0]!.datePrecision.latestDate = '2012-10-27';
+    },
+    (p: typeof projection) => {
+      p.inventorySessions[0]!.selectionIds = ['different'];
+    },
+    (p: typeof projection) => {
+      p.inventorySessions[0]!.sessionOrdinal = 2;
+    },
+  ]) {
+    const changed = JSON.parse(JSON.stringify(successor)) as typeof successor;
+    change(changed.content.reviewedSessionCorrection.projections[0]!);
+    expect(await valid(changed)).toBe(false);
+  }
+  const ordered = JSON.parse(JSON.stringify(successor)) as typeof successor;
+  const group = ordered.content.reviewedSessionCorrection.projections[0]!;
+  group.inventorySelectionIds = ['earlier', 'selection'];
+  const later = {
+    ...session,
+    sessionOrdinal: 2,
+    datePrecision: { ...datePrecision, earliestDate: '2012-10-11' },
+  };
+  group.inventorySessions = [
+    {
+      ...session,
+      selectionIds: ['earlier'],
+      datePrecision: { ...datePrecision, latestDate: '2012-10-10' },
+    },
+    later,
+  ];
+  group.selectedSessions = [later];
+  expect(await valid(ordered)).toBe(true);
+  later.datePrecision.earliestDate = '2012-10-10';
+  expect(await valid(ordered)).toBe(false);
+});
+
+it('admits only the exact2012 closing-paperwork source scope', async () => {
+  const source =
+    'https://www.afl.com.au/news/453694/official-paperwork-close-to-gillette-afl-trade-period-friday-october-26';
+  const key = async (url: string, year = 2012, type = 'mini_draft') =>
+    (
+      await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [
+        url,
+        year,
+        type,
+      ])
+    ).rows[0].key;
+  expect(await key(source)).toBe('453694');
+  expect(await key(source, 2011)).toBeNull();
+  expect(await key(source, 2012, 'national')).toBeNull();
+  expect(await key(source + '?unreviewed=1')).toBeNull();
+  expect(await key(source + '-unreviewed')).toBeNull();
+});
+
+it('authenticates explicit capacity exhaustion and rejects partial, mixed or unbound evidence in SQL', async () => {
+  const scope = { draftYear: 2012, draftType: 'mini_draft' };
+  const closed = { captureId: 'closed', artifactId: 'closed-bytes', documentId: '453694' };
+  const facts = [
+    {
+      evidenceId: 'capacity',
+      captureId: 'rules',
+      artifactId: 'rules-bytes',
+      documentId: 'https://www.goldcoastfc.com.au/news/114828/final-mini-draft-explained',
+      claim: { ...scope, kind: 'draft_selection_capacity', maximumSelections: 2 },
+    },
+    {
+      ...closed,
+      evidenceId: 'roster',
+      claim: {
+        ...scope,
+        kind: 'draft_completed_membership_roster',
+        members: [
+          { recordedName: 'Jack Martin', selectionNumber: 1 },
+          { recordedName: 'Jesse Hogan', selectionNumber: 2 },
+        ],
+      },
+    },
+    {
+      ...closed,
+      evidenceId: 'completion',
+      claim: { ...scope, kind: 'draft_session_completion', sessionOrdinal: 1 },
+    },
+    {
+      ...closed,
+      evidenceId: 'first',
+      claim: {
+        ...scope,
+        kind: 'draft_session_boundary',
+        sessionOrdinal: 1,
+        boundary: 'first',
+        selectionNumber: 1,
+        player: { nativeId: null, recordedName: 'Jack Martin' },
+        selectedByClub: { nativeId: null, recordedName: 'Gold Coast Suns' },
+      },
+    },
+    {
+      ...closed,
+      evidenceId: 'last',
+      claim: {
+        ...scope,
+        kind: 'draft_session_boundary',
+        sessionOrdinal: 1,
+        boundary: 'last',
+        selectionNumber: 2,
+        player: { nativeId: null, recordedName: 'Jesse Hogan' },
+        selectedByClub: { nativeId: null, recordedName: 'Melbourne' },
+      },
+    },
+  ];
+  const check = async (
+    value: unknown,
+    expected: unknown = [1, 2],
+    year = 2012,
+    type = 'mini_draft'
+  ) =>
+    (
+      await pool.query(
+        'SELECT outcome_completed_capacity_exhaustion_exact($1::jsonb,$2::jsonb,$3,$4) AS valid',
+        [JSON.stringify(value), JSON.stringify(expected), year, type]
+      )
+    ).rows[0].valid;
+  expect(await check(facts)).toBe(true);
+  expect(await check(facts.slice(0, 4))).toBe(false);
+  expect(await check([...facts, facts[0]])).toBe(false);
+  expect(await check(facts, [1])).toBe(false);
+  expect(await check(facts, [1, 1])).toBe(false);
+  expect(await check(facts, [1, 2], 2011)).toBe(false);
+  expect(await check(facts, [1, 2], 2012, 'national')).toBe(false);
+  const patches: Array<[string[], unknown]> = [
+    [['0', 'claim', 'maximumSelections'], 3],
+    [['0', 'claim', 'kind'], 'draft_completed_total'],
+    [['0', 'captureId'], 'closed'],
+    [['0', 'artifactId'], 'closed-bytes'],
+    [['0', 'documentId'], '453694'],
+    [['1', 'claim', 'members', '1', 'selectionNumber'], 1],
+    [['1', 'claim', 'members', '1', 'recordedName'], 'Jack Martin'],
+    [['2', 'captureId'], 'unbound'],
+    [['2', 'artifactId'], 'unbound'],
+    [['2', 'claim', 'sessionOrdinal'], 2],
+    [['3', 'documentId'], 'other'],
+    [['3', 'claim', 'player', 'recordedName'], 'Other player'],
+    [['4', 'claim', 'boundary'], 'first'],
+    [['4', 'claim', 'selectionNumber'], 3],
+    [['4', 'evidenceId'], 'first'],
+  ];
+  for (const [path, value] of patches) {
+    expect(
+      (
+        await pool.query(
+          `SELECT outcome_completed_capacity_exhaustion_exact(jsonb_set($1::jsonb,$2::text[],$3::jsonb),$4::jsonb,2012,'mini_draft') AS valid`,
+          [JSON.stringify(facts), path, JSON.stringify(value), '[1,2]']
+        )
+      ).rows[0].valid
+    ).toBe(false);
+  }
+});
+
+it('validates independent2010 list populations and rejects incomplete or altered proofs', async () => {
+  const scope = { draftYear: 2010, draftType: 'national' };
+  const fact = (id: string, documentId: string, claim: object) => ({
+    evidenceId: id,
+    captureId: id,
+    artifactId: id + '-bytes',
+    documentId,
+    claim: { ...scope, ...claim },
+  });
+  const facts = [
+    fact(
+      'total',
+      'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+      {
+        kind: 'draft_completed_list_total',
+        population: 'national_selections_and_rookie_promotions',
+        playerCount: 4,
+      }
+    ),
+    fact('additions', '114795', {
+      kind: 'draft_rookie_list_additions',
+      clubs: [{ recordedClub: 'ADELAIDE', recordedNames: ['One', 'Two'] }],
+    }),
+    fact('slots', '469544', {
+      kind: 'draft_rookie_promotion_slots',
+      clubs: [{ recordedClub: 'Adelaide Crows', selectionNumbers: [2, 4] }],
+    }),
+  ];
+  const check = async (value: unknown, expected: unknown = [1, 3], year = 2010) =>
+    (
+      await pool.query(
+        "SELECT outcome_completed_list_population_exact($1::jsonb,$2::jsonb,$3,'national') AS valid",
+        [JSON.stringify(value), JSON.stringify(expected), year]
+      )
+    ).rows[0].valid;
+  expect(await check(facts)).toBe(true);
+  for (const value of [facts.slice(1), [...facts, facts[0]], [], null])
+    expect(await check(value)).toBe(false);
+  for (const expected of [[1], [1, 1], [1, 2], [1, '3'], [1, 3.5], null])
+    expect(await check(facts, expected)).toBe(false);
+  expect(await check(facts, [1, 3], 2011)).toBe(false);
+  const patches: Array<[string[], unknown]> = [
+    [['0', 'claim', 'playerCount'], 5],
+    [['0', 'claim', 'playerCount'], '4'],
+    [['0', 'claim', 'selectionCount'], 2],
+    [['0', 'claim', 'population'], 'all_lists'],
+    [['1', 'claim', 'draftYear'], 2011],
+    [['1', 'claim', 'clubs'], []],
+    [
+      ['1', 'claim', 'clubs', '0', 'recordedNames'],
+      ['One', 'One'],
+    ],
+    [['1', 'claim', 'clubs', '0', 'recordedNames'], ['One']],
+    [['1', 'claim', 'clubs', '0', 'recordedClub'], 'Adelaide'],
+    [
+      ['2', 'claim', 'clubs', '0', 'selectionNumbers'],
+      [2, 2],
+    ],
+    [
+      ['2', 'claim', 'clubs', '0', 'selectionNumbers'],
+      [2, '4'],
+    ],
+    [
+      ['2', 'claim', 'clubs', '0', 'selectionNumbers'],
+      [2, 3],
+    ],
+    [['2', 'claim', 'clubs', '0', 'extra'], true],
+    [['1', 'documentId'], 'other'],
+    [['1', 'captureId'], 'total'],
+    [['1', 'artifactId'], 'total-bytes'],
+    [['1', 'evidenceId'], 'total'],
+  ];
+  for (const [path, value] of patches)
+    expect(
+      (
+        await pool.query(
+          "SELECT outcome_completed_list_population_exact(jsonb_set($1::jsonb,$2::text[],$3::jsonb), '[1,3]',2010,'national') AS valid",
+          [JSON.stringify(facts), path, JSON.stringify(value)]
+        )
+      ).rows[0].valid,
+      path.join('.')
+    ).toBe(false);
+});
+
+it('reconstructs the2010 numbered union and member identity without a reported-last claim', async () => {
+  const scope = { draftYear: 2010, draftType: 'national' };
+  const fact = (id: string, documentId: string, claim: object, captureId = id) => ({
+    evidenceId: id,
+    captureId,
+    artifactId: captureId + '-bytes',
+    documentId,
+    claim: { ...scope, ...claim },
+  });
+  const clubUrl = 'https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are';
+  const expected = [...Array.from({ length: 77 }, (_, i) => i + 1), 103, 104];
+  const facts = [
+    fact(
+      'total',
+      'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+      {
+        kind: 'draft_completed_list_total',
+        population: 'national_selections_and_rookie_promotions',
+        playerCount: 107,
+      }
+    ),
+    fact('additions', '114795', {
+      kind: 'draft_rookie_list_additions',
+      clubs: [
+        { recordedClub: 'A', recordedNames: Array.from({ length: 28 }, (_, i) => 'Rookie' + i) },
+      ],
+    }),
+    fact('slots', '469544', {
+      kind: 'draft_rookie_promotion_slots',
+      clubs: [
+        {
+          recordedClub: 'A',
+          selectionNumbers: [...Array.from({ length: 25 }, (_, i) => i + 78), 105, 106, 107],
+        },
+      ],
+    }),
+    ...Array.from({ length: 77 }, (_, i) =>
+      fact(
+        'member' + i,
+        '469544',
+        {
+          kind: 'draft_completed_member_number',
+          recordedName: 'Member' + i,
+          selectionNumber: i + 1,
+        },
+        'slots'
+      )
+    ),
+    fact('polo', '45435', {
+      kind: 'draft_completed_member_number',
+      recordedName: 'Dean Polo',
+      selectionNumber: 103,
+    }),
+    fact('young', clubUrl, {
+      kind: 'draft_completed_member_number',
+      recordedName: 'Tom Young',
+      selectionNumber: 104,
+    }),
+    fact(
+      'identity',
+      clubUrl,
+      {
+        kind: 'draft_session_member_identity',
+        sessionOrdinal: 1,
+        selectionNumber: 104,
+        player: { nativeId: null, recordedName: 'Tom Young' },
+        selectedByClub: { nativeId: null, recordedName: 'Collingwood' },
+      },
+      'young'
+    ),
+  ];
+  const check = async (value: unknown, numbers: unknown = expected) =>
+    (
+      await pool.query(
+        'SELECT outcome_completed_numbered_union_exact($1::jsonb,$2::jsonb) AS valid',
+        [JSON.stringify(value), JSON.stringify(numbers)]
+      )
+    ).rows[0].valid;
+  expect(await check(facts)).toBe(true);
+  expect(await check(facts.slice(1))).toBe(false);
+  expect(await check([...facts, facts[82]])).toBe(false);
+  expect(await check(facts, expected.slice(1))).toBe(false);
+  const patches: Array<[string[], unknown]> = [
+    [['0', 'claim', 'playerCount'], 108],
+    [['3', 'captureId'], 'unbound'],
+    [['3', 'artifactId'], 'unbound'],
+    [['3', 'claim', 'recordedName'], 'Member1'],
+    [['3', 'claim', 'selectionNumber'], 2],
+    [['80', 'documentId'], '469544'],
+    [['80', 'claim', 'recordedName'], 'Other'],
+    [['81', 'artifactId'], 'polo-bytes'],
+    [['81', 'claim', 'selectionNumber'], 105],
+    [['82', 'claim', 'player', 'recordedName'], 'Other'],
+    [['82', 'claim', 'selectedByClub', 'recordedName'], 'Other'],
+    [['82', 'claim', 'boundary'], 'last'],
+    [['82', 'claim', 'sessionOrdinal'], 2],
+    [['82', 'captureId'], 'slots'],
+    [['82', 'artifactId'], 'slots-bytes'],
+    [['82', 'documentId'], 'other'],
+    [['82', 'evidenceId'], 'young'],
+    [['82', 'claim', 'kind'], 'draft_session_boundary'],
+  ];
+  for (const [path, value] of patches)
+    expect(
+      (
+        await pool.query(
+          'SELECT outcome_completed_numbered_union_exact(jsonb_set($1::jsonb,$2::text[],$3::jsonb),$4::jsonb) AS valid',
+          [JSON.stringify(facts), path, JSON.stringify(value), JSON.stringify(expected)]
+        )
+      ).rows[0].valid,
+      path.join('.')
+    ).toBe(false);
+});
+
+it('authenticates derived2010 inventory and rejects revoked terminal identities', async () => {
+  const candidateId = 'derived2010-fixture';
+  const scope = { draftYear: 2010, draftType: 'national' };
+  const numbers = [...Array.from({ length: 77 }, (_, i) => i + 1), 103, 104];
+  const urls = [
+    'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+    'https://www.afl.com.au/news/114795/countdown-to-d-day',
+    'https://www.afl.com.au/news/469544/round-by-round-selections',
+    'https://www.afl.com.au/news/45435/polo-prepared-for-different-roles',
+    'https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are',
+  ];
+  const facts: Array<{ capture: number; claim: any }> = [
+    {
+      capture: 0,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_list_total',
+        population: 'national_selections_and_rookie_promotions',
+        playerCount: 107,
+      },
+    },
+    {
+      capture: 1,
+      claim: {
+        ...scope,
+        kind: 'draft_rookie_list_additions',
+        clubs: [
+          { recordedClub: 'A', recordedNames: Array.from({ length: 28 }, (_, i) => 'Rookie' + i) },
+        ],
+      },
+    },
+    {
+      capture: 2,
+      claim: {
+        ...scope,
+        kind: 'draft_rookie_promotion_slots',
+        clubs: [
+          {
+            recordedClub: 'A',
+            selectionNumbers: [...Array.from({ length: 25 }, (_, i) => i + 78), 105, 106, 107],
+          },
+        ],
+      },
+    },
+    ...Array.from({ length: 77 }, (_, i) => ({
+      capture: 2,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Member' + i,
+        selectionNumber: i + 1,
+      },
+    })),
+    {
+      capture: 3,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Dean Polo',
+        selectionNumber: 103,
+      },
+    },
+    {
+      capture: 4,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Tom Young',
+        selectionNumber: 104,
+      },
+    },
+    {
+      capture: 4,
+      claim: {
+        ...scope,
+        kind: 'draft_session_member_identity',
+        sessionOrdinal: 1,
+        selectionNumber: 104,
+        player: { nativeId: null, recordedName: 'Tom Young' },
+        selectedByClub: { nativeId: null, recordedName: 'Collingwood' },
+      },
+    },
+    {
+      capture: 4,
+      claim: { ...scope, kind: 'draft_session_date', sessionOrdinal: 1, eventDate: '2010-11-18' },
+    },
+    { capture: 4, claim: { ...scope, kind: 'draft_session_completion', sessionOrdinal: 1 } },
+    {
+      capture: 2,
+      claim: {
+        ...scope,
+        kind: 'draft_session_boundary',
+        sessionOrdinal: 1,
+        boundary: 'first',
+        selectionNumber: 1,
+        player: { nativeId: null, recordedName: 'First' },
+        selectedByClub: { nativeId: null, recordedName: 'First Club' },
+      },
+    },
+  ];
+  const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+  const evidenceIds = facts.map((_, i) => 'external-evidence:' + hash('derived2010:' + i));
+  const batches = urls.map((_, i) => 'external-evidence-batch:' + hash('derived2010-batch:' + i));
+  const doc = {
+    candidateId,
+    content: { environment: 'test_fixture', competition: 'AFLM', sourceBatchIds: batches },
+  };
+  const inventory = numbers.map((n) => ({
+    candidate_id: candidateId,
+    selection_id: 'derived-selection:' + n,
+    draft_year: 2010,
+    draft_type: 'national',
+    selection_number: n,
+    selection_json: {
+      playerId: 'player:' + n,
+      clubId: 'club:' + n,
+      evidenceIds: [...evidenceIds].sort(),
+    },
+  }));
+  const identities = [
+    ['player', 'First', 'player:1'],
+    ['club', 'First Club', 'club:1'],
+    ['player', 'Tom Young', 'player:104'],
+    ['club', 'Collingwood', 'club:104'],
+  ].map(([kind, recordedName, canonicalId], i) => ({
+    content: {
+      provider: 'official_afl',
+      entityKind: kind,
+      canonicalId,
+      sourceIdentity: { nativeId: null, recordedName },
+      reviewDecisionId: 'review-decision:' + hash('derived2010-review:' + i),
+    },
+  }));
+  const proposal = {
+    schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+    proposedAt: '2026-09-14T00:00:00Z',
+    draftEventCoverage: [
+      {
+        draftYear: 2010,
+        draftType: 'national',
+        sessionOrdinal: 1,
+        eventDate: '2010-11-18',
+        officialName: '2010 fixture',
+        expectedSelectionCount: 79,
+        selectionIds: inventory.map((s) => s.selection_id),
+        evidenceIds: [...evidenceIds].sort(),
+        status: 'complete',
+        proofKind: 'combined_session_facts',
+      },
+    ],
+  };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL session_replication_role=replica');
+    for (const [i, url] of urls.entries()) {
+      const capture = 'source-capture:' + hash('derived2010-capture:' + i);
+      await client.query(
+        `INSERT INTO outcome_source_capture (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json) VALUES($1,$2,$3,$4,'test_fixture','official_afl','draft-session','fixture','automated_web','official-afl-completed-draft-session','AFLM',2010,'2026-09-13','2026-09-13','approved',$5::jsonb)`,
+        [
+          capture,
+          'derived-attempt:' + i,
+          'derived-snapshot:' + i,
+          'artifact:' + hash('derived2010-bytes:' + i),
+          JSON.stringify({ sourceUrl: url }),
+        ]
+      );
+      await client.query(
+        `INSERT INTO outcome_external_evidence_batch (batch_id,capture_id,provider,evidence_count,issue_count,row_set_sha256,issue_set_sha256,status,finalized_at,batch_json) VALUES($1,$2,'official_afl',$3,0,$4,$4,'finalized','2026-09-13','{}')`,
+        [batches[i], capture, facts.filter((f) => f.capture === i).length, hash('derived-row:' + i)]
+      );
+    }
+    for (const [i, f] of facts.entries())
+      await client.query(
+        `INSERT INTO outcome_external_evidence_row(evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json) VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
+        [
+          evidenceIds[i],
+          batches[f.capture],
+          i + 1,
+          'derived:' + i,
+          f.claim.kind,
+          JSON.stringify({ content: { provider: 'official_afl', claim: f.claim } }),
+        ]
+      );
+    for (const identity of identities) {
+      const content = identity.content;
+      const observations = facts.flatMap((fact, i) => {
+        const claim = fact.claim as Record<string, unknown>;
+        const sourceIdentity = claim[content.entityKind === 'player' ? 'player' : 'selectedByClub'];
+        return JSON.stringify(sourceIdentity) === JSON.stringify(content.sourceIdentity)
+          ? [{ evidenceId: evidenceIds[i], seasonYear: 2010, sourceIdentity }]
+          : [];
+      });
+      expect(observations).toHaveLength(1);
+      const decisionDocument = { content: {
+        decision: 'approved', subject: { content: { provider: 'official_afl', entityKind: content.entityKind,
+          identityScope: { kind: 'exact_recorded_name', recordedName: content.sourceIdentity.recordedName, seasonYear: 2010 } } },
+        canonicalTarget: { entityKind: content.entityKind, canonicalId: content.canonicalId },
+        workItem: { content: { observations } },
+      } };
+      await client.query(
+        `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at) VALUES($1,'external_identity','fixture','approved','fixture','{}','fixture','2026-09-13')`,
+        [content.reviewDecisionId]
+      );
+      // Direct SQL inventory fixture: typed observations are required even with setup triggers disabled.
+      const digest = content.reviewDecisionId.split(':')[1];
+      await client.query(`INSERT INTO outcome_external_identity_review_decision
+        (decision_id,subject_id,historical_completion_id,review_package_id,work_item_id,work_item_sha256,
+         work_item_canonical_json,revision,outcome,canonical_target_kind,canonical_target_id,
+         canonical_target_snapshot_sha256,canonical_target_canonical_json,authority_evidence_id,
+         supersedes_decision_id,decision_sha256,decision_canonical_json,decision_json,decided_at)
+        VALUES($1,$1,'fixture',$2,$3,$4,'{}',1,'approved',$5,$6,$4,'{}','fixture',NULL,$4,$7::text,($7::text)::jsonb,'2026-09-13')`,
+        [content.reviewDecisionId, 'external-identity-review-package:' + digest,
+          'external-identity-review-work-item:' + digest, digest, content.entityKind, content.canonicalId, JSON.stringify(decisionDocument)]);
+      const evidenceIndex = evidenceIds.indexOf(observations[0]!.evidenceId);
+      const evidenceDocument = { content: { provider: 'official_afl', claim: facts[evidenceIndex]!.claim } };
+      const matches = async (decision: unknown, evidenceKey = observations[0]!.evidenceId) =>
+        (await client.query('SELECT outcome_session_identity_observation_matches($1::jsonb,$2::jsonb,$3,$4,$5) AS valid',
+          [JSON.stringify(decision), JSON.stringify(evidenceDocument), evidenceKey, content.entityKind, content.canonicalId])).rows[0].valid;
+      expect(await matches(decisionDocument)).toBe(true);
+      const wrongSeason = structuredClone(decisionDocument);
+      wrongSeason.content.subject.content.identityScope.seasonYear = 2012;
+      expect(await matches(wrongSeason)).toBe(false);
+      expect(await matches(decisionDocument, 'external-evidence:' + hash('wrong-observation'))).toBe(false);
+      const wrongObservationSeason = structuredClone(decisionDocument);
+      wrongObservationSeason.content.workItem.content.observations[0]!.seasonYear = 2012;
+      expect(await matches(wrongObservationSeason)).toBe(false);
+    }
+    await client.query('SET LOCAL session_replication_role=origin');
+    const check = async (owner: string) =>
+      (
+        await client.query(
+          `SELECT ${owner}($1,$2::jsonb,2010,'national',$3::jsonb,$4::jsonb,$5::jsonb) AS valid`,
+          [
+            candidateId,
+            JSON.stringify({
+              ...proposal,
+              schemaVersion: owner.includes('_window_')
+                ? 'afl-trade-external-canonical-promotion-proposal/v7'
+                : proposal.schemaVersion,
+            }),
+            JSON.stringify(doc),
+            JSON.stringify(inventory),
+            JSON.stringify(identities),
+          ]
+        )
+      ).rows[0].valid;
+    expect(await check('outcome_external_combined_draft_group_exact_inventory')).toBe(true);
+    expect(await check('outcome_external_window_draft_group_exact_inventory')).toBe(true);
+    await client.query('SET LOCAL session_replication_role=replica');
+    await client.query(
+      "UPDATE outcome_review_decision SET decision='rejected' WHERE decision_id=$1",
+      [identities[3].content.reviewDecisionId]
+    );
+    await client.query('SET LOCAL session_replication_role=origin');
+    expect(await check('outcome_external_combined_draft_group_exact_inventory')).toBe(false);
+    expect(await check('outcome_external_window_draft_group_exact_inventory')).toBe(false);
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+});
+
+it('limits2010 source keys to the exact reviewed URLs, year and pathway', async () => {
+  const sources = [
+    ['https://www.afl.com.au/news/114795/countdown-to-d-day', '114795'],
+    ['https://www.afl.com.au/news/469544/round-by-round-selections', '469544'],
+    ['https://www.afl.com.au/news/45435/polo-prepared-for-different-roles', '45435'],
+    ['https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are', null],
+    [
+      'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+      null,
+    ],
+  ];
+  for (const [url, key] of sources) {
+    const get = async (u: any, year = 2010, type = 'national') =>
+      (
+        await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [
+          u,
+          year,
+          type,
+        ])
+      ).rows[0].key;
+    expect(await get(url)).toBe(key ?? url);
+    expect(await get(url, 2011)).toBeNull();
+    expect(await get(url, 2010, 'rookie')).toBeNull();
+    expect(await get(url + '?x=1')).toBeNull();
   }
 });

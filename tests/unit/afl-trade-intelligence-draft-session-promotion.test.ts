@@ -58,13 +58,9 @@ it('marks combined-proof coverage with an explicit version that cannot masquerad
     })),
   });
 
-  expect(proposal.content.schemaVersion).toBe(
-    'afl-trade-external-canonical-promotion-proposal/v3'
-  );
+  expect(proposal.content.schemaVersion).toBe('afl-trade-external-canonical-promotion-proposal/v3');
   expect(proposal.content.draftEventCoverage).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ proofKind: 'combined_session_facts' }),
-    ])
+    expect.arrayContaining([expect.objectContaining({ proofKind: 'combined_session_facts' })])
   );
 });
 
@@ -114,4 +110,127 @@ it('retains explicit session dates and selection numbers as official source evid
     publicationEligible: false,
   });
   expect(row.content.claim).toMatchObject({ eventDate: '2024-11-21', selectionNumbers: [30] });
+});
+
+it('allows different proof kinds across drafts while rejecting mixed proofs within one draft', () => {
+  const direct = { ...content.draftEventCoverage[0]!, proofKind: 'direct_session_claim' as const };
+  const combined = {
+    ...content.draftEventCoverage[1]!,
+    proofKind: 'combined_session_facts' as const,
+    draftYear: 2025,
+    eventDate: '2025-11-20',
+    sessionOrdinal: 1,
+  };
+  const mixed = {
+    ...content,
+    schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5' as const,
+    proposedAt: '2025-11-22T00:00:00.000Z',
+    draftEventCoverage: [direct, combined],
+  };
+  expect(
+    createAflTradeExternalCanonicalPromotionProposal(mixed).content.draftEventCoverage
+  ).toHaveLength(2);
+  expect(() =>
+    createAflTradeExternalCanonicalPromotionProposal({
+      ...mixed,
+      draftEventCoverage: [
+        direct,
+        { ...combined, draftYear: 2024, eventDate: '2024-11-21', sessionOrdinal: 2 },
+      ],
+    })
+  ).toThrow('consistent session proof kind');
+  for (const second of [
+    { ...combined, selectionIds: direct.selectionIds },
+    { ...combined, evidenceIds: [] },
+    { ...combined, sessionOrdinal: 2 },
+    { ...combined, proofKind: 'unsupported' },
+  ])
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...mixed,
+        draftEventCoverage: [direct, second],
+      } as never)
+    ).toThrow();
+});
+
+function windowContent() {
+  return {
+    ...content,
+    schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v7' as const,
+    proposedAt: '2024-11-30T00:00:00.000Z',
+    draftEventCoverage: content.draftEventCoverage.map((s, i) => ({
+      ...s,
+      proofKind: 'combined_session_facts' as const,
+      ...(i
+        ? {
+            eventDate: null,
+            datePrecision: {
+              precision: 'window' as const,
+              eventDate: null,
+              earliestDate: '2024-11-21',
+              latestDate: '2024-11-25',
+            },
+          }
+        : {}),
+    })),
+  };
+}
+it('v7 preserves null exact day and explicit window bounds with reviewed subset ordinals', () => {
+  const input = windowContent();
+  const proposal = createAflTradeExternalCanonicalPromotionProposal(input);
+  expect(proposal.content).toEqual(input);
+  expect(() =>
+    createAflTradeExternalCanonicalPromotionProposal({
+      ...input,
+      schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v6',
+    } as never)
+  ).toThrow();
+});
+it('v7 rejects false precision, invalid bounds, overlaps, future dates and repeated selections', () => {
+  const input = windowContent(),
+    last = input.draftEventCoverage[1]!;
+  for (const patch of [
+    { eventDate: '2024-11-25' },
+    { datePrecision: undefined },
+    {
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-20',
+        latestDate: '2024-11-25',
+      },
+    },
+    {
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-26',
+        latestDate: '2024-11-25',
+      },
+    },
+    {
+      datePrecision: {
+        precision: 'window',
+        eventDate: null,
+        earliestDate: '2024-11-21',
+        latestDate: '2024-12-01',
+      },
+    },
+    { selectionIds: [selection('1')] },
+    { expectedSelectionCount: 2 },
+    { proofKind: 'direct_session_claim' },
+  ]) {
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...input,
+        draftEventCoverage: [input.draftEventCoverage[0]!, { ...last, ...patch } as never],
+      })
+    ).toThrow();
+  }
+  expect(() =>
+    createAflTradeExternalCanonicalPromotionProposal({
+      ...input,
+      draftEventCoverage: [{ ...input.draftEventCoverage[0]! }],
+    })
+  ).toThrow('explicit session window');
 });

@@ -491,6 +491,17 @@ supersede production Gate authority, and production execution cannot reuse non-p
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not
    grant eligibility for historical valuation that requires an exact trade day.
+   For retained session proofs, `deriveDraftSessionCanonicalPromotionProposal` produces v5:
+   each draft declares `direct_session_claim` or `combined_session_facts`, while trade dates retain
+   their reviewed day/year precision. Different drafts may use different proof kinds; one draft
+   cannot mix them. Migration0176 checks each draft's retained proof and exact overall selection
+   membership, then enforces session finalization and current acquisition evidence. Combined proofs
+   require complete inventory and authenticated boundary identities. Migration0182 additionally accepts
+   nonconsecutive original numbers when authenticated `draft_completed_inventory` claims enumerate
+   exactly every member; migration0184 also accepts the authenticated named-roster join described below.
+   Without either membership proof, the inventory must remain contiguous. A scoped
+   correction candidate cannot use a partial inventory as full-draft proof. The existing metadata-only
+   review command remains on its v1/v4 path; v5 requires the session-aware programmatic owner.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
    content-addressed decision rather than manufacture a successor.
    PostgreSQL derives and authenticates the proposal, appends one typed decision, and advances its
@@ -2652,3 +2663,473 @@ withdrawal, historical archive readback and identity/event lock contention. Fixt
 satisfy genuine source admission or scientific acceptance. Apply migrations and genuine writes only
 under the existing reviewed target runbook and authorization, and record commit, push, PR/CI, merge,
 main synchronization, deployment and admission outcomes separately.
+
+### Preparing reviewed pick lineage
+
+`reviewedPickLineage.ts` validates separately evidenced corrections against an exact retained
+candidate. Preserve the scraped asset label alongside the accepted trade-time number and final
+live number. Keep national and mini-draft selections distinct. A rookie elevation, passed pick,
+unused pick or later package is a distinct endpoint; it must not manufacture a player acquisition.
+
+Each onward movement carries connected holders, explicit predecessor order and the supported
+instant, day or year. Supplementary movements outside the candidate require retained source bytes,
+asset labels and row references. A year is an interval for consistency checking, never an invented
+January 1 observation. Binding rejects contradictory dates, identities and source references.
+
+Use `PostgresAflTradeExternalCanonicalPromotionRepository.previewReviewedPickLineage` to inspect
+these records against a finalized candidate in the requested environment. The read-only preview
+reports absent approved player identities and source artifacts without registered captures. Capture
+presence is not current source authority. The preview always leaves admission and promotion
+eligibility false and does not remove candidate issues. Complete scoped source registration,
+identity review, partial-date persistence and authenticated promotion before claiming admission;
+verify independent database restore and factual readback through the existing owners.
+
+`createReviewedPickLineageRegistration` binds the candidate, environment, complete player endpoints,
+ordered custody and evidence into an immutable approval subject. `reviewedPickLineageApprovalEvidence`
+derives the exact payload for a future retained review; it does not issue or authenticate approval.
+Migration0164 stores one immutable reviewed registration per retained candidate. The promotion owner's
+`registerReviewedPickLineage` and `readReviewedPickLineage` authenticate the exact current review and
+scoped promoter authority. Retries must match both content and decision; withdrawn reviews fail on
+retry and readback. Changed facts require a new candidate rather than overwriting retained history.
+Day/year precision and non-player endpoints remain in the approved JSON; candidate issues and
+canonical custody are untouched. These methods explicitly report source authority and canonical
+admission as false. Current source-permission checks, draft sessions, canonical promotion and archive
+readback are still required before these reviewed records can support admitted facts.
+
+`prepareReviewedPickLineagePromotion` loads the persisted registration through the promotion owner,
+checks current review and candidate/capture source authority in the same transaction, and binds
+ordered custody plus typed endpoints without replacing partial dates with timestamps. Its result
+is preparation, not canonical admission or approval. Do not reuse a saved source check as authority;
+canonical writes must repeat this binding inside their own transaction. Existing candidate issues,
+special-right resolution and draft-session requirements remain until canonical integration completes.
+
+Migration0165 extends canonical pick custody with `observed_date` (an exact day/year object) and
+`predecessor_custody_id`. `observed_at` remains populated only for actual instants; exactly one date
+representation is required. Deferred predecessor checks reject different picks, cycles and impossible
+chronology while allowing explicitly ordered movements within the same year. Existing instant
+uniqueness remains intact. Promotion writes and factual/archive readback preserve date precision and
+predecessors; old records without predecessors retain their prior serialized shape. This storage
+support does not resolve candidate issues, supply draft sessions or admit the genuine reviewed set.
+
+Migration0166 adds typed non-player pick realizations: `passed`, `not_exercised`, and
+`incorporated_into_later_package`. These require `terminal_outcome` and no draft-selection row;
+`exercised_as` retains its selection reference. The candidate, canonical writer and archive preserve
+this distinction. Database guards reject conflicting terminal/selected realizations for one transfer.
+Draft-history reads exclude non-player outcomes from player selections and preserve partial-date
+custody without inventing timestamps. Apply through the normal migration owner in an owned restored
+checkpoint before genuine admission; fixture verification alone does not admit the reviewed73.
+
+Reviewed admission scopes bind a retained expanded candidate to its original reviewed registration.
+The scope keeps whole original trade transactions, exact selected endpoints, and all issues sharing
+active evidence (including transitive links and issues with no evidence). Other evidence IDs are
+explicitly deferred in the candidate JSON and still count toward source-row conservation. Existing
+candidate persistence and promotion authenticate the scope against both stored candidates, the
+current review and source authority; altered trade facts or removed relevant issues fail closed.
+Scoping is a pre-correction operation: it does not resolve custody, special rights, rookie elevation
+or session coverage and cannot turn a blocking reviewed issue into a promotion approval.
+
+Migration0168 permits an unknown originating club on canonical custody observations. The observed
+current holder remains mandatory and club foreign keys still validate supplied identities. Promotion,
+archive and draft-history reads preserve null origins; the first known holder is not substituted for
+an unknown origin. Reviewed records with null origins therefore do not require invented club facts.
+
+`prepareReviewedLineageCorrectionGraph` rechecks the registered review and current source authority,
+then consolidates custody histories by exact retained movement identity. It never merges histories
+merely because they reach the same player. Exact registered transfer references cover movements
+already represented by the original candidate; supplementary movements require retained source
+references. Branches, cycles, incompatible dates, disconnected holders and conflicting endpoints or
+known origins fail closed. Shared movements retain their source rows and explicit predecessors.
+The returned correction graph is preparation; it does not alter candidates or admit canonical facts.
+
+`prepareReviewedOrdinaryCorrection` materializes ordinary histories from a finalized reviewed scope
+inside the existing promotion owner. Persistence and promotion independently rebuild the exact
+candidate using current registered review, source authority and retained directed-transfer claims.
+HTML row references remain provenance; they are not interchangeable with parsed claim ordinals.
+Migration0169 validates the immutable scope first, then checks eligible histories, accepted endpoints,
+complete custody paths, exact movement evidence and unchanged unrelated facts/issues. Source-evidence
+conservation remains mandatory. Any connected history containing a special right stays with the
+special-right owner, even when downstream transfers have ordinary pick labels. Rookie elevation and
+draft-session coverage require their own handling. Persisting a correction candidate does not admit
+it canonically or publish it; remaining blocking issues still prevent promotion.
+
+`buildReviewedSpecialCustodyBindings` converts the registered shared graph into inputs for
+`resolveSpecialEntitlementCustody`. It requires one distinct award component per history and maps
+every movement to its exact existing transfer, preserving predecessor order and ordinary-labelled
+downstream legs. Missing/ambiguous awards or extra inputs fail closed. This pure assembly helper
+does not authenticate approvals: registration and promotion must use the governed database owners.
+
+Migration0170 corrects receipt paths in award, lifecycle, revision-lifecycle and identity-replacement
+source checks. Genuine execution receipts wrap their payload in `executionReceipt.content`.
+The correction preserves exact rights/proposal matching and current approval, expiry and supersession
+checks; it does not create source permission or broaden capture-year coverage.
+
+### Reviewed session evidence successors
+
+The 2015 partial-session adapter binds two exact AFL report URLs, contextual publication dates and
+ordered normalized-paragraph digests. The completed wrap supplies one dated session and first/last
+selection boundaries; the separate retrospective supplies the 70-player total. Changed, duplicated or
+out-of-body evidence fails closed. Parser support does not authorize a capture: bind current source
+rights and Gate scope to the exact 2015 URLs/fields before execution. Migration0181 admits only the
+reviewed wrap article78408 and independent total39972 into the 2015 combined-proof relationship,
+including retained-inventory validation; all existing source/currentness requirements still apply.
+
+The 2013 adapter keeps the event-year request explicit: article452467 provides the completed
+November21 session and first selection; retrospective117263 provides complete numbered membership
+and terminal zone selection97, excluding only explicitly identified rookie upgrades. Article149290
+provides the independent62-player total. Its existing2016 route remains separate and unchanged.
+Publication years remain2013/2018/2019 respectively. Migration0183 binds the reviewed2013 source
+relationship in candidate and retained-inventory validation. Technical parsing does not substitute for
+governed capture, identity decisions, public persistence verification or genuine canonical admission.
+
+Promotion proposal v6 binds coverage exactly to the saved selected-session projection, preserving
+original ordinals even when earlier sessions have no selected members. Migration0178 extends the
+review, write, session-finalization and acquisition-currentness gates. Every candidate selection must
+be covered; partial coverage and unresolved factual records still prevent promotion. Validate public
+promotion, readback/replay and source-revocation behavior before claiming a completed v6 delivery.
+The reviewed subset fixture exercises pick71 alone from a71-selection inventory, original session2,
+public custody/selection promotion, replay and acquisition invalidation/recovery for both session sources.
+The same fixture also exercises enumerated pick97 from71 members with gaps, explicit boundary identity
+reviews, an independent total and complete membership evidence through the retained/public owners.
+These synthetic cases verify behavior; they do not establish genuine2013 admission.
+Migration0179 preserves completion target order in its hash while comparing candidate batch membership
+in sorted order; never rewrite an immutable completion just to match candidate ordering.
+Migration0180 permits a further session successor only when it adds draft groups and preserves every
+prior projection exactly. It recursively authenticates the current parent chain; each edge must extend
+the source set. Existing evidence, corrected facts and ancestor identity approvals remain required.
+
+`prepareReviewedSessionCorrection` reconstructs a private reviewed successor from its finalized
+parent, current historical completion and approved identity records. It preserves accepted custody,
+endpoints and partial trade dates while adding session evidence for the selected draft members.
+Migration0177 validates exact corrected-fact conservation and reconstructs complete draft inventories
+from retained selection claims. The existing direct and combined session validators check those
+inventories, including boundary identities and independent documents, before accepting the subset.
+Unrelated draft selections are never inserted into the reviewed candidate. Persist through
+`PostgresAflTradeExternalReconciliationRepository.persistCandidate`; verify exact readback, replay,
+current sources and independent restore. Session preparation or candidate persistence does not clear
+readiness statuses, provide missing draft groups, or constitute canonical promotion or admission.
+
+Migration0182 applies enumerated-membership validation to candidate and retained-inventory proofs.
+Every supplied enumeration must exactly match the ordered original selection numbers. Independent
+completed totals, completed-session dates, boundary identities and source currentness remain required;
+each covered selection must retain the membership evidence ID. Missing, additional, duplicate or
+renumbered members fail. Membership evidence alone does not establish a session date or authorize
+an identity alias. Source parsers must attest only facts present in their own scoped documents;
+source-specific support and genuine admission require separate verification.
+
+The reviewed2014 parser route uses five exact Official AFL documents:149034 supplies the named
+membership roster and terminal86/Josh Clayton/Brisbane;68212 supplies the November27 session and
+first1/Patrick McCartin/St Kilda;162070 supplies total76;156041 and56745 separately supply
+Steele24 and Finlayson85. Keep the two roster numbers null until the authenticated membership join.
+Publication years remain2019/2014/2016/2016/2018, separately from anchor2014. Parser v12 checks
+scoped paragraph hashes and article timestamps; it does not emit the conflicting adjacent2013 total.
+Migration0185 recognizes those document IDs and the independent2014 total/terminal pair. Source scope,
+boundary identity decisions and public retained promotion/revocation still require separate verification.
+
+The retained subset fixture covers a multi-document roster with a null member number and a separate
+source-bound number claim, in addition to consecutive and enumerated inventories. Both required
+sources pass public capture, preparation, persistence, promotion/readback/replay and individual
+revocation/recovery checks. Nested roster fields require explicit Gate field mappings; allowing only
+`members` does not grant `members.recordedName` or `members.selectionNumber`. Fixtures do not
+establish genuine2014 scope or canonical admission.
+
+Official AFL evidence may retain an explicit `draft_selection` independently of session or custody
+claims. When a retained provider inventory omits a selection, use a separately scoped source claim;
+do not edit prior captures or reduce the completed total. The reviewed-session owner unions selection
+claims across authenticated batches and rejects conflicting claims at the same original number.
+Migration0186 and the TypeScript successor guard permit supplemental official selections only for
+a relevant year/type and a number absent from all parent source selections. Existing claims, candidate
+selections and prior session projections remain immutable; complete membership must still be proved.
+The supplemental-selection fixture removes an interior member from Draftguru and supplies it through
+an official batch; complete-inventory, subset-promotion and source-revocation checks still apply.
+Provider claim support does not extend Gate permissions or authorize a new parser/source route.
+
+Migration0187 permits a source-explicit `draft_completed_member_exclusion` only for a named
+`rookie_elevation` in a national-draft roster. The classification must match the roster's exact
+recorded name and year/type, come from a different document/capture/artifact, and refer to a numbered
+member absent from the national inventory. One classification is required per excluded member.
+The resulting membership must exactly equal the retained inventory, preserving original numbers;
+classifications remain in the session's evidence set. Duplicate, unrelated, missing or conflicting
+classifications fail in both preparation and SQL. A pre-draft classification is not a completed-session
+date or count. Source routes and genuine execution remain separately scoped and verified.
+
+Migration0184 supports a complete `draft_completed_membership_roster` with explicit null numbers
+for named members, joined to separate `draft_completed_member_number` evidence by exact recorded
+name and draft year/type. The join cannot infer numbers from the retained inventory. Every unnumbered
+member requires exactly one binding from a different document, capture and artifact; duplicate names,
+extra bindings, duplicate numbers and incomplete inventories fail. All joined evidence IDs must remain
+in the proposal and selected records, and existing source-currentness gates apply. Existing complete
+inventory claims must still match independently. This support does not authorize source parsers,
+register player aliases, or establish genuine session coverage without the normal retained proof.
+
+### Original issuing award references
+
+`official-afl-issuing-award` captures the two exact reviewed Official AFL/GWS articles through the
+existing source/Gate, field manifest and bounded-fetch owners. Scope uses the original grant year
+(2009 for the four mini-draft rights;2010 for the Ablett compensation component), separately from
+the actual retrospective observation timestamp. `officialAflIssuingAwardAdapter.ts` emits only an
+`issuing_award_reference`; migration0171 permits this evidence kind without granting draft-session,
+custody, activation, expiry or canonical-admission status. The capture fetch seam remains available
+as `captureOfficialAflPage` from the runtime and from `source/officialAflPageCapture.ts`.
+Migration0172 allows issuing references in retained completions only. Include their batches in the
+exact candidate source set before canonical custody; source capture alone does not extend a prior
+completion. Register current issuing-year capture/reviewer coverage before invoking the award owner.
+Retained article bytes and parser verification alone are not registered capture or award evidence.
+
+### Reviewed special-custody successors
+
+`prepareReviewedSpecialCorrection` authenticates the finalized ordinary parent, registered lineage,
+issuing awards and retained completion in one transaction. `reviewedSpecialCorrection.ts` builds a
+versioned successor covering every connected special history, including ordinary-labelled downstream
+legs. Its source set is exactly the parent batches plus registered award evidence; newly added batches
+must contain issuing references with matching grant years. Added evidence remains explicitly accounted
+for in the reviewed scope. Ordinary custody/lineage and unrelated facts are preserved.
+Migration0173 validates special-successor persistence against the immutable ordinary parent, exact
+registered histories/awards/predecessors and current completion. Only referenced issuing-year evidence
+may extend source-year scope. Source custody accepts precisely that validated batch extension.
+Preparation alone does not persist or admit facts; verify genuine persistence/readback, tamper rejection
+and independent restore before proceeding to canonical promotion, lifecycle/exercise and session coverage.
+
+Rookie elevation uses the player-bearing `pickTerminalOutcome.ts` contract. It requires a resolved
+player, exercising club, draft coordinates and live slot; trade-time numbering remains in custody.
+Migration0174 permits a `rookie_elevation` realization with a null draft-selection reference, verifies
+approved player/club identities and matching terminal custody, and preserves prior realization checks.
+Candidate and archive contracts retain this endpoint; promotion and factual release carry it without
+creating a draft selection. These capabilities do not authenticate a reviewed correction successor:
+`prepareReviewedRookieCorrection` rebuilds the versioned successor from the current finalized parent,
+registered review and retained movement evidence in one transaction. Authentication compares the
+entire rebuilt candidate, preserving special/ordinary records and source authority. Its preparation
+result explicitly reports persistence/admission false. Migration0175 authenticates the existing parent
+and exact rookie review, custody, terminal endpoint and content-addressed identifiers while preserving
+prior records and source-evidence conservation. Persistence/replay must pass through that validator.
+Verify readback, SQL tamper rejection and independent restore before recording a completed correction;
+canonical admission, special lifecycle/exercise and draft-session coverage remain separate exits.
+
+The reviewed 2012 national-session adapter (v13) preserves all 74 retrospective roster entries.
+The independent list-lodgement report supplies four explicit rookie-elevation exclusions; the
+completed-event release supplies 70 national selections (66 live, three father-son, one local
+talent), separately from 24 rookie elevations. The retrospective also supplies Michael Osborne
+at original selection 70 and the terminal selection 88. Migration 0188 recognizes these three
+reviewed documents and requires the completed total (AFL453360) to be independent of the terminal
+roster source (AFL87166). AFL38163 is classification evidence, not a completed-session date.
+This capability does not establish genuine capture, identity approval or canonical admission.
+
+Migration 0189 and the completed-membership resolver retain a reviewed 2011 national-draft
+number discrepancy without rewriting either source: AFL506746 reports Cameron Sutcliffe at72,
+whereas the club's completed-draft report AFL75034 explicitly records him at71 and a pass at72.
+Only this exact year, pathway, name, pair of document IDs and pair of reported numbers may use
+an independent number binding for an already numbered roster member. Both authenticated evidence
+references remain required; source revocation is still enforced by the surrounding owners.
+Unknown conflicts, shared capture/artifact provenance, duplicate roster numbers and mismatched
+inventory fail closed. The raw roster remains72 and the club binding remains71. This reviewed
+source-choice rule grants no new capture, identity, publication or canonical admission authority.
+
+The reviewed 2011 parser (v14) emits 75 national members from AFL506746's 96 slots,
+excluding its 13 explicitly promoted rookies and eight passes while retaining local-talent
+selections. It preserves Sutcliffe72 in that roster and emits71 independently from AFL75034.
+AFL453197 supplies the independent75 total; AFL469214 supplies the completed24 November2011
+date and the absent supplemental Jason Blake76 selection. Migration0190 recognizes those four
+documents and pairs the total with the independent roster terminal. The2013 publication year
+of the total report does not change the2011 event year. Governed capture, required boundary
+identity binding and genuine session correction must still execute before admission.
+
+Migration0191 aligns both authenticated SQL membership callers with TypeScript's canonical
+`official_afl:news:<id>` document identity. Bare article numbers cannot satisfy the reviewed
+2011 discrepancy rule; preserve that rule and normalize provenance when constructing the SQL
+facts. Non-AFL document URL identity and current-source authentication remain unchanged.
+
+The2011 mini-draft parser uses exact Gold Coast114828 membership/boundaries, Gold Coast751451
+independent completed total and Adelaide776103 completed-day evidence. Retrospective publication
+years remain source years while the claims belong to2011 and the `mini_draft` pathway.
+Migration0192 permits these exact club URLs only for that event and keeps full URLs as document
+identities. It preserves separate capture/artifact requirements and the reviewed total/terminal
+pair. Parser/routing and migration verification do not establish genuine capture, boundary
+registration, session correction or canonical admission; execute those through their existing owners.
+The2012 mini-draft permitted selections during a window; do not reuse this2011 dated-session
+proof or infer a common2012 selection date from the closing date of the trade period.
+
+Reviewed session projection v2 and promotion v7 preserve an explicit date window with a null
+exact event date. Migration0193 validates same-year bounds, disjoint session chronology and
+unchanged inventory/subset membership in reviewed transitions. It preserves exact-day legacy
+formats and all ancestor projections. This structural check grants no source authority or
+canonical admission. Migration0194 authenticates window claims against retained source evidence
+through a distinct combined-inventory validator, preserving legacy validators, completion/boundary
+requirements, independent totals and current-source checks. Window correction persistence, readback,
+replay and revocation are fixture-verified. Migration0195 adds v7 canonical promotion and explicit
+`outcome_event_version.date_precision` storage. Exact event days remain null for windows; finalization
+matches both null day and bounds to the reviewed coverage. Public promotion/replay/readback and
+Prisma/SQL agreement are fixture-verified. Migration0196 supplies lifecycle ordering for window selections, as described below. Do not substitute
+a window endpoint for the unknown selection day.
+
+Migration0196 reads lifecycle date bounds from canonical events. A window is usable only while its
+finalized v7 promotion and source-authenticated coverage match the stored bounds. Custody and
+activation provenance still establish sequence; date comparisons reject events after the latest
+possible selection day. This is a consistency check, not proof of an exact exercise day. Existing
+exact-day lifecycle, revision and renumbering rules retain their prior meaning. Acquisition-spell
+registration uses the versioned window contract and migration0197 described below; never substitute
+a bound as an exact start date.
+
+The retained-window integration fixture now runs compensation award registration, two custody
+transfers, activation, renumbering, exercise and an award correction through public repositories.
+Exercise/revision replay and readback pass; missing activation, renumbering after the window and
+revoked selection evidence are rejected. These synthetic checks do not constitute genuine mini-draft
+admission or acquisition-spell registration.
+
+Acquisition registration v2 and its versioned rule preserve event windows with null exact dates.
+`deriveAflTradeAcquisitionMembershipBounds` distinguishes possible membership (earliest entry through
+the day before latest departure) from certain membership (latest entry through the day before earliest
+departure), bounded by the reviewed observation date. It validates disjoint chronology and preserves
+legacy exact-day results. Migration0197 persists v2 through the reviewed acquisition repository;
+immutable registration JSON retains the bounds while exact columns remain null when unknown.
+Currentness authenticates the matching v2 rule, promotion, reviewed source bounds and evidence.
+Overlap checks use possible membership, with continuing spells unbounded beyond observedThrough.
+Exact-day metric, valuation and release consumers reject v2 explicitly until their interval-aware
+qualification is implemented. Fixture registration does not establish genuine admission or grading.
+Migration0206 repairs the shared exact-acquisition guard: valuation dataset rows reference
+`acquisition_spell_version_id`; the six metric, release, calculation and observation consumers use
+`spell_version_id`. It preserves v2 rejection on inserts and updates and changes no stored data.
+Apply this forward repair without editing the immutable0197 migration.
+
+The v16 session parser also reads retained2012 mini-draft rules and closing paperwork: it emits the
+October8–26 window, Martin1/Hogan2 membership, boundary selections and completion. It emits neither
+an exact day nor a completed total from prospective capacity. The2011 retrospective claims from the
+same rules URL remain separately scoped. Migration0198 adds exact source/year/pathway eligibility; a supported completeness proof remains required. Reviewed capture scope and completeness evidence must be satisfied before genuine2012 session admission.
+
+Parser v17 preserves the2012 maximum of two selections as `draft_selection_capacity`, separately
+from completed membership. The TypeScript membership/session owner can prove exhaustion only when
+the independent closing document confirms completed use of both distinct numbered rights; it retains
+the source evidence and null exact day. This proof rejects partial use, duplicate rights, mixed total
+mechanisms and mismatched source scope. Migration0199 adds the capacity claim and a separate SQL exhaustion check to the reviewed window
+inventory owner. It authenticates the independent roster, completion and both boundary records while
+retaining the existing source/currentness checks. The bounded2012 synthetic fixture exercises public correction persistence, promotion, replay, null-day
+readback, acquisition registration and source revocation. Promotion rechecks session evidence before
+new writes and replay; altered capacity or completed membership cannot reuse a finalized receipt as
+current authority. Record genuine capture and admission results separately for each authorized target.
+
+The bounded2010 `resolveCompletedDraftListTotal` calculation keeps an all-list total, named rookie
+additions and marked rookie slots separate. It requires independent source references, exact club
+labels with matching counts, unique names and disjoint selection numbers before deriving the national
+selection count. It neither emits a source-reported total nor authenticates source authority. The
+caller must establish exact source scope, population meaning, chronology and club-label bindings;
+raw spelling differences must remain traceable. The parser, SQL/currentness and public persistence
+integration described below enforce these requirements before canonical promotion.
+
+The2010 population contracts distinguish `draft_completed_list_total`, `draft_rookie_list_additions`
+and `draft_rookie_promotion_slots`; only Official AFL and explicit fixtures may emit them. The bounded
+HTML helper `parseOfficialAflDraft2010ListFacts` validates the exact URLs, publication metadata and
+article-body digests for AFL114795 and469544. It preserves original club labels and extracts only
+labelled additions or PR slots, including unnamed slots without inventing players. Parser v18 routes
+these helpers. The reviewed PDF mapping, scoped label bindings and SQL population/union checks below
+complete the implementation; each execution still requires current source and identity authority.
+
+The2010 total resolver also retains explicit additions-label/slot-label pairs for the exact reviewed
+AFL114795/AFL469544 source pair. These mappings apply only after the2010 national scope and source
+checks; they do not modify either claim or install global aliases. Each slot club can match only once.
+Different names such as Adelaide versus Adelaide Crows remain rejected unless the exact reviewed
+uppercase source label is supplied. Genuine PDF custody and SQL admission remain separate requirements.
+
+PDF page ingestion requires an explicit asynchronous `parsePdf` dependency. It receives a copy of
+original captured bytes after authority, digest, immutable storage and readback checks, with the
+original `application/pdf` capture reference. Missing PDF parsers fail closed; PDF bytes never enter
+the HTML decoder. Parsed claims still pass the existing field-authority and staging checks. This
+transport boundary alone does not register the2010 annual report or authorize a PDF source: exact
+source parsing, runtime routing and genuine evidence completion remain required.
+
+The2010 annual-report PDF uses an explicit reviewed-document mapping in
+`officialAflDraft2010PdfFacts.ts`: exact URL, original PDF SHA256 and page65 (printed74) bind
+its reviewed107 list-additions statement. This is not runtime PDF text extraction; changed bytes
+require fresh review. The total remains separate from the derived79 national selections. The runtime
+has a PDF parser dispatch and the fetcher accepts only this exact resource URL as PDF. Provider/Gate
+source eligibility is checked separately from Gate permission; migrations0200–0203 supply population,
+union and source integration. Genuine registration requires the authorized execution record. Preserve actual
+observation timestamps; no historical publication timestamp is inferred from the document or URL.
+
+Combined session projection and reviewed correction now accept the three2010 population claims:
+reported list additions, classified rookie additions and marked rookie slots. They derive the national
+selection count through `resolveCompletedDraftListTotal`; they do not emit a reported79-total claim.
+All three sources are required exactly once, with matching counts and disjoint rookie/inventory slots.
+The mechanism cannot mix with completed-selection totals or mini-draft capacity. Existing complete
+membership, dates, completion and first/last boundary checks still apply before selecting a candidate
+subset. Reconciliation maps these same source claims without replacing their original population values.
+Migrations0200–0203 integrate these claims with SQL/currentness and exact source eligibility.
+Registration and admission still require authenticated execution through the existing owners.
+
+Migration0200 adds `outcome_completed_list_population_exact` for the separate2010 list populations.
+Exact-date and window inventory owners call it on their authenticated evidence set. It checks distinct
+source custody, exact population shapes, reviewed club-label pairs, rookie counts, unique/disjoint
+slots and complete inventory size. It rejects mixed reported-total/capacity evidence and retains the
+independent total-versus-terminal-document requirement. Existing source authorization still applies;
+this migration alone does not enable new source URLs or establish genuine2010 session admission.
+
+`officialAflDraft2010SessionFacts.ts` preserves the incomplete main report as77 separate
+`draft_completed_member_number` claims, with the rookie-slot claim and pick1 boundary. Independent
+Polo and Collingwood reports add103 and104; the club report also establishes the2010-11-18 date and
+completed occurrence. These source-bound numbers cover the retained79-member inventory without
+normalizing the12 source name variants or inferring blank slots as passes. The club report does not
+explicitly state that104 is the global terminal selection, so this parser does not emit a last-boundary
+claim. Parser v18 routes this helper; the numbered-union and member-identity owners below derive
+terminal coverage without changing the source claim. Genuine registration requires retained source
+and identity authority.
+
+`resolveCompletedDraftNumberedUnion` proves the reviewed2010 membership from77 main-list claims,
+Polo103 andYoung104, together with the separate107/28 population proof. It validates source custody,
+unique numbers/names/evidence and exact inventory equality. It derives104 as the maximum of that
+exhausted membership, recording this basis separately from source claims. Combined projection accepts
+this membership mechanism but still requires an authenticated terminal identity boundary; the helper
+alone cannot manufacture a reported-last assertion or canonical player/club identity. Migrations0201–0203
+integrate the union, terminal identity and exact source routing; admission still requires current authority.
+
+The2010 club parser now emits `draft_session_member_identity` for Tom Young/Collingwood/104, with no
+first/last assertion. The strict contract is limited to2010 national session1. Identity work building,
+reviewed correction and reconciliation use the existing player/club resolution owners. Combined
+projection derives a terminal boundary only after the exact numbered union is complete and this
+identity matches the terminal member's document/capture/artifact and inventory player/club IDs.
+It rejects duplicate or unbound identities, mixed reported-last claims and missing identities. Source
+claims remain unchanged. SQL reconstruction/currentness, source field scope and genuine identity
+registration are still required; TypeScript verification is not canonical admission.
+
+Migration0201 provides pure `outcome_completed_numbered_union_exact` reconstruction for83 facts:
+three population claims,79 numbered members and one source member identity. It verifies the exact
+reviewed source allocation/custody, unique members and evidence,107/28 population exhaustion and
+Tom Young/Collingwood/104 identity on the same club source as the terminal member. It does not
+register that identity or grant source authority. Migration0202 connects the predicate to session
+inventory and canonical currentness; unknown or mixed facts reject.
+
+Migration0202 connects the83-fact numbered-union predicate to exact/window inventory validation and
+conserves member-identity evidence in reviewed admission scope. It retains independent terminal-document
+checks and the existing approved, non-superseded player/club identity joins. A derived terminal cannot
+mix with a reported-last claim or multiple sessions. Source eligibility still applies. Direct fixture
+SQL verification covers valid2010 inventory and terminal identity revocation. Migration0203 supplies
+exact source routing; genuine capture, registration and admission require target-specific execution evidence.
+
+Completed-session parser v18 routes the exact2010 membership/Polo/Collingwood/additions sources.
+Provider scope requires2010 national, v18 and exact article publication timestamps. The reviewed PDF
+uses the actual runtime import timestamp as effectiveAt; no publication date is inferred. Migration0203
+adds only the five exact source keys for2010 national and accepts member-identity evidence through the
+existing registered identity review guard. Wrong URL/year/pathway reject. The Collingwood fetch exception
+is exact-URL only. Gate field authorization remains unchanged: every emitted field still requires an
+explicit reviewed mapping and archive request. Verify and retain governance, capture, identity and
+promotion results for the authorized target; parser eligibility is not source permission.
+
+Migration0204 requires session boundary and member-identity approvals to retain the exact source
+observation, entity and season. A same-name approval from another season cannot substitute for it.
+The identity loader preserves distinct subjects when collecting resolutions. Existing candidates
+that omitted a required season-specific resolution must be rebuilt through authenticated successor
+construction; registration alone does not repair their immutable resolution sets. Verify rejected
+source/identity authority and exact replay before admission. No new source capture is needed when
+the reviewed observations and approved subject decisions are already retained.
+
+Reviewed status correction uses `prepareReviewedStatusCorrection` and migration0205 after session
+coverage is authenticated. The successor changes only unresolved transaction/selection statuses to
+single-source when complete usable legs, resolved parties and exact selection/session evidence
+support them. It preserves custody, special rights, date precision and every prior record. Both
+application and SQL owners authenticate the finalized parent and current approvals; successor
+identity records must equal the parent's. Use the existing reconciliation repository for persistence
+and replay. Status readiness does not establish canonical admission or entitlement exercise.
+
+For future picks, custody source provenance follows the recorded observation year, while
+`draft_season_year` remains the pick's target draft year. Do not require a later draft-year capture
+for an earlier evidenced transfer or replace partial observation dates with invented timestamps.
+
+The historical draft/trade reader accepts typed passed, unused, later-package and rookie-elevation
+pick endpoints without a draft-selection row. It leaves drafted-player and actual-pick fields empty
+and continues rejecting missing or mismatched selected endpoints and pick identities.

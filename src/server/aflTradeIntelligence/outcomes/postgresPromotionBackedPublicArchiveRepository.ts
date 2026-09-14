@@ -1,3 +1,6 @@
+import { draftSessionDateWindowSchema } from '../source/draftSessionDatePrecision';
+import { pickTerminalOutcomeSchema } from '../source/pickTerminalOutcome';
+import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
 import { z } from 'zod';
 
@@ -48,6 +51,7 @@ const eventSchema = z
     seasonYear: z.number().int(),
     kind: z.string().min(1),
     eventDate: z.string().min(1).nullable(),
+    datePrecision: draftSessionDateWindowSchema.nullable().optional(),
     officialName: z.string().min(1),
     parties: z.array(partySchema),
   })
@@ -83,12 +87,13 @@ const custodySchema = z
   .object({
     custodyObservationId: z.string().min(1),
     pickId: z.string().min(1),
-    observedAt: z.string().min(1),
+    observedAt: pickCustodyDateSchema,
+    predecessorCustodyId: z.string().min(1).nullable().optional(),
     draftSeasonYear: z.number().int(),
     draftKind: z.string().min(1),
     recordedRound: z.number().int().positive().nullable(),
     recordedPick: z.number().int().positive().nullable(),
-    originalClubId: z.string().min(1),
+    originalClubId: z.string().min(1).nullable(),
     currentClubId: z.string().min(1),
   })
   .passthrough();
@@ -97,8 +102,15 @@ const realizationSchema = z
     realizationId: z.string().min(1),
     pickId: z.string().min(1),
     transferAssetVersionId: z.string().min(1),
-    draftSelectionId: z.string().min(1),
-    relationKind: z.literal('exercised_as'),
+    draftSelectionId: z.string().min(1).nullable(),
+    relationKind: z.enum([
+      'exercised_as',
+      'passed',
+      'not_exercised',
+      'incorporated_into_later_package',
+      'rookie_elevation',
+    ]),
+    terminalOutcome: pickTerminalOutcomeSchema.optional(),
   })
   .passthrough();
 const snapshotSchema = z
@@ -277,7 +289,7 @@ async function buildRecords(
       if (selection.pickId) pickIds.add(selection.pickId);
     } else if (value.record_kind === 'pick_custody') {
       const custody = custodySchema.parse(value.record);
-      clubIds.add(custody.originalClubId);
+      if (custody.originalClubId) clubIds.add(custody.originalClubId);
       clubIds.add(custody.currentClubId);
     }
   }
@@ -340,8 +352,6 @@ async function buildRecords(
         })),
       };
     }
-    if (value.eventDate === null)
-      throw new TypeError('Draft events require an exact occurrence date.');
     return {
       recordKind: 'draft_event',
       recordId: value.eventVersionId,
@@ -349,7 +359,8 @@ async function buildRecords(
       eventVersionId: value.eventVersionId,
       ...(value.supersedesVersionId ? { supersedesVersionId: value.supersedesVersionId } : {}),
       seasonYear: value.seasonYear,
-      occurredOn: dateOnly(value.eventDate),
+      occurredOn: value.eventDate === null ? null : dateOnly(value.eventDate),
+      ...(value.datePrecision ? { datePrecision: value.datePrecision } : {}),
       officialName: value.officialName,
       draftKind: value.kind as 'national_draft',
     };
@@ -425,13 +436,17 @@ async function buildRecords(
         recordKind: 'pick_custody',
         recordId: value.custodyObservationId,
         custodyObservationId: value.custodyObservationId,
+        ...(value.predecessorCustodyId ? { predecessorCustodyId: value.predecessorCustodyId } : {}),
         pickId: value.pickId,
-        observedAt: new Date(value.observedAt).toISOString(),
+        observedAt:
+          typeof value.observedAt === 'string'
+            ? new Date(value.observedAt).toISOString()
+            : value.observedAt,
         draftSeasonYear: value.draftSeasonYear,
         draftKind: value.draftKind,
         recordedRound: value.recordedRound,
         recordedPick: value.recordedPick,
-        originalClub: club(value.originalClubId),
+        originalClub: value.originalClubId ? club(value.originalClubId) : null,
         currentClub: club(value.currentClubId),
       };
     }
@@ -444,6 +459,7 @@ async function buildRecords(
       transferAssetVersionId: value.transferAssetVersionId,
       draftSelectionId: value.draftSelectionId,
       relationKind: value.relationKind,
+      ...(value.terminalOutcome ? { terminalOutcome: value.terminalOutcome } : {}),
     };
   });
 }
@@ -480,7 +496,7 @@ function dimensions(
     pickId = record.pickId;
   } else if (record.recordKind === 'pick_custody') {
     seasonYear = record.draftSeasonYear;
-    clubIds.add(record.originalClub.clubId);
+    if (record.originalClub) clubIds.add(record.originalClub.clubId);
     clubIds.add(record.currentClub.clubId);
     pickId = record.pickId;
   } else {

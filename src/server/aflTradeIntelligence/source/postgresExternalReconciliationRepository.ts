@@ -1,3 +1,4 @@
+import { authenticateReviewedAdmissionScope } from './reviewedAdmissionScope';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -98,14 +99,24 @@ async function requireFinalizedSourceBatches(
       competition: string;
       anchor_season_year: number;
       issue_count: number | string;
+      reviewed_award_year: boolean;
     }>(
       `SELECT batch.status,batch.finalized_at,capture.environment,capture.competition,
-              capture.anchor_season_year,batch.issue_count
+              capture.anchor_season_year,batch.issue_count,
+              EXISTS(SELECT 1 FROM jsonb_array_elements($2::jsonb) binding
+                JOIN outcome_special_entitlement_award award ON award.entitlement_id=binding->>'entitlementId'
+                CROSS JOIN LATERAL jsonb_array_elements(award.award_json#>'{content,evidence}') ref
+                WHERE ref->>'captureId'=capture.capture_id
+                AND award.award_json#>>'{content,awardYear}'=capture.anchor_season_year::text
+                AND award.approval_decision_id=binding->>'awardApprovalDecisionId') AS reviewed_award_year
          FROM outcome_external_evidence_batch batch
          JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
         WHERE batch.batch_id=$1
         FOR SHARE`,
-      [batchId]
+      [
+        batchId,
+        canonicalizeAflTradeJson(candidate.content.reviewedSpecialCorrection?.bindings ?? []),
+      ]
     );
     if (
       source.rows.length !== 1 ||
@@ -114,7 +125,8 @@ async function requireFinalizedSourceBatches(
       Number(source.rows[0].issue_count) !== 0 ||
       source.rows[0].environment !== candidate.content.environment ||
       source.rows[0].competition !== candidate.content.competition ||
-      !allowedSeasonYears.has(Number(source.rows[0].anchor_season_year))
+      (!allowedSeasonYears.has(Number(source.rows[0].anchor_season_year)) &&
+        !source.rows[0].reviewed_award_year)
     ) {
       throw new AflTradeExternalReconciliationPersistenceError(
         'SOURCE_BATCH_UNAVAILABLE',
@@ -136,7 +148,12 @@ async function requireSourceEvidenceMembership(
     ...candidate.content.pickLineage,
     ...candidate.content.issues,
   ];
-  const evidenceIds = [...new Set(records.flatMap(({ evidenceIds }) => evidenceIds))].sort();
+  const evidenceIds = [
+    ...new Set([
+      ...records.flatMap(({ evidenceIds }) => evidenceIds),
+      ...(candidate.content.reviewedScope?.deferredEvidenceIds ?? []),
+    ]),
+  ].sort();
   for (const evidenceId of evidenceIds) {
     const membership = await transaction.query(
       `SELECT evidence.evidence_id
@@ -185,6 +202,216 @@ async function insertJsonChild(
   );
 }
 
+/** Write the candidate's ordered records inside the caller's authenticated transaction. */
+async function insertCandidateRecords(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord,
+  identityResolutions: readonly AflTradeExternalIdentityResolution[]
+) {
+  const content = candidate.content;
+  for (const [index, batchId] of content.sourceBatchIds.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_source_batch',
+      ['candidate_id', 'ordinal', 'batch_id'],
+      [candidate.candidateId, index + 1, batchId]
+    );
+  }
+  for (const [index, resolution] of identityResolutions.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_identity_resolution',
+      [
+        'candidate_id',
+        'ordinal',
+        'resolution_id',
+        'review_decision_id',
+        'provider',
+        'entity_kind',
+        'canonical_id',
+        'resolution_json',
+      ],
+      [
+        candidate.candidateId,
+        index + 1,
+        resolution.resolutionId,
+        resolution.content.reviewDecisionId,
+        resolution.content.provider,
+        resolution.content.entityKind,
+        resolution.content.canonicalId,
+        canonicalizeAflTradeJson(resolution),
+      ]
+    );
+  }
+  for (const [index, record] of content.transactions.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_transaction',
+      ['candidate_id', 'ordinal', 'transaction_id', 'status', 'transaction_json'],
+      [
+        candidate.candidateId,
+        index + 1,
+        record.transactionId,
+        record.status,
+        canonicalizeAflTradeJson(record),
+      ]
+    );
+  }
+  for (const [index, record] of content.transfers.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_transfer',
+      [
+        'candidate_id',
+        'ordinal',
+        'transfer_id',
+        'transaction_id',
+        'pick_id',
+        'status',
+        'transfer_json',
+      ],
+      [
+        candidate.candidateId,
+        index + 1,
+        record.transferId,
+        record.transactionId,
+        record.asset.kind === 'pick_entitlement' ? record.asset.pickId : null,
+        record.status,
+        canonicalizeAflTradeJson(record),
+      ]
+    );
+  }
+  for (const [index, record] of content.draftSelections.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_draft_selection',
+      [
+        'candidate_id',
+        'ordinal',
+        'selection_id',
+        'draft_year',
+        'draft_type',
+        'selection_number',
+        'pick_id',
+        'status',
+        'selection_json',
+      ],
+      [
+        candidate.candidateId,
+        index + 1,
+        record.selectionId,
+        record.draftYear,
+        record.draftType,
+        record.selectionNumber,
+        record.pickId,
+        record.status,
+        canonicalizeAflTradeJson(record),
+      ]
+    );
+  }
+  for (const [index, record] of content.pickCustody.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_pick_custody',
+      ['candidate_id', 'ordinal', 'custody_id', 'pick_id', 'status', 'custody_json'],
+      [
+        candidate.candidateId,
+        index + 1,
+        record.custodyId,
+        record.pickId,
+        record.status,
+        canonicalizeAflTradeJson(record),
+      ]
+    );
+  }
+  for (const [index, record] of content.pickLineage.entries()) {
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_pick_lineage',
+      [
+        'candidate_id',
+        'ordinal',
+        'lineage_id',
+        'transfer_id',
+        'selection_id',
+        'pick_id',
+        'status',
+        'lineage_json',
+      ],
+      [
+        candidate.candidateId,
+        index + 1,
+        record.lineageId,
+        record.transferId,
+        record.selectionId,
+        record.pickId,
+        record.status,
+        canonicalizeAflTradeJson(record),
+      ]
+    );
+  }
+  for (const [index, issue] of content.issues.entries()) {
+    const issueId = createAflTradeContentAddress('external-reconciliation-issue', {
+      candidateId: candidate.candidateId,
+      ...issue,
+    });
+    await insertJsonChild(
+      transaction,
+      'outcome_external_reconciliation_issue',
+      ['candidate_id', 'ordinal', 'issue_id', 'code', 'subject_key', 'issue_json'],
+      [
+        candidate.candidateId,
+        index + 1,
+        issueId,
+        issue.code,
+        issue.subjectKey,
+        canonicalizeAflTradeJson(issue),
+      ]
+    );
+  }
+}
+
+async function insertCandidateHeader(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord,
+  candidateJson: string,
+  sourceAuthority:
+    AflTradeExternalReconciliationCandidateRecord['content']['sourceAuthority'] | null
+) {
+  const content = candidate.content;
+  await transaction.query(
+    `INSERT INTO outcome_external_reconciliation_candidate
+          (candidate_id,source_authority_kind,historical_completion_id,
+           environment,competition,anchor_season_year,reconciled_at,
+           source_batch_count,identity_resolution_count,
+           transaction_count,transfer_count,draft_selection_count,pick_custody_count,
+           pick_lineage_count,issue_count,status,finalized_at,source_authority_json,
+           candidate_canonical_json,candidate_json)
+         VALUES ($1,$2,$3,$4::"OutcomeEnvironment",$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+                 'open',NULL,$16::jsonb,$17,$18::jsonb)`,
+    [
+      candidate.candidateId,
+      sourceAuthority?.kind ?? null,
+      sourceAuthority?.kind === 'historical_plan_completion' ? sourceAuthority.completionId : null,
+      content.environment,
+      content.competition,
+      content.anchorSeasonYear,
+      content.reconciledAt,
+      content.sourceBatchIds.length,
+      content.identityResolutionIds.length,
+      content.transactions.length,
+      content.transfers.length,
+      content.draftSelections.length,
+      content.pickCustody.length,
+      content.pickLineage.length,
+      content.issues.length,
+      sourceAuthority === null ? null : canonicalizeAflTradeJson(sourceAuthority),
+      sourceAuthority === null ? null : canonicalizeAflTradeJson(content),
+      candidateJson,
+    ]
+  );
+}
+
 export class PostgresAflTradeExternalReconciliationRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
@@ -204,6 +431,7 @@ export class PostgresAflTradeExternalReconciliationRepository {
         `SELECT singleton_id FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR SHARE`
       );
 
+      await authenticateReviewedAdmissionScope(transaction, candidate);
       const existing = await transaction.query<{
         status: string;
         finalized_at: string | Date | null;
@@ -247,200 +475,9 @@ export class PostgresAflTradeExternalReconciliationRepository {
       }
 
       await requireFinalizedSourceBatches(transaction, candidate);
-      await transaction.query(
-        `INSERT INTO outcome_external_reconciliation_candidate
-          (candidate_id,source_authority_kind,historical_completion_id,
-           environment,competition,anchor_season_year,reconciled_at,
-           source_batch_count,identity_resolution_count,
-           transaction_count,transfer_count,draft_selection_count,pick_custody_count,
-           pick_lineage_count,issue_count,status,finalized_at,source_authority_json,
-           candidate_canonical_json,candidate_json)
-         VALUES ($1,$2,$3,$4::"OutcomeEnvironment",$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-                 'open',NULL,$16::jsonb,$17,$18::jsonb)`,
-        [
-          candidate.candidateId,
-          sourceAuthority?.kind ?? null,
-          sourceAuthority?.kind === 'historical_plan_completion'
-            ? sourceAuthority.completionId
-            : null,
-          content.environment,
-          content.competition,
-          content.anchorSeasonYear,
-          content.reconciledAt,
-          content.sourceBatchIds.length,
-          content.identityResolutionIds.length,
-          content.transactions.length,
-          content.transfers.length,
-          content.draftSelections.length,
-          content.pickCustody.length,
-          content.pickLineage.length,
-          content.issues.length,
-          sourceAuthority === null ? null : canonicalizeAflTradeJson(sourceAuthority),
-          sourceAuthority === null ? null : canonicalizeAflTradeJson(content),
-          candidateJson,
-        ]
-      );
+      await insertCandidateHeader(transaction, candidate, candidateJson, sourceAuthority);
 
-      for (const [index, batchId] of content.sourceBatchIds.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_source_batch',
-          ['candidate_id', 'ordinal', 'batch_id'],
-          [candidate.candidateId, index + 1, batchId]
-        );
-      }
-      for (const [index, resolution] of identityResolutions.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_identity_resolution',
-          [
-            'candidate_id',
-            'ordinal',
-            'resolution_id',
-            'review_decision_id',
-            'provider',
-            'entity_kind',
-            'canonical_id',
-            'resolution_json',
-          ],
-          [
-            candidate.candidateId,
-            index + 1,
-            resolution.resolutionId,
-            resolution.content.reviewDecisionId,
-            resolution.content.provider,
-            resolution.content.entityKind,
-            resolution.content.canonicalId,
-            canonicalizeAflTradeJson(resolution),
-          ]
-        );
-      }
-      for (const [index, record] of content.transactions.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_transaction',
-          ['candidate_id', 'ordinal', 'transaction_id', 'status', 'transaction_json'],
-          [
-            candidate.candidateId,
-            index + 1,
-            record.transactionId,
-            record.status,
-            canonicalizeAflTradeJson(record),
-          ]
-        );
-      }
-      for (const [index, record] of content.transfers.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_transfer',
-          [
-            'candidate_id',
-            'ordinal',
-            'transfer_id',
-            'transaction_id',
-            'pick_id',
-            'status',
-            'transfer_json',
-          ],
-          [
-            candidate.candidateId,
-            index + 1,
-            record.transferId,
-            record.transactionId,
-            record.asset.kind === 'pick_entitlement' ? record.asset.pickId : null,
-            record.status,
-            canonicalizeAflTradeJson(record),
-          ]
-        );
-      }
-      for (const [index, record] of content.draftSelections.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_draft_selection',
-          [
-            'candidate_id',
-            'ordinal',
-            'selection_id',
-            'draft_year',
-            'draft_type',
-            'selection_number',
-            'pick_id',
-            'status',
-            'selection_json',
-          ],
-          [
-            candidate.candidateId,
-            index + 1,
-            record.selectionId,
-            record.draftYear,
-            record.draftType,
-            record.selectionNumber,
-            record.pickId,
-            record.status,
-            canonicalizeAflTradeJson(record),
-          ]
-        );
-      }
-      for (const [index, record] of content.pickCustody.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_pick_custody',
-          ['candidate_id', 'ordinal', 'custody_id', 'pick_id', 'status', 'custody_json'],
-          [
-            candidate.candidateId,
-            index + 1,
-            record.custodyId,
-            record.pickId,
-            record.status,
-            canonicalizeAflTradeJson(record),
-          ]
-        );
-      }
-      for (const [index, record] of content.pickLineage.entries()) {
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_pick_lineage',
-          [
-            'candidate_id',
-            'ordinal',
-            'lineage_id',
-            'transfer_id',
-            'selection_id',
-            'pick_id',
-            'status',
-            'lineage_json',
-          ],
-          [
-            candidate.candidateId,
-            index + 1,
-            record.lineageId,
-            record.transferId,
-            record.selectionId,
-            record.pickId,
-            record.status,
-            canonicalizeAflTradeJson(record),
-          ]
-        );
-      }
-      for (const [index, issue] of content.issues.entries()) {
-        const issueId = createAflTradeContentAddress('external-reconciliation-issue', {
-          candidateId: candidate.candidateId,
-          ...issue,
-        });
-        await insertJsonChild(
-          transaction,
-          'outcome_external_reconciliation_issue',
-          ['candidate_id', 'ordinal', 'issue_id', 'code', 'subject_key', 'issue_json'],
-          [
-            candidate.candidateId,
-            index + 1,
-            issueId,
-            issue.code,
-            issue.subjectKey,
-            canonicalizeAflTradeJson(issue),
-          ]
-        );
-      }
+      await insertCandidateRecords(transaction, candidate, identityResolutions);
 
       await requireSourceEvidenceMembership(transaction, candidate);
 

@@ -46,6 +46,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   outcomesPool: Pool,
   options: {
     draftSessions?: boolean;
+    sessionProposalV5?: boolean;
+    mixedDraftSessionProofs?: boolean;
+    partialTransactionDates?: boolean;
     combinedDraftSessions?: boolean;
     official2017CombinedDraft?: boolean;
     officialCombinedDraftYear?: 2016 | 2017;
@@ -65,6 +68,18 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     };
   } = {}
 ) {
+  if (options.partialTransactionDates && (!options.sessionProposalV5 || options.lifecycle))
+    throw new Error(
+      'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
+    );
+  if (
+    options.mixedDraftSessionProofs &&
+    (!options.sessionProposalV5 ||
+      !options.combinedDraftSessions ||
+      options.officialCombinedDraftYear ||
+      options.official2017CombinedDraft)
+  )
+    throw new Error('Mixed proof fixture requires synthetic v5 combined-session profile.');
   const hasDraftSessions = options.draftSessions || options.combinedDraftSessions;
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
@@ -337,174 +352,190 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       parserVersion: request.parserVersion,
       fieldManifestSha256: request.fieldManifestSha256,
     };
-    const draftSelectionClaim = (selectionNumber: number) => ({
-      kind: 'draft_selection' as const,
-      draftYear: request.anchorSeasonYear,
-      draftType: 'national' as const,
-      selectionNumber,
-      roundNumber: 1,
-      player: {
-        nativeId: reviewedOfficialCombinedDraft
-          ? `official-${seasonYear}-player-${selectionNumber}`
-          : `draft-player-${selectionNumber}`,
-        recordedName: reviewedOfficialCombinedDraft
-          ? selectionNumber === 1
+    function selectionPlayerName(selectionNumber: number) {
+      return reviewedOfficialCombinedDraft
+        ? selectionNumber === 1
+          ? seasonYear === 2016
+            ? 'Andrew McGrath'
+            : 'Cameron Rayner'
+          : selectionNumber === officialSelectionCount
             ? seasonYear === 2016
-              ? 'Andrew McGrath'
-              : 'Cameron Rayner'
-            : selectionNumber === officialSelectionCount
-              ? seasonYear === 2016
-                ? 'Jake Waterman'
-                : 'Jarrod Garlett'
-              : `${seasonYear} Player ${selectionNumber}`
-          : (options.existingDraftTargets?.[selectionNumber - 1]?.playerName ??
-            (selectionNumber === 1 ? `Player ${index}` : 'Synthetic second draft player')),
-      },
-      selectedByClub: {
-        nativeId: reviewedOfficialCombinedDraft
-          ? `official-${seasonYear}-club-${selectionNumber}`
-          : `draft-club-${selectionNumber}`,
-        recordedName: reviewedOfficialCombinedDraft
-          ? selectionNumber === 1
-            ? targets.toClubName
-            : selectionNumber === officialSelectionCount
-              ? seasonYear === 2016
-                ? 'West Coast'
-                : 'Carlton'
-              : targets.toClubName
-          : (options.existingDraftTargets?.[selectionNumber - 1]?.clubName ??
-            (options.combinedDraftSessions ? targets.toClubName : `Club ${index}`)),
-      },
-    });
-    const evidence = createAflTradeExternalEvidenceEnvelope({
-      schemaVersion: 'afl-trade-external-evidence/v1',
-      provider: 'draftguru',
-      capture: evidenceCapture,
-      sourceRow: { ordinal: 1, sourceKey: `completion-${index}` },
-      claim:
-        request.capabilityId === 'draftguru-trade-detail'
-          ? {
-              kind: 'directed_transfer' as const,
-              nativeEventId: providerEventId,
-              nativeTransferId: nativePlayerId,
-              fromClub: { nativeId: null, recordedName: targets.fromClubName },
-              toClub: { nativeId: null, recordedName: targets.toClubName },
-              asset: {
-                kind: 'player' as const,
-                player: { nativeId: nativePlayerId, recordedName: targets.playerName },
-              },
-            }
-          : draftSelectionClaim(hasDraftSessions ? 1 : index + 1),
-      publicationEligible: false,
-    });
-    const targetEvidence = [evidence];
-    if (hasDraftSessions && evidence.content.claim.kind === 'draft_selection') {
-      const selectionCount = officialSelectionCount ?? 2;
-      for (let selectionNumber = 2; selectionNumber <= selectionCount; selectionNumber += 1) {
-        targetEvidence.push(
-          createAflTradeExternalEvidenceEnvelope({
-            ...evidence.content,
-            sourceRow: {
-              ordinal: selectionNumber,
-              sourceKey: `completion-${index}-selection-${selectionNumber}`,
-            },
-            claim: draftSelectionClaim(selectionNumber),
-          })
-        );
-      }
+              ? 'Jake Waterman'
+              : 'Jarrod Garlett'
+            : `${seasonYear} Player ${selectionNumber}`
+        : (options.existingDraftTargets?.[selectionNumber - 1]?.playerName ??
+            (selectionNumber === 1 ? `Player ${index}` : 'Synthetic second draft player'));
     }
-    if (request.capabilityId === 'draftguru-trade-detail') {
-      targetEvidence.push(
-        createAflTradeExternalEvidenceEnvelope({
-          schemaVersion: 'afl-trade-external-evidence/v1',
-          provider: 'draftguru',
-          capture: evidenceCapture,
-          sourceRow: { ordinal: 2, sourceKey: `completion-${index}-transaction` },
-          claim: {
-            kind: 'transaction',
-            nativeEventId: providerEventId,
-            seasonYear,
-            occurredOn: `${seasonYear}-10-15`,
-            transactionType: 'trade',
-            title: 'Synthetic player entry',
-          },
-          publicationEligible: false,
-        })
-      );
-      if (reviewedOfficialCombinedDraft) {
-        for (const [partyIndex, party] of [
-          { nativePartyId: `official-${seasonYear}-from`, recordedName: targets.fromClubName },
-          { nativePartyId: `official-${seasonYear}-to`, recordedName: targets.toClubName },
-        ].entries()) {
-          targetEvidence.push(
-            createAflTradeExternalEvidenceEnvelope({
-              ...evidence.content,
-              sourceRow: {
-                ordinal: 3 + partyIndex,
-                sourceKey: `official-2017-party-${partyIndex + 1}`,
-              },
-              claim: {
-                kind: 'transaction_party',
+
+    function selectionClubName(selectionNumber: number) {
+      return reviewedOfficialCombinedDraft
+        ? selectionNumber === 1
+          ? targets.toClubName
+          : selectionNumber === officialSelectionCount
+            ? seasonYear === 2016
+              ? 'West Coast'
+              : 'Carlton'
+            : targets.toClubName
+        : (options.existingDraftTargets?.[selectionNumber - 1]?.clubName ??
+            (options.combinedDraftSessions ? targets.toClubName : `Club ${index}`));
+    }
+
+    function buildTargetEvidence() {
+      const draftSelectionClaim = (selectionNumber: number) => ({
+        kind: 'draft_selection' as const,
+        draftYear: request.anchorSeasonYear,
+        draftType:
+          options.mixedDraftSessionProofs && selectionNumber === 3
+            ? ('rookie' as const)
+            : ('national' as const),
+        selectionNumber:
+          options.mixedDraftSessionProofs && selectionNumber === 3 ? 1 : selectionNumber,
+        roundNumber: 1,
+        player: {
+          nativeId: reviewedOfficialCombinedDraft
+            ? `official-${seasonYear}-player-${selectionNumber}`
+            : `draft-player-${selectionNumber}`,
+          recordedName: selectionPlayerName(selectionNumber),
+        },
+        selectedByClub: {
+          nativeId: reviewedOfficialCombinedDraft
+            ? `official-${seasonYear}-club-${selectionNumber}`
+            : `draft-club-${selectionNumber}`,
+          recordedName: selectionClubName(selectionNumber),
+        },
+      });
+      const evidence = createAflTradeExternalEvidenceEnvelope({
+        schemaVersion: 'afl-trade-external-evidence/v1',
+        provider: 'draftguru',
+        capture: evidenceCapture,
+        sourceRow: { ordinal: 1, sourceKey: `completion-${index}` },
+        claim:
+          request.capabilityId === 'draftguru-trade-detail'
+            ? {
+                kind: 'directed_transfer' as const,
                 nativeEventId: providerEventId,
-                nativePartyId: party.nativePartyId,
-                club: { nativeId: null, recordedName: party.recordedName },
-              },
-            })
-          );
-        }
-      }
-      if (options.lifecycle) {
-        for (const [index, transition] of [
-          {
-            nativeEventId: 'synthetic-departure',
-            date: `${seasonYear}-10-20`,
-            from: targets.toClubName,
-            to: targets.fromClubName,
-          },
-          {
-            nativeEventId: 'synthetic-return',
-            date: `${seasonYear}-10-25`,
-            from: targets.fromClubName,
-            to: targets.toClubName,
-          },
-        ].entries()) {
-          targetEvidence.push(
-            createAflTradeExternalEvidenceEnvelope({
-              ...evidence.content,
-              sourceRow: { ordinal: 3 + index * 2, sourceKey: transition.nativeEventId },
-              claim: {
-                kind: 'directed_transfer',
-                nativeEventId: transition.nativeEventId,
                 nativeTransferId: nativePlayerId,
-                fromClub: { nativeId: null, recordedName: transition.from },
-                toClub: { nativeId: null, recordedName: transition.to },
+                fromClub: { nativeId: null, recordedName: targets.fromClubName },
+                toClub: { nativeId: null, recordedName: targets.toClubName },
                 asset: {
-                  kind: 'player',
+                  kind: 'player' as const,
                   player: { nativeId: nativePlayerId, recordedName: targets.playerName },
                 },
-              },
-            })
-          );
+              }
+            : draftSelectionClaim(hasDraftSessions ? 1 : index + 1),
+        publicationEligible: false,
+      });
+      const targetEvidence = [evidence];
+      if (hasDraftSessions && evidence.content.claim.kind === 'draft_selection') {
+        const selectionCount = options.mixedDraftSessionProofs ? 3 : (officialSelectionCount ?? 2);
+        for (let selectionNumber = 2; selectionNumber <= selectionCount; selectionNumber += 1) {
           targetEvidence.push(
             createAflTradeExternalEvidenceEnvelope({
               ...evidence.content,
               sourceRow: {
-                ordinal: 4 + index * 2,
-                sourceKey: `${transition.nativeEventId}-transaction`,
+                ordinal: selectionNumber,
+                sourceKey: `completion-${index}-selection-${selectionNumber}`,
               },
-              claim: {
-                kind: 'transaction',
-                nativeEventId: transition.nativeEventId,
-                seasonYear,
-                occurredOn: transition.date,
-                transactionType: 'trade',
-                title: transition.nativeEventId,
-              },
+              claim: draftSelectionClaim(selectionNumber),
             })
           );
         }
       }
+      if (request.capabilityId === 'draftguru-trade-detail') {
+        targetEvidence.push(
+          createAflTradeExternalEvidenceEnvelope({
+            schemaVersion: 'afl-trade-external-evidence/v1',
+            provider: 'draftguru',
+            capture: evidenceCapture,
+            sourceRow: { ordinal: 2, sourceKey: `completion-${index}-transaction` },
+            claim: {
+              kind: 'transaction',
+              nativeEventId: providerEventId,
+              seasonYear,
+              occurredOn: options.partialTransactionDates ? null : `${seasonYear}-10-15`,
+              transactionType: 'trade',
+              title: 'Synthetic player entry',
+            },
+            publicationEligible: false,
+          })
+        );
+        if (reviewedOfficialCombinedDraft) {
+          for (const [partyIndex, party] of [
+            { nativePartyId: `official-${seasonYear}-from`, recordedName: targets.fromClubName },
+            { nativePartyId: `official-${seasonYear}-to`, recordedName: targets.toClubName },
+          ].entries()) {
+            targetEvidence.push(
+              createAflTradeExternalEvidenceEnvelope({
+                ...evidence.content,
+                sourceRow: {
+                  ordinal: 3 + partyIndex,
+                  sourceKey: `official-2017-party-${partyIndex + 1}`,
+                },
+                claim: {
+                  kind: 'transaction_party',
+                  nativeEventId: providerEventId,
+                  nativePartyId: party.nativePartyId,
+                  club: { nativeId: null, recordedName: party.recordedName },
+                },
+              })
+            );
+          }
+        }
+        if (options.lifecycle) {
+          for (const [index, transition] of [
+            {
+              nativeEventId: 'synthetic-departure',
+              date: `${seasonYear}-10-20`,
+              from: targets.toClubName,
+              to: targets.fromClubName,
+            },
+            {
+              nativeEventId: 'synthetic-return',
+              date: `${seasonYear}-10-25`,
+              from: targets.fromClubName,
+              to: targets.toClubName,
+            },
+          ].entries()) {
+            targetEvidence.push(
+              createAflTradeExternalEvidenceEnvelope({
+                ...evidence.content,
+                sourceRow: { ordinal: 3 + index * 2, sourceKey: transition.nativeEventId },
+                claim: {
+                  kind: 'directed_transfer',
+                  nativeEventId: transition.nativeEventId,
+                  nativeTransferId: nativePlayerId,
+                  fromClub: { nativeId: null, recordedName: transition.from },
+                  toClub: { nativeId: null, recordedName: transition.to },
+                  asset: {
+                    kind: 'player',
+                    player: { nativeId: nativePlayerId, recordedName: targets.playerName },
+                  },
+                },
+              })
+            );
+            targetEvidence.push(
+              createAflTradeExternalEvidenceEnvelope({
+                ...evidence.content,
+                sourceRow: {
+                  ordinal: 4 + index * 2,
+                  sourceKey: `${transition.nativeEventId}-transaction`,
+                },
+                claim: {
+                  kind: 'transaction',
+                  nativeEventId: transition.nativeEventId,
+                  seasonYear,
+                  occurredOn: transition.date,
+                  transactionType: 'trade',
+                  title: transition.nativeEventId,
+                },
+              })
+            );
+          }
+        }
+      }
+      return targetEvidence;
     }
+    const targetEvidence = buildTargetEvidence();
     const batch = createAflTradeExternalEvidenceBatch({
       schemaVersion: 'afl-trade-external-evidence-batch/v1',
       provider: 'draftguru',
@@ -1159,14 +1190,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }
       const selectionId = createAflTradeContentAddress('external-draft-selection', {
         draftYear: seasonYear,
-        draftType: 'national',
+        draftType: claim.draftType,
         selectionNumber: claim.selectionNumber,
       });
-      if (options.combinedDraftSessions) {
+      if (options.combinedDraftSessions && claim.draftType === 'national') {
         draftSelections.push({
           selectionId,
           draftYear: seasonYear,
-          draftType: 'national',
+          draftType: claim.draftType,
           selectionNumber: claim.selectionNumber,
           roundNumber: claim.roundNumber,
           pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
@@ -1199,8 +1230,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         claim: {
           kind: 'draft_session',
           draftYear: seasonYear,
-          draftType: 'national',
-          sessionOrdinal: index + 1,
+          draftType: claim.draftType,
+          sessionOrdinal: claim.draftType === 'rookie' ? 1 : index + 1,
           eventDate: date,
           officialName: `Synthetic session ${index + 1}`,
           selectionNumbers: [claim.selectionNumber],
@@ -1282,7 +1313,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       draftSelections.push({
         selectionId,
         draftYear: seasonYear,
-        draftType: 'national',
+        draftType: claim.draftType,
         selectionNumber: claim.selectionNumber,
         roundNumber: claim.roundNumber,
         pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
@@ -1294,8 +1325,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       });
       draftEventCoverage.push({
         draftYear: seasonYear,
-        draftType: 'national',
-        sessionOrdinal: index + 1,
+        draftType: claim.draftType,
+        sessionOrdinal: claim.draftType === 'rookie' ? 1 : index + 1,
         eventDate: date,
         officialName: `Synthetic session ${index + 1}`,
         expectedSelectionCount: 1,
@@ -1305,12 +1336,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       });
     }
     if (options.combinedDraftSessions) {
-      const selectionRows = draftBatch.batch.content.evidence.map((row) => {
-        if (row.content.claim.kind !== 'draft_selection') {
-          throw new Error('Expected combined-proof draft selection.');
-        }
-        return row.content.claim;
-      });
+      const selectionRows = draftBatch.batch.content.evidence
+        .map((row) => {
+          if (row.content.claim.kind !== 'draft_selection') {
+            throw new Error('Expected combined-proof draft selection.');
+          }
+          return row.content.claim;
+        })
+        .filter((claim) => claim.draftType === 'national');
       const first = selectionRows[0]!;
       const last = selectionRows.at(-1)!;
       const combinedFactGroups = reviewedOfficialCombinedDraft
@@ -1659,7 +1692,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         sourceBatchIds.push(factBatch.batchId);
       }
       combinedEvidenceIds.sort();
-      for (const selection of draftSelections) {
+      for (const selection of draftSelections.filter(
+        (selection) => selection.draftType === 'national'
+      )) {
         selection.evidenceIds = [...selection.evidenceIds, ...combinedEvidenceIds].sort();
       }
       if (reviewedOfficialCombinedDraft) {
@@ -1677,18 +1712,20 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         });
       } else {
         draftEventCoverage.push(
-          ...draftSelections.map((selection, index) => ({
-            draftYear: seasonYear,
-            draftType: 'national',
-            sessionOrdinal: index + 1,
-            eventDate: `${seasonYear}-11-${20 + index}`,
-            officialName: `Synthetic combined session ${index + 1}`,
-            expectedSelectionCount: 1,
-            selectionIds: [selection.selectionId],
-            evidenceIds: combinedEvidenceIds,
-            status: 'complete' as const,
-            proofKind: 'combined_session_facts' as const,
-          }))
+          ...draftSelections
+            .filter((selection) => selection.draftType === 'national')
+            .map((selection, index) => ({
+              draftYear: seasonYear,
+              draftType: 'national',
+              sessionOrdinal: index + 1,
+              eventDate: `${seasonYear}-11-${20 + index}`,
+              officialName: `Synthetic combined session ${index + 1}`,
+              expectedSelectionCount: 1,
+              selectionIds: [selection.selectionId],
+              evidenceIds: combinedEvidenceIds,
+              status: 'complete' as const,
+              proofKind: 'combined_session_facts' as const,
+            }))
         );
       }
     }
@@ -1706,7 +1743,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         transactionId,
         providerEventId,
         seasonYear,
-        occurredOn: `${seasonYear}-10-15`,
+        occurredOn: options.partialTransactionDates ? null : `${seasonYear}-10-15`,
         transactionType: 'trade' as const,
         title: 'Synthetic player entry',
         parties: [targets.fromClubId, targets.toClubId].sort(),
@@ -1824,6 +1861,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     candidate,
     identityResolutions: allResolutions,
   });
+  draftEventCoverage.sort(
+    (a, b) =>
+      a.draftYear - b.draftYear ||
+      a.draftType.localeCompare(b.draftType) ||
+      a.sessionOrdinal - b.sessionOrdinal
+  );
   const proposalInput = {
     candidateId: candidate.candidateId,
     candidateSha256: candidate.candidateId.split(':')[1]!,
@@ -1839,26 +1882,38 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     proposedAt: reviewedAt,
     publicationEligible: false as const,
   };
-  const proposal = options.combinedDraftSessions
+  const proposal = options.sessionProposalV5
     ? createAflTradeExternalCanonicalPromotionProposal({
         ...proposalInput,
-        schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+        schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5',
         draftEventCoverage: draftEventCoverage.map((coverage) => ({
           ...coverage,
-          proofKind: 'combined_session_facts' as const,
+          proofKind:
+            options.combinedDraftSessions && coverage.draftType === 'national'
+              ? ('combined_session_facts' as const)
+              : ('direct_session_claim' as const),
         })),
       })
-    : hasDraftSessions
+    : options.combinedDraftSessions
       ? createAflTradeExternalCanonicalPromotionProposal({
           ...proposalInput,
-          schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v2',
-          draftEventCoverage,
+          schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+          draftEventCoverage: draftEventCoverage.map((coverage) => ({
+            ...coverage,
+            proofKind: 'combined_session_facts' as const,
+          })),
         })
-      : createAflTradeExternalCanonicalPromotionProposal({
-          ...proposalInput,
-          schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
-          draftEventCoverage: [],
-        });
+      : hasDraftSessions
+        ? createAflTradeExternalCanonicalPromotionProposal({
+            ...proposalInput,
+            schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v2',
+            draftEventCoverage,
+          })
+        : createAflTradeExternalCanonicalPromotionProposal({
+            ...proposalInput,
+            schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
+            draftEventCoverage: [],
+          });
   const approvalDecisionId = await seedPromotionAuthority(candidate.candidateId, proposal);
   const receipt = await new PostgresAflTradeExternalCanonicalPromotionRepository(sql).promote({
     candidateId: candidate.candidateId,
@@ -1961,7 +2016,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       promotionId: receipt.promotionId,
       eventVersionId: assets.rows[0]!.event_version_id,
       assetVersionId: assets.rows[0]!.asset_version_id,
-      eventDate: `${seasonYear}-10-15`,
+      get eventDate(): string {
+        if (options.partialTransactionDates)
+          throw new Error('Year-only trade has no exact-day spell entry.');
+        return `${seasonYear}-10-15`;
+      },
       evidence: [sourceArtifact],
     },
   };

@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from '../source/draftSessionDatePrecision';
 import { z } from 'zod';
 import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
 import {
@@ -38,10 +39,17 @@ const ruleContent = z
   })
   .strict();
 
+const windowRuleContent = ruleContent.extend({
+  schemaVersion: z.literal('afl-trade-acquisition-registration-rule/v2'),
+  entry: z.literal('reviewed_incoming_asset_with_explicit_date_precision'),
+  departure: z.literal('reviewed_departure_bounds_day_excluded'),
+  intervals: z.literal('possible_and_certain_membership_no_inferred_boundary_days'),
+});
+
 export const aflTradeAcquisitionSpellRegistrationRuleSchema = z
   .object({
     ruleId: aflTradeContentAddressedIdSchema('acquisition-spell-rule'),
-    content: ruleContent,
+    content: z.union([ruleContent, windowRuleContent]),
   })
   .strict()
   .superRefine((record, context) => {
@@ -89,21 +97,49 @@ const spellContent = z
   })
   .strict();
 
+const windowEvent = event.extend({
+  eventDate: z.null(),
+  datePrecision: draftSessionDateWindowSchema,
+});
+const precisionEvent = z.union([event, windowEvent]);
+const windowSpellContent = spellContent.extend({
+  schemaVersion: z.literal('afl-trade-acquisition-registration/v2'),
+  entry: precisionEvent,
+  departure: precisionEvent.nullable(),
+});
+
+function eventBounds(value: z.infer<typeof precisionEvent>) {
+  return value.eventDate === null
+    ? { earliest: value.datePrecision.earliestDate, latest: value.datePrecision.latestDate }
+    : { earliest: value.eventDate, latest: value.eventDate };
+}
+
 export const aflTradeAcquisitionSpellRegistrationSchema = z
   .object({
     spellVersionId: aflTradeContentAddressedIdSchema('acquisition-spell-version'),
-    content: spellContent,
+    content: z.union([spellContent, windowSpellContent]),
   })
   .strict()
   .superRefine((record, context) => {
     const c = record.content;
+    const entry = eventBounds(c.entry);
+    const departure = c.departure === null ? null : eventBounds(c.departure);
+    if (
+      c.schemaVersion === 'afl-trade-acquisition-registration/v2' &&
+      c.entry.eventDate !== null &&
+      (c.departure === null || c.departure.eventDate !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Window registration v2 requires explicit uncertain event precision.',
+      });
+    }
     const refs = [...c.entry.evidence, ...c.continuityEvidence, ...(c.departure?.evidence ?? [])];
     if (
-      c.entry.eventDate > c.observedThrough ||
+      entry.latest > c.observedThrough ||
       c.observedThrough > c.createdAt.slice(0, 10) ||
-      (c.departure !== null &&
-        (c.departure.eventDate <= c.entry.eventDate ||
-          c.departure.eventDate > c.observedThrough)) ||
+      (departure !== null &&
+        (departure.earliest <= entry.latest || departure.latest > c.observedThrough)) ||
       (c.version === 1) !== (c.supersedesSpellVersionId === null) ||
       refs.some((ref) => Date.parse(ref.createdAt) > Date.parse(c.createdAt))
     ) {
@@ -153,13 +189,69 @@ export function createAflTradeAcquisitionSpellRegistrationRule(
 
 export function createAflTradeAcquisitionSpellRegistration(
   input: Omit<z.input<typeof spellContent>, 'schemaVersion'>
-): AflTradeAcquisitionSpellRegistration {
+): AflTradeAcquisitionSpellRegistration & { content: z.infer<typeof spellContent> } {
   const content = spellContent.parse({
     ...input,
     schemaVersion: 'afl-trade-acquisition-registration/v1',
+  });
+  const registration = aflTradeAcquisitionSpellRegistrationSchema.parse({
+    spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
+    content,
+  });
+  return { ...registration, content };
+}
+
+export function createAflTradeWindowAcquisitionSpellRegistrationRule(
+  input: Omit<
+    z.input<typeof windowRuleContent>,
+    'schemaVersion' | 'entry' | 'departure' | 'intervals' | 'missingEvidence'
+  >
+): AflTradeAcquisitionSpellRegistrationRule {
+  const content = windowRuleContent.parse({
+    ...input,
+    schemaVersion: 'afl-trade-acquisition-registration-rule/v2',
+    entry: 'reviewed_incoming_asset_with_explicit_date_precision',
+    departure: 'reviewed_departure_bounds_day_excluded',
+    intervals: 'possible_and_certain_membership_no_inferred_boundary_days',
+    missingEvidence: 'reject_never_infer_from_appearances',
+  });
+  return aflTradeAcquisitionSpellRegistrationRuleSchema.parse({
+    ruleId: createAflTradeContentAddress('acquisition-spell-rule', content),
+    content,
+  });
+}
+
+export function createAflTradeWindowAcquisitionSpellRegistration(
+  input: Omit<z.input<typeof windowSpellContent>, 'schemaVersion'>
+): AflTradeAcquisitionSpellRegistration {
+  const content = windowSpellContent.parse({
+    ...input,
+    schemaVersion: 'afl-trade-acquisition-registration/v2',
   });
   return aflTradeAcquisitionSpellRegistrationSchema.parse({
     spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
     content,
   });
+}
+
+/** Logical membership bounds from reviewed dates and continuity; does not grant source authority. */
+export function deriveAflTradeAcquisitionMembershipBounds(input: unknown) {
+  const { content } = aflTradeAcquisitionSpellRegistrationSchema.parse(input);
+  const entry = eventBounds(content.entry);
+  const departure = content.departure === null ? null : eventBounds(content.departure);
+  const previousDay = (date: string) =>
+    new Date(Date.parse(date + 'T00:00:00.000Z') - 86400000).toISOString().slice(0, 10);
+  return {
+    exactStartDate: content.entry.eventDate,
+    exactEndDate: content.departure?.eventDate ? previousDay(content.departure.eventDate) : null,
+    observedThrough: content.observedThrough,
+    possible: {
+      startDate: entry.earliest,
+      endDate: departure ? previousDay(departure.latest) : content.observedThrough,
+    },
+    certain: {
+      startDate: entry.latest,
+      endDate: departure ? previousDay(departure.earliest) : content.observedThrough,
+    },
+  };
 }

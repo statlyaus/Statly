@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from '../source/draftSessionDatePrecision';
 import { z } from 'zod';
 
 import { aflDraftTradeOutcomeReleaseRefSchema } from '@/types/aflDraftTradeOutcomes';
@@ -52,7 +53,8 @@ export const aflDraftHistorySelectionSchema = z
     year: z.number().int().min(1897).max(2200),
     draftKind: aflDraftHistoryDraftKindSchema,
     draftName: z.string().trim().min(1).max(300),
-    draftDate: isoDateSchema,
+    draftDate: isoDateSchema.nullable(),
+    draftDatePrecision: draftSessionDateWindowSchema.optional(),
     selectionNumber: z.number().int().positive(),
     round: z.number().int().positive().nullable(),
     pickId: aflTradePublicIdSchema.nullable(),
@@ -75,6 +77,16 @@ export const aflDraftHistorySelectionSchema = z
   })
   .strict()
   .superRefine((selection, context) => {
+    if (
+      (selection.draftDate === null) !== (selection.draftDatePrecision !== undefined) ||
+      (selection.draftDatePrecision &&
+        Number(selection.draftDatePrecision.earliestDate.slice(0, 4)) !== selection.year)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Draft date requires an exact date or a same-year window, exclusively.',
+      });
+    }
     const playerIsResolved = selection.player.aflPlayerId !== null;
     if (playerIsResolved !== (selection.player.identityStatus === 'resolved')) {
       context.addIssue({

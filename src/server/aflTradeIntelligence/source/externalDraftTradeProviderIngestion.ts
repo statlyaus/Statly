@@ -1,3 +1,15 @@
+import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010SourceScope';
+import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
+import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
+import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
+import { reviewedOfficialAflDraft2011EffectiveYear } from './officialAflDraft2011SessionFacts';
+import { reviewedOfficialAflDraft2012EffectiveYear } from './officialAflDraft2012SessionFacts';
+import { reviewedOfficialAflDraft2014EffectiveYear } from './officialAflDraft2014SessionFacts';
+import { reviewedOfficialAflDraft2013EffectiveYear } from './officialAflDraft2013SessionFacts';
+import {
+  isReviewedOfficialIssuingAwardUrl,
+  OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
+} from './officialAflIssuingAwardAdapter';
 import { DRAFTGURU_YEAR_PARSER_VERSION } from './draftguruEventYear';
 import {
   createAflTradeContentAddress,
@@ -121,6 +133,7 @@ export function validateAflTradeExternalCaptureScope(
     if (
       request.provider !== 'footywire' ||
       request.draftPathway === null ||
+      request.draftPathway === 'mini_draft' ||
       request.discoveryFromSeasonYear != null ||
       url.hostname !== 'www.footywire.com' ||
       url.pathname !== '/afl/footy/ft_drafts' ||
@@ -146,18 +159,82 @@ export function validateAflTradeExternalCaptureScope(
       invalid();
     return;
   }
+  if (request.capabilityId === 'official-afl-issuing-award') {
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION ||
+      !isReviewedOfficialIssuingAwardUrl(request.sourceUrl, request.anchorSeasonYear) ||
+      !Number.isFinite(Date.parse(request.effectiveAt)) ||
+      new Date(request.effectiveAt).getUTCFullYear() < request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
   if (request.capabilityId === 'official-afl-completed-draft-session') {
+    const reviewed2010 = reviewedOfficialAflDraft2010Source(request.sourceUrl);
+    if (reviewed2010) {
+      const expectedTime = reviewed2010.effectiveAt ?? request.capturedAt;
+      if (
+        request.provider !== 'official_afl' ||
+        request.anchorSeasonYear !== 2010 ||
+        request.draftPathway !== 'national' ||
+        request.discoveryFromSeasonYear != null ||
+        request.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION ||
+        !Number.isFinite(Date.parse(expectedTime)) ||
+        Date.parse(request.effectiveAt) !== Date.parse(expectedTime)
+      )
+        invalid();
+      return;
+    }
+
+    const reviewedMini2012EffectiveYear =
+      request.anchorSeasonYear === 2012
+        ? reviewedOfficialAflMiniDraft2012EffectiveYear(request.sourceUrl)
+        : null;
+    const reviewedMini2011EffectiveYear =
+      request.anchorSeasonYear === 2011
+        ? reviewedOfficialAflMiniDraft2011EffectiveYear(request.sourceUrl)
+        : null;
+    const reviewed2011EffectiveYear =
+      request.anchorSeasonYear === 2011
+        ? reviewedOfficialAflDraft2011EffectiveYear(request.sourceUrl)
+        : null;
+    const reviewed2012EffectiveYear =
+      request.anchorSeasonYear === 2012
+        ? reviewedOfficialAflDraft2012EffectiveYear(request.sourceUrl)
+        : null;
+    const reviewed2014EffectiveYear =
+      request.anchorSeasonYear === 2014
+        ? reviewedOfficialAflDraft2014EffectiveYear(request.sourceUrl)
+        : null;
+    const reviewed2013EffectiveYear =
+      request.anchorSeasonYear === 2013
+        ? reviewedOfficialAflDraft2013EffectiveYear(request.sourceUrl)
+        : null;
     const reviewed2016EffectiveYear =
       request.anchorSeasonYear === 2016
         ? reviewedOfficialAflDraft2016EffectiveYear(request.sourceUrl)
         : null;
     if (
       request.provider !== 'official_afl' ||
-      request.draftPathway !== 'national' ||
+      request.draftPathway !==
+        (reviewedMini2011EffectiveYear !== null || reviewedMini2012EffectiveYear !== null
+          ? 'mini_draft'
+          : 'national') ||
       request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION ||
       !isReviewedOfficialAflDraftSessionUrl(request.sourceUrl, request.anchorSeasonYear) ||
       new Date(request.effectiveAt).getUTCFullYear() !==
-        (reviewed2016EffectiveYear ?? request.anchorSeasonYear)
+        (reviewedMini2012EffectiveYear ??
+          reviewedMini2011EffectiveYear ??
+          reviewed2011EffectiveYear ??
+          reviewed2012EffectiveYear ??
+          reviewed2014EffectiveYear ??
+          reviewed2013EffectiveYear ??
+          reviewed2016EffectiveYear ??
+          request.anchorSeasonYear)
     )
       invalid();
     return;

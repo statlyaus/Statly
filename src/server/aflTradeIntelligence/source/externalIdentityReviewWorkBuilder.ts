@@ -182,7 +182,7 @@ function addClaimIdentities(
     add('club', claim.selectedByClub, claim.draftYear);
     return;
   }
-  if (claim.kind === 'draft_session_boundary') {
+  if (claim.kind === 'draft_session_boundary' || claim.kind === 'draft_session_member_identity') {
     add('player', claim.player, claim.draftYear);
     add('club', claim.selectedByClub, claim.draftYear);
     return;

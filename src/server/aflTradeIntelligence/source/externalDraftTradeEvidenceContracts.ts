@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from './draftSessionDatePrecision';
 import { specialDraftEntitlementSchema } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -303,12 +304,113 @@ const draftSessionDateClaimSchema = z
     'Draft session date must belong to its draft year.'
   );
 
+const draftSessionWindowClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_window'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    sessionOrdinal: z.number().int().min(1).max(100),
+    datePrecision: draftSessionDateWindowSchema,
+  })
+  .strict()
+  .refine(
+    (claim) => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.draftYear,
+    'Draft session window must belong to its draft year.'
+  );
+
+// Prospective capacity is distinct from an observed completed total.
+const draftSelectionCapacityClaimSchema = z
+  .object({
+    kind: z.literal('draft_selection_capacity'),
+    draftYear: yearSchema,
+    draftType: z.literal('mini_draft'),
+    maximumSelections: z.number().int().min(1).max(100),
+  })
+  .strict();
+
+// These populations are inputs to a reviewed derivation, not reported selection totals.
+const draftCompletedListTotalClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_list_total'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    population: z.literal('national_selections_and_rookie_promotions'),
+    playerCount: positiveOrdinalSchema,
+  })
+  .strict();
+const draftRookieListAdditionsClaimSchema = z
+  .object({
+    kind: z.literal('draft_rookie_list_additions'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    clubs: z
+      .array(
+        z
+          .object({
+            recordedClub: boundedText,
+            recordedNames: z.array(boundedText).min(1).max(100),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(25),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const clubs = claim.clubs.map((club) => club.recordedClub);
+    const names = claim.clubs.flatMap((club) => club.recordedNames);
+    if (new Set(clubs).size !== clubs.length || new Set(names).size !== names.length)
+      context.addIssue({
+        code: 'custom',
+        message: 'Rookie additions require unique club labels and player names.',
+      });
+  });
+const draftRookiePromotionSlotsClaimSchema = z
+  .object({
+    kind: z.literal('draft_rookie_promotion_slots'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    clubs: z
+      .array(
+        z
+          .object({
+            recordedClub: boundedText,
+            selectionNumbers: z.array(positiveOrdinalSchema).min(1).max(100),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(25),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const clubs = claim.clubs.map((club) => club.recordedClub);
+    const numbers = claim.clubs.flatMap((club) => club.selectionNumbers);
+    if (new Set(clubs).size !== clubs.length || new Set(numbers).size !== numbers.length)
+      context.addIssue({
+        code: 'custom',
+        message: 'Rookie slots require unique club labels and selection numbers.',
+      });
+  });
+
 const draftSessionCompletionClaimSchema = z
   .object({
     kind: z.literal('draft_session_completion'),
     draftYear: yearSchema,
     draftType: draftTypeSchema,
     sessionOrdinal: z.number().int().min(1).max(100),
+  })
+  .strict();
+
+const draftSessionMemberIdentityClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_member_identity'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    sessionOrdinal: z.literal(1),
+    selectionNumber: positiveOrdinalSchema,
+    player: recordedEntitySchema,
+    selectedByClub: recordedEntitySchema,
   })
   .strict();
 
@@ -334,12 +436,99 @@ const draftCompletedTotalClaimSchema = z
   })
   .strict();
 
+const draftCompletedInventoryClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_inventory'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    selectionNumbers: z
+      .array(positiveOrdinalSchema)
+      .min(1)
+      .max(500)
+      .refine(
+        (numbers) => numbers.every((value, index) => index === 0 || numbers[index - 1]! < value),
+        'Completed inventory numbers must be unique and ascending.'
+      ),
+  })
+  .strict();
+
+const draftCompletedMembershipRosterClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_membership_roster'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    members: z
+      .array(
+        z
+          .object({
+            recordedName: boundedText,
+            selectionNumber: positiveOrdinalSchema.nullable(),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(500)
+      .refine(
+        (members) =>
+          new Set(members.map((member) => member.recordedName)).size === members.length &&
+          new Set(
+            members.flatMap((member) =>
+              member.selectionNumber === null ? [] : [member.selectionNumber]
+            )
+          ).size === members.filter((member) => member.selectionNumber !== null).length,
+        'Completed membership must have unique names and known selection numbers.'
+      ),
+  })
+  .strict();
+
+const draftCompletedMemberNumberClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_member_number'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    recordedName: boundedText,
+    selectionNumber: positiveOrdinalSchema,
+  })
+  .strict();
+
+const draftCompletedMemberExclusionClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_member_exclusion'),
+    draftYear: yearSchema,
+    draftType: z.literal('national'),
+    recordedName: boundedText,
+    reason: z.literal('rookie_elevation'),
+  })
+  .strict();
+
+const issuingAwardReferenceSchema = z
+  .object({
+    kind: z.literal('issuing_award_reference'),
+    grantYear: yearSchema,
+    scheme: z.enum(['gws_mini_draft', 'gold_coast_expansion_compensation']),
+    recordedOriginalHolder: boundedText,
+    componentCount: positiveOrdinalSchema,
+    sourceDescription: boundedText,
+  })
+  .strict();
+
 const claimSchema = z.discriminatedUnion('kind', [
+  issuingAwardReferenceSchema,
   draftSessionClaimSchema,
   draftSessionDateClaimSchema,
+  draftSessionWindowClaimSchema,
   draftSessionCompletionClaimSchema,
+  draftSelectionCapacityClaimSchema,
+  draftCompletedListTotalClaimSchema,
+  draftRookieListAdditionsClaimSchema,
+  draftRookiePromotionSlotsClaimSchema,
   draftSessionBoundaryClaimSchema,
+  draftSessionMemberIdentityClaimSchema,
   draftCompletedTotalClaimSchema,
+  draftCompletedInventoryClaimSchema,
+  draftCompletedMembershipRosterClaimSchema,
+  draftCompletedMemberNumberClaimSchema,
+  draftCompletedMemberExclusionClaimSchema,
   tradeDetailLinkClaimSchema,
   transactionClaimSchema,
   transactionPartyClaimSchema,
@@ -353,9 +542,19 @@ const allowedKindsByProvider = {
   statly_local_fixture: new Set([
     'draft_session',
     'draft_session_date',
+    'draft_session_window',
+    'draft_selection_capacity',
+    'draft_completed_list_total',
+    'draft_rookie_list_additions',
+    'draft_rookie_promotion_slots',
     'draft_session_completion',
     'draft_session_boundary',
+    'draft_session_member_identity',
     'draft_completed_total',
+    'draft_completed_inventory',
+    'draft_completed_membership_roster',
+    'draft_completed_member_number',
+    'draft_completed_member_exclusion',
     'transaction',
     'transaction_party',
     'directed_transfer',
@@ -371,12 +570,24 @@ const allowedKindsByProvider = {
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([
+    'draft_selection',
+    'issuing_award_reference',
     'pick_custody',
     'draft_session',
     'draft_session_date',
+    'draft_session_window',
+    'draft_selection_capacity',
+    'draft_completed_list_total',
+    'draft_rookie_list_additions',
+    'draft_rookie_promotion_slots',
     'draft_session_completion',
     'draft_session_boundary',
+    'draft_session_member_identity',
     'draft_completed_total',
+    'draft_completed_inventory',
+    'draft_completed_membership_roster',
+    'draft_completed_member_number',
+    'draft_completed_member_exclusion',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
 } as const;

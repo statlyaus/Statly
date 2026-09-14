@@ -507,6 +507,7 @@ model OutcomeExternalIdentityResolutionHead {
 }
 
 model OutcomeExternalReconciliationCandidate {
+  reviewedLineageRegistration OutcomeReviewedPickLineageRegistration?
   candidateId                  String                                            @id @map("candidate_id")
   sourceAuthorityKind          String?                                           @map("source_authority_kind") @outcomes.Text
   historicalCompletionId       String?                                           @map("historical_completion_id") @outcomes.Text
@@ -642,7 +643,7 @@ model OutcomeExternalReconciliationPickLineage {
   ordinal     Int
   lineageId   String                                 @map("lineage_id")
   transferId  String                                 @map("transfer_id")
-  selectionId String                                 @map("selection_id")
+  selectionId String?                                 @map("selection_id")
   pickId      String                                 @map("pick_id")
   status      String
   lineageJson Json                                   @map("lineage_json")
@@ -3255,6 +3256,7 @@ model OutcomeEventVersion {
   kind                 OutcomeEventKind
   acquisitionMechanism OutcomeAcquisitionMechanism      @map("acquisition_mechanism")
   eventDate            DateTime?                        @map("event_date") @outcomes.Date
+  datePrecision        Json?                            @map("date_precision")
   officialName         String                           @map("official_name")
   status               OutcomeRecordStatus
   sourceImportRowId    String                           @map("source_import_row_id")
@@ -3401,19 +3403,23 @@ model OutcomePickLineageEdge {
 model OutcomePickCustodyObservation {
   custodyObservationId String                      @id @map("custody_observation_id")
   pickId               String                      @map("pick_id")
-  observedAt           DateTime                    @map("observed_at") @outcomes.Timestamptz(3)
+  observedAt           DateTime?                    @map("observed_at") @outcomes.Timestamptz(3)
+  observedDate Json? @map("observed_date")
+  predecessorCustodyId String? @map("predecessor_custody_id")
+  predecessor OutcomePickCustodyObservation? @relation("PickCustodyPredecessor", fields: [predecessorCustodyId], references: [custodyObservationId], onDelete: Restrict, onUpdate: NoAction, map: "outcome_pick_custody_predecessor_fk")
+  successors OutcomePickCustodyObservation[] @relation("PickCustodyPredecessor")
   draftSeasonYear      Int                         @map("draft_season_year")
   draftKind            OutcomeEventKind            @map("draft_kind")
   recordedRound        Int?                        @map("recorded_round")
   recordedPick         Int?                        @map("recorded_pick")
-  originalClubId       String                      @map("original_club_id")
+  originalClubId       String?                     @map("original_club_id")
   currentClubId        String                      @map("current_club_id")
   sourceImportRowId    String                      @map("source_import_row_id")
   status               OutcomeRecordStatus
   evidenceJson         Json                        @map("evidence_json")
   recordedAt           DateTime                    @map("recorded_at") @outcomes.Timestamptz(3)
   pick                 OutcomeDraftPick            @relation(fields: [pickId], references: [pickId], onDelete: Restrict)
-  originalClub         OutcomeClub                 @relation("OutcomePickCustodyOriginalClub", fields: [originalClubId], references: [clubId], onDelete: Restrict)
+  originalClub         OutcomeClub?                @relation("OutcomePickCustodyOriginalClub", fields: [originalClubId], references: [clubId], onDelete: Restrict)
   currentClub          OutcomeClub                 @relation("OutcomePickCustodyCurrentClub", fields: [currentClubId], references: [clubId], onDelete: Restrict)
   sourceImportRow      OutcomeImportRow            @relation(fields: [sourceImportRowId], references: [importRowId], onDelete: Restrict)
   releaseMembers       OutcomeReleasePickCustody[]
@@ -3427,15 +3433,16 @@ model OutcomePickRealization {
   realizationId          String                          @id @map("realization_id")
   pickId                 String                          @map("pick_id")
   transferAssetVersionId String                          @map("transfer_asset_version_id")
-  draftSelectionId       String                          @map("draft_selection_id")
+  draftSelectionId       String?                          @map("draft_selection_id")
   sourceImportRowId      String                          @map("source_import_row_id")
+  terminalOutcome Json? @map("terminal_outcome")
   relationKind           String                          @map("relation_kind")
   status                 OutcomeRecordStatus
   evidenceJson           Json                            @map("evidence_json")
   recordedAt             DateTime                        @map("recorded_at") @outcomes.Timestamptz(3)
   pick                   OutcomeDraftPick                @relation(fields: [pickId], references: [pickId], onDelete: Restrict)
   transferAsset          OutcomeEventAsset               @relation(fields: [transferAssetVersionId], references: [assetVersionId], onDelete: Restrict)
-  draftSelection         OutcomeDraftSelection           @relation(fields: [draftSelectionId], references: [selectionId], onDelete: Restrict)
+  draftSelection         OutcomeDraftSelection?           @relation(fields: [draftSelectionId], references: [selectionId], onDelete: Restrict)
   sourceImportRow        OutcomeImportRow                @relation(fields: [sourceImportRowId], references: [importRowId], onDelete: Restrict)
   releaseMembers         OutcomeReleasePickRealization[]
 
@@ -3445,6 +3452,7 @@ model OutcomePickRealization {
 }
 
 model OutcomeReviewDecision {
+  reviewedLineageRegistrations OutcomeReviewedPickLineageRegistration[]
   specialIdentityReplacements OutcomeSpecialEntitlementIdentityReplacement[]
   specialRevisions OutcomeSpecialEntitlementRevision[]
   specialLifecycle OutcomeSpecialEntitlementLifecycle[]
@@ -3568,7 +3576,7 @@ model OutcomeAcquisitionSpellVersion {
   clubId                   String                                 @map("club_id")
   startEventVersionId      String                                 @map("start_event_version_id")
   startAssetVersionId      String                                 @map("start_asset_version_id")
-  startDate                DateTime                               @map("start_date") @outcomes.Date
+  startDate                DateTime?                              @map("start_date") @outcomes.Date
   endDate                  DateTime?                              @map("end_date") @outcomes.Date
   endReason                String?                                @map("end_reason")
   ruleId                   String                                 @map("rule_id")
@@ -6281,4 +6289,15 @@ model OutcomeSpecialEntitlementIdentityReplacement {
   replacementRevision OutcomeSpecialEntitlementRevision @relation("ReplacementSpecialRevision", fields: [replacementRevisionId], references: [revisionId], onDelete: NoAction, onUpdate: NoAction, map: "special_identity_new_revision_fk")
   approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction, map: "special_identity_approval_fk")
   @@map("outcome_special_entitlement_identity_replacement")
+}
+
+model OutcomeReviewedPickLineageRegistration {
+  registrationId String @id @map("registration_id")
+  candidateId String @unique @map("candidate_id")
+  approvalDecisionId String @map("approval_decision_id")
+  registrationJson Json @map("registration_json")
+  candidate OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict, onUpdate: NoAction)
+  approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@map("outcome_reviewed_pick_lineage_registration")
 }

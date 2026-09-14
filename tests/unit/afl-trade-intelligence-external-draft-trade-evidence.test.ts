@@ -44,7 +44,8 @@ describe('external AFL draft and trade evidence contracts', () => {
   it('retains bounded Official AFL session facts without turning them into whole-session claims', () => {
     const officialCapture = {
       ...capture,
-      sourceUrl: 'https://www.afl.com.au/news/99499/draft-talking-points-racing-royalty-and-bluebloods',
+      sourceUrl:
+        'https://www.afl.com.au/news/99499/draft-talking-points-racing-royalty-and-bluebloods',
     };
     const claims = [
       {
@@ -90,6 +91,107 @@ describe('external AFL draft and trade evidence contracts', () => {
         })
       )
     ).toHaveLength(4);
+  });
+
+  it('retains exact enumerated inventory as a separate Official AFL claim', () => {
+    const content = {
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl' as const,
+      capture: { ...capture, sourceUrl: 'https://www.afl.com.au/news/117263/review' },
+      sourceRow: { ordinal: 1, sourceKey: '2013-completed-inventory' },
+      claim: {
+        kind: 'draft_completed_inventory' as const,
+        draftYear: 2013,
+        draftType: 'national' as const,
+        selectionNumbers: [1, 2, 62, 97],
+      },
+      publicationEligible: false as const,
+    };
+    const envelope = createAflTradeExternalEvidenceEnvelope(content);
+    expect(parseAflTradeExternalEvidenceEnvelope(envelope).content.claim).toEqual(content.claim);
+    for (const selectionNumbers of [[], [1, 1], [2, 1], [0, 1], [1, 1.5]]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({
+          ...content,
+          claim: { ...content.claim, selectionNumbers },
+        })
+      ).toThrow();
+    }
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...content,
+        provider: 'draftguru',
+        capture,
+      })
+    ).toThrow();
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...content,
+        // @ts-expect-error Membership evidence cannot assert a session date.
+        claim: { ...content.claim, eventDate: '2013-11-21' },
+      })
+    ).toThrow();
+  });
+
+  it('retains named membership and number corroboration as separate source claims', () => {
+    const content = {
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl' as const,
+      capture: { ...capture, sourceUrl: 'https://www.afl.com.au/news/149034/review' },
+      sourceRow: { ordinal: 1, sourceKey: '2014-membership' },
+      claim: {
+        kind: 'draft_completed_membership_roster' as const,
+        draftYear: 2014,
+        draftType: 'national' as const,
+        members: [
+          { recordedName: 'First Player', selectionNumber: 1 },
+          { recordedName: 'Academy Player', selectionNumber: null },
+        ],
+      },
+      publicationEligible: false as const,
+    };
+    const envelope = createAflTradeExternalEvidenceEnvelope(content);
+    expect(parseAflTradeExternalEvidenceEnvelope(envelope).content.claim).toEqual(content.claim);
+    const number = {
+      ...content,
+      claim: {
+        kind: 'draft_completed_member_number' as const,
+        draftYear: 2014,
+        draftType: 'national' as const,
+        recordedName: 'Academy Player',
+        selectionNumber: 85,
+      },
+    };
+    expect(
+      parseAflTradeExternalEvidenceEnvelope(createAflTradeExternalEvidenceEnvelope(number)).content
+        .claim
+    ).toEqual(number.claim);
+    for (const members of [
+      [],
+      [content.claim.members[0]!, content.claim.members[0]!],
+      [
+        { recordedName: 'One', selectionNumber: 1 },
+        { recordedName: 'Two', selectionNumber: 1 },
+      ],
+      [{ recordedName: '', selectionNumber: null }],
+      [{ recordedName: 'One', selectionNumber: 0 }],
+    ]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({ ...content, claim: { ...content.claim, members } })
+      ).toThrow();
+    }
+    for (const value of [content, number]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({ ...value, provider: 'draftguru', capture })
+      ).toThrow();
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({
+          ...value,
+          // @ts-expect-error Membership claims cannot invent session dates.
+          claim: { ...value.claim, eventDate: '2014-11-27' },
+        })
+      ).toThrow();
+    }
   });
 
   it('content-addresses provider-native transaction and directed-transfer claims', () => {
@@ -165,6 +267,54 @@ describe('external AFL draft and trade evidence contracts', () => {
 
     expect(selection.content.claim.kind).toBe('draft_selection');
     expect(custody.content.claim.kind).toBe('pick_custody');
+  });
+
+  it('retains an official supplemental selection without inferring custody or session coverage', () => {
+    const input = {
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl' as const,
+      capture: {
+        ...capture,
+        sourceUrl: 'https://www.afl.com.au/news/87166/the-class-of-2012-draft-report-card',
+        effectiveAt: '2012-11-22T00:00:00.000Z',
+        parserVersion: 'official-afl-supplemental-selection-test/v1',
+      },
+      sourceRow: { ordinal: 1, sourceKey: '2012:national:70' },
+      claim: {
+        kind: 'draft_selection' as const,
+        draftYear: 2012,
+        draftType: 'national' as const,
+        selectionNumber: 70,
+        roundNumber: null,
+        player: { nativeId: null, recordedName: 'Michael Osborne' },
+        selectedByClub: { nativeId: null, recordedName: 'Hawthorn' },
+      },
+      publicationEligible: false as const,
+    };
+    const envelope = createAflTradeExternalEvidenceEnvelope(input);
+    expect(parseAflTradeExternalEvidenceEnvelope(envelope)).toEqual(envelope);
+    expect(envelope.content.claim).toEqual(input.claim);
+    expect(envelope.content.publicationEligible).toBe(false);
+    for (const claim of [
+      { ...input.claim, selectionNumber: 0 },
+      { ...input.claim, player: { nativeId: null, recordedName: '' } },
+      { ...input.claim, selectedByClub: null },
+      { ...input.claim, originalClub: input.claim.selectedByClub },
+      { ...input.claim, sessionOrdinal: 1 },
+    ]) {
+      expect(() =>
+        createAflTradeExternalEvidenceEnvelope({
+          ...input,
+          claim: claim as unknown as typeof input.claim,
+        })
+      ).toThrow();
+    }
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...input,
+        provider: 'fitzroy_official_afl_player_details',
+      })
+    ).toThrow();
   });
 
   it('preserves unknown original club and round on point-in-time custody evidence', () => {

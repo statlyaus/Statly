@@ -1225,6 +1225,56 @@ it('reconciles complementary session facts only with their complete inventory pr
     expect(selection.evidenceIds).toEqual(expect.arrayContaining(proofIds));
   }
 
+  const gappedBatches = [inventory, dateOne, first, secondStart, finalSession, total].map(
+    (source, index) =>
+      batch(
+        source.content.provider,
+        ['a', '4', '5', '6', '7', '8'][index]!,
+        source.content.evidence.map(({ content: { claim } }) =>
+          claim.kind === 'draft_selection' || claim.kind === 'draft_session_boundary'
+            ? {
+                ...claim,
+                selectionNumber:
+                  claim.selectionNumber === 2 ? 4 : claim.selectionNumber === 3 ? 97 : 1,
+              }
+            : claim
+        ),
+        source.content.evidence[0]!.content.capture.sourceUrl
+      )
+  );
+  const membership = batch(
+    'official_afl',
+    'f',
+    [
+      {
+        kind: 'draft_completed_inventory',
+        draftYear: 2018,
+        draftType: 'national',
+        selectionNumbers: [1, 4, 97],
+      },
+    ],
+    'https://www.afl.com.au/news/999999/fixture-membership'
+  );
+  const reconcileGapped = (sources: typeof gappedBatches) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2018,
+      sourceBatches: sources,
+      identityResolutions,
+      reconciledAt: capturedAt,
+    });
+  const gapped = reconcileGapped([...gappedBatches, membership]);
+  expect(gapped.content.issues).toEqual([]);
+  expect(gapped.content.draftSelections.map((selection) => selection.selectionNumber)).toEqual([
+    1, 4, 97,
+  ]);
+  for (const selection of gapped.content.draftSelections) {
+    expect(selection.status).toBe('single_source');
+    expect(selection.evidenceIds).toContain(membership.content.evidence[0]!.evidenceId);
+  }
+  expect(reconcileGapped(gappedBatches).content.issues.length).toBeGreaterThan(0);
+
   const aliasTotal = batch(
     'official_afl',
     '9',
@@ -1417,7 +1467,7 @@ it('reconciles the exact reviewed 2017 one-session article set outside fixtures'
 
   const missingInventory = batch('draftguru', '3', selectionClaims.slice(0, -1));
   expect(reconcile2017([missingInventory, wrap, total, date]).content.issues[0]?.detail).toContain(
-    'complete unique contiguous inventory'
+    'complete unique inventory'
   );
 
   const duplicateInventory = batch('draftguru', '4', [
@@ -1442,7 +1492,7 @@ it('reconciles the exact reviewed 2017 one-session article set outside fixtures'
   );
   expect(
     reconcile2017([inventory, wrap, total, conflictingDate]).content.issues[0]?.detail
-  ).toContain('one agreed completed date');
+  ).toContain('one agreed date precision');
 
   const extraSession = batch(
     'official_afl',
@@ -1599,6 +1649,93 @@ it('reconciles only the reviewed 2016 one-session article identities outside fix
       identityResolutions,
       reconciledAt: capturedAt,
     });
+
+  const rosterClaim: AflTradeExternalEvidenceContent['claim'] = {
+    kind: 'draft_completed_membership_roster',
+    draftYear: 2016,
+    draftType: 'national',
+    members: selectionClaims.map((claim) => ({
+      recordedName: claim.player.recordedName,
+      selectionNumber: claim.selectionNumber === 77 ? null : claim.selectionNumber,
+    })),
+  };
+  const numberClaim: AflTradeExternalEvidenceContent['claim'] = {
+    kind: 'draft_completed_member_number',
+    draftYear: 2016,
+    draftType: 'national',
+    recordedName: 'Jake Waterman',
+    selectionNumber: 77,
+  };
+  const roster = batch('official_afl', '5', [rosterClaim], wrapUrl);
+  const number = batch('official_afl', '6', [numberClaim], totalUrl);
+  const joined = reconcile2016([inventory, wrap, schedule, total, roster, number]);
+  expect(joined.content.issues).toEqual([]);
+  const joinedIds = [roster, number].flatMap((b) => b.content.evidence.map((e) => e.evidenceId));
+  for (const selected of joined.content.draftSelections) {
+    expect(selected.evidenceIds).toEqual(expect.arrayContaining(joinedIds));
+  }
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, roster]).content.issues.length
+  ).toBeGreaterThan(0);
+  const wrongName = batch(
+    'official_afl',
+    '7',
+    [{ ...numberClaim, recordedName: 'Unrelated Player' }],
+    totalUrl
+  );
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, roster, wrongName]).content.issues.length
+  ).toBeGreaterThan(0);
+  const wrongYear = batch('official_afl', '8', [{ ...numberClaim, draftYear: 2015 }], totalUrl);
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, roster, wrongYear]).content.issues.length
+  ).toBeGreaterThan(0);
+
+  const mixedRoster = batch(
+    'official_afl',
+    'a',
+    [
+      {
+        ...rosterClaim,
+        members: [...rosterClaim.members, { recordedName: 'Elevated Rookie', selectionNumber: 90 }],
+      },
+    ],
+    wrapUrl
+  );
+  const exclusionClaim = {
+    kind: 'draft_completed_member_exclusion' as const,
+    draftYear: 2016,
+    draftType: 'national' as const,
+    recordedName: 'Elevated Rookie',
+    reason: 'rookie_elevation' as const,
+  };
+  const exclusion = batch('official_afl', 'b', [exclusionClaim], totalUrl);
+  const classified = reconcile2016([
+    inventory,
+    wrap,
+    schedule,
+    total,
+    mixedRoster,
+    number,
+    exclusion,
+  ]);
+  expect(classified.content.issues).toEqual([]);
+  for (const selection of classified.content.draftSelections) {
+    expect(selection.evidenceIds).toContain(exclusion.content.evidence[0]!.evidenceId);
+  }
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, mixedRoster, number]).content.issues.length
+  ).toBeGreaterThan(0);
+  const unrelatedExclusion = batch(
+    'official_afl',
+    'c',
+    [{ ...exclusionClaim, recordedName: 'Other' }],
+    totalUrl
+  );
+  expect(
+    reconcile2016([inventory, wrap, schedule, total, mixedRoster, number, unrelatedExclusion])
+      .content.issues.length
+  ).toBeGreaterThan(0);
 
   const candidate = reconcile2016([inventory, wrap, schedule, total]);
   expect(total.content.evidence[0]!.content.capture.effectiveAt).toBe('2019-11-28T11:30:00.000Z');
