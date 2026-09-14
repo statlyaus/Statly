@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from '../source/draftSessionDatePrecision';
 import { pickTerminalOutcomeSchema } from '../source/pickTerminalOutcome';
 import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { specialEntitlementAwardSchema } from '../source/specialEntitlementAwardContracts';
@@ -50,6 +51,7 @@ const eventSchema = z
     seasonYear: z.number().int(),
     kind: z.string().min(1),
     eventDate: z.string().min(1).nullable(),
+    datePrecision: draftSessionDateWindowSchema.nullable().optional(),
     officialName: z.string().min(1),
     parties: z.array(partySchema),
   })
@@ -101,7 +103,13 @@ const realizationSchema = z
     pickId: z.string().min(1),
     transferAssetVersionId: z.string().min(1),
     draftSelectionId: z.string().min(1).nullable(),
-    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package','rookie_elevation']),
+    relationKind: z.enum([
+      'exercised_as',
+      'passed',
+      'not_exercised',
+      'incorporated_into_later_package',
+      'rookie_elevation',
+    ]),
     terminalOutcome: pickTerminalOutcomeSchema.optional(),
   })
   .passthrough();
@@ -344,8 +352,6 @@ async function buildRecords(
         })),
       };
     }
-    if (value.eventDate === null)
-      throw new TypeError('Draft events require an exact occurrence date.');
     return {
       recordKind: 'draft_event',
       recordId: value.eventVersionId,
@@ -353,7 +359,8 @@ async function buildRecords(
       eventVersionId: value.eventVersionId,
       ...(value.supersedesVersionId ? { supersedesVersionId: value.supersedesVersionId } : {}),
       seasonYear: value.seasonYear,
-      occurredOn: dateOnly(value.eventDate),
+      occurredOn: value.eventDate === null ? null : dateOnly(value.eventDate),
+      ...(value.datePrecision ? { datePrecision: value.datePrecision } : {}),
       officialName: value.officialName,
       draftKind: value.kind as 'national_draft',
     };
@@ -431,7 +438,10 @@ async function buildRecords(
         custodyObservationId: value.custodyObservationId,
         ...(value.predecessorCustodyId ? { predecessorCustodyId: value.predecessorCustodyId } : {}),
         pickId: value.pickId,
-        observedAt: typeof value.observedAt === 'string' ? new Date(value.observedAt).toISOString() : value.observedAt,
+        observedAt:
+          typeof value.observedAt === 'string'
+            ? new Date(value.observedAt).toISOString()
+            : value.observedAt,
         draftSeasonYear: value.draftSeasonYear,
         draftKind: value.draftKind,
         recordedRound: value.recordedRound,
@@ -449,7 +459,7 @@ async function buildRecords(
       transferAssetVersionId: value.transferAssetVersionId,
       draftSelectionId: value.draftSelectionId,
       relationKind: value.relationKind,
-      ...(value.terminalOutcome ? {terminalOutcome:value.terminalOutcome} : {}),
+      ...(value.terminalOutcome ? { terminalOutcome: value.terminalOutcome } : {}),
     };
   });
 }

@@ -231,9 +231,19 @@ async function loadSourceAncestry(
   const expectedPromotions = new Set(
     corpus.content.promotions.map(({ promotionId }) => promotionId)
   );
-  const captureById = new Map<string, Pick<CaptureRow,
-    'capture_id' | 'source_snapshot_id' | 'environment' | 'competition' |
-    'anchor_season_year' | 'captured_at' | 'manifest_json'>>();
+  const captureById = new Map<
+    string,
+    Pick<
+      CaptureRow,
+      | 'capture_id'
+      | 'source_snapshot_id'
+      | 'environment'
+      | 'competition'
+      | 'anchor_season_year'
+      | 'captured_at'
+      | 'manifest_json'
+    >
+  >();
   const captureIdsByPromotion = new Map<string, Set<string>>();
   for (const row of result.rows) {
     if (
@@ -366,7 +376,8 @@ async function loadCanonicalMembers(
                   'clubId',party.club_id,'sourceImportRowId',party.source_import_row_id,
                   'role',party.role,'ordinal',party.ordinal) ORDER BY party.ordinal)
                   FROM outcome_event_party party WHERE party.event_version_id=version.event_version_id),'[]'::jsonb)
-              ) AS canonical_record_json
+              ) || CASE WHEN version.date_precision IS NULL THEN '{}'::jsonb
+                   ELSE jsonb_build_object('datePrecision',version.date_precision) END AS canonical_record_json
          FROM requested_member requested
          JOIN outcome_event_version version ON version.event_version_id=requested.canonical_record_id
          JOIN outcome_event event ON event.event_id=version.event_id

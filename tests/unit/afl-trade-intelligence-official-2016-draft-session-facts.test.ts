@@ -6,6 +6,7 @@ import {
   parseOfficialAflDraft2016SessionFacts,
 } from '@/server/aflTradeIntelligence/source/officialAflDraft2016SessionFacts';
 import {
+  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   isReviewedOfficialAflDraftSessionUrl,
   parseOfficialAflDraftSession,
 } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
@@ -247,6 +248,7 @@ describe('reviewed Official AFL 2016 combined draft-session facts', () => {
       expect(isReviewedOfficialAflDraftSessionUrl(`${url}?other=1`, 2016)).toBe(false);
       const request: IngestAflTradeExternalPageRequest = {
         ...capture(url),
+        parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
         effectiveAt: displayedDates[key as keyof typeof displayedDates],
         environment: 'non_production',
         provider: 'official_afl',
@@ -260,6 +262,12 @@ describe('reviewed Official AFL 2016 combined draft-session facts', () => {
         maximumBytes: 2097152,
       };
       expect(() => validateAflTradeExternalCaptureScope(request)).not.toThrow();
+      expect(() =>
+        validateAflTradeExternalCaptureScope({
+          ...request,
+          parserVersion: 'official-afl-completed-draft-session/v17',
+        })
+      ).toThrow();
       expect(() =>
         validateAflTradeExternalCaptureScope({ ...request, anchorSeasonYear: 2019 })
       ).toThrow();

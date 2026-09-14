@@ -1,3 +1,4 @@
+import { aflDraftHistorySelectionSchema } from '@/server/aflTradeIntelligence/outcomes/draftHistoryReadService';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AflTradePromotionBackedArchiveSelection } from '@/server/aflTradeIntelligence/outcomes/promotionBackedArchiveSelection';
@@ -132,7 +133,37 @@ const onTradeRealization = {
   transferAssetVersionId: onTradedTransfer.assetVersionId,
 } satisfies AflTradePromotionBackedPublicArchiveRecordInput;
 
-function archiveReader(yearOnly = false) {
+type Custody = Extract<
+  AflTradePromotionBackedPublicArchiveRecordInput,
+  { recordKind: 'pick_custody' }
+>;
+const firstCustody: Custody = {
+  recordKind: 'pick_custody',
+  recordId: 'custody:first',
+  custodyObservationId: 'custody:first',
+  pickId: pick19.pickId,
+  observedAt: { precision: 'year', year: 2025 },
+  predecessorCustodyId: null,
+  draftSeasonYear: 2025,
+  draftKind: 'national_draft',
+  recordedRound: 3,
+  recordedPick: 45,
+  originalClub: null,
+  currentClub: bulldogs,
+};
+const finalCustody: Custody = {
+  ...firstCustody,
+  recordId: 'custody:final',
+  custodyObservationId: 'custody:final',
+  predecessorCustodyId: firstCustody.custodyObservationId,
+  observedAt: { precision: 'day', date: '2025-11-18' },
+  recordedRound: 1,
+  recordedPick: 19,
+  originalClub: gws,
+  currentClub: gws,
+};
+
+function archiveReader(yearOnly = false, window = false, custody: readonly Custody[] = []) {
   const readRecords = vi.fn(
     async (
       _selection: AflTradePromotionBackedArchiveSelection,
@@ -142,7 +173,23 @@ function archiveReader(yearOnly = false) {
         query.recordKinds.includes('draft_event') &&
         query.recordKinds.includes('draft_selection')
       ) {
-        return [draftEvent, pick14, pick19];
+        return [
+          window
+            ? {
+                ...draftEvent,
+                occurredOn: null,
+                datePrecision: {
+                  precision: 'window',
+                  eventDate: null,
+                  earliestDate: '2025-11-19',
+                  latestDate: '2025-11-21',
+                },
+              }
+            : draftEvent,
+          pick14,
+          pick19,
+          ...custody,
+        ];
       }
       if (query.recordKinds.includes('transfer'))
         return [transfer, realization, onTradedTransfer, onTradeRealization];
@@ -166,6 +213,120 @@ function archiveReader(yearOnly = false) {
 }
 
 describe('PostgreSQL AFL draft-history reads', () => {
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    'follows partial custody predecessors (reverse=%s, known origin=%s)',
+    async (reverse, knownOrigin) => {
+      const initial = { ...firstCustody, originalClub: knownOrigin ? gws : null };
+      const custody = reverse ? [finalCustody, initial] : [initial, finalCustody];
+      const repository = createPostgresAflDraftHistoryRepository({
+        archiveRepository: archiveReader(false, false, custody),
+      });
+      const rows = await repository.readYear(selection, 2025);
+      expect(rows.find((row) => row.selectionId === pick19.selectionId)).toMatchObject({
+        round: 1,
+        originalClub: { aflClubId: gws.clubId },
+        lineage: { status: 'selection_only' },
+      });
+      expect(custody).toEqual(reverse ? [finalCustody, initial] : [initial, finalCustody]);
+    }
+  );
+
+  it('accepts a single partial custody observation without inventing a predecessor', async () => {
+    const repository = createPostgresAflDraftHistoryRepository({
+      archiveRepository: archiveReader(false, false, [firstCustody]),
+    });
+    expect((await repository.readYear(selection, 2025))[1]).toMatchObject({
+      round: 3,
+      originalClub: null,
+    });
+  });
+
+  it('keeps timestamp ordering for legacy custody without predecessor links', async () => {
+    const earlier = { ...firstCustody, observedAt: '2025-10-01T00:00:00.000Z' };
+    const later = {
+      ...finalCustody,
+      predecessorCustodyId: undefined,
+      observedAt: '2025-11-01T00:00:00.000Z',
+    };
+    const repository = createPostgresAflDraftHistoryRepository({
+      archiveRepository: archiveReader(false, false, [later, earlier]),
+    });
+    expect((await repository.readYear(selection, 2025))[1]).toMatchObject({
+      round: 1,
+      originalClub: { aflClubId: gws.clubId },
+    });
+  });
+
+  it.each([
+    [
+      'fork',
+      [
+        firstCustody,
+        finalCustody,
+        { ...finalCustody, recordId: 'custody:branch', custodyObservationId: 'custody:branch' },
+      ],
+    ],
+    [
+      'unlinked partial observations',
+      [firstCustody, { ...finalCustody, predecessorCustodyId: null }],
+    ],
+    ['missing predecessor', [finalCustody]],
+    [
+      'cycle',
+      [{ ...firstCustody, predecessorCustodyId: finalCustody.custodyObservationId }, finalCustody],
+    ],
+    [
+      'disconnected cycle',
+      [
+        firstCustody,
+        finalCustody,
+        {
+          ...firstCustody,
+          recordId: 'custody:cycle',
+          custodyObservationId: 'custody:cycle',
+          predecessorCustodyId: 'custody:cycle',
+        },
+      ],
+    ],
+    ['duplicate identity', [firstCustody, firstCustody, finalCustody]],
+  ] satisfies [string, Custody[]][])(
+    'rejects incomplete or ambiguous custody: %s',
+    async (_name, custody) => {
+      const repository = createPostgresAflDraftHistoryRepository({
+        archiveRepository: archiveReader(false, false, custody),
+      });
+      await expect(repository.readYear(selection, 2025)).rejects.toThrow(/custody/i);
+    }
+  );
+
+  it('returns a validated window without manufacturing an exact draft day', async () => {
+    const repository = createPostgresAflDraftHistoryRepository({
+      archiveRepository: archiveReader(false, true),
+    });
+    const rows = await repository.readYear(selection, 2025);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(aflDraftHistorySelectionSchema.parse(row)).toEqual(row);
+      expect(row.draftDate).toBeNull();
+      expect(row.draftDatePrecision).toMatchObject({
+        earliestDate: '2025-11-19',
+        latestDate: '2025-11-21',
+      });
+      expect(() =>
+        aflDraftHistorySelectionSchema.parse({ ...row, draftDate: '2025-11-20' })
+      ).toThrow();
+      expect(() => aflDraftHistorySelectionSchema.parse({ ...row, year: 2024 })).toThrow();
+      expect(() =>
+        aflDraftHistorySelectionSchema.parse({ ...row, draftDatePrecision: undefined })
+      ).toThrow();
+    }
+  });
+
   it.each([false, true])('maps stable pick lineage with year-only dates: %s', async (yearOnly) => {
     const archiveRepository = archiveReader(yearOnly);
     const repository = createPostgresAflDraftHistoryRepository({ archiveRepository });

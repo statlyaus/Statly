@@ -1,3 +1,4 @@
+import { draftSessionDateWindowSchema } from '../source/draftSessionDatePrecision';
 import { pickTerminalOutcomeSchema } from '../source/pickTerminalOutcome';
 import { pickCustodyDateSchema } from '../source/pickCustodyDate';
 import { z } from 'zod';
@@ -99,7 +100,8 @@ const draftEventRecordSchema = z
     eventVersionId: boundedIdSchema,
     supersedesVersionId: boundedIdSchema.optional(),
     seasonYear: seasonSchema,
-    occurredOn: dateSchema,
+    occurredOn: dateSchema.nullable(),
+    datePrecision: draftSessionDateWindowSchema.optional(),
     officialName: z.string().trim().min(1).max(1_000),
     draftKind: z.enum([
       'national_draft',
@@ -113,6 +115,16 @@ const draftEventRecordSchema = z
   .superRefine((record, context) => {
     if (record.recordId !== record.eventVersionId) {
       context.addIssue({ code: 'custom', message: 'Draft event identity is invalid.' });
+    }
+    if (
+      (record.occurredOn === null) !== (record.datePrecision !== undefined) ||
+      (record.datePrecision &&
+        Number(record.datePrecision.earliestDate.slice(0, 4)) !== record.seasonYear)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Draft events require an exact date or a same-year window, exclusively.',
+      });
     }
   });
 
@@ -232,14 +244,27 @@ const pickRealizationRecordSchema = z
     pickId: boundedIdSchema,
     transferAssetVersionId: boundedIdSchema,
     draftSelectionId: boundedIdSchema.nullable(),
-    relationKind: z.enum(['exercised_as','passed','not_exercised','incorporated_into_later_package','rookie_elevation']),
+    relationKind: z.enum([
+      'exercised_as',
+      'passed',
+      'not_exercised',
+      'incorporated_into_later_package',
+      'rookie_elevation',
+    ]),
     terminalOutcome: pickTerminalOutcomeSchema.optional(),
   })
   .strict()
   .superRefine((record, context) => {
-    if ((record.draftSelectionId === null) !== (record.terminalOutcome !== undefined)
-      || (record.terminalOutcome ? record.relationKind !== record.terminalOutcome.kind : record.relationKind !== 'exercised_as'))
-      context.addIssue({code:'custom',message:'Pick realization must retain its typed endpoint without a fabricated selection.'});
+    if (
+      (record.draftSelectionId === null) !== (record.terminalOutcome !== undefined) ||
+      (record.terminalOutcome
+        ? record.relationKind !== record.terminalOutcome.kind
+        : record.relationKind !== 'exercised_as')
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Pick realization must retain its typed endpoint without a fabricated selection.',
+      });
     if (record.recordId !== record.realizationId) {
       context.addIssue({ code: 'custom', message: 'Pick realization identity is invalid.' });
     }
@@ -435,8 +460,12 @@ function validateRecordClosure(
       }
     } else if (record.recordKind === 'pick_realization') {
       const transfer = transfers.get(record.transferAssetVersionId);
-      const selection = record.draftSelectionId === null ? undefined : selections.get(record.draftSelectionId);
-      if (transfer?.pick?.pickId !== record.pickId || (record.draftSelectionId !== null && selection?.pickId !== record.pickId)) {
+      const selection =
+        record.draftSelectionId === null ? undefined : selections.get(record.draftSelectionId);
+      if (
+        transfer?.pick?.pickId !== record.pickId ||
+        (record.draftSelectionId !== null && selection?.pickId !== record.pickId)
+      ) {
         context.addIssue({ code: 'custom', message: 'Pick realization endpoints do not close.' });
       }
     }

@@ -43,6 +43,8 @@ describe('2011 mini-draft exact source routing', () => {
       });
       expect(() => validateAflTradeExternalCaptureScope(request)).not.toThrow();
       for (const patch of [
+        { parserVersion: 'official-afl-completed-draft-session/v17' },
+        { parserVersion: 'unknown/v1' },
         { draftPathway: 'national' },
         {
           provider: 'footywire',
@@ -68,14 +70,12 @@ describe('2011 mini-draft exact source routing', () => {
 describe('reviewed mini-draft HTTP capture boundary', () => {
   for (const source of Object.values(OFFICIAL_AFL_MINI_2011_SOURCES)) {
     it(`captures only the approved club URL ${source.url}`, async () => {
-      const fetchImpl = vi
-        .fn<typeof fetch>()
-        .mockImplementation(
-          async () =>
-            new Response('<html>retained fixture</html>', {
-              headers: { 'content-type': 'text/html' },
-            })
-        );
+      const fetchImpl = vi.fn<typeof fetch>().mockImplementation(
+        async () =>
+          new Response('<html>retained fixture</html>', {
+            headers: { 'content-type': 'text/html' },
+          })
+      );
       const input = {
         url: source.url,
         validators: null,

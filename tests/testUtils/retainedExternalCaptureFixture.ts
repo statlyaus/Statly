@@ -26,7 +26,10 @@ import {
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
-import { parseOfficialAflDraftSession } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
+import {
+  parseOfficialAflDraftSession,
+  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+} from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import {
   parseDraftguruNationalYearSelections,
   parseDraftguruTradeDetail,
@@ -399,8 +402,9 @@ export async function createRetainedExternalCaptureFixture(
       acquisition: {
         kind: 'provider_web',
         clientName: 'Synthetic',
-        clientVersion:
-          miniCapacity && !official && !tradeDetail
+        clientVersion: official
+          ? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION
+          : miniCapacity && !official && !tradeDetail
             ? DRAFTGURU_YEAR_PARSER_VERSION
             : 'synthetic-national/v1',
         capabilityId,

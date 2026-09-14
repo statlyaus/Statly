@@ -476,6 +476,42 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
   });
 
   describe('PostgreSQL external candidate canonical promotion', () => {
+    it.each(['lineage-status', 'transfer-status', 'pick-mismatch', 'unusable-custody'] as const)(
+      'rejects terminal lineage SQL tampering: %s',
+      async (mutation) => {
+        const client = createPgAflOutcomeSqlClient(outcomesPool);
+        const repository = new PostgresAflTradeExternalReconciliationRepository({
+          ...client,
+          transaction: (work) => client.transaction(async (transaction) => {
+            await work({
+            query: (sql, parameters) => {
+              const values = [...(parameters ?? [])];
+              if (sql.includes('INSERT INTO outcome_external_reconciliation_pick_lineage')) {
+                if (mutation === 'lineage-status') values[6] = 'unresolved';
+                if (mutation === 'pick-mismatch') {
+                  const differentPick = `draft-pick:${digest('a')}`;
+                  values[5] = differentPick;
+                  values[7] = JSON.stringify({ ...JSON.parse(String(values[7])), pickId: differentPick });
+                }
+              }
+              if (mutation === 'transfer-status' && sql.includes('INSERT INTO outcome_external_reconciliation_transfer')) {
+                values[5] = 'disputed';
+              }
+              if (mutation === 'unusable-custody' && sql.includes('INSERT INTO outcome_external_reconciliation_pick_custody')) {
+                values[4] = 'unresolved';
+              }
+              return transaction.query(sql, values);
+            },
+            });
+            throw new Error('Tampered candidate unexpectedly finalized');
+          }),
+        });
+        await expect(repository.persistCandidate({ candidate: candidateFixture(), identityResolutions: [] }))
+          .rejects.toThrow('External reconciliation lineage requires usable transfer, selection, and custody');
+        expect((await outcomesPool.query('SELECT count(*)::int AS count FROM outcome_external_reconciliation_candidate')).rows[0].count).toBe(0);
+      }
+    );
+
     it('atomically promotes once and returns one exact concurrent replay without publishing', async () => {
       const candidate = candidateFixture();
       const reconciliation = new PostgresAflTradeExternalReconciliationRepository(

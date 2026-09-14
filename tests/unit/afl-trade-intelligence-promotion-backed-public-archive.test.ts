@@ -186,6 +186,41 @@ function archive() {
 }
 
 describe('promotion-backed public factual archive', () => {
+  it('preserves draft windows and rejects missing, contradictory or wrong-year dates', () => {
+    const window = {
+      precision: 'window' as const,
+      eventDate: null,
+      earliestDate: '2025-11-19',
+      latestDate: '2025-11-21',
+    };
+    const source = records();
+    const index = source.findIndex((record) => record.recordKind === 'draft_event');
+    const event = source[index];
+    if (event.recordKind !== 'draft_event') throw new Error('Expected draft event');
+    const seal = (override: unknown) => {
+      const rows = [...source];
+      rows[index] = { ...event, ...(override as object) } as typeof event;
+      return createAflTradePromotionBackedPublicArchive({
+        candidate: candidate(rows),
+        createdAt: '2026-08-10T00:00:04.000Z',
+        records: rows,
+      });
+    };
+    const result = seal({ occurredOn: null, datePrecision: window });
+    expect(parseAflTradePromotionBackedPublicArchive(result)).toEqual(result);
+    expect(JSON.stringify(result)).toContain('earliestDate');
+    for (const invalid of [
+      { occurredOn: null },
+      { occurredOn: '2025-11-20', datePrecision: window },
+      {
+        occurredOn: null,
+        datePrecision: { ...window, earliestDate: '2024-11-19', latestDate: '2024-11-21' },
+      },
+      { occurredOn: null, datePrecision: { ...window, latestDate: window.earliestDate } },
+    ])
+      expect(() => seal(invalid)).toThrow();
+  });
+
   it('seals a deterministic complete transaction-to-selection record set', () => {
     const result = archive();
     expect(parseAflTradePromotionBackedPublicArchive(result)).toEqual(result);
@@ -225,13 +260,23 @@ describe('promotion-backed public factual archive', () => {
     expect(parseAflTradePromotionBackedPublicArchive(seal(retained))).toEqual(seal(retained));
     expect(() => seal([...records(), { ...corrected, supersedesVersionId: 'missing' }])).toThrow();
     expect(() => seal([...records(), { ...corrected, eventId: 'another-event' }])).toThrow();
-    expect(() => seal([...retained, {
-      ...corrected, recordId: 'fork', eventVersionId: 'fork',
-    }])).toThrow();
-    expect(() => seal([
-      { ...original, supersedesVersionId: corrected.eventVersionId },
-      ...records().slice(1), corrected,
-    ])).toThrow();
+    expect(() =>
+      seal([
+        ...retained,
+        {
+          ...corrected,
+          recordId: 'fork',
+          eventVersionId: 'fork',
+        },
+      ])
+    ).toThrow();
+    expect(() =>
+      seal([
+        { ...original, supersedesVersionId: corrected.eventVersionId },
+        ...records().slice(1),
+        corrected,
+      ])
+    ).toThrow();
   });
 
   it('rejects omitted, substituted, or orphaned public facts', () => {
