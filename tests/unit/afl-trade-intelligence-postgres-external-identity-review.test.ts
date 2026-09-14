@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   canonicalizeAflTradeJson,
@@ -325,4 +325,38 @@ describe('PostgresAflTradeExternalIdentityReviewRepository', () => {
     );
     expect(canonicalizeAflTradeJson(input.decision.content)).toContain('workItem');
   });
+});
+
+
+it('preserves same-name approvals belonging to different season subjects', async () => {
+  const workItems = [2010, 2012].map((seasonYear) => {
+    const subject = createAflTradeExternalIdentitySubject({
+      environment: 'test_fixture', competition: 'AFLM', provider: 'official_afl', entityKind: 'club',
+      identityScope: { kind: 'exact_recorded_name', recordedName: 'Gold Coast Suns', seasonYear },
+    });
+    return createAflTradeExternalIdentityReviewWorkItem({subject, observations: [{
+      evidenceId: `external-evidence:${sha(seasonYear === 2010 ? 'a' : 'b')}`,
+      batchId: `external-evidence-batch:${sha('c')}`,
+      sourceIdentity: { nativeId: null, recordedName: 'Gold Coast Suns' }, seasonYear,
+      capturedAt: '2026-08-10T00:00:01.000Z',
+    }]});
+  });
+  const reviewPackage = createAflTradeExternalIdentityReviewPackage({
+    completionId: `external-historical-capture-completion:${sha('5')}`, completionSha256: sha('5'),
+    environment: 'test_fixture', competition: 'AFLM', completedAt: '2026-08-10T00:00:03.000Z', items: workItems,
+  });
+  const decisions = workItems.map((workItem) => createAflTradeExternalIdentityReviewDecision({
+    subject: workItem.content.subject, reviewPackageId: reviewPackage.packageId,
+    reviewPackageSha256: reviewPackage.packageId.split(':')[1]!, workItemId: workItem.workItemId,
+    workItemSha256: workItem.workItemId.split(':')[1]!, workItem, revision: 1, supersedesDecisionId: null,
+    decision: 'approved', canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
+      entityKind: 'club', canonicalId: 'club:gold-coast', recordedLabel: 'Gold Coast',
+    }), rationale: 'Exact season-specific club subject.', authorityEvidenceId: `reviewer-authority-evidence:${sha('6')}`,
+    decidedBy: 'reviewer:fixture', decidedAt: '2026-08-10T00:00:04.000Z',
+  }));
+  const repository = new PostgresAflTradeExternalIdentityReviewRepository(new IdentityReviewSql());
+  vi.spyOn(repository, 'loadCurrentDecisions').mockResolvedValue(decisions);
+  const resolutions = await repository.loadCurrentResolutions(reviewPackage);
+  expect(resolutions).toHaveLength(2);
+  expect(resolutions.map(r => r.content.reviewDecisionId).sort()).toEqual(decisions.map(d => d.decisionId).sort());
 });
