@@ -7,7 +7,7 @@ import {
   createAflTradeExternalReconciliationCandidate,
   parseAflTradeExternalReconciliationCandidate,
 } from './externalReconciliationCandidateContracts';
-import { parseAflTradeExternalEvidenceBatch } from './externalDraftTradeEvidenceContracts';
+import { parseAflTradeExternalEvidenceBatch, type AflTradeExternalEvidenceContent } from './externalDraftTradeEvidenceContracts';
 import {
   combinedDraftDocumentId,
   parseAflTradeExternalIdentityResolution,
@@ -32,25 +32,14 @@ export function buildReviewedSessionCorrection(input: {
   identityResolutions: readonly unknown[];
 }) {
   const parent = parseAflTradeExternalReconciliationCandidate(input.candidate);
-  if (
-    !parent.content.reviewedScope ||
-    !parent.content.reviewedCorrection ||
-    parent.content.environment === 'production'
-  )
-    throw new TypeError('Session correction requires an unchanged private reviewed parent.');
+  assertReviewedSessionParent(parent);
   const authority = createAflTradeHistoricalCompletionReconciliationAuthority(
     input.sourceAuthority
   );
   const batches = input.sourceBatches.map(parseAflTradeExternalEvidenceBatch),
     completionIds = batches.map((b) => b.batchId),
     ids = [...completionIds].sort();
-  if (
-    new Set(ids).size !== ids.length ||
-    parent.content.sourceBatchIds.some((id) => !ids.includes(id)) ||
-    authority.candidateSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(ids) ||
-    authority.completionSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(completionIds)
-  )
-    throw new TypeError('Session correction requires its complete extended source set.');
+  assertExtendedSessionBatchSet(parent, authority, completionIds, ids);
   const sessionKinds = new Set([
     'draft_session',
     'draft_session_date',
@@ -217,42 +206,8 @@ export function buildReviewedSessionCorrection(input: {
             parent.content.environment
           ),
         };
-      if (c.kind === 'draft_session_date')
-        return {
-          ...source,
-          kind: 'completed_session_date',
-          sessionOrdinal: c.sessionOrdinal,
-          eventDate: c.eventDate,
-        };
-      if (c.kind === 'draft_session_window')
-        return {
-          ...source,
-          kind: 'completed_session_window',
-          sessionOrdinal: c.sessionOrdinal,
-          datePrecision: c.datePrecision,
-        };
-      if (c.kind === 'draft_session_completion')
-        return { ...source, kind: 'completed_session', sessionOrdinal: c.sessionOrdinal };
-      if (c.kind === 'draft_selection_capacity')
-        return {
-          ...source,
-          kind: 'draft_selection_capacity',
-          draftYear: c.draftYear,
-          draftType: c.draftType,
-          maximumSelections: c.maximumSelections,
-        };
-      if (c.kind === 'draft_completed_list_total')
-        return { ...source, ...c, kind: 'completed_draft_list_total' };
-      if (c.kind === 'draft_rookie_list_additions' || c.kind === 'draft_rookie_promotion_slots')
-        return { ...source, ...c };
-      if (c.kind === 'draft_completed_total')
-        return { ...source, kind: 'completed_draft_total', selectionCount: c.selectionCount };
-      if (c.kind === 'draft_completed_inventory')
-        return {
-          ...source,
-          kind: 'completed_draft_inventory',
-          selectionNumbers: c.selectionNumbers,
-        };
+      const declaration = projectSessionDeclaration(c, source);
+      if (declaration) return declaration;
       if (c.kind === 'draft_completed_membership_roster')
         return {
           ...source,
@@ -358,4 +313,75 @@ export function buildReviewedSessionCorrection(input: {
     persisted: false as const,
     canonicalAdmission: false as const,
   };
+}
+
+function assertExtendedSessionBatchSet(
+  parent: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>,
+  authority: ReturnType<typeof createAflTradeHistoricalCompletionReconciliationAuthority>,
+  completionIds: string[],
+  ids: string[]
+): void {
+  if (
+    new Set(ids).size !== ids.length ||
+    parent.content.sourceBatchIds.some((id) => !ids.includes(id)) ||
+    authority.candidateSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(ids) ||
+    authority.completionSourceBatchSetSha256 !== sha256AflTradeCanonicalJson(completionIds)
+  )
+    throw new TypeError('Session correction requires its complete extended source set.');
+}
+
+function projectSessionDeclaration(
+  c: AflTradeExternalEvidenceContent['claim'],
+  source: Pick<CombinedDraftSessionFact, 'evidenceId' | 'captureId' | 'artifactId' | 'documentId'>
+): CombinedDraftSessionFact | undefined {
+  if (c.kind === 'draft_session_date')
+    return {
+      ...source,
+      kind: 'completed_session_date',
+      sessionOrdinal: c.sessionOrdinal,
+      eventDate: c.eventDate,
+    };
+  if (c.kind === 'draft_session_window')
+    return {
+      ...source,
+      kind: 'completed_session_window',
+      sessionOrdinal: c.sessionOrdinal,
+      datePrecision: c.datePrecision,
+    };
+  if (c.kind === 'draft_session_completion')
+    return { ...source, kind: 'completed_session', sessionOrdinal: c.sessionOrdinal };
+  if (c.kind === 'draft_selection_capacity')
+    return {
+      ...source,
+      kind: 'draft_selection_capacity',
+      draftYear: c.draftYear,
+      draftType: c.draftType,
+      maximumSelections: c.maximumSelections,
+    };
+  if (c.kind === 'draft_completed_list_total')
+    return { ...source, ...c, kind: 'completed_draft_list_total' };
+  if (c.kind === 'draft_rookie_list_additions' || c.kind === 'draft_rookie_promotion_slots')
+    return { ...source, ...c };
+  if (c.kind === 'draft_completed_total')
+    return { ...source, kind: 'completed_draft_total', selectionCount: c.selectionCount };
+  if (c.kind === 'draft_completed_inventory')
+    return {
+      ...source,
+      kind: 'completed_draft_inventory',
+      selectionNumbers: c.selectionNumbers,
+    };
+  return undefined;
+}
+
+function assertReviewedSessionParent(
+  parent: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
+): asserts parent is ReturnType<typeof parseAflTradeExternalReconciliationCandidate> & {
+  content: { reviewedScope: NonNullable<ReturnType<typeof parseAflTradeExternalReconciliationCandidate>['content']['reviewedScope']> }
+} {
+  if (
+    !parent.content.reviewedScope ||
+    !parent.content.reviewedCorrection ||
+    parent.content.environment === 'production'
+  )
+    throw new TypeError('Session correction requires an unchanged private reviewed parent.');
 }
