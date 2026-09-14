@@ -50,6 +50,39 @@ function recordsByKind<T extends AflTradePromotionBackedPublicArchiveRecordInput
   );
 }
 
+function latestCustody(observations: readonly Custody[]): Custody | undefined {
+  if (observations.length === 0) return undefined;
+  const byId = new Map(observations.map((row) => [row.custodyObservationId, row]));
+  if (byId.size !== observations.length)
+    throw new Error('Released pick custody repeats an identity.');
+  const hasPredecessors = observations.some((row) => row.predecessorCustodyId != null);
+  if (!hasPredecessors && observations.every((row) => typeof row.observedAt === 'string')) {
+    return [...observations].sort((left, right) =>
+      String(right.observedAt).localeCompare(String(left.observedAt))
+    )[0];
+  }
+  const predecessors = new Set(
+    observations.flatMap((row) => (row.predecessorCustodyId ? [row.predecessorCustodyId] : []))
+  );
+  const terminals = observations.filter((row) => !predecessors.has(row.custodyObservationId));
+  if (terminals.length !== 1)
+    throw new Error('Released pick custody has no unique terminal observation.');
+  const terminal = terminals[0]!;
+  const visited = new Set<string>();
+  let current: Custody | undefined = terminal;
+  while (current) {
+    if (visited.has(current.custodyObservationId))
+      throw new Error('Released pick custody contains a cycle.');
+    visited.add(current.custodyObservationId);
+    if (!current.predecessorCustodyId) break;
+    current = byId.get(current.predecessorCustodyId);
+    if (!current) throw new Error('Released pick custody is missing a predecessor.');
+  }
+  if (visited.size !== observations.length)
+    throw new Error('Released pick custody contains disconnected observations.');
+  return terminal;
+}
+
 function selectionRows(
   records: readonly AflTradePromotionBackedPublicArchiveRecordInput[]
 ): AflDraftHistorySelection[] {
@@ -106,13 +139,7 @@ function selectionRows(
     }
     const transfer = lineage[0]?.transfer;
     const observations = selection.pickId ? (custodyByPick.get(selection.pickId) ?? []) : [];
-    const custody = observations.every((value) => typeof value.observedAt === 'string')
-      ? observations.sort((left, right) =>
-          String(right.observedAt).localeCompare(String(left.observedAt))
-        )[0]
-      : new Set(observations.map((value) => value.originalClub?.clubId ?? null)).size === 1
-        ? observations[0]
-        : undefined;
+    const custody = latestCustody(observations);
     const originalClub = transfer?.pick?.originalClub ?? custody?.originalClub ?? null;
     return {
       selectionId: selection.selectionId,
