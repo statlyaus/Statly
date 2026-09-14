@@ -304,16 +304,29 @@ const draftSessionDateClaimSchema = z
     'Draft session date must belong to its draft year.'
   );
 
-const draftSessionWindowClaimSchema = z.object({
-  kind: z.literal('draft_session_window'),
-  draftYear: yearSchema,
-  draftType: draftTypeSchema,
-  sessionOrdinal: z.number().int().min(1).max(100),
-  datePrecision: draftSessionDateWindowSchema,
-}).strict().refine(
-  claim => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.draftYear,
-  'Draft session window must belong to its draft year.'
-);
+const draftSessionWindowClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_window'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    sessionOrdinal: z.number().int().min(1).max(100),
+    datePrecision: draftSessionDateWindowSchema,
+  })
+  .strict()
+  .refine(
+    (claim) => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.draftYear,
+    'Draft session window must belong to its draft year.'
+  );
+
+// Prospective capacity is distinct from an observed completed total.
+const draftSelectionCapacityClaimSchema = z
+  .object({
+    kind: z.literal('draft_selection_capacity'),
+    draftYear: yearSchema,
+    draftType: z.literal('mini_draft'),
+    maximumSelections: z.number().int().min(1).max(100),
+  })
+  .strict();
 
 const draftSessionCompletionClaimSchema = z
   .object({
@@ -428,6 +441,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSessionDateClaimSchema,
   draftSessionWindowClaimSchema,
   draftSessionCompletionClaimSchema,
+  draftSelectionCapacityClaimSchema,
   draftSessionBoundaryClaimSchema,
   draftCompletedTotalClaimSchema,
   draftCompletedInventoryClaimSchema,
@@ -448,6 +462,7 @@ const allowedKindsByProvider = {
     'draft_session',
     'draft_session_date',
     'draft_session_window',
+    'draft_selection_capacity',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
@@ -476,6 +491,7 @@ const allowedKindsByProvider = {
     'draft_session',
     'draft_session_date',
     'draft_session_window',
+    'draft_selection_capacity',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',

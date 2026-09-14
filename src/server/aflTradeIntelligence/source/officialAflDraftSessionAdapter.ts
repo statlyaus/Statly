@@ -50,7 +50,7 @@ import {
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
 
-export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v16';
+export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v17';
 
 // Exact reviewed completed reports: contextual date, event-day narrative and full
 // selection coverage must agree. Publication time alone is never an event date.

@@ -161,3 +161,67 @@ export function resolveCompletedDraftMembership(input: {
     evidenceIds: sources.map((source) => source.evidenceId).sort(),
   };
 }
+
+export interface CompletedDraftSelectionCapacity extends CompletedDraftMembershipSource {
+  kind: 'draft_selection_capacity';
+  maximumSelections: number;
+}
+
+/** A reviewed limit plus independently recorded use of every available right proves exhaustion.
+ * This does not relabel prospective capacity as a source-reported completed total.
+ */
+export function resolveCompletedDraftCapacityExhaustion(input: {
+  draftYear: number;
+  draftType: string;
+  inventoryNumbers: readonly number[];
+  capacity: CompletedDraftSelectionCapacity;
+  roster: CompletedDraftMembershipRoster;
+  completion: CompletedDraftMembershipSource & {
+    kind: 'completed_session';
+    sessionOrdinal: number;
+  };
+}) {
+  const { capacity, roster, completion } = input;
+  const fail = (): never => {
+    throw new TypeError(
+      'Capacity exhaustion requires the reviewed limit and independently completed use of every numbered right.'
+    );
+  };
+  const sources = [capacity, roster, completion];
+  if (
+    input.draftYear !== 2012 ||
+    input.draftType !== 'mini_draft' ||
+    roster.kind !== 'completed_draft_membership_roster' ||
+    completion.kind !== 'completed_session' ||
+    completion.sessionOrdinal !== 1 ||
+    capacity.kind !== 'draft_selection_capacity' ||
+    capacity.maximumSelections !== 2 ||
+    capacity.documentId !==
+      'https://www.goldcoastfc.com.au/news/114828/final-mini-draft-explained' ||
+    roster.documentId !== 'official_afl:news:453694' ||
+    sources.some(
+      (source) =>
+        source.draftYear !== input.draftYear ||
+        source.draftType !== input.draftType ||
+        [source.evidenceId, source.captureId, source.artifactId, source.documentId].some(
+          (id) => !id || id.trim() !== id
+        )
+    ) ||
+    new Set(sources.map((source) => source.evidenceId)).size !== sources.length ||
+    completion.documentId !== roster.documentId ||
+    completion.captureId !== roster.captureId ||
+    completion.artifactId !== roster.artifactId ||
+    capacity.captureId === roster.captureId ||
+    capacity.artifactId === roster.artifactId ||
+    input.inventoryNumbers.length !== capacity.maximumSelections ||
+    [...input.inventoryNumbers].sort((a, b) => a - b).some((number, index) => number !== index + 1)
+  )
+    fail();
+  const membership = resolveCompletedDraftMembership({ ...input, bindings: [] });
+  return {
+    schemaVersion: 'afl-trade-completed-draft-capacity-exhaustion/v1' as const,
+    maximumSelections: capacity.maximumSelections,
+    selectionNumbers: membership.selectionNumbers,
+    evidenceIds: sources.map((source) => source.evidenceId).sort(),
+  };
+}

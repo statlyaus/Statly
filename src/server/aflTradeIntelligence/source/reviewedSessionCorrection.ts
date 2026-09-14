@@ -55,6 +55,7 @@ export function buildReviewedSessionCorrection(input: {
     'draft_session',
     'draft_session_date',
     'draft_session_window',
+    'draft_selection_capacity',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
@@ -220,9 +221,22 @@ export function buildReviewedSessionCorrection(input: {
           eventDate: c.eventDate,
         };
       if (c.kind === 'draft_session_window')
-        return {...source, kind: 'completed_session_window', sessionOrdinal: c.sessionOrdinal, datePrecision: c.datePrecision};
+        return {
+          ...source,
+          kind: 'completed_session_window',
+          sessionOrdinal: c.sessionOrdinal,
+          datePrecision: c.datePrecision,
+        };
       if (c.kind === 'draft_session_completion')
         return { ...source, kind: 'completed_session', sessionOrdinal: c.sessionOrdinal };
+      if (c.kind === 'draft_selection_capacity')
+        return {
+          ...source,
+          kind: 'draft_selection_capacity',
+          draftYear: c.draftYear,
+          draftType: c.draftType,
+          maximumSelections: c.maximumSelections,
+        };
       if (c.kind === 'draft_completed_total')
         return { ...source, kind: 'completed_draft_total', selectionCount: c.selectionCount };
       if (c.kind === 'draft_completed_inventory')
@@ -270,8 +284,9 @@ export function buildReviewedSessionCorrection(input: {
       };
     });
     return retainedDraftSessionProjectionSchema.parse(
-      (facts.some(fact => fact.kind === 'completed_session_window')
-        ? projectPrecisionDraftSessionEvidence : projectCombinedDraftSessionEvidence)({
+      (facts.some((fact) => fact.kind === 'completed_session_window')
+        ? projectPrecisionDraftSessionEvidence
+        : projectCombinedDraftSessionEvidence)({
         ...common,
         officialName: `${draftYear} AFL Draft`,
         facts,

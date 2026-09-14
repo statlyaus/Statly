@@ -65,8 +65,10 @@ export function parseOfficialAflMiniDraft2012SessionFacts(
       )
     )
       return fail();
+    if (!text.includes('two picks available to the highest bidders')) return fail();
     // Available capacity is prospective, so it must not become a completed-total claim.
     claims = [
+      { ...common, kind: 'draft_selection_capacity', maximumSelections: 2 },
       {
         ...common,
         kind: 'draft_session_window',

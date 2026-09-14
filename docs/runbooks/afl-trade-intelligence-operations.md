@@ -2991,3 +2991,10 @@ October8–26 window, Martin1/Hogan2 membership, boundary selections and complet
 an exact day nor a completed total from prospective capacity. The2011 retrospective claims from the
 same rules URL remain separately scoped. Migration0198 adds exact source/year/pathway eligibility while preserving the independent-total
 requirement. Reviewed capture scope and completeness evidence must be satisfied before genuine2012 session admission.
+
+Parser v17 preserves the2012 maximum of two selections as `draft_selection_capacity`, separately
+from completed membership. The TypeScript membership/session owner can prove exhaustion only when
+the independent closing document confirms completed use of both distinct numbered rights; it retains
+the source evidence and null exact day. This proof rejects partial use, duplicate rights, mixed total
+mechanisms and mismatched source scope. SQL persistence/currentness and reviewed capture preparation
+for this new claim remain pending; the TypeScript proof alone does not authorize admission.

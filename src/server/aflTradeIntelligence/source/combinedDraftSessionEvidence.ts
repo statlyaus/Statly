@@ -1,6 +1,12 @@
-import { parseDraftSessionDatePrecision, draftSessionDefinitelyPrecedes, type DraftSessionDatePrecision } from './draftSessionDatePrecision';
+import {
+  parseDraftSessionDatePrecision,
+  draftSessionDefinitelyPrecedes,
+  type DraftSessionDatePrecision,
+} from './draftSessionDatePrecision';
 import {
   resolveCompletedDraftMembership,
+  resolveCompletedDraftCapacityExhaustion,
+  type CompletedDraftSelectionCapacity,
   type CompletedDraftMembershipRoster,
   type CompletedDraftMemberNumber,
   type CompletedDraftMemberExclusion,
@@ -21,6 +27,7 @@ interface CombinedDraftFactBase {
 }
 
 export type CombinedDraftSessionFact =
+  | CompletedDraftSelectionCapacity
   | CompletedDraftMembershipRoster
   | CompletedDraftMemberNumber
   | CompletedDraftMemberExclusion
@@ -32,7 +39,7 @@ export type CombinedDraftSessionFact =
   | (CombinedDraftFactBase & {
       kind: 'completed_session_window';
       sessionOrdinal: number;
-      datePrecision: Extract<DraftSessionDatePrecision, {precision: 'window'}>;
+      datePrecision: Extract<DraftSessionDatePrecision, { precision: 'window' }>;
     })
   | (CombinedDraftFactBase & {
       kind: 'completed_session';
@@ -232,7 +239,7 @@ function requireOne<T>(values: T[], message: string): T {
 
 export type PrecisionDraftSessionCoverage = Omit<CombinedDraftSessionCoverage, 'eventDate'> & {
   eventDate: string | null;
-  datePrecision?: Extract<DraftSessionDatePrecision, {precision: 'window'}>;
+  datePrecision?: Extract<DraftSessionDatePrecision, { precision: 'window' }>;
 };
 
 interface CombinedDraftSessionInput {
@@ -253,38 +260,54 @@ export interface PrecisionDraftSessionProjection {
 
 /** A versioned proof preserves date bounds when projecting a verified full inventory. */
 export function projectPrecisionDraftSessionEvidence(
-  input: CombinedDraftSessionInput & {selectedSelectionIds: readonly string[]}
+  input: CombinedDraftSessionInput & { selectedSelectionIds: readonly string[] }
 ): PrecisionDraftSessionProjection {
   const inventorySessions = resolvePrecisionDraftSessionEvidence(input);
-  const inventorySelectionIds = input.selections.map(s => s.selectionId).sort();
+  const inventorySelectionIds = input.selections.map((s) => s.selectionId).sort();
   const selectedSelectionIds = [...input.selectedSelectionIds].sort();
   const inventory = new Set(inventorySelectionIds);
-  if (!selectedSelectionIds.length || new Set(selectedSelectionIds).size !== selectedSelectionIds.length ||
-      selectedSelectionIds.some(id => !inventory.has(id))) {
-    throw new TypeError('Session projection requires a nonempty unique subset of the proved inventory.');
+  if (
+    !selectedSelectionIds.length ||
+    new Set(selectedSelectionIds).size !== selectedSelectionIds.length ||
+    selectedSelectionIds.some((id) => !inventory.has(id))
+  ) {
+    throw new TypeError(
+      'Session projection requires a nonempty unique subset of the proved inventory.'
+    );
   }
   const selected = new Set(selectedSelectionIds);
   return {
     schemaVersion: 'afl-trade-combined-draft-session-projection/v2',
-    inventorySelectionIds, selectedSelectionIds, inventorySessions,
-    selectedSessions: inventorySessions.map(session => ({...session,
-      selectionIds: session.selectionIds.filter(id => selected.has(id)),
-      evidenceIds: [...session.evidenceIds],
-      ...(session.datePrecision ? {datePrecision: {...session.datePrecision}} : {}),
-    })).filter(session => session.selectionIds.length > 0),
+    inventorySelectionIds,
+    selectedSelectionIds,
+    inventorySessions,
+    selectedSessions: inventorySessions
+      .map((session) => ({
+        ...session,
+        selectionIds: session.selectionIds.filter((id) => selected.has(id)),
+        evidenceIds: [...session.evidenceIds],
+        ...(session.datePrecision ? { datePrecision: { ...session.datePrecision } } : {}),
+      }))
+      .filter((session) => session.selectionIds.length > 0),
   };
 }
 
 /** Legacy consumers must explicitly opt into window-aware proof handling. */
-export function resolveCombinedDraftSessionEvidence(input: CombinedDraftSessionInput): CombinedDraftSessionCoverage[] {
-  return resolvePrecisionDraftSessionEvidence(input).map(session => {
+export function resolveCombinedDraftSessionEvidence(
+  input: CombinedDraftSessionInput
+): CombinedDraftSessionCoverage[] {
+  return resolvePrecisionDraftSessionEvidence(input).map((session) => {
     if (session.eventDate === null || session.datePrecision !== undefined)
-      throw new TypeError('Session window requires a precision-aware projection and promotion owner.');
-    return {...session, eventDate: session.eventDate};
+      throw new TypeError(
+        'Session window requires a precision-aware projection and promotion owner.'
+      );
+    return { ...session, eventDate: session.eventDate };
   });
 }
 
-export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSessionInput): PrecisionDraftSessionCoverage[] {
+export function resolvePrecisionDraftSessionEvidence(
+  input: CombinedDraftSessionInput
+): PrecisionDraftSessionCoverage[] {
   const orderedSelections = [...input.selections].sort(
     (left, right) => left.selectionNumber - right.selectionNumber
   );
@@ -292,11 +315,51 @@ export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSession
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_draft_total' }> =>
       fact.kind === 'completed_draft_total'
   );
-  const total = requireOne(
-    unique(totals.map(({ selectionCount }) => selectionCount)),
-    'Combined draft proof requires one agreed completed selection total.'
-  );
   const inventoryNumbers = orderedSelections.map(({ selectionNumber }) => selectionNumber);
+  const capacities = input.facts.filter(
+    (fact): fact is CompletedDraftSelectionCapacity => fact.kind === 'draft_selection_capacity'
+  );
+  let total: number;
+  if (capacities.length) {
+    if (totals.length)
+      throw new TypeError(
+        'Choose one explicit completeness mechanism; do not mix capacity with completed totals.'
+      );
+    const capacity = requireOne(
+      capacities,
+      'Capacity exhaustion requires exactly one reviewed capacity.'
+    );
+    const roster = requireOne(
+      input.facts.filter(
+        (fact): fact is CompletedDraftMembershipRoster =>
+          fact.kind === 'completed_draft_membership_roster'
+      ),
+      'Capacity exhaustion requires one completed roster.'
+    );
+    const completion = requireOne(
+      input.facts.filter(
+        (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_session' }> =>
+          fact.kind === 'completed_session'
+      ),
+      'Capacity exhaustion requires one completed session.'
+    );
+    if (completion.sessionOrdinal !== 1)
+      throw new TypeError('Capacity exhaustion requires the reviewed single mini-draft session.');
+    const proof = resolveCompletedDraftCapacityExhaustion({
+      draftYear: input.draftYear,
+      draftType: input.draftType,
+      inventoryNumbers,
+      capacity,
+      roster,
+      completion: { ...completion, draftYear: input.draftYear, draftType: input.draftType },
+    });
+    total = proof.selectionNumbers.length;
+  } else {
+    total = requireOne(
+      unique(totals.map(({ selectionCount }) => selectionCount)),
+      'Combined draft proof requires one agreed completed selection total.'
+    );
+  }
   const enumerations = input.facts.filter(
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_draft_inventory' }> =>
       fact.kind === 'completed_draft_inventory'
@@ -363,8 +426,12 @@ export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSession
       fact.kind === 'session_boundary'
   );
   const dates = input.facts.filter(
-    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_session_date' | 'completed_session_window' }> =>
-      fact.kind === 'completed_session_date' || fact.kind === 'completed_session_window'
+    (
+      fact
+    ): fact is Extract<
+      CombinedDraftSessionFact,
+      { kind: 'completed_session_date' | 'completed_session_window' }
+    > => fact.kind === 'completed_session_date' || fact.kind === 'completed_session_window'
   );
   const completions = input.facts.filter(
     (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'completed_session' }> =>
@@ -439,7 +506,7 @@ export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSession
     }
   }
   if (
-    totals.every(
+    [...totals, ...capacities].every(
       (fact) =>
         fact.documentId === finalBoundary.documentId ||
         fact.captureId === finalBoundary.captureId ||
@@ -450,20 +517,33 @@ export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSession
   }
 
   const evidenceIds = unique(input.facts.map(({ evidenceId }) => evidenceId)).sort();
-  const precisionByOrdinal = new Map(ordinals.map(sessionOrdinal => {
-    const claims = dates.filter(fact => fact.sessionOrdinal === sessionOrdinal).map(fact =>
-      parseDraftSessionDatePrecision(fact.kind === 'completed_session_date'
-        ? {precision: 'day', eventDate: fact.eventDate} : fact.datePrecision, input.draftYear));
-    const agreed = requireOne(unique(claims.map(value => JSON.stringify(value))),
-      'Every combined draft session requires one agreed date precision.');
-    const precision = claims.find(value => JSON.stringify(value) === agreed)!;
-    return [sessionOrdinal, precision] as const;
-  }));
+  const precisionByOrdinal = new Map(
+    ordinals.map((sessionOrdinal) => {
+      const claims = dates
+        .filter((fact) => fact.sessionOrdinal === sessionOrdinal)
+        .map((fact) =>
+          parseDraftSessionDatePrecision(
+            fact.kind === 'completed_session_date'
+              ? { precision: 'day', eventDate: fact.eventDate }
+              : fact.datePrecision,
+            input.draftYear
+          )
+        );
+      const agreed = requireOne(
+        unique(claims.map((value) => JSON.stringify(value))),
+        'Every combined draft session requires one agreed date precision.'
+      );
+      const precision = claims.find((value) => JSON.stringify(value) === agreed)!;
+      return [sessionOrdinal, precision] as const;
+    })
+  );
   return ordinals.map((sessionOrdinal, index) => {
     const precision = precisionByOrdinal.get(sessionOrdinal)!;
     const prior = index > 0 ? precisionByOrdinal.get(ordinals[index - 1]!)! : null;
     if (prior && !draftSessionDefinitelyPrecedes(prior, precision)) {
-      throw new TypeError('Combined draft session date bounds must be strictly increasing without overlap.');
+      throw new TypeError(
+        'Combined draft session date bounds must be strictly increasing without overlap.'
+      );
     }
     const first = starts[index]!.selectionNumber;
     const nextStart = starts[index + 1];
@@ -474,7 +554,7 @@ export function resolvePrecisionDraftSessionEvidence(input: CombinedDraftSession
       officialName: input.officialName,
       sessionOrdinal,
       eventDate: precision.eventDate,
-      ...(precision.precision === 'window' ? {datePrecision: precision} : {}),
+      ...(precision.precision === 'window' ? { datePrecision: precision } : {}),
       selectionIds: orderedSelections
         .filter(({ selectionNumber }) => selectionNumber >= first && selectionNumber <= last)
         .map(({ selectionId }) => selectionId)
