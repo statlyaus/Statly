@@ -72,6 +72,7 @@ describe.each([
   const admin = new Pool({ connectionString: url });
   const pool = new Pool({ connectionString: url, options: `-c search_path=${schema}` });
   const sql = createPgAflOutcomeSqlClient(pool);
+  let windowExerciseInput: Parameters<typeof verifyWindowSpecialExercise>[1] | undefined;
   const databaseInstant = async () =>
     (
       await pool.query<{ at: string }>(
@@ -723,13 +724,13 @@ describe.each([
           }
         }
         if (!miniCapacity)
-          await verifyWindowSpecialExercise(pool, {
+          windowExerciseInput = {
             promotionId: result.promotionId,
             windowCaptureId: second.target.captureId,
             batchId: trade.target.evidenceBatchId,
             authorityId: promoterAuthority,
             actor,
-          });
+          };
       }
       const retainedArtifacts = new Map();
       for (const fixture of [draft, trade, official, second]) {
@@ -797,4 +798,11 @@ describe.each([
       ).toEqual([{ original_club_id: null }]);
     }
   );
+  if (mode === 'window') {
+    it('registers window special-right exercise with replay and revocation', async () => {
+      if (!windowExerciseInput) throw new Error('Window promotion prerequisite did not complete.');
+      await verifyWindowSpecialExercise(pool, windowExerciseInput);
+    });
+  }
+
 });
