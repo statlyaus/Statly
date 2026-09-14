@@ -2985,3 +2985,9 @@ Currentness authenticates the matching v2 rule, promotion, reviewed source bound
 Overlap checks use possible membership, with continuing spells unbounded beyond observedThrough.
 Exact-day metric, valuation and release consumers reject v2 explicitly until their interval-aware
 qualification is implemented. Fixture registration does not establish genuine admission or grading.
+
+The v16 session parser also reads retained2012 mini-draft rules and closing paperwork: it emits the
+October8–26 window, Martin1/Hogan2 membership, boundary selections and completion. It emits neither
+an exact day nor a completed total from prospective capacity. The2011 retrospective claims from the
+same rules URL remain separately scoped. Migration0198 adds exact source/year/pathway eligibility while preserving the independent-total
+requirement. Reviewed capture scope and completeness evidence must be satisfied before genuine2012 session admission.

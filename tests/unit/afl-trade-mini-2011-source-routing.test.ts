@@ -16,7 +16,7 @@ describe('2011 mini-draft exact source routing', () => {
   for (const [key, source] of Object.entries(OFFICIAL_AFL_MINI_2011_SOURCES)) {
     it(`keeps event, publication year, pathway and host scoped for ${key}`, () => {
       expect(isReviewedOfficialAflDraftSessionUrl(source.url, 2011)).toBe(true);
-      expect(isReviewedOfficialAflDraftSessionUrl(source.url, 2012)).toBe(false);
+      expect(isReviewedOfficialAflDraftSessionUrl(source.url, 2012)).toBe(key === 'membership');
       expect(reviewedOfficialAflMiniDraft2011EffectiveYear(source.url)).toBe(
         Number(source.time.slice(0, 4))
       );
@@ -44,9 +44,13 @@ describe('2011 mini-draft exact source routing', () => {
       expect(() => validateAflTradeExternalCaptureScope(request)).not.toThrow();
       for (const patch of [
         { draftPathway: 'national' },
-        { provider: 'footywire', capabilityId: 'footywire-draft-results', sourceUrl: 'https://www.footywire.com/afl/footy/ft_drafts?year=2011&t=N' },
+        {
+          provider: 'footywire',
+          capabilityId: 'footywire-draft-results',
+          sourceUrl: 'https://www.footywire.com/afl/footy/ft_drafts?year=2011&t=N',
+        },
         { draftPathway: 'rookie' },
-        { anchorSeasonYear: 2012 },
+        { anchorSeasonYear: 2013 },
         { sourceUrl: source.url + '?x=1' },
         { provider: 'draftguru' },
         { effectiveAt: '2010-01-01T00:00:00Z' },
@@ -61,24 +65,47 @@ describe('2011 mini-draft exact source routing', () => {
   }
 });
 
-
 describe('reviewed mini-draft HTTP capture boundary', () => {
   for (const source of Object.values(OFFICIAL_AFL_MINI_2011_SOURCES)) {
     it(`captures only the approved club URL ${source.url}`, async () => {
-      const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () =>
-        new Response('<html>retained fixture</html>', {headers: {'content-type': 'text/html'}}));
-      const input = {url: source.url, validators: null, maximumBytes: 1024, timeoutMs: 1000, fetchImpl};
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockImplementation(
+          async () =>
+            new Response('<html>retained fixture</html>', {
+              headers: { 'content-type': 'text/html' },
+            })
+        );
+      const input = {
+        url: source.url,
+        validators: null,
+        maximumBytes: 1024,
+        timeoutMs: 1000,
+        fetchImpl,
+      };
       const result = await captureOfficialAflPage(input);
       expect(result.status).toBe('captured');
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect(fetchImpl).toHaveBeenCalledWith(source.url, expect.objectContaining({redirect: 'error', method: 'GET'}));
-      for (const url of [source.url + '?x=1', source.url + '#fragment', source.url + '-unreviewed',
-        source.url.replace('https:', 'http:'), source.url.replace(new URL(source.url).hostname, 'unreviewed.example'),
-        source.url.replace('/news/', ':8443/news/')]) {
-        await expect(captureOfficialAflPage({...input, url})).rejects.toThrow('outside the approved article path');
+      expect(fetchImpl).toHaveBeenCalledWith(
+        source.url,
+        expect.objectContaining({ redirect: 'error', method: 'GET' })
+      );
+      for (const url of [
+        source.url + '?x=1',
+        source.url + '#fragment',
+        source.url + '-unreviewed',
+        source.url.replace('https:', 'http:'),
+        source.url.replace(new URL(source.url).hostname, 'unreviewed.example'),
+        source.url.replace('/news/', ':8443/news/'),
+      ]) {
+        await expect(captureOfficialAflPage({ ...input, url })).rejects.toThrow(
+          'outside the approved article path'
+        );
       }
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      await expect(captureOfficialAflPage({...input, maximumBytes: 2})).rejects.toThrow('byte limit');
+      await expect(captureOfficialAflPage({ ...input, maximumBytes: 2 })).rejects.toThrow(
+        'byte limit'
+      );
     });
   }
 });

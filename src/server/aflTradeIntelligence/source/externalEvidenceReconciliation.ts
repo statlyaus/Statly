@@ -62,6 +62,7 @@ const reviewedCombinedDraftArticleIds = new Set([
   '75034',
   '453197',
   '469214',
+  '453694',
 ]);
 
 export function combinedDraftDocumentId(

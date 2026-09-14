@@ -2419,7 +2419,7 @@ it('authenticates only the reviewed 2011 membership number pair in SQL', async (
   }
 });
 
-it('scopes reviewed mini-draft club document keys to exact URLs and2011 pathway', async () => {
+it('scopes reviewed mini-draft document keys to exact URLs, years and pathway', async () => {
   const urls = [
     'https://www.goldcoastfc.com.au/news/114828/final-mini-draft-explained',
     'https://www.goldcoastfc.com.au/news/751451/young-star-ready-to-shine',
@@ -2435,7 +2435,7 @@ it('scopes reviewed mini-draft club document keys to exact URLs and2011 pathway'
         ])
       ).rows[0].key;
     expect(await key(source, 2011, 'mini_draft')).toBe(source);
-    expect(await key(source, 2012, 'mini_draft')).toBeNull();
+    expect(await key(source, 2012, 'mini_draft')).toBe(source === urls[0] ? source : null);
     expect(await key(source, 2011, 'national')).toBeNull();
     expect(await key(source + '?unreviewed=1', 2011, 'mini_draft')).toBeNull();
     expect(
@@ -2584,4 +2584,16 @@ it('preserves window bounds and membership across SQL reviewed transitions', asy
   expect(await valid(ordered)).toBe(true);
   later.datePrecision.earliestDate = '2012-10-10';
   expect(await valid(ordered)).toBe(false);
+});
+
+
+it('admits only the exact2012 closing-paperwork source scope', async () => {
+  const source = 'https://www.afl.com.au/news/453694/official-paperwork-close-to-gillette-afl-trade-period-friday-october-26';
+  const key = async (url: string, year = 2012, type = 'mini_draft') =>
+    (await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [url,year,type])).rows[0].key;
+  expect(await key(source)).toBe('453694');
+  expect(await key(source,2011)).toBeNull();
+  expect(await key(source,2012,'national')).toBeNull();
+  expect(await key(source+'?unreviewed=1')).toBeNull();
+  expect(await key(source+'-unreviewed')).toBeNull();
 });
