@@ -155,3 +155,76 @@ it('accepts the complete union in projection but still requires a terminal ident
   facts[facts.length - 1].clubId = 'wrong';
   expect(() => projectCombinedDraftSessionEvidence(projection)).toThrow(/identity/);
 });
+
+it('derives the last boundary only from a source-bound member identity and complete population', async () => {
+  const { projectCombinedDraftSessionEvidence } =
+    await import('@/server/aflTradeIntelligence/source/combinedDraftSessionEvidence');
+  const terminal = input.members[78];
+  const identity = {
+    ...terminal,
+    evidenceId: 'terminal-identity',
+    kind: 'session_member_identity',
+    sessionOrdinal: 1,
+    playerId: 'p:104',
+    clubId: 'c:104',
+  };
+  const facts: any[] = [
+    input.total,
+    input.additions,
+    input.slots,
+    ...input.members,
+    {
+      ...source('date', 'date'),
+      kind: 'completed_session_date',
+      sessionOrdinal: 1,
+      eventDate: '2010-11-18',
+    },
+    { ...source('completion', 'completion'), kind: 'completed_session', sessionOrdinal: 1 },
+    {
+      ...source('first', 'first'),
+      kind: 'session_boundary',
+      sessionOrdinal: 1,
+      boundary: 'first',
+      selectionNumber: 1,
+      playerId: 'p:1',
+      clubId: 'c:1',
+    },
+    identity,
+  ];
+  const request = {
+    ...scope,
+    officialName: 'Fixture2010',
+    selectedSelectionIds: ['s:104'],
+    selections: inventoryNumbers.map((n) => ({
+      selectionId: `s:${n}`,
+      selectionNumber: n,
+      playerId: `p:${n}`,
+      clubId: `c:${n}`,
+    })),
+    facts,
+  };
+  expect(projectCombinedDraftSessionEvidence(request).selectedSessions[0].selectionIds).toEqual([
+    's:104',
+  ]);
+  expect(facts.some((f) => f.kind === 'session_boundary' && f.boundary === 'last')).toBe(false);
+  for (const patch of [
+    { captureId: 'other' },
+    { artifactId: 'other' },
+    { documentId: 'other' },
+    { evidenceId: terminal.evidenceId },
+    { selectionNumber: 103 },
+    { sessionOrdinal: 2 },
+    { playerId: '' },
+    { clubId: 'wrong' },
+  ]) {
+    expect(() =>
+      projectCombinedDraftSessionEvidence({
+        ...request,
+        facts: [...facts.slice(0, -1), { ...identity, ...patch }],
+      })
+    ).toThrow();
+  }
+  expect(() =>
+    projectCombinedDraftSessionEvidence({ ...request, facts: [...facts, identity] })
+  ).toThrow();
+});

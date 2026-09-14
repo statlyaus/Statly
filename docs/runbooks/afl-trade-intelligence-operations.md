@@ -3071,3 +3071,12 @@ exhausted membership, recording this basis separately from source claims. Combin
 this membership mechanism but still requires an authenticated terminal identity boundary; the helper
 alone cannot manufacture a reported-last assertion or canonical player/club identity. SQL union parity,
 terminal identity integration and source routing remain required before genuine2010 admission.
+
+The2010 club parser now emits `draft_session_member_identity` for Tom Young/Collingwood/104, with no
+first/last assertion. The strict contract is limited to2010 national session1. Identity work building,
+reviewed correction and reconciliation use the existing player/club resolution owners. Combined
+projection derives a terminal boundary only after the exact numbered union is complete and this
+identity matches the terminal member's document/capture/artifact and inventory player/club IDs.
+It rejects duplicate or unbound identities, mixed reported-last claims and missing identities. Source
+claims remain unchanged. SQL reconstruction/currentness, source field scope and genuine identity
+registration are still required; TypeScript verification is not canonical admission.

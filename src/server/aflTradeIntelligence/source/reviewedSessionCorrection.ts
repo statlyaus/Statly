@@ -58,6 +58,7 @@ export function buildReviewedSessionCorrection(input: {
     'draft_selection_capacity',
     'draft_session_completion',
     'draft_session_boundary',
+    'draft_session_member_identity',
     'draft_completed_total',
     'draft_completed_list_total',
     'draft_rookie_list_additions',
@@ -277,6 +278,15 @@ export function buildReviewedSessionCorrection(input: {
           draftType: c.draftType,
           recordedName: c.recordedName,
           reason: c.reason,
+        };
+      if (c.kind === 'draft_session_member_identity')
+        return {
+          ...source,
+          kind: 'session_member_identity',
+          sessionOrdinal: c.sessionOrdinal,
+          selectionNumber: c.selectionNumber,
+          playerId: lookup.get(key(e.content.provider, 'player', c.player)) ?? '',
+          clubId: lookup.get(key(e.content.provider, 'club', c.selectedByClub)) ?? '',
         };
       if (c.kind !== 'draft_session_boundary')
         throw new TypeError('Invalid partial session claim.');

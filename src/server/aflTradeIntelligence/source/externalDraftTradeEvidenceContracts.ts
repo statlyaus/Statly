@@ -402,6 +402,18 @@ const draftSessionCompletionClaimSchema = z
   })
   .strict();
 
+const draftSessionMemberIdentityClaimSchema = z
+  .object({
+    kind: z.literal('draft_session_member_identity'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    sessionOrdinal: z.literal(1),
+    selectionNumber: positiveOrdinalSchema,
+    player: recordedEntitySchema,
+    selectedByClub: recordedEntitySchema,
+  })
+  .strict();
+
 const draftSessionBoundaryClaimSchema = z
   .object({
     kind: z.literal('draft_session_boundary'),
@@ -511,6 +523,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftRookieListAdditionsClaimSchema,
   draftRookiePromotionSlotsClaimSchema,
   draftSessionBoundaryClaimSchema,
+  draftSessionMemberIdentityClaimSchema,
   draftCompletedTotalClaimSchema,
   draftCompletedInventoryClaimSchema,
   draftCompletedMembershipRosterClaimSchema,
@@ -536,6 +549,7 @@ const allowedKindsByProvider = {
     'draft_rookie_promotion_slots',
     'draft_session_completion',
     'draft_session_boundary',
+    'draft_session_member_identity',
     'draft_completed_total',
     'draft_completed_inventory',
     'draft_completed_membership_roster',
@@ -568,6 +582,7 @@ const allowedKindsByProvider = {
     'draft_rookie_promotion_slots',
     'draft_session_completion',
     'draft_session_boundary',
+    'draft_session_member_identity',
     'draft_completed_total',
     'draft_completed_inventory',
     'draft_completed_membership_roster',

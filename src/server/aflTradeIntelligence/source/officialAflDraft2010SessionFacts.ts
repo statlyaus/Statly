@@ -111,6 +111,14 @@ export function parseOfficialAflDraft2010SessionFacts(
       { ...scope, kind: 'draft_session_date', sessionOrdinal: 1, eventDate: '2010-11-18' },
       { ...scope, kind: 'draft_session_completion', sessionOrdinal: 1 }
     );
+    claims.push({
+      ...scope,
+      kind: 'draft_session_member_identity',
+      sessionOrdinal: 1,
+      selectionNumber: 104,
+      player: { nativeId: null, recordedName: 'Tom Young' },
+      selectedByClub: { nativeId: null, recordedName: 'Collingwood' },
+    });
     // This report establishes Young at104, not that104 is the global final selection.
     // Terminal status must be established by the complete cross-document population proof.
   }

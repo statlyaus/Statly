@@ -78,3 +78,23 @@ it.each([
 ])('rejects malformed population %j', (claim) => {
   expect(() => wrap(claim)).toThrow();
 });
+it('preserves member identity without accepting an asserted boundary or changed scope', () => {
+  const claim = {
+    kind: 'draft_session_member_identity',
+    draftYear: 2010,
+    draftType: 'national',
+    sessionOrdinal: 1,
+    selectionNumber: 104,
+    player: { nativeId: null, recordedName: 'Tom Young' },
+    selectedByClub: { nativeId: null, recordedName: 'Collingwood' },
+  };
+  expect(wrap(claim).content.claim).toEqual(claim);
+  for (const patch of [
+    { boundary: 'last' },
+    { draftYear: 2011 },
+    { draftType: 'rookie' },
+    { sessionOrdinal: 2 },
+  ])
+    expect(() => wrap({ ...claim, ...patch })).toThrow();
+  expect(() => wrap(claim, 'draftguru')).toThrow();
+});

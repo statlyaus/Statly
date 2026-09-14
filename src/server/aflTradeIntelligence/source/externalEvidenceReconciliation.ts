@@ -74,7 +74,11 @@ export function combinedDraftDocumentId(
   environment: 'test_fixture' | 'non_production' | 'production'
 ): string {
   if (provider === 'official_afl') {
-    if (sourceUrl === OFFICIAL_AFL_2010_REPORT.url) return sourceUrl;
+    if (
+      sourceUrl === OFFICIAL_AFL_2010_REPORT.url ||
+      sourceUrl === 'https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are'
+    )
+      return sourceUrl;
     // Exact club URLs retain host-qualified identity, matching SQL's URL fallback.
     if (reviewedOfficialAflMiniDraft2011EffectiveYear(sourceUrl) !== null) return sourceUrl;
     try {
@@ -1031,6 +1035,7 @@ export function reconcileAflTradeExternalEvidence(input: {
       'draft_session_date',
       'draft_session_completion',
       'draft_session_boundary',
+      'draft_session_member_identity',
       'draft_completed_total',
       'draft_completed_list_total',
       'draft_rookie_list_additions',
@@ -1050,6 +1055,7 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_date'
             | 'draft_session_completion'
             | 'draft_session_boundary'
+            | 'draft_session_member_identity'
             | 'draft_completed_total'
             | 'draft_completed_list_total'
             | 'draft_rookie_list_additions'
@@ -1074,6 +1080,7 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_date'
             | 'draft_session_completion'
             | 'draft_session_boundary'
+            | 'draft_session_member_identity'
             | 'draft_completed_total'
             | 'draft_completed_list_total'
             | 'draft_rookie_list_additions'
@@ -1160,23 +1167,35 @@ export function reconcileAflTradeExternalEvidence(input: {
             reason: claim.reason,
           };
         }
-        if (claim.kind !== 'draft_session_boundary') {
+        if (
+          claim.kind !== 'draft_session_boundary' &&
+          claim.kind !== 'draft_session_member_identity'
+        ) {
           throw new TypeError('Unexpected combined draft-session evidence kind.');
         }
         const playerId = resolve(
           row.content.provider,
           'player',
           claim.player,
-          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.boundary}:player`,
+          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.kind === 'draft_session_boundary' ? claim.boundary : 'member'}:player`,
           row.evidenceId
         );
         const clubId = resolve(
           row.content.provider,
           'club',
           claim.selectedByClub,
-          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.boundary}:club`,
+          `draft-session:${claim.draftYear}:${claim.draftType}:${claim.sessionOrdinal}:${claim.kind === 'draft_session_boundary' ? claim.boundary : 'member'}:club`,
           row.evidenceId
         );
+        if (claim.kind === 'draft_session_member_identity')
+          return {
+            ...source,
+            kind: 'session_member_identity',
+            sessionOrdinal: claim.sessionOrdinal,
+            selectionNumber: claim.selectionNumber,
+            playerId: playerId ?? '',
+            clubId: clubId ?? '',
+          };
         return {
           ...source,
           kind: 'session_boundary',

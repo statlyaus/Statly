@@ -52,6 +52,13 @@ export type CombinedDraftSessionFact =
       sessionOrdinal: number;
     })
   | (CombinedDraftFactBase & {
+      kind: 'session_member_identity';
+      sessionOrdinal: number;
+      selectionNumber: number;
+      playerId: string;
+      clubId: string;
+    })
+  | (CombinedDraftFactBase & {
       kind: 'session_boundary';
       sessionOrdinal: number;
       boundary: 'first' | 'last';
@@ -411,10 +418,11 @@ export function resolvePrecisionDraftSessionEvidence(
       fact.kind === 'completed_draft_member_exclusion'
   );
   const numberedUnion = listTotals.length === 1 && bindings.length > 0 && rosters.length === 0;
+  let unionProof: ReturnType<typeof resolveCompletedDraftNumberedUnion> | undefined;
   if (numberedUnion) {
     if (exclusions.length)
       throw new TypeError('Numbered population membership cannot mix roster exclusions.');
-    resolveCompletedDraftNumberedUnion({
+    unionProof = resolveCompletedDraftNumberedUnion({
       draftYear: input.draftYear,
       draftType: input.draftType,
       inventoryNumbers,
@@ -512,6 +520,36 @@ export function resolvePrecisionDraftSessionEvidence(
     throw new TypeError('Combined draft session boundaries must be strictly increasing.');
   }
   const finalOrdinal = ordinals.at(-1);
+  const memberIdentities = input.facts.filter(
+    (fact): fact is Extract<CombinedDraftSessionFact, { kind: 'session_member_identity' }> =>
+      fact.kind === 'session_member_identity'
+  );
+  if (memberIdentities.length) {
+    if (
+      !unionProof ||
+      ordinals.length !== 1 ||
+      finalOrdinal !== 1 ||
+      boundaries.some((b) => b.boundary === 'last')
+    )
+      throw new TypeError(
+        'Derived terminal identity requires one complete numbered-union session and no reported-last claim.'
+      );
+    const identity = requireOne(
+      memberIdentities,
+      'Derived terminal requires one source member identity.'
+    );
+    const member = unionProof.terminalMember;
+    if (
+      identity.sessionOrdinal !== 1 ||
+      identity.selectionNumber !== member.selectionNumber ||
+      identity.documentId !== member.documentId ||
+      identity.captureId !== member.captureId ||
+      identity.artifactId !== member.artifactId ||
+      identity.evidenceId === member.evidenceId
+    )
+      throw new TypeError('Derived terminal identity must bind the exact terminal member source.');
+    boundaries.push({ ...identity, kind: 'session_boundary', boundary: 'last' });
+  }
   const finalBoundary = requireOne(
     boundaries.filter((fact) => fact.sessionOrdinal === finalOrdinal && fact.boundary === 'last'),
     'The final combined draft session requires one explicit terminal boundary.'
