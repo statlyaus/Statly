@@ -237,6 +237,12 @@ const contentSchema = z
       .strict()
       .optional(),
     reviewedSessionCorrection: reviewedSessionCorrectionSchema.optional(),
+    reviewedStatusCorrection: z.object({
+      schemaVersion: z.literal('afl-trade-reviewed-status-correction/v1'),
+      parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+      transactionIds: sortedUniqueIdsSchema.pipe(z.array(aflTradeContentAddressedIdSchema('external-transaction'))),
+      selectionIds: sortedUniqueIdsSchema.pipe(z.array(aflTradeContentAddressedIdSchema('external-draft-selection'))),
+    }).strict().optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),

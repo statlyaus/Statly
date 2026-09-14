@@ -1,3 +1,4 @@
+import { buildReviewedStatusCorrection } from './reviewedStatusCorrection';
 import { buildReviewedSessionCorrection } from './reviewedSessionCorrection';
 import { PostgresAflTradeExternalIdentityReviewRepository } from './postgresExternalIdentityReviewRepository';
 import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityReviewWorkBuilder';
@@ -140,6 +141,15 @@ export async function authenticateReviewedAdmissionScope(
   transaction: AflOutcomeSqlTransaction,
   candidate: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
 ) {
+  if (candidate.content.reviewedStatusCorrection) {
+    const expected = await prepareReviewedStatusCorrection(transaction, {
+      parentCandidateId: candidate.content.reviewedStatusCorrection.parentCandidateId,
+      environment: candidate.content.environment,
+    });
+    if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
+      throw new TypeError('Status correction differs from its authenticated parent and resolved dependencies.');
+    return;
+  }
   if (candidate.content.reviewedSessionCorrection) {
     const marker = candidate.content.reviewedSessionCorrection;
     const expected = await prepareReviewedSessionCorrection(transaction, {
@@ -437,4 +447,30 @@ export async function prepareReviewedSessionCorrection(
     throw new TypeError('Session correction is missing authenticated ancestor resolutions.');
   return buildReviewedSessionCorrection({candidate:parent,sourceAuthority:source.sourceAuthority,sourceBatches:source.sourceBatches,
     identityResolutions:[...new Map([...ancestor,...current].map(r=>[r.resolutionId,r])).values()]});
+}
+
+/** Reconcile statuses only after authenticating the immutable parent and every current dependency. */
+export async function prepareReviewedStatusCorrection(
+  transaction: AflOutcomeSqlTransaction,
+  input: { parentCandidateId: string; environment: string }
+) {
+  if (input.environment === 'production')
+    throw new TypeError('Status correction requires a private environment.');
+  const loaded = await transaction.query<{ candidate_json: unknown; current: boolean }>(
+    `SELECT candidate_json,outcome_external_candidate_retained_sources_current(candidate_id,clock_timestamp()) AS current
+     FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 AND status='finalized' FOR SHARE`,
+    [input.parentCandidateId]
+  );
+  if (!loaded.rows[0]?.current)
+    throw new TypeError('Status correction requires a current finalized parent.');
+  const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
+  if (parent.candidateId !== input.parentCandidateId || parent.content.environment !== input.environment ||
+      !parent.content.reviewedSessionCorrection || parent.content.reviewedStatusCorrection)
+    throw new TypeError('Status correction requires its exact private reviewed session parent.');
+  await authenticateReviewedAdmissionScope(transaction, parent);
+  // Reconstruction can retain ancestor resolutions; SQL verifies their current review authority.
+  await transaction.query('SELECT validate_outcome_reviewed_admission_scope($1::jsonb)', [
+    JSON.stringify(parent),
+  ]);
+  return { candidate: buildReviewedStatusCorrection(parent), persisted: false as const };
 }

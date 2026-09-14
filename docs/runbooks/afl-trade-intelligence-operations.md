@@ -3111,3 +3111,11 @@ that omitted a required season-specific resolution must be rebuilt through authe
 construction; registration alone does not repair their immutable resolution sets. Verify rejected
 source/identity authority and exact replay before admission. No new source capture is needed when
 the reviewed observations and approved subject decisions are already retained.
+
+Reviewed status correction uses `prepareReviewedStatusCorrection` and migration0205 after session
+coverage is authenticated. The successor changes only unresolved transaction/selection statuses to
+single-source when complete usable legs, resolved parties and exact selection/session evidence
+support them. It preserves custody, special rights, date precision and every prior record. Both
+application and SQL owners authenticate the finalized parent and current approvals; successor
+identity records must equal the parent's. Use the existing reconciliation repository for persistence
+and replay. Status readiness does not establish canonical admission or entitlement exercise.
