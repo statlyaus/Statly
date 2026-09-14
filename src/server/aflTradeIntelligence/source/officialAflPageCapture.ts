@@ -1,3 +1,4 @@
+import { isReviewedOfficialAflPlayerContinuitySource } from './officialAflPlayerContinuitySourceScope';
 import { reviewedOfficialAflCompensationSource } from './officialAflCompensationSourceScope';
 import { OFFICIAL_AFL_2010_SESSION_SOURCES } from './officialAflDraft2010SessionFacts';
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
@@ -48,6 +49,7 @@ export async function captureOfficialAflPage(input: {
     compensationSource?.mediaType === 'application/pdf';
   if (
     !reviewedPdf &&
+    !isReviewedOfficialAflPlayerContinuitySource(input.url) &&
     (url.protocol !== 'https:' ||
       (url.hostname !== 'www.afl.com.au' &&
         url.href !== GWS_MINI_GRANT_URL &&
