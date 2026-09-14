@@ -1,4 +1,10 @@
 import {
+  reviewedOfficialAflDraft2010Source,
+  OFFICIAL_AFL_2010_ADDITIONS_URL,
+} from './officialAflDraft2010SourceScope';
+import { parseOfficialAflDraft2010SessionFacts } from './officialAflDraft2010SessionFacts';
+import { parseOfficialAflDraft2010ListFacts } from './officialAflDraft2010ListFacts';
+import {
   reviewedOfficialAflMiniDraft2012EffectiveYear,
   parseOfficialAflMiniDraft2012SessionFacts,
 } from './officialAflMiniDraft2012SessionFacts';
@@ -50,7 +56,7 @@ import {
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
 
-export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v17';
+export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v18';
 
 // Exact reviewed completed reports: contextual date, event-day narrative and full
 // selection coverage must agree. Publication time alone is never an event date.
@@ -207,6 +213,7 @@ const reviewedReports = [
 ] as const;
 
 export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: number): boolean {
+  if (seasonYear === 2010 && reviewedOfficialAflDraft2010Source(url)) return true;
   if (seasonYear === 2012 && reviewedOfficialAflMiniDraft2012EffectiveYear(url) !== null)
     return true;
   if (seasonYear === 2011 && reviewedOfficialAflMiniDraft2011EffectiveYear(url) !== null)
@@ -227,6 +234,13 @@ export function parseOfficialAflDraftSession(
   html: string,
   input: { capture: AflTradeExternalEvidenceContent['capture']; anchorSeasonYear?: number }
 ): { evidence: AflTradeExternalEvidenceEnvelope[]; issues: AflTradeExternalPageIssue[] } {
+  if (
+    input.anchorSeasonYear === 2010 &&
+    reviewedOfficialAflDraft2010Source(input.capture.sourceUrl)?.mediaType === 'text/html'
+  )
+    return input.capture.sourceUrl === OFFICIAL_AFL_2010_ADDITIONS_URL
+      ? parseOfficialAflDraft2010ListFacts(html, input)
+      : parseOfficialAflDraft2010SessionFacts(html, input);
   if (
     input.anchorSeasonYear === 2012 &&
     reviewedOfficialAflMiniDraft2012EffectiveYear(input.capture.sourceUrl) !== null

@@ -1,3 +1,5 @@
+import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010SourceScope';
+import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
 import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import { reviewedOfficialAflDraft2011EffectiveYear } from './officialAflDraft2011SessionFacts';
@@ -171,6 +173,22 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'official-afl-completed-draft-session') {
+    const reviewed2010 = reviewedOfficialAflDraft2010Source(request.sourceUrl);
+    if (reviewed2010) {
+      const expectedTime = reviewed2010.effectiveAt ?? request.capturedAt;
+      if (
+        request.provider !== 'official_afl' ||
+        request.anchorSeasonYear !== 2010 ||
+        request.draftPathway !== 'national' ||
+        request.discoveryFromSeasonYear != null ||
+        request.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION ||
+        !Number.isFinite(Date.parse(expectedTime)) ||
+        Date.parse(request.effectiveAt) !== Date.parse(expectedTime)
+      )
+        invalid();
+      return;
+    }
+
     const reviewedMini2012EffectiveYear =
       request.anchorSeasonYear === 2012
         ? reviewedOfficialAflMiniDraft2012EffectiveYear(request.sourceUrl)

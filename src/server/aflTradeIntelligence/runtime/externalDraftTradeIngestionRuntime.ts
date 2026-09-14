@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_2010_REPORT } from '../source/officialAflDraft2010PdfFacts';
 import 'server-only';
 import { parseOfficialAflDraft2010PdfFacts } from '../source/officialAflDraft2010PdfFacts';
 
@@ -138,7 +139,13 @@ export function createAflTradeExternalIngestionRuntime(
       }
       const effectiveCommand = {
         ...command,
-        request: { ...command.request, capturedAt },
+        request: {
+          ...command.request,
+          capturedAt,
+          ...(command.request.sourceUrl === OFFICIAL_AFL_2010_REPORT.url
+            ? { effectiveAt: capturedAt }
+            : {}),
+        },
       };
       const parsePage = ({
         html,

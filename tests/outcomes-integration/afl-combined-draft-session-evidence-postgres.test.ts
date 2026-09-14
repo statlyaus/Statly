@@ -603,7 +603,7 @@ it('reconstructs combined sessions, rejects downgrades, and fails after dependen
        AS definition`
   );
   expect(identityGuard.rows[0]?.definition).toContain(
-    "ELSIF claim->>'kind'='draft_session_boundary' THEN"
+    "ELSIF claim->>'kind' IN ('draft_session_boundary','draft_session_member_identity') THEN"
   );
   expect(identityGuard.rows[0]?.definition).toContain(
     "(subject.entity_kind='player' AND claim->'player'=source_identity) OR"
@@ -3126,5 +3126,32 @@ it('authenticates derived2010 inventory and rejects revoked terminal identities'
   } finally {
     await client.query('ROLLBACK');
     client.release();
+  }
+});
+
+it('limits2010 source keys to the exact reviewed URLs, year and pathway', async () => {
+  const sources = [
+    ['https://www.afl.com.au/news/114795/countdown-to-d-day', '114795'],
+    ['https://www.afl.com.au/news/469544/round-by-round-selections', '469544'],
+    ['https://www.afl.com.au/news/45435/polo-prepared-for-different-roles', '45435'],
+    ['https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are', null],
+    [
+      'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+      null,
+    ],
+  ];
+  for (const [url, key] of sources) {
+    const get = async (u: any, year = 2010, type = 'national') =>
+      (
+        await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [
+          u,
+          year,
+          type,
+        ])
+      ).rows[0].key;
+    expect(await get(url)).toBe(key ?? url);
+    expect(await get(url, 2011)).toBeNull();
+    expect(await get(url, 2010, 'rookie')).toBeNull();
+    expect(await get(url + '?x=1')).toBeNull();
   }
 });

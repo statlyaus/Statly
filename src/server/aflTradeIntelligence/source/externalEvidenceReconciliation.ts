@@ -37,6 +37,7 @@ type Evidence = AflTradeExternalEvidenceBatch['content']['evidence'][number];
 
 const reviewedCombinedDraftArticleIds = new Set([
   '114795',
+  '45435',
   '469544',
   '53184',
   '39763',

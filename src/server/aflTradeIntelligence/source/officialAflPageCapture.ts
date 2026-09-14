@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_2010_SESSION_SOURCES } from './officialAflDraft2010SessionFacts';
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
 import { createHash } from 'node:crypto';
 import type { AflTradeExternalPageCapture } from './externalDraftTradeIngestion';
@@ -46,6 +47,7 @@ export async function captureOfficialAflPage(input: {
     (url.protocol !== 'https:' ||
       (url.hostname !== 'www.afl.com.au' &&
         url.href !== GWS_MINI_GRANT_URL &&
+        url.href !== OFFICIAL_AFL_2010_SESSION_SOURCES.collingwood.url &&
         !Object.values(OFFICIAL_AFL_MINI_2011_SOURCES).some((source) => source.url === url.href)) ||
       !/^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) ||
       url.search ||

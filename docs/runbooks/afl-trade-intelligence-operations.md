@@ -3094,3 +3094,12 @@ checks and the existing approved, non-superseded player/club identity joins. A d
 mix with a reported-last claim or multiple sessions. Source eligibility still applies. Direct fixture
 SQL verification covers valid2010 inventory and terminal identity revocation; genuine public capture,
 registration and canonical admission remain pending until exact source/provider/Gate routing is complete.
+
+Completed-session parser v18 routes the exact2010 membership/Polo/Collingwood/additions sources.
+Provider scope requires2010 national, v18 and exact article publication timestamps. The reviewed PDF
+uses the actual runtime import timestamp as effectiveAt; no publication date is inferred. Migration0203
+adds only the five exact source keys for2010 national and accepts member-identity evidence through the
+existing registered identity review guard. Wrong URL/year/pathway reject. The Collingwood fetch exception
+is exact-URL only. Gate field authorization remains unchanged: every emitted field still requires an
+explicit reviewed mapping and archive request. Genuine governance preparation and public capture /
+identity / promotion verification remain pending; parser eligibility is not source permission.
