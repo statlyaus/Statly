@@ -1,3 +1,5 @@
+import { resolveCompletedDraftListTotal } from './completedDraftListTotal';
+type ListPopulationInput = Parameters<typeof resolveCompletedDraftListTotal>[0];
 import {
   parseDraftSessionDatePrecision,
   draftSessionDefinitelyPrecedes,
@@ -27,6 +29,9 @@ interface CombinedDraftFactBase {
 }
 
 export type CombinedDraftSessionFact =
+  | ListPopulationInput['total']
+  | ListPopulationInput['additions']
+  | ListPopulationInput['slots']
   | CompletedDraftSelectionCapacity
   | CompletedDraftMembershipRoster
   | CompletedDraftMemberNumber
@@ -319,8 +324,29 @@ export function resolvePrecisionDraftSessionEvidence(
   const capacities = input.facts.filter(
     (fact): fact is CompletedDraftSelectionCapacity => fact.kind === 'draft_selection_capacity'
   );
+  const listTotals = input.facts.filter(
+    (fact): fact is ListPopulationInput['total'] => fact.kind === 'completed_draft_list_total'
+  );
+  const additions = input.facts.filter(
+    (fact): fact is ListPopulationInput['additions'] => fact.kind === 'draft_rookie_list_additions'
+  );
+  const slots = input.facts.filter(
+    (fact): fact is ListPopulationInput['slots'] => fact.kind === 'draft_rookie_promotion_slots'
+  );
   let total: number;
-  if (capacities.length) {
+  if (listTotals.length || additions.length || slots.length) {
+    if (totals.length || capacities.length)
+      throw new TypeError('List populations cannot be mixed with reported totals or capacity.');
+    const proof = resolveCompletedDraftListTotal({
+      draftYear: input.draftYear,
+      draftType: input.draftType,
+      inventoryNumbers,
+      total: requireOne(listTotals, 'List populations require one reviewed list total.'),
+      additions: requireOne(additions, 'List populations require one rookie additions source.'),
+      slots: requireOne(slots, 'List populations require one rookie slots source.'),
+    });
+    total = proof.derivedSelectionCount;
+  } else if (capacities.length) {
     if (totals.length)
       throw new TypeError(
         'Choose one explicit completeness mechanism; do not mix capacity with completed totals.'
@@ -506,7 +532,7 @@ export function resolvePrecisionDraftSessionEvidence(
     }
   }
   if (
-    [...totals, ...capacities].every(
+    [...totals, ...capacities, ...listTotals].every(
       (fact) =>
         fact.documentId === finalBoundary.documentId ||
         fact.captureId === finalBoundary.captureId ||

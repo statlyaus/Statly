@@ -59,6 +59,9 @@ export function buildReviewedSessionCorrection(input: {
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
+    'draft_completed_list_total',
+    'draft_rookie_list_additions',
+    'draft_rookie_promotion_slots',
     'draft_completed_inventory',
     'draft_completed_membership_roster',
     'draft_completed_member_number',
@@ -237,6 +240,10 @@ export function buildReviewedSessionCorrection(input: {
           draftType: c.draftType,
           maximumSelections: c.maximumSelections,
         };
+      if (c.kind === 'draft_completed_list_total')
+        return { ...source, ...c, kind: 'completed_draft_list_total' };
+      if (c.kind === 'draft_rookie_list_additions' || c.kind === 'draft_rookie_promotion_slots')
+        return { ...source, ...c };
       if (c.kind === 'draft_completed_total')
         return { ...source, kind: 'completed_draft_total', selectionCount: c.selectionCount };
       if (c.kind === 'draft_completed_inventory')

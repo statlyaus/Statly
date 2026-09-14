@@ -1492,7 +1492,7 @@ it('reconciles the exact reviewed 2017 one-session article set outside fixtures'
   );
   expect(
     reconcile2017([inventory, wrap, total, conflictingDate]).content.issues[0]?.detail
-  ).toContain('one agreed completed date');
+  ).toContain('one agreed date precision');
 
   const extraSession = batch(
     'official_afl',

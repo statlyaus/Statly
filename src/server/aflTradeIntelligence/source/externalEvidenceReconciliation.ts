@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
@@ -35,6 +36,8 @@ type RecordedEntity = Extract<Claim, { kind: 'transaction_party' }>['club'];
 type Evidence = AflTradeExternalEvidenceBatch['content']['evidence'][number];
 
 const reviewedCombinedDraftArticleIds = new Set([
+  '114795',
+  '469544',
   '53184',
   '39763',
   '99499',
@@ -71,6 +74,7 @@ export function combinedDraftDocumentId(
   environment: 'test_fixture' | 'non_production' | 'production'
 ): string {
   if (provider === 'official_afl') {
+    if (sourceUrl === OFFICIAL_AFL_2010_REPORT.url) return sourceUrl;
     // Exact club URLs retain host-qualified identity, matching SQL's URL fallback.
     if (reviewedOfficialAflMiniDraft2011EffectiveYear(sourceUrl) !== null) return sourceUrl;
     try {
@@ -1028,6 +1032,9 @@ export function reconcileAflTradeExternalEvidence(input: {
       'draft_session_completion',
       'draft_session_boundary',
       'draft_completed_total',
+      'draft_completed_list_total',
+      'draft_rookie_list_additions',
+      'draft_rookie_promotion_slots',
       'draft_completed_inventory',
       'draft_completed_membership_roster',
       'draft_completed_member_number',
@@ -1044,6 +1051,9 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_completion'
             | 'draft_session_boundary'
             | 'draft_completed_total'
+            | 'draft_completed_list_total'
+            | 'draft_rookie_list_additions'
+            | 'draft_rookie_promotion_slots'
             | 'draft_completed_inventory'
             | 'draft_completed_membership_roster'
             | 'draft_completed_member_number'
@@ -1065,6 +1075,9 @@ export function reconcileAflTradeExternalEvidence(input: {
             | 'draft_session_completion'
             | 'draft_session_boundary'
             | 'draft_completed_total'
+            | 'draft_completed_list_total'
+            | 'draft_rookie_list_additions'
+            | 'draft_rookie_promotion_slots'
             | 'draft_completed_inventory'
             | 'draft_completed_membership_roster'
             | 'draft_completed_member_number'
@@ -1101,6 +1114,13 @@ export function reconcileAflTradeExternalEvidence(input: {
             sessionOrdinal: claim.sessionOrdinal,
           };
         }
+        if (claim.kind === 'draft_completed_list_total')
+          return { ...source, ...claim, kind: 'completed_draft_list_total' };
+        if (
+          claim.kind === 'draft_rookie_list_additions' ||
+          claim.kind === 'draft_rookie_promotion_slots'
+        )
+          return { ...source, ...claim };
         if (claim.kind === 'draft_completed_total') {
           return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
         }

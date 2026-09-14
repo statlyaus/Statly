@@ -3038,3 +3038,12 @@ require fresh review. The total remains separate from the derived79 national sel
 has a PDF parser dispatch and the fetcher accepts only this exact resource URL as PDF. Provider/Gate
 source eligibility, SQL population integration and genuine registration remain pending. Preserve actual
 observation timestamps; no historical publication timestamp is inferred from the document or URL.
+
+Combined session projection and reviewed correction now accept the three2010 population claims:
+reported list additions, classified rookie additions and marked rookie slots. They derive the national
+selection count through `resolveCompletedDraftListTotal`; they do not emit a reported79-total claim.
+All three sources are required exactly once, with matching counts and disjoint rookie/inventory slots.
+The mechanism cannot mix with completed-selection totals or mini-draft capacity. Existing complete
+membership, dates, completion and first/last boundary checks still apply before selecting a candidate
+subset. Reconciliation maps these same source claims without replacing their original population values.
+SQL/currentness, source eligibility and genuine2010 registration remain pending.
