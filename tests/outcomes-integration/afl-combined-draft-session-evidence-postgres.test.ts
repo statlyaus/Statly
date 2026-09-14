@@ -2790,3 +2790,117 @@ it('validates independent2010 list populations and rejects incomplete or altered
       path.join('.')
     ).toBe(false);
 });
+
+it('reconstructs the2010 numbered union and member identity without a reported-last claim', async () => {
+  const scope = { draftYear: 2010, draftType: 'national' };
+  const fact = (id: string, documentId: string, claim: object, captureId = id) => ({
+    evidenceId: id,
+    captureId,
+    artifactId: captureId + '-bytes',
+    documentId,
+    claim: { ...scope, ...claim },
+  });
+  const clubUrl = 'https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are';
+  const expected = [...Array.from({ length: 77 }, (_, i) => i + 1), 103, 104];
+  const facts = [
+    fact(
+      'total',
+      'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+      {
+        kind: 'draft_completed_list_total',
+        population: 'national_selections_and_rookie_promotions',
+        playerCount: 107,
+      }
+    ),
+    fact('additions', '114795', {
+      kind: 'draft_rookie_list_additions',
+      clubs: [
+        { recordedClub: 'A', recordedNames: Array.from({ length: 28 }, (_, i) => 'Rookie' + i) },
+      ],
+    }),
+    fact('slots', '469544', {
+      kind: 'draft_rookie_promotion_slots',
+      clubs: [
+        {
+          recordedClub: 'A',
+          selectionNumbers: [...Array.from({ length: 25 }, (_, i) => i + 78), 105, 106, 107],
+        },
+      ],
+    }),
+    ...Array.from({ length: 77 }, (_, i) =>
+      fact(
+        'member' + i,
+        '469544',
+        {
+          kind: 'draft_completed_member_number',
+          recordedName: 'Member' + i,
+          selectionNumber: i + 1,
+        },
+        'slots'
+      )
+    ),
+    fact('polo', '45435', {
+      kind: 'draft_completed_member_number',
+      recordedName: 'Dean Polo',
+      selectionNumber: 103,
+    }),
+    fact('young', clubUrl, {
+      kind: 'draft_completed_member_number',
+      recordedName: 'Tom Young',
+      selectionNumber: 104,
+    }),
+    fact(
+      'identity',
+      clubUrl,
+      {
+        kind: 'draft_session_member_identity',
+        sessionOrdinal: 1,
+        selectionNumber: 104,
+        player: { nativeId: null, recordedName: 'Tom Young' },
+        selectedByClub: { nativeId: null, recordedName: 'Collingwood' },
+      },
+      'young'
+    ),
+  ];
+  const check = async (value: unknown, numbers: unknown = expected) =>
+    (
+      await pool.query(
+        'SELECT outcome_completed_numbered_union_exact($1::jsonb,$2::jsonb) AS valid',
+        [JSON.stringify(value), JSON.stringify(numbers)]
+      )
+    ).rows[0].valid;
+  expect(await check(facts)).toBe(true);
+  expect(await check(facts.slice(1))).toBe(false);
+  expect(await check([...facts, facts[82]])).toBe(false);
+  expect(await check(facts, expected.slice(1))).toBe(false);
+  const patches: Array<[string[], unknown]> = [
+    [['0', 'claim', 'playerCount'], 108],
+    [['3', 'captureId'], 'unbound'],
+    [['3', 'artifactId'], 'unbound'],
+    [['3', 'claim', 'recordedName'], 'Member1'],
+    [['3', 'claim', 'selectionNumber'], 2],
+    [['80', 'documentId'], '469544'],
+    [['80', 'claim', 'recordedName'], 'Other'],
+    [['81', 'artifactId'], 'polo-bytes'],
+    [['81', 'claim', 'selectionNumber'], 105],
+    [['82', 'claim', 'player', 'recordedName'], 'Other'],
+    [['82', 'claim', 'selectedByClub', 'recordedName'], 'Other'],
+    [['82', 'claim', 'boundary'], 'last'],
+    [['82', 'claim', 'sessionOrdinal'], 2],
+    [['82', 'captureId'], 'slots'],
+    [['82', 'artifactId'], 'slots-bytes'],
+    [['82', 'documentId'], 'other'],
+    [['82', 'evidenceId'], 'young'],
+    [['82', 'claim', 'kind'], 'draft_session_boundary'],
+  ];
+  for (const [path, value] of patches)
+    expect(
+      (
+        await pool.query(
+          'SELECT outcome_completed_numbered_union_exact(jsonb_set($1::jsonb,$2::text[],$3::jsonb),$4::jsonb) AS valid',
+          [JSON.stringify(facts), path, JSON.stringify(value), JSON.stringify(expected)]
+        )
+      ).rows[0].valid,
+      path.join('.')
+    ).toBe(false);
+});

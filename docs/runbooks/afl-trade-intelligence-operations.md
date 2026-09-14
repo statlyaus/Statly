@@ -3080,3 +3080,10 @@ identity matches the terminal member's document/capture/artifact and inventory p
 It rejects duplicate or unbound identities, mixed reported-last claims and missing identities. Source
 claims remain unchanged. SQL reconstruction/currentness, source field scope and genuine identity
 registration are still required; TypeScript verification is not canonical admission.
+
+Migration0201 provides pure `outcome_completed_numbered_union_exact` reconstruction for83 facts:
+three population claims,79 numbered members and one source member identity. It verifies the exact
+reviewed source allocation/custody, unique members and evidence,107/28 population exhaustion and
+Tom Young/Collingwood/104 identity on the same club source as the terminal member. It does not
+register that identity or grant source authority. The predicate still needs integration with session
+inventory and canonical currentness owners before public2010 admission; unknown/mixed facts reject.

@@ -1228,6 +1228,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0198_official_mini_2012_window_sources',
       '0199_reviewed_capacity_exhaustion',
       '0200_reviewed_list_population',
+      '0201_reviewed_numbered_union',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
