@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { IngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
+import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { OFFICIAL_AFL_2016_SESSION_FACT_URLS } from '@/server/aflTradeIntelligence/source/officialAflDraft2016SessionFacts';
 
 function request(
@@ -80,6 +81,7 @@ describe('Official AFL retrospective draft-session scope', () => {
   const officialRequest = (sourceUrl: string, effectiveAt: string) => ({
     ...request(sourceUrl, 'official-afl-completed-draft-session'),
     provider: 'official_afl' as const,
+    parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
     anchorSeasonYear: 2016,
     draftPathway: 'national' as const,
     effectiveAt,
@@ -94,6 +96,18 @@ describe('Official AFL retrospective draft-session scope', () => {
         )
       )
     ).not.toThrow();
+  });
+
+  it('rejects a placeholder parser version for the reviewed retrospective URL', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope({
+        ...officialRequest(
+          OFFICIAL_AFL_2016_SESSION_FACT_URLS.independentTotal,
+          '2019-11-28T11:30:00.000Z'
+        ),
+        parserVersion: 'scope-validation-fixture/v1',
+      })
+    ).toThrow(expect.objectContaining({ code: 'INVALID_SCOPE' }));
   });
 
   it('rejects a different effective year for the reviewed retrospective URL', () => {
