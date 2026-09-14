@@ -129,7 +129,14 @@ export async function verifySessionAcquisitionCurrentness(
           [spell.spellVersionId]
         )
       ).rows
-    ).toEqual([{ start_date: null, end_date: null, end_reason: null, possible: '[2024-11-21,)' }]);
+    ).toEqual([
+      {
+        start_date: null,
+        end_date: null,
+        end_reason: null,
+        possible: `[${spell.content.entry.eventDate === null ? spell.content.entry.datePrecision.earliestDate : spell.content.entry.eventDate},)`,
+      },
+    ]);
     const duplicate = createAflTradeWindowAcquisitionSpellRegistration({
       ...spell.content,
       createdAt: await at(),
@@ -148,7 +155,14 @@ export async function verifySessionAcquisitionCurrentness(
       supersedesSpellVersionId: spell.spellVersionId,
       entry: {
         ...spell.content.entry,
-        datePrecision: { ...spell.content.entry.datePrecision, latestDate: '2024-11-26' },
+        datePrecision: {
+          ...spell.content.entry.datePrecision,
+          latestDate: new Date(
+            Date.parse(spell.content.entry.datePrecision.latestDate + 'T00:00:00Z') + 86400000
+          )
+            .toISOString()
+            .slice(0, 10),
+        },
       },
       createdAt: await at(),
     });

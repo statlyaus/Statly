@@ -924,7 +924,7 @@ it('runs the reviewed 2016 proof through public promotion and current spell guar
       'rejected',
     ]);
     expect(await exactCurrentProof()).toBe(false);
-    await expect(replayPromotion()).resolves.toMatchObject({ idempotentReplay: true });
+    await expect(replayPromotion()).rejects.toThrow('exact current draft-session evidence');
     await expect(spells.loadCurrentExact(spell.spellVersionId, scope)).rejects.toThrow();
     await replicaUpdate('UPDATE outcome_source_capture SET status=$2 WHERE capture_id=$1', [
       captureId,
@@ -947,7 +947,7 @@ it('runs the reviewed 2016 proof through public promotion and current spell guar
     'rejected',
   ]);
   expect(await exactCurrentProof()).toBe(false);
-  await expect(replayPromotion()).resolves.toMatchObject({ idempotentReplay: true });
+  await expect(replayPromotion()).rejects.toThrow('exact current draft-session evidence');
   await expect(spells.loadCurrentExact(spell.spellVersionId, scope)).rejects.toThrow();
   await replicaUpdate('UPDATE outcome_review_decision SET decision=$2 WHERE decision_id=$1', [
     boundaryIdentity.content.reviewDecisionId,

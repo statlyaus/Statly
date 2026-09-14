@@ -972,6 +972,20 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidate,
         proposal: approval.proposal,
       });
+      if (
+        'draftEventCoverage' in approval.proposal.content &&
+        approval.proposal.content.draftEventCoverage.length > 0
+      ) {
+        const sessionProof = await transaction.query<{ exact: boolean }>(
+          'SELECT outcome_external_draft_sessions_exact($1,$2::jsonb) AS exact',
+          [candidate.candidateId, canonicalizeAflTradeJson(approval.proposal.content)]
+        );
+        if (sessionProof.rows[0]?.exact !== true)
+          throw new AflTradeExternalCanonicalPromotionError(
+            'INVALID_INPUT',
+            'Canonical promotion requires exact current draft-session evidence, including replay.'
+          );
+      }
       // Revalidate award authority before replay as well as before new writes.
       const rights = candidate.content.transfers.filter(
         (record) => record.asset.kind === 'special_entitlement'

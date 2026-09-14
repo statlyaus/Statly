@@ -52,8 +52,16 @@ describe.each([
   'supplemental_selection',
   'rookie_exclusion',
   'window',
+  'capacity',
 ])('reviewed retained subset (%s)', (mode) => {
-  const sessionWindow = mode === 'window';
+  const miniCapacity = mode === 'capacity';
+  const sessionWindow = mode === 'window' || miniCapacity;
+  const year = miniCapacity ? 2012 : 2024;
+  const inventoryCount = miniCapacity ? 2 : 71;
+  const finalPick = miniCapacity ? 2 : mode === 'consecutive' ? 71 : 97;
+  const firstDay = miniCapacity ? '2012-10-08' : '2024-11-21';
+  const lastDay = miniCapacity ? '2012-10-26' : '2024-11-25';
+  const afterLastDay = miniCapacity ? '2012-10-27' : '2024-11-26';
   const enumerated = mode !== 'consecutive';
   const multiDocument = mode === 'multi_document' || mode === 'rookie_exclusion';
   const rookieExclusion = mode === 'rookie_exclusion';
@@ -92,7 +100,7 @@ describe.each([
         sql,
         false,
         'test_fixture',
-        71,
+        inventoryCount,
         false,
         false,
         false,
@@ -100,13 +108,14 @@ describe.each([
         multiDocument,
         supplementalSelection,
         rookieExclusion,
-        sessionWindow
+        sessionWindow,
+        miniCapacity
       );
       const trade = await createRetainedExternalCaptureFixture(
         sql,
         false,
         'test_fixture',
-        71,
+        inventoryCount,
         false,
         true,
         false,
@@ -114,13 +123,14 @@ describe.each([
         multiDocument,
         supplementalSelection,
         rookieExclusion,
-        sessionWindow
+        sessionWindow,
+        miniCapacity
       );
       const official = await createRetainedExternalCaptureFixture(
         sql,
         true,
         'test_fixture',
-        71,
+        inventoryCount,
         false,
         false,
         false,
@@ -128,7 +138,8 @@ describe.each([
         multiDocument,
         supplementalSelection,
         rookieExclusion,
-        sessionWindow
+        sessionWindow,
+        miniCapacity
       );
       const second = await createRetainedExternalCaptureFixture(
         sql,
@@ -142,7 +153,8 @@ describe.each([
         multiDocument,
         supplementalSelection,
         rookieExclusion,
-        sessionWindow
+        sessionWindow,
+        miniCapacity
       );
       const plannedAt = (
         await pool.query<{ at: string }>(
@@ -200,8 +212,8 @@ describe.each([
           capabilityId,
           scopeKey: 'public-afl-draft-trade-outcomes',
           competition: 'AFLM',
-          validFromSeason: 2024,
-          validThroughSeason: 2024,
+          validFromSeason: year,
+          validThroughSeason: year,
         };
         const referenceId = address('reviewer-authority-evidence', document),
           digest = sha(document),
@@ -222,7 +234,7 @@ describe.each([
             [referenceId, digest, ref.artifactId, approval, at, canonical(document)]
           );
           await tx.query(
-            `INSERT INTO outcome_operational_principal_authority(authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,valid_from_season,valid_through_season,valid_from,valid_through) VALUES($1,$2,$3,'public-afl-draft-trade-outcomes',$4,$5,'AFLM',2024,2024,$6,NULL)`,
+            `INSERT INTO outcome_operational_principal_authority(authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,valid_from_season,valid_through_season,valid_from,valid_through) VALUES($1,$2,$3,'public-afl-draft-trade-outcomes',$4,$5,'AFLM',${year},${year},$6,NULL)`,
             [referenceId, actor, role, provider, capabilityId, at]
           );
         });
@@ -243,7 +255,7 @@ describe.each([
         { source, reviewRepository }
       );
       expect(queue.items.filter((i) => i.entityKind === 'player')).toHaveLength(
-        supplementalSelection ? 70 : 71
+        supplementalSelection ? 70 : inventoryCount
       );
       const targetIds = new Map<string, string>();
       const identityReviewedAt = await databaseInstant();
@@ -312,7 +324,7 @@ describe.each([
         identityResolutions: originalResolutions,
       });
       const selected = original.content.draftSelections.find(
-        (s) => s.selectionNumber === (enumerated ? 97 : 71)
+        (s) => s.selectionNumber === finalPick
       )!;
       const transfer = original.content.transfers[0]!;
       const registration = createReviewedPickLineageRegistration({
@@ -323,25 +335,25 @@ describe.each([
             schemaVersion: 'afl-trade-reviewed-pick-lineage/v1',
             candidateId: original.candidateId,
             transferId: transfer.transferId,
-            retainedSourceLabel: `Pick ${enumerated ? 97 : 71}`,
-            acceptedTradeTimePick: enumerated ? 97 : 71,
+            retainedSourceLabel: `Pick ${finalPick}`,
+            acceptedTradeTimePick: finalPick,
             originalClubId: null,
             movements: [
               {
                 transferId: transfer.transferId,
                 fromClubId: transfer.fromClubId!,
                 toClubId: transfer.toClubId!,
-                occurredAt: { precision: 'year', year: 2024 },
+                occurredAt: { precision: 'year', year },
                 predecessorOrdinal: null,
               },
             ],
             endpoint: {
               kind: 'selected',
-              draftYear: 2024,
-              draftType: 'national',
-              livePick: enumerated ? 97 : 71,
+              draftYear: year,
+              draftType: miniCapacity ? 'mini_draft' : 'national',
+              livePick: finalPick,
               playerId: selected.playerId!,
-              recordedPlayerName: 'Synthetic Player 70',
+              recordedPlayerName: miniCapacity ? 'Synthetic Player 1' : 'Synthetic Player 70',
               exercisingClubId: selected.clubId!,
             },
             attribution: 'direct',
@@ -516,7 +528,7 @@ describe.each([
       expect(candidate.content.draftSelections).toHaveLength(1);
       expect(
         candidate.content.reviewedSessionCorrection!.projections[0].inventorySelectionIds
-      ).toHaveLength(71);
+      ).toHaveLength(inventoryCount);
       if (sessionWindow) {
         expect(candidate.content.reviewedSessionCorrection!.projections[0].schemaVersion).toBe(
           'afl-trade-combined-draft-session-projection/v2'
@@ -533,8 +545,8 @@ describe.each([
         expect(await check(candidate)).toBe(true);
         const altered = JSON.parse(JSON.stringify(candidate));
         const projection = altered.content.reviewedSessionCorrection.projections[0];
-        projection.inventorySessions[1].datePrecision.latestDate = '2024-11-26';
-        projection.selectedSessions[0].datePrecision.latestDate = '2024-11-26';
+        projection.inventorySessions[miniCapacity ? 0 : 1].datePrecision.latestDate = afterLastDay;
+        projection.selectedSessions[0].datePrecision.latestDate = afterLastDay;
         expect(await check(altered)).toBe(false);
         const client = await pool.connect();
         try {
@@ -542,7 +554,7 @@ describe.each([
           await client.query('SET LOCAL session_replication_role=replica');
           await client.query(
             "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
-            [second.target.captureId]
+            [miniCapacity ? official.target.captureId : second.target.captureId]
           );
           expect(
             (
@@ -567,7 +579,7 @@ describe.each([
         })),
       });
       expect(proposal.content.draftEventCoverage[0]).toMatchObject({
-        sessionOrdinal: 2,
+        sessionOrdinal: miniCapacity ? 1 : 2,
         expectedSelectionCount: 1,
       });
       const decision = createAflTradeExternalCanonicalPromotionReviewDecision({
@@ -614,8 +626,8 @@ describe.each([
             date_precision: {
               precision: 'window',
               eventDate: null,
-              earliestDate: '2024-11-21',
-              latestDate: '2024-11-25',
+              earliestDate: firstDay,
+              latestDate: lastDay,
             },
           },
         ]);
@@ -627,14 +639,14 @@ describe.each([
               [result.promotionId]
             )
           ).rows[0].bounds;
-        expect(await bounds()).toBe('[2024-11-21,2024-11-26)');
+        expect(await bounds()).toBe(`[${firstDay},${afterLastDay})`);
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
           await client.query('SET LOCAL session_replication_role=replica');
           await client.query(
             "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
-            [second.target.captureId]
+            [miniCapacity ? official.target.captureId : second.target.captureId]
           );
           expect(
             (
@@ -649,14 +661,75 @@ describe.each([
           await client.query('ROLLBACK');
           client.release();
         }
-        expect(await bounds()).toBe('[2024-11-21,2024-11-26)');
-        await verifyWindowSpecialExercise(pool, {
-          promotionId: result.promotionId,
-          windowCaptureId: second.target.captureId,
-          batchId: trade.target.evidenceBatchId,
-          authorityId: promoterAuthority,
-          actor,
-        });
+        expect(await bounds()).toBe(`[${firstDay},${afterLastDay})`);
+        if (miniCapacity) {
+          const variants = [
+            [
+              'draft_selection_capacity',
+              "jsonb_set(evidence_json,'{content,claim,maximumSelections}','3'::jsonb)",
+            ],
+            [
+              'draft_completed_membership_roster',
+              "jsonb_set(evidence_json,'{content,claim,members}',jsonb_build_array(evidence_json#>'{content,claim,members,0}'))",
+            ],
+            [
+              'draft_completed_membership_roster',
+              "jsonb_set(evidence_json,'{content,claim,members}',jsonb_build_array(evidence_json#>'{content,claim,members,0}',evidence_json#>'{content,claim,members,0}'))",
+            ],
+            [
+              'draft_selection_capacity',
+              "jsonb_set(evidence_json,'{content,claim,selectionCount}','2'::jsonb)",
+            ],
+          ];
+          for (const [kind, expression] of variants) {
+            const row = (
+              await pool.query<{ evidence_id: string; evidence_json: unknown }>(
+                `SELECT e.evidence_id,e.evidence_json FROM outcome_external_evidence_row e
+               JOIN outcome_external_reconciliation_source_batch b USING(batch_id)
+               WHERE b.candidate_id=$1 AND e.claim_kind=$2`,
+                [candidate.candidateId, kind]
+              )
+            ).rows[0];
+            const change = async (restore: boolean) => {
+              const client = await pool.connect();
+              try {
+                await client.query('BEGIN');
+                await client.query('SET LOCAL session_replication_role=replica');
+                if (restore)
+                  await client.query(
+                    'UPDATE outcome_external_evidence_row SET evidence_json=$2::jsonb WHERE evidence_id=$1',
+                    [row.evidence_id, JSON.stringify(row.evidence_json)]
+                  );
+                else
+                  await client.query(
+                    `UPDATE outcome_external_evidence_row SET evidence_json=${expression} WHERE evidence_id=$1`,
+                    [row.evidence_id]
+                  );
+                await client.query('COMMIT');
+              } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+              } finally {
+                client.release();
+              }
+            };
+            try {
+              await change(false);
+              await expect(promotions.promote(input)).rejects.toThrow();
+            } finally {
+              await change(true);
+            }
+            expect(await promotions.promote(input)).toEqual({ ...result, idempotentReplay: true });
+          }
+        }
+        if (!miniCapacity)
+          await verifyWindowSpecialExercise(pool, {
+            promotionId: result.promotionId,
+            windowCaptureId: second.target.captureId,
+            batchId: trade.target.evidenceBatchId,
+            authorityId: promoterAuthority,
+            actor,
+          });
       }
       const retainedArtifacts = new Map();
       for (const fixture of [draft, trade, official, second]) {

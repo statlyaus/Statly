@@ -2997,5 +2997,7 @@ the independent closing document confirms completed use of both distinct numbere
 the source evidence and null exact day. This proof rejects partial use, duplicate rights, mixed total
 mechanisms and mismatched source scope. Migration0199 adds the capacity claim and a separate SQL exhaustion check to the reviewed window
 inventory owner. It authenticates the independent roster, completion and both boundary records while
-retaining the existing source/currentness checks. New capacity public persistence/revocation coverage
-and genuine reviewed capture preparation remain pending; pure proof checks alone do not authorize admission.
+retaining the existing source/currentness checks. The bounded2012 synthetic fixture exercises public correction persistence, promotion, replay, null-day
+readback, acquisition registration and source revocation. Promotion rechecks session evidence before
+new writes and replay; altered capacity or completed membership cannot reuse a finalized receipt as
+current authority. Genuine reviewed capture preparation and admission remain pending.
