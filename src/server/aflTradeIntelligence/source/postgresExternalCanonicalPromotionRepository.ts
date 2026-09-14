@@ -5,7 +5,7 @@ import {
   prepareReviewedSpecialCorrection,
   prepareReviewedRookieCorrection,
 } from './reviewedAdmissionScope';
-import { pickCustodyDateColumns } from './pickCustodyDate';
+import { pickCustodyDateColumns, pickCustodyObservationYear } from './pickCustodyDate';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
 import {
   registerReviewedPickLineage,
@@ -1718,7 +1718,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             key: `custody:${record.custodyId}`,
             recordKind: 'external_pick_custody',
             sourceRecordId: record.custodyId,
-            seasonYear: record.draftYear,
+            seasonYear: pickCustodyObservationYear(record.observedAt),
             evidenceIds: record.evidenceIds,
             record,
           });

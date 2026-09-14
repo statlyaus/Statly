@@ -3119,3 +3119,7 @@ support them. It preserves custody, special rights, date precision and every pri
 application and SQL owners authenticate the finalized parent and current approvals; successor
 identity records must equal the parent's. Use the existing reconciliation repository for persistence
 and replay. Status readiness does not establish canonical admission or entitlement exercise.
+
+For future picks, custody source provenance follows the recorded observation year, while
+`draft_season_year` remains the pick's target draft year. Do not require a later draft-year capture
+for an earlier evidenced transfer or replace partial observation dates with invented timestamps.

@@ -48,7 +48,8 @@ import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/se
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
-describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence precision: %s', (precision) => {
+describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual occurrence precision: %s', (precision) => {
+  const pickDraftYear = precision === 'future' ? 2026 : 2025;
   const reviewedDate = precision === 'day' ? '2025-10-15' : null;
   const databaseUrl =
     process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -90,7 +91,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
     nativeTransferId: 'pick-14',
   });
   const pickId = createAflTradeContentAddress('draft-pick', {
-    draftYear: 2025,
+    draftYear: pickDraftYear,
     draftType: 'national',
     nominalRound: 1,
     nominalPick: 14,
@@ -145,7 +146,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
           asset: {
             kind: 'pick_entitlement',
             pickId,
-            draftYear: 2025,
+            draftYear: pickDraftYear,
             draftType: 'national',
             nominalRound: 1,
             nominalPick: 14,
@@ -162,7 +163,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
           custodyId,
           pickId,
           observedAt: precision === 'instant' ? '2025-11-01T00:00:00.000Z' : precision === 'day' ? {precision:'day',date:'2025-11-01'} : {precision:'year',year:2025},
-          draftYear: 2025,
+          draftYear: pickDraftYear,
           draftType: 'national',
           roundNumber: 1,
           recordedPickNumber: 14,
@@ -184,7 +185,7 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
       VALUES ('fixture-elevated-player','Fixture elevated player','approved')`);
     await outcomesPool.query(
       `INSERT INTO outcome_competition_season (competition,season_year)
-     VALUES ('AFLM',2010),('AFLM',2011),('AFLM',2012),('AFLM',2019),('AFLM',2020),('AFLM',2025)`
+     VALUES ('AFLM',2010),('AFLM',2011),('AFLM',2012),('AFLM',2019),('AFLM',2020),('AFLM',2025),('AFLM',2026)`
     );
     await outcomesPool.query(
       `INSERT INTO outcome_club (club_id,current_name,status) VALUES
@@ -698,6 +699,12 @@ describe.each(['instant', 'day', 'year', 'rookie'] as const)('factual occurrence
       const storedCustody = (await outcomesPool.query('SELECT observed_at,observed_date FROM outcome_pick_custody_observation WHERE custody_observation_id=$1',[custodyId])).rows[0];
       if (precision === 'instant') { expect(storedCustody.observed_at).not.toBeNull(); expect(storedCustody.observed_date).toBeNull(); }
       else { expect(storedCustody.observed_at).toBeNull(); expect(storedCustody.observed_date).toEqual(candidate.content.pickCustody[0].observedAt); }
+      if (precision === 'future') {
+        expect((await outcomesPool.query('SELECT draft_season_year FROM outcome_pick_custody_observation WHERE custody_observation_id=$1',[custodyId])).rows).toEqual([{draft_season_year:2026}]);
+        const captureYears = (await outcomesPool.query('SELECT season_year FROM outcome_source_capture_season WHERE capture_id=$1',[captureId])).rows.map(row=>row.season_year);
+        expect(captureYears).toContain(2025);
+        expect(captureYears).not.toContain(2026);
+      }
       const archiveCustody = (await outcomesPool.query<{record_json:{record:unknown}}>("SELECT record_json FROM outcome_public_factual_archive_record WHERE record_kind='pick_custody'")).rows;
       expect(archiveCustody[0].record_json.record).toMatchObject({observedAt:candidate.content.pickCustody[0].observedAt});
       if (precision === 'year') {

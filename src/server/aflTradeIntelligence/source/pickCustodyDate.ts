@@ -13,3 +13,10 @@ export function pickCustodyDateColumns(input: unknown) {
     ? { observedAt: value, observedDate: null }
     : { observedAt: null, observedDate: value };
 }
+
+/** Capture provenance follows the observed movement, independently of the pick's draft year. */
+export function pickCustodyObservationYear(input: unknown): number {
+  const value = pickCustodyDateSchema.parse(input);
+  if (typeof value === 'string') return new Date(value).getUTCFullYear();
+  return value.precision === 'year' ? value.year : Number(value.date.slice(0, 4));
+}
