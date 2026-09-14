@@ -1,3 +1,6 @@
+import { PostgresAflTradePromotionBackedCorpusRepository } from '@/server/aflTradeIntelligence/artifacts/postgresPromotionBackedCorpusRepository';
+import { PostgresAflTradePromotionBackedFactualReleaseRepository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedFactualReleaseRepository';
+import { PostgresAflTradePromotionBackedPublicArchiveRepository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedPublicArchiveRepository';
 import { draftSessionDateWindowSchema } from '@/server/aflTradeIntelligence/source/draftSessionDatePrecision';
 import { verifyWindowSpecialExercise } from '../testUtils/windowSpecialExercise';
 import { buildReviewedSessionCorrection } from '@/server/aflTradeIntelligence/source/reviewedSessionCorrection';
@@ -822,6 +825,41 @@ describe.each([
       ).toEqual([{ original_club_id: null }]);
     }
   );
+  if (sessionWindow) {
+    it('preserves promoted window dates through release, archive and exact replay', async () => {
+      const corpus = await new PostgresAflTradePromotionBackedCorpusRepository(sql).build({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        knowledgeCutoffAt: await databaseInstant(),
+        createdAt: await databaseInstant(),
+      });
+      const releases = new PostgresAflTradePromotionBackedFactualReleaseRepository(sql);
+      const releaseRequest = {
+        corpusId: corpus.corpusId,
+        scopeKey: 'public-afl-draft-trade-outcomes',
+        createdAt: await databaseInstant(),
+      };
+      const release = await releases.build(releaseRequest);
+      const archives = new PostgresAflTradePromotionBackedPublicArchiveRepository(sql);
+      const request = { releaseId: release.releaseId, createdAt: await databaseInstant() };
+      const result = await archives.build(request);
+      const events = result.archive.content.records
+        .map((row) => row.record)
+        .filter((record) => record.recordKind === 'draft_event');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        occurredOn: null,
+        datePrecision: {
+          precision: 'window',
+          eventDate: null,
+          earliestDate: firstDay,
+          latestDate: lastDay,
+        },
+      });
+      expect(await releases.build(releaseRequest)).toEqual({ ...release, idempotentReplay: true });
+      expect(await archives.build(request)).toEqual({ ...result, idempotentReplay: true });
+    });
+  }
   if (mode === 'window') {
     it('registers window special-right exercise with replay and revocation', async () => {
       if (!windowExerciseInput) throw new Error('Window promotion prerequisite did not complete.');
