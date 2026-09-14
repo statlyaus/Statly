@@ -21,6 +21,34 @@ import { bindReviewedPickLineage } from './reviewedPickLineage';
 import { reviewedPickLineageRegistrationSchema } from './reviewedPickLineageRegistrationContracts';
 import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotionBinding';
 
+/** Retain blocking issues and their transitive evidence without dropping ambiguous rows. */
+function retainConnectedScopeIssues(
+  sourceIssues: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>['content']['issues'],
+  activeEvidence: Set<string>,
+  transferIds: Set<string>
+) {
+  // Empty/ambiguous evidence stays blocking; shared evidence cannot be classified as unrelated.
+  const retainedIssues = new Set<number>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    sourceIssues.forEach((issue, index) => {
+      if (retainedIssues.has(index)) return;
+      if (
+        issue.evidenceIds.length === 0 ||
+        issue.evidenceIds.some((id) => activeEvidence.has(id)) ||
+        (issue.subjectKey.startsWith('lineage:') &&
+          transferIds.has(issue.subjectKey.slice('lineage:'.length)))
+      ) {
+        retainedIssues.add(index);
+        for (const id of issue.evidenceIds) activeEvidence.add(id);
+        grew = true;
+      }
+    });
+  }
+  return sourceIssues.filter((_, index) => retainedIssues.has(index));
+}
+
 /** Deterministic pre-correction scope. Whole trades and every relevant issue remain intact. */
 export function buildReviewedAdmissionScope(input: {
   sourceCandidate: unknown;
@@ -93,26 +121,7 @@ export function buildReviewedAdmissionScope(input: {
     [...transactions, ...transfers, ...draftSelections].flatMap((r) => r.evidenceIds)
   );
   const transferIds = new Set(transfers.map((t) => t.transferId));
-  // Empty/ambiguous evidence stays blocking; shared evidence cannot be classified as unrelated.
-  const retainedIssues = new Set<number>();
-  let grew = true;
-  while (grew) {
-    grew = false;
-    source.content.issues.forEach((issue, index) => {
-      if (retainedIssues.has(index)) return;
-      if (
-        issue.evidenceIds.length === 0 ||
-        issue.evidenceIds.some((id) => activeEvidence.has(id)) ||
-        (issue.subjectKey.startsWith('lineage:') &&
-          transferIds.has(issue.subjectKey.slice('lineage:'.length)))
-      ) {
-        retainedIssues.add(index);
-        for (const id of issue.evidenceIds) activeEvidence.add(id);
-        grew = true;
-      }
-    });
-  }
-  const issues = source.content.issues.filter((_, index) => retainedIssues.has(index));
+  const issues = retainConnectedScopeIssues(source.content.issues, activeEvidence, transferIds);
   const allEvidence = new Set(
     [
       ...source.content.transactions,
@@ -198,6 +207,14 @@ export async function authenticateReviewedAdmissionScope(
       );
     return;
   }
+  await authenticateUncorrectedAdmissionScope(transaction, candidate);
+}
+
+/** Authenticate the original scope before any correction is reconstructed. */
+async function authenticateUncorrectedAdmissionScope(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>
+) {
   const scope = candidate.content.reviewedScope;
   if (!scope) return;
   const stored = await transaction.query<{ registration: unknown }>(
