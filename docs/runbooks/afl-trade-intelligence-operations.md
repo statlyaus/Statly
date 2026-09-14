@@ -3023,3 +3023,10 @@ AFL114795/AFL469544 source pair. These mappings apply only after the2010 nationa
 checks; they do not modify either claim or install global aliases. Each slot club can match only once.
 Different names such as Adelaide versus Adelaide Crows remain rejected unless the exact reviewed
 uppercase source label is supplied. Genuine PDF custody and SQL admission remain separate requirements.
+
+PDF page ingestion requires an explicit asynchronous `parsePdf` dependency. It receives a copy of
+original captured bytes after authority, digest, immutable storage and readback checks, with the
+original `application/pdf` capture reference. Missing PDF parsers fail closed; PDF bytes never enter
+the HTML decoder. Parsed claims still pass the existing field-authority and staging checks. This
+transport boundary alone does not register the2010 annual report or authorize a PDF source: exact
+source parsing, runtime routing and genuine evidence completion remain required.

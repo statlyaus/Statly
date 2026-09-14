@@ -411,6 +411,13 @@ export interface AflTradeExternalPageIngestionDependencies {
     evidence: readonly AflTradeExternalEvidenceEnvelope[];
     issues: readonly AflTradeExternalPageIssue[];
   };
+  parsePdf?(input: {
+    bytes: Uint8Array;
+    capture: AflTradeExternalEvidenceContent['capture'];
+  }): Promise<{
+    evidence: readonly AflTradeExternalEvidenceEnvelope[];
+    issues: readonly AflTradeExternalPageIssue[];
+  }>;
 }
 
 export type IngestAflTradeExternalPageResult =
@@ -660,7 +667,16 @@ export async function ingestAflTradeExternalPage(
     parserVersion: request.parserVersion,
     fieldManifestSha256: request.fieldManifestSha256,
   };
-  const parsed = dependencies.parsePage({ html: decodeUtf8(captured.bytes), capture });
+  const isPdf = captured.mediaType.split(';', 1)[0].trim().toLowerCase() === 'application/pdf';
+  if (isPdf && !dependencies.parsePdf) {
+    throw new AflTradeExternalPageIngestionError(
+      'INVALID_DEPENDENCY',
+      'PDF capture requires an explicit raw-byte PDF parser.'
+    );
+  }
+  const parsed = isPdf
+    ? await dependencies.parsePdf!({ bytes: captured.bytes.slice(), capture })
+    : dependencies.parsePage({ html: decodeUtf8(captured.bytes), capture });
   if (parsed.evidence.length === 0) {
     throw new AflTradeExternalPageIngestionError(
       'EMPTY_EVIDENCE',

@@ -485,4 +485,82 @@ describe('external AFL draft/trade page ingestion', () => {
     expect(deps.captureRegistry.persistCapture).not.toHaveBeenCalled();
     expect(deps.staging.persist).not.toHaveBeenCalled();
   });
+
+  it.each(['valid', 'missing parser', 'wrong digest', 'revoked authority', 'empty evidence'])(
+    'preserves PDF byte custody and fails closed: %s',
+    async (scenario) => {
+      const deps = dependencies();
+      const rawArtifacts = createAflTradeFixtureArtifactRepository({ artifactClass: 'raw_source' });
+      // Binary bytes deliberately cannot be decoded by the HTML UTF-8 path.
+      const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10, 255, 254]);
+      const original = bytes.slice();
+      const sourceUrl = 'https://resources.afl.com.au/fixture/annual-report.pdf';
+      const parsePage = vi.fn();
+      const parsePdf = vi.fn<NonNullable<AflTradeExternalPageIngestionDependencies['parsePdf']>>(
+        async ({ bytes: parserBytes, capture }) => {
+          expect(parserBytes).toEqual(original);
+          expect(capture).toMatchObject({ mediaType: 'application/pdf', contentSha256: sha256(original) });
+          expect(deps.captureRegistry.persistCapture).toHaveBeenCalledOnce();
+          const stored = await rawArtifacts.loadExact(
+            createAflTradeByteArtifactRef(original, 'application/pdf', capturedAt), 1000
+          );
+          expect(stored?.bytes).toEqual(original);
+          parserBytes[0] = 0; // A parser cannot mutate the capture buffer.
+          return {
+            evidence: scenario === 'empty evidence' ? [] : [createAflTradeExternalEvidenceEnvelope({
+              schemaVersion: 'afl-trade-external-evidence/v1',
+              provider: 'official_afl',
+              capture,
+              sourceRow: { ordinal: 1, sourceKey: 'fixture:list-total' },
+              claim: {
+                kind: 'draft_completed_list_total',
+                draftYear: 2010,
+                draftType: 'national',
+                population: 'national_selections_and_rookie_promotions',
+                playerCount: 4,
+              },
+              publicationEligible: false,
+            })],
+            issues: [],
+          };
+        }
+      );
+      if (scenario === 'revoked authority') {
+        deps.authorizeCapture.mockRejectedValueOnce(new Error('authority withdrawn'));
+      }
+      const run = ingestAflTradeExternalPage({
+        ...sourceScope,
+        provider: 'official_afl',
+        sourceUrl,
+        capturedAt,
+        effectiveAt: capturedAt,
+        parserVersion: 'fixture-pdf/v1',
+        fieldManifestSha256: digest('f'),
+        maximumBytes: 1000,
+      }, {
+        ...deps,
+        rawArtifacts,
+        capturePage: async () => ({
+          status: 'captured', sourceUrl, bytes,
+          contentSha256: scenario === 'wrong digest' ? digest('0') : sha256(bytes),
+          mediaType: 'application/pdf', eTag: null, lastModified: null,
+        }),
+        parsePage,
+        ...(scenario === 'missing parser' ? {} : { parsePdf }),
+      });
+      if (scenario === 'valid') {
+        await expect(run).resolves.toMatchObject({ status: 'staged', evidenceCount: 1 });
+        expect(bytes).toEqual(original);
+        expect(deps.staging.persist).toHaveBeenCalledOnce();
+      } else {
+        await expect(run).rejects.toThrow();
+        expect(deps.staging.persist).not.toHaveBeenCalled();
+      }
+      if (['missing parser', 'wrong digest', 'revoked authority'].includes(scenario)) {
+        expect(parsePdf).not.toHaveBeenCalled();
+      }
+      expect(parsePage).not.toHaveBeenCalled();
+    }
+  );
+
 });
