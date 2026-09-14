@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
 import { createHash } from 'node:crypto';
 import type { AflTradeExternalPageCapture } from './externalDraftTradeIngestion';
 import { GWS_MINI_GRANT_URL } from './officialAflIssuingAwardAdapter';
@@ -39,18 +40,22 @@ export async function captureOfficialAflPage(input: {
   fetchImpl: typeof fetch;
 }): Promise<AflTradeExternalPageCapture> {
   const url = new URL(input.url);
+  const reviewedPdf = url.href === OFFICIAL_AFL_2010_REPORT.url;
   if (
-    url.protocol !== 'https:' ||
-    (url.hostname !== 'www.afl.com.au' &&
-      url.href !== GWS_MINI_GRANT_URL &&
-      !Object.values(OFFICIAL_AFL_MINI_2011_SOURCES).some((source) => source.url === url.href)) ||
-    !/^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) ||
-    url.search ||
-    url.hash
+    !reviewedPdf &&
+    (url.protocol !== 'https:' ||
+      (url.hostname !== 'www.afl.com.au' &&
+        url.href !== GWS_MINI_GRANT_URL &&
+        !Object.values(OFFICIAL_AFL_MINI_2011_SOURCES).some((source) => source.url === url.href)) ||
+      !/^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) ||
+      url.search ||
+      url.hash)
   ) {
     throw new TypeError('Official AFL capture URL is outside the approved article path.');
   }
-  const headers = new Headers({ Accept: 'text/html,application/xhtml+xml' });
+  const headers = new Headers({
+    Accept: reviewedPdf ? 'application/pdf' : 'text/html,application/xhtml+xml',
+  });
   if (input.validators?.eTag) headers.set('If-None-Match', input.validators.eTag);
   if (input.validators?.lastModified)
     headers.set('If-Modified-Since', input.validators.lastModified);
@@ -66,7 +71,11 @@ export async function captureOfficialAflPage(input: {
     return { status: 'not_modified', sourceUrl: url.href, eTag, lastModified };
   if (response.status !== 200) throw new Error(`Official AFL capture returned ${response.status}.`);
   const mediaType = response.headers.get('content-type') ?? '';
-  if (!/^text\/html\b/i.test(mediaType))
+  if (
+    reviewedPdf
+      ? mediaType.split(';', 1)[0].trim().toLowerCase() !== 'application/pdf'
+      : !/^text\/html\b/i.test(mediaType)
+  )
     throw new Error('Official AFL capture returned unsupported content type.');
   const declaredLength = response.headers.get('content-length');
   if (declaredLength !== null && Number(declaredLength) > input.maximumBytes)

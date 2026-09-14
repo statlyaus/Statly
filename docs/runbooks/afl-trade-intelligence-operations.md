@@ -3030,3 +3030,11 @@ original `application/pdf` capture reference. Missing PDF parsers fail closed; P
 the HTML decoder. Parsed claims still pass the existing field-authority and staging checks. This
 transport boundary alone does not register the2010 annual report or authorize a PDF source: exact
 source parsing, runtime routing and genuine evidence completion remain required.
+
+The2010 annual-report PDF uses an explicit reviewed-document mapping in
+`officialAflDraft2010PdfFacts.ts`: exact URL, original PDF SHA256 and page65 (printed74) bind
+its reviewed107 list-additions statement. This is not runtime PDF text extraction; changed bytes
+require fresh review. The total remains separate from the derived79 national selections. The runtime
+has a PDF parser dispatch and the fetcher accepts only this exact resource URL as PDF. Provider/Gate
+source eligibility, SQL population integration and genuine registration remain pending. Preserve actual
+observation timestamps; no historical publication timestamp is inferred from the document or URL.

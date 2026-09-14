@@ -1,4 +1,5 @@
 import 'server-only';
+import { parseOfficialAflDraft2010PdfFacts } from '../source/officialAflDraft2010PdfFacts';
 
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -222,6 +223,18 @@ export function createAflTradeExternalIngestionRuntime(
             return captureOfficialAflPage(common);
           },
           parsePage,
+          parsePdf: async ({ bytes, capture }) => {
+            if (
+              command.request.provider !== 'official_afl' ||
+              command.request.capabilityId !== 'official-afl-completed-draft-session'
+            )
+              throw new TypeError('PDF parser requires the official completed-session capability.');
+            return parseOfficialAflDraft2010PdfFacts({
+              bytes,
+              capture,
+              anchorSeasonYear: command.request.anchorSeasonYear,
+            });
+          },
         },
         clock,
       });
