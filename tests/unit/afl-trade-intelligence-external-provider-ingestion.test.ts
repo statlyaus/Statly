@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
 import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
@@ -262,6 +265,125 @@ function fixtureDependencies() {
 }
 
 describe('authorized external provider ingestion', () => {
+  it('retains observation time while finalizing under current execution authority, with exact replay', async () => {
+    const fixture = fixtureDependencies();
+    const content = structuredClone(sourceRights.content);
+    for (const field of ['seasonYear', 'occurredOn', 'transactionType', 'title']) {
+      content.fields.push({
+        ...content.fields[0]!,
+        sourceField: field,
+        normalizedField: `transaction.${field}`,
+      });
+    }
+    const rights = aflTradeSourceRightsProposalSchema.parse({
+      rightsArtifactId: createAflTradeContentAddress('source-rights', content),
+      content,
+    });
+    const current = createApprovedAflTradeExternalGateRecords({
+      sourceRights: rights,
+      environment: 'production',
+      version: 1,
+      supersedesDecisionId: null,
+      decidedAt: '2026-08-09T00:02:00.000Z',
+      effectiveAt: '2026-08-09T00:02:00.000Z',
+      revalidateAt: '2027-08-09T00:00:00.000Z',
+      accountableOwner: 'data-owner',
+      reviewer: { id: 'reviewer', role: 'source-reviewer', evidenceId: artifact('c') },
+      authorityEvidenceId: artifact('b'),
+    });
+    fixture.dependencies.resolveAuthorization = async () => ({
+      revision: 1,
+      ledger: { proposals: [current.proposal], decisions: [current.decision] },
+      sourceRights: rights,
+    });
+    const observedAt = '2026-08-09T01:00:00.000Z';
+    const retainedRequest = {
+      ...request,
+      capturedAt: observedAt,
+      fieldManifestSha256: sha256AflTradeCanonicalJson(rights.content.fields),
+    };
+    const scopedGate = {
+      ...gateRequest,
+      decisionKey: current.decision.content.decisionKey,
+      rightsArtifactId: rights.rightsArtifactId,
+      fieldUses: rights.content.fields.map((field) => ({
+        sourceField: field.sourceField,
+        use: 'archive_fact' as const,
+      })),
+    };
+    const bytes = new TextEncoder().encode('<p>Retained fixture</p>');
+    fixture.dependencies.ingestion.capturePage = async () => ({
+      status: 'captured',
+      sourceUrl: request.sourceUrl,
+      bytes,
+      contentSha256: createHash('sha256').update(bytes).digest('hex'),
+      mediaType: 'text/html',
+      eTag: null,
+      lastModified: null,
+    });
+    const persistCapture = vi.fn(fixture.dependencies.ingestion.captureRegistry.persistCapture);
+    fixture.dependencies.ingestion.captureRegistry.persistCapture = persistCapture;
+    fixture.dependencies.ingestion.parsePage = ({ capture }) => ({
+      evidence: [
+        createAflTradeExternalEvidenceEnvelope({
+          schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+          provider: 'draftguru',
+          capture,
+          sourceRow: { ordinal: 1, sourceKey: 'retained' },
+          publicationEligible: false,
+          claim: {
+            kind: 'transaction',
+            nativeEventId: '2026-fixture',
+            seasonYear: 2026,
+            occurredOn: '2026-08-09',
+            transactionType: 'trade',
+            title: null,
+          },
+        }),
+      ],
+      issues: [],
+    });
+    const batches = new Set<string>();
+    const persist = vi.fn<typeof fixture.dependencies.ingestion.staging.persist>(
+      async ({ batch }) => {
+        const idempotentReplay = batches.has(batch.batchId);
+        batches.add(batch.batchId);
+        return { batchId: batch.batchId, idempotentReplay };
+      }
+    );
+    fixture.dependencies.ingestion.staging.persist = persist;
+    const first = await ingestAuthorizedAflTradeExternalPage(
+      { request: retainedRequest, gateRequest: scopedGate },
+      fixture.dependencies
+    );
+    const replay = await ingestAuthorizedAflTradeExternalPage(
+      { request: retainedRequest, gateRequest: scopedGate },
+      fixture.dependencies
+    );
+    expect(first).toMatchObject({
+      status: 'completed',
+      result: { status: 'staged', idempotentReplay: false },
+    });
+    expect(replay).toMatchObject({
+      status: 'completed',
+      result: { status: 'staged', idempotentReplay: true },
+    });
+    const batch = persist.mock.calls[0]![0].batch;
+    expect(batch.content.finalizedAt).toBe('2026-08-10T00:00:00.000Z');
+    expect(batch.content.evidence[0]!.content.capture.capturedAt).toBe(observedAt);
+    expect(persist.mock.calls[1]![0].batch).toEqual(batch);
+    expect(persistCapture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capturedAt: observedAt,
+        executionReceipt: expect.objectContaining({
+          content: expect.objectContaining({
+            outcome: expect.objectContaining({ completedAt: '2026-08-10T00:00:00.000Z' }),
+          }),
+        }),
+      })
+    );
+  });
+
   it('rejects the local fixture provider before live authorization or admission', async () => {
     const fixture = fixtureDependencies();
 

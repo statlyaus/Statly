@@ -57,7 +57,7 @@ it('registers an explicitly reviewed absent native person, then replays and reus
   const plan = createAflTradeRetainedExternalCapturePlan({
     environment: 'non_production',
     competition: 'AFLM',
-    plannedAt: new Date(new Date(fixture.target.request.capturedAt).getTime() + 1).toISOString(),
+    plannedAt: new Date().toISOString(),
     scopeEvidence: fixture.scopeEvidence,
     targets: [fixture.target],
   });
