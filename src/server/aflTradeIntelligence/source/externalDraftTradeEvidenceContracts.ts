@@ -528,7 +528,21 @@ const compensationActivationReferenceSchema = z
   })
   .strict();
 
+const compensationRuleReferenceSchema = z
+  .object({
+    kind: z.literal('compensation_rule_reference'),
+    scheme: z.enum(['gold_coast_expansion_compensation', 'gws_expansion_compensation']),
+    awardYear: yearSchema,
+    expiresAfterYear: yearSchema.nullable(),
+    nomination: z.literal('before_season').nullable(),
+    initialYearNoticeDeadline: z.iso.date().nullable(),
+    tradeable: z.literal(true),
+    windowYears: z.literal(5).nullable(),
+  })
+  .strict();
+
 const claimSchema = z.discriminatedUnion('kind', [
+  compensationRuleReferenceSchema,
   compensationActivationReferenceSchema,
   issuingAwardReferenceSchema,
   draftSessionClaimSchema,
@@ -587,6 +601,7 @@ const allowedKindsByProvider = {
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([
+    'compensation_rule_reference',
     'compensation_activation_reference',
     'draft_selection',
     'issuing_award_reference',

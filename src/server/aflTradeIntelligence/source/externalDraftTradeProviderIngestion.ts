@@ -1,3 +1,8 @@
+import { reviewedOfficialAflCompensationArticle } from './officialAflCompensationArticleFacts';
+import {
+  reviewedOfficialAflCompensationPdf,
+  OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,
+} from './officialAflCompensationPdfFacts';
 import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010SourceScope';
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
 import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
@@ -155,6 +160,22 @@ export function validateAflTradeExternalCaptureScope(
       url.search ||
       url.hash ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'official-afl-compensation-lifecycle') {
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_COMPENSATION_PARSER_VERSION ||
+      !(
+        reviewedOfficialAflCompensationArticle(request.sourceUrl, request.anchorSeasonYear) ||
+        reviewedOfficialAflCompensationPdf(request.sourceUrl, request.anchorSeasonYear)
+      ) ||
+      !Number.isFinite(Date.parse(request.effectiveAt)) ||
+      new Date(request.effectiveAt).getUTCFullYear() < request.anchorSeasonYear
     )
       invalid();
     return;
