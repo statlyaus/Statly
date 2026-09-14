@@ -189,15 +189,16 @@ export function createAflTradeAcquisitionSpellRegistrationRule(
 
 export function createAflTradeAcquisitionSpellRegistration(
   input: Omit<z.input<typeof spellContent>, 'schemaVersion'>
-): AflTradeAcquisitionSpellRegistration {
+): AflTradeAcquisitionSpellRegistration & { content: z.infer<typeof spellContent> } {
   const content = spellContent.parse({
     ...input,
     schemaVersion: 'afl-trade-acquisition-registration/v1',
   });
-  return aflTradeAcquisitionSpellRegistrationSchema.parse({
+  const registration = aflTradeAcquisitionSpellRegistrationSchema.parse({
     spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
     content,
   });
+  return { ...registration, content };
 }
 
 export function createAflTradeWindowAcquisitionSpellRegistrationRule(
