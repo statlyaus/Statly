@@ -17,14 +17,20 @@ export interface ReviewedMovementEvidence {
   evidenceId: string;
 }
 
-/** Materialize ordinary histories only. Special-right chains and rookie elevation stay blocking. */
-export function buildReviewedOrdinaryCorrection(input: {
-  scopeCandidate: unknown;
-  registration: unknown;
-  movementEvidence: readonly ReviewedMovementEvidence[];
-}) {
-  const parent = parseAflTradeExternalReconciliationCandidate(input.scopeCandidate);
-  const registration = reviewedPickLineageRegistrationSchema.parse(input.registration);
+type Candidate = ReturnType<typeof parseAflTradeExternalReconciliationCandidate>;
+type Registration = ReturnType<typeof reviewedPickLineageRegistrationSchema.parse>;
+type Graph = ReturnType<typeof buildReviewedLineageCorrectionGraph>;
+type Movement = Graph['content']['movements'][number];
+type Chain = Graph['content']['chains'][number];
+type Transfer = Candidate['content']['transfers'][number];
+const evidence = (ids: readonly string[]) => [...new Set(ids)].sort();
+
+function assertOrdinaryParent(
+  parent: Candidate,
+  registration: Registration
+): asserts parent is Candidate & {
+  content: { reviewedScope: NonNullable<Candidate['content']['reviewedScope']> };
+} {
   if (
     !parent.content.reviewedScope ||
     parent.content.reviewedCorrection ||
@@ -34,6 +40,164 @@ export function buildReviewedOrdinaryCorrection(input: {
     parent.content.environment !== registration.content.environment
   )
     throw new TypeError('Ordinary correction requires the exact registered pre-correction scope.');
+}
+
+function movementEvidenceIds(
+  movement: Movement,
+  movementEvidence: readonly ReviewedMovementEvidence[],
+  byTransfer: Map<string, Transfer>
+) {
+  let ids: string[];
+  if (movement.source) {
+    // HTML row references remain in the registration. Parsed claim ordinals are a different coordinate system.
+    const source = movement.source;
+    ids = evidence(
+      movementEvidence
+        .filter(
+          (row) =>
+            row.artifactId === source.artifact.artifactId &&
+            row.sourceUrl === source.sourceUrl &&
+            row.nativeEventId === source.nativeEventId &&
+            row.fromClubId === movement.fromClubId &&
+            row.toClubId === movement.toClubId &&
+            (movement.transferIds.includes(row.transferId) ||
+              row.retainedAssetLabel === source.retainedAssetLabel)
+        )
+        .map((row) => row.evidenceId)
+    );
+    if (ids.length !== 1)
+      throw new TypeError(
+        'Movement requires one exact retained evidence transfer for its source, clubs and asset.'
+      );
+  } else {
+    ids = movement.transferIds.flatMap(
+      (transferId) => byTransfer.get(transferId)?.evidenceIds ?? []
+    );
+    if (!ids.length)
+      throw new TypeError('Registered movement requires original transfer evidence.');
+  }
+  return ids;
+}
+
+function recordedMovementPick(
+  movement: Movement,
+  records: Map<string, Registration['content']['records'][number]>
+) {
+  const rootRecords = movement.transferIds.flatMap((transferId) =>
+    records.has(transferId) ? [records.get(transferId)!] : []
+  );
+  const reviewedPicks = new Set(
+    rootRecords.flatMap((r) => (r.acceptedTradeTimePick === null ? [] : [r.acceptedTradeTimePick]))
+  );
+  if (reviewedPicks.size > 1)
+    throw new TypeError('Shared movement has contradictory reviewed trade-time picks.');
+  const label = movement.source?.retainedAssetLabel;
+  const match = label?.match(/^Pick\s+(\d+)$/i);
+  const recordedPickNumber = [...reviewedPicks][0] ?? (match ? Number(match[1]) : null);
+  return recordedPickNumber;
+}
+
+function ordinaryCoordinates(
+  chain: Chain,
+  content: Candidate['content'],
+  byTransfer: Map<string, Transfer>
+) {
+  const endpoint = chain.endpoint;
+  const selected =
+    endpoint.kind === 'selected'
+      ? content.draftSelections.filter(
+          (s) =>
+            s.playerId === endpoint.playerId &&
+            s.clubId === endpoint.exercisingClubId &&
+            s.draftYear === endpoint.draftYear &&
+            s.draftType === endpoint.draftType &&
+            s.selectionNumber === endpoint.livePick
+        )
+      : [];
+  if (chain.endpoint.kind === 'selected' && selected.length !== 1)
+    throw new TypeError('Reviewed ordinary endpoint must match one scoped selection.');
+  const selection = selected[0];
+  const first = byTransfer.get(chain.transferIds[0])!;
+  if (first.asset.kind !== 'pick_entitlement')
+    throw new TypeError('Special rights require their dedicated correction owner.');
+  const pickId = selection?.pickId ?? first.asset.pickId;
+  const draftYear =
+    chain.endpoint.kind === 'incorporated_into_later_package'
+      ? first.asset.draftYear
+      : chain.endpoint.draftYear;
+  const draftType =
+    chain.endpoint.kind === 'incorporated_into_later_package'
+      ? first.asset.draftType
+      : chain.endpoint.draftType;
+  if (draftYear === null || draftType === null)
+    throw new TypeError('Ordinary correction requires known draft coordinates.');
+  return { selection, pickId, draftYear, draftType };
+}
+
+function applyOrdinaryLineage(
+  content: Candidate['content'],
+  chain: Chain,
+  coordinates: ReturnType<typeof ordinaryCoordinates>,
+  registration: Registration,
+  records: Map<string, Registration['content']['records'][number]>,
+  custodyIds: string[]
+) {
+  const { selection, pickId, draftYear, draftType } = coordinates;
+  const bindings: { transferId: string; lineageId: string; custodyIds: string[] }[] = [];
+  for (const transferId of chain.transferIds) {
+    const transfer = content.transfers.find((t) => t.transferId === transferId)!;
+    if (transfer.asset.kind !== 'pick_entitlement')
+      throw new TypeError('Ordinary correction cannot relabel special rights.');
+    const record = records.get(transferId)!;
+    transfer.asset = {
+      ...transfer.asset,
+      pickId,
+      draftYear,
+      draftType,
+      nominalPick: record.acceptedTradeTimePick ?? transfer.asset.nominalPick,
+      originalClubId: chain.originalClubId,
+    };
+    transfer.status = 'single_source';
+    const terminalOutcome =
+      chain.endpoint.kind === 'selected' || chain.endpoint.kind === 'rookie_elevation'
+        ? undefined
+        : chain.endpoint;
+    const lineageId = createAflTradeContentAddress('external-pick-lineage', {
+      registrationId: registration.registrationId,
+      transferId,
+      pickId,
+      selectionId: selection?.selectionId ?? null,
+      ...(terminalOutcome ? { terminalOutcome } : {}),
+    });
+    content.pickLineage.push({
+      lineageId,
+      pickId,
+      transferId,
+      selectionId: selection?.selectionId ?? null,
+      ...(terminalOutcome ? { terminalOutcome } : {}),
+      status: 'single_source',
+      evidenceIds: evidence([
+        ...transfer.evidenceIds,
+        ...(selection?.evidenceIds ?? []),
+        ...content.pickCustody
+          .filter((c) => custodyIds.includes(c.custodyId))
+          .flatMap((c) => c.evidenceIds),
+      ]),
+    });
+    bindings.push({ transferId, lineageId, custodyIds });
+  }
+  return bindings;
+}
+
+/** Materialize ordinary histories only. Special-right chains and rookie elevation stay blocking. */
+export function buildReviewedOrdinaryCorrection(input: {
+  scopeCandidate: unknown;
+  registration: unknown;
+  movementEvidence: readonly ReviewedMovementEvidence[];
+}) {
+  const parent = parseAflTradeExternalReconciliationCandidate(input.scopeCandidate);
+  const registration = reviewedPickLineageRegistrationSchema.parse(input.registration);
+  assertOrdinaryParent(parent, registration);
   const graph = buildReviewedLineageCorrectionGraph(registration.content.records);
   const byTransfer = new Map(parent.content.transfers.map((t) => [t.transferId, t]));
   const records = new Map(registration.content.records.map((r) => [r.transferId, r]));
@@ -45,38 +209,13 @@ export function buildReviewedOrdinaryCorrection(input: {
   const content = structuredClone(parent.content);
   const appliedTransferIds: string[] = [];
   const bindings: { transferId: string; lineageId: string; custodyIds: string[] }[] = [];
-  const evidence = (ids: readonly string[]) => [...new Set(ids)].sort();
   for (const chain of eligible) {
     // A shared ordinary history is supported, but every movement is persisted once for its stable pick.
-    const endpoint = chain.endpoint;
-    const selected =
-      endpoint.kind === 'selected'
-        ? content.draftSelections.filter(
-            (s) =>
-              s.playerId === endpoint.playerId &&
-              s.clubId === endpoint.exercisingClubId &&
-              s.draftYear === endpoint.draftYear &&
-              s.draftType === endpoint.draftType &&
-              s.selectionNumber === endpoint.livePick
-          )
-        : [];
-    if (chain.endpoint.kind === 'selected' && selected.length !== 1)
-      throw new TypeError('Reviewed ordinary endpoint must match one scoped selection.');
-    const selection = selected[0];
-    const first = byTransfer.get(chain.transferIds[0])!;
-    if (first.asset.kind !== 'pick_entitlement')
-      throw new TypeError('Special rights require their dedicated correction owner.');
-    const pickId = selection?.pickId ?? first.asset.pickId;
-    const draftYear =
-      chain.endpoint.kind === 'incorporated_into_later_package'
-        ? first.asset.draftYear
-        : chain.endpoint.draftYear;
-    const draftType =
-      chain.endpoint.kind === 'incorporated_into_later_package'
-        ? first.asset.draftType
-        : chain.endpoint.draftType;
-    if (draftYear === null || draftType === null)
-      throw new TypeError('Ordinary correction requires known draft coordinates.');
+    const { selection, pickId, draftYear, draftType } = ordinaryCoordinates(
+      chain,
+      content,
+      byTransfer
+    );
     const custodyIds = chain.movementIds.map((movementId) =>
       createAflTradeContentAddress('external-pick-custody', {
         correctionGraphId: graph.correctionGraphId,
@@ -86,48 +225,8 @@ export function buildReviewedOrdinaryCorrection(input: {
     );
     chain.movementIds.forEach((id, index) => {
       const movement = graph.content.movements.find((m) => m.movementId === id)!;
-      let ids: string[];
-      if (movement.source) {
-        // HTML row references remain in the registration. Parsed claim ordinals are a different coordinate system.
-        const source = movement.source;
-        ids = evidence(
-          input.movementEvidence
-            .filter(
-              (row) =>
-                row.artifactId === source.artifact.artifactId &&
-                row.sourceUrl === source.sourceUrl &&
-                row.nativeEventId === source.nativeEventId &&
-                row.fromClubId === movement.fromClubId &&
-                row.toClubId === movement.toClubId &&
-                (movement.transferIds.includes(row.transferId) ||
-                  row.retainedAssetLabel === source.retainedAssetLabel)
-            )
-            .map((row) => row.evidenceId)
-        );
-        if (ids.length !== 1)
-          throw new TypeError(
-            'Movement requires one exact retained evidence transfer for its source, clubs and asset.'
-          );
-      } else {
-        ids = movement.transferIds.flatMap(
-          (transferId) => byTransfer.get(transferId)?.evidenceIds ?? []
-        );
-        if (!ids.length)
-          throw new TypeError('Registered movement requires original transfer evidence.');
-      }
-      const rootRecords = movement.transferIds.flatMap((transferId) =>
-        records.has(transferId) ? [records.get(transferId)!] : []
-      );
-      const reviewedPicks = new Set(
-        rootRecords.flatMap((r) =>
-          r.acceptedTradeTimePick === null ? [] : [r.acceptedTradeTimePick]
-        )
-      );
-      if (reviewedPicks.size > 1)
-        throw new TypeError('Shared movement has contradictory reviewed trade-time picks.');
-      const label = movement.source?.retainedAssetLabel;
-      const match = label?.match(/^Pick\s+(\d+)$/i);
-      const recordedPickNumber = [...reviewedPicks][0] ?? (match ? Number(match[1]) : null);
+      const ids = movementEvidenceIds(movement, input.movementEvidence, byTransfer);
+      const recordedPickNumber = recordedMovementPick(movement, records);
       content.pickCustody.push({
         custodyId: custodyIds[index],
         pickId,
@@ -145,49 +244,16 @@ export function buildReviewedOrdinaryCorrection(input: {
     });
     if (selection)
       selection.status = selection.status === 'corroborated' ? 'corroborated' : 'single_source';
-    for (const transferId of chain.transferIds) {
-      const transfer = content.transfers.find((t) => t.transferId === transferId)!;
-      if (transfer.asset.kind !== 'pick_entitlement')
-        throw new TypeError('Ordinary correction cannot relabel special rights.');
-      const record = records.get(transferId)!;
-      transfer.asset = {
-        ...transfer.asset,
-        pickId,
-        draftYear,
-        draftType,
-        nominalPick: record.acceptedTradeTimePick ?? transfer.asset.nominalPick,
-        originalClubId: chain.originalClubId,
-      };
-      transfer.status = 'single_source';
-      const terminalOutcome =
-        chain.endpoint.kind === 'selected' || chain.endpoint.kind === 'rookie_elevation'
-          ? undefined
-          : chain.endpoint;
-      const lineageId = createAflTradeContentAddress('external-pick-lineage', {
-        registrationId: registration.registrationId,
-        transferId,
-        pickId,
-        selectionId: selection?.selectionId ?? null,
-        ...(terminalOutcome ? { terminalOutcome } : {}),
-      });
-      content.pickLineage.push({
-        lineageId,
-        pickId,
-        transferId,
-        selectionId: selection?.selectionId ?? null,
-        ...(terminalOutcome ? { terminalOutcome } : {}),
-        status: 'single_source',
-        evidenceIds: evidence([
-          ...transfer.evidenceIds,
-          ...(selection?.evidenceIds ?? []),
-          ...content.pickCustody
-            .filter((c) => custodyIds.includes(c.custodyId))
-            .flatMap((c) => c.evidenceIds),
-        ]),
-      });
-      appliedTransferIds.push(transferId);
-      bindings.push({ transferId, lineageId, custodyIds });
-    }
+    const chainBindings = applyOrdinaryLineage(
+      content,
+      chain,
+      { selection, pickId, draftYear, draftType },
+      registration,
+      records,
+      custodyIds
+    );
+    appliedTransferIds.push(...chainBindings.map((binding) => binding.transferId));
+    bindings.push(...chainBindings);
   }
   const applied = new Set(appliedTransferIds);
   content.issues = content.issues.filter(
