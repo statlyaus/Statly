@@ -106,9 +106,13 @@ function selectionRows(
     }
     const transfer = lineage[0]?.transfer;
     const observations = selection.pickId ? (custodyByPick.get(selection.pickId) ?? []) : [];
-    const custody = observations.every(value => typeof value.observedAt === 'string')
-      ? observations.sort((left, right) => String(right.observedAt).localeCompare(String(left.observedAt)))[0]
-      : new Set(observations.map(value => value.originalClub?.clubId ?? null)).size === 1 ? observations[0] : undefined;
+    const custody = observations.every((value) => typeof value.observedAt === 'string')
+      ? observations.sort((left, right) =>
+          String(right.observedAt).localeCompare(String(left.observedAt))
+        )[0]
+      : new Set(observations.map((value) => value.originalClub?.clubId ?? null)).size === 1
+        ? observations[0]
+        : undefined;
     const originalClub = transfer?.pick?.originalClub ?? custody?.originalClub ?? null;
     return {
       selectionId: selection.selectionId,
@@ -118,6 +122,7 @@ function selectionRows(
       draftKind: draftKind(event.draftKind),
       draftName: event.officialName,
       draftDate: event.occurredOn,
+      ...(event.datePrecision ? { draftDatePrecision: event.datePrecision } : {}),
       selectionNumber: selection.selectionNumber,
       round: transfer?.pick?.nominalRound ?? custody?.recordedRound ?? null,
       pickId: selection.pickId,
