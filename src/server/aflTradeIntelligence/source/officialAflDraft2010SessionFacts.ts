@@ -135,7 +135,7 @@ export function parseOfficialAflDraft2010SessionFacts(
   if (key === 'membership') {
     const populations = parseOfficialAflDraft2010ListFacts(html, input);
     if (populations.issues.length) return fail();
-    evidence.push(...populations.evidence);
+    evidence.unshift(...populations.evidence);
   }
   return { evidence, issues: [] };
 }
