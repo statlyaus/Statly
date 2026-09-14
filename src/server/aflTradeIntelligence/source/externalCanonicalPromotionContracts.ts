@@ -144,221 +144,249 @@ const windowDraftSessionCoverageSchema = z
       });
   });
 
-const proposalContentSchema = z
-  .union([
-    proposalBaseSchema,
-    proposalBaseSchema.extend({
-      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v7'),
-      draftEventCoverage: z.array(windowDraftSessionCoverageSchema).max(100),
-      transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
-    }),
-    proposalBaseSchema.extend({
-      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v6'),
-      draftEventCoverage: z.array(reviewedDraftSessionCoverageSchema).max(100),
-      transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
-    }),
-    proposalBaseSchema.extend({
-      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v5'),
-      draftEventCoverage: z.array(reviewedDraftSessionCoverageSchema).max(100),
-      transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
-    }),
-    proposalBaseSchema.extend({
-      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v4'),
-      transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
-    }),
-    proposalBaseSchema.extend({
-      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v2'),
-      draftEventCoverage: z.array(draftSessionCoverageSchema).max(100),
-    }),
-    proposalBaseSchema.extend({
-      schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v3'),
-      draftEventCoverage: z.array(combinedDraftSessionCoverageSchema).max(100),
-    }),
-  ])
-  .superRefine((proposal, context) => {
-    if (proposal.candidateId !== `external-reconciliation:${proposal.candidateSha256}`) {
-      context.addIssue({
-        code: 'custom',
-        path: ['candidateSha256'],
-        message: 'Candidate digest must equal the candidate content address.',
-      });
+const proposalFieldsSchema = z.union([
+  proposalBaseSchema,
+  proposalBaseSchema.extend({
+    schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v7'),
+    draftEventCoverage: z.array(windowDraftSessionCoverageSchema).max(100),
+    transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+  }),
+  proposalBaseSchema.extend({
+    schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v6'),
+    draftEventCoverage: z.array(reviewedDraftSessionCoverageSchema).max(100),
+    transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+  }),
+  proposalBaseSchema.extend({
+    schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v5'),
+    draftEventCoverage: z.array(reviewedDraftSessionCoverageSchema).max(100),
+    transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+  }),
+  proposalBaseSchema.extend({
+    schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v4'),
+    transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
+  }),
+  proposalBaseSchema.extend({
+    schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v2'),
+    draftEventCoverage: z.array(draftSessionCoverageSchema).max(100),
+  }),
+  proposalBaseSchema.extend({
+    schemaVersion: z.literal('afl-trade-external-canonical-promotion-proposal/v3'),
+    draftEventCoverage: z.array(combinedDraftSessionCoverageSchema).max(100),
+  }),
+]);
+
+type ProposalContent = z.infer<typeof proposalFieldsSchema>;
+
+function invalidDatedSession(
+  session: { sessionOrdinal: number; eventDate: string; draftYear: number; selectionIds: string[] },
+  prior: { ordinal: number; date: string } | undefined,
+  proposal: ProposalContent,
+  seenSelections: Set<string>
+) {
+  return (
+    (proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
+      ? session.sessionOrdinal <= (prior?.ordinal ?? 0)
+      : session.sessionOrdinal !== (prior?.ordinal ?? 0) + 1) ||
+    (prior && session.eventDate < prior.date) ||
+    Number(session.eventDate.slice(0, 4)) !== session.draftYear ||
+    session.eventDate > proposal.proposedAt.slice(0, 10) ||
+    session.selectionIds.length === 0 ||
+    session.selectionIds.some((id) => seenSelections.has(id))
+  );
+}
+
+type WindowSession = Extract<
+  ProposalContent,
+  { schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v7' }
+>['draftEventCoverage'][number];
+function invalidWindowPrecision(
+  session: WindowSession,
+  prior: WindowSession | undefined,
+  proposedAt: string
+) {
+  const precision = draftSessionDatePrecisionSchema.safeParse(
+    session.eventDate === null
+      ? session.datePrecision
+      : { precision: 'day', eventDate: session.eventDate }
+  );
+  let invalid = !precision.success;
+  if (precision.success) {
+    const first =
+      precision.data.precision === 'day' ? precision.data.eventDate : precision.data.earliestDate;
+    const last =
+      precision.data.precision === 'day' ? precision.data.eventDate : precision.data.latestDate;
+    invalid ||= Number(first.slice(0, 4)) !== session.draftYear || last > proposedAt.slice(0, 10);
+    if (prior) {
+      const priorPrecision = draftSessionDatePrecisionSchema.safeParse(
+        prior.eventDate === null
+          ? prior.datePrecision
+          : { precision: 'day', eventDate: prior.eventDate }
+      );
+      invalid ||=
+        !priorPrecision.success ||
+        !draftSessionDefinitelyPrecedes(priorPrecision.data!, precision.data);
     }
-    const keys = proposal.draftEventCoverage.map(
-      (coverage) =>
-        `${coverage.draftYear}|${coverage.draftType}${'sessionOrdinal' in coverage ? `|${String(coverage.sessionOrdinal).padStart(3, '0')}` : ''}`
-    );
-    if (new Set(keys).size !== keys.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['draftEventCoverage'],
-        message: 'Each draft event may have exactly one coverage commitment.',
-      });
-    }
-    if (keys.some((key, index) => index > 0 && keys[index - 1] > key)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['draftEventCoverage'],
-        message: 'Draft-event coverage must be canonically sorted.',
-      });
-    }
-    if (
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v2' ||
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v3' ||
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5' ||
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
-    ) {
-      const seenSelections = new Set<string>();
-      const previous = new Map<string, { ordinal: number; date: string }>();
-      for (const session of proposal.draftEventCoverage) {
-        const key = `${session.draftYear}|${session.draftType}`;
-        const prior = previous.get(key);
-        if (
-          (proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
-            ? session.sessionOrdinal <= (prior?.ordinal ?? 0)
-            : session.sessionOrdinal !== (prior?.ordinal ?? 0) + 1) ||
-          (prior && session.eventDate < prior.date) ||
-          Number(session.eventDate.slice(0, 4)) !== session.draftYear ||
-          session.eventDate > proposal.proposedAt.slice(0, 10) ||
-          session.selectionIds.length === 0 ||
-          session.selectionIds.some((id) => seenSelections.has(id))
-        ) {
-          context.addIssue({
-            code: 'custom',
-            path: ['draftEventCoverage'],
-            message:
-              'Draft sessions require chronological gap-free ordinals and disjoint dated selections.',
-          });
-        }
-        previous.set(key, { ordinal: session.sessionOrdinal, date: session.eventDate });
-        session.selectionIds.forEach((id) => seenSelections.add(id));
-      }
-    }
-    if (
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5' ||
-      proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
-    ) {
-      const proofByDraft = new Map<string, string>();
-      for (const session of proposal.draftEventCoverage) {
-        const key = `${session.draftYear}|${session.draftType}`;
-        const prior = proofByDraft.get(key);
-        if (prior !== undefined && prior !== session.proofKind) {
-          context.addIssue({
-            code: 'custom',
-            path: ['draftEventCoverage'],
-            message: 'Each draft must use one consistent session proof kind.',
-          });
-        }
-        proofByDraft.set(key, session.proofKind);
-      }
-    }
-    if (proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v7') {
-      const previous = new Map<string, (typeof proposal.draftEventCoverage)[number]>();
-      const seen = new Set<string>();
-      let hasWindow = false;
-      for (const session of proposal.draftEventCoverage) {
-        const key = `${session.draftYear}|${session.draftType}`;
-        const prior = previous.get(key);
-        const precision = draftSessionDatePrecisionSchema.safeParse(
-          session.eventDate === null
-            ? session.datePrecision
-            : { precision: 'day', eventDate: session.eventDate }
-        );
-        let invalid = !precision.success;
-        if (precision.success) {
-          const first =
-            precision.data.precision === 'day'
-              ? precision.data.eventDate
-              : precision.data.earliestDate;
-          const last =
-            precision.data.precision === 'day'
-              ? precision.data.eventDate
-              : precision.data.latestDate;
-          invalid ||=
-            Number(first.slice(0, 4)) !== session.draftYear ||
-            last > proposal.proposedAt.slice(0, 10);
-          if (prior) {
-            const priorPrecision = draftSessionDatePrecisionSchema.safeParse(
-              prior.eventDate === null
-                ? prior.datePrecision
-                : { precision: 'day', eventDate: prior.eventDate }
-            );
-            invalid ||=
-              !priorPrecision.success ||
-              !draftSessionDefinitelyPrecedes(priorPrecision.data!, precision.data);
-          }
-        }
-        invalid ||=
-          session.sessionOrdinal <= (prior?.sessionOrdinal ?? 0) ||
-          (!!prior && prior.proofKind !== session.proofKind) ||
-          !session.selectionIds.length ||
-          session.selectionIds.some((id) => seen.has(id));
-        if (invalid)
-          context.addIssue({
-            code: 'custom',
-            message:
-              'Window sessions require valid ordered date bounds, consistent proof kind and disjoint selections.',
-          });
-        hasWindow ||= session.datePrecision !== undefined;
-        previous.set(key, session);
-        session.selectionIds.forEach((id) => seen.add(id));
-      }
-      if (!hasWindow)
+  }
+  return invalid;
+}
+
+function validateDatedSessionCoverage(proposal: ProposalContent, context: z.RefinementCtx) {
+  if (
+    proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v2' ||
+    proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v3' ||
+    proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5' ||
+    proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
+  ) {
+    const seenSelections = new Set<string>();
+    const previous = new Map<string, { ordinal: number; date: string }>();
+    for (const session of proposal.draftEventCoverage) {
+      const key = `${session.draftYear}|${session.draftType}`;
+      const prior = previous.get(key);
+      if (invalidDatedSession(session, prior, proposal, seenSelections)) {
         context.addIssue({
           code: 'custom',
-          message: 'Promotion v7 requires an explicit session window.',
+          path: ['draftEventCoverage'],
+          message:
+            'Draft sessions require chronological gap-free ordinals and disjoint dated selections.',
         });
+      }
+      previous.set(key, { ordinal: session.sessionOrdinal, date: session.eventDate });
+      session.selectionIds.forEach((id) => seenSelections.add(id));
     }
-    const transactionIds = proposal.transactionDateCoverage.map(
-      ({ transactionId }) => transactionId
-    );
-    if (new Set(transactionIds).size !== transactionIds.length) {
+  }
+}
+
+function validateConsistentProofKind(proposal: ProposalContent, context: z.RefinementCtx) {
+  if (
+    proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v5' ||
+    proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v6'
+  ) {
+    const proofByDraft = new Map<string, string>();
+    for (const session of proposal.draftEventCoverage) {
+      const key = `${session.draftYear}|${session.draftType}`;
+      const prior = proofByDraft.get(key);
+      if (prior !== undefined && prior !== session.proofKind) {
+        context.addIssue({
+          code: 'custom',
+          path: ['draftEventCoverage'],
+          message: 'Each draft must use one consistent session proof kind.',
+        });
+      }
+      proofByDraft.set(key, session.proofKind);
+    }
+  }
+}
+
+function validateWindowSessionCoverage(proposal: ProposalContent, context: z.RefinementCtx) {
+  if (proposal.schemaVersion === 'afl-trade-external-canonical-promotion-proposal/v7') {
+    const previous = new Map<string, (typeof proposal.draftEventCoverage)[number]>();
+    const seen = new Set<string>();
+    let hasWindow = false;
+    for (const session of proposal.draftEventCoverage) {
+      const key = `${session.draftYear}|${session.draftType}`;
+      const prior = previous.get(key);
+      let invalid = invalidWindowPrecision(session, prior, proposal.proposedAt);
+      invalid ||=
+        session.sessionOrdinal <= (prior?.sessionOrdinal ?? 0) ||
+        (!!prior && prior.proofKind !== session.proofKind) ||
+        !session.selectionIds.length ||
+        session.selectionIds.some((id) => seen.has(id));
+      if (invalid)
+        context.addIssue({
+          code: 'custom',
+          message:
+            'Window sessions require valid ordered date bounds, consistent proof kind and disjoint selections.',
+        });
+      hasWindow ||= session.datePrecision !== undefined;
+      previous.set(key, session);
+      session.selectionIds.forEach((id) => seen.add(id));
+    }
+    if (!hasWindow)
       context.addIssue({
         code: 'custom',
-        path: ['transactionDateCoverage'],
-        message: 'Each transaction may have exactly one reviewed occurrence date.',
+        message: 'Promotion v7 requires an explicit session window.',
       });
-    }
-    if (
-      transactionIds.some(
-        (transactionId, index) => index > 0 && transactionIds[index - 1] > transactionId
-      )
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['transactionDateCoverage'],
-        message: 'Transaction-date coverage must be canonically sorted.',
-      });
-    }
-    const proposedOn = new Date(proposal.proposedAt).toLocaleDateString('en-CA', {
-      timeZone: 'Australia/Melbourne',
+  }
+}
+
+const proposalContentSchema = proposalFieldsSchema.superRefine((proposal, context) => {
+  if (proposal.candidateId !== `external-reconciliation:${proposal.candidateSha256}`) {
+    context.addIssue({
+      code: 'custom',
+      path: ['candidateSha256'],
+      message: 'Candidate digest must equal the candidate content address.',
     });
-    proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear }, index) => {
-      if (occurredOn === null) {
-        if (seasonYear > Number(proposedOn.slice(0, 4))) {
-          context.addIssue({
-            code: 'custom',
-            path: ['transactionDateCoverage', index],
-            message: 'Transaction occurrence year cannot postdate the promotion proposal.',
-          });
-        }
-        return;
-      }
-      if (Number(occurredOn.slice(0, 4)) !== seasonYear) {
-        context.addIssue({
-          code: 'custom',
-          path: ['transactionDateCoverage', index, 'occurredOn'],
-          message: 'Transaction occurrence date must fall within its exact transaction season.',
-        });
-      }
-      if (occurredOn > proposedOn) {
-        context.addIssue({
-          code: 'custom',
-          path: ['transactionDateCoverage', index, 'occurredOn'],
-          message: 'Transaction occurrence date cannot postdate the promotion proposal.',
-        });
-      }
+  }
+  const keys = proposal.draftEventCoverage.map(
+    (coverage) =>
+      `${coverage.draftYear}|${coverage.draftType}${'sessionOrdinal' in coverage ? `|${String(coverage.sessionOrdinal).padStart(3, '0')}` : ''}`
+  );
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['draftEventCoverage'],
+      message: 'Each draft event may have exactly one coverage commitment.',
     });
+  }
+  if (keys.some((key, index) => index > 0 && keys[index - 1] > key)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['draftEventCoverage'],
+      message: 'Draft-event coverage must be canonically sorted.',
+    });
+  }
+  validateDatedSessionCoverage(proposal, context);
+  validateConsistentProofKind(proposal, context);
+  validateWindowSessionCoverage(proposal, context);
+  const transactionIds = proposal.transactionDateCoverage.map(({ transactionId }) => transactionId);
+  if (new Set(transactionIds).size !== transactionIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['transactionDateCoverage'],
+      message: 'Each transaction may have exactly one reviewed occurrence date.',
+    });
+  }
+  if (
+    transactionIds.some(
+      (transactionId, index) => index > 0 && transactionIds[index - 1] > transactionId
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['transactionDateCoverage'],
+      message: 'Transaction-date coverage must be canonically sorted.',
+    });
+  }
+  const proposedOn = new Date(proposal.proposedAt).toLocaleDateString('en-CA', {
+    timeZone: 'Australia/Melbourne',
   });
+  proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear }, index) => {
+    if (occurredOn === null) {
+      if (seasonYear > Number(proposedOn.slice(0, 4))) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transactionDateCoverage', index],
+          message: 'Transaction occurrence year cannot postdate the promotion proposal.',
+        });
+      }
+      return;
+    }
+    if (Number(occurredOn.slice(0, 4)) !== seasonYear) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transactionDateCoverage', index, 'occurredOn'],
+        message: 'Transaction occurrence date must fall within its exact transaction season.',
+      });
+    }
+    if (occurredOn > proposedOn) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transactionDateCoverage', index, 'occurredOn'],
+        message: 'Transaction occurrence date cannot postdate the promotion proposal.',
+      });
+    }
+  });
+});
 
 export const aflTradeExternalCanonicalPromotionProposalSchema = z
   .object({
