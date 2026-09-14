@@ -371,12 +371,11 @@ const contentSchema = z
     }
     const transactionIds = new Set(content.transactions.map(({ transactionId }) => transactionId));
     const transferIds = new Set(content.transfers.map(({ transferId }) => transferId));
-    const selectionIds = new Set(content.draftSelections.map(({ selectionId }) => selectionId));
     const duplicate = (values: readonly string[]) => new Set(values).size !== values.length;
     const collections = [
-      ['transactions', [...transactionIds]],
-      ['transfers', [...transferIds]],
-      ['draftSelections', [...selectionIds]],
+      ['transactions', content.transactions.map(({ transactionId }) => transactionId)],
+      ['transfers', content.transfers.map(({ transferId }) => transferId)],
+      ['draftSelections', content.draftSelections.map(({ selectionId }) => selectionId)],
       ['pickCustody', content.pickCustody.map(({ custodyId }) => custodyId)],
       ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
     ] as const;

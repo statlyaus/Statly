@@ -180,6 +180,27 @@ function proposal(selectionIds: string[] = [selectionId], source = candidate()) 
 }
 
 describe('external canonical promotion contracts', () => {
+  it.each(['transactions', 'transfers', 'draftSelections', 'pickCustody', 'pickLineage'] as const)(
+    'rejects duplicate IDs in candidate %s before promotion',
+    (collection) => {
+      const content = structuredClone(candidate().content);
+      const rows = content[collection];
+      // Duplicate an otherwise valid row; no source facts or membership claims change.
+      Object.assign(content, { [collection]: [...rows, structuredClone(rows[0])] });
+      let failure: unknown;
+      try {
+        createAflTradeExternalReconciliationCandidate(content);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: [collection], message: 'IDs must be unique.' }),
+        ]),
+      });
+    }
+  );
+
   it('accepts an unknown origin while still requiring the observed holder', () => {
     const original = candidate();
     const source = createAflTradeExternalReconciliationCandidate({
