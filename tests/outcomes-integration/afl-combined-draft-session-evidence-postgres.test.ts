@@ -2904,3 +2904,227 @@ it('reconstructs the2010 numbered union and member identity without a reported-l
       path.join('.')
     ).toBe(false);
 });
+
+it('authenticates derived2010 inventory and rejects revoked terminal identities', async () => {
+  const candidateId = 'derived2010-fixture';
+  const scope = { draftYear: 2010, draftType: 'national' };
+  const numbers = [...Array.from({ length: 77 }, (_, i) => i + 1), 103, 104];
+  const urls = [
+    'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+    'https://www.afl.com.au/news/114795/countdown-to-d-day',
+    'https://www.afl.com.au/news/469544/round-by-round-selections',
+    'https://www.afl.com.au/news/45435/polo-prepared-for-different-roles',
+    'https://www.collingwoodfc.com.au/news/132825/the-pies-2010-afl-draft-picks-are',
+  ];
+  const facts: Array<{ capture: number; claim: any }> = [
+    {
+      capture: 0,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_list_total',
+        population: 'national_selections_and_rookie_promotions',
+        playerCount: 107,
+      },
+    },
+    {
+      capture: 1,
+      claim: {
+        ...scope,
+        kind: 'draft_rookie_list_additions',
+        clubs: [
+          { recordedClub: 'A', recordedNames: Array.from({ length: 28 }, (_, i) => 'Rookie' + i) },
+        ],
+      },
+    },
+    {
+      capture: 2,
+      claim: {
+        ...scope,
+        kind: 'draft_rookie_promotion_slots',
+        clubs: [
+          {
+            recordedClub: 'A',
+            selectionNumbers: [...Array.from({ length: 25 }, (_, i) => i + 78), 105, 106, 107],
+          },
+        ],
+      },
+    },
+    ...Array.from({ length: 77 }, (_, i) => ({
+      capture: 2,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Member' + i,
+        selectionNumber: i + 1,
+      },
+    })),
+    {
+      capture: 3,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Dean Polo',
+        selectionNumber: 103,
+      },
+    },
+    {
+      capture: 4,
+      claim: {
+        ...scope,
+        kind: 'draft_completed_member_number',
+        recordedName: 'Tom Young',
+        selectionNumber: 104,
+      },
+    },
+    {
+      capture: 4,
+      claim: {
+        ...scope,
+        kind: 'draft_session_member_identity',
+        sessionOrdinal: 1,
+        selectionNumber: 104,
+        player: { nativeId: null, recordedName: 'Tom Young' },
+        selectedByClub: { nativeId: null, recordedName: 'Collingwood' },
+      },
+    },
+    {
+      capture: 4,
+      claim: { ...scope, kind: 'draft_session_date', sessionOrdinal: 1, eventDate: '2010-11-18' },
+    },
+    { capture: 4, claim: { ...scope, kind: 'draft_session_completion', sessionOrdinal: 1 } },
+    {
+      capture: 2,
+      claim: {
+        ...scope,
+        kind: 'draft_session_boundary',
+        sessionOrdinal: 1,
+        boundary: 'first',
+        selectionNumber: 1,
+        player: { nativeId: null, recordedName: 'First' },
+        selectedByClub: { nativeId: null, recordedName: 'First Club' },
+      },
+    },
+  ];
+  const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+  const evidenceIds = facts.map((_, i) => 'external-evidence:' + hash('derived2010:' + i));
+  const batches = urls.map((_, i) => 'external-evidence-batch:' + hash('derived2010-batch:' + i));
+  const doc = {
+    candidateId,
+    content: { environment: 'test_fixture', competition: 'AFLM', sourceBatchIds: batches },
+  };
+  const inventory = numbers.map((n) => ({
+    candidate_id: candidateId,
+    selection_id: 'derived-selection:' + n,
+    draft_year: 2010,
+    draft_type: 'national',
+    selection_number: n,
+    selection_json: {
+      playerId: 'player:' + n,
+      clubId: 'club:' + n,
+      evidenceIds: [...evidenceIds].sort(),
+    },
+  }));
+  const identities = [
+    ['player', 'First', 'player:1'],
+    ['club', 'First Club', 'club:1'],
+    ['player', 'Tom Young', 'player:104'],
+    ['club', 'Collingwood', 'club:104'],
+  ].map(([kind, recordedName, canonicalId], i) => ({
+    content: {
+      provider: 'official_afl',
+      entityKind: kind,
+      canonicalId,
+      sourceIdentity: { nativeId: null, recordedName },
+      reviewDecisionId: 'review-decision:' + hash('derived2010-review:' + i),
+    },
+  }));
+  const proposal = {
+    schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+    proposedAt: '2026-09-14T00:00:00Z',
+    draftEventCoverage: [
+      {
+        draftYear: 2010,
+        draftType: 'national',
+        sessionOrdinal: 1,
+        eventDate: '2010-11-18',
+        officialName: '2010 fixture',
+        expectedSelectionCount: 79,
+        selectionIds: inventory.map((s) => s.selection_id),
+        evidenceIds: [...evidenceIds].sort(),
+        status: 'complete',
+        proofKind: 'combined_session_facts',
+      },
+    ],
+  };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL session_replication_role=replica');
+    for (const [i, url] of urls.entries()) {
+      const capture = 'source-capture:' + hash('derived2010-capture:' + i);
+      await client.query(
+        `INSERT INTO outcome_source_capture (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json) VALUES($1,$2,$3,$4,'test_fixture','official_afl','draft-session','fixture','automated_web','official-afl-completed-draft-session','AFLM',2010,'2026-09-13','2026-09-13','approved',$5::jsonb)`,
+        [
+          capture,
+          'derived-attempt:' + i,
+          'derived-snapshot:' + i,
+          'artifact:' + hash('derived2010-bytes:' + i),
+          JSON.stringify({ sourceUrl: url }),
+        ]
+      );
+      await client.query(
+        `INSERT INTO outcome_external_evidence_batch (batch_id,capture_id,provider,evidence_count,issue_count,row_set_sha256,issue_set_sha256,status,finalized_at,batch_json) VALUES($1,$2,'official_afl',$3,0,$4,$4,'finalized','2026-09-13','{}')`,
+        [batches[i], capture, facts.filter((f) => f.capture === i).length, hash('derived-row:' + i)]
+      );
+    }
+    for (const [i, f] of facts.entries())
+      await client.query(
+        `INSERT INTO outcome_external_evidence_row(evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json) VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
+        [
+          evidenceIds[i],
+          batches[f.capture],
+          i + 1,
+          'derived:' + i,
+          f.claim.kind,
+          JSON.stringify({ content: { provider: 'official_afl', claim: f.claim } }),
+        ]
+      );
+    for (const identity of identities)
+      await client.query(
+        `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at) VALUES($1,'external_identity','fixture','approved','fixture','{}','fixture','2026-09-13')`,
+        [identity.content.reviewDecisionId]
+      );
+    await client.query('SET LOCAL session_replication_role=origin');
+    const check = async (owner: string) =>
+      (
+        await client.query(
+          `SELECT ${owner}($1,$2::jsonb,2010,'national',$3::jsonb,$4::jsonb,$5::jsonb) AS valid`,
+          [
+            candidateId,
+            JSON.stringify({
+              ...proposal,
+              schemaVersion: owner.includes('_window_')
+                ? 'afl-trade-external-canonical-promotion-proposal/v7'
+                : proposal.schemaVersion,
+            }),
+            JSON.stringify(doc),
+            JSON.stringify(inventory),
+            JSON.stringify(identities),
+          ]
+        )
+      ).rows[0].valid;
+    expect(await check('outcome_external_combined_draft_group_exact_inventory')).toBe(true);
+    expect(await check('outcome_external_window_draft_group_exact_inventory')).toBe(true);
+    await client.query('SET LOCAL session_replication_role=replica');
+    await client.query(
+      "UPDATE outcome_review_decision SET decision='rejected' WHERE decision_id=$1",
+      [identities[3].content.reviewDecisionId]
+    );
+    await client.query('SET LOCAL session_replication_role=origin');
+    expect(await check('outcome_external_combined_draft_group_exact_inventory')).toBe(false);
+    expect(await check('outcome_external_window_draft_group_exact_inventory')).toBe(false);
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+});

@@ -3087,3 +3087,10 @@ reviewed source allocation/custody, unique members and evidence,107/28 populatio
 Tom Young/Collingwood/104 identity on the same club source as the terminal member. It does not
 register that identity or grant source authority. The predicate still needs integration with session
 inventory and canonical currentness owners before public2010 admission; unknown/mixed facts reject.
+
+Migration0202 connects the83-fact numbered-union predicate to exact/window inventory validation and
+conserves member-identity evidence in reviewed admission scope. It retains independent terminal-document
+checks and the existing approved, non-superseded player/club identity joins. A derived terminal cannot
+mix with a reported-last claim or multiple sessions. Source eligibility still applies. Direct fixture
+SQL verification covers valid2010 inventory and terminal identity revocation; genuine public capture,
+registration and canonical admission remain pending until exact source/provider/Gate routing is complete.
