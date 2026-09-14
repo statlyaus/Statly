@@ -1,3 +1,4 @@
+import { resolveCompletedDraftNumberedUnion } from './completedDraftNumberedUnion';
 import { resolveCompletedDraftListTotal } from './completedDraftListTotal';
 type ListPopulationInput = Parameters<typeof resolveCompletedDraftListTotal>[0];
 import {
@@ -409,9 +410,23 @@ export function resolvePrecisionDraftSessionEvidence(
     (fact): fact is CompletedDraftMemberExclusion =>
       fact.kind === 'completed_draft_member_exclusion'
   );
+  const numberedUnion = listTotals.length === 1 && bindings.length > 0 && rosters.length === 0;
+  if (numberedUnion) {
+    if (exclusions.length)
+      throw new TypeError('Numbered population membership cannot mix roster exclusions.');
+    resolveCompletedDraftNumberedUnion({
+      draftYear: input.draftYear,
+      draftType: input.draftType,
+      inventoryNumbers,
+      total: listTotals[0]!,
+      additions: additions[0]!,
+      slots: slots[0]!,
+      members: bindings,
+    });
+  }
   if (
     rosters.length > 1 ||
-    ((bindings.length > 0 || exclusions.length > 0) && rosters.length !== 1)
+    (!numberedUnion && (bindings.length > 0 || exclusions.length > 0) && rosters.length !== 1)
   ) {
     throw new TypeError(
       'Member-number evidence requires one explicit completed membership roster.'
@@ -427,7 +442,7 @@ export function resolvePrecisionDraftSessionEvidence(
       exclusions,
     });
   }
-  if (enumerations.length === 0 && rosters.length === 0) {
+  if (enumerations.length === 0 && rosters.length === 0 && !numberedUnion) {
     if (inventoryNumbers.some((number, index) => number !== index + 1)) {
       throw new TypeError(
         'A noncontiguous inventory requires explicit completed membership evidence.'

@@ -3063,3 +3063,11 @@ normalizing the12 source name variants or inferring blank slots as passes. The c
 explicitly state that104 is the global terminal selection, so this parser does not emit a last-boundary
 claim. Complete-union and derived-terminal support, exact source eligibility and public persistence
 verification remain prerequisites to genuine registration; this helper is not yet runtime-routed.
+
+`resolveCompletedDraftNumberedUnion` proves the reviewed2010 membership from77 main-list claims,
+Polo103 andYoung104, together with the separate107/28 population proof. It validates source custody,
+unique numbers/names/evidence and exact inventory equality. It derives104 as the maximum of that
+exhausted membership, recording this basis separately from source claims. Combined projection accepts
+this membership mechanism but still requires an authenticated terminal identity boundary; the helper
+alone cannot manufacture a reported-last assertion or canonical player/club identity. SQL union parity,
+terminal identity integration and source routing remain required before genuine2010 admission.
