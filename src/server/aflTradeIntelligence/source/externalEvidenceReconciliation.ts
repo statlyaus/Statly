@@ -25,6 +25,72 @@ import {
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
 
+/** Project source facts without resolving boundary identities or changing retained attribution. */
+function projectCombinedSessionSourceFact(
+  claim: Claim,
+  source: Pick<CombinedDraftSessionFact, 'evidenceId' | 'captureId' | 'artifactId' | 'documentId'>
+): CombinedDraftSessionFact | undefined {
+  if (claim.kind === 'draft_session_date') {
+    return {
+      ...source,
+      kind: 'completed_session_date',
+      sessionOrdinal: claim.sessionOrdinal,
+      eventDate: claim.eventDate,
+    };
+  }
+  if (claim.kind === 'draft_session_completion') {
+    return {
+      ...source,
+      kind: 'completed_session',
+      sessionOrdinal: claim.sessionOrdinal,
+    };
+  }
+  if (claim.kind === 'draft_completed_list_total')
+    return { ...source, ...claim, kind: 'completed_draft_list_total' };
+  if (claim.kind === 'draft_rookie_list_additions' || claim.kind === 'draft_rookie_promotion_slots')
+    return { ...source, ...claim };
+  if (claim.kind === 'draft_completed_total') {
+    return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
+  }
+  if (claim.kind === 'draft_completed_inventory') {
+    return {
+      ...source,
+      kind: 'completed_draft_inventory',
+      selectionNumbers: claim.selectionNumbers,
+    };
+  }
+  if (claim.kind === 'draft_completed_membership_roster') {
+    return {
+      ...source,
+      kind: 'completed_draft_membership_roster',
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      members: claim.members,
+    };
+  }
+  if (claim.kind === 'draft_completed_member_number') {
+    return {
+      ...source,
+      kind: 'completed_draft_member_number',
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      recordedName: claim.recordedName,
+      selectionNumber: claim.selectionNumber,
+    };
+  }
+  if (claim.kind === 'draft_completed_member_exclusion') {
+    return {
+      ...source,
+      kind: 'completed_draft_member_exclusion',
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      recordedName: claim.recordedName,
+      reason: claim.reason,
+    };
+  }
+  return undefined;
+}
+
 export const AFL_TRADE_EXTERNAL_IDENTITY_RESOLUTION_SCHEMA_VERSION =
   'afl-trade-external-identity-resolution/v1' as const;
 export const AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION =
@@ -1107,67 +1173,8 @@ export function reconcileAflTradeExternalEvidence(input: {
             input.environment
           ),
         };
-        if (claim.kind === 'draft_session_date') {
-          return {
-            ...source,
-            kind: 'completed_session_date',
-            sessionOrdinal: claim.sessionOrdinal,
-            eventDate: claim.eventDate,
-          };
-        }
-        if (claim.kind === 'draft_session_completion') {
-          return {
-            ...source,
-            kind: 'completed_session',
-            sessionOrdinal: claim.sessionOrdinal,
-          };
-        }
-        if (claim.kind === 'draft_completed_list_total')
-          return { ...source, ...claim, kind: 'completed_draft_list_total' };
-        if (
-          claim.kind === 'draft_rookie_list_additions' ||
-          claim.kind === 'draft_rookie_promotion_slots'
-        )
-          return { ...source, ...claim };
-        if (claim.kind === 'draft_completed_total') {
-          return { ...source, kind: 'completed_draft_total', selectionCount: claim.selectionCount };
-        }
-        if (claim.kind === 'draft_completed_inventory') {
-          return {
-            ...source,
-            kind: 'completed_draft_inventory',
-            selectionNumbers: claim.selectionNumbers,
-          };
-        }
-        if (claim.kind === 'draft_completed_membership_roster') {
-          return {
-            ...source,
-            kind: 'completed_draft_membership_roster',
-            draftYear: claim.draftYear,
-            draftType: claim.draftType,
-            members: claim.members,
-          };
-        }
-        if (claim.kind === 'draft_completed_member_number') {
-          return {
-            ...source,
-            kind: 'completed_draft_member_number',
-            draftYear: claim.draftYear,
-            draftType: claim.draftType,
-            recordedName: claim.recordedName,
-            selectionNumber: claim.selectionNumber,
-          };
-        }
-        if (claim.kind === 'draft_completed_member_exclusion') {
-          return {
-            ...source,
-            kind: 'completed_draft_member_exclusion',
-            draftYear: claim.draftYear,
-            draftType: claim.draftType,
-            recordedName: claim.recordedName,
-            reason: claim.reason,
-          };
-        }
+        const sourceFact = projectCombinedSessionSourceFact(claim, source);
+        if (sourceFact) return sourceFact;
         if (
           claim.kind !== 'draft_session_boundary' &&
           claim.kind !== 'draft_session_member_identity'
