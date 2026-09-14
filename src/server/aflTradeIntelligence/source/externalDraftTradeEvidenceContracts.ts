@@ -512,7 +512,38 @@ const issuingAwardReferenceSchema = z
   })
   .strict();
 
+const compensationActivationReferenceSchema = z
+  .object({
+    kind: z.literal('compensation_activation_reference'),
+    useYear: yearSchema,
+    recordedPlayer: boundedText,
+    recordedHolder: boundedText,
+    selectionPosition: z.enum([
+      'mid_first_round',
+      'end_first_round',
+      'first_round',
+      'second_round',
+      'third_round',
+    ]),
+  })
+  .strict();
+
+const compensationRuleReferenceSchema = z
+  .object({
+    kind: z.literal('compensation_rule_reference'),
+    scheme: z.enum(['gold_coast_expansion_compensation', 'gws_expansion_compensation']),
+    awardYear: yearSchema,
+    expiresAfterYear: yearSchema.nullable(),
+    nomination: z.literal('before_season').nullable(),
+    initialYearNoticeDeadline: z.iso.date().nullable(),
+    tradeable: z.literal(true),
+    windowYears: z.literal(5).nullable(),
+  })
+  .strict();
+
 const claimSchema = z.discriminatedUnion('kind', [
+  compensationRuleReferenceSchema,
+  compensationActivationReferenceSchema,
   issuingAwardReferenceSchema,
   draftSessionClaimSchema,
   draftSessionDateClaimSchema,
@@ -570,6 +601,8 @@ const allowedKindsByProvider = {
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([
+    'compensation_rule_reference',
+    'compensation_activation_reference',
     'draft_selection',
     'issuing_award_reference',
     'pick_custody',

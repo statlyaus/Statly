@@ -697,7 +697,11 @@ export async function ingestAflTradeExternalPage(
     provider: request.provider,
     captureId: persistedCapture.captureId,
     evidence: [...parsed.evidence],
-    finalizedAt: request.capturedAt,
+    // Retained observations keep their capture time; the new batch belongs to this execution.
+    finalizedAt:
+      executionReceipt.content.schemaVersion === AFL_TRADE_EXTERNAL_CAPTURE_EXECUTION_SCHEMA_VERSION
+        ? executionReceipt.content.outcome.completedAt
+        : request.capturedAt,
     publicationEligible: false,
   });
   const staged = await dependencies.staging.persist({ batch, issues: parsed.issues });

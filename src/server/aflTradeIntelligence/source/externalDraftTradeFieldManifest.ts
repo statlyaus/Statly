@@ -41,6 +41,26 @@ export function requireAflTradeExternalEvidenceFieldAuthority(input: {
       `Draft selection event years outside approved source scope: ${[...new Set(unsupportedSelectionYears)].sort((a, b) => a - b).join(', ')}`
     );
   }
+  const unsupportedCompensationYears = input.evidence.flatMap(({ content }) => {
+    const claim = content.claim;
+    const year =
+      claim.kind === 'compensation_rule_reference'
+        ? claim.awardYear
+        : claim.kind === 'compensation_activation_reference'
+          ? claim.useYear
+          : undefined;
+    if (year === undefined) return [];
+    return input.sourceRights.content.scope.seasonRanges.some(
+      ({ from, to }) => from <= year && year <= to
+    )
+      ? []
+      : [year];
+  });
+  if (unsupportedCompensationYears.length > 0) {
+    throw new TypeError(
+      `Compensation event years outside approved source scope: ${[...new Set(unsupportedCompensationYears)].sort((a, b) => a - b).join(', ')}`
+    );
+  }
   const fieldsByNormalizedPath = new Map(
     input.sourceRights.content.fields.map((field) => [field.normalizedField, field] as const)
   );

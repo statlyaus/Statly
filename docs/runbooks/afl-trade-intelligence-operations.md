@@ -2875,6 +2875,21 @@ exact candidate source set before canonical custody; source capture alone does n
 completion. Register current issuing-year capture/reviewer coverage before invoking the award owner.
 Retained article bytes and parser verification alone are not registered capture or award evidence.
 
+### Compensation lifecycle references
+
+`official-afl-compensation-lifecycle` uses the exact reviewed URLs in
+`officialAflCompensationSourceScope.ts`; `officialAflCompensationArticleFacts.ts` and
+`officialAflCompensationPdfFacts.ts` bind allowed anchor years, parser version and byte hashes.
+The article and PDF parsers emit separate
+`compensation_activation_reference` and `compensation_rule_reference` facts; migration0209 permits
+both in the existing immutable evidence staging owner. Retain use-year, recorded player/holder and
+selection position separately from original award year, expiry and nomination rules. Preserve absent
+notice dates; an initial-year deadline is not evidence of a club's actual notice date.
+These references do not enter the issuing-award lane or create lifecycle registrations. Bind retained
+bytes to current exact source/Gate authority and registered captures before supplying the existing
+activation and exercise owners. Parser fixtures, staging replay and migration checks do not establish
+genuine registration, canonical admission, shared deployment or permission to publish.
+
 ### Reviewed special-custody successors
 
 `prepareReviewedSpecialCorrection` authenticates the finalized ordinary parent, registered lineage,
