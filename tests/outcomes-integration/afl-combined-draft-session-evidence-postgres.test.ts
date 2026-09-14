@@ -2586,14 +2586,123 @@ it('preserves window bounds and membership across SQL reviewed transitions', asy
   expect(await valid(ordered)).toBe(false);
 });
 
-
 it('admits only the exact2012 closing-paperwork source scope', async () => {
-  const source = 'https://www.afl.com.au/news/453694/official-paperwork-close-to-gillette-afl-trade-period-friday-october-26';
+  const source =
+    'https://www.afl.com.au/news/453694/official-paperwork-close-to-gillette-afl-trade-period-friday-october-26';
   const key = async (url: string, year = 2012, type = 'mini_draft') =>
-    (await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [url,year,type])).rows[0].key;
+    (
+      await pool.query('SELECT outcome_official_mini_2011_document_key($1,$2,$3) AS key', [
+        url,
+        year,
+        type,
+      ])
+    ).rows[0].key;
   expect(await key(source)).toBe('453694');
-  expect(await key(source,2011)).toBeNull();
-  expect(await key(source,2012,'national')).toBeNull();
-  expect(await key(source+'?unreviewed=1')).toBeNull();
-  expect(await key(source+'-unreviewed')).toBeNull();
+  expect(await key(source, 2011)).toBeNull();
+  expect(await key(source, 2012, 'national')).toBeNull();
+  expect(await key(source + '?unreviewed=1')).toBeNull();
+  expect(await key(source + '-unreviewed')).toBeNull();
+});
+
+it('authenticates explicit capacity exhaustion and rejects partial, mixed or unbound evidence in SQL', async () => {
+  const scope = { draftYear: 2012, draftType: 'mini_draft' };
+  const closed = { captureId: 'closed', artifactId: 'closed-bytes', documentId: '453694' };
+  const facts = [
+    {
+      evidenceId: 'capacity',
+      captureId: 'rules',
+      artifactId: 'rules-bytes',
+      documentId: 'https://www.goldcoastfc.com.au/news/114828/final-mini-draft-explained',
+      claim: { ...scope, kind: 'draft_selection_capacity', maximumSelections: 2 },
+    },
+    {
+      ...closed,
+      evidenceId: 'roster',
+      claim: {
+        ...scope,
+        kind: 'draft_completed_membership_roster',
+        members: [
+          { recordedName: 'Jack Martin', selectionNumber: 1 },
+          { recordedName: 'Jesse Hogan', selectionNumber: 2 },
+        ],
+      },
+    },
+    {
+      ...closed,
+      evidenceId: 'completion',
+      claim: { ...scope, kind: 'draft_session_completion', sessionOrdinal: 1 },
+    },
+    {
+      ...closed,
+      evidenceId: 'first',
+      claim: {
+        ...scope,
+        kind: 'draft_session_boundary',
+        sessionOrdinal: 1,
+        boundary: 'first',
+        selectionNumber: 1,
+        player: { nativeId: null, recordedName: 'Jack Martin' },
+        selectedByClub: { nativeId: null, recordedName: 'Gold Coast Suns' },
+      },
+    },
+    {
+      ...closed,
+      evidenceId: 'last',
+      claim: {
+        ...scope,
+        kind: 'draft_session_boundary',
+        sessionOrdinal: 1,
+        boundary: 'last',
+        selectionNumber: 2,
+        player: { nativeId: null, recordedName: 'Jesse Hogan' },
+        selectedByClub: { nativeId: null, recordedName: 'Melbourne' },
+      },
+    },
+  ];
+  const check = async (
+    value: unknown,
+    expected: unknown = [1, 2],
+    year = 2012,
+    type = 'mini_draft'
+  ) =>
+    (
+      await pool.query(
+        'SELECT outcome_completed_capacity_exhaustion_exact($1::jsonb,$2::jsonb,$3,$4) AS valid',
+        [JSON.stringify(value), JSON.stringify(expected), year, type]
+      )
+    ).rows[0].valid;
+  expect(await check(facts)).toBe(true);
+  expect(await check(facts.slice(0, 4))).toBe(false);
+  expect(await check([...facts, facts[0]])).toBe(false);
+  expect(await check(facts, [1])).toBe(false);
+  expect(await check(facts, [1, 1])).toBe(false);
+  expect(await check(facts, [1, 2], 2011)).toBe(false);
+  expect(await check(facts, [1, 2], 2012, 'national')).toBe(false);
+  const patches: Array<[string[], unknown]> = [
+    [['0', 'claim', 'maximumSelections'], 3],
+    [['0', 'claim', 'kind'], 'draft_completed_total'],
+    [['0', 'captureId'], 'closed'],
+    [['0', 'artifactId'], 'closed-bytes'],
+    [['0', 'documentId'], '453694'],
+    [['1', 'claim', 'members', '1', 'selectionNumber'], 1],
+    [['1', 'claim', 'members', '1', 'recordedName'], 'Jack Martin'],
+    [['2', 'captureId'], 'unbound'],
+    [['2', 'artifactId'], 'unbound'],
+    [['2', 'claim', 'sessionOrdinal'], 2],
+    [['3', 'documentId'], 'other'],
+    [['3', 'claim', 'player', 'recordedName'], 'Other player'],
+    [['4', 'claim', 'boundary'], 'first'],
+    [['4', 'claim', 'selectionNumber'], 3],
+    [['4', 'evidenceId'], 'first'],
+  ];
+  for (const [path, value] of patches) {
+    expect(
+      (
+        await pool.query(
+          `SELECT outcome_completed_capacity_exhaustion_exact(jsonb_set($1::jsonb,$2::text[],$3::jsonb),$4::jsonb,2012,'mini_draft') AS valid`,
+          [JSON.stringify(facts), path, JSON.stringify(value), '[1,2]']
+        )
+      ).rows[0].valid
+    ).toBe(false);
+  }
 });
