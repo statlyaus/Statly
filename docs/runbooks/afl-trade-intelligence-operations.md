@@ -3009,3 +3009,11 @@ selection count. It neither emits a source-reported total nor authenticates sour
 caller must establish exact source scope, population meaning, chronology and club-label bindings;
 raw spelling differences must remain traceable. Parser contracts, SQL/currentness checks and public
 persistence integration are required before this calculation can support canonical promotion.
+
+The2010 population contracts distinguish `draft_completed_list_total`, `draft_rookie_list_additions`
+and `draft_rookie_promotion_slots`; only Official AFL and explicit fixtures may emit them. The bounded
+HTML helper `parseOfficialAflDraft2010ListFacts` validates the exact URLs, publication metadata and
+article-body digests for AFL114795 and469544. It preserves original club labels and extracts only
+labelled additions or PR slots, including unnamed slots without inventing players. The helper is not
+yet wired into capture routing. Annual-report PDF extraction, reviewed cross-source label binding,
+SQL scope/currentness and canonical promotion integration remain required.

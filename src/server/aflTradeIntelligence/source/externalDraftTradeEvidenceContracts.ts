@@ -328,6 +328,71 @@ const draftSelectionCapacityClaimSchema = z
   })
   .strict();
 
+// These populations are inputs to a reviewed derivation, not reported selection totals.
+const draftCompletedListTotalClaimSchema = z
+  .object({
+    kind: z.literal('draft_completed_list_total'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    population: z.literal('national_selections_and_rookie_promotions'),
+    playerCount: positiveOrdinalSchema,
+  })
+  .strict();
+const draftRookieListAdditionsClaimSchema = z
+  .object({
+    kind: z.literal('draft_rookie_list_additions'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    clubs: z
+      .array(
+        z
+          .object({
+            recordedClub: boundedText,
+            recordedNames: z.array(boundedText).min(1).max(100),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(25),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const clubs = claim.clubs.map((club) => club.recordedClub);
+    const names = claim.clubs.flatMap((club) => club.recordedNames);
+    if (new Set(clubs).size !== clubs.length || new Set(names).size !== names.length)
+      context.addIssue({
+        code: 'custom',
+        message: 'Rookie additions require unique club labels and player names.',
+      });
+  });
+const draftRookiePromotionSlotsClaimSchema = z
+  .object({
+    kind: z.literal('draft_rookie_promotion_slots'),
+    draftYear: z.literal(2010),
+    draftType: z.literal('national'),
+    clubs: z
+      .array(
+        z
+          .object({
+            recordedClub: boundedText,
+            selectionNumbers: z.array(positiveOrdinalSchema).min(1).max(100),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(25),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const clubs = claim.clubs.map((club) => club.recordedClub);
+    const numbers = claim.clubs.flatMap((club) => club.selectionNumbers);
+    if (new Set(clubs).size !== clubs.length || new Set(numbers).size !== numbers.length)
+      context.addIssue({
+        code: 'custom',
+        message: 'Rookie slots require unique club labels and selection numbers.',
+      });
+  });
+
 const draftSessionCompletionClaimSchema = z
   .object({
     kind: z.literal('draft_session_completion'),
@@ -442,6 +507,9 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSessionWindowClaimSchema,
   draftSessionCompletionClaimSchema,
   draftSelectionCapacityClaimSchema,
+  draftCompletedListTotalClaimSchema,
+  draftRookieListAdditionsClaimSchema,
+  draftRookiePromotionSlotsClaimSchema,
   draftSessionBoundaryClaimSchema,
   draftCompletedTotalClaimSchema,
   draftCompletedInventoryClaimSchema,
@@ -463,6 +531,9 @@ const allowedKindsByProvider = {
     'draft_session_date',
     'draft_session_window',
     'draft_selection_capacity',
+    'draft_completed_list_total',
+    'draft_rookie_list_additions',
+    'draft_rookie_promotion_slots',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
@@ -492,6 +563,9 @@ const allowedKindsByProvider = {
     'draft_session_date',
     'draft_session_window',
     'draft_selection_capacity',
+    'draft_completed_list_total',
+    'draft_rookie_list_additions',
+    'draft_rookie_promotion_slots',
     'draft_session_completion',
     'draft_session_boundary',
     'draft_completed_total',
