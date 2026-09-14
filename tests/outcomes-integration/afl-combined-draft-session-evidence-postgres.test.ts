@@ -2706,3 +2706,87 @@ it('authenticates explicit capacity exhaustion and rejects partial, mixed or unb
     ).toBe(false);
   }
 });
+
+it('validates independent2010 list populations and rejects incomplete or altered proofs', async () => {
+  const scope = { draftYear: 2010, draftType: 'national' };
+  const fact = (id: string, documentId: string, claim: object) => ({
+    evidenceId: id,
+    captureId: id,
+    artifactId: id + '-bytes',
+    documentId,
+    claim: { ...scope, ...claim },
+  });
+  const facts = [
+    fact(
+      'total',
+      'https://resources.afl.com.au/afl/document/2019/12/05/0b3bf9a6-8f7d-4094-8591-d10f5babd3cf/afl_annual_report_2010_V2-min.pdf',
+      {
+        kind: 'draft_completed_list_total',
+        population: 'national_selections_and_rookie_promotions',
+        playerCount: 4,
+      }
+    ),
+    fact('additions', '114795', {
+      kind: 'draft_rookie_list_additions',
+      clubs: [{ recordedClub: 'ADELAIDE', recordedNames: ['One', 'Two'] }],
+    }),
+    fact('slots', '469544', {
+      kind: 'draft_rookie_promotion_slots',
+      clubs: [{ recordedClub: 'Adelaide Crows', selectionNumbers: [2, 4] }],
+    }),
+  ];
+  const check = async (value: unknown, expected: unknown = [1, 3], year = 2010) =>
+    (
+      await pool.query(
+        "SELECT outcome_completed_list_population_exact($1::jsonb,$2::jsonb,$3,'national') AS valid",
+        [JSON.stringify(value), JSON.stringify(expected), year]
+      )
+    ).rows[0].valid;
+  expect(await check(facts)).toBe(true);
+  for (const value of [facts.slice(1), [...facts, facts[0]], [], null])
+    expect(await check(value)).toBe(false);
+  for (const expected of [[1], [1, 1], [1, 2], [1, '3'], [1, 3.5], null])
+    expect(await check(facts, expected)).toBe(false);
+  expect(await check(facts, [1, 3], 2011)).toBe(false);
+  const patches: Array<[string[], unknown]> = [
+    [['0', 'claim', 'playerCount'], 5],
+    [['0', 'claim', 'playerCount'], '4'],
+    [['0', 'claim', 'selectionCount'], 2],
+    [['0', 'claim', 'population'], 'all_lists'],
+    [['1', 'claim', 'draftYear'], 2011],
+    [['1', 'claim', 'clubs'], []],
+    [
+      ['1', 'claim', 'clubs', '0', 'recordedNames'],
+      ['One', 'One'],
+    ],
+    [['1', 'claim', 'clubs', '0', 'recordedNames'], ['One']],
+    [['1', 'claim', 'clubs', '0', 'recordedClub'], 'Adelaide'],
+    [
+      ['2', 'claim', 'clubs', '0', 'selectionNumbers'],
+      [2, 2],
+    ],
+    [
+      ['2', 'claim', 'clubs', '0', 'selectionNumbers'],
+      [2, '4'],
+    ],
+    [
+      ['2', 'claim', 'clubs', '0', 'selectionNumbers'],
+      [2, 3],
+    ],
+    [['2', 'claim', 'clubs', '0', 'extra'], true],
+    [['1', 'documentId'], 'other'],
+    [['1', 'captureId'], 'total'],
+    [['1', 'artifactId'], 'total-bytes'],
+    [['1', 'evidenceId'], 'total'],
+  ];
+  for (const [path, value] of patches)
+    expect(
+      (
+        await pool.query(
+          "SELECT outcome_completed_list_population_exact(jsonb_set($1::jsonb,$2::text[],$3::jsonb), '[1,3]',2010,'national') AS valid",
+          [JSON.stringify(facts), path, JSON.stringify(value)]
+        )
+      ).rows[0].valid,
+      path.join('.')
+    ).toBe(false);
+});

@@ -3047,3 +3047,10 @@ The mechanism cannot mix with completed-selection totals or mini-draft capacity.
 membership, dates, completion and first/last boundary checks still apply before selecting a candidate
 subset. Reconciliation maps these same source claims without replacing their original population values.
 SQL/currentness, source eligibility and genuine2010 registration remain pending.
+
+Migration0200 adds `outcome_completed_list_population_exact` for the separate2010 list populations.
+Exact-date and window inventory owners call it on their authenticated evidence set. It checks distinct
+source custody, exact population shapes, reviewed club-label pairs, rookie counts, unique/disjoint
+slots and complete inventory size. It rejects mixed reported-total/capacity evidence and retains the
+independent total-versus-terminal-document requirement. Existing source authorization still applies;
+this migration alone does not enable new source URLs or establish genuine2010 session admission.
