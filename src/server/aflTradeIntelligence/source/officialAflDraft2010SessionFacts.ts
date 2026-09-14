@@ -23,6 +23,41 @@ export const OFFICIAL_AFL_2010_SESSION_SOURCES = {
   },
 } as const;
 const norm = (text: string) => text.replace(/\s+/g, ' ').trim();
+function parseNumberedMembership(bodyHtml: string) {
+  const scope = { draftYear: 2010 as const, draftType: 'national' as const };
+  const claims: AflTradeExternalEvidenceContent['claim'][] = [];
+  const rows = bodyHtml
+    .split(/<br\s*\/?\s*>/i)
+    .map((fragment) => norm(load(fragment).text()))
+    .filter((t) => /^\d+ /.test(t));
+  if (rows.length !== 112 || rows.some((row, i) => Number(row.match(/^\d+/)![0]) !== i + 1))
+    return null;
+  for (const row of rows) {
+    if (row.includes('(PR)') || /\bpass\b/i.test(row)) continue;
+    const match = row.match(/^(\d+) (.+?) - (.+)$/);
+    if (!match) continue; // Blank published slots remain absent, never inferred as passes.
+    const recordedName = match[3]!.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+    if (!recordedName) return null;
+    claims.push({
+      ...scope,
+      kind: 'draft_completed_member_number',
+      recordedName,
+      selectionNumber: Number(match[1]),
+    });
+  }
+  if (claims.length !== 77) return null;
+  claims.push({
+    ...scope,
+    kind: 'draft_session_boundary',
+    sessionOrdinal: 1,
+    boundary: 'first',
+    selectionNumber: 1,
+    player: { nativeId: null, recordedName: 'David Swallow' },
+    selectedByClub: { nativeId: null, recordedName: 'Gold Coast Suns' },
+  });
+  return claims;
+}
+
 /** Separate numbered-member facts retain each document's actual scope and spellings. */
 export function parseOfficialAflDraft2010SessionFacts(
   html: string,
@@ -57,36 +92,9 @@ export function parseOfficialAflDraft2010SessionFacts(
   const scope = { draftYear: 2010 as const, draftType: 'national' as const };
   const claims: AflTradeExternalEvidenceContent['claim'][] = [];
   if (key === 'membership') {
-    const rows = body
-      .html()!
-      .split(/<br\s*\/?\s*>/i)
-      .map((fragment) => norm(load(fragment).text()))
-      .filter((t) => /^\d+ /.test(t));
-    if (rows.length !== 112 || rows.some((row, i) => Number(row.match(/^\d+/)![0]) !== i + 1))
-      return fail();
-    for (const row of rows) {
-      if (row.includes('(PR)') || /\bpass\b/i.test(row)) continue;
-      const match = row.match(/^(\d+) (.+?) - (.+)$/);
-      if (!match) continue; // Blank published slots remain absent, never inferred as passes.
-      const recordedName = match[3]!.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-      if (!recordedName) return fail();
-      claims.push({
-        ...scope,
-        kind: 'draft_completed_member_number',
-        recordedName,
-        selectionNumber: Number(match[1]),
-      });
-    }
-    if (claims.length !== 77) return fail();
-    claims.push({
-      ...scope,
-      kind: 'draft_session_boundary',
-      sessionOrdinal: 1,
-      boundary: 'first',
-      selectionNumber: 1,
-      player: { nativeId: null, recordedName: 'David Swallow' },
-      selectedByClub: { nativeId: null, recordedName: 'Gold Coast Suns' },
-    });
+    const membership = parseNumberedMembership(body.html()!);
+    if (!membership) return fail();
+    claims.push(...membership);
   } else if (key === 'polo') {
     if (!text.includes('Dean Polo') || !text.includes('103rd selection')) return fail();
     claims.push({

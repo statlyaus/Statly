@@ -36,6 +36,34 @@ const clubHeadings = [
   'WESTERN BULLDOGS',
 ];
 const norm = (text: string) => text.replace(/\s+/g, ' ').trim();
+function parseRookieAdditions(text: string) {
+  const clubs: { recordedClub: string; recordedNames: string[] }[] = [];
+  const headings = [
+    ...text.matchAll(
+      new RegExp(
+        `(${[...clubHeadings].sort((a, b) => b.length - a.length).join('|')})NAB AFL Draft selections:`,
+        'g'
+      )
+    ),
+  ];
+  if (headings.length !== clubHeadings.length || headings.some((h, i) => h[1] !== clubHeadings[i]))
+    return null;
+  for (let i = 0; i < clubHeadings.length; i++) {
+    const heading = clubHeadings[i]!;
+    const start = headings[i]!.index!;
+    const end = headings[i + 1]?.index ?? text.length;
+    const section = text.slice(start, end),
+      matches = [...section.matchAll(/Additions: (.*?)(?=Approach:|$)/g)];
+    if (matches.length !== 1) return null;
+    const names = [...matches[0]![1]!.matchAll(/(?:^|, )([^,()]+) \(rookie elevation\)/g)].map(
+      (m) => m[1]!.trim()
+    );
+    if (names.length) clubs.push({ recordedClub: heading, recordedNames: names });
+  }
+  if (clubs.flatMap((c) => c.recordedNames).length !== 28) return null;
+  return clubs;
+}
+
 /** Retain original club labels. Downstream joining must bind label differences explicitly. */
 export function parseOfficialAflDraft2010ListFacts(
   html: string,
@@ -68,33 +96,8 @@ export function parseOfficialAflDraft2010ListFacts(
   const common = { draftYear: 2010 as const, draftType: 'national' as const };
   let claim: AflTradeExternalEvidenceContent['claim'];
   if (key === 'additions') {
-    const clubs: { recordedClub: string; recordedNames: string[] }[] = [];
-    const headings = [
-      ...text.matchAll(
-        new RegExp(
-          `(${[...clubHeadings].sort((a, b) => b.length - a.length).join('|')})NAB AFL Draft selections:`,
-          'g'
-        )
-      ),
-    ];
-    if (
-      headings.length !== clubHeadings.length ||
-      headings.some((h, i) => h[1] !== clubHeadings[i])
-    )
-      return fail();
-    for (let i = 0; i < clubHeadings.length; i++) {
-      const heading = clubHeadings[i]!;
-      const start = headings[i]!.index!;
-      const end = headings[i + 1]?.index ?? text.length;
-      const section = text.slice(start, end),
-        matches = [...section.matchAll(/Additions: (.*?)(?=Approach:|$)/g)];
-      if (matches.length !== 1) return fail();
-      const names = [...matches[0]![1]!.matchAll(/(?:^|, )([^,()]+) \(rookie elevation\)/g)].map(
-        (m) => m[1]!.trim()
-      );
-      if (names.length) clubs.push({ recordedClub: heading, recordedNames: names });
-    }
-    if (clubs.flatMap((c) => c.recordedNames).length !== 28) return fail();
+    const clubs = parseRookieAdditions(text);
+    if (!clubs) return fail();
     claim = { ...common, kind: 'draft_rookie_list_additions', clubs };
   } else {
     const rows = body
