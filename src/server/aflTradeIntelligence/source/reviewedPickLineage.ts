@@ -144,6 +144,65 @@ export const reviewedPickLineageSchema = z
 
 export type ReviewedPickLineage = z.infer<typeof reviewedPickLineageSchema>;
 
+type LineageCandidate = ReturnType<typeof parseAflTradeExternalReconciliationCandidate>;
+type LineageTransfer = LineageCandidate['content']['transfers'][number];
+type LineageTransaction = LineageCandidate['content']['transactions'][number];
+
+function retainedAssetLabel(asset: LineageTransfer['asset']): string | null {
+  const source = asset.kind === 'special_entitlement' ? asset.sourceAsset : asset;
+  if (source.kind === 'special_pick') return source.sourceLabel;
+  if (source.kind !== 'pick_entitlement') return null;
+  return (
+    source.recordedLabel ?? (source.nominalPick === null ? null : `Pick ${source.nominalPick}`)
+  );
+}
+
+function validateMovementDate(
+  occurredAt: ReviewedPickLineage['movements'][number]['occurredAt'],
+  event: LineageTransaction
+) {
+  const date = specialEntitlementDateBounds(occurredAt);
+  if (
+    date.year !== event.seasonYear ||
+    (date.day !== null && event.occurredOn !== null && date.day !== event.occurredOn)
+  ) {
+    throw new TypeError('Reviewed custody contradicts the candidate transaction date.');
+  }
+}
+
+function validateCandidateMovements(
+  movements: ReviewedPickLineage['movements'],
+  transfers: ReadonlyMap<string, LineageTransfer>,
+  transactions: ReadonlyMap<string, LineageTransaction>
+) {
+  for (const movement of movements) {
+    if (movement.transferId === null) continue;
+    const transfer = transfers.get(movement.transferId);
+    if (
+      !transfer ||
+      transfer.asset.kind === 'player' ||
+      transfer.status === 'disputed' ||
+      transfer.fromClubId !== movement.fromClubId ||
+      transfer.toClubId !== movement.toClubId
+    ) {
+      throw new TypeError('Reviewed custody does not match a candidate pick transfer.');
+    }
+    const event = transactions.get(transfer.transactionId)!;
+    if (movement.source && movement.source.nativeEventId !== event.providerEventId) {
+      throw new TypeError('Movement source must identify the candidate transaction.');
+    }
+    const expectedLabel = retainedAssetLabel(transfer.asset);
+    if (
+      movement.source &&
+      expectedLabel !== null &&
+      movement.source.retainedAssetLabel !== expectedLabel
+    ) {
+      throw new TypeError('Movement source must preserve the candidate asset label.');
+    }
+    validateMovementDate(movement.occurredAt, event);
+  }
+}
+
 /** Binds reviewed facts to immutable candidate identities. Authority/readback belongs to the repository. */
 export function bindReviewedPickLineage(candidateInput: unknown, recordsInput: readonly unknown[]) {
   const candidate = parseAflTradeExternalReconciliationCandidate(candidateInput);
@@ -156,46 +215,7 @@ export function bindReviewedPickLineage(candidateInput: unknown, recordsInput: r
   for (const record of records) {
     if (record.candidateId !== candidate.candidateId)
       throw new TypeError('Lineage must bind the exact candidate.');
-    for (const movement of record.movements) {
-      if (movement.transferId === null) continue;
-      const transfer = transfers.get(movement.transferId);
-      if (
-        !transfer ||
-        transfer.asset.kind === 'player' ||
-        transfer.status === 'disputed' ||
-        transfer.fromClubId !== movement.fromClubId ||
-        transfer.toClubId !== movement.toClubId
-      ) {
-        throw new TypeError('Reviewed custody does not match a candidate pick transfer.');
-      }
-      const event = transactions.get(transfer.transactionId)!;
-      if (movement.source && movement.source.nativeEventId !== event.providerEventId) {
-        throw new TypeError('Movement source must identify the candidate transaction.');
-      }
-      const sourceAsset =
-        transfer.asset.kind === 'special_entitlement' ? transfer.asset.sourceAsset : transfer.asset;
-      const expectedLabel =
-        sourceAsset.kind === 'special_pick'
-          ? sourceAsset.sourceLabel
-          : sourceAsset.kind === 'pick_entitlement'
-            ? (sourceAsset.recordedLabel ??
-              (sourceAsset.nominalPick === null ? null : `Pick ${sourceAsset.nominalPick}`))
-            : null;
-      if (
-        movement.source &&
-        expectedLabel !== null &&
-        movement.source.retainedAssetLabel !== expectedLabel
-      ) {
-        throw new TypeError('Movement source must preserve the candidate asset label.');
-      }
-      const date = specialEntitlementDateBounds(movement.occurredAt);
-      if (
-        date.year !== event.seasonYear ||
-        (date.day !== null && event.occurredOn !== null && date.day !== event.occurredOn)
-      ) {
-        throw new TypeError('Reviewed custody contradicts the candidate transaction date.');
-      }
-    }
+    validateCandidateMovements(record.movements, transfers, transactions);
     const current = transfers.get(record.transferId)!;
     const asset = current.asset;
     const sourceAsset = asset.kind === 'special_entitlement' ? asset.sourceAsset : asset;
@@ -206,13 +226,7 @@ export function bindReviewedPickLineage(candidateInput: unknown, recordsInput: r
     ) {
       throw new TypeError('Reviewed lineage must preserve the original club identity.');
     }
-    const label =
-      sourceAsset.kind === 'special_pick'
-        ? sourceAsset.sourceLabel
-        : sourceAsset.kind === 'pick_entitlement'
-          ? (sourceAsset.recordedLabel ??
-            (sourceAsset.nominalPick === null ? null : `Pick ${sourceAsset.nominalPick}`))
-          : null;
+    const label = retainedAssetLabel(asset);
     if (label !== null && label !== record.retainedSourceLabel) {
       throw new TypeError('Reviewed correction must retain the original candidate asset label.');
     }
