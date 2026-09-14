@@ -224,6 +224,7 @@ export function validateAflTradeExternalCaptureScope(
           ? 'mini_draft'
           : 'national') ||
       request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION ||
       !isReviewedOfficialAflDraftSessionUrl(request.sourceUrl, request.anchorSeasonYear) ||
       new Date(request.effectiveAt).getUTCFullYear() !==
         (reviewedMini2012EffectiveYear ??
