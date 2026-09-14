@@ -3054,3 +3054,12 @@ source custody, exact population shapes, reviewed club-label pairs, rookie count
 slots and complete inventory size. It rejects mixed reported-total/capacity evidence and retains the
 independent total-versus-terminal-document requirement. Existing source authorization still applies;
 this migration alone does not enable new source URLs or establish genuine2010 session admission.
+
+`officialAflDraft2010SessionFacts.ts` preserves the incomplete main report as77 separate
+`draft_completed_member_number` claims, with the rookie-slot claim and pick1 boundary. Independent
+Polo and Collingwood reports add103 and104; the club report also establishes the2010-11-18 date and
+completed occurrence. These source-bound numbers cover the retained79-member inventory without
+normalizing the12 source name variants or inferring blank slots as passes. The club report does not
+explicitly state that104 is the global terminal selection, so this parser does not emit a last-boundary
+claim. Complete-union and derived-terminal support, exact source eligibility and public persistence
+verification remain prerequisites to genuine registration; this helper is not yet runtime-routed.
