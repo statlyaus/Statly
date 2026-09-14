@@ -426,43 +426,48 @@ describe.each([
       const expanded = await new PostgresAflTradeExternalHistoricalCaptureCompletionRepository(
         sql
       ).completeRetainedPlan(expandedPlan.planId);
-      if (enumerated) {
-        const officialAuthority = await authority(
-          'afl_trade_external_identity_reviewer',
-          'official_afl',
-          'external_identity_resolution'
-        );
-        const boundaryQueue = await loadAflTradeExternalIdentityReviewQueue(
-          { completionId: expanded.completionId },
-          { source, reviewRepository }
-        );
-        for (const item of boundaryQueue.items.filter((item) => item.provider === 'official_afl')) {
-          const canonicalId = targetIds.get(item.entityKind + '|' + item.observedNames[0]);
-          if (
-            supplementalSelection &&
-            item.entityKind === 'player' &&
-            item.observedNames[0] === 'Synthetic Player 34'
-          ) {
-            // Interior inventory evidence does not require an unrelated canonical player target.
-            expect(canonicalId).toBeUndefined();
-            continue;
-          }
-          expect(canonicalId).toBeDefined();
-          await recordAflTradeExternalIdentityReviewDecision(
-            {
-              completionId: expanded.completionId,
-              subjectId: item.subjectId,
-              decision: 'approved',
-              canonicalId: canonicalId!,
-              rationale: 'Synthetic exact boundary identity reused from retained inventory',
-              authorityEvidenceId: officialAuthority,
-              decidedBy: actor,
-              decidedAt: await databaseInstant(),
-            },
+      async function registerBoundaryIdentities() {
+        if (enumerated) {
+          const officialAuthority = await authority(
+            'afl_trade_external_identity_reviewer',
+            'official_afl',
+            'external_identity_resolution'
+          );
+          const boundaryQueue = await loadAflTradeExternalIdentityReviewQueue(
+            { completionId: expanded.completionId },
             { source, reviewRepository }
           );
+          for (const item of boundaryQueue.items.filter(
+            (item) => item.provider === 'official_afl'
+          )) {
+            const canonicalId = targetIds.get(item.entityKind + '|' + item.observedNames[0]);
+            if (
+              supplementalSelection &&
+              item.entityKind === 'player' &&
+              item.observedNames[0] === 'Synthetic Player 34'
+            ) {
+              // Interior inventory evidence does not require an unrelated canonical player target.
+              expect(canonicalId).toBeUndefined();
+              continue;
+            }
+            expect(canonicalId).toBeDefined();
+            await recordAflTradeExternalIdentityReviewDecision(
+              {
+                completionId: expanded.completionId,
+                subjectId: item.subjectId,
+                decision: 'approved',
+                canonicalId: canonicalId!,
+                rationale: 'Synthetic exact boundary identity reused from retained inventory',
+                authorityEvidenceId: officialAuthority,
+                decidedBy: actor,
+                decidedAt: await databaseInstant(),
+              },
+              { source, reviewRepository }
+            );
+          }
         }
       }
+      await registerBoundaryIdentities();
       const expandedSource = await source.load(expanded.completionId);
       const expandedIds = expandedSource.sourceBatches.map((b) => b.batchId).sort();
       expect(
@@ -472,40 +477,43 @@ describe.each([
       expect(expandedSource.sourceAuthority.completionSourceBatchSetSha256).toBe(
         sha(expandedSource.sourceBatches.map((b) => b.batchId))
       );
-      if (supplementalSelection) {
-        for (const patch of [
-          { selectionNumber: 34 },
-          { draftYear: 2023 },
-          { draftType: 'rookie' as const },
-        ]) {
-          const changed = expandedSource.sourceBatches.map((batch) => {
-            if (batch.batchId !== official.target.evidenceBatchId) return batch;
-            return createAflTradeExternalEvidenceBatch({
-              ...batch.content,
-              evidence: batch.content.evidence.map((row) =>
-                row.content.claim.kind === 'draft_selection'
-                  ? createAflTradeExternalEvidenceEnvelope({
-                      ...row.content,
-                      claim: { ...row.content.claim, ...patch },
-                    })
-                  : row
-              ),
+      async function verifySupplementalRejections() {
+        if (supplementalSelection) {
+          for (const patch of [
+            { selectionNumber: 34 },
+            { draftYear: 2023 },
+            { draftType: 'rookie' as const },
+          ]) {
+            const changed = expandedSource.sourceBatches.map((batch) => {
+              if (batch.batchId !== official.target.evidenceBatchId) return batch;
+              return createAflTradeExternalEvidenceBatch({
+                ...batch.content,
+                evidence: batch.content.evidence.map((row) =>
+                  row.content.claim.kind === 'draft_selection'
+                    ? createAflTradeExternalEvidenceEnvelope({
+                        ...row.content,
+                        claim: { ...row.content.claim, ...patch },
+                      })
+                    : row
+                ),
+              });
             });
-          });
-          expect(() =>
-            buildReviewedSessionCorrection({
-              candidate: ordinary.candidate,
-              sourceBatches: changed,
-              sourceAuthority: {
-                ...expandedSource.sourceAuthority,
-                candidateSourceBatchSetSha256: sha(changed.map((b) => b.batchId).sort()),
-                completionSourceBatchSetSha256: sha(changed.map((b) => b.batchId)),
-              },
-              identityResolutions: originalResolutions,
-            })
-          ).toThrow(/absent official selections in relevant drafts/);
+            expect(() =>
+              buildReviewedSessionCorrection({
+                candidate: ordinary.candidate,
+                sourceBatches: changed,
+                sourceAuthority: {
+                  ...expandedSource.sourceAuthority,
+                  candidateSourceBatchSetSha256: sha(changed.map((b) => b.batchId).sort()),
+                  completionSourceBatchSetSha256: sha(changed.map((b) => b.batchId)),
+                },
+                identityResolutions: originalResolutions,
+              })
+            ).toThrow(/absent official selections in relevant drafts/);
+          }
         }
       }
+      await verifySupplementalRejections();
       const built = await sql.transaction((tx) =>
         prepareReviewedSessionCorrection(tx, {
           parentCandidateId: ordinary.candidate.candidateId,
@@ -530,47 +538,54 @@ describe.each([
       expect(
         candidate.content.reviewedSessionCorrection!.projections[0].inventorySelectionIds
       ).toHaveLength(inventoryCount);
-      if (sessionWindow) {
-        expect(candidate.content.reviewedSessionCorrection!.projections[0].schemaVersion).toBe(
-          'afl-trade-combined-draft-session-projection/v2'
-        );
-        expect(await reviews.loadCandidate(candidate.candidateId)).toEqual(candidate);
-        await candidateRepository.persistCandidate({ candidate, identityResolutions: resolutions });
-        const check = async (document: unknown) =>
-          (
-            await pool.query(
-              'SELECT outcome_reviewed_session_inventory_exact($1::jsonb,$2::jsonb) AS valid',
-              [canonical(document), canonical(resolutions)]
-            )
-          ).rows[0].valid;
-        expect(await check(candidate)).toBe(true);
-        const altered = JSON.parse(JSON.stringify(candidate));
-        const projection = altered.content.reviewedSessionCorrection.projections[0];
-        projection.inventorySessions[miniCapacity ? 0 : 1].datePrecision.latestDate = afterLastDay;
-        projection.selectedSessions[0].datePrecision.latestDate = afterLastDay;
-        expect(await check(altered)).toBe(false);
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-          await client.query('SET LOCAL session_replication_role=replica');
-          await client.query(
-            "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
-            [miniCapacity ? official.target.captureId : second.target.captureId]
+      async function verifyWindowInventoryAuthority() {
+        if (sessionWindow) {
+          expect(candidate.content.reviewedSessionCorrection!.projections[0].schemaVersion).toBe(
+            'afl-trade-combined-draft-session-projection/v2'
           );
-          expect(
+          expect(await reviews.loadCandidate(candidate.candidateId)).toEqual(candidate);
+          await candidateRepository.persistCandidate({
+            candidate,
+            identityResolutions: resolutions,
+          });
+          const check = async (document: unknown) =>
             (
-              await client.query(
+              await pool.query(
                 'SELECT outcome_reviewed_session_inventory_exact($1::jsonb,$2::jsonb) AS valid',
-                [canonical(candidate), canonical(resolutions)]
+                [canonical(document), canonical(resolutions)]
               )
-            ).rows[0].valid
-          ).toBe(false);
-        } finally {
-          await client.query('ROLLBACK');
-          client.release();
+            ).rows[0].valid;
+          expect(await check(candidate)).toBe(true);
+          const altered = JSON.parse(JSON.stringify(candidate));
+          const projection = altered.content.reviewedSessionCorrection.projections[0];
+          projection.inventorySessions[miniCapacity ? 0 : 1].datePrecision.latestDate =
+            afterLastDay;
+          projection.selectedSessions[0].datePrecision.latestDate = afterLastDay;
+          expect(await check(altered)).toBe(false);
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            await client.query('SET LOCAL session_replication_role=replica');
+            await client.query(
+              "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
+              [miniCapacity ? official.target.captureId : second.target.captureId]
+            );
+            expect(
+              (
+                await client.query(
+                  'SELECT outcome_reviewed_session_inventory_exact($1::jsonb,$2::jsonb) AS valid',
+                  [canonical(candidate), canonical(resolutions)]
+                )
+              ).rows[0].valid
+            ).toBe(false);
+          } finally {
+            await client.query('ROLLBACK');
+            client.release();
+          }
+          expect(await check(candidate)).toBe(true);
         }
-        expect(await check(candidate)).toBe(true);
       }
+      await verifyWindowInventoryAuthority();
       const proposal = deriveReviewedSessionCanonicalPromotionProposal({
         candidate,
         proposedAt: await databaseInstant(),
@@ -612,186 +627,195 @@ describe.each([
       expect((await reviews.loadCandidate(candidate.candidateId)).content.pickCustody).toHaveLength(
         1
       );
-      if (sessionWindow) {
-        const stored = (
-          await pool.query(
-            `SELECT event.event_date,event.date_precision FROM outcome_event_version event
+      async function verifyPromotedWindowAuthority() {
+        if (sessionWindow) {
+          const stored = (
+            await pool.query(
+              `SELECT event.event_date,event.date_precision FROM outcome_event_version event
           JOIN outcome_external_canonical_promotion_record record ON record.canonical_record_id=event.event_version_id
           WHERE record.record_kind='draft_event' AND record.promotion_id=$1`,
+              [result.promotionId]
+            )
+          ).rows;
+          expect(stored).toEqual([
+            {
+              event_date: null,
+              date_precision: {
+                precision: 'window',
+                eventDate: null,
+                earliestDate: firstDay,
+                latestDate: lastDay,
+              },
+            },
+          ]);
+          const bounds = async () =>
+            (
+              await pool.query(
+                `SELECT outcome_event_evidenced_date_bounds(canonical_record_id)::text AS bounds
+          FROM outcome_external_canonical_promotion_record WHERE promotion_id=$1 AND record_kind='draft_event'`,
+                [result.promotionId]
+              )
+            ).rows[0].bounds;
+          expect(await bounds()).toBe(`[${firstDay},${afterLastDay})`);
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            await client.query('SET LOCAL session_replication_role=replica');
+            await client.query(
+              "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
+              [miniCapacity ? official.target.captureId : second.target.captureId]
+            );
+            expect(
+              (
+                await client.query(
+                  `SELECT outcome_event_evidenced_date_bounds(canonical_record_id) AS bounds
+            FROM outcome_external_canonical_promotion_record WHERE promotion_id=$1 AND record_kind='draft_event'`,
+                  [result.promotionId]
+                )
+              ).rows[0].bounds
+            ).toBeNull();
+          } finally {
+            await client.query('ROLLBACK');
+            client.release();
+          }
+          expect(await bounds()).toBe(`[${firstDay},${afterLastDay})`);
+          if (miniCapacity) {
+            const variants = [
+              [
+                'draft_selection_capacity',
+                "jsonb_set(evidence_json,'{content,claim,maximumSelections}','3'::jsonb)",
+              ],
+              [
+                'draft_completed_membership_roster',
+                "jsonb_set(evidence_json,'{content,claim,members}',jsonb_build_array(evidence_json#>'{content,claim,members,0}'))",
+              ],
+              [
+                'draft_completed_membership_roster',
+                "jsonb_set(evidence_json,'{content,claim,members}',jsonb_build_array(evidence_json#>'{content,claim,members,0}',evidence_json#>'{content,claim,members,0}'))",
+              ],
+              [
+                'draft_selection_capacity',
+                "jsonb_set(evidence_json,'{content,claim,selectionCount}','2'::jsonb)",
+              ],
+            ];
+            for (const [kind, expression] of variants) {
+              const row = (
+                await pool.query<{ evidence_id: string; evidence_json: unknown }>(
+                  `SELECT e.evidence_id,e.evidence_json FROM outcome_external_evidence_row e
+               JOIN outcome_external_reconciliation_source_batch b USING(batch_id)
+               WHERE b.candidate_id=$1 AND e.claim_kind=$2`,
+                  [candidate.candidateId, kind]
+                )
+              ).rows[0];
+              const change = async (restore: boolean) => {
+                const client = await pool.connect();
+                try {
+                  await client.query('BEGIN');
+                  await client.query('SET LOCAL session_replication_role=replica');
+                  if (restore)
+                    await client.query(
+                      'UPDATE outcome_external_evidence_row SET evidence_json=$2::jsonb WHERE evidence_id=$1',
+                      [row.evidence_id, JSON.stringify(row.evidence_json)]
+                    );
+                  else
+                    await client.query(
+                      `UPDATE outcome_external_evidence_row SET evidence_json=${expression} WHERE evidence_id=$1`,
+                      [row.evidence_id]
+                    );
+                  await client.query('COMMIT');
+                } catch (error) {
+                  await client.query('ROLLBACK');
+                  throw error;
+                } finally {
+                  client.release();
+                }
+              };
+              try {
+                await change(false);
+                await expect(promotions.promote(input)).rejects.toThrow();
+              } finally {
+                await change(true);
+              }
+              expect(await promotions.promote(input)).toEqual({
+                ...result,
+                idempotentReplay: true,
+              });
+            }
+          }
+          if (!miniCapacity)
+            windowExerciseInput = {
+              promotionId: result.promotionId,
+              windowCaptureId: second.target.captureId,
+              batchId: trade.target.evidenceBatchId,
+              authorityId: promoterAuthority,
+              actor,
+            };
+        }
+      }
+      await verifyPromotedWindowAuthority();
+      async function verifyPromotedAcquisition() {
+        const retainedArtifacts = new Map();
+        for (const fixture of [draft, trade, official, second]) {
+          const ref = fixture.target.sourceArtifact;
+          const retained = await fixture.raw.loadExact(ref, 2097152);
+          if (!retained) throw new Error('Missing actual fixture source bytes');
+          retainedArtifacts.set(ref.artifactId, { reference: ref, bytes: retained.bytes });
+        }
+        const assets = (
+          await pool.query<{
+            event_date: string | null;
+            date_precision: unknown;
+            event_id: string;
+            event_version_id: string;
+            asset_version_id: string;
+            player_id: string;
+          }>(
+            `SELECT event.event_date::TEXT,event.date_precision,event.event_id,event.event_version_id,asset.asset_version_id,asset.player_id
+     FROM outcome_external_canonical_promotion_record member JOIN outcome_event_asset asset ON asset.asset_version_id=member.canonical_record_id
+     JOIN outcome_event_version event ON event.event_version_id=asset.event_version_id WHERE member.promotion_id=$1 AND member.record_kind='draft_player_asset'`,
             [result.promotionId]
           )
         ).rows;
-        expect(stored).toEqual([
-          {
-            event_date: null,
-            date_precision: {
-              precision: 'window',
-              eventDate: null,
-              earliestDate: firstDay,
-              latestDate: lastDay,
-            },
-          },
-        ]);
-        const bounds = async () =>
-          (
-            await pool.query(
-              `SELECT outcome_event_evidenced_date_bounds(canonical_record_id)::text AS bounds
-          FROM outcome_external_canonical_promotion_record WHERE promotion_id=$1 AND record_kind='draft_event'`,
-              [result.promotionId]
-            )
-          ).rows[0].bounds;
-        expect(await bounds()).toBe(`[${firstDay},${afterLastDay})`);
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-          await client.query('SET LOCAL session_replication_role=replica');
-          await client.query(
-            "UPDATE outcome_source_capture SET status='rejected' WHERE capture_id=$1",
-            [miniCapacity ? official.target.captureId : second.target.captureId]
-          );
-          expect(
-            (
-              await client.query(
-                `SELECT outcome_event_evidenced_date_bounds(canonical_record_id) AS bounds
-            FROM outcome_external_canonical_promotion_record WHERE promotion_id=$1 AND record_kind='draft_event'`,
-                [result.promotionId]
-              )
-            ).rows[0].bounds
-          ).toBeNull();
-        } finally {
-          await client.query('ROLLBACK');
-          client.release();
-        }
-        expect(await bounds()).toBe(`[${firstDay},${afterLastDay})`);
-        if (miniCapacity) {
-          const variants = [
-            [
-              'draft_selection_capacity',
-              "jsonb_set(evidence_json,'{content,claim,maximumSelections}','3'::jsonb)",
-            ],
-            [
-              'draft_completed_membership_roster',
-              "jsonb_set(evidence_json,'{content,claim,members}',jsonb_build_array(evidence_json#>'{content,claim,members,0}'))",
-            ],
-            [
-              'draft_completed_membership_roster',
-              "jsonb_set(evidence_json,'{content,claim,members}',jsonb_build_array(evidence_json#>'{content,claim,members,0}',evidence_json#>'{content,claim,members,0}'))",
-            ],
-            [
-              'draft_selection_capacity',
-              "jsonb_set(evidence_json,'{content,claim,selectionCount}','2'::jsonb)",
-            ],
-          ];
-          for (const [kind, expression] of variants) {
-            const row = (
-              await pool.query<{ evidence_id: string; evidence_json: unknown }>(
-                `SELECT e.evidence_id,e.evidence_json FROM outcome_external_evidence_row e
-               JOIN outcome_external_reconciliation_source_batch b USING(batch_id)
-               WHERE b.candidate_id=$1 AND e.claim_kind=$2`,
-                [candidate.candidateId, kind]
-              )
-            ).rows[0];
-            const change = async (restore: boolean) => {
-              const client = await pool.connect();
-              try {
-                await client.query('BEGIN');
-                await client.query('SET LOCAL session_replication_role=replica');
-                if (restore)
-                  await client.query(
-                    'UPDATE outcome_external_evidence_row SET evidence_json=$2::jsonb WHERE evidence_id=$1',
-                    [row.evidence_id, JSON.stringify(row.evidence_json)]
-                  );
-                else
-                  await client.query(
-                    `UPDATE outcome_external_evidence_row SET evidence_json=${expression} WHERE evidence_id=$1`,
-                    [row.evidence_id]
-                  );
-                await client.query('COMMIT');
-              } catch (error) {
-                await client.query('ROLLBACK');
-                throw error;
-              } finally {
-                client.release();
-              }
-            };
-            try {
-              await change(false);
-              await expect(promotions.promote(input)).rejects.toThrow();
-            } finally {
-              await change(true);
-            }
-            expect(await promotions.promote(input)).toEqual({ ...result, idempotentReplay: true });
-          }
-        }
-        if (!miniCapacity)
-          windowExerciseInput = {
-            promotionId: result.promotionId,
-            windowCaptureId: second.target.captureId,
-            batchId: trade.target.evidenceBatchId,
-            authorityId: promoterAuthority,
-            actor,
-          };
-      }
-      const retainedArtifacts = new Map();
-      for (const fixture of [draft, trade, official, second]) {
-        const ref = fixture.target.sourceArtifact;
-        const retained = await fixture.raw.loadExact(ref, 2097152);
-        if (!retained) throw new Error('Missing actual fixture source bytes');
-        retainedArtifacts.set(ref.artifactId, { reference: ref, bytes: retained.bytes });
-      }
-      const assets = (
-        await pool.query<{
-          event_date: string | null;
-          date_precision: unknown;
-          event_id: string;
-          event_version_id: string;
-          asset_version_id: string;
-          player_id: string;
-        }>(
-          `SELECT event.event_date::TEXT,event.date_precision,event.event_id,event.event_version_id,asset.asset_version_id,asset.player_id
-     FROM outcome_external_canonical_promotion_record member JOIN outcome_event_asset asset ON asset.asset_version_id=member.canonical_record_id
-     JOIN outcome_event_version event ON event.event_version_id=asset.event_version_id WHERE member.promotion_id=$1 AND member.record_kind='draft_player_asset'`,
-          [result.promotionId]
-        )
-      ).rows;
-      const draftEntries = [];
-      for (const asset of assets) {
-        const refs = (
-          await pool.query<{ artifact_id: string }>(
-            `SELECT DISTINCT capture.source_artifact_id AS artifact_id
+        const draftEntries = [];
+        for (const asset of assets) {
+          const refs = (
+            await pool.query<{ artifact_id: string }>(
+              `SELECT DISTINCT capture.source_artifact_id AS artifact_id
       FROM outcome_external_canonical_promotion_record member CROSS JOIN LATERAL jsonb_array_elements_text(member.evidence_ids) id(value)
       JOIN outcome_external_evidence_row row ON row.evidence_id=id.value JOIN outcome_external_evidence_batch batch ON batch.batch_id=row.batch_id
       JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id WHERE member.promotion_id=$1 AND member.canonical_record_id IN ($2,$3) ORDER BY artifact_id`,
-            [result.promotionId, asset.asset_version_id, asset.event_version_id]
-          )
-        ).rows;
-        draftEntries.push({
-          ...asset,
-          entry: {
-            promotionId: result.promotionId,
-            eventVersionId: asset.event_version_id,
-            assetVersionId: asset.asset_version_id,
-            ...(asset.event_date === null
-              ? {
-                  eventDate: null,
-                  datePrecision: draftSessionDateWindowSchema.parse(asset.date_precision),
-                }
-              : { eventDate: asset.event_date }),
-            evidence: refs.map((r) => {
-              const retained = retainedArtifacts.get(r.artifact_id);
-              if (!retained) throw new Error('Missing promoted evidence');
-              return retained.reference;
-            }),
-          },
+              [result.promotionId, asset.asset_version_id, asset.event_version_id]
+            )
+          ).rows;
+          draftEntries.push({
+            ...asset,
+            entry: {
+              promotionId: result.promotionId,
+              eventVersionId: asset.event_version_id,
+              assetVersionId: asset.asset_version_id,
+              ...(asset.event_date === null
+                ? {
+                    eventDate: null,
+                    datePrecision: draftSessionDateWindowSchema.parse(asset.date_precision),
+                  }
+                : { eventDate: asset.event_date }),
+              evidence: refs.map((r) => {
+                const retained = retainedArtifacts.get(r.artifact_id);
+                if (!retained) throw new Error('Missing promoted evidence');
+                return retained.reference;
+              }),
+            },
+          });
+        }
+        await verifySessionAcquisitionCurrentness(pool, {
+          candidate,
+          retainedArtifacts,
+          sourceArtifact: draft.target.sourceArtifact,
+          draftEntries,
+          clubId: selected.clubId!,
         });
       }
-      await verifySessionAcquisitionCurrentness(pool, {
-        candidate,
-        retainedArtifacts,
-        sourceArtifact: draft.target.sourceArtifact,
-        draftEntries,
-        clubId: selected.clubId!,
-      });
+      await verifyPromotedAcquisition();
       // Check the externally persisted unknown, in addition to the public receipt.
       expect(
         (await pool.query('SELECT DISTINCT original_club_id FROM outcome_draft_pick')).rows
@@ -804,5 +828,4 @@ describe.each([
       await verifyWindowSpecialExercise(pool, windowExerciseInput);
     });
   }
-
 });
