@@ -45,6 +45,10 @@ const reports = [
   },
 ] as const;
 
+export function reviewedOfficialAflCompensationPdf(url: string, year: number): boolean {
+  return reports.some((source) => source.url === url && source.year === year);
+}
+
 /** Reviewed page mappings to exact original PDFs; no notice date, issuing award or approval inferred. */
 export function parseOfficialAflCompensationPdfFacts(input: {
   bytes: Uint8Array;

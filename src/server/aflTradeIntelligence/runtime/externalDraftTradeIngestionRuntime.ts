@@ -1,3 +1,5 @@
+import { parseOfficialAflCompensationArticle } from '../source/officialAflCompensationArticleFacts';
+import { parseOfficialAflCompensationPdfFacts } from '../source/officialAflCompensationPdfFacts';
 import { OFFICIAL_AFL_2010_REPORT } from '../source/officialAflDraft2010PdfFacts';
 import 'server-only';
 import { parseOfficialAflDraft2010PdfFacts } from '../source/officialAflDraft2010PdfFacts';
@@ -192,6 +194,11 @@ export function createAflTradeExternalIngestionRuntime(
               draftYear: command.request.anchorSeasonYear,
               observedAt: command.request.effectiveAt,
             });
+          case 'official-afl-compensation-lifecycle':
+            return parseOfficialAflCompensationArticle(html, {
+              capture,
+              anchorSeasonYear: command.request.anchorSeasonYear,
+            });
           case 'official-afl-issuing-award':
             return parseOfficialAflIssuingAward(html, { capture });
           case 'official-afl-completed-draft-session':
@@ -231,6 +238,17 @@ export function createAflTradeExternalIngestionRuntime(
           },
           parsePage,
           parsePdf: async ({ bytes, capture }) => {
+            if (
+              command.request.provider === 'official_afl' &&
+              command.request.capabilityId === 'official-afl-compensation-lifecycle'
+            ) {
+              return parseOfficialAflCompensationPdfFacts({
+                bytes,
+                capture,
+                anchorSeasonYear: command.request.anchorSeasonYear,
+              });
+            }
+
             if (
               command.request.provider !== 'official_afl' ||
               command.request.capabilityId !== 'official-afl-completed-draft-session'
