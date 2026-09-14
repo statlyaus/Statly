@@ -3001,3 +3001,11 @@ retaining the existing source/currentness checks. The bounded2012 synthetic fixt
 readback, acquisition registration and source revocation. Promotion rechecks session evidence before
 new writes and replay; altered capacity or completed membership cannot reuse a finalized receipt as
 current authority. Genuine reviewed capture preparation and admission remain pending.
+
+The bounded2010 `resolveCompletedDraftListTotal` calculation keeps an all-list total, named rookie
+additions and marked rookie slots separate. It requires independent source references, exact club
+labels with matching counts, unique names and disjoint selection numbers before deriving the national
+selection count. It neither emits a source-reported total nor authenticates source authority. The
+caller must establish exact source scope, population meaning, chronology and club-label bindings;
+raw spelling differences must remain traceable. Parser contracts, SQL/currentness checks and public
+persistence integration are required before this calculation can support canonical promotion.
