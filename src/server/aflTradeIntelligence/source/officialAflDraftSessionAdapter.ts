@@ -212,20 +212,24 @@ const reviewedReports = [
   },
 ] as const;
 
+const reviewedSessionUrlChecks = new Map<number, (url: string) => boolean>([
+  [2010, (url) => Boolean(reviewedOfficialAflDraft2010Source(url))],
+  [2011, (url) =>
+    reviewedOfficialAflMiniDraft2011EffectiveYear(url) !== null ||
+    reviewedOfficialAflDraft2011EffectiveYear(url) !== null],
+  [2012, (url) =>
+    reviewedOfficialAflMiniDraft2012EffectiveYear(url) !== null ||
+    reviewedOfficialAflDraft2012EffectiveYear(url) !== null],
+  [2013, (url) => reviewedOfficialAflDraft2013EffectiveYear(url) !== null],
+  [2014, (url) => reviewedOfficialAflDraft2014EffectiveYear(url) !== null],
+  [2015, isReviewedOfficialAflDraft2015SessionFactUrl],
+  [2016, isReviewedOfficialAflDraft2016SessionFactUrl],
+  [2017, isReviewedOfficialAflDraft2017SessionFactUrl],
+  [2018, isReviewedOfficialAflDraft2018SessionFactUrl],
+]);
+
 export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: number): boolean {
-  if (seasonYear === 2010 && reviewedOfficialAflDraft2010Source(url)) return true;
-  if (seasonYear === 2012 && reviewedOfficialAflMiniDraft2012EffectiveYear(url) !== null)
-    return true;
-  if (seasonYear === 2011 && reviewedOfficialAflMiniDraft2011EffectiveYear(url) !== null)
-    return true;
-  if (seasonYear === 2011 && reviewedOfficialAflDraft2011EffectiveYear(url) !== null) return true;
-  if (seasonYear === 2012 && reviewedOfficialAflDraft2012EffectiveYear(url) !== null) return true;
-  if (seasonYear === 2014 && reviewedOfficialAflDraft2014EffectiveYear(url) !== null) return true;
-  if (seasonYear === 2013 && reviewedOfficialAflDraft2013EffectiveYear(url) !== null) return true;
-  if (seasonYear === 2015 && isReviewedOfficialAflDraft2015SessionFactUrl(url)) return true;
-  if (seasonYear === 2016 && isReviewedOfficialAflDraft2016SessionFactUrl(url)) return true;
-  if (seasonYear === 2017 && isReviewedOfficialAflDraft2017SessionFactUrl(url)) return true;
-  if (seasonYear === 2018 && isReviewedOfficialAflDraft2018SessionFactUrl(url)) return true;
+  if (reviewedSessionUrlChecks.get(seasonYear)?.(url)) return true;
   if (url === OFFICIAL_AFL_2019_CLUB_REVIEW_URL) return seasonYear === 2019;
   return reviewedReports.some((report) => report.year === seasonYear && report.url === url);
 }
