@@ -3017,3 +3017,9 @@ article-body digests for AFL114795 and469544. It preserves original club labels 
 labelled additions or PR slots, including unnamed slots without inventing players. The helper is not
 yet wired into capture routing. Annual-report PDF extraction, reviewed cross-source label binding,
 SQL scope/currentness and canonical promotion integration remain required.
+
+The2010 total resolver also retains explicit additions-label/slot-label pairs for the exact reviewed
+AFL114795/AFL469544 source pair. These mappings apply only after the2010 national scope and source
+checks; they do not modify either claim or install global aliases. Each slot club can match only once.
+Different names such as Adelaide versus Adelaide Crows remain rejected unless the exact reviewed
+uppercase source label is supplied. Genuine PDF custody and SQL admission remain separate requirements.

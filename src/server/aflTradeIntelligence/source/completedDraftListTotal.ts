@@ -61,9 +61,38 @@ export function resolveCompletedDraftListTotal(input: {
     new Set(slots.clubs.map((c) => c.recordedClub)).size !== slots.clubs.length
   )
     fail();
+  // Exact labels from the reviewed2010 source pair above, not a global club alias table.
+  const reviewedSlotLabels: Record<string, string> = {
+    ADELAIDE: 'Adelaide Crows',
+    'BRISBANE LIONS': 'Brisbane Lions',
+    CARLTON: 'Carlton',
+    COLLINGWOOD: 'Collingwood',
+    ESSENDON: 'Essendon',
+    FREMANTLE: 'Fremantle',
+    GEELONG: 'Geelong Cats',
+    MELBOURNE: 'Melbourne',
+    'NORTH MELBOURNE': 'North Melbourne',
+    'PORT ADELAIDE': 'Port Adelaide',
+    RICHMOND: 'Richmond',
+    'ST KILDA': 'St Kilda',
+    'SYDNEY SWANS': 'Sydney Swans',
+    'WEST COAST': 'West Coast Eagles',
+    'WESTERN BULLDOGS': 'Western Bulldogs',
+  };
+  const clubLabelBindings: { additionsLabel: string; slotsLabel: string }[] = [];
+  const matchedLabels = new Set<string>();
   for (const club of additions.clubs) {
-    const marked = slots.clubs.find((c) => c.recordedClub === club.recordedClub);
-    if (!marked || marked.selectionNumbers.length !== club.recordedNames.length) fail();
+    const slotLabel = reviewedSlotLabels[club.recordedClub] ?? club.recordedClub;
+    const marked = slots.clubs.find((c) => c.recordedClub === slotLabel);
+    if (
+      !marked ||
+      matchedLabels.has(slotLabel) ||
+      marked.selectionNumbers.length !== club.recordedNames.length
+    )
+      fail();
+    matchedLabels.add(slotLabel);
+    if (slotLabel !== club.recordedClub)
+      clubLabelBindings.push({ additionsLabel: club.recordedClub, slotsLabel: slotLabel });
   }
   const names = additions.clubs.flatMap((c) => c.recordedNames);
   const excluded = slots.clubs.flatMap((c) => c.selectionNumbers);
@@ -85,5 +114,6 @@ export function resolveCompletedDraftListTotal(input: {
     derivedSelectionCount: total.playerCount - names.length,
     excludedSelectionNumbers: excluded.sort((a, b) => a - b),
     evidenceIds: sources.map((s) => s.evidenceId).sort(),
+    ...(clubLabelBindings.length ? { clubLabelBindings } : {}),
   };
 }

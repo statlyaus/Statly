@@ -82,3 +82,25 @@ it.each([
   if (mode === 'fraction') bad.slots.clubs[0].selectionNumbers = [4.5];
   expect(() => resolveCompletedDraftListTotal(bad)).toThrow();
 });
+
+it('binds only reviewed2010 club labels and retains both originals', () => {
+  const actual = structuredClone(input);
+  actual.additions.clubs[0]!.recordedClub = 'ADELAIDE';
+  actual.slots.clubs[1]!.recordedClub = 'Adelaide Crows';
+  const before = structuredClone(actual);
+  expect(resolveCompletedDraftListTotal(actual).clubLabelBindings).toEqual([
+    { additionsLabel: 'ADELAIDE', slotsLabel: 'Adelaide Crows' },
+  ]);
+  expect(actual).toEqual(before);
+  actual.additions.documentId = 'official_afl:news:other';
+  expect(() => resolveCompletedDraftListTotal(actual)).toThrow();
+});
+it('rejects approximate labels and two addition labels mapped to one slot club', () => {
+  const actual = structuredClone(input);
+  actual.additions.clubs[0]!.recordedClub = 'Adelaide';
+  actual.slots.clubs[1]!.recordedClub = 'Adelaide Crows';
+  expect(() => resolveCompletedDraftListTotal(actual)).toThrow();
+  actual.additions.clubs[0]!.recordedClub = 'ADELAIDE';
+  actual.additions.clubs[1]!.recordedClub = 'Adelaide Crows';
+  expect(() => resolveCompletedDraftListTotal(actual)).toThrow();
+});
