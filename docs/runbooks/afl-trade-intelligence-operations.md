@@ -2957,17 +2957,16 @@ requirements, independent totals and current-source checks. Window correction pe
 replay and revocation are fixture-verified. Migration0195 adds v7 canonical promotion and explicit
 `outcome_event_version.date_precision` storage. Exact event days remain null for windows; finalization
 matches both null day and bounds to the reviewed coverage. Public promotion/replay/readback and
-Prisma/SQL agreement are fixture-verified. Lifecycle ordering for window selections still requires
-implementation and verification before genuine admission. Do not substitute a window
-endpoint for the unknown selection day.
+Prisma/SQL agreement are fixture-verified. Migration0196 supplies lifecycle ordering for window selections, as described below. Do not substitute
+a window endpoint for the unknown selection day.
 
 Migration0196 reads lifecycle date bounds from canonical events. A window is usable only while its
 finalized v7 promotion and source-authenticated coverage match the stored bounds. Custody and
 activation provenance still establish sequence; date comparisons reject events after the latest
 possible selection day. This is a consistency check, not proof of an exact exercise day. Existing
 exact-day lifecycle, revision and renumbering rules retain their prior meaning. Acquisition-spell
-registration still requires an exact day; add a versioned partial-date contract and storage before
-registering a window-based spell, rather than substituting a bound as its start date.
+registration uses the versioned window contract and migration0197 described below; never substitute
+a bound as an exact start date.
 
 The retained-window integration fixture now runs compensation award registration, two custody
 transfers, activation, renumbering, exercise and an award correction through public repositories.
@@ -3004,23 +3003,23 @@ inventory owner. It authenticates the independent roster, completion and both bo
 retaining the existing source/currentness checks. The bounded2012 synthetic fixture exercises public correction persistence, promotion, replay, null-day
 readback, acquisition registration and source revocation. Promotion rechecks session evidence before
 new writes and replay; altered capacity or completed membership cannot reuse a finalized receipt as
-current authority. Genuine reviewed capture preparation and admission remain pending.
+current authority. Record genuine capture and admission results separately for each authorized target.
 
 The bounded2010 `resolveCompletedDraftListTotal` calculation keeps an all-list total, named rookie
 additions and marked rookie slots separate. It requires independent source references, exact club
 labels with matching counts, unique names and disjoint selection numbers before deriving the national
 selection count. It neither emits a source-reported total nor authenticates source authority. The
 caller must establish exact source scope, population meaning, chronology and club-label bindings;
-raw spelling differences must remain traceable. Parser contracts, SQL/currentness checks and public
-persistence integration are required before this calculation can support canonical promotion.
+raw spelling differences must remain traceable. The parser, SQL/currentness and public persistence
+integration described below enforce these requirements before canonical promotion.
 
 The2010 population contracts distinguish `draft_completed_list_total`, `draft_rookie_list_additions`
 and `draft_rookie_promotion_slots`; only Official AFL and explicit fixtures may emit them. The bounded
 HTML helper `parseOfficialAflDraft2010ListFacts` validates the exact URLs, publication metadata and
 article-body digests for AFL114795 and469544. It preserves original club labels and extracts only
-labelled additions or PR slots, including unnamed slots without inventing players. The helper is not
-yet wired into capture routing. Annual-report PDF extraction, reviewed cross-source label binding,
-SQL scope/currentness and canonical promotion integration remain required.
+labelled additions or PR slots, including unnamed slots without inventing players. Parser v18 routes
+these helpers. The reviewed PDF mapping, scoped label bindings and SQL population/union checks below
+complete the implementation; each execution still requires current source and identity authority.
 
 The2010 total resolver also retains explicit additions-label/slot-label pairs for the exact reviewed
 AFL114795/AFL469544 source pair. These mappings apply only after the2010 national scope and source
@@ -3040,7 +3039,8 @@ The2010 annual-report PDF uses an explicit reviewed-document mapping in
 its reviewed107 list-additions statement. This is not runtime PDF text extraction; changed bytes
 require fresh review. The total remains separate from the derived79 national selections. The runtime
 has a PDF parser dispatch and the fetcher accepts only this exact resource URL as PDF. Provider/Gate
-source eligibility, SQL population integration and genuine registration remain pending. Preserve actual
+source eligibility is checked separately from Gate permission; migrations0200–0203 supply population,
+union and source integration. Genuine registration requires the authorized execution record. Preserve actual
 observation timestamps; no historical publication timestamp is inferred from the document or URL.
 
 Combined session projection and reviewed correction now accept the three2010 population claims:
@@ -3050,7 +3050,8 @@ All three sources are required exactly once, with matching counts and disjoint r
 The mechanism cannot mix with completed-selection totals or mini-draft capacity. Existing complete
 membership, dates, completion and first/last boundary checks still apply before selecting a candidate
 subset. Reconciliation maps these same source claims without replacing their original population values.
-SQL/currentness, source eligibility and genuine2010 registration remain pending.
+Migrations0200–0203 integrate these claims with SQL/currentness and exact source eligibility.
+Registration and admission still require authenticated execution through the existing owners.
 
 Migration0200 adds `outcome_completed_list_population_exact` for the separate2010 list populations.
 Exact-date and window inventory owners call it on their authenticated evidence set. It checks distinct
@@ -3065,16 +3066,17 @@ Polo and Collingwood reports add103 and104; the club report also establishes the
 completed occurrence. These source-bound numbers cover the retained79-member inventory without
 normalizing the12 source name variants or inferring blank slots as passes. The club report does not
 explicitly state that104 is the global terminal selection, so this parser does not emit a last-boundary
-claim. Complete-union and derived-terminal support, exact source eligibility and public persistence
-verification remain prerequisites to genuine registration; this helper is not yet runtime-routed.
+claim. Parser v18 routes this helper; the numbered-union and member-identity owners below derive
+terminal coverage without changing the source claim. Genuine registration requires retained source
+and identity authority.
 
 `resolveCompletedDraftNumberedUnion` proves the reviewed2010 membership from77 main-list claims,
 Polo103 andYoung104, together with the separate107/28 population proof. It validates source custody,
 unique numbers/names/evidence and exact inventory equality. It derives104 as the maximum of that
 exhausted membership, recording this basis separately from source claims. Combined projection accepts
 this membership mechanism but still requires an authenticated terminal identity boundary; the helper
-alone cannot manufacture a reported-last assertion or canonical player/club identity. SQL union parity,
-terminal identity integration and source routing remain required before genuine2010 admission.
+alone cannot manufacture a reported-last assertion or canonical player/club identity. Migrations0201–0203
+integrate the union, terminal identity and exact source routing; admission still requires current authority.
 
 The2010 club parser now emits `draft_session_member_identity` for Tom Young/Collingwood/104, with no
 first/last assertion. The strict contract is limited to2010 national session1. Identity work building,
@@ -3089,15 +3091,15 @@ Migration0201 provides pure `outcome_completed_numbered_union_exact` reconstruct
 three population claims,79 numbered members and one source member identity. It verifies the exact
 reviewed source allocation/custody, unique members and evidence,107/28 population exhaustion and
 Tom Young/Collingwood/104 identity on the same club source as the terminal member. It does not
-register that identity or grant source authority. The predicate still needs integration with session
-inventory and canonical currentness owners before public2010 admission; unknown/mixed facts reject.
+register that identity or grant source authority. Migration0202 connects the predicate to session
+inventory and canonical currentness; unknown or mixed facts reject.
 
 Migration0202 connects the83-fact numbered-union predicate to exact/window inventory validation and
 conserves member-identity evidence in reviewed admission scope. It retains independent terminal-document
 checks and the existing approved, non-superseded player/club identity joins. A derived terminal cannot
 mix with a reported-last claim or multiple sessions. Source eligibility still applies. Direct fixture
-SQL verification covers valid2010 inventory and terminal identity revocation; genuine public capture,
-registration and canonical admission remain pending until exact source/provider/Gate routing is complete.
+SQL verification covers valid2010 inventory and terminal identity revocation. Migration0203 supplies
+exact source routing; genuine capture, registration and admission require target-specific execution evidence.
 
 Completed-session parser v18 routes the exact2010 membership/Polo/Collingwood/additions sources.
 Provider scope requires2010 national, v18 and exact article publication timestamps. The reviewed PDF
@@ -3105,8 +3107,8 @@ uses the actual runtime import timestamp as effectiveAt; no publication date is 
 adds only the five exact source keys for2010 national and accepts member-identity evidence through the
 existing registered identity review guard. Wrong URL/year/pathway reject. The Collingwood fetch exception
 is exact-URL only. Gate field authorization remains unchanged: every emitted field still requires an
-explicit reviewed mapping and archive request. Genuine governance preparation and public capture /
-identity / promotion verification remain pending; parser eligibility is not source permission.
+explicit reviewed mapping and archive request. Verify and retain governance, capture, identity and
+promotion results for the authorized target; parser eligibility is not source permission.
 
 Migration0204 requires session boundary and member-identity approvals to retain the exact source
 observation, entity and season. A same-name approval from another season cannot substitute for it.
