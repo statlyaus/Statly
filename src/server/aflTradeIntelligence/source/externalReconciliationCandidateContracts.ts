@@ -153,7 +153,7 @@ const issueSchema = z
   })
   .strict();
 
-const contentSchema = z
+const contentFieldsSchema = z
   .object({
     schemaVersion: z.union([
       z.literal(AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION),
@@ -237,12 +237,19 @@ const contentSchema = z
       .strict()
       .optional(),
     reviewedSessionCorrection: reviewedSessionCorrectionSchema.optional(),
-    reviewedStatusCorrection: z.object({
-      schemaVersion: z.literal('afl-trade-reviewed-status-correction/v1'),
-      parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
-      transactionIds: sortedUniqueIdsSchema.pipe(z.array(aflTradeContentAddressedIdSchema('external-transaction'))),
-      selectionIds: sortedUniqueIdsSchema.pipe(z.array(aflTradeContentAddressedIdSchema('external-draft-selection'))),
-    }).strict().optional(),
+    reviewedStatusCorrection: z
+      .object({
+        schemaVersion: z.literal('afl-trade-reviewed-status-correction/v1'),
+        parentCandidateId: aflTradeContentAddressedIdSchema('external-reconciliation'),
+        transactionIds: sortedUniqueIdsSchema.pipe(
+          z.array(aflTradeContentAddressedIdSchema('external-transaction'))
+        ),
+        selectionIds: sortedUniqueIdsSchema.pipe(
+          z.array(aflTradeContentAddressedIdSchema('external-draft-selection'))
+        ),
+      })
+      .strict()
+      .optional(),
     identityResolutionIds: sortedUniqueIdsSchema.pipe(
       z.array(aflTradeContentAddressedIdSchema('external-identity-resolution'))
     ),
@@ -255,264 +262,306 @@ const contentSchema = z
     reconciledAt: instantSchema,
     publicationEligible: z.literal(false),
   })
-  .strict()
-  .superRefine((content, context) => {
-    if (content.reviewedSessionCorrection) {
-      const marker = content.reviewedSessionCorrection;
-      if (
-        !content.reviewedScope ||
-        content.environment === 'production' ||
-        !content.sourceAuthority ||
-        !('completionId' in content.sourceAuthority) ||
-        content.sourceAuthority.completionId !== marker.sourceCompletionId ||
-        marker.projections.some((proof) => {
-          const group = proof.inventorySessions[0]!;
-          const selected = content.draftSelections
-            .filter((s) => s.draftYear === group.draftYear && s.draftType === group.draftType)
-            .map((s) => s.selectionId)
-            .sort();
-          return JSON.stringify(selected) !== JSON.stringify(proof.selectedSelectionIds);
-        })
-      )
-        context.addIssue({
-          code: 'custom',
-          path: ['reviewedSessionCorrection'],
-          message:
-            'Session correction must bind its private scope, source completion and exact candidate selections.',
-        });
-    }
+  .strict();
+
+type CandidateContent = z.infer<typeof contentFieldsSchema>;
+
+function validateSessionCorrectionMarker(content: CandidateContent, context: z.RefinementCtx) {
+  if (content.reviewedSessionCorrection) {
+    const marker = content.reviewedSessionCorrection;
     if (
-      content.reviewedRookieCorrection &&
-      (!content.reviewedCorrection ||
-        content.environment === 'production' ||
-        content.reviewedRookieCorrection.registrationId !==
-          content.reviewedCorrection.registrationId ||
-        content.reviewedRookieCorrection.correctionGraphId !==
-          content.reviewedCorrection.correctionGraphId)
+      !content.reviewedScope ||
+      content.environment === 'production' ||
+      !content.sourceAuthority ||
+      !('completionId' in content.sourceAuthority) ||
+      content.sourceAuthority.completionId !== marker.sourceCompletionId ||
+      marker.projections.some((proof) => {
+        const group = proof.inventorySessions[0]!;
+        const selected = content.draftSelections
+          .filter((s) => s.draftYear === group.draftYear && s.draftType === group.draftType)
+          .map((s) => s.selectionId)
+          .sort();
+        return JSON.stringify(selected) !== JSON.stringify(proof.selectedSelectionIds);
+      })
     )
       context.addIssue({
         code: 'custom',
-        path: ['reviewedRookieCorrection'],
+        path: ['reviewedSessionCorrection'],
         message:
-          'Rookie corrections require the same private reviewed registration and correction graph.',
+          'Session correction must bind its private scope, source completion and exact candidate selections.',
       });
-    if (
-      content.reviewedSpecialCorrection &&
-      (!content.reviewedCorrection ||
-        content.reviewedSpecialCorrection.registrationId !==
-          content.reviewedCorrection.registrationId ||
-        content.reviewedSpecialCorrection.correctionGraphId !==
-          content.reviewedCorrection.correctionGraphId ||
-        content.environment === 'production' ||
-        content.sourceAuthority?.kind !== 'historical_plan_completion')
+  }
+}
+
+function validateRookieCorrectionMarker(content: CandidateContent, context: z.RefinementCtx) {
+  if (
+    content.reviewedRookieCorrection &&
+    (!content.reviewedCorrection ||
+      content.environment === 'production' ||
+      content.reviewedRookieCorrection.registrationId !==
+        content.reviewedCorrection.registrationId ||
+      content.reviewedRookieCorrection.correctionGraphId !==
+        content.reviewedCorrection.correctionGraphId)
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['reviewedRookieCorrection'],
+      message:
+        'Rookie corrections require the same private reviewed registration and correction graph.',
+    });
+}
+
+function validateSpecialCorrectionMarker(content: CandidateContent, context: z.RefinementCtx) {
+  if (
+    content.reviewedSpecialCorrection &&
+    (!content.reviewedCorrection ||
+      content.reviewedSpecialCorrection.registrationId !==
+        content.reviewedCorrection.registrationId ||
+      content.reviewedSpecialCorrection.correctionGraphId !==
+        content.reviewedCorrection.correctionGraphId ||
+      content.environment === 'production' ||
+      content.sourceAuthority?.kind !== 'historical_plan_completion')
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['reviewedSpecialCorrection'],
+      message:
+        'Special corrections require their private ordinary parent registration and historical source authority.',
+    });
+}
+
+function validateOrdinaryCorrectionMarker(content: CandidateContent, context: z.RefinementCtx) {
+  if (
+    content.reviewedCorrection &&
+    (!content.reviewedScope ||
+      content.reviewedCorrection.registrationId !== content.reviewedScope.registrationId)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['reviewedCorrection'],
+      message: 'Reviewed corrections require their matching registered admission scope.',
+    });
+  }
+}
+
+function validateCandidateSourceAuthority(content: CandidateContent, context: z.RefinementCtx) {
+  if (
+    content.environment !== 'test_fixture' &&
+    content.draftSelections.some(({ supportingProviders }) =>
+      supportingProviders.includes('statly_local_fixture')
     )
-      context.addIssue({
-        code: 'custom',
-        path: ['reviewedSpecialCorrection'],
-        message:
-          'Special corrections require their private ordinary parent registration and historical source authority.',
-      });
-    if (
-      content.reviewedCorrection &&
-      (!content.reviewedScope ||
-        content.reviewedCorrection.registrationId !== content.reviewedScope.registrationId)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['reviewedCorrection'],
-        message: 'Reviewed corrections require their matching registered admission scope.',
-      });
-    }
-    if (
-      content.environment !== 'test_fixture' &&
-      content.draftSelections.some(({ supportingProviders }) =>
-        supportingProviders.includes('statly_local_fixture')
-      )
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['draftSelections'],
-        message: 'Local fixture provider support is valid only in test_fixture candidates.',
-      });
-    }
-    if (content.schemaVersion === AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION) {
-      if (!content.sourceAuthority) {
-        context.addIssue({
-          code: 'custom',
-          path: ['sourceAuthority'],
-          message: 'Version 2 candidates require an exact reconciliation source authority.',
-        });
-      } else if (
-        content.sourceAuthority.candidateSourceBatchSetSha256 !==
-        sha256AflTradeCanonicalJson(content.sourceBatchIds)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['sourceAuthority', 'candidateSourceBatchSetSha256'],
-          message: 'Source authority must bind the exact canonical candidate batch set.',
-        });
-      }
-    } else if (content.sourceAuthority !== undefined) {
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['draftSelections'],
+      message: 'Local fixture provider support is valid only in test_fixture candidates.',
+    });
+  }
+  if (content.schemaVersion === AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION) {
+    if (!content.sourceAuthority) {
       context.addIssue({
         code: 'custom',
         path: ['sourceAuthority'],
-        message: 'Legacy candidates cannot claim version 2 source authority.',
+        message: 'Version 2 candidates require an exact reconciliation source authority.',
       });
-    }
-    if (
-      content.sourceAuthority?.kind === 'historical_plan_completion' &&
-      Date.parse(content.sourceAuthority.completedAt) > Date.parse(content.reconciledAt)
+    } else if (
+      content.sourceAuthority.candidateSourceBatchSetSha256 !==
+      sha256AflTradeCanonicalJson(content.sourceBatchIds)
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['reconciledAt'],
-        message: 'Historical capture completion must precede reconciliation.',
+        path: ['sourceAuthority', 'candidateSourceBatchSetSha256'],
+        message: 'Source authority must bind the exact canonical candidate batch set.',
       });
     }
-    const transactionIds = new Set(content.transactions.map(({ transactionId }) => transactionId));
-    const transferIds = new Set(content.transfers.map(({ transferId }) => transferId));
-    const duplicate = (values: readonly string[]) => new Set(values).size !== values.length;
-    const collections = [
-      ['transactions', content.transactions.map(({ transactionId }) => transactionId)],
-      ['transfers', content.transfers.map(({ transferId }) => transferId)],
-      ['draftSelections', content.draftSelections.map(({ selectionId }) => selectionId)],
-      ['pickCustody', content.pickCustody.map(({ custodyId }) => custodyId)],
-      ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
-    ] as const;
-    const relevantSeasonYears = new Set([
-      ...content.transactions.map(({ seasonYear }) => seasonYear),
-      ...content.transfers.flatMap(({ asset }) =>
-        asset.kind === 'pick_entitlement' ? [asset.draftYear] : []
-      ),
-      ...content.draftSelections.map(({ draftYear }) => draftYear),
-      ...content.pickCustody.map(({ draftYear }) => draftYear),
-    ]);
-    if (!relevantSeasonYears.has(content.anchorSeasonYear)) {
+  } else if (content.sourceAuthority !== undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['sourceAuthority'],
+      message: 'Legacy candidates cannot claim version 2 source authority.',
+    });
+  }
+  if (
+    content.sourceAuthority?.kind === 'historical_plan_completion' &&
+    Date.parse(content.sourceAuthority.completedAt) > Date.parse(content.reconciledAt)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['reconciledAt'],
+      message: 'Historical capture completion must precede reconciliation.',
+    });
+  }
+}
+
+function validateRookieTerminalCustody(
+  content: CandidateContent,
+  lineage: CandidateContent['pickLineage'][number],
+  index: number,
+  context: z.RefinementCtx
+) {
+  const usable = (status: z.infer<typeof statusSchema>) =>
+    status === 'single_source' || status === 'corroborated';
+  if (lineage.terminalOutcome?.kind === 'rookie_elevation') {
+    const endpoint = lineage.terminalOutcome;
+    const history = content.pickCustody.filter((custody) => custody.pickId === lineage.pickId);
+    const predecessors = new Set(history.map((custody) => custody.predecessorCustodyId));
+    const terminalCustody = history.filter((custody) => !predecessors.has(custody.custodyId));
+    if (
+      terminalCustody.length !== 1 ||
+      terminalCustody[0].currentClubId !== endpoint.exercisingClubId ||
+      !usable(terminalCustody[0].status)
+    ) {
       context.addIssue({
         code: 'custom',
-        path: ['anchorSeasonYear'],
-        message: 'Candidate anchor season must be represented by its factual records.',
+        path: ['pickLineage', index, 'terminalOutcome'],
+        message: 'Rookie elevation requires one usable terminal custody holder matching its club.',
       });
     }
-    collections.forEach(([path, values]) => {
-      if (duplicate(values))
-        context.addIssue({ code: 'custom', path: [path], message: 'IDs must be unique.' });
+  }
+}
+
+function hasUnusableLineageEvidence(
+  lineage: CandidateContent['pickLineage'][number],
+  transfer: CandidateContent['transfers'][number],
+  selection: CandidateContent['draftSelections'][number] | undefined,
+  hasUsableCustody: boolean
+) {
+  const usable = (status: z.infer<typeof statusSchema>) =>
+    status === 'single_source' || status === 'corroborated';
+  return (
+    !usable(lineage.status) ||
+    !usable(transfer.status) ||
+    (selection !== undefined && !usable(selection.status)) ||
+    !hasUsableCustody
+  );
+}
+
+const contentSchema = contentFieldsSchema.superRefine((content, context) => {
+  validateSessionCorrectionMarker(content, context);
+  validateRookieCorrectionMarker(content, context);
+  validateSpecialCorrectionMarker(content, context);
+  validateOrdinaryCorrectionMarker(content, context);
+  validateCandidateSourceAuthority(content, context);
+  const transactionIds = new Set(content.transactions.map(({ transactionId }) => transactionId));
+  const transferIds = new Set(content.transfers.map(({ transferId }) => transferId));
+  const duplicate = (values: readonly string[]) => new Set(values).size !== values.length;
+  const collections = [
+    ['transactions', content.transactions.map(({ transactionId }) => transactionId)],
+    ['transfers', content.transfers.map(({ transferId }) => transferId)],
+    ['draftSelections', content.draftSelections.map(({ selectionId }) => selectionId)],
+    ['pickCustody', content.pickCustody.map(({ custodyId }) => custodyId)],
+    ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
+  ] as const;
+  const relevantSeasonYears = new Set([
+    ...content.transactions.map(({ seasonYear }) => seasonYear),
+    ...content.transfers.flatMap(({ asset }) =>
+      asset.kind === 'pick_entitlement' ? [asset.draftYear] : []
+    ),
+    ...content.draftSelections.map(({ draftYear }) => draftYear),
+    ...content.pickCustody.map(({ draftYear }) => draftYear),
+  ]);
+  if (!relevantSeasonYears.has(content.anchorSeasonYear)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['anchorSeasonYear'],
+      message: 'Candidate anchor season must be represented by its factual records.',
     });
-    content.transfers.forEach((transfer, index) => {
-      if (!transactionIds.has(transfer.transactionId)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['transfers', index, 'transactionId'],
-          message: 'Transfer must reference a candidate transaction.',
-        });
-      }
-    });
-    content.transactions.forEach((transaction, index) => {
-      const ownedTransferIds = content.transfers
-        .filter(({ transactionId }) => transactionId === transaction.transactionId)
-        .map(({ transferId }) => transferId)
-        .sort();
-      const incomplete = transaction.parties.length < 2 || transaction.transferIds.length === 0;
-      if (
-        transaction.transferIds.some((transferId) => !transferIds.has(transferId)) ||
-        JSON.stringify(transaction.transferIds) !== JSON.stringify(ownedTransferIds)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['transactions', index, 'transferIds'],
-          message: 'Transaction transfer membership must equal its exact owned transfer set.',
-        });
-      }
-      if (
-        incomplete &&
-        (transaction.status !== 'unresolved' ||
-          !content.issues.some(
-            (issue) =>
-              issue.code === 'transaction_incomplete' &&
-              issue.subjectKey === `transaction:${transaction.providerEventId}`
-          ))
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['transactions', index],
-          message: 'Incomplete transactions must remain unresolved with an exact blocking issue.',
-        });
-      }
-    });
-    content.pickLineage.forEach((lineage, index) => {
-      const transfer = content.transfers.find(
-        ({ transferId }) => transferId === lineage.transferId
-      );
-      const selection = content.draftSelections.find(
-        ({ selectionId }) => selectionId === lineage.selectionId
-      );
-      const usable = (status: z.infer<typeof statusSchema>) =>
-        status === 'single_source' || status === 'corroborated';
-      const hasUsableCustody = content.pickCustody.some(
-        (custody) => custody.pickId === lineage.pickId && usable(custody.status)
-      );
-      if (lineage.terminalOutcome?.kind === 'rookie_elevation') {
-        const endpoint = lineage.terminalOutcome;
-        const history = content.pickCustody.filter((custody) => custody.pickId === lineage.pickId);
-        const predecessors = new Set(history.map((custody) => custody.predecessorCustodyId));
-        const terminalCustody = history.filter((custody) => !predecessors.has(custody.custodyId));
-        if (
-          terminalCustody.length !== 1 ||
-          terminalCustody[0].currentClubId !== endpoint.exercisingClubId ||
-          !usable(terminalCustody[0].status)
-        ) {
-          context.addIssue({
-            code: 'custom',
-            path: ['pickLineage', index, 'terminalOutcome'],
-            message:
-              'Rookie elevation requires one usable terminal custody holder matching its club.',
-          });
-        }
-      }
-      if (
-        !transfer ||
-        transfer.asset.kind !== 'pick_entitlement' ||
-        (!selection && !lineage.terminalOutcome)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['pickLineage', index],
-          message: 'Lineage must reference a pick transfer and draft selection in this candidate.',
-        });
-      } else if (
-        lineage.pickId !== transfer.asset.pickId ||
-        (selection !== undefined && lineage.pickId !== selection.pickId)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['pickLineage', index, 'pickId'],
-          message: 'Lineage pick identity must match both transfer and selection.',
-        });
-      } else if (
-        lineage.terminalOutcome &&
-        lineage.terminalOutcome.kind !== 'incorporated_into_later_package' &&
-        (lineage.terminalOutcome.draftYear !== transfer.asset.draftYear ||
-          lineage.terminalOutcome.draftType !== transfer.asset.draftType)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['pickLineage', index],
-          message: 'Terminal outcome must match the transferred pick draft.',
-        });
-      } else if (
-        !usable(lineage.status) ||
-        !usable(transfer.status) ||
-        (selection !== undefined && !usable(selection.status)) ||
-        !hasUsableCustody
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['pickLineage', index, 'status'],
-          message: 'Lineage requires usable transfer, selection, and custody evidence.',
-        });
-      }
-    });
+  }
+  collections.forEach(([path, values]) => {
+    if (duplicate(values))
+      context.addIssue({ code: 'custom', path: [path], message: 'IDs must be unique.' });
   });
+  content.transfers.forEach((transfer, index) => {
+    if (!transactionIds.has(transfer.transactionId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transfers', index, 'transactionId'],
+        message: 'Transfer must reference a candidate transaction.',
+      });
+    }
+  });
+  content.transactions.forEach((transaction, index) => {
+    const ownedTransferIds = content.transfers
+      .filter(({ transactionId }) => transactionId === transaction.transactionId)
+      .map(({ transferId }) => transferId)
+      .sort();
+    const incomplete = transaction.parties.length < 2 || transaction.transferIds.length === 0;
+    if (
+      transaction.transferIds.some((transferId) => !transferIds.has(transferId)) ||
+      JSON.stringify(transaction.transferIds) !== JSON.stringify(ownedTransferIds)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transactions', index, 'transferIds'],
+        message: 'Transaction transfer membership must equal its exact owned transfer set.',
+      });
+    }
+    if (
+      incomplete &&
+      (transaction.status !== 'unresolved' ||
+        !content.issues.some(
+          (issue) =>
+            issue.code === 'transaction_incomplete' &&
+            issue.subjectKey === `transaction:${transaction.providerEventId}`
+        ))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transactions', index],
+        message: 'Incomplete transactions must remain unresolved with an exact blocking issue.',
+      });
+    }
+  });
+  content.pickLineage.forEach((lineage, index) => {
+    const transfer = content.transfers.find(({ transferId }) => transferId === lineage.transferId);
+    const selection = content.draftSelections.find(
+      ({ selectionId }) => selectionId === lineage.selectionId
+    );
+    const usable = (status: z.infer<typeof statusSchema>) =>
+      status === 'single_source' || status === 'corroborated';
+    const hasUsableCustody = content.pickCustody.some(
+      (custody) => custody.pickId === lineage.pickId && usable(custody.status)
+    );
+    validateRookieTerminalCustody(content, lineage, index, context);
+    if (
+      !transfer ||
+      transfer.asset.kind !== 'pick_entitlement' ||
+      (!selection && !lineage.terminalOutcome)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineage', index],
+        message: 'Lineage must reference a pick transfer and draft selection in this candidate.',
+      });
+    } else if (
+      lineage.pickId !== transfer.asset.pickId ||
+      (selection !== undefined && lineage.pickId !== selection.pickId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineage', index, 'pickId'],
+        message: 'Lineage pick identity must match both transfer and selection.',
+      });
+    } else if (
+      lineage.terminalOutcome &&
+      lineage.terminalOutcome.kind !== 'incorporated_into_later_package' &&
+      (lineage.terminalOutcome.draftYear !== transfer.asset.draftYear ||
+        lineage.terminalOutcome.draftType !== transfer.asset.draftType)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineage', index],
+        message: 'Terminal outcome must match the transferred pick draft.',
+      });
+    } else if (hasUnusableLineageEvidence(lineage, transfer, selection, hasUsableCustody)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineage', index, 'status'],
+        message: 'Lineage requires usable transfer, selection, and custody evidence.',
+      });
+    }
+  });
+});
 
 export const aflTradeExternalReconciliationCandidateSchema = z
   .object({
