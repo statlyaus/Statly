@@ -1237,6 +1237,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0207_window_archive_release_membership',
       '0208_terminal_lineage_finalization',
       '0209_compensation_reference_staging',
+      '0210_player_departure_reference_staging',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
