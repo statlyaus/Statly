@@ -1,3 +1,4 @@
+import { reviewedOfficialAflCompensationSource } from './officialAflCompensationSourceScope';
 import { OFFICIAL_AFL_2010_SESSION_SOURCES } from './officialAflDraft2010SessionFacts';
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
 import { createHash } from 'node:crypto';
@@ -41,12 +42,16 @@ export async function captureOfficialAflPage(input: {
   fetchImpl: typeof fetch;
 }): Promise<AflTradeExternalPageCapture> {
   const url = new URL(input.url);
-  const reviewedPdf = url.href === OFFICIAL_AFL_2010_REPORT.url;
+  const compensationSource = reviewedOfficialAflCompensationSource(input.url);
+  const reviewedPdf =
+    url.href === OFFICIAL_AFL_2010_REPORT.url ||
+    compensationSource?.mediaType === 'application/pdf';
   if (
     !reviewedPdf &&
     (url.protocol !== 'https:' ||
       (url.hostname !== 'www.afl.com.au' &&
         url.href !== GWS_MINI_GRANT_URL &&
+        compensationSource?.mediaType !== 'text/html' &&
         url.href !== OFFICIAL_AFL_2010_SESSION_SOURCES.collingwood.url &&
         !Object.values(OFFICIAL_AFL_MINI_2011_SOURCES).some((source) => source.url === url.href)) ||
       !/^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) ||
