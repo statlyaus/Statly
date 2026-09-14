@@ -66,6 +66,54 @@ export function reviewedOfficialAflDraft2014EffectiveYear(url: string): number |
   );
   return key ? Number(times[key].slice(0, 4)) : null;
 }
+function parseReviewedMembership(
+  $: ReturnType<typeof load>
+): AflTradeExternalEvidenceContent['claim'][] | null {
+  const body = $('.article-body');
+  const common = { draftYear: 2014, draftType: 'national' as const };
+  const paragraphs = body
+    .find('p')
+    .map((_, e) => normalize($(e).text()))
+    .get()
+    .filter((text) => text.startsWith('2014 NAB AFL Draft:'));
+  if (
+    paragraphs.length !== reviewed.membershipDigests.length ||
+    paragraphs.some((text, i) => hash(text) !== reviewed.membershipDigests[i])
+  )
+    return null;
+  const members: { recordedName: string; selectionNumber: number | null }[] = [];
+  for (const paragraph of paragraphs) {
+    for (const match of paragraph
+      .slice('2014 NAB AFL Draft:'.length)
+      .matchAll(/([^,]+?)\s*\(([^)]+)\)/g)) {
+      const number = match[2]!.match(/^(?:pick No\.|No\.)?(\d+)(?:\s*[–-].*)?$/);
+      if (!number && match[2] !== 'NSW Zone Selection') return null;
+      members.push({
+        recordedName: match[1]!.trim(),
+        selectionNumber: number ? Number(number[1]) : null,
+      });
+    }
+  }
+  if (members.length !== 76 || members.filter((m) => m.selectionNumber === null).length !== 2)
+    return null;
+  const brisbane = body
+    .find('p')
+    .filter((_, e) => normalize($(e).text()).startsWith('2014 NAB AFL Draft: Liam Dawson'));
+  if (brisbane.length !== 1 || normalize(brisbane.prev('h6').text()) !== 'BRISBANE') return null;
+  return [
+    { ...common, kind: 'draft_completed_membership_roster', members },
+    {
+      ...common,
+      kind: 'draft_session_boundary',
+      sessionOrdinal: 1,
+      boundary: 'last',
+      selectionNumber: 86,
+      player: { nativeId: null, recordedName: 'Josh Clayton' },
+      selectedByClub: { nativeId: null, recordedName: 'Brisbane' },
+    },
+  ];
+}
+
 export function parseOfficialAflDraft2014SessionFacts(
   html: string,
   input: { capture: AflTradeExternalEvidenceContent['capture'] }
@@ -91,48 +139,9 @@ export function parseOfficialAflDraft2014SessionFacts(
   const common = { draftYear: 2014, draftType: 'national' as const };
   let claims: AflTradeExternalEvidenceContent['claim'][];
   if (key === 'membership') {
-    const paragraphs = body
-      .find('p')
-      .map((_, e) => normalize($(e).text()))
-      .get()
-      .filter((text) => text.startsWith('2014 NAB AFL Draft:'));
-    if (
-      paragraphs.length !== reviewed.membershipDigests.length ||
-      paragraphs.some((text, i) => hash(text) !== reviewed.membershipDigests[i])
-    )
-      return fail();
-    const members: { recordedName: string; selectionNumber: number | null }[] = [];
-    for (const paragraph of paragraphs) {
-      for (const match of paragraph
-        .slice('2014 NAB AFL Draft:'.length)
-        .matchAll(/([^,]+?)\s*\(([^)]+)\)/g)) {
-        const number = match[2]!.match(/^(?:pick No\.|No\.)?(\d+)(?:\s*[–-].*)?$/);
-        if (!number && match[2] !== 'NSW Zone Selection') return fail();
-        members.push({
-          recordedName: match[1]!.trim(),
-          selectionNumber: number ? Number(number[1]) : null,
-        });
-      }
-    }
-    if (members.length !== 76 || members.filter((m) => m.selectionNumber === null).length !== 2)
-      return fail();
-    const brisbane = body
-      .find('p')
-      .filter((_, e) => normalize($(e).text()).startsWith('2014 NAB AFL Draft: Liam Dawson'));
-    if (brisbane.length !== 1 || normalize(brisbane.prev('h6').text()) !== 'BRISBANE')
-      return fail();
-    claims = [
-      { ...common, kind: 'draft_completed_membership_roster', members },
-      {
-        ...common,
-        kind: 'draft_session_boundary',
-        sessionOrdinal: 1,
-        boundary: 'last',
-        selectionNumber: 86,
-        player: { nativeId: null, recordedName: 'Josh Clayton' },
-        selectedByClub: { nativeId: null, recordedName: 'Brisbane' },
-      },
-    ];
+    const membership = parseReviewedMembership($);
+    if (!membership) return fail();
+    claims = membership;
   } else {
     const digests = body
       .find('p,div')

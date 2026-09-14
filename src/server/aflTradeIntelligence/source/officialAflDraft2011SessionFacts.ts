@@ -41,6 +41,85 @@ export function reviewedOfficialAflDraft2011EffectiveYear(url: string): number |
   return key ? Number(reviewed[key].time.slice(0, 4)) : null;
 }
 
+function reviewedMembershipMatches(
+  members: { recordedName: string; selectionNumber: number }[],
+  selected: string[]
+) {
+  return !(
+    members.some((member) => !member.recordedName) ||
+    new Set(members.map((member) => member.recordedName)).size !== 75 ||
+    members[0]?.recordedName !== 'Jonathon Patton' ||
+    members.at(-1)?.recordedName !== 'Jackson Allen' ||
+    !selected[0]?.startsWith('1. GWS Giants - ') ||
+    !selected.at(-1)?.startsWith('91. Gold Coast Suns (LT) - ') ||
+    members.find((member) => member.recordedName === 'Cameron Sutcliffe')?.selectionNumber !== 72
+  );
+}
+
+function parseReviewedMembership(
+  bodyHtml: string
+): AflTradeExternalEvidenceContent['claim'][] | null {
+  const common = { draftYear: 2011, draftType: 'national' as const };
+  const lines = bodyHtml
+    .split(/<br\s*\/?\s*>/i)
+    .map((fragment) => normalize(load(fragment).text()))
+    .filter((text) => /^\d+\./.test(text));
+  if (
+    lines.length !== 96 ||
+    lines.some((text, index) => Number(text.match(/^\d+/)?.[0]) !== index + 1)
+  )
+    return null;
+  const promotions = lines.filter((text) => text.includes('(PR)'));
+  const passes = lines.filter((text) => / - Pass$/.test(text));
+  const selected = lines.filter((text) => !promotions.includes(text) && !passes.includes(text));
+  if (promotions.length !== 13 || passes.length !== 8 || selected.length !== 75) return null;
+  const members = selected.map((text) => ({
+    recordedName:
+      text
+        .split(' - ')[1]
+        ?.replace(/\s+\(.*$/, '')
+        .trim() ?? '',
+    selectionNumber: Number(text.match(/^\d+/)?.[0]),
+  }));
+  if (!reviewedMembershipMatches(members, selected)) return null;
+  // Keep the source's disputed72. The independent club report and reviewed
+  // membership owner resolve it; this parser never edits the reported value.
+  return [
+    { ...common, kind: 'draft_completed_membership_roster', members },
+    {
+      ...common,
+      kind: 'draft_session_boundary',
+      sessionOrdinal: 1,
+      boundary: 'first',
+      selectionNumber: 1,
+      player: { nativeId: null, recordedName: 'Jonathon Patton' },
+      selectedByClub: { nativeId: null, recordedName: 'GWS Giants' },
+    },
+    {
+      ...common,
+      kind: 'draft_session_boundary',
+      sessionOrdinal: 1,
+      boundary: 'last',
+      selectionNumber: 91,
+      player: { nativeId: null, recordedName: 'Jackson Allen' },
+      selectedByClub: { nativeId: null, recordedName: 'Gold Coast Suns' },
+    },
+  ];
+}
+
+function reviewedArticleMatches($: ReturnType<typeof load>, key: keyof typeof reviewed) {
+  const body = $('.article-body'),
+    date = $('.article__date > time');
+  // Pin the reviewed article text, never navigation or related-story text. Structural
+  // checks below also reject changed club headings and moved/duplicated labels.
+  return !(
+    body.length !== 1 ||
+    date.length !== 1 ||
+    date.attr('datetime') !== reviewed[key].time ||
+    createHash('sha256').update(normalize(body.text())).digest('hex') !== reviewed[key].digest
+  );
+}
+
 export function parseOfficialAflDraft2011SessionFacts(
   html: string,
   input: { capture: AflTradeExternalEvidenceContent['capture'] }
@@ -58,74 +137,14 @@ export function parseOfficialAflDraft2011SessionFacts(
   const key = sourceKey(input.capture.sourceUrl);
   if (!key) return fail();
   const $ = load(html),
-    body = $('.article-body'),
-    date = $('.article__date > time');
-  // Pin the reviewed article text, never navigation or related-story text. Structural
-  // checks below also reject changed club headings and moved/duplicated labels.
-  if (
-    body.length !== 1 ||
-    date.length !== 1 ||
-    date.attr('datetime') !== reviewed[key].time ||
-    createHash('sha256').update(normalize(body.text())).digest('hex') !== reviewed[key].digest
-  )
-    return fail();
+    body = $('.article-body');
+  if (!reviewedArticleMatches($, key)) return fail();
   const common = { draftYear: 2011, draftType: 'national' as const };
   let claims: AflTradeExternalEvidenceContent['claim'][];
   if (key === 'membership') {
-    const lines = (body.html() ?? '')
-      .split(/<br\s*\/?\s*>/i)
-      .map((fragment) => normalize(load(fragment).text()))
-      .filter((text) => /^\d+\./.test(text));
-    if (
-      lines.length !== 96 ||
-      lines.some((text, index) => Number(text.match(/^\d+/)?.[0]) !== index + 1)
-    )
-      return fail();
-    const promotions = lines.filter((text) => text.includes('(PR)'));
-    const passes = lines.filter((text) => / - Pass$/.test(text));
-    const selected = lines.filter((text) => !promotions.includes(text) && !passes.includes(text));
-    if (promotions.length !== 13 || passes.length !== 8 || selected.length !== 75) return fail();
-    const members = selected.map((text) => ({
-      recordedName:
-        text
-          .split(' - ')[1]
-          ?.replace(/\s+\(.*$/, '')
-          .trim() ?? '',
-      selectionNumber: Number(text.match(/^\d+/)?.[0]),
-    }));
-    if (
-      members.some((member) => !member.recordedName) ||
-      new Set(members.map((member) => member.recordedName)).size !== 75 ||
-      members[0]?.recordedName !== 'Jonathon Patton' ||
-      members.at(-1)?.recordedName !== 'Jackson Allen' ||
-      !selected[0]?.startsWith('1. GWS Giants - ') ||
-      !selected.at(-1)?.startsWith('91. Gold Coast Suns (LT) - ') ||
-      members.find((member) => member.recordedName === 'Cameron Sutcliffe')?.selectionNumber !== 72
-    )
-      return fail();
-    // Keep the source's disputed72. The independent club report and reviewed
-    // membership owner resolve it; this parser never edits the reported value.
-    claims = [
-      { ...common, kind: 'draft_completed_membership_roster', members },
-      {
-        ...common,
-        kind: 'draft_session_boundary',
-        sessionOrdinal: 1,
-        boundary: 'first',
-        selectionNumber: 1,
-        player: { nativeId: null, recordedName: 'Jonathon Patton' },
-        selectedByClub: { nativeId: null, recordedName: 'GWS Giants' },
-      },
-      {
-        ...common,
-        kind: 'draft_session_boundary',
-        sessionOrdinal: 1,
-        boundary: 'last',
-        selectionNumber: 91,
-        player: { nativeId: null, recordedName: 'Jackson Allen' },
-        selectedByClub: { nativeId: null, recordedName: 'Gold Coast Suns' },
-      },
-    ];
+    const membership = parseReviewedMembership(body.html() ?? '');
+    if (!membership) return fail();
+    claims = membership;
   } else if (key === 'sutcliffe') {
     const text = normalize(body.text());
     if (!text.includes('Pick 71: Cameron Sutcliffe') || !text.includes('Pick 72: Pass'))
