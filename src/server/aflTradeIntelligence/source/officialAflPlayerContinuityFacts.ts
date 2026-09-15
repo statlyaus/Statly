@@ -9,6 +9,22 @@ export const OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION = 'official-afl-playe
 // Reviewed source facts only. Exact byte matching is required; this grants no canonical approval.
 const references = [
   {
+    url: 'https://www.gwsgiants.com.au/news/325692/patfull-calls-full-time',
+    sha256: '2ba435e9668d60727b7828dff722cf62b708029ce60ef1e1e92152adce71b1e0',
+    year: 2016,
+    claim: {
+      kind: 'player_continuity_reference',
+      recordedPlayer: 'Joel Patfull',
+      recordedClub: 'Greater Western Sydney',
+      membershipSeasons: [2015, 2016],
+      // Published 12 October: delisted now, with future rookie re-listing planned.
+      // Preserve membership before that report, without bridging the list change.
+      observedThrough: '2016-10-11',
+      membershipStatus: 'listed',
+      coverage: 'partial_calendar_boundary',
+    },
+  },
+  {
     url: 'https://www.hawthornfc.com.au/news/412198/hale-calls-time-on-decorated-career',
     sha256: '37bc743e43a6e935a93f32add7a128e7fcd36642f52e8d9edbe35a31a79ba9e8',
     year: 2013,

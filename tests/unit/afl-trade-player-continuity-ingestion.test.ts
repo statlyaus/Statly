@@ -7,6 +7,7 @@ import {
   OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
 } from '@/server/aflTradeIntelligence/source/officialAflPlayerContinuityFacts';
 const sources = [
+  ['https://www.gwsgiants.com.au/news/325692/patfull-calls-full-time', 2016],
   ['https://www.hawthornfc.com.au/news/412198/hale-calls-time-on-decorated-career', 2013],
   ['https://www.afc.com.au/news/23562/tambling-retires-from-afl', 2013],
   ['https://www.lions.com.au/news/267468/lions-delist-five', 2013],
@@ -121,4 +122,15 @@ it('requires both membership and observation years plus every emitted field', as
   const gate = fixture();
   gate.gate0aReceipt.content.request.fieldUses = [];
   expect(() => check(gate)).toThrow('outside the reviewed Gate');
+});
+
+it('keeps Patfull playing membership separate from future rookie re-listing', () => {
+  const source = reviewedOfficialAflPlayerContinuity(
+    'https://www.gwsgiants.com.au/news/325692/patfull-calls-full-time',
+    2016
+  )!;
+  expect(source.claim.membershipSeasons).toEqual([2015, 2016]);
+  expect(source.claim.observedThrough).toBe('2016-10-11');
+  expect(source.claim.membershipStatus).toBe('listed');
+  expect(source.claim.coverage).toBe('partial_calendar_boundary');
 });
