@@ -459,7 +459,7 @@ it.each([false, true])(
       };
       const exactParentBytes = async (
         documents: unknown,
-        env = scope.environment,
+        env: string = scope.environment,
         cutoff = valuationRequest.knowledgeCutoffAt
       ) =>
         (
