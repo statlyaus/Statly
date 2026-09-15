@@ -3163,3 +3163,14 @@ for an earlier evidenced transfer or replace partial observation dates with inve
 The historical draft/trade reader accepts typed passed, unused, later-package and rookie-elevation
 pick endpoints without a draft-selection row. It leaves drafted-player and actual-pick fields empty
 and continues rejecting missing or mismatched selected endpoints and pick identities.
+
+### Reviewed legacy trade-year bindings
+
+Migration 0212 lets a reviewed acquisition binding use January 1–December 31 of the
+immutable promoted transaction year when the original trade has no exact date or
+stored precision. These are uncertainty bounds, not claimed event days. The year
+must match the original promoted transaction and event season; narrower ranges,
+other years and fabricated exact dates fail. Existing promotion, identity, review,
+custody and source-ancestry checks still run. The reviewed departure/spell stores
+the immutable binding; original event and asset records are unchanged. This does
+not admit numerical valuations or convert year bounds into exact-day observations.
