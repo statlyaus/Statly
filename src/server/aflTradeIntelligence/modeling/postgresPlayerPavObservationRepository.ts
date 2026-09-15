@@ -113,7 +113,7 @@ async function trustedNow(transaction: AflOutcomeSqlTransaction): Promise<string
   return iso(value);
 }
 
-async function loadPolicy(
+export async function loadCurrentAflTradePlayerPavPolicy(
   transaction: AflOutcomeSqlTransaction,
   policyId: string,
   environment: AflTradePlayerPavExecutionContext['environment']
@@ -366,7 +366,11 @@ async function requireCurrentAuthority(
 ): Promise<void> {
   const policy =
     suppliedPolicy ??
-    (await loadPolicy(transaction, set.content.policy.policyId, set.content.environment));
+    (await loadCurrentAflTradePlayerPavPolicy(
+      transaction,
+      set.content.policy.policyId,
+      set.content.environment
+    ));
   if (canonicalizeAflTradeJson(policy) !== canonicalizeAflTradeJson(set.content.policy)) {
     throw new AflTradePlayerPavObservationError(
       'POLICY_NOT_CURRENT',
@@ -626,7 +630,11 @@ export class PostgresAflTradePlayerPavObservationRepository implements AflTradeP
         await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
           `outcome-player-pav-set:${request.environment}:${request.releaseId}:${request.policyId}:${request.knowledgeCutoffAt}`,
         ]);
-        const policy = await loadPolicy(transaction, request.policyId, request.environment);
+        const policy = await loadCurrentAflTradePlayerPavPolicy(
+          transaction,
+          request.policyId,
+          request.environment
+        );
         if (policy.content.competition !== request.competition) {
           throw new AflTradePlayerPavObservationError(
             'POLICY_NOT_CURRENT',
@@ -698,7 +706,11 @@ export class PostgresAflTradePlayerPavObservationRepository implements AflTradeP
       await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
         `outcome-player-pav-set:non_production:${currentAuthority.releaseId}:${currentAuthority.policyId}:${currentAuthority.knowledgeCutoffAt}`,
       ]);
-      const policy = await loadPolicy(transaction, currentAuthority.policyId, 'non_production');
+      const policy = await loadCurrentAflTradePlayerPavPolicy(
+        transaction,
+        currentAuthority.policyId,
+        'non_production'
+      );
       const predictions = await loadPredictions(
         transaction,
         currentAuthority.releaseId,
@@ -865,7 +877,11 @@ export class PostgresAflTradePlayerPavObservationRepository implements AflTradeP
             'Retained player-PAV observations differ from the exact private authority.'
           );
         }
-        const policy = await loadPolicy(transaction, binding.policyId, 'non_production');
+        const policy = await loadCurrentAflTradePlayerPavPolicy(
+          transaction,
+          binding.policyId,
+          'non_production'
+        );
         const predictions = await loadPredictions(
           transaction,
           binding.releaseId,

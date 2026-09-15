@@ -1386,8 +1386,17 @@ the review decision itself remains in the existing review owner. The context rea
 canonical year/date precision, current registered spell and retained evidence bytes. It uses the
 decision's actual recording time and never turns a year-only trade into an exact date. This review
 selects an approved private factual candidate; it is neither public release activation nor Gate 2
-scientific admission. Annual coverage, policy/calculation selection and durable materialization
-remain separate requirements before the full adapter can execute.
+scientific admission.
+
+`postgresPostseasonCoverageAuthority.ts` authenticates a current reviewed expected match set against
+the exact current calculation inputs. Complete coverage requires equality; partial coverage permits
+only a subset. A finalized calculation or calendar date alone cannot establish a complete season.
+`postgresPostseasonObservationMaterialization.ts` combines these readers with the existing current
+retrospective policy owner to derive observation v3. Missing coverage and missing player rows remain
+unavailable; incomplete feature seasons are unavailable, and receiving-spell outcomes retain partial
+coverage and signed values. Callers cannot supply annual values. Coverage/review/calculation bindings
+are returned for subsequent persistence and replay checks; durable materialization and the valuation
+connection remain required before the full adapter can execute.
 
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single

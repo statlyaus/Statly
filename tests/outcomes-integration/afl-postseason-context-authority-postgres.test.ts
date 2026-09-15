@@ -1,3 +1,9 @@
+import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
+import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
+import { createAflTradePlayerPavPolicy } from '@/server/aflTradeIntelligence/modeling/playerPavObservationContracts';
+import { PostgresAflTradePlayerPavObservationRepository } from '@/server/aflTradeIntelligence/modeling/postgresPlayerPavObservationRepository';
+import { materializeAflTradePostseasonObservation } from '@/server/aflTradeIntelligence/modeling/postgresPostseasonObservationMaterialization';
 import { Pool } from 'pg';
 import { createAflTradeExternalCaptureExecutionReceipt } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import { expect, it } from 'vitest';
@@ -197,6 +203,114 @@ it.each([false, true])(
       expect(result.acquisitionSpell).toEqual(spell);
       expect(result.release.releaseId).toBe(release.releaseId);
       expect(await load()).toEqual(result);
+      const methodBytes = new TextEncoder().encode(
+        '<html>Synthetic HPN method for missing-season materialization</html>'
+      );
+      const methodArtifact = createAflTradeByteArtifactRef(methodBytes, 'text/html', await now());
+      await pool.query(
+        `INSERT INTO outcome_artifact_custody
+        (artifact_id,content_sha256,storage_uri,media_type,byte_length,created_at,verified_at,environment,artifact_class,custody_json)
+        VALUES($1,$2,$3,$4,$5,$6,$7,'test_fixture','raw_source','{}')`,
+        [
+          methodArtifact.artifactId,
+          methodArtifact.contentSha256,
+          methodArtifact.storageUri,
+          methodArtifact.mediaType,
+          methodArtifact.byteLength,
+          methodArtifact.createdAt,
+          await now(),
+        ]
+      );
+      const method = createAflTradeHpnPavMethod({
+        sourceArtifact: methodArtifact,
+        sourceBytes: methodBytes,
+        capturedAt: methodArtifact.createdAt,
+      });
+      const methodAuthority = { loadExact: async () => ({ method, sourceBytes: methodBytes }) };
+      await new PostgresAflTradeHpnPavCalculationRepository(client, methodAuthority).registerMethod(
+        method,
+        scope
+      );
+      const policy = await client.transaction(async (transaction) => {
+        const at = (
+          await transaction.query<{ at: Date }>(
+            "SELECT date_trunc('milliseconds',transaction_timestamp()) AS at"
+          )
+        ).rows[0]!.at.toISOString();
+        const policy = createAflTradePlayerPavPolicy({
+          schemaVersion: 'afl-trade-player-pav-policy/v2',
+          knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation',
+          authorityBoundary:
+            'private_released_acquisition_spell_exact_finalized_hpn_pav_no_grade_publication_or_fantasy_ownership',
+          publicationEligible: false,
+          ...scope,
+          policyVersion: 'synthetic-postseason-policy',
+          featureHistorySeasons: 1,
+          fixedHorizonSeasons: 3,
+          methodId: method.methodId,
+          sourceValueUnit: 'season_pav',
+          outcomeValueUnit: 'fixed_horizon_pav',
+          partitions: (['train', 'calibration', 'validation', 'final_test'] as const).map(
+            (role, index) => ({
+              role,
+              fromPredictionSeason: event.season_year - 24 + index * 8,
+              throughPredictionSeason: event.season_year - 24 + index * 8,
+            })
+          ),
+          approvalDecision: { id: `review-decision:${'6'.repeat(64)}`, sha256: '6'.repeat(64) },
+          createdAt: at,
+        });
+        const { approvalDecision: policyApproval, ...policyEvidence } = policy.content;
+        await transaction.query(
+          `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+        VALUES($1,'player_pav_policy',$2,'approved','Synthetic atomic policy approval',$3::jsonb,'synthetic-reviewer',date_trunc('milliseconds',transaction_timestamp()))`,
+          [
+            policyApproval.id,
+            `AFLM:${policy.content.policyVersion}`,
+            canonicalizeAflTradeJson(policyEvidence),
+          ]
+        );
+        await new PostgresAflTradePlayerPavObservationRepository({
+          query: transaction.query.bind(transaction),
+          transaction: async (work) => work(transaction),
+        }).registerPolicy(policy, scope);
+        return policy;
+      });
+      const materializeRequest = {
+        ...request,
+        policyId: policy.policyId,
+        knowledgeCutoffAt: await now(),
+      };
+      const materialize = (overrides = {}) =>
+        client.transaction((transaction) =>
+          materializeAflTradePostseasonObservation(
+            transaction,
+            { ...materializeRequest, ...overrides },
+            methodAuthority,
+            evidence
+          )
+        );
+      const materialized = await materialize();
+      expect(materialized.observation.content.context.content.tradeDate).toBe(event.event_date);
+      expect(materialized.observation.content.context.content.recordedAt).toBe(recordedAt);
+      expect(materialized.observation.content.features).toEqual([
+        { seasonYear: event.season_year, state: 'unavailable', reason: 'season_incomplete' },
+      ]);
+      expect(materialized.observation.content.outcomes.map(({ seasonYear }) => seasonYear)).toEqual(
+        [event.season_year + 1, event.season_year + 2, event.season_year + 3]
+      );
+      expect(
+        materialized.observation.content.outcomes.every(
+          (season) => season.state === 'unavailable' && !('values' in season)
+        )
+      ).toBe(true);
+      expect(
+        materialized.coverageBindings.every(({ calculationId }) => calculationId === null)
+      ).toBe(true);
+      expect(await materialize()).toEqual(materialized);
+      await expect(materialize({ values: [{ totalPav: 99 }] })).rejects.toThrow();
+
       await expect(load({ environment: 'non_production' })).rejects.toThrow('scope differs');
       await expect(load({ reviewDecisionId: 'missing-review' })).rejects.toThrow('unavailable');
       await expect(load({ knowledgeCutoffAt: promoted.sourceArtifact.createdAt })).rejects.toThrow(
@@ -237,6 +351,7 @@ it.each([false, true])(
         [review.reviewId, request.reviewDecisionId, canonicalizeAflTradeJson(review), await now()]
       );
       await expect(load()).rejects.toThrow('not current');
+      await expect(materialize()).rejects.toThrow('not current');
       expect(
         (
           await pool.query(

@@ -14,6 +14,12 @@ import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntellig
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradePostseasonSeasonCoverage,
+  aflTradePostseasonCoverageSubject,
+} from '@/server/aflTradeIntelligence/modeling/postseasonSeasonCoverage';
+import { loadCurrentAflTradePostseasonCoverage } from '@/server/aflTradeIntelligence/modeling/postgresPostseasonCoverageAuthority';
 import { loadCurrentAflTradePostseasonCalculation } from '@/server/aflTradeIntelligence/modeling/postgresPostseasonCalculationAuthority';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
@@ -379,6 +385,95 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
       })
     )
   ).rejects.toThrow('method custody differs');
+  const seasonArtifacts = new Map<string, Uint8Array>();
+  const coverageReader = {
+    read: async (ref: { artifactId: string }) => {
+      const bytes = seasonArtifacts.get(ref.artifactId);
+      if (!bytes) throw new Error('Unknown synthetic season evidence.');
+      return bytes;
+    },
+  };
+  const loadCoverage = async () => {
+    const request = {
+      ...scope,
+      methodId: method.methodId,
+      seasonYear: 2026,
+      knowledgeCutoffAt: await instant(),
+    };
+    return client.transaction((transaction) =>
+      loadCurrentAflTradePostseasonCoverage(transaction, request, methodAuthority, coverageReader)
+    );
+  };
+  expect(await loadCoverage()).toBeNull();
+  let priorCoverageDecision: string | null = null;
+  const publishCoverage = async (state: 'complete' | 'partial', expectedMatchIds: string[]) => {
+    const document = { fixtureOnly: true, state, expectedMatchIds, seasonYear: 2026 };
+    const ref = createAflTradeCanonicalJsonArtifactRef(document, await instant());
+    seasonArtifacts.set(
+      ref.artifactId,
+      new TextEncoder().encode(canonicalizeAflTradeJson(document))
+    );
+    await pool.query(
+      `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,created_at,verified_at,environment,artifact_class,custody_json)
+      VALUES($1,$2,$3,$4,$5,$6,$7,'non_production','derived_private','{}')`,
+      [
+        ref.artifactId,
+        ref.contentSha256,
+        ref.storageUri,
+        ref.mediaType,
+        ref.byteLength,
+        ref.createdAt,
+        await instant(),
+      ]
+    );
+    const coverage = createAflTradePostseasonSeasonCoverage({
+      schemaVersion: 'afl-trade-postseason-season-coverage/v1',
+      ...scope,
+      seasonYear: 2026,
+      methodId: method.methodId,
+      calculationId: finalized.calculation.calculationId,
+      state,
+      expectedMatchIds,
+      evidence: ref,
+      createdAt: await instant(),
+    });
+    const id = `synthetic-coverage:${coverage.coverageId}`;
+    await pool.query(
+      `INSERT INTO outcome_review_decision
+      (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+      VALUES($1,'postseason_season_coverage',$2,'approved',$3,'Explicit synthetic season coverage',$4::jsonb,'synthetic-reviewer',$5)`,
+      [
+        id,
+        aflTradePostseasonCoverageSubject(coverage.content),
+        priorCoverageDecision,
+        canonicalizeAflTradeJson(coverage),
+        await instant(),
+      ]
+    );
+    priorCoverageDecision = id;
+    return coverage;
+  };
+  const matches = built.inputSet.content.completedMatches.map(({ matchId }) => matchId);
+  const complete = await publishCoverage('complete', matches);
+  expect((await loadCoverage())?.coverage).toEqual(complete);
+  await publishCoverage('complete', [...matches, 'synthetic-unplayed-match']);
+  await expect(loadCoverage()).rejects.toThrow('completed matches');
+  const partial = await publishCoverage('partial', [...matches, 'synthetic-unplayed-match']);
+  expect((await loadCoverage())?.coverage).toEqual(partial);
+  seasonArtifacts.set(partial.content.evidence.artifactId, new TextEncoder().encode('corrupt'));
+  await expect(loadCoverage()).rejects.toThrow('not current and exact');
+  seasonArtifacts.set(
+    partial.content.evidence.artifactId,
+    new TextEncoder().encode(
+      canonicalizeAflTradeJson({
+        fixtureOnly: true,
+        state: 'partial',
+        expectedMatchIds: [...matches, 'synthetic-unplayed-match'],
+        seasonYear: 2026,
+      })
+    )
+  );
   await pool.query(
     `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
     VALUES('synthetic-full-hpn-revocation','acquisition_spell_registration',$1,'rejected',$2,'Synthetic withdrawal',$3::jsonb,'synthetic-reviewer',$4)`,
@@ -394,6 +489,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     built.inputSet
   );
   await expect(loadCalculation()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+  await expect(loadCoverage()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
   await expect(
     calculations.loadFinalizedCalculation(
       {
