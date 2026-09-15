@@ -11,6 +11,10 @@ import {
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
+import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
+import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
+import { loadCurrentAflTradePostseasonCalculation } from '@/server/aflTradeIntelligence/modeling/postgresPostseasonCalculationAuthority';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   createAflTradeAcquisitionSpellRegistration,
@@ -230,10 +234,36 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     scope
   );
   const repository = new PostgresAflTradeHpnPavInputRepository(client);
+  const methodBytes = new TextEncoder().encode(
+    '<html>Explicit synthetic HPN method fixture</html>'
+  );
+  const methodArtifact = createAflTradeByteArtifactRef(methodBytes, 'text/html', await instant());
+  await pool.query(
+    `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,created_at,verified_at,environment,artifact_class,custody_json)
+     VALUES($1,$2,$3,$4,$5,$6,$7,'non_production','raw_source','{}'::jsonb)`,
+    [
+      methodArtifact.artifactId,
+      methodArtifact.contentSha256,
+      methodArtifact.storageUri,
+      methodArtifact.mediaType,
+      methodArtifact.byteLength,
+      methodArtifact.createdAt,
+      await instant(),
+    ]
+  );
+  const method = createAflTradeHpnPavMethod({
+    sourceArtifact: methodArtifact,
+    sourceBytes: methodBytes,
+    capturedAt: methodArtifact.createdAt,
+  });
+  const methodAuthority = { loadExact: async () => ({ method, sourceBytes: methodBytes }) };
+  const calculations = new PostgresAflTradeHpnPavCalculationRepository(client, methodAuthority);
+  await calculations.registerMethod(method, scope);
   const request = {
     ...scope,
     seasonYear: 2026,
-    methodId: `hpn-pav-method:${'1'.repeat(64)}`,
+    methodId: method.methodId,
     factualRunId,
     effectiveThrough: '2026-03-20T23:59:59.999Z',
     sources,
@@ -280,6 +310,75 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     inputSet: built.inputSet,
     idempotentReplay: true,
   });
+  const finalized = await calculations.calculateAndPersist(read, scope);
+  const currentRequest = {
+    ...scope,
+    calculationId: finalized.calculation.calculationId,
+    methodId: method.methodId,
+    seasonYear: 2026,
+    knowledgeCutoffAt: await instant(),
+  };
+  const loadCalculation = (overrides = {}) =>
+    client.transaction((transaction) =>
+      loadCurrentAflTradePostseasonCalculation(
+        transaction,
+        { ...currentRequest, ...overrides },
+        methodAuthority
+      )
+    );
+  await expect(loadCalculation()).resolves.toEqual({
+    calculation: finalized.calculation,
+    inputSet: built.inputSet,
+  });
+  // Simulate corrupted read results without disabling guards or modifying retained evidence.
+  // The row counts remain unchanged; exact child projections must still reject the result.
+  for (const collection of ['teams', 'players'] as const) {
+    await expect(
+      client.transaction((transaction) =>
+        loadCurrentAflTradePostseasonCalculation(
+          {
+            async query<Row>(sql: string, parameters?: readonly unknown[]) {
+              const result = await transaction.query<Row>(sql, parameters);
+              if (!sql.includes('AS teams')) return result;
+              const rows = structuredClone(result.rows);
+              const retained = rows[0] as {
+                teams: { total_pav: number }[];
+                players: { total_pav: number }[];
+              };
+              retained[collection][0]!.total_pav += 1;
+              return { ...result, rows };
+            },
+          },
+          currentRequest,
+          methodAuthority
+        )
+      )
+    ).rejects.toThrow('exact persisted membership');
+  }
+  await expect(
+    pool.query(
+      'UPDATE outcome_hpn_pav_calculation_player SET total_pav=total_pav+1 WHERE calculation_id=$1',
+      [currentRequest.calculationId]
+    )
+  ).rejects.toThrow();
+  await expect(loadCalculation()).resolves.toEqual({
+    calculation: finalized.calculation,
+    inputSet: built.inputSet,
+  });
+  await expect(loadCalculation({ seasonYear: 2025 })).rejects.toThrow('not current and finalized');
+  await expect(loadCalculation({ environment: 'test_fixture' })).rejects.toThrow(
+    'not current and finalized'
+  );
+  await expect(
+    loadCalculation({ knowledgeCutoffAt: built.inputSet.content.createdAt })
+  ).rejects.toThrow('not current and finalized');
+  await expect(
+    client.transaction((transaction) =>
+      loadCurrentAflTradePostseasonCalculation(transaction, currentRequest, {
+        loadExact: async () => ({ method, sourceBytes: new TextEncoder().encode('wrong bytes') }),
+      })
+    )
+  ).rejects.toThrow('method custody differs');
   await pool.query(
     `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
     VALUES('synthetic-full-hpn-revocation','acquisition_spell_registration',$1,'rejected',$2,'Synthetic withdrawal',$3::jsonb,'synthetic-reviewer',$4)`,
@@ -294,4 +393,14 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
   await expect(repository.loadFinalizedSeasonInputSet(read, scope)).resolves.toEqual(
     built.inputSet
   );
+  await expect(loadCalculation()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+  await expect(
+    calculations.loadFinalizedCalculation(
+      {
+        calculationId: finalized.calculation.calculationId,
+        environment: scope.environment,
+      },
+      scope
+    )
+  ).resolves.toEqual(finalized.calculation);
 });

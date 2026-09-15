@@ -1373,6 +1373,13 @@ Existing observation-set/model and valuation execution consumers reject these ve
 them off as legacy timestamp-based records. Pre-1998 PAV, future-pick calendar adapters, authenticated
 post-departure zeros and numerical execution remain unsupported by this slice.
 
+`modeling/postgresPostseasonCalculationAuthority.ts` supplies the adapter's calculation read:
+within the caller's transaction it requires the current scoped head, exact parent and child row
+content, retained method bytes, and the existing current-input owner's source/identity/spell checks.
+It rejects withdrawn authority without deleting historical calculations and performs no writes or
+recalculation. This helper does not establish release/review authority or complete-season coverage;
+the full observation/case repository adapter and its persistence checks are still required.
+
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
 2025 HPN source set. Explicit historical calculation IDs establish identity, not current source/input
