@@ -603,6 +603,21 @@ async function persistArchive(
     throw new Error('Public factual archive did not finalize exactly once.');
 }
 
+/** Read-only reconstruction from the existing candidate and immutable release snapshots. */
+export async function loadAflTradePromotionBackedArchiveFromRelease(
+  transaction: AflOutcomeSqlTransaction,
+  releaseId: string,
+  createdAt: string
+): Promise<AflTradePromotionBackedPublicArchive> {
+  const candidate = await loadCandidate(transaction, releaseId);
+  const snapshots = await loadSnapshots(transaction, releaseId);
+  return createAflTradePromotionBackedPublicArchive({
+    candidate,
+    createdAt,
+    records: await buildRecords(transaction, snapshots),
+  });
+}
+
 export class PostgresAflTradePromotionBackedPublicArchiveRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 

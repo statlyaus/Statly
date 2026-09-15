@@ -1395,8 +1395,17 @@ only a subset. A finalized calculation or calendar date alone cannot establish a
 retrospective policy owner to derive observation v3. Missing coverage and missing player rows remain
 unavailable; incomplete feature seasons are unavailable, and receiving-spell outcomes retain partial
 coverage and signed values. Callers cannot supply annual values. Coverage/review/calculation bindings
-are returned for subsequent persistence and replay checks; durable materialization and the valuation
-connection remain required before the full adapter can execute.
+are returned for subsequent persistence and replay checks.
+
+Postseason materialization review v2 selects exact retained component, contribution-ledger, package
+policy and lineage artifacts, plus one later effective assessment. The context reader verifies their
+custody and bytes alongside the original review evidence. `valuation/postgresPostseasonValuationMaterialization.ts`
+connects both builders to that same context, reconstructing canonical parties/transfers through the
+existing factual archive reader without publishing an archive. It checks complete asset membership,
+common model bindings, receiving-party contribution roots and the original three-season bounds.
+Supported future-pick forecasts still require their separate calendar adapter. This assembles private
+contracts; it grants no numerical admission or execution. Guarded persistence/current replay and a
+complete PostgreSQL case-materialization fixture remain required before adapter delivery.
 
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single

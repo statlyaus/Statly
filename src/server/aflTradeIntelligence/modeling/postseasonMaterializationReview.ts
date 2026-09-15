@@ -5,12 +5,30 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
 import { aflTradePostseasonYearContentSchema } from '../domain/postseasonYearContext';
 
 const year = aflTradePostseasonYearContentSchema.shape;
 
+function validateCommonReview(
+  record: {
+    tradeDate: string | null;
+    tradeYear: number;
+    reviewEvidence: { createdAt: string };
+    createdAt: string;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (record.tradeDate !== null && Number(record.tradeDate.slice(0, 4)) !== record.tradeYear) {
+    ctx.addIssue({ code: 'custom', message: 'Reviewed date and year differ.' });
+  }
+  if (Date.parse(record.reviewEvidence.createdAt) > Date.parse(record.createdAt)) {
+    ctx.addIssue({ code: 'custom', message: 'Review proposal precedes its evidence.' });
+  }
+}
+
 /** Review content excludes the later decision ID and its actual recording timestamp. */
-export const aflTradePostseasonMaterializationReviewContentSchema = z
+const observationReviewContentSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-postseason-materialization-review/v1'),
     authorityBoundary: z.literal('private_factual_materialization_no_numerical_admission'),
@@ -29,14 +47,49 @@ export const aflTradePostseasonMaterializationReviewContentSchema = z
     createdAt: year.recordedAt,
   })
   .strict()
+  .superRefine(validateCommonReview);
+
+/** Retained parent selection is factual contract authority, never permission to execute a model. */
+const valuationParentsSchema = z
+  .object({
+    componentDrawSetArtifact: aflTradeArtifactRefSchema,
+    realizedContributionLedgerArtifact: aflTradeArtifactRefSchema,
+    packagePolicyArtifact: aflTradeArtifactRefSchema,
+    lineageGraphArtifact: aflTradeArtifactRefSchema,
+    laterEffectiveAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+const valuationReviewContentSchema = z
+  .object({
+    ...observationReviewContentSchema.shape,
+    schemaVersion: z.literal('afl-trade-postseason-materialization-review/v2'),
+    valuation: valuationParentsSchema,
+  })
+  .strict()
   .superRefine((record, ctx) => {
-    if (record.tradeDate !== null && Number(record.tradeDate.slice(0, 4)) !== record.tradeYear) {
-      ctx.addIssue({ code: 'custom', message: 'Reviewed date and year differ.' });
-    }
-    if (Date.parse(record.reviewEvidence.createdAt) > Date.parse(record.createdAt)) {
-      ctx.addIssue({ code: 'custom', message: 'Review proposal precedes its evidence.' });
+    validateCommonReview(record, ctx);
+    const refs = [
+      record.valuation.componentDrawSetArtifact,
+      record.valuation.realizedContributionLedgerArtifact,
+      record.valuation.packagePolicyArtifact,
+      record.valuation.lineageGraphArtifact,
+    ];
+    if (
+      new Set(refs.map((ref) => ref.artifactId)).size !== refs.length ||
+      refs.some((ref) => Date.parse(ref.createdAt) > Date.parse(record.createdAt))
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Valuation parents must be distinct and precede their review proposal.',
+      });
     }
   });
+
+export const aflTradePostseasonMaterializationReviewContentSchema = z.union([
+  observationReviewContentSchema,
+  valuationReviewContentSchema,
+]);
 
 export const aflTradePostseasonMaterializationReviewSchema = z
   .object({

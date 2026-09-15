@@ -46,6 +46,17 @@ export async function loadCurrentAflTradePostseasonContext(
   const decision = decisions.rows[0]!;
   const review = aflTradePostseasonMaterializationReviewSchema.parse(decision.evidence_json);
   const c = review.content;
+  const reviewArtifacts = [
+    c.reviewEvidence,
+    ...(c.schemaVersion === 'afl-trade-postseason-materialization-review/v2'
+      ? [
+          c.valuation.componentDrawSetArtifact,
+          c.valuation.realizedContributionLedgerArtifact,
+          c.valuation.packagePolicyArtifact,
+          c.valuation.lineageGraphArtifact,
+        ]
+      : []),
+  ].sort((left, right) => left.artifactId.localeCompare(right.artifactId));
   if (decision.subject_id !== review.reviewId || c.environment !== request.environment) {
     throw new Error('Postseason materialization review scope differs.');
   }
@@ -106,7 +117,7 @@ export async function loadCurrentAflTradePostseasonContext(
       canonicalizeAflTradeJson(review),
       c.createdAt,
       decision.recorded_at,
-      canonicalizeAflTradeJson([c.reviewEvidence]),
+      canonicalizeAflTradeJson(reviewArtifacts),
     ]
   );
   if (authority.rows.length !== 1)
@@ -122,8 +133,10 @@ export async function loadCurrentAflTradePostseasonContext(
   ) {
     throw new Error('Postseason release content differs.');
   }
-  if (!doesAflTradeArtifactRefMatchBytes(c.reviewEvidence, await evidence.read(c.reviewEvidence))) {
-    throw new Error('Postseason review evidence bytes differ.');
+  for (const reference of reviewArtifacts) {
+    if (!doesAflTradeArtifactRefMatchBytes(reference, await evidence.read(reference))) {
+      throw new Error('Postseason review evidence bytes differ.');
+    }
   }
   const acquisitionSpell = await new PostgresAflTradeAcquisitionSpellRegistrationRepository(
     {

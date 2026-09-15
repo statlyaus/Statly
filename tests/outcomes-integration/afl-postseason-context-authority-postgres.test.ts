@@ -1,3 +1,6 @@
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createFabricatedAflTradeValuationFixture } from '@/server/aflTradeIntelligence/valuation/tradeValuationFixtures';
+import { materializeAflTradePostseasonValuation } from '@/server/aflTradeIntelligence/valuation/postgresPostseasonValuationMaterialization';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
@@ -310,6 +313,82 @@ it.each([false, true])(
       ).toBe(true);
       expect(await materialize()).toEqual(materialized);
       await expect(materialize({ values: [{ totalPav: 99 }] })).rejects.toThrow();
+
+      const caseFixture = createFabricatedAflTradeValuationFixture('two_party_player_swap');
+      const retainParent = async (value: unknown) => {
+        const ref = createAflTradeCanonicalJsonArtifactRef(value, await now());
+        const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(value));
+        await pool.query(
+          `INSERT INTO outcome_artifact_custody
+          (artifact_id,content_sha256,storage_uri,media_type,byte_length,created_at,verified_at,environment,artifact_class,custody_json)
+          VALUES($1,$2,$3,$4,$5,$6,$7,'test_fixture','derived_private','{}')`,
+          [
+            ref.artifactId,
+            ref.contentSha256,
+            ref.storageUri,
+            ref.mediaType,
+            ref.byteLength,
+            ref.createdAt,
+            await now(),
+          ]
+        );
+        promoted.retainedArtifacts.set(ref.artifactId, { reference: ref, bytes });
+        return ref;
+      };
+      const valuationParents = {
+        componentDrawSetArtifact: await retainParent(caseFixture.componentDrawSet),
+        realizedContributionLedgerArtifact: await retainParent(
+          caseFixture.realizedContributionLedger
+        ),
+        packagePolicyArtifact: await retainParent(caseFixture.packagePolicy),
+        lineageGraphArtifact: await retainParent(caseFixture.lineageGraph),
+        laterEffectiveAt: await now(),
+      };
+      const valuationReview = createAflTradePostseasonMaterializationReview({
+        ...review.content,
+        schemaVersion: 'afl-trade-postseason-materialization-review/v2',
+        valuation: valuationParents,
+        createdAt: await now(),
+      });
+      await approve(
+        'synthetic-valuation-review',
+        'postseason_materialization',
+        valuationReview.reviewId,
+        valuationReview
+      );
+      const valuationRequest = {
+        ...materializeRequest,
+        reviewDecisionId: 'synthetic-valuation-review',
+        knowledgeCutoffAt: await now(),
+      };
+      const selectedValuation = await load({
+        reviewDecisionId: valuationRequest.reviewDecisionId,
+        knowledgeCutoffAt: valuationRequest.knowledgeCutoffAt,
+      });
+      expect(selectedValuation.review).toEqual(valuationReview);
+      // Deliberately unrelated synthetic swap parents cannot stand in for this one-way source fixture.
+      await expect(
+        client.transaction((tx) =>
+          materializeAflTradePostseasonValuation(tx, valuationRequest, methodAuthority, evidence)
+        )
+      ).rejects.toThrow('account for every factual transfer');
+      const retainedParent = promoted.retainedArtifacts.get(
+        valuationParents.packagePolicyArtifact.artifactId
+      )!;
+      promoted.retainedArtifacts.set(valuationParents.packagePolicyArtifact.artifactId, {
+        ...retainedParent,
+        bytes: new TextEncoder().encode('{}'),
+      });
+      await expect(
+        load({
+          reviewDecisionId: valuationRequest.reviewDecisionId,
+          knowledgeCutoffAt: valuationRequest.knowledgeCutoffAt,
+        })
+      ).rejects.toThrow('bytes differ');
+      promoted.retainedArtifacts.set(
+        valuationParents.packagePolicyArtifact.artifactId,
+        retainedParent
+      );
 
       await expect(load({ environment: 'non_production' })).rejects.toThrow('scope differs');
       await expect(load({ reviewDecisionId: 'missing-review' })).rejects.toThrow('unavailable');
