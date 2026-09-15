@@ -1,3 +1,6 @@
+import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
+import { createAflTradePostseasonPlayerPavObservation } from '@/server/aflTradeIntelligence/modeling/postseasonPlayerPavObservation';
+import { PostgresPostseasonMaterializationRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresPostseasonMaterializationRepository';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createFabricatedAflTradeValuationFixture } from '@/server/aflTradeIntelligence/valuation/tradeValuationFixtures';
 import { materializeAflTradePostseasonValuation } from '@/server/aflTradeIntelligence/valuation/postgresPostseasonValuationMaterialization';
@@ -314,6 +317,49 @@ it.each([false, true])(
       expect(await materialize()).toEqual(materialized);
       await expect(materialize({ values: [{ totalPav: 99 }] })).rejects.toThrow();
 
+      const retainedRepository = new PostgresPostseasonMaterializationRepository({
+        client,
+        artifacts: createAflTradeFixtureArtifactRepository({ artifactClass: 'derived_private' }),
+        evidence,
+        methodAuthority,
+        maximumArtifactBytes: 10_000_000,
+      });
+      const persistedRequest = { kind: 'observation', selection: materializeRequest };
+      const copies = await Promise.all(
+        [1, 2, 3].map(() => retainedRepository.materialize(persistedRequest))
+      );
+      expect(copies.filter((copy) => !copy.idempotentReplay)).toHaveLength(1);
+      const saved = copies[0]!.manifest;
+      expect(copies.every((copy) => copy.manifest.manifestId === saved.manifestId)).toBe(true);
+      expect(saved.content.observation).toEqual(materialized.observation);
+      expect(await retainedRepository.loadCurrentExact(saved.manifestId)).toEqual(saved);
+      expect(
+        (
+          await pool.query(
+            'SELECT count(*)::integer AS n FROM outcome_private_evaluation_materialization_manifest'
+          )
+        ).rows[0]!.n
+      ).toBe(1);
+      const wrongObservation = createAflTradePostseasonPlayerPavObservation({
+        ...saved.content.observation.content,
+        features: [
+          { seasonYear: event.season_year, state: 'unavailable', reason: 'source_missing' },
+        ],
+      });
+      expect(
+        (
+          await pool.query('SELECT outcome_postseason_observation_exact($1::jsonb) AS valid', [
+            canonicalizeAflTradeJson({ ...saved.content, observation: wrongObservation }),
+          ])
+        ).rows[0]!.valid
+      ).toBe(false);
+      await expect(
+        pool.query(
+          'DELETE FROM outcome_private_evaluation_materialization_manifest WHERE materialization_manifest_id=$1',
+          [saved.manifestId]
+        )
+      ).rejects.toThrow('append-only');
+
       const caseFixture = createFabricatedAflTradeValuationFixture('two_party_player_swap');
       const retainParent = async (value: unknown) => {
         const ref = createAflTradeCanonicalJsonArtifactRef(value, await now());
@@ -431,6 +477,11 @@ it.each([false, true])(
       );
       await expect(load()).rejects.toThrow('not current');
       await expect(materialize()).rejects.toThrow('not current');
+      await expect(retainedRepository.loadCurrentExact(saved.manifestId)).rejects.toThrow(
+        'not current'
+      );
+      await expect(retainedRepository.materialize(persistedRequest)).rejects.toThrow('not current');
+      expect(await retainedRepository.loadRetainedExact(saved.manifestId)).toEqual(saved);
       expect(
         (
           await pool.query(

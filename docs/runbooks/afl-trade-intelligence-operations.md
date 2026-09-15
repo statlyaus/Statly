@@ -1407,6 +1407,14 @@ Supported future-pick forecasts still require their separate calendar adapter. T
 contracts; it grants no numerical admission or execution. Guarded persistence/current replay and a
 complete PostgreSQL case-materialization fixture remain required before adapter delivery.
 
+The draft `private-evaluation-materialization-manifest/v2` repository persists derived observations
+in the existing immutable manifest owner and rederives current authority on every replay/current read.
+Its request-key index deduplicates concurrent attempts; retained reads make no current-authority claim.
+Migration 0217 currently permits only observation records with absent season calculations. Measured
+observation and complete-case inserts remain rejected until independent SQL source/child-row guards
+and complete end-to-end tests are finished. The existing v1 insert and numerical-consumer rules remain
+in force. This draft persistence boundary is not full adapter delivery.
+
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
 2025 HPN source set. Explicit historical calculation IDs establish identity, not current source/input
