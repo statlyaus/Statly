@@ -40,8 +40,7 @@ const annual = z.discriminatedUnion('state', [
     .strict(),
 ]);
 
-/** Versioned structural input; persistence must separately authenticate release, calculations and current spell authority. */
-export const aflTradePostseasonPlayerPavObservationContentSchema = z
+const observationContent = z
   .object({
     schemaVersion: z.literal('afl-trade-player-pav-observation/v3'),
     context: aflTradePostseasonYearContextSchema,
@@ -51,98 +50,137 @@ export const aflTradePostseasonPlayerPavObservationContentSchema = z
     features: z.array(annual).min(1).max(3),
     outcomes: z.array(annual).length(3),
   })
-  .strict()
-  .superRefine((record, ctx) => {
-    const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
-    const context = record.context.content;
-    const spell = record.acquisitionSpell.content;
+  .strict();
+
+type Observation = z.infer<typeof observationContent>;
+type Season = z.infer<typeof annual>;
+type Value = z.infer<typeof aflTradePlayerPavValueSchema>;
+type Kind = 'features' | 'outcomes';
+interface Validation {
+  record: Observation;
+  cutoff: number;
+  bounds: ReturnType<typeof deriveAflTradeAcquisitionMembershipBounds>;
+  calculations: Map<string, string>;
+  issue: (message: string) => void;
+}
+
+function hasCompatibleTradeDate({ record, bounds }: Validation): boolean {
+  const knownEntry = record.acquisitionSpell.content.entry.eventDate;
+  const tradeDate = record.context.content.tradeDate;
+  if (knownEntry !== null) return knownEntry === tradeDate;
+  if (tradeDate === null) return true;
+  return tradeDate >= bounds.possible.startDate && tradeDate <= bounds.certain.startDate;
+}
+
+function validateAcquisition(check: Validation): void {
+  const { record, bounds, cutoff, issue } = check;
+  const context = record.context.content;
+  const spell = record.acquisitionSpell.content;
+  const bindingMatches =
+    spell.environment === context.environment &&
+    spell.competition === context.competition &&
+    spell.entry.promotionId === context.promotionId &&
+    spell.entry.eventVersionId === context.eventVersionId;
+  const year = String(context.tradeYear);
+  const datesMatch =
+    bounds.possible.startDate.slice(0, 4) === year &&
+    bounds.certain.startDate.slice(0, 4) === year &&
+    hasCompatibleTradeDate(check);
+  if (!bindingMatches || !datesMatch || Date.parse(spell.createdAt) > cutoff) {
+    issue(
+      'Acquisition must match the reviewed trade, scope, date bounds and reconstruction cutoff.'
+    );
+  }
+}
+
+function validateCalculation(value: Value, check: Validation): void {
+  const binding = JSON.stringify([value.seasonYear, value.effectiveThrough, value.calculatedAt]);
+  const previous = check.calculations.get(value.calculationId);
+  if (previous !== undefined && previous !== binding) {
+    check.issue('One calculation cannot identify conflicting season metadata.');
+  }
+  check.calculations.set(value.calculationId, binding);
+}
+
+function validateValue(value: Value, seasonYear: number, kind: Kind, check: Validation): void {
+  const { record, bounds, cutoff, issue } = check;
+  const spell = record.acquisitionSpell.content;
+  validateCalculation(value, check);
+  if (
+    value.playerId !== spell.playerId ||
+    value.seasonYear !== seasonYear ||
+    Date.parse(value.calculatedAt) > cutoff
+  ) {
+    issue('PAV values must match the player, annual season and recording cutoff.');
+  }
+  if (kind !== 'outcomes') return;
+  if (
+    value.clubId !== spell.clubId ||
+    value.spellVersionId !== record.acquisitionSpell.spellVersionId ||
+    `${seasonYear}-01-01` < bounds.certain.startDate ||
+    value.effectiveThrough.slice(0, 10) > bounds.certain.endDate
+  ) {
+    issue('Outcome values must belong to the receiving spell within evidenced membership.');
+  }
+}
+
+function validateSeason(season: Season, kind: Kind, check: Validation): void {
+  if (season.state === 'unavailable') return;
+  const { issue, cutoff, bounds } = check;
+  if (kind === 'features' && season.state !== 'observed') {
+    issue('Incomplete seasons cannot enter completed-season features.');
+  }
+  if (Date.parse(season.coverageEvidence.createdAt) > cutoff) {
+    issue('Coverage evidence exceeds the reconstruction cutoff.');
+  }
+  const keys = season.values.map((value) => `${value.seasonYear}|${value.spellVersionId}`);
+  if (new Set(keys).size !== keys.length)
+    issue('A season cannot duplicate a player spell contribution.');
+  for (const value of season.values) validateValue(value, season.seasonYear, kind, check);
+  if (
+    kind === 'outcomes' &&
+    season.state === 'observed' &&
+    `${season.seasonYear}-12-31` > bounds.certain.endDate
+  ) {
+    issue(
+      'Incomplete membership requires partial or unavailable outcomes, never a complete season or invented zero.'
+    );
+  }
+}
+
+function validateWindow(
+  seasons: Season[],
+  expected: number[],
+  kind: Kind,
+  check: Validation
+): void {
+  if (
+    seasons.length !== expected.length ||
+    seasons.some((season, i) => season.seasonYear !== expected[i])
+  ) {
+    check.issue(
+      'Annual records must cover the exact ordered history or original three-season outcome window.'
+    );
+  }
+  for (const season of seasons) validateSeason(season, kind, check);
+}
+
+/** Versioned structural input; persistence must separately authenticate release, calculations and current spell authority. */
+export const aflTradePostseasonPlayerPavObservationContentSchema = observationContent.superRefine(
+  (record, ctx) => {
+    const check: Validation = {
+      record,
+      cutoff: Date.parse(record.context.content.knowledgeCutoffAt),
+      bounds: deriveAflTradeAcquisitionMembershipBounds(record.acquisitionSpell),
+      calculations: new Map(),
+      issue: (message) => ctx.addIssue({ code: 'custom', message }),
+    };
+    validateAcquisition(check);
     const window = aflTradePostseasonSeasonWindow(record.context, record.historySeasons);
-    const cutoff = Date.parse(context.knowledgeCutoffAt);
-    const bounds = deriveAflTradeAcquisitionMembershipBounds(record.acquisitionSpell);
-    const entryYear =
-      spell.entry.eventDate?.slice(0, 4) ??
-      ('datePrecision' in spell.entry ? spell.entry.datePrecision.earliestDate.slice(0, 4) : null);
-    const entryLastYear =
-      spell.entry.eventDate?.slice(0, 4) ??
-      ('datePrecision' in spell.entry ? spell.entry.datePrecision.latestDate.slice(0, 4) : null);
-    if (
-      spell.environment !== context.environment ||
-      spell.competition !== context.competition ||
-      spell.entry.promotionId !== context.promotionId ||
-      spell.entry.eventVersionId !== context.eventVersionId ||
-      (spell.entry.eventDate !== null && spell.entry.eventDate !== context.tradeDate) ||
-      entryYear !== String(context.tradeYear) ||
-      entryLastYear !== String(context.tradeYear) ||
-      (context.tradeDate !== null &&
-        (context.tradeDate < bounds.possible.startDate ||
-          context.tradeDate > bounds.certain.startDate)) ||
-      Date.parse(spell.createdAt) > cutoff
-    ) {
-      issue(
-        'Acquisition must match the reviewed trade, scope, date bounds and reconstruction cutoff.'
-      );
-    }
-    const calculations = new Map<string, string>();
-    for (const [kind, seasons, expected] of [
-      ['features', record.features, window.featureSeasons],
-      ['outcomes', record.outcomes, window.outcomeSeasons],
-    ] as const) {
-      if (
-        seasons.length !== expected.length ||
-        seasons.some((season, i) => season.seasonYear !== expected[i])
-      ) {
-        issue(
-          'Annual records must cover the exact ordered history or original three-season outcome window.'
-        );
-      }
-      for (const season of seasons) {
-        if (season.state === 'unavailable') continue;
-        if (kind === 'features' && season.state !== 'observed')
-          issue('Incomplete seasons cannot enter completed-season features.');
-        if (Date.parse(season.coverageEvidence.createdAt) > cutoff)
-          issue('Coverage evidence exceeds the reconstruction cutoff.');
-        const keys = season.values.map((value) => `${value.seasonYear}|${value.spellVersionId}`);
-        if (new Set(keys).size !== keys.length)
-          issue('A season cannot duplicate a player spell contribution.');
-        for (const value of season.values) {
-          const binding = JSON.stringify([
-            value.seasonYear,
-            value.effectiveThrough,
-            value.calculatedAt,
-          ]);
-          const previous = calculations.get(value.calculationId);
-          if (previous !== undefined && previous !== binding)
-            issue('One calculation cannot identify conflicting season metadata.');
-          calculations.set(value.calculationId, binding);
-          if (
-            value.playerId !== spell.playerId ||
-            value.seasonYear !== season.seasonYear ||
-            Date.parse(value.calculatedAt) > cutoff
-          ) {
-            issue('PAV values must match the player, annual season and recording cutoff.');
-          }
-          if (
-            kind === 'outcomes' &&
-            (value.clubId !== spell.clubId ||
-              value.spellVersionId !== record.acquisitionSpell.spellVersionId ||
-              `${season.seasonYear}-01-01` < bounds.certain.startDate ||
-              value.effectiveThrough.slice(0, 10) > bounds.certain.endDate)
-          ) {
-            issue('Outcome values must belong to the receiving spell within evidenced membership.');
-          }
-        }
-        if (
-          kind === 'outcomes' &&
-          season.state === 'observed' &&
-          `${season.seasonYear}-12-31` > bounds.certain.endDate
-        ) {
-          issue(
-            'Incomplete membership requires partial or unavailable outcomes, never a complete season or invented zero.'
-          );
-        }
-      }
-    }
-  });
+    validateWindow(record.features, window.featureSeasons, 'features', check);
+    validateWindow(record.outcomes, window.outcomeSeasons, 'outcomes', check);
+  }
+);
 
 export const aflTradePostseasonPlayerPavObservationSchema = z
   .object({
