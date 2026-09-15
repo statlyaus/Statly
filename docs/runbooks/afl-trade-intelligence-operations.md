@@ -1423,8 +1423,10 @@ the original three-season horizon and one later assessment. Future-pick forecast
 The two-player synthetic exchange covers exact and year-only dates, persistence, replay and review
 withdrawal; a resealed direct-write forgery is rejected. Historical reads preserve withdrawn records
 without claiming current authority. Existing v1 and numerical-consumer rules remain in force.
-Independent restore and remaining acceptance/delivery checks are still required; this grants no
-scientific admission or production deployment.
+Independent schema dump/removal/restore passes through fresh connections and retained artifact copies.
+A racing replay waits for review withdrawal and then rejects it; replacement coverage cannot silently
+change an existing observation. Broader checks and PR delivery remain required; no scientific
+admission or production deployment is granted.
 
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single

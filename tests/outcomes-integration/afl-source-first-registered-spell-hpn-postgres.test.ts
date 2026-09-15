@@ -597,6 +597,11 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
   await expect(loadCoverage()).rejects.toThrow('completed matches');
   const partial = await publishCoverage('partial', [...matches, 'synthetic-unplayed-match']);
   expect((await loadCoverage())?.coverage).toEqual(partial);
+  // Replay must not silently adopt a replacement coverage review after its original cutoff.
+  await expect(persisted.loadCurrentExact(measured.manifest.manifestId)).rejects.toThrow();
+  expect(await persisted.loadRetainedExact(measured.manifest.manifestId)).toEqual(
+    measured.manifest
+  );
   seasonArtifacts.set(partial.content.evidence.artifactId, new TextEncoder().encode('corrupt'));
   await expect(loadCoverage()).rejects.toThrow('not current and exact');
   seasonArtifacts.set(

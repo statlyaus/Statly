@@ -1,3 +1,4 @@
+import { restorePostseasonFixtureSchema } from '../testUtils/restorePostseasonFixtureSchema';
 import { createAflTradeComponentDrawSet } from '@/server/aflTradeIntelligence/valuation/componentDrawSet';
 import { createAflTradeRealizedContributionLedger } from '@/server/aflTradeIntelligence/valuation/realizedContributionLedger';
 import { createAflTradeLineageGraphId } from '@/server/aflTradeIntelligence/valuation/valuationCaseContracts';
@@ -521,6 +522,54 @@ it.each([false, true])(
       expect(await retainedRepository.loadCurrentExact(completeSaved.manifest.manifestId)).toEqual(
         completeSaved.manifest
       );
+      // Restore the actual database schema, then authenticate through a new connection and artifact repository.
+      await restorePostseasonFixtureSchema(admin, databaseUrl!, schemaName);
+      const restoredPool = new Pool({
+        connectionString: databaseUrl,
+        options: `-c search_path=${schemaName}`,
+      });
+      try {
+        const restoredArtifacts = createAflTradeFixtureArtifactRepository({
+          artifactClass: 'derived_private',
+        });
+        for (const manifest of [saved, completeSaved.manifest]) {
+          const ref = createAflTradeCanonicalJsonArtifactRef(manifest, manifest.content.createdAt);
+          await restoredArtifacts.putIfAbsent(
+            ref,
+            new TextEncoder().encode(canonicalizeAflTradeJson(manifest))
+          );
+        }
+        const restoredEvidence = new Map(
+          [...promoted.retainedArtifacts].map(([id, value]) => [id, new Uint8Array(value.bytes)])
+        );
+        const restoredRepository = new PostgresPostseasonMaterializationRepository({
+          client: createPgAflOutcomeSqlClient(restoredPool),
+          artifacts: restoredArtifacts,
+          evidence: {
+            read: async (ref) => {
+              const bytes = restoredEvidence.get(ref.artifactId);
+              if (!bytes) throw new Error('Restored evidence absent.');
+              return bytes;
+            },
+          },
+          methodAuthority: {
+            loadExact: async () => ({
+              method: structuredClone(method),
+              sourceBytes: new Uint8Array(methodBytes),
+            }),
+          },
+          maximumArtifactBytes: 10_000_000,
+        });
+        expect(await restoredRepository.loadCurrentExact(saved.manifestId)).toEqual(saved);
+        expect(
+          await restoredRepository.loadCurrentExact(completeSaved.manifest.manifestId)
+        ).toEqual(completeSaved.manifest);
+        expect((await restoredRepository.materialize(completeRequest)).manifest).toEqual(
+          completeSaved.manifest
+        );
+      } finally {
+        await restoredPool.end();
+      }
       // A direct writer can reseal hashes; SQL must still reject invented case values.
       await expect(
         client.transaction(async (tx) => {
@@ -642,17 +691,50 @@ it.each([false, true])(
       expect(await retainedRepository.loadCurrentExact(completeSaved.manifest.manifestId)).toEqual(
         completeSaved.manifest
       );
-      await pool.query(
-        `INSERT INTO outcome_review_decision
+      const writer = await pool.connect();
+      try {
+        await writer.query('BEGIN');
+        const writerPid = (await writer.query<{ pid: number }>('SELECT pg_backend_pid() AS pid'))
+          .rows[0]!.pid;
+        await writer.query(
+          `INSERT INTO outcome_review_decision
         (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
         VALUES('synthetic-valuation-withdrawal','postseason_materialization',$1,'rejected',$2,'Synthetic withdrawal',$3::jsonb,'synthetic-reviewer',$4)`,
-        [
-          valuationReview.reviewId,
-          valuationRequest.reviewDecisionId,
-          canonicalizeAflTradeJson(valuationReview),
-          await now(),
-        ]
-      );
+          [
+            valuationReview.reviewId,
+            valuationRequest.reviewDecisionId,
+            canonicalizeAflTradeJson(valuationReview),
+            await now(),
+          ]
+        );
+        const racingReplay = retainedRepository.materialize(completeRequest).then(
+          () => ({ rejected: false, message: '' }),
+          (error: unknown) => ({
+            rejected: true,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        );
+        let blocked = false;
+        const deadline = Date.now() + 3000;
+        while (Date.now() < deadline) {
+          blocked = (
+            await admin.query<{ blocked: boolean }>(
+              'SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))) AS blocked',
+              [writerPid]
+            )
+          ).rows[0]!.blocked;
+          if (blocked) break;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        await writer.query('COMMIT');
+        const raced = await racingReplay;
+        expect(blocked).toBe(true);
+        expect(raced.rejected).toBe(true);
+        expect(raced.message).toContain('not current');
+      } finally {
+        await writer.query('ROLLBACK');
+        writer.release();
+      }
       await expect(retainedRepository.materialize(completeRequest)).rejects.toThrow('not current');
       expect(await retainedRepository.loadRetainedExact(completeSaved.manifest.manifestId)).toEqual(
         completeSaved.manifest
@@ -672,5 +754,6 @@ it.each([false, true])(
       await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
       await admin.end();
     }
-  }
+  },
+  60_000
 );
