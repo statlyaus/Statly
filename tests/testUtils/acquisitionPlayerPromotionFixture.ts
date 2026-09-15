@@ -45,6 +45,8 @@ import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTr
 export async function createSyntheticAcquisitionPlayerPromotion(
   outcomesPool: Pool,
   options: {
+    /** Optional complete synthetic capture envelope for factual-release owner tests. */
+    fixtureCaptureExecutionReceipt?: unknown;
     tradeSeasonYear?: number;
     promoterThroughSeason?: number;
     draftSessions?: boolean;
@@ -70,6 +72,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     };
   } = {}
 ) {
+  if (
+    options.fixtureCaptureExecutionReceipt !== undefined &&
+    options.environment === 'non_production'
+  )
+    throw new Error('Synthetic capture envelope overrides are limited to test_fixture.');
   if (options.partialTransactionDates && (!options.sessionProposalV5 || options.lifecycle))
     throw new Error(
       'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
@@ -580,7 +587,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       [
         targetCaptureId,
         attemptId,
-        `snapshot-historical-completion-${fixtureNamespace}-${index}`,
+        options.fixtureCaptureExecutionReceipt === undefined
+          ? `snapshot-historical-completion-${fixtureNamespace}-${index}`
+          : targetArtifactId.replace('artifact:', 'source-snapshot:'),
         targetArtifactId,
         request.dataset,
         request.datasetVersion,
@@ -589,7 +598,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         capturedAt,
         canonicalizeAflTradeJson({
           sourceUrl: request.sourceUrl,
-          executionReceipt: { content: syntheticAdmission },
+          executionReceipt: options.fixtureCaptureExecutionReceipt ?? {
+            content: syntheticAdmission,
+          },
         }),
       ]
     );
@@ -1280,12 +1291,16 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         [
           dateCaptureId,
           `session-attempt-${index}`,
-          `session-snapshot-${index}`,
+          options.fixtureCaptureExecutionReceipt === undefined
+            ? `session-snapshot-${index}`
+            : dateArtifact.artifactId.replace('artifact:', 'source-snapshot:'),
           dateArtifact.artifactId,
           capturedAt,
           canonicalizeAflTradeJson({
             sourceUrl: dateRow.content.capture.sourceUrl,
-            executionReceipt: { content: syntheticAdmission },
+            executionReceipt: options.fixtureCaptureExecutionReceipt ?? {
+              content: syntheticAdmission,
+            },
           }),
           seasonYear,
         ]
@@ -1652,12 +1667,16 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           [
             factCaptureId,
             `combined-session-attempt-${fixtureNamespace}-${groupIndex}`,
-            `combined-session-snapshot-${fixtureNamespace}-${groupIndex}`,
+            options.fixtureCaptureExecutionReceipt === undefined
+              ? `combined-session-snapshot-${fixtureNamespace}-${groupIndex}`
+              : artifact.artifactId.replace('artifact:', 'source-snapshot:'),
             artifact.artifactId,
             capturedAt,
             canonicalizeAflTradeJson({
               sourceUrl: group.sourceUrl,
-              executionReceipt: { content: syntheticAdmission },
+              executionReceipt: options.fixtureCaptureExecutionReceipt ?? {
+                content: syntheticAdmission,
+              },
             }),
             seasonYear,
             factCapture.effectiveAt,

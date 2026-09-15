@@ -1380,6 +1380,15 @@ It rejects withdrawn authority without deleting historical calculations and perf
 recalculation. This helper does not establish release/review authority or complete-season coverage;
 the full observation/case repository adapter and its persistence checks are still required.
 
+`postseasonMaterializationReview.ts` defines the reviewed private release/trade/spell selection;
+the review decision itself remains in the existing review owner. The context reader in
+`postgresPostseasonContextAuthority.ts` authenticates that decision, exact release membership,
+canonical year/date precision, current registered spell and retained evidence bytes. It uses the
+decision's actual recording time and never turns a year-only trade into an exact date. This review
+selects an approved private factual candidate; it is neither public release activation nor Gate 2
+scientific admission. Annual coverage, policy/calculation selection and durable materialization
+remain separate requirements before the full adapter can execute.
+
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
 2025 HPN source set. Explicit historical calculation IDs establish identity, not current source/input
