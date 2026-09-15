@@ -44,6 +44,23 @@ describe('reviewed postseason year context', () => {
     }
   );
 
+  it('requires year-only recording after the complete trade-year bound', () => {
+    const input = {
+      ...content(),
+      reviewEvidence: createAflTradeByteArtifactRef(
+        Buffer.from('fixture review'),
+        'text/plain',
+        '2014-01-01T00:00:00.000Z'
+      ),
+    };
+    for (const recordedAt of ['2014-01-02T00:00:00.000Z', '2014-12-31T23:59:59.999Z']) {
+      expect(() => createAflTradePostseasonYearContext({ ...input, recordedAt })).toThrow();
+    }
+    for (const recordedAt of ['2015-01-01T00:00:00.000Z', '2014-12-31T23:00:00-01:00']) {
+      expect(() => createAflTradePostseasonYearContext({ ...input, recordedAt })).not.toThrow();
+    }
+  });
+
   it('preserves a known date without deriving it from the year', () => {
     const context = createAflTradePostseasonYearContext({ ...content(), tradeDate: '2014-10-15' });
     expect(context.content.tradeDate).toBe('2014-10-15');

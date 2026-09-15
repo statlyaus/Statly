@@ -192,6 +192,37 @@ describe('postseason builders', () => {
     ).toThrow();
   });
 
+  it('retains a partial spell value when season calculation coverage ends after membership', () => {
+    const f = fixture('2016-06-01');
+    const partial = { ...f.annual(2016, true), state: 'partial' as const };
+    partial.values[0].effectiveThrough = '2016-12-31T23:59:59.999Z';
+    const missing = {
+      seasonYear: 2017,
+      state: 'unavailable' as const,
+      reason: 'membership_incomplete' as const,
+    };
+    const record = createAflTradePostseasonPlayerPavObservation({
+      ...f.observation,
+      outcomes: [f.annual(2015, true), partial, missing],
+    });
+    expect(record.content.outcomes[1]).toMatchObject({
+      state: 'partial',
+      values: [{ totalPav: -1 }],
+    });
+    expect(() =>
+      createAflTradePostseasonPlayerPavObservation({
+        ...f.observation,
+        outcomes: [f.annual(2015, true), { ...partial, state: 'observed' }, missing],
+      })
+    ).toThrow();
+    expect(() =>
+      createAflTradePostseasonPlayerPavObservation({
+        ...f.observation,
+        outcomes: [f.annual(2015, true), partial, { ...f.annual(2017, true), state: 'partial' }],
+      })
+    ).toThrow();
+  });
+
   it('rejects mixed promotion contexts and sealed observation changes', () => {
     const f = fixture();
     const context = createAflTradePostseasonYearContext({

@@ -118,7 +118,7 @@ function validateValue(value: Value, seasonYear: number, kind: Kind, check: Vali
     value.clubId !== spell.clubId ||
     value.spellVersionId !== record.acquisitionSpell.spellVersionId ||
     `${seasonYear}-01-01` < bounds.certain.startDate ||
-    value.effectiveThrough.slice(0, 10) > bounds.certain.endDate
+    `${seasonYear}-01-01` > bounds.certain.endDate
   ) {
     issue('Outcome values must belong to the receiving spell within evidenced membership.');
   }

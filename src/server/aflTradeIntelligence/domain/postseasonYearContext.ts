@@ -55,11 +55,14 @@ export const aflTradePostseasonYearContentSchema = z
         message: 'Review must be recorded by the reconstruction knowledge cutoff.',
       });
     }
-    if (new Date(content.recordedAt).getUTCFullYear() < content.tradeYear) {
+    if (
+      content.tradeDate === null &&
+      Date.parse(content.recordedAt) < Date.parse(`${content.tradeYear + 1}-01-01T00:00:00.000Z`)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['recordedAt'],
-        message: 'Retrospective context cannot predate the trade year.',
+        message: 'A year-only retrospective recording must follow the latest possible trade day.',
       });
     }
     if (

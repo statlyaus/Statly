@@ -1358,6 +1358,10 @@ Both consume the sealed `domain/postseasonYearContext.ts` context. The observati
 acquisition registration and uses 1/2/3 completed-season histories ending in trade year Y; annual
 outcomes retain Y+1 through Y+3, signed PAV, and explicit partial/unavailable states. Full outcome
 seasons require full-year certain membership; uncertain boundaries remain partial/unavailable.
+A season calculation's coverage timestamp can extend past a player's departure; partial values
+remain bound to the receiving spell and an overlapping outcome year. Admission must authenticate
+the underlying spell-scoped calculation rows. Year-only context recording must follow the latest
+possible trade day; same-year recordings require an evidenced day rather than an invented date.
 No missing participation or post-departure zero is invented. The case stores one shared later
 assessment for realized, remaining and current views. Actual recording knowledge remains separate
 from playing-season eligibility, and an unknown trade date stays null.
