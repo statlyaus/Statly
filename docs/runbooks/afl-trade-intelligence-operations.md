@@ -3180,7 +3180,11 @@ not admit numerical valuations or convert year bounds into exact-day observation
 The exact continuity parser emits season membership separately from a supported
 observation cutoff. A final playing season does not imply December 31 membership;
 retired rookie listing does not imply appearances. Rules named `reviewed-continuity-*`
-require current retained claims matching the player/club and covering the cutoff.
+require every referenced continuity artifact to have a current retained claim matching
+the player/club and covering the cutoff. Migration 0215 also requires each claim to
+enumerate every post-trade season from acquisition year + 1 through the observation
+year; later membership cannot authenticate an earlier spell. At least one continuity
+reference is required. Both player capabilities are dispatched by the external-ingestion runtime.
 Withdrawal invalidates current reads. Partial calendar coverage remains explicit
 and must not be treated as complete numerical outcome admission.
 

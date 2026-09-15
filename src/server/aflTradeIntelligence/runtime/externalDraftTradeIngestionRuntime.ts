@@ -1,3 +1,5 @@
+import { parseOfficialAflPlayerContinuity } from '../source/officialAflPlayerContinuityFacts';
+import { parseOfficialAflPlayerDeparture } from '../source/officialAflPlayerDepartureFacts';
 import { parseOfficialAflCompensationArticle } from '../source/officialAflCompensationArticleFacts';
 import { parseOfficialAflCompensationPdfFacts } from '../source/officialAflCompensationPdfFacts';
 import { OFFICIAL_AFL_2010_REPORT } from '../source/officialAflDraft2010PdfFacts';
@@ -196,6 +198,16 @@ export function createAflTradeExternalIngestionRuntime(
             });
           case 'official-afl-compensation-lifecycle':
             return parseOfficialAflCompensationArticle(html, {
+              capture,
+              anchorSeasonYear: command.request.anchorSeasonYear,
+            });
+          case 'official-afl-player-continuity':
+            return parseOfficialAflPlayerContinuity(html, {
+              capture,
+              anchorSeasonYear: command.request.anchorSeasonYear,
+            });
+          case 'official-afl-player-departure':
+            return parseOfficialAflPlayerDeparture(html, {
               capture,
               anchorSeasonYear: command.request.anchorSeasonYear,
             });
