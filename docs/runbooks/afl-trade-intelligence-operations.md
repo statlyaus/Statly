@@ -1351,6 +1351,24 @@ legacy mapping review successor that invalidates current reads without erasing h
 Migration 0118 also corrects the legacy finalizer's player/club lock-key expression exposed by that
 test. This fixture evidence is not a genuine historical admission or the full local rehearsal.
 
+Postseason year contracts have separate entry points: `createAflTradePostseasonPlayerPavObservation`
+in `modeling/postseasonPlayerPavObservation.ts` builds observation v3, and
+`createAflTradePostseasonValuationCase` in `valuation/postseasonValuationCase.ts` builds case v2.
+Both consume the sealed `domain/postseasonYearContext.ts` context. The observation binds an existing
+acquisition registration and uses 1/2/3 completed-season histories ending in trade year Y; annual
+outcomes retain Y+1 through Y+3, signed PAV, and explicit partial/unavailable states. Full outcome
+seasons require full-year certain membership; uncertain boundaries remain partial/unavailable.
+No missing participation or post-departure zero is invented. The case stores one shared later
+assessment for realized, remaining and current views. Actual recording knowledge remains separate
+from playing-season eligibility, and an unknown trade date stays null.
+
+These are structural contract builders, not repository materializers or admission grants. Current
+release, review, spell, source and finalized-calculation authority must still be resolved by a
+version-aware adapter. Coverage artifact references do not themselves prove complete statistics.
+Existing observation-set/model and valuation execution consumers reject these versions; do not pass
+them off as legacy timestamp-based records. Pre-1998 PAV, future-pick calendar adapters, authenticated
+post-departure zeros and numerical execution remain unsupported by this slice.
+
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
 2025 HPN source set. Explicit historical calculation IDs establish identity, not current source/input
