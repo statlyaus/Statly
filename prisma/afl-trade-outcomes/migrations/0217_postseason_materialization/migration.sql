@@ -237,6 +237,34 @@ BEGIN
 END;
 $$;
 
+-- Authenticate embedded parent documents against the reviewed immutable artifact bytes.
+-- This is a prerequisite for the complete-case guard, not numerical admission.
+CREATE FUNCTION outcome_postseason_valuation_parent_bytes_exact(documents JSONB, refs JSONB, env TEXT, cutoff TIMESTAMPTZ)
+RETURNS BOOLEAN LANGUAGE plpgsql AS $$
+DECLARE name TEXT; document JSONB; ref JSONB; bytes BYTEA; retained RECORD;
+BEGIN
+ IF documents IS NULL OR jsonb_typeof(documents)<>'object' OR NOT COALESCE(documents=jsonb_build_object(
+   'componentDrawSet',documents->'componentDrawSet','realizedContributionLedger',documents->'realizedContributionLedger',
+   'packagePolicy',documents->'packagePolicy','lineageGraph',documents->'lineageGraph'),FALSE) THEN RETURN FALSE; END IF;
+ FOREACH name IN ARRAY ARRAY['componentDrawSet','realizedContributionLedger','packagePolicy','lineageGraph'] LOOP
+   document:=documents->name; ref:=refs->(name||'Artifact');
+   IF jsonb_typeof(document) IS DISTINCT FROM 'object' OR ref IS NULL THEN RETURN FALSE; END IF;
+   bytes:=convert_to(outcome_afl_trade_canonical_json(document),'UTF8');
+   SELECT * INTO retained FROM outcome_artifact_custody WHERE artifact_id=ref->>'artifactId' FOR KEY SHARE;
+   IF NOT FOUND OR NOT COALESCE(
+     ref->>'contentSha256'=encode(sha256(bytes),'hex')
+     AND ref->>'artifactId'='artifact:'||(ref->>'contentSha256')
+     AND ref->>'storageUri'='artifact://sha256/'||(ref->>'contentSha256')
+     AND ref->>'mediaType'='application/json' AND (ref->>'byteLength')::BIGINT=octet_length(bytes)
+     AND retained.content_sha256=ref->>'contentSha256' AND retained.storage_uri=ref->>'storageUri'
+     AND retained.media_type=ref->>'mediaType' AND retained.byte_length=(ref->>'byteLength')::BIGINT
+     AND retained.created_at=(ref->>'createdAt')::TIMESTAMPTZ AND retained.created_at<=cutoff
+     AND retained.verified_at<=cutoff AND retained.environment::TEXT=env,FALSE) THEN RETURN FALSE; END IF;
+ END LOOP;
+ RETURN TRUE;
+END;
+$$;
+
 CREATE FUNCTION validate_outcome_postseason_materialization_insert()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE c JSONB:=NEW.manifest_json->'content'; custody RECORD;
@@ -247,6 +275,7 @@ BEGIN
    AND c=jsonb_build_object('schemaVersion',c->'schemaVersion','environment',c->'environment','selector',c->'selector',
      'requestKey',c->'requestKey','request',c->'request','policyApprovalDecisionId',c->'policyApprovalDecisionId',
      'coverageBindings',c->'coverageBindings','observation',c->'observation','valuationCase',c->'valuationCase',
+     'valuationParents',c->'valuationParents',
      'createdAt',c->'createdAt','publicationEligible',c->'publicationEligible','authorityBoundary',c->'authorityBoundary')
    AND c->'request'=jsonb_build_object('kind',c#>'{request,kind}','selection',jsonb_build_object(
      'environment',c#>'{request,selection,environment}','reviewDecisionId',c#>'{request,selection,reviewDecisionId}',
@@ -260,6 +289,7 @@ BEGIN
    AND c->>'requestKey'=outcome_postseason_address('postseason-materialization-request',c->'request')
    AND c->'publicationEligible'='false'::JSONB AND c->>'authorityBoundary'='private_factual_materialization_no_numerical_admission'
    AND c#>>'{request,kind}'='observation' AND c->'valuationCase'='null'::JSONB
+   AND c->'valuationParents'='null'::JSONB
    AND custody.content_sha256=encode(sha256(convert_to(NEW.manifest_canonical_json,'UTF8')),'hex')
    AND custody.artifact_id='artifact:'||custody.content_sha256 AND custody.storage_uri='artifact://sha256/'||custody.content_sha256
    AND custody.media_type='application/json' AND custody.byte_length=octet_length(convert_to(NEW.manifest_canonical_json,'UTF8'))
@@ -286,7 +316,9 @@ EXECUTE FUNCTION validate_outcome_postseason_materialization_insert();
 DO $$ DECLARE signature TEXT; BEGIN
  FOREACH signature IN ARRAY ARRAY['outcome_postseason_address(text,jsonb)',
    'outcome_postseason_calculation_exact(text,timestamp with time zone)',
-   'outcome_postseason_observation_exact(jsonb)','validate_outcome_postseason_materialization_insert()'] LOOP
+   'outcome_postseason_observation_exact(jsonb)',
+   'outcome_postseason_valuation_parent_bytes_exact(jsonb,jsonb,text,timestamp with time zone)',
+   'validate_outcome_postseason_materialization_insert()'] LOOP
    EXECUTE format('ALTER FUNCTION %s SET search_path TO %I,pg_catalog,pg_temp',signature,current_schema());
  END LOOP;
 END $$;

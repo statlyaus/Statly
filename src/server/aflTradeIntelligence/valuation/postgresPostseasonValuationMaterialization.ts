@@ -1,110 +1,22 @@
-import { z } from 'zod';
 import {
   doesAflTradeArtifactRefMatchBytes,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
-import {
-  AFL_TRADE_ASSET_TYPES,
-  AFL_TRADE_LINEAGE_EDGE_KINDS,
-  AFL_TRADE_ASSET_DISPOSITION_KINDS,
-  AFL_TRADE_CORRECTION_RELATION_KINDS,
-} from '../domain/lineageTypes';
-import { validateAflTradeLineageGraph } from '../domain/lineageValidation';
 import type { AflTradeHpnPavMethodAuthority } from '../modeling/hpnPavCalculationService';
 import { materializeAflTradePostseasonObservation } from '../modeling/postgresPostseasonObservationMaterialization';
 import type { AflTradeAcquisitionRegistrationEvidenceReader } from '../outcomes/postgresAcquisitionSpellRegistrationRepository';
 import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleaseRepository';
 import { loadAflTradePromotionBackedArchiveFromRelease } from '../outcomes/postgresPromotionBackedPublicArchiveRepository';
-import { aflTradeComponentDrawSetSchema } from './componentDrawSet';
-import { aflTradePackagePolicySchema } from './packagePolicy';
+import { postseasonValuationParentsSchema } from './postseasonValuationParents';
 import { createAflTradePostseasonValuationCase } from './postseasonValuationCase';
-import { aflTradeRealizedContributionLedgerSchema } from './realizedContributionLedger';
 import { createAflTradeLineageGraphId } from './valuationCaseContracts';
 import {
   buildParties,
-  requireCommonModelBinding,
   requireCompleteAssetBinding,
   selectedTransaction,
   transfersFor,
 } from './valuationCaseMaterialization';
-
-const instant = z.iso.datetime({ offset: true });
-const identifier = z.string().trim().min(1).max(1000);
-const known = { knownFrom: instant, knownTo: instant.nullable(), evidenceId: identifier };
-const graphSchema = z
-  .object({
-    assets: z
-      .array(
-        z
-          .object({
-            ...known,
-            assetId: identifier,
-            assetType: z.enum(AFL_TRADE_ASSET_TYPES),
-            effectiveFrom: instant,
-          })
-          .strict()
-      )
-      .max(100000),
-    custodySpells: z
-      .array(
-        z
-          .object({
-            ...known,
-            custodySpellId: identifier,
-            assetId: identifier,
-            aflClubId: identifier,
-            effectiveFrom: instant,
-            effectiveTo: instant.nullable(),
-          })
-          .strict()
-      )
-      .max(100000),
-    edges: z
-      .array(
-        z
-          .object({
-            ...known,
-            edgeId: identifier,
-            kind: z.enum(AFL_TRADE_LINEAGE_EDGE_KINDS),
-            sourceAssetId: identifier,
-            targetAssetId: identifier,
-            effectiveAt: instant,
-            ruleVersion: identifier,
-          })
-          .strict()
-      )
-      .max(100000),
-    dispositions: z
-      .array(
-        z
-          .object({
-            ...known,
-            dispositionId: identifier,
-            kind: z.enum(AFL_TRADE_ASSET_DISPOSITION_KINDS),
-            assetId: identifier,
-            effectiveAt: instant,
-            reasonCode: identifier,
-          })
-          .strict()
-      )
-      .max(100000),
-    corrections: z
-      .array(
-        z
-          .object({
-            correctionId: identifier,
-            kind: z.enum(AFL_TRADE_CORRECTION_RELATION_KINDS),
-            supersededRecordId: identifier,
-            replacementRecordId: identifier,
-            knownAt: instant,
-            evidenceId: identifier,
-          })
-          .strict()
-      )
-      .max(100000),
-  })
-  .strict();
 
 /** Connects both builders to the same reviewed owners. No model execution or admission occurs. */
 export async function materializeAflTradePostseasonValuation(
@@ -133,24 +45,18 @@ export async function materializeAflTradePostseasonValuation(
       throw new Error('Valuation parent is not canonical JSON.');
     return value;
   };
-  const componentDrawSet = aflTradeComponentDrawSetSchema.parse(
-    await readJson(parents.componentDrawSetArtifact)
-  );
-  const realizedContributionLedger = aflTradeRealizedContributionLedgerSchema.parse(
-    await readJson(parents.realizedContributionLedgerArtifact)
-  );
-  const packagePolicy = aflTradePackagePolicySchema.parse(
-    await readJson(parents.packagePolicyArtifact)
-  );
-  // The existing graph validator validates all temporal, identity, edge and custody invariants.
-  const graph = graphSchema.parse(await readJson(parents.lineageGraphArtifact));
-  if (!validateAflTradeLineageGraph(graph).valid) throw new Error('Valuation lineage is invalid.');
-  requireCommonModelBinding({
+  const valuationParents = postseasonValuationParentsSchema.parse({
+    componentDrawSet: await readJson(parents.componentDrawSetArtifact),
+    realizedContributionLedger: await readJson(parents.realizedContributionLedgerArtifact),
+    packagePolicy: await readJson(parents.packagePolicyArtifact),
+    lineageGraph: await readJson(parents.lineageGraphArtifact),
+  });
+  const {
     componentDrawSet,
     realizedContributionLedger,
     packagePolicy,
     lineageGraph: graph,
-  });
+  } = valuationParents;
   const archive = await loadAflTradePromotionBackedArchiveFromRelease(
     transaction,
     selection.release.releaseId,
@@ -248,5 +154,5 @@ export async function materializeAflTradePostseasonValuation(
     legacySourceMetricsTreatment:
       'excluded_from_calculation_retained_only_by_separate_legacy_projection',
   });
-  return { ...materialized, valuationCase };
+  return { ...materialized, valuationCase, valuationParents };
 }

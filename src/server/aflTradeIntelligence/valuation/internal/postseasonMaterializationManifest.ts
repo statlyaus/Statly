@@ -8,6 +8,8 @@ import {
 import { aflTradePostseasonObservationMaterializationRequestSchema } from '../../modeling/postgresPostseasonObservationMaterialization';
 import { aflTradePostseasonPlayerPavObservationSchema } from '../../modeling/postseasonPlayerPavObservation';
 import { aflTradePostseasonValuationCaseSchema } from '../postseasonValuationCase';
+import { postseasonValuationParentsSchema } from '../postseasonValuationParents';
+import { createAflTradeLineageGraphId } from '../valuationCaseContracts';
 
 export const postseasonMaterializationRequestSchema = z
   .object({
@@ -51,6 +53,7 @@ const contentSchema = z
     coverageBindings: z.array(coverageBinding).min(4).max(6),
     observation: aflTradePostseasonPlayerPavObservationSchema,
     valuationCase: aflTradePostseasonValuationCaseSchema.nullable(),
+    valuationParents: postseasonValuationParentsSchema.nullable(),
     createdAt: z.iso.datetime({ offset: true }),
     publicationEligible: z.literal(false),
     authorityBoundary: z.literal('private_factual_materialization_no_numerical_admission'),
@@ -69,6 +72,7 @@ const contentSchema = z
       content.request.selection.knowledgeCutoffAt !== context.knowledgeCutoffAt ||
       Date.parse(content.createdAt) < Date.parse(context.knowledgeCutoffAt) ||
       (content.request.kind === 'complete_trade') !== (content.valuationCase !== null) ||
+      (content.valuationCase !== null) !== (content.valuationParents !== null) ||
       (content.valuationCase !== null &&
         canonicalizeAflTradeJson(content.valuationCase.content.context) !==
           canonicalizeAflTradeJson(observation.context))
@@ -77,6 +81,25 @@ const contentSchema = z
         code: 'custom',
         message: 'Materialization request, context and result bindings differ.',
       });
+    if (content.valuationCase && content.valuationParents) {
+      const value = content.valuationCase.content;
+      const parents = content.valuationParents;
+      const draws = parents.componentDrawSet;
+      if (
+        value.componentDrawSetId !== draws.componentDrawSetId ||
+        value.realizedContributionLedgerId !==
+          parents.realizedContributionLedger.realizedContributionLedgerId ||
+        value.packagePolicyId !== parents.packagePolicy.packagePolicyId ||
+        value.lineageGraphId !== createAflTradeLineageGraphId(parents.lineageGraph) ||
+        value.valuationBundleId !== draws.content.valuationBundleId ||
+        value.valuationInputBundleId !== draws.content.valuationInputBundleId ||
+        value.valueUnitId !== draws.content.valueUnitId
+      )
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Valuation case differs from its exact retained parents.',
+        });
+    }
     const years = [...observation.features, ...observation.outcomes].map(
       (value) => value.seasonYear
     );

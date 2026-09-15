@@ -1,3 +1,4 @@
+import { postseasonValuationParentsSchema } from '../postseasonValuationParents';
 import {
   createAflTradeCanonicalJsonArtifactRef,
   doesAflTradeArtifactRefMatchBytes,
@@ -82,6 +83,10 @@ export class PostgresPostseasonMaterializationRepository {
       valuationCase:
         'valuationCase' in result
           ? aflTradePostseasonValuationCaseSchema.parse(result.valuationCase)
+          : null,
+      valuationParents:
+        'valuationParents' in result
+          ? postseasonValuationParentsSchema.parse(result.valuationParents)
           : null,
       createdAt,
       publicationEligible: false,

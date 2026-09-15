@@ -4,6 +4,7 @@ import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifact
 import { createAflTradePostseasonYearContext } from '@/server/aflTradeIntelligence/domain/postseasonYearContext';
 import { createAflTradePostseasonMaterializationReview } from '@/server/aflTradeIntelligence/modeling/postseasonMaterializationReview';
 import { materializeAflTradePostseasonValuation } from '@/server/aflTradeIntelligence/valuation/postgresPostseasonValuationMaterialization';
+import { postseasonValuationParentsSchema } from '@/server/aflTradeIntelligence/valuation/postseasonValuationParents';
 import { createFabricatedAflTradeValuationFixture } from '@/server/aflTradeIntelligence/valuation/tradeValuationFixtures';
 
 // SQL authority readers have separate PostgreSQL coverage. These tests isolate case assembly.
@@ -107,12 +108,10 @@ function fixture(yearOnly = false) {
   const observation = { selection, observation: { content: { context } }, coverageBindings: [] };
   owners.observation.mockResolvedValue(observation);
   owners.archive.mockResolvedValue(archive);
-  const query = vi
-    .fn()
-    .mockResolvedValue({
-      rows: transfers.map((t) => ({ asset_version_id: t.assetVersionId })),
-      rowCount: transfers.length,
-    });
+  const query = vi.fn().mockResolvedValue({
+    rows: transfers.map((t) => ({ asset_version_id: t.assetVersionId })),
+    rowCount: transfers.length,
+  });
   const run = () =>
     materializeAflTradePostseasonValuation(
       { query },
@@ -128,6 +127,12 @@ it.each([false, true])(
   async (yearOnly) => {
     const f = fixture(yearOnly);
     const result = await f.run();
+    expect(result.valuationParents).toEqual({
+      componentDrawSet: f.source.componentDrawSet,
+      realizedContributionLedger: f.source.realizedContributionLedger,
+      packagePolicy: f.source.packagePolicy,
+      lineageGraph: f.source.lineageGraph,
+    });
     expect(result.valuationCase.content.context).toEqual(f.context);
     expect(result.valuationCase.content.parties).toEqual(f.source.valuationCase.content.parties);
     expect(result.valuationCase.content.outcomeSeasons).toEqual([2025, 2026, 2027]);
@@ -154,4 +159,24 @@ it('rejects caller substitution of the selected event', async () => {
   const f = fixture();
   f.observation.selection.review.content.eventVersionId = 'another-event';
   await expect(f.run()).rejects.toThrow('trade differs');
+});
+
+it('rejects retained parents with an invalid lineage even when the case is not executed', async () => {
+  const result = await fixture().run();
+  const parents = structuredClone(result.valuationParents);
+  parents.lineageGraph.assets.push({ ...parents.lineageGraph.assets[0]! });
+  expect(() => postseasonValuationParentsSchema.parse(parents)).toThrow();
+});
+it('rejects mixing separately valid retained model parents', async () => {
+  const result = await fixture().run();
+  const other = createFabricatedAflTradeValuationFixture('two_party_player_swap');
+  const parents = structuredClone(result.valuationParents);
+  // A resealed parent remains structurally valid but must not change the shared value unit.
+  const { createAflTradePackagePolicy } =
+    await import('@/server/aflTradeIntelligence/valuation/packagePolicy');
+  parents.packagePolicy = createAflTradePackagePolicy({
+    ...other.packagePolicy.content,
+    valueUnitId: 'different-unit',
+  });
+  expect(() => postseasonValuationParentsSchema.parse(parents)).toThrow('one exact model');
 });

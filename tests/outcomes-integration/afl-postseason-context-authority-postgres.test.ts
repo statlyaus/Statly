@@ -412,6 +412,30 @@ it.each([false, true])(
         knowledgeCutoffAt: valuationRequest.knowledgeCutoffAt,
       });
       expect(selectedValuation.review).toEqual(valuationReview);
+      const parentDocuments = {
+        componentDrawSet: caseFixture.componentDrawSet,
+        realizedContributionLedger: caseFixture.realizedContributionLedger,
+        packagePolicy: caseFixture.packagePolicy,
+        lineageGraph: caseFixture.lineageGraph,
+      };
+      const exactParentBytes = async (
+        documents: unknown,
+        env = scope.environment,
+        cutoff = valuationRequest.knowledgeCutoffAt
+      ) =>
+        (
+          await pool.query<{ exact: boolean }>(
+            'SELECT outcome_postseason_valuation_parent_bytes_exact($1::jsonb,$2::jsonb,$3,$4::timestamptz) AS exact',
+            [JSON.stringify(documents), JSON.stringify(valuationParents), env, cutoff]
+          )
+        ).rows[0]!.exact;
+      expect(await exactParentBytes(parentDocuments)).toBe(true);
+      expect(await exactParentBytes({ ...parentDocuments, packagePolicy: {} })).toBe(false);
+      expect(await exactParentBytes({ ...parentDocuments, unreviewed: {} })).toBe(false);
+      expect(await exactParentBytes(parentDocuments, 'non_production')).toBe(false);
+      expect(
+        await exactParentBytes(parentDocuments, scope.environment, '2000-01-01T00:00:00.000Z')
+      ).toBe(false);
       // Deliberately unrelated synthetic swap parents cannot stand in for this one-way source fixture.
       await expect(
         client.transaction((tx) =>
