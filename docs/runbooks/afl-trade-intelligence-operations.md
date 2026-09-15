@@ -3174,3 +3174,12 @@ other years and fabricated exact dates fail. Existing promotion, identity, revie
 custody and source-ancestry checks still run. The reviewed departure/spell stores
 the immutable binding; original event and asset records are unchanged. This does
 not admit numerical valuations or convert year bounds into exact-day observations.
+
+### Reviewed continuity references
+
+The exact continuity parser emits season membership separately from a supported
+observation cutoff. A final playing season does not imply December 31 membership;
+retired rookie listing does not imply appearances. Rules named `reviewed-continuity-*`
+require current retained claims matching the player/club and covering the cutoff.
+Withdrawal invalidates current reads. Partial calendar coverage remains explicit
+and must not be treated as complete numerical outcome admission.

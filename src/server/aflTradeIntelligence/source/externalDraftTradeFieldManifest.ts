@@ -73,6 +73,19 @@ export function requireAflTradeExternalEvidenceFieldAuthority(input: {
   if (unsupportedDepartureYears.length > 0) {
     throw new TypeError('Player departure event years outside approved source scope.');
   }
+  for (const {
+    content: { claim },
+  } of input.evidence) {
+    if (claim.kind !== 'player_continuity_reference') continue;
+    for (const year of [...claim.membershipSeasons, Number(claim.observedThrough.slice(0, 4))]) {
+      if (
+        !input.sourceRights.content.scope.seasonRanges.some(
+          ({ from, to }) => from <= year && year <= to
+        )
+      )
+        throw new TypeError('Player continuity years outside approved source scope.');
+    }
+  }
   const fieldsByNormalizedPath = new Map(
     input.sourceRights.content.fields.map((field) => [field.normalizedField, field] as const)
   );
