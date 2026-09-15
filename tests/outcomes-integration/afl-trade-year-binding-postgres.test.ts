@@ -48,7 +48,7 @@ afterAll(async () => {
 });
 it('authenticates the promoted full trade year without modifying the legacy event', async () => {
   const before = (
-    await pool.query(
+    await pool.query<{ value: { event_date: string | null; date_precision: unknown } }>(
       'SELECT to_jsonb(e) AS value FROM outcome_event_version e WHERE event_version_id=$1',
       [binding.eventVersionId]
     )
@@ -59,7 +59,7 @@ it('authenticates the promoted full trade year without modifying the legacy even
   expect(await current(binding)).toBe(true);
   expect(
     (
-      await pool.query(
+      await pool.query<{ value: { event_date: string | null; date_precision: unknown } }>(
         'SELECT to_jsonb(e) AS value FROM outcome_event_version e WHERE event_version_id=$1',
         [binding.eventVersionId]
       )

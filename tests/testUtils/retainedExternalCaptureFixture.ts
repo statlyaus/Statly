@@ -753,7 +753,7 @@ export async function createRetainedExternalCaptureFixture(
                         kind: 'player_departure_reference',
                         departureYear: 2012,
                         recordedPlayer: 'Synthetic Player',
-                        recordedClub: 'Synthetic Club',
+                        recordedClub: 'Western Bulldogs',
                         reason: 'contract_release',
                       },
                       publicationEligible: false,

@@ -3183,3 +3183,7 @@ retired rookie listing does not imply appearances. Rules named `reviewed-continu
 require current retained claims matching the player/club and covering the cutoff.
 Withdrawal invalidates current reads. Partial calendar coverage remains explicit
 and must not be treated as complete numerical outcome admission.
+
+Departure currentness also requires the retained recorded player/club names to
+match their immutable canonical identities (migration 0214); a reviewed claim for
+one subject cannot close another subject’s acquisition.

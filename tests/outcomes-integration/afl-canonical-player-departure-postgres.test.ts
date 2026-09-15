@@ -71,9 +71,10 @@ beforeAll(async () => {
     true
   );
   const evidenceId = (
-    await pool.query('SELECT evidence_id FROM outcome_external_evidence_row WHERE batch_id=$1', [
-      source.target.evidenceBatchId,
-    ])
+    await pool.query<{ evidence_id: string }>(
+      'SELECT evidence_id FROM outcome_external_evidence_row WHERE batch_id=$1',
+      [source.target.evidenceBatchId]
+    )
   ).rows[0].evidence_id;
   const reader = {
     read: async (ref: typeof acquisition.sourceArtifact) => {
@@ -94,7 +95,7 @@ beforeAll(async () => {
     departureYear: 2012,
     reason: 'contract_release',
     recordedPlayer: 'Synthetic Player',
-    recordedClub: 'Synthetic Club',
+    recordedClub: 'Western Bulldogs',
     sourceEvidenceId: evidenceId,
     sourceBatchId: source.target.evidenceBatchId,
     evidence: [source.target.sourceArtifact],
@@ -159,6 +160,28 @@ it('registers and replays the canonical departure, closes the exact spell, and r
     (await pool.query('SELECT count(*)::int AS n FROM outcome_canonical_player_departure')).rows[0]
       .n
   ).toBe(1);
+  const identityConnection = await pool.connect();
+  try {
+    await identityConnection.query('BEGIN');
+    // Corrupt only this disposable rollback fixture to exercise read-time identity defence.
+    await identityConnection.query('SET LOCAL session_replication_role=replica');
+    await identityConnection.query('UPDATE outcome_player SET display_name=$1 WHERE player_id=$2', [
+      'Different source subject',
+      event.content.playerId,
+    ]);
+    await identityConnection.query('SET LOCAL session_replication_role=origin');
+    expect(
+      (
+        await identityConnection.query(
+          'SELECT outcome_canonical_player_departure_current($1,clock_timestamp()) AS ok',
+          [event.departureEventId]
+        )
+      ).rows[0].ok
+    ).toBe(false);
+  } finally {
+    await identityConnection.query('ROLLBACK');
+    identityConnection.release();
+  }
   const duplicate = createCanonicalPlayerDeparture({ ...event.content, createdAt: await now() });
   await review(
     'duplicate-acquisition-review',
@@ -232,7 +255,7 @@ it('registers and replays the canonical departure, closes the exact spell, and r
   try {
     await connection.query('BEGIN');
     const tx: AflOutcomeSqlClient = {
-      query: async <Row>(query, parameters) => {
+      query: async <Row>(query: string, parameters?: readonly unknown[]) => {
         const result = await connection.query(query, parameters ? [...parameters] : undefined);
         return { rows: result.rows as Row[], rowCount: result.rowCount };
       },
