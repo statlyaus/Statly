@@ -68,7 +68,7 @@ beforeAll(async () => {
     false,
     false,
     false,
-    true
+    { playerDeparture: true }
   );
   const evidenceId = (
     await pool.query<{ evidence_id: string }>(

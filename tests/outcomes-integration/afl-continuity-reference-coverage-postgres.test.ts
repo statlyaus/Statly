@@ -55,7 +55,7 @@ beforeAll(async () => {
   `);
   await pool.query(
     readFileSync(
-      'prisma/afl-trade-outcomes/migrations/0215_continuity_reference_coverage/migration.sql',
+      'prisma/afl-trade-outcomes/migrations/0216_all_continuity_references/migration.sql',
       'utf8'
     )
   );
@@ -114,4 +114,23 @@ it('accepts the supported partial-year cutoff without requiring later seasons', 
 });
 it('requires at least one continuity reference', async () => {
   expect(await current({ ...spell, continuityEvidence: [] })).toBe(false);
+});
+
+it('rejects an unmatched reference alongside valid continuity evidence', async () => {
+  expect(
+    await current({
+      ...spell,
+      continuityEvidence: [...spell.continuityEvidence, { artifactId: 'missing' }],
+    })
+  ).toBe(false);
+});
+it('rejects a wrong-capability capture alongside valid continuity evidence', async () => {
+  await pool.query(
+    "UPDATE outcome_source_capture SET capability_id='official-afl-player-departure' WHERE capture_id='b'"
+  );
+  expect(await current()).toBe(false);
+});
+it('rejects a captured reference with no staged evidence batch', async () => {
+  await pool.query("DELETE FROM outcome_external_evidence_batch WHERE batch_id='b'");
+  expect(await current()).toBe(false);
 });

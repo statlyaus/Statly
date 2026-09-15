@@ -3184,7 +3184,8 @@ require every referenced continuity artifact to have a current retained claim ma
 the player/club and covering the cutoff. Migration 0215 also requires each claim to
 enumerate every post-trade season from acquisition year + 1 through the observation
 year; later membership cannot authenticate an earlier spell. At least one continuity
-reference is required. Both player capabilities are dispatched by the external-ingestion runtime.
+reference is required. Migration 0216 rejects unmatched and wrong-capability artifacts
+rather than filtering them out of validation. Both player capabilities are dispatched by the external-ingestion runtime.
 Withdrawal invalidates current reads. Partial calendar coverage remains explicit
 and must not be treated as complete numerical outcome admission.
 

@@ -55,8 +55,9 @@ export async function createRetainedExternalCaptureFixture(
   rookieExclusion = false,
   sessionWindow = false,
   miniCapacity = false,
-  playerDeparture = false
+  options: { playerDeparture?: boolean } = {}
 ) {
+  const { playerDeparture = false } = options;
   function validateMiniCapacityScope() {
     if (
       miniCapacity &&
