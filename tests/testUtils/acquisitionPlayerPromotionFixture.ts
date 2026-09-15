@@ -1,3 +1,4 @@
+import { completeSyntheticCaptureReceipt } from './completeSyntheticCaptureReceipt';
 import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import {
@@ -47,6 +48,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   options: {
     /** Optional complete synthetic capture envelope for factual-release owner tests. */
     fixtureCaptureExecutionReceipt?: unknown;
+    /** Full synthetic admitted receipts for private release/measurement composition tests. */
+    completeCaptureReceipts?: boolean;
     tradeSeasonYear?: number;
     promoterThroughSeason?: number;
     draftSessions?: boolean;
@@ -587,7 +590,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       [
         targetCaptureId,
         attemptId,
-        options.fixtureCaptureExecutionReceipt === undefined
+        options.fixtureCaptureExecutionReceipt === undefined && !options.completeCaptureReceipts
           ? `snapshot-historical-completion-${fixtureNamespace}-${index}`
           : targetArtifactId.replace('artifact:', 'source-snapshot:'),
         targetArtifactId,
@@ -598,9 +601,23 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         capturedAt,
         canonicalizeAflTradeJson({
           sourceUrl: request.sourceUrl,
-          executionReceipt: options.fixtureCaptureExecutionReceipt ?? {
-            content: syntheticAdmission,
-          },
+          executionReceipt: options.completeCaptureReceipts
+            ? await completeSyntheticCaptureReceipt(sql, {
+                environment,
+                provider: 'draftguru',
+                year: seasonYear,
+                sourceUrl: request.sourceUrl,
+                capabilityId: request.capabilityId,
+                dataset: request.dataset,
+                datasetVersion: request.datasetVersion,
+                parserVersion: request.parserVersion,
+                fieldManifestSha256: request.fieldManifestSha256,
+                capturedAt,
+                artifact: targetArtifact,
+              })
+            : (options.fixtureCaptureExecutionReceipt ?? {
+                content: syntheticAdmission,
+              }),
         }),
       ]
     );
@@ -1291,16 +1308,30 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         [
           dateCaptureId,
           `session-attempt-${index}`,
-          options.fixtureCaptureExecutionReceipt === undefined
+          options.fixtureCaptureExecutionReceipt === undefined && !options.completeCaptureReceipts
             ? `session-snapshot-${index}`
             : dateArtifact.artifactId.replace('artifact:', 'source-snapshot:'),
           dateArtifact.artifactId,
           capturedAt,
           canonicalizeAflTradeJson({
             sourceUrl: dateRow.content.capture.sourceUrl,
-            executionReceipt: options.fixtureCaptureExecutionReceipt ?? {
-              content: syntheticAdmission,
-            },
+            executionReceipt: options.completeCaptureReceipts
+              ? await completeSyntheticCaptureReceipt(sql, {
+                  environment,
+                  provider: 'official_afl',
+                  year: seasonYear,
+                  sourceUrl: dateRow.content.capture.sourceUrl,
+                  capabilityId: 'synthetic-session',
+                  dataset: 'draft-session',
+                  datasetVersion: 'synthetic-v1',
+                  parserVersion: dateRow.content.capture.parserVersion,
+                  fieldManifestSha256: dateRow.content.capture.fieldManifestSha256,
+                  capturedAt,
+                  artifact: dateArtifact,
+                })
+              : (options.fixtureCaptureExecutionReceipt ?? {
+                  content: syntheticAdmission,
+                }),
           }),
           seasonYear,
         ]
@@ -1667,16 +1698,31 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           [
             factCaptureId,
             `combined-session-attempt-${fixtureNamespace}-${groupIndex}`,
-            options.fixtureCaptureExecutionReceipt === undefined
+            options.fixtureCaptureExecutionReceipt === undefined && !options.completeCaptureReceipts
               ? `combined-session-snapshot-${fixtureNamespace}-${groupIndex}`
               : artifact.artifactId.replace('artifact:', 'source-snapshot:'),
             artifact.artifactId,
             capturedAt,
             canonicalizeAflTradeJson({
               sourceUrl: group.sourceUrl,
-              executionReceipt: options.fixtureCaptureExecutionReceipt ?? {
-                content: syntheticAdmission,
-              },
+              executionReceipt: options.completeCaptureReceipts
+                ? await completeSyntheticCaptureReceipt(sql, {
+                    environment,
+                    provider: 'official_afl',
+                    year: seasonYear,
+                    sourceUrl: group.sourceUrl,
+                    capabilityId: 'synthetic-combined-session',
+                    dataset: 'draft-session',
+                    datasetVersion: 'synthetic-v1',
+                    parserVersion: factCapture.parserVersion,
+                    fieldManifestSha256: factCapture.fieldManifestSha256,
+                    capturedAt,
+                    effectiveAt: factCapture.effectiveAt,
+                    artifact,
+                  })
+                : (options.fixtureCaptureExecutionReceipt ?? {
+                    content: syntheticAdmission,
+                  }),
             }),
             seasonYear,
             factCapture.effectiveAt,

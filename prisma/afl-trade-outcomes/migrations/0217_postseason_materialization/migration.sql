@@ -198,12 +198,12 @@ BEGIN
          (cov->>'createdAt')::TIMESTAMPTZ,coverage.decided_at,transaction_timestamp())
        AND outcome_acquisition_registration_evidence_exact(jsonb_build_array(cov->'evidence'),c->>'environment',
          (cov->>'createdAt')::TIMESTAMPTZ,coverage.decided_at),FALSE) THEN RETURN FALSE; END IF;
-     SELECT calculation.* INTO calculation FROM outcome_hpn_pav_calculation calculation
-       JOIN outcome_hpn_pav_calculation_head head ON head.calculation_id=calculation.calculation_id
-       WHERE calculation.calculation_id=binding->>'calculationId' AND calculation.environment::TEXT=c->>'environment'
-       AND calculation.competition='AFLM' AND calculation.season_year=year AND calculation.method_id=p->>'methodId'
-       AND calculation.status='finalized' AND calculation.finalized_at<=cutoff AND calculation.effective_through<=cutoff
-       AND calculation.calculated_at<=(cov->>'createdAt')::TIMESTAMPTZ FOR SHARE OF calculation,head;
+     SELECT stored_calc.* INTO calculation FROM outcome_hpn_pav_calculation stored_calc
+       JOIN outcome_hpn_pav_calculation_head head ON head.calculation_id=stored_calc.calculation_id
+       WHERE stored_calc.calculation_id=binding->>'calculationId' AND stored_calc.environment::TEXT=c->>'environment'
+       AND stored_calc.competition='AFLM' AND stored_calc.season_year=year AND stored_calc.method_id=p->>'methodId'
+       AND stored_calc.status='finalized' AND stored_calc.finalized_at<=cutoff AND stored_calc.effective_through<=cutoff
+       AND stored_calc.calculated_at<=(cov->>'createdAt')::TIMESTAMPTZ FOR SHARE OF stored_calc,head;
      IF NOT FOUND OR NOT outcome_postseason_calculation_exact(calculation.calculation_id,cutoff) THEN RETURN FALSE; END IF;
      SELECT jsonb_agg(match->'matchId' ORDER BY match->>'matchId') INTO actual_matches
        FROM outcome_hpn_pav_input_set input, jsonb_array_elements(input.input_set_json#>'{content,completedMatches}') match
@@ -260,10 +260,6 @@ BEGIN
    AND c->>'requestKey'=outcome_postseason_address('postseason-materialization-request',c->'request')
    AND c->'publicationEligible'='false'::JSONB AND c->>'authorityBoundary'='private_factual_materialization_no_numerical_admission'
    AND c#>>'{request,kind}'='observation' AND c->'valuationCase'='null'::JSONB
-   -- Retain the draft measured-write barrier until full observation composition verifies
-   -- the new SQL validator against complete capture/release fixture ancestry.
-   AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(c->'coverageBindings') binding
-     WHERE binding->'calculationId' IS DISTINCT FROM 'null'::JSONB)
    AND custody.content_sha256=encode(sha256(convert_to(NEW.manifest_canonical_json,'UTF8')),'hex')
    AND custody.artifact_id='artifact:'||custody.content_sha256 AND custody.storage_uri='artifact://sha256/'||custody.content_sha256
    AND custody.media_type='application/json' AND custody.byte_length=octet_length(convert_to(NEW.manifest_canonical_json,'UTF8'))

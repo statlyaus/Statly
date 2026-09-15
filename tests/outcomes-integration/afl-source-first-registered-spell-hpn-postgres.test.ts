@@ -1,3 +1,13 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
+import { PostgresAflTradePromotionBackedCorpusRepository } from '@/server/aflTradeIntelligence/artifacts/postgresPromotionBackedCorpusRepository';
+import { PostgresAflTradePromotionBackedFactualReleaseRepository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedFactualReleaseRepository';
+import { createAflTradePostseasonMaterializationReview } from '@/server/aflTradeIntelligence/modeling/postseasonMaterializationReview';
+import { createAflTradePlayerPavPolicy } from '@/server/aflTradeIntelligence/modeling/playerPavObservationContracts';
+import { PostgresAflTradePlayerPavObservationRepository } from '@/server/aflTradeIntelligence/modeling/postgresPlayerPavObservationRepository';
+import { PostgresPostseasonMaterializationRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresPostseasonMaterializationRepository';
 import { aflTradeFactualReconciliationRunSchema } from '@/server/aflTradeIntelligence/outcomes/factualReconciliationContracts';
 import { reconcileAflTradeFactualFacts } from '@/server/aflTradeIntelligence/outcomes/factualReconciliationService';
 import { PostgresAflTradeFactualReconciliationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresFactualReconciliationRepository';
@@ -43,13 +53,16 @@ const pool = new Pool({
   max: 4,
 });
 const client = createPgAflOutcomeSqlClient(pool);
+let artifactRoot: string;
 beforeAll(async () => {
+  artifactRoot = await mkdtemp(join(tmpdir(), 'postseason-measured-'));
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
 });
 afterAll(async () => {
+  await rm(artifactRoot, { recursive: true, force: true });
   await pool.end();
   try {
     await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
@@ -158,6 +171,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
   const factualRunId = combined.factualRunId;
   const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
+    completeCaptureReceipts: true,
     draftSessions: true,
     existingDraftTargets: [
       {
@@ -214,13 +228,13 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     ...scope,
     playerId: promoted.playerId,
     clubId: promoted.clubId,
-    entry: promoted.draftEntries[0]!.entry,
+    entry: promoted.entry,
     departure: null,
     ruleId: rule.ruleId,
     version: 1,
     supersedesSpellVersionId: null,
     observedThrough: '2026-03-19',
-    continuityEvidence: promoted.draftEntries[0]!.entry.evidence,
+    continuityEvidence: promoted.entry.evidence,
     createdAt: await instant(),
   });
   let approval = await approve('acquisition_spell_registration', spell.spellVersionId, spell);
@@ -462,6 +476,122 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
   };
   const matches = built.inputSet.content.completedMatches.map(({ matchId }) => matchId);
   const complete = await publishCoverage('complete', matches);
+  const corpus = await new PostgresAflTradePromotionBackedCorpusRepository(client).build({
+    ...scope,
+    knowledgeCutoffAt: await instant(),
+    createdAt: await instant(),
+  });
+  const release = await new PostgresAflTradePromotionBackedFactualReleaseRepository(client).build({
+    corpusId: corpus.corpusId,
+    scopeKey: 'synthetic-measured-postseason',
+    createdAt: await instant(),
+  });
+  const event = (
+    await pool.query<{ event_id: string; season_year: number }>(
+      'SELECT event_id,season_year FROM outcome_event JOIN outcome_event_version USING(event_id) WHERE event_version_id=$1',
+      [promoted.entry.eventVersionId]
+    )
+  ).rows[0]!;
+  const review = createAflTradePostseasonMaterializationReview({
+    schemaVersion: 'afl-trade-postseason-materialization-review/v1',
+    authorityBoundary: 'private_factual_materialization_no_numerical_admission',
+    ...scope,
+    scopeKey: 'synthetic-measured-postseason',
+    releaseId: release.releaseId,
+    spellVersionId: spell.spellVersionId,
+    tradeId: event.event_id,
+    promotionId: promoted.entry.promotionId,
+    eventVersionId: promoted.entry.eventVersionId,
+    tradeYear: event.season_year,
+    tradeDate: promoted.entry.eventDate,
+    period: 'established_postseason',
+    reviewEvidence: promoted.sourceArtifact,
+    createdAt: await instant(),
+  });
+  const reviewDecisionId = await approve('postseason_materialization', review.reviewId, review);
+  const policy = await client.transaction(async (tx) => {
+    const at = (
+      await tx.query<{ at: Date }>(
+        "SELECT date_trunc('milliseconds',transaction_timestamp()) AS at"
+      )
+    ).rows[0]!.at.toISOString();
+    const policy = createAflTradePlayerPavPolicy({
+      schemaVersion: 'afl-trade-player-pav-policy/v2',
+      knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation',
+      authorityBoundary:
+        'private_released_acquisition_spell_exact_finalized_hpn_pav_no_grade_publication_or_fantasy_ownership',
+      publicationEligible: false,
+      ...scope,
+      policyVersion: 'synthetic-measured-postseason',
+      featureHistorySeasons: 1,
+      fixedHorizonSeasons: 3,
+      methodId: method.methodId,
+      sourceValueUnit: 'season_pav',
+      outcomeValueUnit: 'fixed_horizon_pav',
+      partitions: (['train', 'calibration', 'validation', 'final_test'] as const).map(
+        (role, index) => ({
+          role,
+          fromPredictionSeason: event.season_year - 24 + index * 8,
+          throughPredictionSeason: event.season_year - 24 + index * 8,
+        })
+      ),
+      approvalDecision: { id: `review-decision:${'6'.repeat(64)}`, sha256: '6'.repeat(64) },
+      createdAt: at,
+    });
+    const { approvalDecision, ...policyEvidence } = policy.content;
+    await tx.query(
+      `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+      VALUES($1,'player_pav_policy',$2,'approved','Synthetic atomic policy',$3::jsonb,'synthetic-reviewer',$4)`,
+      [
+        approvalDecision.id,
+        `AFLM:${policy.content.policyVersion}`,
+        canonicalizeAflTradeJson(policyEvidence),
+        at,
+      ]
+    );
+    await new PostgresAflTradePlayerPavObservationRepository({
+      query: tx.query.bind(tx),
+      transaction: async (work) => work(tx),
+    }).registerPolicy(policy, scope);
+    return policy;
+  });
+  const persisted = new PostgresPostseasonMaterializationRepository({
+    client,
+    methodAuthority,
+    artifacts: createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: artifactRoot,
+      repositoryId: 'synthetic-postseason-measured',
+      maximumObjectBytes: 10_000_000,
+    }),
+    evidence: {
+      read: async (ref) =>
+        seasonArtifacts.get(ref.artifactId) ??
+        promoted.retainedArtifacts.get(ref.artifactId)!.bytes,
+    },
+    maximumArtifactBytes: 10_000_000,
+  });
+  const measuredRequest = {
+    kind: 'observation',
+    selection: {
+      environment: scope.environment,
+      reviewDecisionId,
+      policyId: policy.policyId,
+      knowledgeCutoffAt: await instant(),
+    },
+  };
+  const measured = await persisted.materialize(measuredRequest);
+  const outcome = measured.manifest.content.observation.content.outcomes.find(
+    (season) => season.seasonYear === 2026
+  )!;
+  expect(outcome.state).toBe('partial');
+  if (outcome.state === 'unavailable') throw new Error('Expected measured partial outcome');
+  const player = finalized.calculation.content.players.find(
+    (p) => p.spellVersionId === spell.spellVersionId
+  )!;
+  expect(outcome.values[0]!.totalPav).toBe(player.totalPav);
+  expect((await persisted.materialize(measuredRequest)).manifest).toEqual(measured.manifest);
+  expect(await persisted.loadCurrentExact(measured.manifest.manifestId)).toEqual(measured.manifest);
+
   expect((await loadCoverage())?.coverage).toEqual(complete);
   await publishCoverage('complete', [...matches, 'synthetic-unplayed-match']);
   await expect(loadCoverage()).rejects.toThrow('completed matches');
@@ -496,6 +626,10 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
   );
   await expect(loadCalculation()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
   await expect(loadSqlCalculation()).rejects.toThrow();
+  await expect(persisted.loadCurrentExact(measured.manifest.manifestId)).rejects.toThrow();
+  expect(await persisted.loadRetainedExact(measured.manifest.manifestId)).toEqual(
+    measured.manifest
+  );
   await expect(loadCoverage()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
   await expect(
     calculations.loadFinalizedCalculation(
