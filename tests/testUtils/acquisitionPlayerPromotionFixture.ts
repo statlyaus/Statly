@@ -64,6 +64,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       { playerId: string; playerName: string; clubId: string; clubName: string },
     ];
     lifecycle?: boolean;
+    reciprocalPlayer?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -443,6 +444,29 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         publicationEligible: false,
       });
       const targetEvidence = [evidence];
+      if (options.reciprocalPlayer && request.capabilityId === 'draftguru-trade-detail') {
+        targetEvidence.push(
+          createAflTradeExternalEvidenceEnvelope({
+            ...evidence.content,
+            sourceRow: { ordinal: 20, sourceKey: 'synthetic-reciprocal-player' },
+            claim: {
+              kind: 'directed_transfer',
+              nativeEventId: providerEventId,
+              nativeTransferId: 'synthetic-reciprocal-player',
+              fromClub: { nativeId: null, recordedName: targets.toClubName },
+              toClub: { nativeId: null, recordedName: targets.fromClubName },
+              asset: {
+                kind: 'player',
+                player: {
+                  nativeId: 'synthetic-reciprocal-player',
+                  recordedName: 'Synthetic Reciprocal Player',
+                },
+              },
+            },
+          })
+        );
+      }
+
       if (hasDraftSessions && evidence.content.claim.kind === 'draft_selection') {
         const selectionCount = options.mixedDraftSessionProofs ? 3 : (officialSelectionCount ?? 2);
         for (let selectionNumber = 2; selectionNumber <= selectionCount; selectionNumber += 1) {
@@ -552,7 +576,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }
       return targetEvidence;
     }
-    const targetEvidence = buildTargetEvidence();
+    const targetEvidence = buildTargetEvidence().sort(
+      (a, b) => a.content.sourceRow.ordinal - b.content.sourceRow.ordinal
+    );
     const batch = createAflTradeExternalEvidenceBatch({
       schemaVersion: 'afl-trade-external-evidence-batch/v1',
       provider: 'draftguru',
@@ -1034,6 +1060,43 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const batchId = playerBatch.batch.batchId;
   const evidenceId = playerBatch.batch.content.evidence[0]!.evidenceId;
   const allResolutions = [resolution];
+  if (options.reciprocalPlayer) {
+    const item = reviewPackage.content.items.find(
+      ({ workItem }) =>
+        workItem.content.subject.content.entityKind === 'player' &&
+        workItem.content.subject.content.identityScope.kind === 'provider_native_id' &&
+        workItem.content.subject.content.identityScope.nativeId === 'synthetic-reciprocal-player'
+    )?.workItem;
+    if (!item) throw new Error('Missing reciprocal player identity work item.');
+    await outcomesPool.query(
+      "INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')",
+      ['synthetic-reciprocal-player', 'Synthetic Reciprocal Player']
+    );
+    const decision = createAflTradeExternalIdentityReviewDecision({
+      ...identityDecision.content,
+      ...(await nextIdentityRevision(item.content.subject.subjectId)),
+      subject: item.content.subject,
+      workItemId: item.workItemId,
+      workItemSha256: item.workItemId.split(':')[1]!,
+      workItem: item,
+      canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
+        entityKind: 'player',
+        canonicalId: 'synthetic-reciprocal-player',
+        recordedLabel: 'Synthetic Reciprocal Player',
+      }),
+      decidedAt: await databaseNow(),
+    });
+    await identities.persistDecision({ reviewPackage, decision });
+    const reciprocalResolution = (await identities.loadCurrentResolutions(reviewPackage)).find(
+      (value) =>
+        value.content.reviewDecisionId === decision.decisionId &&
+        value.content.canonicalId === 'synthetic-reciprocal-player'
+    );
+    if (!reciprocalResolution)
+      throw new Error('Reciprocal player identity did not become current.');
+    allResolutions.push(reciprocalResolution);
+  }
+
   if (reviewedOfficialCombinedDraft) {
     for (const [recordedName, canonicalId] of [
       [targets.fromClubName, targets.fromClubId],
@@ -1803,6 +1866,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     }
     reviewedAt = await databaseNow();
   }
+  if (options.reciprocalPlayer) reviewedAt = await databaseNow();
   const syntheticCandidateContent = {
     schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
     environment,
@@ -1819,7 +1883,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         transactionType: 'trade' as const,
         title: 'Synthetic player entry',
         parties: [targets.fromClubId, targets.toClubId].sort(),
-        transferIds: [transferId],
+        transferIds: [
+          transferId,
+          ...(options.reciprocalPlayer
+            ? [
+                createAflTradeContentAddress('external-transfer', {
+                  transactionId,
+                  nativeTransferId: 'synthetic-reciprocal-player',
+                }),
+              ]
+            : []),
+        ].sort(),
         status: 'single_source' as const,
         evidenceIds: playerBatch.batch.content.evidence
           .filter(
@@ -1866,6 +1940,33 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }),
     ].sort((a, b) => a.transactionId.localeCompare(b.transactionId)),
     transfers: [
+      ...(options.reciprocalPlayer
+        ? [
+            {
+              transferId: createAflTradeContentAddress('external-transfer', {
+                transactionId,
+                nativeTransferId: 'synthetic-reciprocal-player',
+              }),
+              transactionId,
+              fromClubId: targets.toClubId,
+              toClubId: targets.fromClubId,
+              asset: {
+                kind: 'player' as const,
+                playerId: 'synthetic-reciprocal-player',
+                recordedName: 'Synthetic Reciprocal Player',
+              },
+              status: 'single_source' as const,
+              evidenceIds: playerBatch.batch.content.evidence
+                .filter(
+                  (row) =>
+                    row.content.claim.kind === 'directed_transfer' &&
+                    row.content.claim.nativeTransferId === 'synthetic-reciprocal-player'
+                )
+                .map((row) => row.evidenceId),
+            },
+          ]
+        : []),
+
       {
         transferId,
         transactionId,

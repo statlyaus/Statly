@@ -1,3 +1,6 @@
+import { createAflTradeComponentDrawSet } from '@/server/aflTradeIntelligence/valuation/componentDrawSet';
+import { createAflTradeRealizedContributionLedger } from '@/server/aflTradeIntelligence/valuation/realizedContributionLedger';
+import { createAflTradeLineageGraphId } from '@/server/aflTradeIntelligence/valuation/valuationCaseContracts';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { createAflTradePostseasonPlayerPavObservation } from '@/server/aflTradeIntelligence/modeling/postseasonPlayerPavObservation';
 import { PostgresPostseasonMaterializationRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresPostseasonMaterializationRepository';
@@ -14,7 +17,10 @@ import { Pool } from 'pg';
 import { createAflTradeExternalCaptureExecutionReceipt } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import { expect, it } from 'vitest';
 
-import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  canonicalizeAflTradeJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { PostgresAflTradePromotionBackedCorpusRepository } from '@/server/aflTradeIntelligence/artifacts/postgresPromotionBackedCorpusRepository';
 import { createAflTradePostseasonMaterializationReview } from '@/server/aflTradeIntelligence/modeling/postseasonMaterializationReview';
 import { loadCurrentAflTradePostseasonContext } from '@/server/aflTradeIntelligence/modeling/postgresPostseasonContextAuthority';
@@ -82,6 +88,7 @@ it.each([false, true])(
       });
       const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
         fixtureCaptureExecutionReceipt: fixtureReceipt,
+        reciprocalPlayer: true,
         ...(yearOnly ? { sessionProposalV5: true, partialTransactionDates: true } : {}),
       });
       const evidence = {
@@ -360,7 +367,38 @@ it.each([false, true])(
         )
       ).rejects.toThrow('append-only');
 
-      const caseFixture = createFabricatedAflTradeValuationFixture('two_party_player_swap');
+      const fabricated = createFabricatedAflTradeValuationFixture('two_party_player_swap');
+      const canonicalTransfers = (
+        await pool.query<{ asset_version_id: string; to_club_id: string }>(
+          "SELECT asset_version_id,to_club_id FROM outcome_event_asset WHERE event_version_id=$1 AND status='approved' ORDER BY asset_version_id",
+          [entry.eventVersionId]
+        )
+      ).rows;
+      expect(canonicalTransfers).toHaveLength(2);
+      const replacements = new Map<string, string>();
+      fabricated.valuationCase.content.parties.forEach((party, index) => {
+        replacements.set(party.aflClubId, canonicalTransfers[index]!.to_club_id);
+        replacements.set(
+          party.receivedRootAssetIds[0]!,
+          canonicalTransfers[index]!.asset_version_id
+        );
+      });
+      const remap = <T>(value: T): T =>
+        JSON.parse(JSON.stringify(value), (_key, v: unknown) =>
+          typeof v === 'string' ? (replacements.get(v) ?? v) : v
+        ) as T;
+      const lineageGraph = remap(fabricated.lineageGraph);
+      const caseFixture = {
+        lineageGraph,
+        componentDrawSet: createAflTradeComponentDrawSet(
+          remap(fabricated.componentDrawSet.content)
+        ),
+        realizedContributionLedger: createAflTradeRealizedContributionLedger({
+          ...remap(fabricated.realizedContributionLedger.content),
+          lineageGraphId: createAflTradeLineageGraphId(lineageGraph),
+        }),
+        packagePolicy: fabricated.packagePolicy,
+      };
       const retainParent = async (value: unknown) => {
         const ref = createAflTradeCanonicalJsonArtifactRef(value, await now());
         const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(value));
@@ -436,12 +474,108 @@ it.each([false, true])(
       expect(
         await exactParentBytes(parentDocuments, scope.environment, '2000-01-01T00:00:00.000Z')
       ).toBe(false);
-      // Deliberately unrelated synthetic swap parents cannot stand in for this one-way source fixture.
+      const assembled = await client.transaction((tx) =>
+        materializeAflTradePostseasonValuation(tx, valuationRequest, methodAuthority, evidence)
+      );
+      const caseDocument = {
+        environment: scope.environment,
+        request: { kind: 'complete_trade', selection: valuationRequest },
+        observation: assembled.observation,
+        valuationParents: assembled.valuationParents,
+        valuationCase: assembled.valuationCase,
+      };
+      const caseExact = async (document: unknown) =>
+        (
+          await pool.query<{ exact: boolean }>(
+            'SELECT outcome_postseason_valuation_case_exact($1::jsonb) AS exact',
+            [JSON.stringify(document)]
+          )
+        ).rows[0]!.exact;
+      expect(await caseExact(caseDocument)).toBe(true);
+      expect(
+        await caseExact({
+          ...caseDocument,
+          valuationCase: {
+            ...assembled.valuationCase,
+            content: { ...assembled.valuationCase.content, outcomeSeasons: [2026, 2027, 2028] },
+          },
+        })
+      ).toBe(false);
+      const forgedContent = { ...assembled.valuationCase.content, valueUnitId: 'forged-unit' };
+      expect(
+        await caseExact({
+          ...caseDocument,
+          valuationCase: {
+            valuationCaseId: createAflTradeContentAddress('valuation-case', forgedContent),
+            content: forgedContent,
+          },
+        })
+      ).toBe(false);
+      const completeRequest = { kind: 'complete_trade', selection: valuationRequest };
+      const completeSaved = await retainedRepository.materialize(completeRequest);
+      expect(completeSaved.manifest.content.valuationCase).toEqual(assembled.valuationCase);
+      expect(completeSaved.manifest.content.valuationParents).toEqual(assembled.valuationParents);
+      expect((await retainedRepository.materialize(completeRequest)).manifest).toEqual(
+        completeSaved.manifest
+      );
+      expect(await retainedRepository.loadCurrentExact(completeSaved.manifest.manifestId)).toEqual(
+        completeSaved.manifest
+      );
+      // A direct writer can reseal hashes; SQL must still reject invented case values.
       await expect(
-        client.transaction((tx) =>
-          materializeAflTradePostseasonValuation(tx, valuationRequest, methodAuthority, evidence)
-        )
-      ).rejects.toThrow('account for every factual transfer');
+        client.transaction(async (tx) => {
+          const createdAt = (
+            await tx.query<{ at: Date }>(
+              "SELECT date_trunc('milliseconds',transaction_timestamp()) AS at"
+            )
+          ).rows[0]!.at.toISOString();
+          const content = {
+            ...completeSaved.manifest.content,
+            createdAt,
+            valuationCase: {
+              valuationCaseId: createAflTradeContentAddress('valuation-case', forgedContent),
+              content: forgedContent,
+            },
+          };
+          const forged = {
+            manifestId: createAflTradeContentAddress(
+              'private-evaluation-materialization-manifest',
+              content
+            ),
+            content,
+          };
+          const ref = createAflTradeCanonicalJsonArtifactRef(forged, createdAt);
+          await tx.query(
+            `INSERT INTO outcome_artifact_custody
+          (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,environment,created_at,verified_at,custody_json)
+          VALUES($1,$2,$3,$4,$5,'derived_private',$6,$7,clock_timestamp(),'{}')`,
+            [
+              ref.artifactId,
+              ref.contentSha256,
+              ref.storageUri,
+              ref.mediaType,
+              ref.byteLength,
+              scope.environment,
+              createdAt,
+            ]
+          );
+          await tx.query(
+            `INSERT INTO outcome_private_evaluation_materialization_manifest
+          (materialization_manifest_id,content_sha256,valuation_scope_key,trade_id,artifact_id,created_at,content_canonical_json,manifest_canonical_json,manifest_json)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8::text,$8::text::jsonb)`,
+            [
+              forged.manifestId,
+              forged.manifestId.split(':')[1],
+              content.selector.valuationScopeKey,
+              content.selector.tradeId,
+              ref.artifactId,
+              createdAt,
+              canonicalizeAflTradeJson(content),
+              canonicalizeAflTradeJson(forged),
+            ]
+          );
+        })
+      ).rejects.toThrow('Postseason materialization content or current authority differs');
       const retainedParent = promoted.retainedArtifacts.get(
         valuationParents.packagePolicyArtifact.artifactId
       )!;
@@ -505,6 +639,25 @@ it.each([false, true])(
         'not current'
       );
       await expect(retainedRepository.materialize(persistedRequest)).rejects.toThrow('not current');
+      expect(await retainedRepository.loadCurrentExact(completeSaved.manifest.manifestId)).toEqual(
+        completeSaved.manifest
+      );
+      await pool.query(
+        `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+        VALUES('synthetic-valuation-withdrawal','postseason_materialization',$1,'rejected',$2,'Synthetic withdrawal',$3::jsonb,'synthetic-reviewer',$4)`,
+        [
+          valuationReview.reviewId,
+          valuationRequest.reviewDecisionId,
+          canonicalizeAflTradeJson(valuationReview),
+          await now(),
+        ]
+      );
+      await expect(retainedRepository.materialize(completeRequest)).rejects.toThrow('not current');
+      expect(await retainedRepository.loadRetainedExact(completeSaved.manifest.manifestId)).toEqual(
+        completeSaved.manifest
+      );
+
       expect(await retainedRepository.loadRetainedExact(saved.manifestId)).toEqual(saved);
       expect(
         (

@@ -1404,8 +1404,8 @@ connects both builders to that same context, reconstructing canonical parties/tr
 existing factual archive reader without publishing an archive. It checks complete asset membership,
 common model bindings, receiving-party contribution roots and the original three-season bounds.
 Supported future-pick forecasts still require their separate calendar adapter. This assembles private
-contracts; it grants no numerical admission or execution. Guarded persistence/current replay and a
-complete PostgreSQL case-materialization fixture remain required before adapter delivery.
+contracts; it grants no numerical admission or execution. Guarded persistence/current replay now has
+a complete PostgreSQL case fixture; remaining acceptance and delivery checks are still required.
 
 The draft `private-evaluation-materialization-manifest/v2` repository persists derived observations
 in the existing immutable manifest owner and rederives current authority on every replay/current read.
@@ -1415,12 +1415,16 @@ proves measured partial persistence, exact replay, and withdrawal of current spe
 historical records remain intact. SQL compares exact calculation children and reuses the fully
 migrated HPN finalization validators as read-only current-input checks.
 
-Complete-case inserts remain rejected pending case-level SQL validation and a complete-exchange
-PostgreSQL fixture. The draft manifest embeds all four exact retained parent documents alongside the
-case. Their shared model/lineage binding and case IDs are checked by the contract; the SQL parent-byte
-helper authenticates canonical document bytes against reviewed artifact references and scoped custody.
-This helper alone does not authorize a complete-case write. Existing v1 insert and numerical-consumer
-rules remain in force. This draft persistence boundary is not full adapter delivery.
+Complete-case inserts now require the observation authority guard and an independent case guard.
+The manifest embeds all four exact reviewed parent documents. SQL authenticates their canonical bytes,
+scoped custody and shared model IDs, reconstructs parties from approved canonical transfers, checks
+complete asset membership and release inclusion, and preserves receiving-party contribution roots,
+the original three-season horizon and one later assessment. Future-pick forecasts remain unsupported.
+The two-player synthetic exchange covers exact and year-only dates, persistence, replay and review
+withdrawal; a resealed direct-write forgery is rejected. Historical reads preserve withdrawn records
+without claiming current authority. Existing v1 and numerical-consumer rules remain in force.
+Independent restore and remaining acceptance/delivery checks are still required; this grants no
+scientific admission or production deployment.
 
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
