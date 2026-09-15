@@ -3004,6 +3004,21 @@ Migration0206 repairs the shared exact-acquisition guard: valuation dataset rows
 `spell_version_id`. It preserves v2 rejection on inserts and updates and changes no stored data.
 Apply this forward repair without editing the immutable0197 migration.
 
+Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
+They require a current promoted incoming asset, exact `player_departure_reference` source claim,
+retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.
+The record retains its leaving club and year; it creates no receiving club or trade. One canonical
+departure is allowed per acquired asset, and exact replay reuses it. Direct writes are guarded;
+registered content is immutable. Conflicting corrections require an explicit successor design,
+not an update or another departure for the same acquisition.
+
+`canonicalDepartureSpellBinding` supplies explicit year bounds to registration v2. The database
+checks that the departure belongs to the spell's exact acquisition and that its bounds/evidence
+match the registered departure. A revoked departure review or withdrawn source makes current
+departure and spell reads fail. Incoming trade checks and v2 restrictions on exact-day consumers
+remain enforced. Source staging, canonical registration, spell registration and numerical admission
+are separate steps; passing synthetic integration tests claims none of the genuine records.
+
 The v16 session parser also reads retained2012 mini-draft rules and closing paperwork: it emits the
 October8–26 window, Martin1/Hogan2 membership, boundary selections and completion. It emits neither
 an exact day nor a completed total from prospective capacity. The2011 retrospective claims from the

@@ -1,3 +1,4 @@
+import { canonicalDepartureSpellBindingSchema } from '../source/canonicalPlayerDeparture';
 import { draftSessionDateWindowSchema } from '../source/draftSessionDatePrecision';
 import { z } from 'zod';
 import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
@@ -105,10 +106,12 @@ const precisionEvent = z.union([event, windowEvent]);
 const windowSpellContent = spellContent.extend({
   schemaVersion: z.literal('afl-trade-acquisition-registration/v2'),
   entry: precisionEvent,
-  departure: precisionEvent.nullable(),
+  departure: z.union([precisionEvent, canonicalDepartureSpellBindingSchema]).nullable(),
 });
 
-function eventBounds(value: z.infer<typeof precisionEvent>) {
+function eventBounds(
+  value: z.infer<typeof precisionEvent> | z.infer<typeof canonicalDepartureSpellBindingSchema>
+) {
   return value.eventDate === null
     ? { earliest: value.datePrecision.earliestDate, latest: value.datePrecision.latestDate }
     : { earliest: value.eventDate, latest: value.eventDate };
