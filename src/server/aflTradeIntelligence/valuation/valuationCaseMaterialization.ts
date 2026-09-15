@@ -91,7 +91,7 @@ function transferMatchesComponentAsset(transfer: TransferRecord, asset: Componen
   );
 }
 
-function requireCommonModelBinding(input: {
+export function requireCommonModelBinding(input: {
   componentDrawSet: AflTradeComponentDrawSet;
   realizedContributionLedger: AflTradeRealizedContributionLedger;
   packagePolicy: AflTradePackagePolicy;
@@ -121,7 +121,7 @@ function requireCommonModelBinding(input: {
   }
 }
 
-function selectedTransaction(
+export function selectedTransaction(
   archive: AflTradePromotionBackedPublicArchive,
   tradeId: string
 ): TransactionRecord {
@@ -143,7 +143,7 @@ function selectedTransaction(
   return matches[0]!;
 }
 
-function transfersFor(
+export function transfersFor(
   archive: AflTradePromotionBackedPublicArchive,
   transaction: TransactionRecord
 ): TransferRecord[] {
@@ -155,7 +155,7 @@ function transfersFor(
     );
 }
 
-function requireCompleteAssetBinding(
+export function requireCompleteAssetBinding(
   transfers: readonly TransferRecord[],
   componentDrawSet: AflTradeComponentDrawSet
 ): void {
@@ -223,7 +223,7 @@ function requireDirectedLineage(
   }
 }
 
-function buildParties(
+export function buildParties(
   transaction: TransactionRecord,
   transfers: readonly TransferRecord[]
 ): AflTradeValuationCase['content']['parties'] {

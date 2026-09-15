@@ -1373,6 +1373,65 @@ Existing observation-set/model and valuation execution consumers reject these ve
 them off as legacy timestamp-based records. Pre-1998 PAV, future-pick calendar adapters, authenticated
 post-departure zeros and numerical execution remain unsupported by this slice.
 
+`modeling/postgresPostseasonCalculationAuthority.ts` supplies the adapter's calculation read:
+within the caller's transaction it requires the current scoped head, exact parent and child row
+content, retained method bytes, and the existing current-input owner's source/identity/spell checks.
+It rejects withdrawn authority without deleting historical calculations and performs no writes or
+recalculation. This helper does not establish release/review authority or complete-season coverage;
+the full observation/case repository adapter and its persistence checks are still required.
+
+`postseasonMaterializationReview.ts` defines the reviewed private release/trade/spell selection;
+the review decision itself remains in the existing review owner. The context reader in
+`postgresPostseasonContextAuthority.ts` authenticates that decision, exact release membership,
+canonical year/date precision, current registered spell and retained evidence bytes. It uses the
+decision's actual recording time and never turns a year-only trade into an exact date. This review
+selects an approved private factual candidate; it is neither public release activation nor Gate 2
+scientific admission.
+
+`postgresPostseasonCoverageAuthority.ts` authenticates a current reviewed expected match set against
+the exact current calculation inputs. Complete coverage requires equality; partial coverage permits
+only a subset. A finalized calculation or calendar date alone cannot establish a complete season.
+`postgresPostseasonObservationMaterialization.ts` combines these readers with the existing current
+retrospective policy owner to derive observation v3. Missing coverage and missing player rows remain
+unavailable; incomplete feature seasons are unavailable, and receiving-spell outcomes retain partial
+coverage and signed values. Callers cannot supply annual values. Coverage/review/calculation bindings
+are returned for subsequent persistence and replay checks.
+
+Postseason materialization review v2 selects exact retained component, contribution-ledger, package
+policy and lineage artifacts, plus one later effective assessment. The context reader verifies their
+custody and bytes alongside the original review evidence. `valuation/postgresPostseasonValuationMaterialization.ts`
+connects both builders to that same context, reconstructing canonical parties/transfers through the
+existing factual archive reader without publishing an archive. It checks complete asset membership,
+common model bindings, receiving-party contribution roots and the original three-season bounds.
+Both materialization and SQL require exactly one current lineage custodian matching each transfer
+recipient at the trade day, or at January 1 of Y+1 when only the year is known. This outcome-window
+boundary does not populate the unknown trade date; missing, expired or contradictory custody fails
+closed. Custody knowledge must be active at the reconstruction knowledge cutoff.
+Supported future-pick forecasts still require their separate calendar adapter. This assembles private
+contracts; it grants no numerical admission or execution. Guarded persistence/current replay now has
+a complete PostgreSQL case fixture; remaining acceptance and delivery checks are still required.
+
+The draft `private-evaluation-materialization-manifest/v2` repository persists derived observations
+in the existing immutable manifest owner and rederives current authority on every replay/current read.
+Its request-key index deduplicates concurrent attempts; retained reads make no current-authority claim.
+Migration 0217 permits derived observations with exact current calculations. The source-first fixture
+proves measured partial persistence, exact replay, and withdrawal of current spell authority while
+historical records remain intact. SQL compares exact calculation children and reuses the fully
+migrated HPN finalization validators as read-only current-input checks.
+
+Complete-case inserts now require the observation authority guard and an independent case guard.
+The manifest embeds all four exact reviewed parent documents. SQL authenticates their canonical bytes,
+scoped custody and shared model IDs, reconstructs parties from approved canonical transfers, checks
+complete asset membership and release inclusion, and preserves receiving-party contribution roots,
+the original three-season horizon and one later assessment. Future-pick forecasts remain unsupported.
+The two-player synthetic exchange covers exact and year-only dates, persistence, replay and review
+withdrawal; a resealed direct-write forgery is rejected. Historical reads preserve withdrawn records
+without claiming current authority. Existing v1 and numerical-consumer rules remain in force.
+Independent schema dump/removal/restore passes through fresh connections and retained artifact copies.
+A racing replay waits for review withdrawal and then rejects it; replacement coverage cannot silently
+change an existing observation. Broader checks and PR delivery remain required; no scientific
+admission or production deployment is granted.
+
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single
 2025 HPN source set. Explicit historical calculation IDs establish identity, not current source/input
