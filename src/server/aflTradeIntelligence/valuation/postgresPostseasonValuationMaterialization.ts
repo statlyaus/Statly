@@ -1,3 +1,4 @@
+import { findAflTradeAssetCustodian } from '../domain/lineageAttribution';
 import {
   doesAflTradeArtifactRefMatchBytes,
   type AflTradeArtifactRef,
@@ -97,6 +98,22 @@ export async function materializeAflTradePostseasonValuation(
     )
   )
     throw new Error('Valuation roots or transfer endpoints differ.');
+  // A year-only trade has no invented day: authenticate custody at the original outcome-window boundary.
+  const custodyAt = review.tradeDate
+    ? `${review.tradeDate}T00:00:00.000Z`
+    : `${review.tradeYear + 1}-01-01T00:00:00.000Z`;
+  if (
+    transfers.some(
+      (transfer) =>
+        findAflTradeAssetCustodian(graph.custodySpells, transfer.assetVersionId, {
+          effectiveAsOf: custodyAt,
+          knowledgeCutoffAt: selection.context.content.knowledgeCutoffAt,
+        }) !== transfer.toClub.clubId
+    )
+  )
+    throw new Error(
+      'Valuation lineage custody differs from the canonical recipient at the trade boundary.'
+    );
   if (
     realizedContributionLedger.content.records.some(
       (record) => transferByRoot.get(record.rootAssetId)?.toClub.clubId !== record.aflClubId

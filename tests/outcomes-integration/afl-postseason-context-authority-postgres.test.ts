@@ -493,6 +493,81 @@ it.each([false, true])(
           )
         ).rows[0]!.exact;
       expect(await caseExact(caseDocument)).toBe(true);
+      // Reseal and review every changed parent so rejection must come from recipient custody,
+      // not stale hashes, missing custody bytes, or a mismatched lineage ID.
+      for (const mismatch of ['sender', 'missing', 'expired', 'not-yet-known'] as const) {
+        const graph = structuredClone(lineageGraph);
+        const root = canonicalTransfers[0]!;
+        const spell = graph.custodySpells.find((s) => s.assetId === root.asset_version_id)!;
+        if (mismatch === 'sender') spell.aflClubId = canonicalTransfers[1]!.to_club_id;
+        if (mismatch === 'missing')
+          graph.custodySpells = graph.custodySpells.filter((s) => s !== spell);
+        if (mismatch === 'expired') {
+          spell.effectiveFrom = '2024-01-01T00:00:00.000Z';
+          spell.effectiveTo = yearOnly
+            ? '2025-01-01T00:00:00.000Z'
+            : `${review.content.tradeDate}T00:00:00.000Z`;
+        }
+        if (mismatch === 'not-yet-known') spell.knownFrom = '2099-01-01T00:00:00.000Z';
+        const ledger = createAflTradeRealizedContributionLedger({
+          ...caseFixture.realizedContributionLedger.content,
+          lineageGraphId: createAflTradeLineageGraphId(graph),
+        });
+        const badReview = createAflTradePostseasonMaterializationReview({
+          ...valuationReview.content,
+          schemaVersion: 'afl-trade-postseason-materialization-review/v2',
+          valuation: {
+            ...valuationParents,
+            lineageGraphArtifact: await retainParent(graph),
+            realizedContributionLedgerArtifact: await retainParent(ledger),
+          },
+          createdAt: await now(),
+        });
+        const decisionId = `synthetic-custody-${mismatch}`;
+        await approve(decisionId, 'postseason_materialization', badReview.reviewId, badReview);
+        const badRequest = {
+          ...valuationRequest,
+          reviewDecisionId: decisionId,
+          knowledgeCutoffAt: await now(),
+        };
+        await expect(
+          client.transaction((tx) =>
+            materializeAflTradePostseasonValuation(tx, badRequest, methodAuthority, evidence)
+          )
+        ).rejects.toThrow('lineage custody differs');
+        const observation = await client.transaction((tx) =>
+          materializeAflTradePostseasonObservation(tx, badRequest, methodAuthority, evidence)
+        );
+        const content = {
+          ...assembled.valuationCase.content,
+          context: observation.selection.context,
+          lineageGraphId: ledger.content.lineageGraphId,
+          realizedContributionLedgerId: ledger.realizedContributionLedgerId,
+          laterAssessment: {
+            ...assembled.valuationCase.content.laterAssessment,
+            knowledgeCutoffAt: badRequest.knowledgeCutoffAt,
+            valuationAsOf: badRequest.knowledgeCutoffAt,
+          },
+        };
+        expect(
+          await caseExact({
+            ...caseDocument,
+            request: { kind: 'complete_trade', selection: badRequest },
+            observation: observation.observation,
+            valuationParents: {
+              ...parentDocuments,
+              lineageGraph: graph,
+              realizedContributionLedger: ledger,
+            },
+            valuationCase: {
+              valuationCaseId: createAflTradeContentAddress('valuation-case', content),
+              content,
+            },
+          }),
+          mismatch
+        ).toBe(false);
+      }
+
       expect(
         await caseExact({
           ...caseDocument,

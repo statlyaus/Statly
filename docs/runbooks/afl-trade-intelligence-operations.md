@@ -1403,6 +1403,10 @@ custody and bytes alongside the original review evidence. `valuation/postgresPos
 connects both builders to that same context, reconstructing canonical parties/transfers through the
 existing factual archive reader without publishing an archive. It checks complete asset membership,
 common model bindings, receiving-party contribution roots and the original three-season bounds.
+Both materialization and SQL require exactly one current lineage custodian matching each transfer
+recipient at the trade day, or at January 1 of Y+1 when only the year is known. This outcome-window
+boundary does not populate the unknown trade date; missing, expired or contradictory custody fails
+closed. Custody knowledge must be active at the reconstruction knowledge cutoff.
 Supported future-pick forecasts still require their separate calendar adapter. This assembles private
 contracts; it grants no numerical admission or execution. Guarded persistence/current replay now has
 a complete PostgreSQL case fixture; remaining acceptance and delivery checks are still required.

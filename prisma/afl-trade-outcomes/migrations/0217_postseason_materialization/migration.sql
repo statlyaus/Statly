@@ -273,7 +273,7 @@ DECLARE r JSONB; docs JSONB:=c->'valuationParents'; draws JSONB:=docs#>'{compone
  ledger JSONB:=docs#>'{realizedContributionLedger,content}'; policy JSONB:=docs#>'{packagePolicy,content}';
  graph JSONB:=docs->'lineageGraph'; expected JSONB; parties JSONB; actual_ids JSONB; parent_ids JSONB;
  asset RECORD; component JSONB; root JSONB; item JSONB; cutoff TIMESTAMPTZ:=(c#>>'{request,selection,knowledgeCutoffAt}')::TIMESTAMPTZ;
- later_at TIMESTAMPTZ; y INTEGER; expected_kind TEXT; canonical_graph JSONB; collection TEXT; key_name TEXT;
+ later_at TIMESTAMPTZ; y INTEGER; expected_kind TEXT; canonical_graph JSONB; collection TEXT; key_name TEXT; custody_at TIMESTAMPTZ; custodians JSONB;
 BEGIN
  SELECT evidence_json->'content' INTO r FROM outcome_review_decision
  WHERE decision_id=c#>>'{request,selection,reviewDecisionId}' FOR SHARE;
@@ -289,6 +289,9 @@ BEGIN
      INTO canonical_graph FROM jsonb_array_elements(graph->collection);
  END LOOP;
  y:=(r->>'tradeYear')::INTEGER; later_at:=(r#>>'{valuation,laterEffectiveAt}')::TIMESTAMPTZ;
+ custody_at:=CASE WHEN r->>'tradeDate' IS NOT NULL THEN (r->>'tradeDate')::DATE::TIMESTAMP AT TIME ZONE 'UTC'
+   ELSE make_date(y+1,1,1)::TIMESTAMP AT TIME ZONE 'UTC' END;
+
  IF NOT COALESCE(draws->>'schemaVersion'='afl-trade-component-draw-set/v1'
    AND ledger->>'schemaVersion'='afl-trade-realized-contribution-ledger/v1'
    AND policy->>'schemaVersion'='afl-trade-package-policy/v1'
@@ -314,6 +317,13 @@ BEGIN
      OR NOT EXISTS(SELECT 1 FROM outcome_event_party WHERE event_version_id=asset.event_version_id AND club_id=asset.from_club_id)
      OR NOT EXISTS(SELECT 1 FROM outcome_event_party WHERE event_version_id=asset.event_version_id AND club_id=asset.to_club_id)
      OR asset.from_club_id=asset.to_club_id THEN RETURN FALSE; END IF;
+   SELECT jsonb_agg(value->>'aflClubId') INTO custodians FROM jsonb_array_elements(graph->'custodySpells')
+     WHERE value->>'assetId'=asset.asset_version_id
+       AND (value->>'effectiveFrom')::TIMESTAMPTZ<=custody_at
+       AND (value->>'effectiveTo' IS NULL OR custody_at<(value->>'effectiveTo')::TIMESTAMPTZ)
+       AND (value->>'knownFrom')::TIMESTAMPTZ<=cutoff
+       AND (value->>'knownTo' IS NULL OR cutoff<(value->>'knownTo')::TIMESTAMPTZ);
+   IF custodians IS DISTINCT FROM jsonb_build_array(asset.to_club_id) THEN RETURN FALSE; END IF;
    SELECT value INTO component FROM jsonb_array_elements(draws->'assets') WHERE value->>'assetId'=asset.asset_version_id;
    SELECT value INTO root FROM jsonb_array_elements(graph->'assets') WHERE value->>'assetId'=asset.asset_version_id;
    expected_kind:=CASE asset.kind::TEXT WHEN 'player' THEN 'player' WHEN 'current_pick' THEN 'current_pick_entitlement'

@@ -1,3 +1,5 @@
+import { createAflTradeLineageGraphId } from '@/server/aflTradeIntelligence/valuation/valuationCaseContracts';
+import { createAflTradeRealizedContributionLedger } from '@/server/aflTradeIntelligence/valuation/realizedContributionLedger';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
@@ -119,7 +121,7 @@ function fixture(yearOnly = false) {
       { loadMethod: vi.fn() } as never,
       evidence
     );
-  return { source, review, context, transfers, retained, observation, query, run };
+  return { source, review, context, transfers, retained, retain, observation, query, run };
 }
 
 it.each([false, true])(
@@ -179,4 +181,37 @@ it('rejects mixing separately valid retained model parents', async () => {
     valueUnitId: 'different-unit',
   });
   expect(() => postseasonValuationParentsSchema.parse(parents)).toThrow('one exact model');
+});
+
+it.each([false, true])('rejects reviewed custody contradictions, yearOnly=%s', async (yearOnly) => {
+  for (const mismatch of ['sender', 'missing', 'expired', 'not-yet-known'] as const) {
+    const f = fixture(yearOnly);
+    const graph = structuredClone(f.source.lineageGraph);
+    const transfer = f.transfers[0]!;
+    const spell = graph.custodySpells.find((s) => s.assetId === transfer.assetVersionId)!;
+    if (mismatch === 'sender') spell.aflClubId = transfer.fromClub.clubId;
+    if (mismatch === 'missing')
+      graph.custodySpells = graph.custodySpells.filter((s) => s !== spell);
+    if (mismatch === 'expired') spell.effectiveFrom = '2024-01-01T00:00:00.000Z';
+    if (mismatch === 'expired')
+      spell.effectiveTo = yearOnly
+        ? '2025-01-01T00:00:00.000Z'
+        : f.source.valuationCase.content.tradeEffectiveAt;
+    if (mismatch === 'not-yet-known') spell.knownFrom = '2027-01-01T00:00:00.000Z';
+    const ledger = createAflTradeRealizedContributionLedger({
+      ...f.source.realizedContributionLedger.content,
+      lineageGraphId: createAflTradeLineageGraphId(graph),
+    });
+    if (f.review.content.schemaVersion !== 'afl-trade-postseason-materialization-review/v2')
+      throw new Error();
+    f.observation.selection.review = createAflTradePostseasonMaterializationReview({
+      ...f.review.content,
+      valuation: {
+        ...f.review.content.valuation,
+        lineageGraphArtifact: f.retain(graph),
+        realizedContributionLedgerArtifact: f.retain(ledger),
+      },
+    });
+    await expect(f.run(), mismatch).rejects.toThrow('lineage custody differs');
+  }
 });
