@@ -1413,7 +1413,11 @@ Its request-key index deduplicates concurrent attempts; retained reads make no c
 Migration 0217 currently permits only observation records with absent season calculations. Measured
 observation and complete-case inserts remain rejected until independent SQL source/child-row guards
 and complete end-to-end tests are finished. The existing v1 insert and numerical-consumer rules remain
-in force. This draft persistence boundary is not full adapter delivery.
+in force. The SQL calculation reader now compares exact calculation children and reuses the fully
+migrated HPN finalization validators as read-only current-input checks. Its source-first calculation
+and spell-withdrawal regression passes; measured observation composition still needs a complete
+capture/release fixture before its write barrier is removed. This draft persistence boundary is not
+full adapter delivery.
 
 The existing player-PAV observation-set contract requires all four chronological, label-purged model
 partitions. Its historical measurement windows cannot inherit authority from the dispatch's single

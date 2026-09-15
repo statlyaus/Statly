@@ -336,6 +336,12 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     calculation: finalized.calculation,
     inputSet: built.inputSet,
   });
+  const loadSqlCalculation = () =>
+    pool.query<{ valid: boolean }>(
+      'SELECT outcome_postseason_calculation_exact($1,$2::timestamptz) AS valid',
+      [currentRequest.calculationId, currentRequest.knowledgeCutoffAt]
+    );
+  expect((await loadSqlCalculation()).rows[0]!.valid).toBe(true);
   // Simulate corrupted read results without disabling guards or modifying retained evidence.
   // The row counts remain unchanged; exact child projections must still reject the result.
   for (const collection of ['teams', 'players'] as const) {
@@ -489,6 +495,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     built.inputSet
   );
   await expect(loadCalculation()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
+  await expect(loadSqlCalculation()).rejects.toThrow();
   await expect(loadCoverage()).rejects.toMatchObject({ code: 'RESOLUTION_NOT_CURRENT' });
   await expect(
     calculations.loadFinalizedCalculation(

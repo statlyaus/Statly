@@ -9,6 +9,97 @@ RETURNS TEXT LANGUAGE sql IMMUTABLE STRICT AS $$
  SELECT prefix||':'||encode(sha256(convert_to(outcome_afl_trade_canonical_json(content),'UTF8')),'hex')
 $$;
 
+-- Reuse the fully migrated HPN owners, including projected/retrospective/nonparticipant
+-- and registered-spell amendments. Remove only their one-time transition precondition;
+-- the remaining body is a read-only authority and exact-membership validator.
+DO $migration$
+DECLARE source_name TEXT; target_name TEXT; body TEXT; transition TEXT;
+BEGIN
+ transition:=$fragment$  IF OLD."status"<>'building' OR NEW."status"<>'finalized' OR OLD."finalized_at" IS NOT NULL
+    OR NEW."finalized_at" IS NULL OR NEW."finalized_at"<>NEW."created_at"
+    OR (to_jsonb(NEW)-'status'-'finalized_at') IS DISTINCT FROM
+       (to_jsonb(OLD)-'status'-'finalized_at') THEN
+    RAISE EXCEPTION 'HPN PAV input sets permit only one exact finalization transition';
+  END IF;$fragment$;
+ FOREACH source_name IN ARRAY ARRAY['finalize_outcome_hpn_pav_input_set','finalize_outcome_hpn_pav_input_set_v2'] LOOP
+   SELECT prosrc INTO body FROM pg_proc WHERE oid=to_regprocedure(source_name||'()');
+   IF body IS NULL OR (length(body)-length(replace(body,transition,'')))/length(transition)<>1
+     OR (length(body)-length(replace(body,'RETURN NEW;','')))/length('RETURN NEW;')<>1 THEN
+     RAISE EXCEPTION 'Expected exact HPN owner transition and return in %',source_name;
+   END IF;
+   body:=replace(replace(replace(body,transition,''),'NEW.','input_row.'),'RETURN NEW;','RETURN TRUE;');
+   IF body ~ '\mOLD\M' OR body ~* '\m(INSERT|UPDATE|DELETE)\M' THEN
+     RAISE EXCEPTION 'HPN current-read extraction contains a transition or mutation in %',source_name;
+   END IF;
+   target_name:=CASE WHEN source_name='finalize_outcome_hpn_pav_input_set' THEN 'outcome_postseason_hpn_input_legacy_exact'
+     ELSE 'outcome_postseason_hpn_input_projected_exact' END;
+   EXECUTE format('CREATE FUNCTION %I(input_row outcome_hpn_pav_input_set) RETURNS BOOLEAN LANGUAGE plpgsql AS %L',target_name,body);
+   EXECUTE format('ALTER FUNCTION %I(outcome_hpn_pav_input_set) SET search_path TO %I,pg_catalog,pg_temp',target_name,current_schema());
+ END LOOP;
+END $migration$;
+
+CREATE FUNCTION outcome_postseason_calculation_exact(target_id TEXT, cutoff TIMESTAMPTZ)
+RETURNS BOOLEAN LANGUAGE plpgsql AS $$
+DECLARE calc outcome_hpn_pav_calculation%ROWTYPE; inputs outcome_hpn_pav_input_set%ROWTYPE;
+ method outcome_hpn_pav_method%ROWTYPE; actual JSONB; expected JSONB;
+BEGIN
+ SELECT calculation.* INTO calc FROM outcome_hpn_pav_calculation calculation
+ JOIN outcome_hpn_pav_calculation_head head ON head.calculation_id=calculation.calculation_id
+   AND head.environment=calculation.environment AND head.competition=calculation.competition
+   AND head.season_year=calculation.season_year AND head.method_id=calculation.method_id
+ WHERE calculation.calculation_id=target_id AND calculation.status='finalized'
+   AND calculation.finalized_at>=calculation.calculated_at AND calculation.finalized_at<=cutoff
+   AND calculation.effective_through<=cutoff AND cutoff<=transaction_timestamp() FOR SHARE OF calculation,head;
+ IF NOT FOUND THEN RETURN FALSE; END IF;
+ IF NOT COALESCE(calc.calculation_id=outcome_postseason_address('hpn-pav-season',calc.calculation_json->'content')
+   AND calc.calculation_json->>'calculationId'=calc.calculation_id
+   AND calc.calculation_canonical_json=outcome_afl_trade_canonical_json(calc.calculation_json->'content')
+   AND calc.calculation_sha256=split_part(calc.calculation_id,':',2)
+   AND calc.method_id=calc.calculation_json#>>'{content,methodId}'
+   AND calc.input_set_id=calc.calculation_json#>>'{content,inputSetId}'
+   AND calc.environment::TEXT=calc.calculation_json#>>'{content,environment}'
+   AND calc.competition=calc.calculation_json#>>'{content,competition}'
+   AND calc.season_year=(calc.calculation_json#>>'{content,seasonYear}')::INTEGER
+   AND calc.calculated_at=(calc.calculation_json#>>'{content,calculatedAt}')::TIMESTAMPTZ
+   AND calc.effective_through=(calc.calculation_json#>>'{content,effectiveThrough}')::TIMESTAMPTZ
+   AND calc.schema_version=calc.calculation_json#>>'{content,schemaVersion}'
+   AND calc.value_unit=calc.calculation_json#>>'{content,valueUnit}'
+   AND calc.player_count=jsonb_array_length(calc.calculation_json#>'{content,players}')
+   AND calc.team_count=jsonb_array_length(calc.calculation_json#>'{content,teams}'),FALSE) THEN RETURN FALSE; END IF;
+ SELECT jsonb_agg(to_jsonb(player)-'calculation_id' ORDER BY ordinal) INTO actual
+   FROM outcome_hpn_pav_calculation_player player WHERE calculation_id=target_id;
+ SELECT jsonb_agg(jsonb_build_object('spell_version_id',p->'spellVersionId','player_id',p->'playerId','team_id',p->'teamId',
+   'ordinal',ordinal-1,'player_sha256',encode(sha256(convert_to(outcome_afl_trade_canonical_json(p),'UTF8')),'hex'),
+   'offensive_pav',p->'offensivePav','midfield_pav',p->'midfieldPav','defensive_pav',p->'defensivePav','total_pav',p->'totalPav',
+   'player_canonical_json',outcome_afl_trade_canonical_json(p)) ORDER BY ordinal) INTO expected
+   FROM jsonb_array_elements(calc.calculation_json#>'{content,players}') WITH ORDINALITY item(p,ordinal);
+ IF actual IS DISTINCT FROM expected THEN RETURN FALSE; END IF;
+ SELECT jsonb_agg(to_jsonb(team)-'calculation_id' ORDER BY ordinal) INTO actual
+   FROM outcome_hpn_pav_calculation_team team WHERE calculation_id=target_id;
+ SELECT jsonb_agg(jsonb_build_object('team_id',t->'teamId','ordinal',ordinal-1,
+   'team_sha256',encode(sha256(convert_to(outcome_afl_trade_canonical_json(t),'UTF8')),'hex'),
+   'offensive_pav',t->'offensivePav','midfield_pav',t->'midfieldPav','defensive_pav',t->'defensivePav','total_pav',t->'totalPav',
+   'team_canonical_json',outcome_afl_trade_canonical_json(t)) ORDER BY ordinal) INTO expected
+   FROM jsonb_array_elements(calc.calculation_json#>'{content,teams}') WITH ORDINALITY item(t,ordinal);
+ IF actual IS DISTINCT FROM expected THEN RETURN FALSE; END IF;
+ SELECT * INTO method FROM outcome_hpn_pav_method WHERE method_id=calc.method_id AND environment=calc.environment FOR SHARE;
+ IF NOT FOUND OR NOT COALESCE(method.method_id=outcome_postseason_address('hpn-pav-method',method.method_json->'content')
+   AND outcome_acquisition_registration_evidence_exact(jsonb_build_array(method.method_json#>'{content,sourceArtifact}'),
+     calc.environment::TEXT,cutoff,cutoff),FALSE) THEN RETURN FALSE; END IF;
+ SELECT * INTO inputs FROM outcome_hpn_pav_input_set WHERE input_set_id=calc.input_set_id AND status='finalized'
+   AND finalized_at<=calc.calculated_at AND method_id=calc.method_id AND environment=calc.environment
+   AND competition=calc.competition AND season_year=calc.season_year FOR SHARE;
+ IF NOT FOUND OR inputs.input_set_canonical_json IS DISTINCT FROM outcome_afl_trade_canonical_json(inputs.input_set_json->'content')
+   OR inputs.input_set_id IS DISTINCT FROM outcome_postseason_address('hpn-pav-input-set',inputs.input_set_json->'content')
+   OR calc.calculation_json#>>'{content,inputSetSha256}' IS DISTINCT FROM inputs.input_set_sha256::TEXT THEN RETURN FALSE; END IF;
+ IF inputs.input_set_json#>>'{content,schemaVersion}'='afl-trade-hpn-pav-input-set/v2'
+   OR inputs.input_set_json#>>'{content,fieldMapAuthority}'='projected' THEN
+   RETURN outcome_postseason_hpn_input_projected_exact(inputs);
+ END IF;
+ RETURN outcome_postseason_hpn_input_legacy_exact(inputs);
+END;
+$$;
+
 CREATE FUNCTION outcome_postseason_observation_exact(c JSONB)
 RETURNS BOOLEAN LANGUAGE plpgsql AS $$
 DECLARE req JSONB:=c#>'{request,selection}'; obs JSONB:=c#>'{observation,content}';
@@ -113,7 +204,7 @@ BEGIN
        AND calculation.competition='AFLM' AND calculation.season_year=year AND calculation.method_id=p->>'methodId'
        AND calculation.status='finalized' AND calculation.finalized_at<=cutoff AND calculation.effective_through<=cutoff
        AND calculation.calculated_at<=(cov->>'createdAt')::TIMESTAMPTZ FOR SHARE OF calculation,head;
-     IF NOT FOUND THEN RETURN FALSE; END IF;
+     IF NOT FOUND OR NOT outcome_postseason_calculation_exact(calculation.calculation_id,cutoff) THEN RETURN FALSE; END IF;
      SELECT jsonb_agg(match->'matchId' ORDER BY match->>'matchId') INTO actual_matches
        FROM outcome_hpn_pav_input_set input, jsonb_array_elements(input.input_set_json#>'{content,completedMatches}') match
        WHERE input.input_set_id=calculation.input_set_id;
@@ -169,9 +260,8 @@ BEGIN
    AND c->>'requestKey'=outcome_postseason_address('postseason-materialization-request',c->'request')
    AND c->'publicationEligible'='false'::JSONB AND c->>'authorityBoundary'='private_factual_materialization_no_numerical_admission'
    AND c#>>'{request,kind}'='observation' AND c->'valuationCase'='null'::JSONB
-   -- Draft boundary: enable measured/case persistence only after its SQL current-source
-   -- and exact child-row guards have their end-to-end tests. Repository reads already
-   -- reauthenticate those owners, but direct SQL must enforce them independently too.
+   -- Retain the draft measured-write barrier until full observation composition verifies
+   -- the new SQL validator against complete capture/release fixture ancestry.
    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(c->'coverageBindings') binding
      WHERE binding->'calculationId' IS DISTINCT FROM 'null'::JSONB)
    AND custody.content_sha256=encode(sha256(convert_to(NEW.manifest_canonical_json,'UTF8')),'hex')
@@ -196,3 +286,11 @@ CREATE TRIGGER outcome_postseason_materialization_insert_guard
 BEFORE INSERT ON outcome_private_evaluation_materialization_manifest FOR EACH ROW
 WHEN (NEW.manifest_json#>>'{content,schemaVersion}'='private-evaluation-materialization-manifest/v2')
 EXECUTE FUNCTION validate_outcome_postseason_materialization_insert();
+
+DO $$ DECLARE signature TEXT; BEGIN
+ FOREACH signature IN ARRAY ARRAY['outcome_postseason_address(text,jsonb)',
+   'outcome_postseason_calculation_exact(text,timestamp with time zone)',
+   'outcome_postseason_observation_exact(jsonb)','validate_outcome_postseason_materialization_insert()'] LOOP
+   EXECUTE format('ALTER FUNCTION %s SET search_path TO %I,pg_catalog,pg_temp',signature,current_schema());
+ END LOOP;
+END $$;
