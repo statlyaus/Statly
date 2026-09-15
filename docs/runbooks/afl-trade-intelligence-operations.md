@@ -3004,6 +3004,21 @@ Migration0206 repairs the shared exact-acquisition guard: valuation dataset rows
 `spell_version_id`. It preserves v2 rejection on inserts and updates and changes no stored data.
 Apply this forward repair without editing the immutable0197 migration.
 
+Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
+They require a current promoted incoming asset, exact `player_departure_reference` source claim,
+retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.
+The record retains its leaving club and year; it creates no receiving club or trade. One canonical
+departure is allowed per acquired asset, and exact replay reuses it. Direct writes are guarded;
+registered content is immutable. Conflicting corrections require an explicit successor design,
+not an update or another departure for the same acquisition.
+
+`canonicalDepartureSpellBinding` supplies explicit year bounds to registration v2. The database
+checks that the departure belongs to the spell's exact acquisition and that its bounds/evidence
+match the registered departure. A revoked departure review or withdrawn source makes current
+departure and spell reads fail. Incoming trade checks and v2 restrictions on exact-day consumers
+remain enforced. Source staging, canonical registration, spell registration and numerical admission
+are separate steps; passing synthetic integration tests claims none of the genuine records.
+
 The v16 session parser also reads retained2012 mini-draft rules and closing paperwork: it emits the
 October8–26 window, Martin1/Hogan2 membership, boundary selections and completion. It emits neither
 an exact day nor a completed total from prospective capacity. The2011 retrospective claims from the
@@ -3148,3 +3163,32 @@ for an earlier evidenced transfer or replace partial observation dates with inve
 The historical draft/trade reader accepts typed passed, unused, later-package and rookie-elevation
 pick endpoints without a draft-selection row. It leaves drafted-player and actual-pick fields empty
 and continues rejecting missing or mismatched selected endpoints and pick identities.
+
+### Reviewed legacy trade-year bindings
+
+Migration 0212 lets a reviewed acquisition binding use January 1–December 31 of the
+immutable promoted transaction year when the original trade has no exact date or
+stored precision. These are uncertainty bounds, not claimed event days. The year
+must match the original promoted transaction and event season; narrower ranges,
+other years and fabricated exact dates fail. Existing promotion, identity, review,
+custody and source-ancestry checks still run. The reviewed departure/spell stores
+the immutable binding; original event and asset records are unchanged. This does
+not admit numerical valuations or convert year bounds into exact-day observations.
+
+### Reviewed continuity references
+
+The exact continuity parser emits season membership separately from a supported
+observation cutoff. A final playing season does not imply December 31 membership;
+retired rookie listing does not imply appearances. Rules named `reviewed-continuity-*`
+require every referenced continuity artifact to have a current retained claim matching
+the player/club and covering the cutoff. Migration 0215 also requires each claim to
+enumerate every post-trade season from acquisition year + 1 through the observation
+year; later membership cannot authenticate an earlier spell. At least one continuity
+reference is required. Migration 0216 rejects unmatched and wrong-capability artifacts
+rather than filtering them out of validation. Both player capabilities are dispatched by the external-ingestion runtime.
+Withdrawal invalidates current reads. Partial calendar coverage remains explicit
+and must not be treated as complete numerical outcome admission.
+
+Departure currentness also requires the retained recorded player/club names to
+match their immutable canonical identities (migration 0214); a reviewed claim for
+one subject cannot close another subject’s acquisition.

@@ -1,3 +1,11 @@
+import {
+  reviewedOfficialAflPlayerContinuity,
+  OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
+} from './officialAflPlayerContinuityFacts';
+import {
+  reviewedOfficialAflPlayerDeparture,
+  OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
+} from './officialAflPlayerDepartureFacts';
 import { reviewedOfficialAflCompensationArticle } from './officialAflCompensationArticleFacts';
 import {
   reviewedOfficialAflCompensationPdf,
@@ -160,6 +168,32 @@ export function validateAflTradeExternalCaptureScope(
       url.search ||
       url.hash ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'official-afl-player-continuity') {
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION ||
+      !reviewedOfficialAflPlayerContinuity(request.sourceUrl, request.anchorSeasonYear) ||
+      !Number.isFinite(Date.parse(request.effectiveAt)) ||
+      new Date(request.effectiveAt).getUTCFullYear() < request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'official-afl-player-departure') {
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION ||
+      !reviewedOfficialAflPlayerDeparture(request.sourceUrl, request.anchorSeasonYear) ||
+      !Number.isFinite(Date.parse(request.effectiveAt)) ||
+      new Date(request.effectiveAt).getUTCFullYear() < request.anchorSeasonYear
     )
       invalid();
     return;

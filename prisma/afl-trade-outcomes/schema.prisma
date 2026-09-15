@@ -3313,6 +3313,7 @@ model OutcomeDraftPick {
 }
 
 model OutcomeEventAsset {
+  canonicalDeparture OutcomeCanonicalPlayerDeparture?
   specialEntitlementId String? @map("special_entitlement_id")
   specialEntitlement OutcomeSpecialEntitlementAward? @relation(fields: [specialEntitlementId], references: [entitlementId], onDelete: Restrict)
   specialCustody OutcomeSpecialEntitlementCustody?
@@ -3452,6 +3453,7 @@ model OutcomePickRealization {
 }
 
 model OutcomeReviewDecision {
+  canonicalPlayerDepartures OutcomeCanonicalPlayerDeparture[]
   reviewedLineageRegistrations OutcomeReviewedPickLineageRegistration[]
   specialIdentityReplacements OutcomeSpecialEntitlementIdentityReplacement[]
   specialRevisions OutcomeSpecialEntitlementRevision[]
@@ -6300,4 +6302,16 @@ model OutcomeReviewedPickLineageRegistration {
   approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
 
   @@map("outcome_reviewed_pick_lineage_registration")
+}
+
+model OutcomeCanonicalPlayerDeparture {
+  acquisitionAssetVersionId String @unique(map: "outcome_departure_acquisition_asset_key") @map("acquisition_asset_version_id")
+  acquisitionAsset OutcomeEventAsset @relation(fields: [acquisitionAssetVersionId], references: [assetVersionId], onDelete: Restrict, onUpdate: NoAction, map: "outcome_departure_acquisition_asset_fk")
+  departureEventId String @id @map("departure_event_id")
+  contentCanonicalJson String @map("content_canonical_json")
+  approvalDecisionId String @map("approval_decision_id")
+  registeredAt DateTime @map("registered_at") @outcomes.Timestamptz(3)
+  approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction, map: "outcome_canonical_player_departure_approval_decision_id_fkey")
+
+  @@map("outcome_canonical_player_departure")
 }

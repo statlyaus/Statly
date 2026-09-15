@@ -541,7 +541,35 @@ const compensationRuleReferenceSchema = z
   })
   .strict();
 
+const playerDepartureReferenceSchema = z
+  .object({
+    kind: z.literal('player_departure_reference'),
+    departureYear: yearSchema,
+    recordedPlayer: boundedText,
+    recordedClub: boundedText,
+    reason: z.enum(['delisting', 'contract_release', 'resignation']),
+  })
+  .strict();
+
+const playerContinuityReferenceSchema = z
+  .object({
+    kind: z.literal('player_continuity_reference'),
+    recordedPlayer: boundedText,
+    recordedClub: boundedText,
+    membershipSeasons: z
+      .array(yearSchema)
+      .min(1)
+      .max(30)
+      .refine((years) => years.every((y, i) => i === 0 || years[i - 1]! < y)),
+    observedThrough: z.iso.date(),
+    membershipStatus: z.enum(['listed', 'retired_rookie_listed']),
+    coverage: z.enum(['full_target_window', 'partial_calendar_boundary']),
+  })
+  .strict();
+
 const claimSchema = z.discriminatedUnion('kind', [
+  playerDepartureReferenceSchema,
+  playerContinuityReferenceSchema,
   compensationRuleReferenceSchema,
   compensationActivationReferenceSchema,
   issuingAwardReferenceSchema,
@@ -601,6 +629,8 @@ const allowedKindsByProvider = {
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([
+    'player_departure_reference',
+    'player_continuity_reference',
     'compensation_rule_reference',
     'compensation_activation_reference',
     'draft_selection',

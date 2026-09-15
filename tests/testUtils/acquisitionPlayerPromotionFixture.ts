@@ -45,6 +45,8 @@ import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTr
 export async function createSyntheticAcquisitionPlayerPromotion(
   outcomesPool: Pool,
   options: {
+    tradeSeasonYear?: number;
+    promoterThroughSeason?: number;
     draftSessions?: boolean;
     sessionProposalV5?: boolean;
     mixedDraftSessionProofs?: boolean;
@@ -88,7 +90,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const reviewedOfficialCombinedDraft = officialCombinedDraftYear !== null;
   if (reviewedOfficialCombinedDraft && !options.combinedDraftSessions)
     throw new Error('A reviewed Official profile requires combined draft sessions.');
-  const seasonYear = officialCombinedDraftYear ?? 2024;
+  if (
+    options.tradeSeasonYear !== undefined &&
+    (hasDraftSessions || options.lifecycle || options.partialTransactionDates)
+  )
+    throw new Error('Custom year is limited to simple synthetic trades.');
+  const seasonYear = officialCombinedDraftYear ?? options.tradeSeasonYear ?? 2024;
   const fixtureNamespace = reviewedOfficialCombinedDraft
     ? `official-${seasonYear}`
     : 'synthetic-2024';
@@ -735,7 +742,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       capabilityId: 'external_candidate_promotion',
       competition: 'AFLM',
       validFromSeason: seasonYear,
-      validThroughSeason: seasonYear,
+      validThroughSeason: options.promoterThroughSeason ?? seasonYear,
     };
     const authorityId = createAflTradeContentAddress(
       'reviewer-authority-evidence',
@@ -811,9 +818,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       (authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,
        valid_from_season,valid_through_season,valid_from,valid_through)
      VALUES ($1,$2,'afl_trade_canonical_promoter','public-afl-draft-trade-outcomes','multi_source',
-             'external_candidate_promotion','AFLM',$3,$3,
+             'external_candidate_promotion','AFLM',$3,$4,
              '2026-01-01T00:00:00.000Z',NULL)`,
-      [authorityId, principalRef, seasonYear]
+      [authorityId, principalRef, seasonYear, options.promoterThroughSeason ?? seasonYear]
     );
     const repository = new PostgresAflTradeExternalCanonicalPromotionReviewRepository(
       createPgAflOutcomeSqlClient(outcomesPool)
