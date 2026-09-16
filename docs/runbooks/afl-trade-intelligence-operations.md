@@ -2190,6 +2190,21 @@ operational-role gates are satisfied.
    Firestore, fantasy user, league, team or roster row changed. Publication starts only through the
    separate factual-release procedure below.
 
+HPN statistical decision custody is a separate, unverified staging boundary. Migration
+`0219_hpn_statistical_decision_custody` retains immutable submissions through
+`PostgresAflTradeHpnStatisticalAdjudicationRepository.retainUnverified`; `loadUnverified` rechecks
+the complete contract and evidence bytes supplied by the retained artifact reader. Keep those bytes
+in the artifact store: the table retains decision JSON and references, not a second copy of artifacts.
+Exact concurrent replay preserves the first registration timestamp. Competing submissions may share
+a cell; neither retention nor a supplied supersession ID establishes a current decision.
+SQL enforces canonical content addresses, selection consistency, chronology, unverified authority and
+immutability. It does not duplicate every nested contract check; repository reads reject malformed
+direct-SQL submissions. No source rights, identities, reviewer authority, current head, calculation
+eligibility or publication authority follows from custody. Before adding consumption, implement and
+test repository authentication and database current-head guards against the original source rows and
+governed evidence. An independent table restore must preserve canonical bytes and timestamps and
+read back successfully with the retained evidence; it does not by itself prove artifact-store restore.
+
 For complete-season reconciliation, measure receipt construction and persistence before execution.
 Migration `0139_canonical_text_reconciliation_receipt` allows the exact complete canonical wrapper in
 text with a separately authenticated wrapper checksum, preserving legacy JSONB receipts. Use the

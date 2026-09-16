@@ -1,0 +1,183 @@
+import { Pool } from 'pg';
+import { afterAll, beforeAll, expect, it } from 'vitest';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { PostgresAflTradeHpnStatisticalAdjudicationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnStatisticalAdjudicationRepository';
+import { createAflTradeHpnStatisticalDecision } from '@/server/aflTradeIntelligence/modeling/hpnStatisticalAdjudication';
+import { fixture } from '../testUtils/hpnStatisticalAdjudicationFixture';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+
+const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
+if (!url) throw new Error('Disposable PostgreSQL required.');
+const schema = `hpn_statistical_custody_${process.pid}_${Date.now()}`;
+const admin = new Pool({ connectionString: url });
+const pool = new Pool({ connectionString: url, options: `-c search_path=${schema}` });
+const repository = new PostgresAflTradeHpnStatisticalAdjudicationRepository(
+  createPgAflOutcomeSqlClient(pool)
+);
+const f = fixture();
+const reader = {
+  read: async (reference: { artifactId: string }) => {
+    const bytes = f.evidenceBytes.get(reference.artifactId);
+    if (!bytes) throw new Error('Synthetic evidence missing.');
+    return bytes;
+  },
+};
+beforeAll(async () => {
+  await admin.query(`CREATE SCHEMA "${schema}"`);
+  const scoped = new URL(url);
+  scoped.searchParams.set('schema', schema);
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
+}, 120000);
+afterAll(async () => {
+  await pool.end();
+  await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
+  await admin.end();
+});
+
+it('retains concurrent exact replays once and reads them without granting authority', async () => {
+  const results = await Promise.all([
+    repository.retainUnverified(f.result, reader),
+    repository.retainUnverified(f.result, reader),
+  ]);
+  expect(results.map((result) => result.idempotentReplay).sort()).toEqual([false, true]);
+  expect(results[0].registeredAt).toBe(results[1].registeredAt);
+  expect(await repository.loadUnverified(f.result.decisionId, reader)).toEqual({
+    decision: f.result,
+    registeredAt: results[0].registeredAt,
+    status: 'retained_unverified',
+    calculationEligible: false,
+    publicationEligible: false,
+  });
+  expect(await repository.loadUnverified('absent', reader)).toBeNull();
+});
+
+it('checks evidence again on replay/read and rejects modified decisions before insertion', async () => {
+  await repository.retainUnverified(f.result, reader);
+  const alteredReader = { read: async () => new Uint8Array([1]) };
+  await expect(repository.retainUnverified(f.result, alteredReader)).rejects.toThrow('altered');
+  await expect(repository.loadUnverified(f.result.decisionId, alteredReader)).rejects.toThrow(
+    'altered'
+  );
+  await expect(
+    repository.retainUnverified({ ...f.result, selectedValue: 99 }, reader)
+  ).rejects.toThrow();
+});
+
+it('retains competing submissions without selecting or superseding a current decision', async () => {
+  await repository.retainUnverified(f.result, reader);
+  const alternative = createAflTradeHpnStatisticalDecision(
+    {
+      ...f.input,
+      rationale: 'A separate unverified submission.',
+      supersedesDecisionId: f.result.decisionId,
+    },
+    f.evidenceBytes
+  );
+  expect(await repository.retainUnverified(alternative, reader)).toMatchObject({
+    status: 'retained_unverified',
+    calculationEligible: false,
+  });
+  expect((await repository.loadUnverified(f.result.decisionId, reader))?.decision).toEqual(
+    f.result
+  );
+  expect(
+    (
+      await pool.query(
+        'SELECT count(*)::int AS count FROM outcome_hpn_statistical_decision_custody'
+      )
+    ).rows[0].count
+  ).toBe(2);
+});
+
+it.each([
+  'UPDATE outcome_hpn_statistical_decision_custody SET registered_at=registered_at',
+  'DELETE FROM outcome_hpn_statistical_decision_custody',
+  'TRUNCATE outcome_hpn_statistical_decision_custody',
+])('rejects mutation: %s', async (sql) => {
+  await repository.retainUnverified(f.result, reader);
+  await expect(pool.query(sql)).rejects.toThrow('immutable');
+});
+
+it('rejects direct SQL content/address drift and attempted authority escalation', async () => {
+  for (const overrides of [
+    { authority: 'approved' },
+    { authority: null },
+    { publicationEligible: true },
+    { selectedValue: 99 },
+  ]) {
+    const { decisionId: _id, ...body } = { ...f.result, ...overrides };
+    const decision = {
+      ...body,
+      decisionId: createAflTradeContentAddress('hpn-statistical-decision', body),
+    };
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_hpn_statistical_decision_custody
+       (decision_id,scope_key,decision_canonical_json,decision_json) VALUES ($1,$2,$3::text,($3::text)::jsonb)`,
+        [
+          decision.decisionId,
+          createAflTradeContentAddress('hpn-statistical-scope', f.candidate.scope),
+          canonicalizeAflTradeJson(decision),
+        ]
+      )
+    ).rejects.toThrow('outcome_hpn_statistical_custody_integrity');
+  }
+  await expect(
+    pool.query(
+      `INSERT INTO outcome_hpn_statistical_decision_custody
+     (decision_id,scope_key,decision_canonical_json,decision_json) VALUES ($1,$2,$3::text,($3::text)::jsonb)`,
+      ['wrong-id', 'wrong-scope', canonicalizeAflTradeJson(f.result)]
+    )
+  ).rejects.toThrow('outcome_hpn_statistical_custody_integrity');
+});
+
+it('round-trips an independent migrated schema with the original registration timestamps', async () => {
+  await repository.retainUnverified(f.result, reader);
+  const restoreSchema = `${schema}_restore`;
+  const restored = new Pool({ connectionString: url, options: `-c search_path=${restoreSchema}` });
+  try {
+    await admin.query(`CREATE SCHEMA "${restoreSchema}"`);
+    const scoped = new URL(url!);
+    scoped.searchParams.set('schema', restoreSchema);
+    runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
+    const rows = (
+      await pool.query(
+        'SELECT * FROM outcome_hpn_statistical_decision_custody ORDER BY decision_id'
+      )
+    ).rows;
+    for (const row of rows) {
+      await restored.query(
+        `INSERT INTO outcome_hpn_statistical_decision_custody
+        (decision_id,scope_key,decision_canonical_json,decision_json,registered_at)
+        VALUES ($1,$2,$3,$4,$5)`,
+        [
+          row.decision_id,
+          row.scope_key,
+          row.decision_canonical_json,
+          row.decision_json,
+          row.registered_at,
+        ]
+      );
+    }
+    expect(
+      (
+        await restored.query(
+          'SELECT * FROM outcome_hpn_statistical_decision_custody ORDER BY decision_id'
+        )
+      ).rows
+    ).toEqual(rows);
+    const restoredRepository = new PostgresAflTradeHpnStatisticalAdjudicationRepository(
+      createPgAflOutcomeSqlClient(restored)
+    );
+    expect(await restoredRepository.loadUnverified(f.result.decisionId, reader)).toEqual(
+      await repository.loadUnverified(f.result.decisionId, reader)
+    );
+  } finally {
+    await restored.end();
+    await admin.query(`DROP SCHEMA IF EXISTS "${restoreSchema}" CASCADE`);
+  }
+}, 120000);

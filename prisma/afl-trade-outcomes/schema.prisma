@@ -6304,6 +6304,18 @@ model OutcomeReviewedPickLineageRegistration {
   @@map("outcome_reviewed_pick_lineage_registration")
 }
 
+// Unverified immutable submissions only; there is no current-head or calculation relation.
+model OutcomeHpnStatisticalDecisionCustody {
+  decisionId String @id @map("decision_id")
+  scopeKey String @map("scope_key")
+  decisionCanonicalJson String @map("decision_canonical_json")
+  decisionJson Json @map("decision_json")
+  registeredAt DateTime @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+
+  @@index([scopeKey, decisionId], map: "outcome_hpn_statistical_custody_scope_idx")
+  @@map("outcome_hpn_statistical_decision_custody")
+}
+
 model OutcomeCanonicalPlayerDeparture {
   acquisitionAssetVersionId String @unique(map: "outcome_departure_acquisition_asset_key") @map("acquisition_asset_version_id")
   acquisitionAsset OutcomeEventAsset @relation(fields: [acquisitionAssetVersionId], references: [assetVersionId], onDelete: Restrict, onUpdate: NoAction, map: "outcome_departure_acquisition_asset_fk")
