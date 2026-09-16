@@ -6,7 +6,10 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { PostgresAflTradeHpnStatisticalAdjudicationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnStatisticalAdjudicationRepository';
-import { createAflTradeHpnStatisticalDecision } from '@/server/aflTradeIntelligence/modeling/hpnStatisticalAdjudication';
+import {
+  createAflTradeHpnStatisticalCell,
+  createAflTradeHpnStatisticalDecision,
+} from '@/server/aflTradeIntelligence/modeling/hpnStatisticalAdjudication';
 import { fixture } from '../testUtils/hpnStatisticalAdjudicationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
@@ -100,6 +103,23 @@ it.each([
 ])('rejects mutation: %s', async (sql) => {
   await repository.retainUnverified(f.result, reader);
   await expect(pool.query(sql)).rejects.toThrow('immutable');
+});
+
+it('does not authenticate retained decisions whose source runs are absent', async () => {
+  const { candidateId: _id, ...body } = f.candidate;
+  const candidate = createAflTradeHpnStatisticalCell({
+    ...body,
+    scope: { ...body.scope, competitionId: 'AFLM' },
+  });
+  const decision = createAflTradeHpnStatisticalDecision({ ...f.input, candidate }, f.evidenceBytes);
+  await repository.retainUnverified(decision, reader);
+  await expect(repository.inspectRetainedSources(decision.decisionId, reader)).rejects.toThrow(
+    'One or more reviewed source runs'
+  );
+  expect(await repository.loadUnverified(decision.decisionId, reader)).toMatchObject({
+    status: 'retained_unverified',
+    calculationEligible: false,
+  });
 });
 
 it('rejects direct SQL content/address drift and attempted authority escalation', async () => {

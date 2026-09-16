@@ -11,6 +11,7 @@ import {
   aflTradeHpnStatisticalDecisionSchema,
   type AflTradeHpnStatisticalDecision,
 } from './hpnStatisticalAdjudication';
+import { authenticateAflTradeHpnStatisticalSources } from './postgresHpnStatisticalSourceAuthentication';
 
 export interface AflTradeHpnAdjudicationEvidenceReader {
   read(reference: AflTradeArtifactRef): Promise<Uint8Array>;
@@ -108,5 +109,17 @@ export class PostgresAflTradeHpnStatisticalAdjudicationRepository {
     const result = authenticateStored(stored.rows[0], decisionId);
     await verifyEvidence(result.decision, evidenceReader);
     return result;
+  }
+
+  async inspectRetainedSources(
+    decisionId: string,
+    evidenceReader: AflTradeHpnAdjudicationEvidenceReader
+  ) {
+    const retained = await this.loadUnverified(decisionId, evidenceReader);
+    if (!retained) throw new Error('Statistical decision has not been retained.');
+    const sources = await this.client.transaction((transaction) =>
+      authenticateAflTradeHpnStatisticalSources(transaction, retained.decision.candidate)
+    );
+    return { ...sources, decisionId, decisionStatus: 'retained_unverified' as const };
   }
 }

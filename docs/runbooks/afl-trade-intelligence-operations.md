@@ -2197,6 +2197,13 @@ the complete contract and evidence bytes supplied by the retained artifact reade
 in the artifact store: the table retains decision JSON and references, not a second copy of artifacts.
 Exact concurrent replay preserves the first registration timestamp. Competing submissions may share
 a cell; neither retention nor a supplied supersession ID establishes a current decision.
+`inspectRetainedSources` compares both observations with their retained run/capture/snapshot/artifact,
+row hashes, reviewed statistic projection, season and candidate-time availability. It reuses current
+map/source authority checks in a transaction and reads only the two requested decoded rows. The
+result still leaves the decision unverified: canonical identities, reviewer authority, governed
+supporting evidence and current heads are not established. Typed zeros (including zero components
+of a derived statistic) require separate representation evidence; relabelling a normalized blank
+as measured cannot bypass that condition. Existing legacy input/calculation behavior is unchanged.
 SQL enforces canonical content addresses, selection consistency, chronology, unverified authority and
 immutability. It does not duplicate every nested contract check; repository reads reject malformed
 direct-SQL submissions. No source rights, identities, reviewer authority, current head, calculation
