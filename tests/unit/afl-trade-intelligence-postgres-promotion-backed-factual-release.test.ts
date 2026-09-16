@@ -147,7 +147,8 @@ class ReleaseSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
     if (sql.includes('FROM outcome_promotion_backed_corpus corpus')) {
       return result([{ status: 'finalized', corpus_json: corpus }] as T[]);
     }
-    if (sql.includes('FROM outcome_promotion_backed_corpus_promotion corpus_promotion')) {
+    if (sql.includes('FROM outcome_promotion_factual_required_sources(')) {
+      expect(params).toEqual([corpus.corpusId, corpus.content.knowledgeCutoffAt]);
       return result(this.captures as T[]);
     }
     if (sql.includes('WITH requested_member')) return result(this.canonical as T[]);
