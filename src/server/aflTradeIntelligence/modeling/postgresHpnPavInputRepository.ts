@@ -1070,6 +1070,77 @@ async function loadFinalizedInputSetInTransaction(
   return inputSet;
 }
 
+function persistedSourceKeys(existing: AflTradeHpnPavSeasonInputSet) {
+  const persistedMaps = new Map(
+    existing.content.fieldMaps.map((fieldMap) => [fieldMap.fieldMapId, fieldMap])
+  );
+  return existing.content.sourceRuns
+    .map((run) => {
+      const fieldMap = persistedMaps.get(run.fieldMapId);
+      if (fieldMap?.content.inputKind === 'completed_match_result') {
+        return `${run.normalizationRunId}|${run.fieldMapId}|completed_match_result|`;
+      }
+      const roles = [
+        ...new Set(
+          existing.content.rows.flatMap((row) =>
+            row.kind === 'player_match_stats' &&
+            row.source.normalizationRunId === run.normalizationRunId
+              ? [row.role]
+              : []
+          )
+        ),
+      ];
+      return `${run.normalizationRunId}|${run.fieldMapId}|${fieldMap?.content.inputKind ?? ''}|${roles.length === 1 ? (roles[0] ?? '') : 'mixed'}`;
+    })
+    .sort();
+}
+
+function requireExactScopeReplay(
+  request: AflTradeHpnPavSeasonInputRequest,
+  record: { input_set_json: unknown; finalized_at: Date | string | null }
+): AflTradeHpnPavSeasonInputSet {
+  let existing: AflTradeHpnPavSeasonInputSet;
+  try {
+    existing = aflTradeHpnPavSeasonInputSetSchema.parse(record.input_set_json);
+  } catch {
+    throw new AflTradeHpnPavInputError(
+      'REPLAY_CONFLICT',
+      'The logical PAV input scope contains an unauthenticated immutable record.'
+    );
+  }
+  const requestedSources = request.sources
+    .map(
+      ({ normalizationRunId, fieldMapId, inputKind, role }) =>
+        `${normalizationRunId}|${fieldMapId}|${inputKind}|${role ?? ''}`
+    )
+    .sort();
+  const persistedSources = persistedSourceKeys(existing);
+
+  if (
+    record.finalized_at === null ||
+    ('knowledgePolicy' in existing.content ? existing.content.knowledgePolicy : undefined) !==
+      request.knowledgePolicy ||
+    ('knowledgeCutoffAt' in existing.content ? existing.content.knowledgeCutoffAt : undefined) !==
+      request.knowledgeCutoffAt ||
+    existing.content.factualUniverse.factualRunId !== request.factualRunId ||
+    canonicalizeAflTradeJson(
+      ('excludedSourceRows' in existing.content
+        ? existing.content.excludedSourceRows.map((row) => row.review.decision.id)
+        : []
+      ).sort()
+    ) !== canonicalizeAflTradeJson([...(request.reviewedNonparticipantDecisions ?? [])].sort()) ||
+    requestedSources.length !== persistedSources.length ||
+    requestedSources.some((source, index) => source !== persistedSources[index])
+  ) {
+    throw new AflTradeHpnPavInputError(
+      'REPLAY_CONFLICT',
+      'The logical PAV input scope already has different or unfinished immutable content.'
+    );
+  }
+
+  return existing;
+}
+
 export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInputRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
@@ -1190,69 +1261,7 @@ export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInpu
           ]
         );
         if (scopeReplay.rows[0]) {
-          let existing: AflTradeHpnPavSeasonInputSet;
-          try {
-            existing = aflTradeHpnPavSeasonInputSetSchema.parse(scopeReplay.rows[0].input_set_json);
-          } catch {
-            throw new AflTradeHpnPavInputError(
-              'REPLAY_CONFLICT',
-              'The logical PAV input scope contains an unauthenticated immutable record.'
-            );
-          }
-          const requestedSources = request.sources
-            .map(
-              ({ normalizationRunId, fieldMapId, inputKind, role }) =>
-                `${normalizationRunId}|${fieldMapId}|${inputKind}|${role ?? ''}`
-            )
-            .sort();
-          const persistedMaps = new Map(
-            existing.content.fieldMaps.map((fieldMap) => [fieldMap.fieldMapId, fieldMap])
-          );
-          const persistedSources = existing.content.sourceRuns
-            .map((run) => {
-              const fieldMap = persistedMaps.get(run.fieldMapId);
-              if (fieldMap?.content.inputKind === 'completed_match_result') {
-                return `${run.normalizationRunId}|${run.fieldMapId}|completed_match_result|`;
-              }
-              const roles = [
-                ...new Set(
-                  existing.content.rows.flatMap((row) =>
-                    row.kind === 'player_match_stats' &&
-                    row.source.normalizationRunId === run.normalizationRunId
-                      ? [row.role]
-                      : []
-                  )
-                ),
-              ];
-              return `${run.normalizationRunId}|${run.fieldMapId}|${fieldMap?.content.inputKind ?? ''}|${roles.length === 1 ? (roles[0] ?? '') : 'mixed'}`;
-            })
-            .sort();
-          if (
-            scopeReplay.rows[0].finalized_at === null ||
-            ('knowledgePolicy' in existing.content
-              ? existing.content.knowledgePolicy
-              : undefined) !== request.knowledgePolicy ||
-            ('knowledgeCutoffAt' in existing.content
-              ? existing.content.knowledgeCutoffAt
-              : undefined) !== request.knowledgeCutoffAt ||
-            existing.content.factualUniverse.factualRunId !== request.factualRunId ||
-            canonicalizeAflTradeJson(
-              ('excludedSourceRows' in existing.content
-                ? existing.content.excludedSourceRows.map((row) => row.review.decision.id)
-                : []
-              ).sort()
-            ) !==
-              canonicalizeAflTradeJson(
-                [...(request.reviewedNonparticipantDecisions ?? [])].sort()
-              ) ||
-            requestedSources.length !== persistedSources.length ||
-            requestedSources.some((source, index) => source !== persistedSources[index])
-          ) {
-            throw new AflTradeHpnPavInputError(
-              'REPLAY_CONFLICT',
-              'The logical PAV input scope already has different or unfinished immutable content.'
-            );
-          }
+          const existing = requireExactScopeReplay(request, scopeReplay.rows[0]);
           const current = await loadFinalizedInputSetInTransaction(
             transaction,
             {

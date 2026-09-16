@@ -2,7 +2,10 @@ import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifa
 import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleaseRepository';
 import { decodedScalar } from './hpnDecodedScalar';
 import type { AflTradeHpnPavInputFieldMap } from './hpnPavInputContracts';
-import { aflTradeHpnStatisticalCellSchema } from './hpnStatisticalAdjudication';
+import {
+  aflTradeHpnStatisticalCellSchema,
+  type AflTradeHpnStatisticalCell,
+} from './hpnStatisticalAdjudication';
 import { inspectAflTradeHpnStatisticalIdentity } from './postgresHpnStatisticalIdentityInspection';
 import {
   loadAflTradeHpnSourceRuns,
@@ -66,6 +69,50 @@ function retainedValue(
   if (!Number.isSafeInteger(value))
     throw new Error('Projected statistic exceeds safe integer precision.');
   return value;
+}
+
+type SourceContext =
+  Awaited<ReturnType<typeof loadAflTradeHpnSourceRuns>> extends Map<string, infer Context>
+    ? Context
+    : never;
+function requireExactObservationCustody(
+  cell: AflTradeHpnStatisticalCell,
+  observation: AflTradeHpnStatisticalCell['primary'],
+  context: SourceContext,
+  row: RetainedRow | undefined
+): asserts row is RetainedRow {
+  const expected = {
+    normalizationRunId: context.row.normalization_run_id,
+    stagingSha256: context.row.staging_sha256,
+    provider: context.row.capture_provider,
+    capabilityId: context.row.capture_capability_id,
+    captureId: context.row.capture_id,
+    sourceSnapshotId: context.row.source_snapshot_id,
+    sourceArtifactId: context.row.source_artifact_id,
+    sourceRowSha256: row?.source_row_sha256,
+    typedPayloadSha256: row && sha256AflTradeCanonicalJson(row.typed_payload),
+    fieldMapId: context.map.fieldMapId,
+    fieldMapSha256: sha256AflTradeCanonicalJson(context.map.content),
+  };
+  if (
+    !row ||
+    Object.entries(expected).some(
+      ([key, value]) => observation[key as keyof typeof observation] !== value
+    ) ||
+    row.normalization_run_id !== observation.normalizationRunId ||
+    row.capture_id !== observation.captureId ||
+    row.competition !== cell.scope.competitionId ||
+    row.season_year !== cell.scope.season ||
+    row.row_status !== 'staged' ||
+    !(Date.parse(new Date(row.recorded_at).toISOString()) <= Date.parse(cell.createdAt)) ||
+    !(
+      Date.parse(new Date(context.row.finalized_at!).toISOString()) <= Date.parse(cell.createdAt)
+    ) ||
+    (context.map.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1' &&
+      Date.parse(context.map.content.createdAt) > Date.parse(cell.createdAt))
+  ) {
+    throw new Error('Statistical observation does not match exact retained source custody.');
+  }
 }
 
 /**
@@ -140,38 +187,7 @@ export async function authenticateAflTradeHpnStatisticalSources(
     const row = rows.rows.find(
       (item) => item.provider_decoded_row_id === observation.providerDecodedRowId
     )!;
-    const expected = {
-      normalizationRunId: context.row.normalization_run_id,
-      stagingSha256: context.row.staging_sha256,
-      provider: context.row.capture_provider,
-      capabilityId: context.row.capture_capability_id,
-      captureId: context.row.capture_id,
-      sourceSnapshotId: context.row.source_snapshot_id,
-      sourceArtifactId: context.row.source_artifact_id,
-      sourceRowSha256: row?.source_row_sha256,
-      typedPayloadSha256: row && sha256AflTradeCanonicalJson(row.typed_payload),
-      fieldMapId: context.map.fieldMapId,
-      fieldMapSha256: sha256AflTradeCanonicalJson(context.map.content),
-    };
-    if (
-      !row ||
-      Object.entries(expected).some(
-        ([key, value]) => observation[key as keyof typeof observation] !== value
-      ) ||
-      row.normalization_run_id !== observation.normalizationRunId ||
-      row.capture_id !== observation.captureId ||
-      row.competition !== cell.scope.competitionId ||
-      row.season_year !== cell.scope.season ||
-      row.row_status !== 'staged' ||
-      !(Date.parse(new Date(row.recorded_at).toISOString()) <= Date.parse(cell.createdAt)) ||
-      !(
-        Date.parse(new Date(context.row.finalized_at!).toISOString()) <= Date.parse(cell.createdAt)
-      ) ||
-      (context.map.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1' &&
-        Date.parse(context.map.content.createdAt) > Date.parse(cell.createdAt))
-    ) {
-      throw new Error('Statistical observation does not match exact retained source custody.');
-    }
+    requireExactObservationCustody(cell, observation, context, row);
     if (observation.representation !== 'measured' && !reviewedZero) {
       throw new Error('Blank-normalized zero requires separate governed representation evidence.');
     }
