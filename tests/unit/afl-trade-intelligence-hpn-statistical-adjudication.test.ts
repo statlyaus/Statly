@@ -1,9 +1,11 @@
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   createAflTradeHpnStatisticalCell as cell,
   createAflTradeHpnStatisticalDecision as decision,
   assessAflTradeHpnStatisticalCoverage as coverage,
   aflTradeHpnStatisticalDecisionSchema,
+  aflTradeHpnStatisticalCellSchema,
 } from '@/server/aflTradeIntelligence/modeling/hpnStatisticalAdjudication';
 
 // Observed sample values; all identities and evidence bytes below are synthetic test fixtures.
@@ -25,11 +27,17 @@ const digest = 'a'.repeat(64);
 function fixture(index = 0) {
   const [playerId, primary, corroborating] = samples[index];
   const observation = {
-    normalizationRunId: 'primary-run',
-    normalizationRunSha256: digest,
-    decodedRowId: `row-${playerId}`,
-    decodedRowSha256: digest,
-    fieldMapId: 'map-v1',
+    normalizationRunId: `provider-normalization-run:${digest}`,
+    stagingSha256: digest,
+    provider: 'afl-tables',
+    capabilityId: 'afl-tables-player-stats',
+    captureId: 'primary-capture',
+    sourceSnapshotId: `source-snapshot:${digest}`,
+    sourceArtifactId: `artifact:${digest}`,
+    providerDecodedRowId: `row-${playerId}`,
+    sourceRowSha256: digest,
+    typedPayloadSha256: digest,
+    fieldMapId: `hpn-pav-field-map:${digest}`,
     fieldMapSha256: digest,
     sourceFields: ['Clearances'],
     value: primary,
@@ -49,7 +57,18 @@ function fixture(index = 0) {
     primary: observation,
     corroborating: {
       ...observation,
-      normalizationRunId: 'secondary-run',
+      normalizationRunId: `provider-normalization-run:${'b'.repeat(64)}`,
+      stagingSha256: 'b'.repeat(64),
+      provider: 'footywire',
+      capabilityId: 'footywire-player-stats',
+      captureId: 'secondary-capture',
+      sourceSnapshotId: `source-snapshot:${'b'.repeat(64)}`,
+      sourceArtifactId: `artifact:${'b'.repeat(64)}`,
+      providerDecodedRowId: `secondary-row-${playerId}`,
+      sourceRowSha256: 'b'.repeat(64),
+      typedPayloadSha256: 'b'.repeat(64),
+      fieldMapId: `hpn-pav-field-map:${'b'.repeat(64)}`,
+      fieldMapSha256: 'b'.repeat(64),
       value: corroborating,
       representation: 'measured',
     },
@@ -112,7 +131,7 @@ describe('HPN statistical adjudication contracts', () => {
     const { candidateId: _id, ...body } = a.candidate;
     const changed = cell({
       ...body,
-      primary: { ...body.primary, decodedRowSha256: 'b'.repeat(64) },
+      primary: { ...body.primary, sourceRowSha256: 'b'.repeat(64) },
     });
     expect(() => coverage([a.candidate, changed], [])).toThrow('Duplicate');
   });
@@ -129,7 +148,12 @@ describe('HPN statistical adjudication contracts', () => {
   });
   it('detects modified source hashes, identities and values on replay', () => {
     const f = fixture();
-    for (const field of ['decodedRowSha256', 'normalizationRunSha256', 'fieldMapSha256'] as const) {
+    for (const field of [
+      'sourceRowSha256',
+      'typedPayloadSha256',
+      'stagingSha256',
+      'fieldMapSha256',
+    ] as const) {
       const altered = structuredClone(f.result);
       altered.candidate.primary[field] = 'b'.repeat(64);
       expect(aflTradeHpnStatisticalDecisionSchema.safeParse(altered).success).toBe(false);
@@ -190,4 +214,82 @@ describe('HPN statistical adjudication contracts', () => {
       'requires_repository_verification'
     );
   });
+});
+
+describe('review regressions for imported statistical decisions', () => {
+  it.each([
+    'provider',
+    'normalizationRunId',
+    'captureId',
+    'sourceSnapshotId',
+    'sourceArtifactId',
+    'providerDecodedRowId',
+  ] as const)('rejects shared %s despite other distinct lineage labels', (field) => {
+    const { candidateId: _id, ...body } = fixture().candidate;
+    body.corroborating[field] = body.primary[field];
+    expect(() => cell(body)).toThrow('distinct');
+    const imported = {
+      ...body,
+      candidateId: createAflTradeContentAddress('hpn-statistical-cell', body),
+    };
+    expect(aflTradeHpnStatisticalCellSchema.safeParse(imported).success).toBe(false);
+  });
+  it('rejects renamed copies of the same retained row and map bytes', () => {
+    const { candidateId: _id, ...body } = fixture().candidate;
+    body.corroborating.sourceRowSha256 = body.primary.sourceRowSha256;
+    body.corroborating.fieldMapSha256 = body.primary.fieldMapSha256;
+    body.corroborating.fieldMapId = body.primary.fieldMapId;
+    expect(() => cell(body)).toThrow('distinct');
+  });
+  it('requires established content-addressed run, snapshot, artifact and map identifiers', () => {
+    for (const field of [
+      'normalizationRunId',
+      'sourceSnapshotId',
+      'sourceArtifactId',
+      'fieldMapId',
+    ] as const) {
+      const { candidateId: _id, ...body } = fixture().candidate;
+      body.primary[field] = 'free-form-replacement';
+      expect(() => cell(body)).toThrow();
+    }
+  });
+  it('canonicalizes factory input but rejects recomputed unordered imports and coverage', () => {
+    const f = fixture();
+    const evidence = [
+      { ...f.input.evidence[0], locator: 'z.CLR' },
+      { ...f.input.evidence[0], locator: 'a.CLR' },
+    ];
+    const forward = decision({ ...f.input, evidence }, f.evidenceBytes);
+    const reverse = decision({ ...f.input, evidence: [...evidence].reverse() }, f.evidenceBytes);
+    expect(forward).toEqual(reverse);
+    expect(evidence.map((item) => item.locator)).toEqual(['z.CLR', 'a.CLR']);
+    expect(aflTradeHpnStatisticalDecisionSchema.parse(forward)).toEqual(forward);
+    const { decisionId: _id, ...body } = forward;
+    body.evidence.reverse();
+    const imported = {
+      ...body,
+      decisionId: createAflTradeContentAddress('hpn-statistical-decision', body),
+    };
+    expect(aflTradeHpnStatisticalDecisionSchema.safeParse(imported).success).toBe(false);
+    expect(() => coverage([f.candidate], [imported])).toThrow('uniquely ordered');
+  });
+});
+
+it('rejects mismatched field-map identifiers and digests even with a recomputed candidate ID', () => {
+  const { candidateId: _id, ...body } = fixture().candidate;
+  body.primary.fieldMapSha256 = 'c'.repeat(64);
+  expect(() => cell(body)).toThrow('Field-map identifier');
+  const imported = {
+    ...body,
+    candidateId: createAflTradeContentAddress('hpn-statistical-cell', body),
+  };
+  expect(aflTradeHpnStatisticalCellSchema.safeParse(imported).success).toBe(false);
+});
+
+it('rejects copied typed payloads under the same map despite different raw-row hashes', () => {
+  const { candidateId: _id, ...body } = fixture().candidate;
+  body.corroborating.typedPayloadSha256 = body.primary.typedPayloadSha256;
+  body.corroborating.fieldMapSha256 = body.primary.fieldMapSha256;
+  body.corroborating.fieldMapId = body.primary.fieldMapId;
+  expect(() => cell(body)).toThrow('distinct');
 });

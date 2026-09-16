@@ -43,11 +43,17 @@ const scopeSchema = z
   .strict();
 const observationSchema = z
   .object({
-    normalizationRunId: id,
-    normalizationRunSha256: aflTradeSha256Schema,
-    decodedRowId: id,
-    decodedRowSha256: aflTradeSha256Schema,
-    fieldMapId: id,
+    normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
+    stagingSha256: aflTradeSha256Schema,
+    provider: id,
+    capabilityId: id,
+    captureId: id,
+    sourceSnapshotId: aflTradeContentAddressedIdSchema('source-snapshot'),
+    sourceArtifactId: aflTradeContentAddressedIdSchema('artifact'),
+    providerDecodedRowId: id,
+    sourceRowSha256: aflTradeSha256Schema,
+    typedPayloadSha256: aflTradeSha256Schema,
+    fieldMapId: aflTradeContentAddressedIdSchema('hpn-pav-field-map'),
     fieldMapSha256: aflTradeSha256Schema,
     sourceFields: z.array(z.string().min(1).max(200)).min(1).max(10),
     value: count,
@@ -55,6 +61,12 @@ const observationSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.fieldMapId !== `hpn-pav-field-map:${value.fieldMapSha256}`) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Field-map identifier must match its content digest.',
+      });
+    }
     if (new Set(value.sourceFields).size !== value.sourceFields.length) {
       ctx.addIssue({ code: 'custom', message: 'Source fields must be unique.' });
     }
@@ -78,10 +90,23 @@ const candidateBody = z
         message: 'A discrepancy requires different retained values.',
       });
     }
-    if (value.primary.normalizationRunId === value.corroborating.normalizationRunId) {
+    const { primary, corroborating } = value;
+    // Distinct labels alone cannot prove independence; retained lineage must be checked again by the repository.
+    if (
+      primary.normalizationRunId === corroborating.normalizationRunId ||
+      primary.provider === corroborating.provider ||
+      primary.captureId === corroborating.captureId ||
+      primary.sourceSnapshotId === corroborating.sourceSnapshotId ||
+      primary.sourceArtifactId === corroborating.sourceArtifactId ||
+      primary.providerDecodedRowId === corroborating.providerDecodedRowId ||
+      ((primary.sourceRowSha256 === corroborating.sourceRowSha256 ||
+        primary.typedPayloadSha256 === corroborating.typedPayloadSha256) &&
+        primary.fieldMapSha256 === corroborating.fieldMapSha256)
+    ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Observations must bind distinct normalization runs.',
+        message:
+          'Observations must bind distinct providers and retained run/capture/row provenance.',
       });
     }
   });
@@ -102,7 +127,7 @@ export function createAflTradeHpnStatisticalCell(input: z.input<typeof candidate
   });
 }
 
-const decisionBody = z
+const decisionFields = z
   .object({
     schemaVersion: z.literal('afl-trade-hpn-statistical-decision/v1'),
     candidate: aflTradeHpnStatisticalCellSchema,
@@ -128,33 +153,33 @@ const decisionBody = z
     authority: z.literal('requires_repository_verification'),
     publicationEligible: z.literal(false),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (value.selectedValue !== value.candidate[value.selectedSource].value) {
+  .strict();
+const decisionBody = decisionFields.superRefine((value, ctx) => {
+  if (value.selectedValue !== value.candidate[value.selectedSource].value) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Decision must select the unchanged retained source value.',
+    });
+  }
+  if (Date.parse(value.decidedAt) < Date.parse(value.candidate.createdAt)) {
+    ctx.addIssue({ code: 'custom', message: 'Decision predates its candidate.' });
+  }
+  let previousKey: string | null = null;
+  for (const evidence of value.evidence) {
+    const key = JSON.stringify([evidence.artifact.artifactId, evidence.locator]);
+    if (
+      (previousKey !== null && key <= previousKey) ||
+      evidence.observedValue !== value.selectedValue ||
+      Date.parse(evidence.artifact.createdAt) > Date.parse(value.decidedAt)
+    ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Decision must select the unchanged retained source value.',
+        message: 'Evidence must be uniquely ordered, timely and support the selected value.',
       });
     }
-    if (Date.parse(value.decidedAt) < Date.parse(value.candidate.createdAt)) {
-      ctx.addIssue({ code: 'custom', message: 'Decision predates its candidate.' });
-    }
-    const keys = new Set<string>();
-    for (const evidence of value.evidence) {
-      const key = JSON.stringify([evidence.artifact.artifactId, evidence.locator]);
-      if (
-        keys.has(key) ||
-        evidence.observedValue !== value.selectedValue ||
-        Date.parse(evidence.artifact.createdAt) > Date.parse(value.decidedAt)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'Evidence must be unique, timely and support the selected value.',
-        });
-      }
-      keys.add(key);
-    }
-  });
+    previousKey = key;
+  }
+});
 export const aflTradeHpnStatisticalDecisionSchema = decisionBody
   .safeExtend({
     decisionId: aflTradeContentAddressedIdSchema(decisionPrefix),
@@ -169,7 +194,7 @@ export function createAflTradeHpnStatisticalDecision(
   input: z.input<typeof decisionBody>,
   evidenceBytes: ReadonlyMap<string, Uint8Array>
 ) {
-  const body = decisionBody.parse(input);
+  const body = decisionFields.parse(input);
   for (const { artifact } of body.evidence) {
     const bytes = evidenceBytes.get(artifact.artifactId);
     if (!bytes || !doesAflTradeArtifactRefMatchBytes(artifact, bytes)) {
