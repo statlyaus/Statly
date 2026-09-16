@@ -12,6 +12,15 @@ import {
   type AflTradeHpnStatisticalDecision,
 } from './hpnStatisticalAdjudication';
 import { authenticateAflTradeHpnStatisticalSources } from './postgresHpnStatisticalSourceAuthentication';
+import { z } from 'zod';
+
+const reviewerExecutionSchema = z
+  .object({
+    environment: z.literal('non_production'),
+    principalRef: z.string().min(1).max(240),
+    authorityEvidenceId: z.string().regex(/^reviewer-authority-evidence:[a-f0-9]{64}$/),
+  })
+  .strict();
 
 export interface AflTradeHpnAdjudicationEvidenceReader {
   read(reference: AflTradeArtifactRef): Promise<Uint8Array>;
@@ -121,5 +130,31 @@ export class PostgresAflTradeHpnStatisticalAdjudicationRepository {
       authenticateAflTradeHpnStatisticalSources(transaction, retained.decision.candidate)
     );
     return { ...sources, decisionId, decisionStatus: 'retained_unverified' as const };
+  }
+
+  /** Execution principal must come from the authenticated operator boundary, not decision JSON. */
+  async inspectReviewerAuthority(
+    decisionId: string,
+    execution: z.input<typeof reviewerExecutionSchema>,
+    evidenceReader: AflTradeHpnAdjudicationEvidenceReader
+  ) {
+    const context = reviewerExecutionSchema.parse(execution);
+    const retained = await this.loadUnverified(decisionId, evidenceReader);
+    if (!retained) throw new Error('Statistical decision has not been retained.');
+    const result = await this.client.query<{ current: boolean }>(
+      `SELECT outcome_hpn_statistical_reviewer_is_current($1,$2,$3) AS current`,
+      [decisionId, context.authorityEvidenceId, context.principalRef]
+    );
+    if (result.rows.length !== 1 || result.rows[0].current !== true) {
+      throw new Error('Statistical reviewer lacks current exact governed authority.');
+    }
+    return {
+      decisionId,
+      authorityEvidenceId: context.authorityEvidenceId,
+      status: 'reviewer_authority_matches' as const,
+      decisionStatus: 'retained_unverified' as const,
+      calculationEligible: false as const,
+      publicationEligible: false as const,
+    };
   }
 }

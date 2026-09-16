@@ -2204,10 +2204,18 @@ result also inspects both rows' current canonical player/match/club resolutions 
 HPN input predicates, including candidate-only player scope, assignment continuity and review
 supersession. The represented club must match exactly one source match side and that canonical
 side's club; canonical competition/season must agree. Returned resolution revisions are read-only
-snapshots requiring locked rechecks before promotion or consumption. Reviewer authority, governed
-supporting evidence and current heads remain unestablished. Typed zeros (including zero components
+snapshots requiring locked rechecks before promotion or consumption. Governed supporting evidence
+and current heads remain unestablished. Typed zeros (including zero components
 of a derived statistic) require separate representation evidence; relabelling a normalized blank
 as measured cannot bypass that condition. Existing legacy input/calculation behavior is unchanged.
+`inspectReviewerAuthority` separately checks the authenticated operator against a governed
+`afl_trade_hpn_statistical_reviewer` registration. Migration0220 restricts that role to one AFLM
+season, scope `hpn-statistics:AFLM:<season>`, provider `statly_modeling` and capability
+`adjudicate_hpn_statistics`. Identity-reviewer grants do not qualify. Authority evidence must carry
+exact `validFrom`/`validThrough` timestamps, exist and be custody-verified before the decision, and
+remain current and unexpired. Registration still requires the isolated non-production governance
+writer; the migration registers no principals. Passing this read-only check does not approve the
+statistical decision, its supporting evidence, or any calculation. Recheck at the eventual write boundary.
 SQL enforces canonical content addresses, selection consistency, chronology, unverified authority and
 immutability. It does not duplicate every nested contract check; repository reads reject malformed
 direct-SQL submissions. No source rights, identities, reviewer authority, current head, calculation
