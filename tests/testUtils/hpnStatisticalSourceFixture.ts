@@ -174,7 +174,15 @@ export function setup(
     home_club_id: cell.scope.clubId,
     away_club_id: 'opponent',
   }));
-  const state = { currentApproval: true, stagedAuthority: true, rows, runs, identities };
+  const state = {
+    currentApproval: true,
+    stagedAuthority: true,
+    statisticalSupport: true,
+    statisticalSource: true,
+    rows,
+    runs,
+    identities,
+  };
   const statements: string[] = [];
   const transaction: AflOutcomeSqlTransaction = {
     async query<Row>(sql: string, parameters?: readonly unknown[]) {
@@ -182,6 +190,9 @@ export function setup(
       let result: unknown[];
       if (sql.includes('AS checked_at'))
         result = [{ checked_at: new Date('2026-09-16T03:00:00Z') }];
+      else if (sql.includes('AS authorized')) result = [{ authorized: state.statisticalSource }];
+      else if (sql.includes('outcome_hpn_statistical_support_is_current'))
+        result = [{ current: state.statisticalSupport }];
       else if (sql.includes('FROM jsonb_to_recordset')) result = state.runs;
       else if (sql.includes('pg_advisory_xact_lock')) result = [];
       else if (sql.includes('SELECT legacy.map_json'))

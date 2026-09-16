@@ -147,3 +147,47 @@ describe('HPN retained source authentication', () => {
     );
   });
 });
+
+it('permits the isolated statistical scope only with current exact support and source authority', async () => {
+  const f = setup('clearances', true);
+  f.state.stagedAuthority = false;
+  await expect(authenticateAflTradeHpnStatisticalSources(f.transaction, f.cell)).rejects.toThrow(
+    'exact clean'
+  );
+  const support = { decisionId: 'decision', reviewId: 'review' };
+  await expect(
+    authenticateAflTradeHpnStatisticalSources(f.transaction, f.cell, support)
+  ).resolves.toBeDefined();
+  f.state.statisticalSource = false;
+  await expect(
+    authenticateAflTradeHpnStatisticalSources(f.transaction, f.cell, support)
+  ).rejects.toThrow('exact clean');
+  f.state.statisticalSource = true;
+  f.state.statisticalSupport = false;
+  await expect(
+    authenticateAflTradeHpnStatisticalSources(f.transaction, f.cell, support)
+  ).rejects.toThrow('Current exact statistical support');
+});
+it('retains unknown cache-zero provenance even when explicit supporting evidence permits selection', async () => {
+  const f = setup();
+  f.state.rows[0].typed_payload.values.Clearances.value = '0';
+  const { candidateId: _id, ...body } = f.cell;
+  const candidate = createAflTradeHpnStatisticalCell({
+    ...body,
+    primary: {
+      ...body.primary,
+      typedPayloadSha256: sha256AflTradeCanonicalJson(f.state.rows[0].typed_payload),
+      value: 0,
+      representation: 'retained_zero_origin_unknown',
+    },
+  });
+  await expect(authenticateAflTradeHpnStatisticalSources(f.transaction, candidate)).rejects.toThrow(
+    'governed representation'
+  );
+  await expect(
+    authenticateAflTradeHpnStatisticalSources(f.transaction, candidate, {
+      decisionId: 'decision',
+      reviewId: 'review',
+    })
+  ).resolves.toBeDefined();
+});

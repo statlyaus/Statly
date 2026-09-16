@@ -185,7 +185,8 @@ export async function requireAflTradeHpnSourceRunAuthority(
     row: AflTradeHpnSourceRunRow;
     map: AflTradeHpnPavInputFieldMap;
     selection: AflTradeHpnSourceSelection;
-  }
+  },
+  statisticalSupport?: { decisionId: string; reviewId: string; candidateId: string }
 ): Promise<void> {
   const { row, map, selection } = context;
   let captureAuthorized = row.capture_status === 'approved';
@@ -201,6 +202,28 @@ export async function requireAflTradeHpnSourceRunAuthority(
       [map.fieldMapId, row.capture_id, row.normalization_run_id, createdAt]
     );
     captureAuthorized = authority.rows[0]?.staged_source_authority === true;
+    if (!captureAuthorized && statisticalSupport) {
+      const statistical = await transaction.query<{ authorized: boolean }>(
+        `SELECT outcome_hpn_statistical_support_is_current($1) AND EXISTS (
+          SELECT 1 FROM outcome_hpn_statistical_support_review s
+          JOIN outcome_hpn_statistical_decision_custody d USING(decision_id)
+          WHERE s.review_id=$1 AND s.decision_id=$2
+            AND d.decision_json#>>'{candidate,candidateId}'=$3
+            AND EXISTS (SELECT 1 FROM jsonb_each(d.decision_json->'candidate') o
+              WHERE o.key IN ('primary','corroborating') AND o.value->>'fieldMapId'=$4
+                AND o.value->>'captureId'=$5 AND o.value->>'normalizationRunId'=$6)
+        ) AND outcome_hpn_statistical_source_map_is_exact($4,$5,$6) AS authorized`,
+        [
+          statisticalSupport.reviewId,
+          statisticalSupport.decisionId,
+          statisticalSupport.candidateId,
+          map.fieldMapId,
+          row.capture_id,
+          row.normalization_run_id,
+        ]
+      );
+      captureAuthorized = statistical.rows[0]?.authorized === true;
+    }
   }
   if (
     row.capture_environment !== request.environment ||

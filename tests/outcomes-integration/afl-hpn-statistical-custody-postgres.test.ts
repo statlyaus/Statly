@@ -41,7 +41,9 @@ async function prepareGovernanceRole(targetSchema: string) {
       CREATE ROLE afl_trade_nonproduction_governance_registry_writer NOLOGIN;
     END IF;
   END $$`);
-  await admin.query(`GRANT USAGE ON SCHEMA "${targetSchema}" TO afl_trade_nonproduction_governance_registry_writer`);
+  await admin.query(
+    `GRANT USAGE ON SCHEMA "${targetSchema}" TO afl_trade_nonproduction_governance_registry_writer`
+  );
   await admin.query(`GRANT SELECT ON "${targetSchema}".outcome_review_decision,
     "${targetSchema}".outcome_governed_evidence_reference TO afl_trade_nonproduction_governance_registry_writer`);
 }
@@ -116,7 +118,7 @@ it('retains competing submissions without selecting or superseding a current dec
 it.each([
   'UPDATE outcome_hpn_statistical_decision_custody SET registered_at=registered_at',
   'DELETE FROM outcome_hpn_statistical_decision_custody',
-  'TRUNCATE outcome_hpn_statistical_decision_custody',
+  'TRUNCATE outcome_hpn_statistical_decision_custody CASCADE',
 ])('rejects mutation: %s', async (sql) => {
   await repository.retainUnverified(f.result, reader);
   await expect(pool.query(sql)).rejects.toThrow('immutable');
@@ -327,4 +329,59 @@ it('requires a current independently governed statistical reviewer without appro
   await expect(
     repository.inspectReviewerAuthority(decision.decisionId, grant.context, reader)
   ).rejects.toThrow('governed authority');
+});
+
+it.each([
+  ['integer', '0', 0, true],
+  ['integer', '7', 7, true],
+  ['finite_number', '7e0', 7, true],
+  ['text', '7', 7, false],
+  ['factor', '7', 7, false],
+  ['integer', 7, 7, false],
+  ['integer', '7.0', 7, false],
+  ['finite_number', 'NaN', 7, false],
+  ['finite_number', 'Infinity', 7, false],
+  ['finite_number', '1.5', 1.5, false],
+  ['integer', '-1', -1, false],
+  ['integer', '9007199254740992', 9007199254740992, false],
+  ['integer', '7', 8, false],
+])(
+  'authenticates numeric scalar kind %s and literal %s',
+  async (kind, value, expected, accepted) => {
+    const result = await pool.query(
+      'SELECT outcome_hpn_statistical_numeric_scalar_matches($1::jsonb,$2,$3::jsonb) AS valid',
+      [JSON.stringify({ values: { CLR: { kind, value } } }), 'CLR', JSON.stringify(expected)]
+    );
+    expect(result.rows[0].valid).toBe(accepted);
+  }
+);
+it('rejects ambiguous scalar envelopes and string-valued expectations', async () => {
+  for (const [payload, expected] of [
+    [{ CLR: 7, values: { CLR: { kind: 'integer', value: '7' } } }, 7],
+    [{ values: { CLR: { kind: 'integer', value: '7' } } }, '7'],
+    [{ values: {} }, 7],
+  ]) {
+    const result = await pool.query(
+      'SELECT outcome_hpn_statistical_numeric_scalar_matches($1::jsonb,$2,$3::jsonb) AS valid',
+      [JSON.stringify(payload), 'CLR', JSON.stringify(expected)]
+    );
+    expect(result.rows[0].valid).toBe(false);
+  }
+});
+
+it('canonicalizes nested custody JSON with pg_restore empty search_path', async () => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL search_path TO ''");
+    const value = { z: [{ b: 2, a: 1 }], a: { nested: true } };
+    const result = await client.query(
+      `SELECT "${schema}".outcome_afl_trade_canonical_json($1::jsonb) AS canonical`,
+      [JSON.stringify(value)]
+    );
+    expect(result.rows[0].canonical).toBe(canonicalizeAflTradeJson(value));
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
+  }
 });

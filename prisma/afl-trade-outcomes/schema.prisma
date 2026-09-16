@@ -3498,6 +3498,8 @@ model OutcomeReviewDecision {
 
   @@index([subjectType, subjectId, decidedAt], map: "outcome_review_decision_subject_idx")
   @@map("outcome_review_decision")
+  hpnStatisticalSupportReviews OutcomeHpnStatisticalSupportReview[]
+
 }
 
 model OutcomeDataException {
@@ -6314,6 +6316,9 @@ model OutcomeHpnStatisticalDecisionCustody {
 
   @@index([scopeKey, decisionId], map: "outcome_hpn_statistical_custody_scope_idx")
   @@map("outcome_hpn_statistical_decision_custody")
+  supportReviews OutcomeHpnStatisticalSupportReview[]
+  currentSelections OutcomeHpnStatisticalCurrentSelection[]
+
 }
 
 model OutcomeCanonicalPlayerDeparture {
@@ -6326,4 +6331,29 @@ model OutcomeCanonicalPlayerDeparture {
   approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction, map: "outcome_canonical_player_departure_approval_decision_id_fkey")
 
   @@map("outcome_canonical_player_departure")
+}
+
+model OutcomeHpnStatisticalSupportReview {
+  reviewId String @id @map("review_id")
+  decisionId String @map("decision_id")
+  approvalDecisionId String @map("approval_decision_id")
+  reviewCanonicalJson String @map("review_canonical_json")
+  reviewJson Json @map("review_json")
+  registeredAt DateTime @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  decision OutcomeHpnStatisticalDecisionCustody @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  currentSelections OutcomeHpnStatisticalCurrentSelection[]
+  @@map("outcome_hpn_statistical_support_review")
+}
+model OutcomeHpnStatisticalCurrentSelection {
+  scopeKey String @id @map("scope_key")
+  decisionId String @map("decision_id")
+  supportReviewId String @map("support_review_id")
+  revision Int
+  supersedesDecisionId String? @map("supersedes_decision_id")
+  identityJson Json @map("identity_json")
+  appliedAt DateTime @default(dbgenerated("date_trunc('milliseconds'::text, clock_timestamp())")) @map("applied_at") @outcomes.Timestamptz(3)
+  decision OutcomeHpnStatisticalDecisionCustody @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  supportReview OutcomeHpnStatisticalSupportReview @relation(fields: [supportReviewId], references: [reviewId], onDelete: Restrict, onUpdate: NoAction)
+  @@map("outcome_hpn_statistical_current_selection")
 }

@@ -45,14 +45,18 @@ function numericMapping(map: AflTradeHpnPavInputFieldMap, statistic: string) {
   throw new Error('Statistic has no supported reviewed numeric mapping.');
 }
 
-function retainedValue(payload: unknown, mapping: ReturnType<typeof numericMapping>) {
+function retainedValue(
+  payload: unknown,
+  mapping: ReturnType<typeof numericMapping>,
+  reviewedZero = false
+) {
   const values = mapping.fields.map((field) => decodedScalar(payload, field));
   if (
     values.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
   ) {
     throw new Error('Retained statistic must contain measured safe nonnegative integers.');
   }
-  if (values.some((value) => value === 0)) {
+  if (values.some((value) => value === 0) && !reviewedZero) {
     throw new Error('Zero values require separate governed representation evidence.');
   }
   const value = values.reduce<number>(
@@ -71,7 +75,8 @@ function retainedValue(payload: unknown, mapping: ReturnType<typeof numericMappi
  */
 export async function authenticateAflTradeHpnStatisticalSources(
   transaction: AflOutcomeSqlTransaction,
-  input: unknown
+  input: unknown,
+  support?: { decisionId: string; reviewId: string }
 ) {
   const cell = aflTradeHpnStatisticalCellSchema.parse(input);
   if (cell.scope.competitionId !== 'AFLM' || cell.scope.season < 1998 || cell.scope.season > 2200) {
@@ -83,6 +88,20 @@ export async function authenticateAflTradeHpnStatisticalSources(
   const checkedAt = new Date(clock.rows[0].checked_at).toISOString();
   if (Date.parse(cell.createdAt) > Date.parse(checkedAt))
     throw new Error('Candidate is future-dated.');
+  let reviewedZero = false;
+  if (support) {
+    const verified = await transaction.query<{ current: boolean }>(
+      `SELECT outcome_hpn_statistical_support_is_current($1) AND EXISTS (
+        SELECT 1 FROM outcome_hpn_statistical_support_review r
+        JOIN outcome_hpn_statistical_decision_custody d USING(decision_id)
+        WHERE r.review_id=$1 AND r.decision_id=$2
+          AND d.decision_json#>>'{candidate,candidateId}'=$3) AS current`,
+      [support.reviewId, support.decisionId, cell.candidateId]
+    );
+    if (verified.rows[0]?.current !== true)
+      throw new Error('Current exact statistical support is required.');
+    reviewedZero = true;
+  }
   const roles = ['primary', 'corroborating'] as const;
   const contexts = await loadAflTradeHpnSourceRuns(
     transaction,
@@ -115,7 +134,8 @@ export async function authenticateAflTradeHpnStatisticalSources(
         knowledgeCutoffAt: cell.createdAt,
       },
       checkedAt,
-      context
+      context,
+      support ? { ...support, candidateId: cell.candidateId } : undefined
     );
     const row = rows.rows.find(
       (item) => item.provider_decoded_row_id === observation.providerDecodedRowId
@@ -152,14 +172,21 @@ export async function authenticateAflTradeHpnStatisticalSources(
     ) {
       throw new Error('Statistical observation does not match exact retained source custody.');
     }
-    if (observation.representation !== 'measured') {
+    if (observation.representation !== 'measured' && !reviewedZero) {
       throw new Error('Blank-normalized zero requires separate governed representation evidence.');
+    }
+    if (
+      reviewedZero &&
+      observation.value === 0 &&
+      observation.representation !== 'retained_zero_origin_unknown'
+    ) {
+      throw new Error('A retained zero must preserve unknown original provenance.');
     }
     const mapping = numericMapping(context.map, cell.scope.statistic);
     if (
       canonicalizeAflTradeJson([...observation.sourceFields].sort()) !==
         canonicalizeAflTradeJson([...mapping.fields].sort()) ||
-      retainedValue(row.typed_payload, mapping) !== observation.value
+      retainedValue(row.typed_payload, mapping, reviewedZero) !== observation.value
     ) {
       throw new Error('Statistical observation changes the reviewed fields or retained value.');
     }

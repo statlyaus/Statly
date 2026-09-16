@@ -57,7 +57,7 @@ const observationSchema = z
     fieldMapSha256: aflTradeSha256Schema,
     sourceFields: z.array(z.string().min(1).max(200)).min(1).max(10),
     value: count,
-    representation: z.enum(['measured', 'blank_normalized_zero']),
+    representation: z.enum(['measured', 'blank_normalized_zero', 'retained_zero_origin_unknown']),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -70,7 +70,7 @@ const observationSchema = z
     if (new Set(value.sourceFields).size !== value.sourceFields.length) {
       ctx.addIssue({ code: 'custom', message: 'Source fields must be unique.' });
     }
-    if (value.representation === 'blank_normalized_zero' && value.value !== 0) {
+    if (value.representation !== 'measured' && value.value !== 0) {
       ctx.addIssue({ code: 'custom', message: 'A normalized blank can only represent zero.' });
     }
   });

@@ -1248,6 +1248,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0218_entitlement_release_source_ancestry',
       '0219_hpn_statistical_decision_custody',
       '0220_hpn_statistical_reviewer_authority',
+  '0221_hpn_private_clearance_adjudication',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
