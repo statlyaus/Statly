@@ -1,4 +1,12 @@
-import { asObject, asString, decodedScalar, nonnegativeInteger } from './hpnDecodedScalar';
+import { resolutionSql, clubResolutionSql } from './hpnCurrentResolutionSql';
+import {
+  digestFromId,
+  currentPlayerResolution,
+  currentResolution,
+  exactOneResolution,
+  choosePlayerClub,
+} from './hpnCurrentResolution';
+import { asObject, decodedScalar, nonnegativeInteger } from './hpnDecodedScalar';
 import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -119,13 +127,7 @@ interface FinalizedInputSetRow {
   factual_appearance_count: number;
 }
 
-type CurrentResolution = AflTradeHpnPavSeasonInputSet['content']['rows'][number] extends infer Row
-  ? Row extends { player: infer Resolution }
-    ? Resolution
-    : never
-  : never;
 type InputRow = AflTradeHpnPavSeasonInputSet['content']['rows'][number];
-type AssignedResolution = Exclude<CurrentResolution, { assignmentDecision: null }>;
 type PlayerInputRow = Extract<InputRow, { kind: 'player_match_stats' }>;
 type UnboundInputRow =
   Exclude<InputRow, { kind: 'player_match_stats' }> | Omit<PlayerInputRow, 'acquisitionSpell'>;
@@ -153,91 +155,6 @@ function isoDate(value: Date | string | null, label: string): string {
     ].join('-');
   }
   throw new AflTradeHpnPavInputError('SOURCE_AUTHORITY_MISMATCH', `${label} is invalid.`);
-}
-
-function asPositiveInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-    throw new AflTradeHpnPavInputError('RESOLUTION_NOT_CURRENT', `${label} is invalid.`);
-  }
-  return value;
-}
-
-function digestFromId(identifier: string, prefix: string): string {
-  const match = new RegExp(`^${prefix}:([a-f0-9]{64})$`).exec(identifier);
-  if (!match?.[1]) {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      `Current ${prefix} identity is invalid.`
-    );
-  }
-  return match[1];
-}
-
-function currentPlayerResolution(unparsed: unknown): CurrentResolution {
-  const value = asObject(unparsed, 'player resolution');
-  const decisionId = asString(value.decisionId, 'player decision');
-  if (value.resolutionScope === 'candidate_only') {
-    if (value.assignmentDecisionId !== null || value.assignmentStatus !== null) {
-      throw new AflTradeHpnPavInputError(
-        'RESOLUTION_NOT_CURRENT',
-        'Candidate-only player resolution cannot claim a reusable assignment.'
-      );
-    }
-    return {
-      entityKind: 'player',
-      resolutionScope: 'candidate_only',
-      canonicalId: asString(value.canonicalId, 'player canonical ID'),
-      revision: asPositiveInteger(value.revision, 'player revision'),
-      status: 'current_approved',
-      resolutionDecision: {
-        id: decisionId,
-        sha256: digestFromId(decisionId, 'provider-resolution-decision'),
-      },
-      assignmentDecision: null,
-    };
-  }
-  return currentResolution('player', value);
-}
-
-function currentResolution(
-  entityKind: 'player' | 'club' | 'match',
-  unparsed: unknown
-): AssignedResolution {
-  const value = asObject(unparsed, `${entityKind} resolution`);
-  const decisionId = asString(value.decisionId, `${entityKind} decision`);
-  const assignmentDecisionId = asString(
-    value.assignmentDecisionId,
-    `${entityKind} assignment decision`
-  );
-  if (decisionId !== assignmentDecisionId || value.assignmentStatus !== 'active') {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      `The ${entityKind} resolution does not own the current active assignment.`
-    );
-  }
-  const sha256 = digestFromId(decisionId, 'provider-resolution-decision');
-  return {
-    entityKind,
-    canonicalId: asString(value.canonicalId, `${entityKind} canonical ID`),
-    revision: asPositiveInteger(value.revision, `${entityKind} revision`),
-    status: 'current_approved',
-    resolutionDecision: { id: decisionId, sha256 },
-    assignmentDecision: { id: assignmentDecisionId, sha256 },
-  };
-}
-
-function exactOneResolution(
-  entityKind: 'club',
-  unparsed: unknown,
-  side: 'home' | 'away'
-): AssignedResolution {
-  if (!Array.isArray(unparsed) || unparsed.length !== 1) {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      `The ${side}-club resolution is absent or ambiguous.`
-    );
-  }
-  return currentResolution(entityKind, unparsed[0]);
 }
 
 function reviewedFields(fieldMap: AflTradeHpnPavInputFieldMap): string[] {
@@ -423,67 +340,6 @@ function projectedNonnegativeInteger(
   );
 }
 
-function resolutionSql(entity: 'player' | 'match', candidateAlias: string): string {
-  if (entity === 'player')
-    return `SELECT jsonb_build_object(
-      'canonicalId',resolution.player_id,'revision',head.revision,
-      'decisionId',resolution.decision_id,'resolutionScope',resolution.resolution_scope,
-      'assignmentDecisionId',CASE WHEN resolution.resolution_scope='candidate_only' THEN NULL ELSE resolution.decision_id END,
-      'assignmentStatus',assignment.status) AS value
-    FROM outcome_provider_player_resolution_head head
-    JOIN outcome_provider_player_resolution resolution ON resolution.resolution_id=head.resolution_id
-    LEFT JOIN outcome_provider_identity_assignment_head assignment
-      ON assignment.assignment_case_id=resolution.assignment_case_id
-    WHERE head.identity_candidate_id=${candidateAlias}.identity_candidate_id
-      AND resolution.identity_candidate_id=head.identity_candidate_id
-      AND resolution.outcome='approved'
-      AND ((resolution.resolution_scope='candidate_only'
-        AND resolution.assignment_case_id IS NULL AND resolution.player_identity_id IS NULL
-        AND resolution.decision_json#>>'{content,proposal,content,identityCandidateId}'=head.identity_candidate_id
-        AND resolution.decision_json#>>'{content,proposal,content,staging,providerDecodedRowId}'=${candidateAlias}.provider_decoded_row_id
-        AND resolution.decision_json#>>'{content,proposal,content,proposedTarget,scope}'='candidate_only'
-        AND resolution.decision_json#>>'{content,proposal,content,proposedTarget,playerId}'=resolution.player_id)
-        OR (resolution.resolution_scope IS DISTINCT FROM 'candidate_only'
-          AND outcome_provider_assignment_continuity_current(resolution.decision_id) AND assignment.status='active'))
-      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-        WHERE successor.supersedes_decision_id=resolution.decision_id)`;
-  const table = `outcome_provider_${entity}_resolution`;
-  const head = `outcome_provider_${entity}_resolution_head`;
-  const candidateColumn = 'match_candidate_id';
-  const canonicalColumn = 'match_id';
-  return `SELECT jsonb_build_object(
-      'canonicalId', resolution.${canonicalColumn}, 'revision', head.revision,
-      'decisionId', resolution.decision_id,
-      'assignmentDecisionId', resolution.decision_id,
-      'assignmentStatus', assignment.status) AS value
-    FROM ${head} head
-    JOIN ${table} resolution ON resolution.resolution_id=head.resolution_id
-    JOIN outcome_provider_identity_assignment_head assignment
-      ON assignment.assignment_case_id=resolution.assignment_case_id
-    WHERE head.${candidateColumn}=${candidateAlias}.${candidateColumn}
-      AND resolution.outcome='approved' AND outcome_provider_assignment_continuity_current(resolution.decision_id)
-      AND assignment.status='active'
-      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-        WHERE successor.supersedes_decision_id=resolution.decision_id)`;
-}
-
-function clubResolutionSql(side: 'home' | 'away'): string {
-  return `SELECT COALESCE(jsonb_agg(jsonb_build_object(
-      'canonicalId', resolution.club_id, 'revision', head.revision,
-      'decisionId', resolution.decision_id,
-      'assignmentDecisionId', resolution.decision_id,
-      'assignmentStatus', assignment.status)), '[]'::jsonb) AS values
-    FROM outcome_provider_club_resolution resolution
-    JOIN outcome_provider_club_resolution_head head ON head.resolution_id=resolution.resolution_id
-    JOIN outcome_provider_identity_assignment_head assignment
-      ON assignment.assignment_case_id=resolution.assignment_case_id
-    WHERE resolution.match_candidate_id=match_candidate.match_candidate_id
-      AND resolution.side='${side}' AND resolution.outcome='approved'
-      AND outcome_provider_assignment_continuity_current(resolution.decision_id) AND assignment.status='active'
-      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-        WHERE successor.supersedes_decision_id=resolution.decision_id)`;
-}
-
 async function loadDecodedRows(
   transaction: AflOutcomeSqlTransaction,
   runIds: readonly string[]
@@ -601,25 +457,6 @@ async function loadFactualUniverse(
       clubId: appearance.club_id,
     })),
   };
-}
-
-function choosePlayerClub(row: DecodedRow, sourceClub: unknown): AssignedResolution {
-  if (typeof sourceClub !== 'string') {
-    throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', 'Player club is not observed.');
-  }
-  const home = sourceClub === row.home_club_native_id || sourceClub === row.home_club_name;
-  const away = sourceClub === row.away_club_native_id || sourceClub === row.away_club_name;
-  if (home === away) {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      'Player club cannot be assigned to exactly one match side.'
-    );
-  }
-  return exactOneResolution(
-    'club',
-    home ? row.home_club_resolutions : row.away_club_resolutions,
-    home ? 'home' : 'away'
-  );
 }
 
 function buildRows(

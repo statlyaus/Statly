@@ -12,6 +12,8 @@ import {
 } from '@/server/aflTradeIntelligence/modeling/hpnStatisticalAdjudication';
 import { fixture } from '../testUtils/hpnStatisticalAdjudicationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import { inspectAflTradeHpnStatisticalIdentity } from '@/server/aflTradeIntelligence/modeling/postgresHpnStatisticalIdentityInspection';
+import { setup as sourceFixture } from '../testUtils/hpnStatisticalSourceFixture';
 
 const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!url) throw new Error('Disposable PostgreSQL required.');
@@ -120,6 +122,21 @@ it('does not authenticate retained decisions whose source runs are absent', asyn
     status: 'retained_unverified',
     calculationEligible: false,
   });
+});
+
+it('executes shared current-resolution SQL and rejects absent identity context', async () => {
+  const source = sourceFixture();
+  await expect(
+    createPgAflOutcomeSqlClient(pool).transaction((transaction) =>
+      inspectAflTradeHpnStatisticalIdentity(
+        transaction,
+        source.cell,
+        source.cell.primary.providerDecodedRowId,
+        source.maps[0],
+        source.state.rows[0].typed_payload
+      )
+    )
+  ).rejects.toThrow('Exact statistical identity context is unavailable');
 });
 
 it('rejects direct SQL content/address drift and attempted authority escalation', async () => {

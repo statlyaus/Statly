@@ -3,6 +3,7 @@ import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleas
 import { decodedScalar } from './hpnDecodedScalar';
 import type { AflTradeHpnPavInputFieldMap } from './hpnPavInputContracts';
 import { aflTradeHpnStatisticalCellSchema } from './hpnStatisticalAdjudication';
+import { inspectAflTradeHpnStatisticalIdentity } from './postgresHpnStatisticalIdentityInspection';
 import {
   loadAflTradeHpnSourceRuns,
   requireAflTradeHpnSourceRunAuthority,
@@ -65,8 +66,8 @@ function retainedValue(payload: unknown, mapping: ReturnType<typeof numericMappi
 
 /**
  * Authenticate both retained source observations in the caller's transaction. This is a source
- * comparison, not a decision approval: identities, reviewer/evidence authority and current heads
- * still require their own locked checks. Never cache this result as calculation authority.
+ * comparison, not a decision approval: identity snapshots require locked rechecks at promotion;
+ * reviewer/evidence authority and current heads remain separate. Never cache as calculation authority.
  */
 export async function authenticateAflTradeHpnStatisticalSources(
   transaction: AflOutcomeSqlTransaction,
@@ -100,6 +101,7 @@ export async function authenticateAflTradeHpnStatisticalSources(
     [roles.map((role) => cell[role].providerDecodedRowId)]
   );
   if (rows.rows.length !== 2) throw new Error('Both exact retained source rows are required.');
+  const identities = [];
   for (const role of roles) {
     const observation = cell[role];
     const context = contexts.get(observation.normalizationRunId)!;
@@ -161,11 +163,23 @@ export async function authenticateAflTradeHpnStatisticalSources(
     ) {
       throw new Error('Statistical observation changes the reviewed fields or retained value.');
     }
+    identities.push({
+      role,
+      ...(await inspectAflTradeHpnStatisticalIdentity(
+        transaction,
+        cell,
+        row.provider_decoded_row_id,
+        context.map,
+        row.typed_payload
+      )),
+    });
   }
   return {
     candidateId: cell.candidateId,
     checkedAt,
     status: 'retained_sources_match' as const,
+    identities,
+    identityAuthority: 'read_only_snapshot_requires_locked_recheck' as const,
     calculationEligible: false as const,
     publicationEligible: false as const,
   };

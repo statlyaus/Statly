@@ -2200,8 +2200,12 @@ a cell; neither retention nor a supplied supersession ID establishes a current d
 `inspectRetainedSources` compares both observations with their retained run/capture/snapshot/artifact,
 row hashes, reviewed statistic projection, season and candidate-time availability. It reuses current
 map/source authority checks in a transaction and reads only the two requested decoded rows. The
-result still leaves the decision unverified: canonical identities, reviewer authority, governed
-supporting evidence and current heads are not established. Typed zeros (including zero components
+result also inspects both rows' current canonical player/match/club resolutions using the existing
+HPN input predicates, including candidate-only player scope, assignment continuity and review
+supersession. The represented club must match exactly one source match side and that canonical
+side's club; canonical competition/season must agree. Returned resolution revisions are read-only
+snapshots requiring locked rechecks before promotion or consumption. Reviewer authority, governed
+supporting evidence and current heads remain unestablished. Typed zeros (including zero components
 of a derived statistic) require separate representation evidence; relabelling a normalized blank
 as measured cannot bypass that condition. Existing legacy input/calculation behavior is unchanged.
 SQL enforces canonical content addresses, selection consistency, chronology, unverified authority and
