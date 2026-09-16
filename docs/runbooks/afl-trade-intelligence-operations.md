@@ -3273,3 +3273,14 @@ and must not be treated as complete numerical outcome admission.
 Departure currentness also requires the retained recorded player/club names to
 match their immutable canonical identities (migration 0214); a reviewed claim for
 one subject cannot close another subject’s acquisition.
+
+### Entitlement evidence in promotion-backed releases
+
+Migration 0218 derives each promotion's required capture set from its import runs and the evidence
+referenced by authenticated entitlement snapshots for its exact corpus assets. The release loader
+and SQL candidate guard use this same association set. Retained activation, exercise, revision or
+identity-replacement evidence can therefore belong to a factual release without being an import
+source of the original trade. Unrelated captures are excluded; canonical corpus membership stays
+unchanged. Every included capture still passes scope, knowledge-cutoff, exact receipt and current
+source-rights checks. Missing or withdrawn entitlement authority rejects construction. Existing
+releases remain immutable; construct a successor with actual operation timestamps and verify replay.
