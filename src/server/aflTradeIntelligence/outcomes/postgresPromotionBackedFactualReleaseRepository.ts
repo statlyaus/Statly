@@ -216,17 +216,15 @@ async function loadSourceAncestry(
   createdAt: string
 ) {
   const result = await transaction.query<CaptureRow>(
-    `SELECT corpus_promotion.promotion_id,promotion_run.capture_id,capture.source_snapshot_id,
+    `SELECT required.promotion_id,required.capture_id,capture.source_snapshot_id,
             capture.environment,capture.competition,capture.anchor_season_year,capture.captured_at,
             capture.manifest_json
-       FROM outcome_promotion_backed_corpus_promotion corpus_promotion
-       JOIN outcome_external_canonical_promotion_import_run promotion_run
-         ON promotion_run.promotion_id=corpus_promotion.promotion_id
-       JOIN outcome_source_capture capture ON capture.capture_id=promotion_run.capture_id
-      WHERE corpus_promotion.corpus_id=$1 AND capture.status='approved'
-      ORDER BY corpus_promotion.promotion_id,promotion_run.capture_id
-      FOR SHARE OF corpus_promotion,promotion_run,capture`,
-    [corpus.corpusId]
+       FROM outcome_promotion_factual_required_sources($1,$2::timestamptz) required
+       JOIN outcome_source_capture capture ON capture.capture_id=required.capture_id
+      WHERE capture.status='approved'
+      ORDER BY required.promotion_id,required.capture_id
+      FOR SHARE OF capture`,
+    [corpus.corpusId, corpus.content.knowledgeCutoffAt]
   );
   const expectedPromotions = new Set(
     corpus.content.promotions.map(({ promotionId }) => promotionId)

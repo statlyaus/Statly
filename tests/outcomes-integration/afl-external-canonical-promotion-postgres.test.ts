@@ -1024,6 +1024,22 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
           `UPDATE outcome_external_evidence_batch SET status='finalized',finalized_at='2026-08-09T11:00:00Z' WHERE batch_id=$1`,
           [rightBatchId]
         );
+        // Retained lifecycle evidence need not be an import source of the promoted trades.
+        const activationCaptureId = createAflTradeContentAddress('source-capture', { activationYear: year });
+        await outcomesPool.query(`INSERT INTO outcome_source_capture_attempt
+          (attempt_id,environment,provider,dataset,capability_id,status,started_at,completed_at,attempt_json)
+          SELECT $1,environment,provider,dataset,capability_id,status,started_at,completed_at,attempt_json
+          FROM outcome_source_capture_attempt WHERE attempt_id='attempt-promotion'`, [`attempt:${activationCaptureId}`]);
+        await outcomesPool.query(`INSERT INTO outcome_source_capture
+          (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,
+           access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json)
+          SELECT $1,$2,$3,source_artifact_id,environment,provider,dataset,dataset_version,access_mechanism,capability_id,
+           competition,anchor_season_year,effective_at,captured_at,status,manifest_json
+          FROM outcome_source_capture WHERE capture_id=$4`,
+          [activationCaptureId,`attempt:${activationCaptureId}`,createAflTradeContentAddress('source-snapshot',{ activationYear: year }),rightCaptureId]);
+        await outcomesPool.query(`INSERT INTO outcome_source_capture_season(capture_id,competition,season_year)
+          SELECT $1,competition,season_year FROM outcome_source_capture_season WHERE capture_id=$2 ON CONFLICT DO NOTHING`,[activationCaptureId,rightCaptureId]);
+        const rightCaptureIds = [rightCaptureId, activationCaptureId];
         const award = createSpecialEntitlementAward({
           schemaVersion: 'afl-trade-special-entitlement-award/v1',
           environment: 'test_fixture',
@@ -1224,11 +1240,11 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
         )).rows[0]!.asset_version_id;
         await expect.soft(outcomesPool.query(
           'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-          [award.entitlementId, baselineAsset, '2026-08-09T11:59:59.999Z', [rightCaptureId]]
+          [award.entitlementId, baselineAsset, '2026-08-09T11:59:59.999Z', rightCaptureIds]
         )).rejects.toThrow(/cutoff/);
         expect((await outcomesPool.query<{ fact: unknown }>(
           'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-          [award.entitlementId, baselineAsset, '2026-08-09T12:00:00Z', [rightCaptureId]]
+          [award.entitlementId, baselineAsset, '2026-08-09T12:00:00Z', rightCaptureIds]
         )).rows[0]!.fact).toMatchObject({ award });
 
         await expect(
@@ -1401,6 +1417,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
           const exerciseInput = await reviewed(exercise);
           const activation = {
             ...base,
+            evidence: [{ ...base.evidence[0]!, captureId: activationCaptureId }],
             kind: 'activation',
             useYear: selectionYear,
             noticeYear: precision === 'year' ? null : selectionYear,
@@ -1650,7 +1667,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
               fact: { revision: unknown; award: unknown };
             }>(
               'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-              [award.entitlementId, currentAssetId, '2026-08-09T12:07:00Z', [rightCaptureId]]
+              [award.entitlementId, currentAssetId, '2026-08-09T12:07:00Z', rightCaptureIds]
             );
             expect(currentRead.rows[0]!.fact).toMatchObject({
               revision: revised,
@@ -1803,7 +1820,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
             await expect.soft(outcomesPool.query<{ fact: unknown }>(
               'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
               [award.entitlementId, beforeCustodyCorrection.content.state.custody[0]!.assetVersionId,
-                '2026-08-09T12:06:35Z', [rightCaptureId]]
+                '2026-08-09T12:06:35Z', rightCaptureIds]
             )).resolves.toMatchObject({ rows: [{ fact: { revision: beforeCustodyCorrection } }] });
 
             const correctedRead = await outcomesPool.query<{
@@ -1814,7 +1831,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
                 award.entitlementId,
                 currentRevision.content.state.custody[0]!.assetVersionId,
                 '2026-08-09T12:07:00Z',
-                [rightCaptureId],
+                rightCaptureIds,
               ]
             );
             expect(correctedRead.rows[0]!.fact).toMatchObject({
@@ -1827,7 +1844,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
               currentRevision: unknown;
             } }>(
               'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-              [award.entitlementId, currentAssetId, '2026-08-09T12:07:00Z', [rightCaptureId]]
+              [award.entitlementId, currentAssetId, '2026-08-09T12:07:00Z', rightCaptureIds]
             );
             expect(historicalRead.rows[0]!.fact).toMatchObject({
               revisionStatus: 'superseded', currentRevision: custodyRevision,
@@ -1836,7 +1853,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
               .toContainEqual(expect.objectContaining({ assetVersionId: currentAssetId }));
             await expect(outcomesPool.query(
               'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
-              [award.entitlementId, 'asset:unknown', '2026-08-09T12:07:00Z', [rightCaptureId]]
+              [award.entitlementId, 'asset:unknown', '2026-08-09T12:07:00Z', rightCaptureIds]
             )).rejects.toThrow(/absent from retained entitlement revision history/);
             await expect(outcomesPool.query(
               'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
@@ -1914,7 +1931,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
             expect((await outcomesPool.query<{ fact: unknown }>(
               'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
               [award.entitlementId, currentRevision.content.state.custody[0]!.assetVersionId,
-               '2026-08-09T12:07:00Z', [rightCaptureId]]
+               '2026-08-09T12:07:00Z', rightCaptureIds]
             )).rows[0]!.fact).toMatchObject({ lifecycle: { exercise: { record: { selectionId: replacementSelectionId } } } });
 
             expect((await outcomesPool.query<{ selection_id: string }>(
@@ -1985,7 +2002,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
               await tx.query('SET CONSTRAINTS ALL IMMEDIATE');
               expect((await tx.query<{ fact: unknown }>(
                 'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-                [award.entitlementId, currentAssetId, '2026-08-09T12:07:00Z', [rightCaptureId]]
+                [award.entitlementId, currentAssetId, '2026-08-09T12:07:00Z', rightCaptureIds]
               )).rows[0]!.fact).toMatchObject({ entitlementId: award.entitlementId, revisionStatus: 'retired_identity',
                 identityReplacement, replacementFact: { entitlementId: newIdentityAward.entitlementId,
                   lifecycle: { exercise: { record: { selectionId: replacementSelectionId } } } } });
@@ -2019,7 +2036,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
                 [`withdraw:${identityApproval}`, identityReplacement.replacementId, authority.principal_ref, identityApproval]
               );
               await expect(tx.query('SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
-                [award.entitlementId, currentAssetId, '2026-08-09T12:09:00Z', [rightCaptureId]]))
+                [award.entitlementId, currentAssetId, '2026-08-09T12:09:00Z', rightCaptureIds]))
                 .rejects.toThrow(/exact current reviewed approval/);
               await tx.query('ROLLBACK TO SAVEPOINT replacement_withdrawal');
               throw new Error('Fixture restores source after verified identity transition');
@@ -2051,7 +2068,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
               )).rows).toEqual([{ entitlement_id: newIdentityAward.entitlementId }]);
               expect((await outcomesPool.query<{ fact: unknown }>(
                 'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-                [award.entitlementId, currentAssetId, '2026-08-09T12:11:00Z', [rightCaptureId]]
+                [award.entitlementId, currentAssetId, '2026-08-09T12:11:00Z', rightCaptureIds]
               )).rows[0]!.fact).toMatchObject({ revisionStatus: 'retired_identity', replacementFact: { entitlementId: newIdentityAward.entitlementId } });
               const writer = await outcomesPool.connect();
               const reader = await outcomesPool.connect();
@@ -2063,7 +2080,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
                 await reader.query("SET LOCAL statement_timeout='2s'");
                 await expect(reader.query(
                   'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
-                  [award.entitlementId, currentAssetId, '2026-08-09T12:11:00Z', [rightCaptureId]]
+                  [award.entitlementId, currentAssetId, '2026-08-09T12:11:00Z', rightCaptureIds]
                 )).rejects.toMatchObject({ code: '40001' });
                 await reader.query('ROLLBACK');
                 // The failed read releases its ancestor lock, allowing a replacement writer to finish.
@@ -2073,7 +2090,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
                 await writer.query('ROLLBACK');
                 expect((await reader.query<{ fact: unknown }>(
                   'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-                  [award.entitlementId, currentAssetId, '2026-08-09T12:11:00Z', [rightCaptureId]]
+                  [award.entitlementId, currentAssetId, '2026-08-09T12:11:00Z', rightCaptureIds]
                 )).rows[0]!.fact).toMatchObject({ revisionStatus: 'retired_identity',
                   replacementFact: { entitlementId: newIdentityAward.entitlementId } });
               } finally {
@@ -2122,12 +2139,12 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
               expect((await outcomesPool.query<{ fact: unknown }>(
                 'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
                 [award.entitlementId, beforeCustodyCorrection.content.state.custody[0]!.assetVersionId,
-                  '2026-08-09T12:06:35Z', [rightCaptureId]]
+                  '2026-08-09T12:06:35Z', rightCaptureIds]
               )).rows[0]!.fact).toMatchObject({ revision: beforeCustodyCorrection });
 
               const chainRead = await outcomesPool.query<{ fact: unknown }>(
                 'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-                [award.entitlementId, currentAssetId, '2026-08-09T12:13:00Z', [rightCaptureId]]
+                [award.entitlementId, currentAssetId, '2026-08-09T12:13:00Z', rightCaptureIds]
               );
               expect(chainRead.rows[0]!.fact).toMatchObject({ entitlementId: award.entitlementId, revisionStatus: 'retired_identity',
                 replacementFact: { entitlementId: newIdentityAward.entitlementId, revisionStatus: 'retired_identity',
@@ -2139,10 +2156,10 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
                 [`withdraw:${laterInput.approvalDecisionId}`, laterRevision.revisionId, authority.principal_ref, laterInput.approvalDecisionId]
               );
               await expect(outcomesPool.query('SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
-                [award.entitlementId, currentAssetId, '2026-08-09T12:14:00Z', [rightCaptureId]])).rejects.toThrow(/current reviewed approval/);
+                [award.entitlementId, currentAssetId, '2026-08-09T12:14:00Z', rightCaptureIds])).rejects.toThrow(/current reviewed approval/);
               await expect(outcomesPool.query('SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
                 [award.entitlementId, beforeCustodyCorrection.content.state.custody[0]!.assetVersionId,
-                  '2026-08-09T12:06:35Z', [rightCaptureId]])).rejects.toThrow(/current reviewed approval/);
+                  '2026-08-09T12:06:35Z', rightCaptureIds])).rejects.toThrow(/current reviewed approval/);
 
 
             });
@@ -2225,7 +2242,7 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
             await expect(
               outcomesPool.query(
                 'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[])',
-                [award.entitlementId, currentAssetId, '2026-08-09T12:09:00Z', [rightCaptureId]]
+                [award.entitlementId, currentAssetId, '2026-08-09T12:09:00Z', rightCaptureIds]
               )
             ).rejects.toThrow(/current reviewed approval/);
 
@@ -2382,6 +2399,44 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
         scopeKey: 'public-afl-draft-trade-outcomes:AFLM:2010-2025',
         createdAt: '2026-08-09T12:10:00.000Z',
       });
+      const lifecycleCaptureId = createAflTradeContentAddress('source-capture', { activationYear: 2010 });
+      const unrelatedCaptureId = createAflTradeContentAddress('source-capture', { activationYear: 2011 });
+      expect((await outcomesPool.query('SELECT 1 FROM outcome_external_canonical_promotion_import_run WHERE capture_id=$1',[lifecycleCaptureId])).rows).toHaveLength(0);
+      const releaseCaptureIds = (await outcomesPool.query<{capture_id:string}>('SELECT capture_id FROM outcome_release_source_capture WHERE release_id=$1',[exercisedRelease.releaseId])).rows.map(row=>row.capture_id);
+      expect(releaseCaptureIds).toContain(lifecycleCaptureId);
+      expect(releaseCaptureIds).not.toContain(unrelatedCaptureId);
+      expect(exercisedRelease.canonicalMemberCount).toBe(release.canonicalMemberCount);
+      const releaseReplay = await new PostgresAflTradePromotionBackedFactualReleaseRepository(createPgAflOutcomeSqlClient(outcomesPool)).build({corpusId:corpus.corpusId,scopeKey:'public-afl-draft-trade-outcomes:AFLM:2010-2025',createdAt:'2026-08-09T12:10:00.000Z'});
+      expect(releaseReplay).toMatchObject({releaseId:exercisedRelease.releaseId,idempotentReplay:true});
+      // Tamper only with application reader output. The real SQL guard must reject an unrelated source.
+      const sqlClient = createPgAflOutcomeSqlClient(outcomesPool);
+      for (const corruption of ['extra', 'omitted', 'scope', 'cutoff'] as const) {
+        const tamperedClient: typeof sqlClient = {
+          ...sqlClient,
+          transaction: work => sqlClient.transaction(tx => work({
+            query: async <Row = Record<string, unknown>>(query: string, parameters?: readonly unknown[]) => {
+              const original = await tx.query<Row>(query, parameters);
+              if (!query.includes('FROM outcome_promotion_factual_required_sources')) return original;
+              let altered = [...original.rows] as Record<string, unknown>[];
+              const lifecycle = altered.find(row => row.capture_id === lifecycleCaptureId)!;
+              expect(lifecycle).toBeDefined();
+              if (corruption === 'omitted') altered = altered.filter(row => row.capture_id !== lifecycleCaptureId);
+              else if (corruption === 'scope') altered = altered.map(row => row.capture_id === lifecycleCaptureId ? {...row, environment: 'non_production'} : row);
+              else if (corruption === 'cutoff') altered = altered.map(row => row.capture_id === lifecycleCaptureId ? {...row, captured_at: '2099-01-01T00:00:00.000Z'} : row);
+              else {
+                const extra = await tx.query<Record<string,unknown>>('SELECT * FROM outcome_source_capture WHERE capture_id=$1',[unrelatedCaptureId]);
+                const {capture_id,source_snapshot_id,environment,competition,anchor_season_year,captured_at,manifest_json} = extra.rows[0]!;
+                altered.push({promotion_id:lifecycle.promotion_id,capture_id,source_snapshot_id,environment,competition,anchor_season_year,captured_at,manifest_json});
+              }
+              return {rows: altered as Row[], rowCount: altered.length};
+            }
+          }))
+        };
+        await expect(new PostgresAflTradePromotionBackedFactualReleaseRepository(tamperedClient).build({
+          corpusId:corpus.corpusId,scopeKey:'public-afl-draft-trade-outcomes:AFLM:2010-2025',createdAt:'2026-08-09T12:10:01.000Z'
+        })).rejects.toThrow(corruption === 'extra' ? /promotion source set mismatch/ : corruption === 'omitted' ? /absent from.*release/ : /scope or knowledge cutoff/);
+      }
+
       const exerciseSnapshots = await outcomesPool.query(
         `SELECT record_canonical_json::jsonb#>'{record,specialEntitlement,lifecycle,exercise,record}' AS exercise
         FROM outcome_release_event_asset WHERE release_id=$1 AND record_canonical_json::jsonb#>'{record,specialEntitlement,lifecycle,exercise}' IS NOT NULL`,
