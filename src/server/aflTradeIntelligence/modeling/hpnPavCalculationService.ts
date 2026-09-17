@@ -12,6 +12,10 @@ import type {
   AflTradeHpnPavInputExecutionContext,
   AflTradeHpnPavInputRepository,
 } from './hpnPavInputRepository';
+import {
+  AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION,
+  applyAflTradeHpnStatisticalSelections,
+} from './hpnPavInputContracts';
 import { aflTradeHpnPavMethodSchema, type AflTradeHpnPavMethod } from './hpnPlayerApproximateValue';
 
 export const AFL_TRADE_HPN_PAV_FINALIZED_CALCULATION_SCHEMA_VERSION =
@@ -181,13 +185,13 @@ function addStats(
   previous: AflTradeHpnPavCorePlayer | undefined,
   spellVersionId: string,
   playerId: string,
-  rowId: string,
+  rowIds: readonly string[],
   stats: Omit<AflTradeHpnPavCorePlayer, 'spellVersionId' | 'playerId' | 'sourceRowIds'>
 ): AflTradeHpnPavCorePlayer {
   if (previous && previous.playerId !== playerId) {
     throw new TypeError('An acquisition spell cannot aggregate more than one player.');
   }
-  const sourceRowIds = [...(previous?.sourceRowIds ?? []), rowId].sort(compare);
+  const sourceRowIds = [...new Set([...(previous?.sourceRowIds ?? []), ...rowIds])].sort(compare);
   return {
     spellVersionId,
     playerId,
@@ -237,6 +241,19 @@ function deriveTeams(
       away.pointsFor += row.awayPoints;
       away.pointsAgainst += row.homePoints;
     } else if (row.role === 'primary') {
+      const stats = applyAflTradeHpnStatisticalSelections(inputSet, row);
+      const selectedCorroboratingRows =
+        inputSet.content.schemaVersion === AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION
+          ? inputSet.content.statisticalSelections.decisions.flatMap((decision) => {
+              const { scope } = decision.candidate;
+              return decision.selectedSource === 'corroborating' &&
+                scope.playerId === row.player.canonicalId &&
+                scope.matchId === row.match.canonicalId &&
+                scope.clubId === row.club.canonicalId
+                ? [decision.candidate.corroborating.providerDecodedRowId]
+                : [];
+            })
+          : [];
       const clubId = row.club.canonicalId;
       const team = ensure(clubId);
       const spellVersionId = row.acquisitionSpell.spellVersionId;
@@ -249,12 +266,12 @@ function deriveTeams(
           team.players.get(spellVersionId),
           spellVersionId,
           row.player.canonicalId,
-          row.source.providerDecodedRowId,
-          row.stats
+          [row.source.providerDecodedRowId, ...selectedCorroboratingRows],
+          stats
         )
       );
       const byClub = matchInside50s.get(row.match.canonicalId) ?? new Map<string, number>();
-      byClub.set(clubId, (byClub.get(clubId) ?? 0) + row.stats.inside50s);
+      byClub.set(clubId, (byClub.get(clubId) ?? 0) + stats.inside50s);
       matchInside50s.set(row.match.canonicalId, byClub);
     }
   }

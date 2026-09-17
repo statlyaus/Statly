@@ -5,7 +5,9 @@ import {
   addAflTradeContentAddressIssue,
   aflTradeContentAddressedIdSchema,
   aflTradeSha256Schema,
+  canonicalizeAflTradeJson,
   createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
 import {
   listAflTradeHpnCandidateSourceFields,
@@ -16,11 +18,19 @@ import {
   aflTradeHpnProjectedFieldMapSchema,
   type AflTradeHpnProjectedFieldMap,
 } from './hpnProjectedFieldMap';
+import {
+  aflTradeHpnStatisticalDecisionSchema,
+  type AflTradeHpnStatisticalDecision,
+} from './hpnStatisticalAdjudication';
 
 export const AFL_TRADE_HPN_PAV_FIELD_MAP_SCHEMA_VERSION = 'afl-trade-hpn-pav-field-map/v1' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION = 'afl-trade-hpn-pav-input-set/v1' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION =
   'afl-trade-hpn-pav-input-set/v2' as const;
+export const AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION =
+  'afl-trade-hpn-pav-input-set/v5' as const;
+export const AFL_TRADE_HPN_STATISTICAL_SELECTION_SET_SCHEMA_VERSION =
+  'afl-trade-hpn-statistical-selection-set/v1' as const;
 export const AFL_TRADE_HPN_PAV_RETROSPECTIVE_KNOWLEDGE_POLICY =
   'retrospective_as_recorded_by_input_creation' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY =
@@ -451,6 +461,86 @@ const inputSetCountsSchema = z
   })
   .strict();
 
+const statisticalSelectionMembershipSchema = z
+  .object({
+    scopeKey: aflTradeContentAddressedIdSchema('hpn-statistical-scope'),
+    candidateId: aflTradeContentAddressedIdSchema('hpn-statistical-cell'),
+    decisionId: aflTradeContentAddressedIdSchema('hpn-statistical-decision'),
+    supportReviewId: aflTradeContentAddressedIdSchema('hpn-statistical-support'),
+    revision: z.number().int().positive(),
+    appliedAt: instantSchema,
+    identitySha256: aflTradeSha256Schema,
+  })
+  .strict();
+
+export const aflTradeHpnStatisticalSelectionSetSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_HPN_STATISTICAL_SELECTION_SET_SCHEMA_VERSION),
+    status: z.literal('coverage_complete'),
+    decisions: z.array(aflTradeHpnStatisticalDecisionSchema).min(1).max(100_000),
+    membership: z.array(statisticalSelectionMembershipSchema).min(1).max(100_000),
+    membershipSha256: aflTradeSha256Schema,
+    coverageId: aflTradeContentAddressedIdSchema('hpn-statistical-coverage'),
+  })
+  .strict()
+  .superRefine((selectionSet, context) => {
+    const decisions = [...selectionSet.decisions].sort((left, right) =>
+      ordinalCompare(left.candidate.candidateId, right.candidate.candidateId)
+    );
+    const membership = [...selectionSet.membership].sort((left, right) =>
+      ordinalCompare(left.scopeKey, right.scopeKey)
+    );
+    const byDecision = new Map(decisions.map((decision) => [decision.decisionId, decision]));
+    const expectedCoverageMembership = decisions.map(({ candidate, decisionId }) => ({
+      candidateId: candidate.candidateId,
+      decisionId,
+    }));
+    if (
+      decisions.length !== new Set(decisions.map(({ decisionId }) => decisionId)).size ||
+      decisions.length !== new Set(decisions.map(({ candidate }) => candidate.candidateId)).size ||
+      membership.length !== decisions.length ||
+      canonicalizeAflTradeJson(selectionSet.decisions) !== canonicalizeAflTradeJson(decisions) ||
+      canonicalizeAflTradeJson(selectionSet.membership) !== canonicalizeAflTradeJson(membership) ||
+      membership.some((member) => {
+        const decision = byDecision.get(member.decisionId);
+        return (
+          !decision ||
+          member.candidateId !== decision.candidate.candidateId ||
+          member.scopeKey !==
+            createAflTradeContentAddress('hpn-statistical-scope', decision.candidate.scope) ||
+          Date.parse(member.appliedAt) < Date.parse(decision.decidedAt)
+        );
+      })
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Statistical selection membership must be unique, ordered and exact.',
+      });
+    }
+    if (selectionSet.membershipSha256 !== sha256AflTradeCanonicalJson(membership)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['membershipSha256'],
+        message: 'Statistical selection membership digest does not match exact membership.',
+      });
+    }
+    const coverageId = createAflTradeContentAddress('hpn-statistical-coverage', {
+      candidateIds: decisions.map(({ candidate }) => candidate.candidateId).sort(ordinalCompare),
+      membership: expectedCoverageMembership,
+    });
+    if (selectionSet.coverageId !== coverageId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['coverageId'],
+        message: 'Statistical coverage identity does not match its exact decisions.',
+      });
+    }
+  });
+
+export type AflTradeHpnStatisticalSelectionSet = z.infer<
+  typeof aflTradeHpnStatisticalSelectionSetSchema
+>;
+
 const inputSetBase = {
   authorityBoundary: z.literal(AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY),
   publicationEligible: z.literal(false),
@@ -535,6 +625,19 @@ const excludedProjectedInputSetContentSchema = z
   .strict()
   .superRefine(addInputSetIssues);
 
+const statisticallyAdjudicatedInputSetContentSchema = z
+  .object({
+    ...retrospectiveInputSetBase,
+    schemaVersion: z.literal(AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION),
+    environment: z.literal('non_production'),
+    fieldMapAuthority: z.literal('projected'),
+    fieldMaps: z.array(aflTradeHpnProjectedFieldMapSchema).min(3).max(100),
+    excludedSourceRows: z.array(aflTradeHpnPavExcludedSourceRowSchema).max(100_000),
+    statisticalSelections: aflTradeHpnStatisticalSelectionSetSchema,
+  })
+  .strict()
+  .superRefine(addInputSetIssues);
+
 const inputSetContentSchema = z.union([
   legacyInputSetContentSchema,
   projectedInputSetContentSchema,
@@ -542,6 +645,7 @@ const inputSetContentSchema = z.union([
   retrospectiveProjectedInputSetContentSchema,
   excludedLegacyInputSetContentSchema,
   excludedProjectedInputSetContentSchema,
+  statisticallyAdjudicatedInputSetContentSchema,
 ]);
 
 export const aflTradeHpnPavSeasonInputSetSchema = z
@@ -678,6 +782,152 @@ function reviewedFields(fieldMap: AflTradeHpnPavInputFieldMap['content']): strin
     ].sort(ordinalCompare);
   }
   return aflTradeHpnPavReviewedFields(fieldMap);
+}
+
+const statisticalFields = listAflTradeHpnRequiredSemanticFields('player_match_stats').filter(
+  (field): field is keyof z.infer<typeof pavStatsSchema> =>
+    !['player', 'match', 'club'].includes(field)
+);
+
+function statisticalScopeKey(scope: AflTradeHpnStatisticalDecision['candidate']['scope']) {
+  return createAflTradeContentAddress('hpn-statistical-scope', scope);
+}
+
+function projectedStatisticalFields(
+  map: AflTradeHpnProjectedFieldMap['content'],
+  statistic: keyof z.infer<typeof pavStatsSchema>
+): string[] {
+  const mapping = projectedBinding(map, statistic);
+  if (!mapping) return [];
+  return [...listAflTradeHpnCandidateSourceFields({ semanticField: statistic, mapping })].sort(
+    ordinalCompare
+  );
+}
+
+function observationMatchesInput(
+  input: z.infer<typeof statisticallyAdjudicatedInputSetContentSchema>,
+  row: z.infer<typeof playerRowSchema>,
+  observation: AflTradeHpnStatisticalDecision['candidate']['primary'],
+  statistic: keyof z.infer<typeof pavStatsSchema>
+): boolean {
+  const run = input.sourceRuns.find(
+    ({ normalizationRunId }) => normalizationRunId === row.source.normalizationRunId
+  );
+  const map = input.fieldMaps.find(({ fieldMapId }) => fieldMapId === run?.fieldMapId);
+  if (!run || !map || map.content.inputKind !== 'player_match_stats') return false;
+  return (
+    observation.normalizationRunId === row.source.normalizationRunId &&
+    observation.stagingSha256 === run.stagingSha256 &&
+    observation.provider === run.provider &&
+    observation.capabilityId === run.capabilityId &&
+    observation.captureId === run.captureId &&
+    observation.sourceSnapshotId === run.sourceSnapshotId &&
+    observation.sourceArtifactId === run.sourceArtifactId &&
+    observation.providerDecodedRowId === row.source.providerDecodedRowId &&
+    observation.sourceRowSha256 === row.source.sourceRowSha256 &&
+    observation.typedPayloadSha256 === row.source.typedPayloadSha256 &&
+    observation.fieldMapId === map.fieldMapId &&
+    observation.fieldMapSha256 === sha256AflTradeCanonicalJson(map.content) &&
+    canonicalizeAflTradeJson([...observation.sourceFields].sort(ordinalCompare)) ===
+      canonicalizeAflTradeJson(projectedStatisticalFields(map.content, statistic)) &&
+    observation.value === row.stats[statistic]
+  );
+}
+
+function addStatisticalSelectionIssues(
+  input: z.infer<typeof statisticallyAdjudicatedInputSetContentSchema>,
+  context: z.RefinementCtx
+): void {
+  const cutoff = input.knowledgeCutoffAt;
+  const playerRows = input.rows.filter(
+    (row): row is z.infer<typeof playerRowSchema> => row.kind === 'player_match_stats'
+  );
+  const grouped = new Map<string, z.infer<typeof playerRowSchema>[]>();
+  for (const row of playerRows) {
+    const key = [row.match.canonicalId, row.player.canonicalId, row.club.canonicalId].join('\0');
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+  const expectedScopes = new Set<string>();
+  let ambiguousPair = false;
+  for (const rows of grouped.values()) {
+    const primary = rows.filter(({ role }) => role === 'primary');
+    const corroborating = rows.filter(({ role }) => role === 'corroborating');
+    if (primary.length !== 1 || corroborating.length !== 1) {
+      ambiguousPair = true;
+      continue;
+    }
+    for (const statistic of statisticalFields) {
+      if (primary[0]!.stats[statistic] !== corroborating[0]!.stats[statistic]) {
+        expectedScopes.add(
+          statisticalScopeKey({
+            environment: input.environment,
+            competitionId: input.competition,
+            season: input.seasonYear,
+            playerId: primary[0]!.player.canonicalId,
+            matchId: primary[0]!.match.canonicalId,
+            clubId: primary[0]!.club.canonicalId,
+            statistic,
+          })
+        );
+      }
+    }
+  }
+  const memberByDecision = new Map(
+    input.statisticalSelections.membership.map((member) => [member.decisionId, member])
+  );
+  const actualScopes = new Set<string>();
+  let invalidDecision = false;
+  for (const decision of input.statisticalSelections.decisions) {
+    const member = memberByDecision.get(decision.decisionId);
+    const candidate = decision.candidate;
+    const scopeKey = statisticalScopeKey(candidate.scope);
+    const rows = grouped.get(
+      [candidate.scope.matchId, candidate.scope.playerId, candidate.scope.clubId].join('\0')
+    );
+    const primary = rows?.filter(({ role }) => role === 'primary') ?? [];
+    const corroborating = rows?.filter(({ role }) => role === 'corroborating') ?? [];
+    actualScopes.add(scopeKey);
+    if (
+      !member ||
+      member.scopeKey !== scopeKey ||
+      candidate.scope.environment !== input.environment ||
+      candidate.scope.competitionId !== input.competition ||
+      candidate.scope.season !== input.seasonYear ||
+      Date.parse(candidate.createdAt) > Date.parse(cutoff) ||
+      Date.parse(decision.decidedAt) > Date.parse(cutoff) ||
+      Date.parse(member.appliedAt) > Date.parse(cutoff) ||
+      primary.length !== 1 ||
+      corroborating.length !== 1 ||
+      !observationMatchesInput(
+        input,
+        primary[0]!,
+        candidate.primary,
+        candidate.scope.statistic as keyof z.infer<typeof pavStatsSchema>
+      ) ||
+      !observationMatchesInput(
+        input,
+        corroborating[0]!,
+        candidate.corroborating,
+        candidate.scope.statistic as keyof z.infer<typeof pavStatsSchema>
+      )
+    ) {
+      invalidDecision = true;
+    }
+  }
+  if (
+    ambiguousPair ||
+    invalidDecision ||
+    actualScopes.size !== input.statisticalSelections.decisions.length ||
+    actualScopes.size !== expectedScopes.size ||
+    [...actualScopes].some((scope) => !expectedScopes.has(scope))
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['statisticalSelections'],
+      message:
+        'Statistical selections must exactly cover every unambiguous source discrepancy with current retained observations.',
+    });
+  }
 }
 
 function projectedResultMatchesSource(
@@ -1070,6 +1320,9 @@ function addInputSetIssues(
       message: 'PAV input counts do not match exact membership.',
     });
   }
+  if (input.schemaVersion === AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION) {
+    addStatisticalSelectionIssues(input, context);
+  }
 }
 
 export function createAflTradeHpnPavFieldMap(
@@ -1114,11 +1367,68 @@ type CreateExcludedInputSet = Omit<
   | z.input<typeof excludedProjectedInputSetContentSchema>,
   'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts' | 'fieldMapAuthority'
 >;
+type CreateStatisticallyAdjudicatedInputSet = Omit<
+  z.input<typeof statisticallyAdjudicatedInputSetContentSchema>,
+  'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts' | 'fieldMapAuthority'
+>;
 type CreateInputSet =
   | CreateLegacyInputSet
   | CreateProjectedInputSet
   | CreateRetrospectiveInputSet
-  | CreateExcludedInputSet;
+  | CreateExcludedInputSet
+  | CreateStatisticallyAdjudicatedInputSet;
+
+export function createAflTradeHpnStatisticalSelectionSet(
+  decisionsInput: readonly AflTradeHpnStatisticalDecision[],
+  membershipInput: readonly z.input<typeof statisticalSelectionMembershipSchema>[]
+): AflTradeHpnStatisticalSelectionSet {
+  const decisions = decisionsInput
+    .map((decision) => aflTradeHpnStatisticalDecisionSchema.parse(decision))
+    .sort((left, right) =>
+      ordinalCompare(left.candidate.candidateId, right.candidate.candidateId)
+    );
+  const membership = membershipInput
+    .map((member) => statisticalSelectionMembershipSchema.parse(member))
+    .sort((left, right) => ordinalCompare(left.scopeKey, right.scopeKey));
+  return aflTradeHpnStatisticalSelectionSetSchema.parse({
+    schemaVersion: AFL_TRADE_HPN_STATISTICAL_SELECTION_SET_SCHEMA_VERSION,
+    status: 'coverage_complete',
+    decisions,
+    membership,
+    membershipSha256: sha256AflTradeCanonicalJson(membership),
+    coverageId: createAflTradeContentAddress('hpn-statistical-coverage', {
+      candidateIds: decisions.map(({ candidate }) => candidate.candidateId).sort(ordinalCompare),
+      membership: decisions.map(({ candidate, decisionId }) => ({
+        candidateId: candidate.candidateId,
+        decisionId,
+      })),
+    }),
+  });
+}
+
+export function applyAflTradeHpnStatisticalSelections(
+  inputSet: AflTradeHpnPavSeasonInputSet,
+  row: Extract<AflTradeHpnPavSeasonInputSet['content']['rows'][number], { kind: 'player_match_stats' }>
+) {
+  const stats = { ...row.stats };
+  if (
+    inputSet.content.schemaVersion !== AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION ||
+    row.role !== 'primary'
+  ) {
+    return stats;
+  }
+  for (const decision of inputSet.content.statisticalSelections.decisions) {
+    const { scope } = decision.candidate;
+    if (
+      scope.playerId === row.player.canonicalId &&
+      scope.matchId === row.match.canonicalId &&
+      scope.clubId === row.club.canonicalId
+    ) {
+      stats[scope.statistic as keyof typeof stats] = decision.selectedValue;
+    }
+  }
+  return stats;
+}
 
 export function createAflTradeHpnPavSeasonInputSet(
   unparsedInput: CreateInputSet
@@ -1163,7 +1473,13 @@ export function createAflTradeHpnPavSeasonInputSet(
   };
   const content = inputSetContentSchema.parse({
     ...unparsedInput,
-    ...('excludedSourceRows' in unparsedInput
+    ...('statisticalSelections' in unparsedInput
+      ? {
+          excludedSourceRows: [...unparsedInput.excludedSourceRows].sort((left, right) =>
+            ordinalCompare(left.source.providerDecodedRowId, right.source.providerDecodedRowId)
+          ),
+        }
+      : 'excludedSourceRows' in unparsedInput
       ? {
           excludedSourceRows: [...unparsedInput.excludedSourceRows].sort((left, right) =>
             ordinalCompare(left.source.providerDecodedRowId, right.source.providerDecodedRowId)
@@ -1176,7 +1492,9 @@ export function createAflTradeHpnPavSeasonInputSet(
         }
       : {}),
     schemaVersion:
-      'excludedSourceRows' in unparsedInput
+      'statisticalSelections' in unparsedInput
+        ? AFL_TRADE_HPN_PAV_INPUT_SET_V5_SCHEMA_VERSION
+        : 'excludedSourceRows' in unparsedInput
         ? 'afl-trade-hpn-pav-input-set/v4'
         : 'knowledgePolicy' in unparsedInput
           ? 'afl-trade-hpn-pav-input-set/v3'

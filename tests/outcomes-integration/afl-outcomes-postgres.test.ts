@@ -1248,7 +1248,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0218_entitlement_release_source_ancestry',
       '0219_hpn_statistical_decision_custody',
       '0220_hpn_statistical_reviewer_authority',
-  '0221_hpn_private_clearance_adjudication',
+      '0221_hpn_private_clearance_adjudication',
+      '0222_hpn_pav_statistical_selection_membership',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1351,6 +1352,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_hpn_field_map_candidate',
       'outcome_hpn_field_map_review_decision',
       'outcome_hpn_projected_field_map',
+      'outcome_hpn_pav_input_statistical_selection',
       'outcome_hpn_reviewed_season_universe',
       'outcome_hpn_reviewed_season_member',
       'outcome_private_reviewed_hpn_method',
@@ -1361,6 +1363,45 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
     ]) {
       expect(tableNames).toContain(expected);
     }
+
+    const hpnV5Functions = await query<{ signature: string; definition: string }>(
+      `SELECT signature,pg_get_functiondef(signature::regprocedure) AS definition
+         FROM unnest(ARRAY[
+           'guard_outcome_hpn_pav_input_knowledge_version()',
+           'validate_outcome_hpn_pav_input_set_insert()',
+           'guard_outcome_hpn_pav_input_run_insert()',
+           'finalize_outcome_hpn_pav_input_set()',
+           'finalize_outcome_hpn_pav_input_set_v2()'
+         ]) signature`
+    );
+    expect(hpnV5Functions.rows).toHaveLength(5);
+    for (const { definition } of hpnV5Functions.rows) {
+      expect(definition).toContain('afl-trade-hpn-pav-input-set/v5');
+    }
+    for (const signature of [
+      'finalize_outcome_hpn_pav_input_set()',
+      'finalize_outcome_hpn_pav_input_set_v2()',
+    ]) {
+      expect(
+        hpnV5Functions.rows.find((row) => row.signature === signature)?.definition
+      ).toContain('require_outcome_hpn_pav_statistical_selections');
+    }
+    expect(
+      hpnV5Functions.rows.find(
+        (row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()'
+      )?.definition
+    ).toContain('outcome_hpn_acquisition_spell_is_current');
+    const hpnSelectionGuard = await query<{ definition: string }>(
+      `SELECT pg_get_functiondef(
+        'require_outcome_hpn_pav_statistical_selections(text,boolean)'::regprocedure) AS definition`
+    );
+    expect(hpnSelectionGuard.rows[0]?.definition).toContain('jsonb_each');
+    expect(hpnSelectionGuard.rows[0]?.definition).toContain(
+      'does not exactly cover retained discrepancies'
+    );
+    expect(hpnSelectionGuard.rows[0]?.definition).toContain(
+      'outcome_hpn_statistical_selection_is_current'
+    );
 
     const triggers = await query<{ trigger_name: string }>(
       `SELECT trigger_name FROM information_schema.triggers WHERE trigger_schema = current_schema()`

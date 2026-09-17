@@ -22,6 +22,7 @@ import {
   type AflTradeHpnPavInputFieldMap,
   type AflTradeHpnPavSeasonInputSet,
 } from './hpnPavInputContracts';
+import { loadAflTradeHpnStatisticalSelectionSet } from './postgresHpnStatisticalSelectionConsumption';
 import {
   listAflTradeHpnCandidateSourceFields,
   type AflTradeHpnSemanticBindingCandidate,
@@ -122,6 +123,7 @@ interface FinalizedInputSetRow {
   actual_source_run_count: number;
   actual_source_row_count: number;
   actual_excluded_source_row_count?: number;
+  actual_statistical_selection_count?: number;
   actual_completed_match_count: number;
   factual_match_count: number;
   factual_appearance_count: number;
@@ -885,6 +887,36 @@ async function persistInputSet(
        FROM jsonb_to_recordset($1::jsonb) AS value("inputSetId" text,"factId" text,ordinal integer)`,
     [canonicalizeAflTradeJson(factualAppearanceMembers)]
   );
+  if (content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5') {
+    const statisticalMembers = content.statisticalSelections.membership.map(
+      (member, ordinal) => ({
+        inputSetId: inputSet.inputSetId,
+        ordinal,
+        ...member,
+        selectionSha256: sha256AflTradeCanonicalJson(member),
+        selectionCanonicalJson: canonicalizeAflTradeJson(member),
+      })
+    );
+    await transaction.query(
+      `INSERT INTO outcome_hpn_pav_input_statistical_selection
+        (input_set_id,ordinal,scope_key,candidate_id,decision_id,support_review_id,revision,
+         applied_at,identity_json,identity_sha256,selection_sha256,selection_canonical_json,selection_json)
+       SELECT value."inputSetId",value.ordinal,value."scopeKey",value."candidateId",value."decisionId",
+              value."supportReviewId",value.revision,head.applied_at,head.identity_json,
+              value."identitySha256",value."selectionSha256",value."selectionCanonicalJson",
+              value."selectionCanonicalJson"::jsonb
+         FROM jsonb_to_recordset($1::jsonb) AS value(
+           "inputSetId" text,ordinal integer,"scopeKey" text,"candidateId" text,"decisionId" text,
+           "supportReviewId" text,revision integer,"appliedAt" text,"identitySha256" text,
+           "selectionSha256" text,"selectionCanonicalJson" text)
+         JOIN outcome_hpn_statistical_current_selection head
+           ON head.scope_key=value."scopeKey" AND head.decision_id=value."decisionId"
+          AND head.support_review_id=value."supportReviewId" AND head.revision=value.revision
+          AND head.applied_at=value."appliedAt"::timestamptz
+          AND encode(sha256(convert_to(outcome_afl_trade_canonical_json(head.identity_json),'UTF8')),'hex')=value."identitySha256"`,
+      [canonicalizeAflTradeJson(statisticalMembers)]
+    );
+  }
   await transaction.query(
     `UPDATE outcome_hpn_pav_input_set SET status='finalized', finalized_at=created_at
       WHERE input_set_id=$1 AND status='building'`,
@@ -919,7 +951,10 @@ async function loadFinalizedInputSetInTransaction(
               WHERE member.input_set_id=input_set.input_set_id) AS factual_match_count,
             (SELECT count(*)::integer
                FROM outcome_hpn_pav_input_factual_appearance_member member
-              WHERE member.input_set_id=input_set.input_set_id) AS factual_appearance_count
+              WHERE member.input_set_id=input_set.input_set_id) AS factual_appearance_count,
+            (SELECT count(*)::integer
+               FROM outcome_hpn_pav_input_statistical_selection member
+              WHERE member.input_set_id=input_set.input_set_id) AS actual_statistical_selection_count
        FROM outcome_hpn_pav_input_set input_set
       WHERE input_set.input_set_id=$1
       FOR SHARE`,
@@ -951,6 +986,10 @@ async function loadFinalizedInputSetInTransaction(
     (count, member) => count + member.factIds.length,
     0
   );
+  const statisticalSelectionCount =
+    inputSet.content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5'
+      ? inputSet.content.statisticalSelections.membership.length
+      : 0;
   if (
     canonicalizeAflTradeJson(inputSet.content) !== row.input_set_canonical_json ||
     sha256AflTradeCanonicalJson(inputSet.content) !== row.input_set_sha256 ||
@@ -963,7 +1002,8 @@ async function loadFinalizedInputSetInTransaction(
     inputSet.content.rows.length !== row.actual_source_row_count ||
     inputSet.content.completedMatches.length !== row.actual_completed_match_count ||
     factualMatchCount !== row.factual_match_count ||
-    factualAppearanceCount !== row.factual_appearance_count
+    factualAppearanceCount !== row.factual_appearance_count ||
+    statisticalSelectionCount !== (row.actual_statistical_selection_count ?? 0)
   ) {
     throw new AflTradeHpnPavInputError(
       'REPLAY_CONFLICT',
@@ -983,6 +1023,13 @@ async function loadFinalizedInputSetInTransaction(
       ...(excluded.length === 0
         ? {}
         : { reviewedNonparticipantDecisions: excluded.map((row) => row.review.decision.id) }),
+      ...(content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5'
+        ? {
+            reviewedStatisticalDecisions: content.statisticalSelections.decisions.map(
+              ({ decisionId }) => decisionId
+            ),
+          }
+        : {}),
       ...('knowledgePolicy' in content
         ? {
             knowledgePolicy: content.knowledgePolicy,
@@ -1054,6 +1101,23 @@ async function loadFinalizedInputSetInTransaction(
       contexts
     );
     requireFactualUniverseCoverage(currentRows, universe, contexts);
+    if (content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5') {
+      const currentSelections = await loadAflTradeHpnStatisticalSelectionSet(
+        transaction,
+        currentRequest,
+        inputSet,
+        cutoff
+      );
+      if (
+        canonicalizeAflTradeJson(currentSelections) !==
+        canonicalizeAflTradeJson(content.statisticalSelections)
+      ) {
+        throw new AflTradeHpnPavInputError(
+          'RESOLUTION_NOT_CURRENT',
+          'Retained statistical selection membership is no longer current.'
+        );
+      }
+    }
     const reconstructed = createAflTradeHpnPavSeasonInputSet({
       ...content,
       ...(excluded.length === 0 ? {} : { excludedSourceRows: currentExcluded }),
@@ -1129,6 +1193,12 @@ function requireExactScopeReplay(
         : []
       ).sort()
     ) !== canonicalizeAflTradeJson([...(request.reviewedNonparticipantDecisions ?? [])].sort()) ||
+    canonicalizeAflTradeJson(
+      (existing.content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5'
+        ? existing.content.statisticalSelections.decisions.map(({ decisionId }) => decisionId)
+        : []
+      ).sort()
+    ) !== canonicalizeAflTradeJson([...(request.reviewedStatisticalDecisions ?? [])].sort()) ||
     requestedSources.length !== persistedSources.length ||
     requestedSources.some((source, index) => source !== persistedSources[index])
   ) {
@@ -1370,7 +1440,7 @@ export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInpu
           completedMatches,
           rows,
         };
-        const inputSet = fieldMaps.every(isProjectedFieldMap)
+        let inputSet = fieldMaps.every(isProjectedFieldMap)
           ? createAflTradeHpnPavSeasonInputSet({
               ...inputSetBase,
               environment: 'non_production',
@@ -1388,6 +1458,39 @@ export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInpu
                   'One HPN input set cannot mix legacy and projected field-map authority.'
                 );
               })();
+        if (request.reviewedStatisticalDecisions !== undefined) {
+          if (
+            inputSet.content.schemaVersion !== 'afl-trade-hpn-pav-input-set/v3' &&
+            inputSet.content.schemaVersion !== 'afl-trade-hpn-pav-input-set/v4'
+          ) {
+            throw new AflTradeHpnPavInputError(
+              'SOURCE_AUTHORITY_MISMATCH',
+              'Statistical selection consumption requires private projected retrospective inputs.'
+            );
+          }
+          const statisticalSelections = await loadAflTradeHpnStatisticalSelectionSet(
+            transaction,
+            request,
+            inputSet,
+            custodyCutoff
+          );
+          try {
+            inputSet = createAflTradeHpnPavSeasonInputSet({
+              ...inputSetBase,
+              environment: 'non_production',
+              fieldMaps: fieldMaps.filter(isProjectedFieldMap),
+              excludedSourceRows,
+              statisticalSelections,
+            });
+          } catch (error) {
+            throw new AflTradeHpnPavInputError(
+              'STATISTICAL_COVERAGE_INCOMPLETE',
+              error instanceof Error
+                ? error.message
+                : 'Statistical decisions do not exactly cover the source discrepancies.'
+            );
+          }
+        }
         const replay = await transaction.query<{
           input_set_json: unknown;
           finalized_at: Date | string | null;

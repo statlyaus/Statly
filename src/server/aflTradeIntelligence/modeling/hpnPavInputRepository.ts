@@ -41,10 +41,28 @@ export const aflTradeHpnPavSeasonInputRequestSchema = z
       .min(1)
       .max(100_000)
       .optional(),
+    reviewedStatisticalDecisions: z
+      .array(contentAddressedId('hpn-statistical-decision'))
+      .min(1)
+      .max(100_000)
+      .optional(),
     sources: z.array(sourceSelectionSchema).min(3).max(100),
   })
   .strict()
   .superRefine((request, context) => {
+    if (
+      request.reviewedStatisticalDecisions !== undefined &&
+      (request.knowledgePolicy === undefined ||
+        request.environment !== 'non_production' ||
+        new Set(request.reviewedStatisticalDecisions).size !==
+          request.reviewedStatisticalDecisions.length)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Statistical decisions require unique membership and explicit private retrospective custody.',
+      });
+    }
     if (
       request.reviewedNonparticipantDecisions !== undefined &&
       (request.knowledgePolicy === undefined ||
@@ -130,6 +148,7 @@ export type AflTradeHpnPavInputErrorCode =
   | 'INPUT_SET_NOT_FINALIZED'
   | 'INCOMPLETE_SOURCE_ROWS'
   | 'RESOLUTION_NOT_CURRENT'
+  | 'STATISTICAL_COVERAGE_INCOMPLETE'
   | 'REPLAY_CONFLICT'
   | 'PERSISTENCE_REJECTED';
 
