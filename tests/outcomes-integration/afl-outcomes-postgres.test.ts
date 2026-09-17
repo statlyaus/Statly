@@ -1402,6 +1402,16 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
     expect(hpnSelectionGuard.rows[0]?.definition).toContain(
       'outcome_hpn_statistical_selection_is_current'
     );
+    const hpnCalculationFinalizer = await query<{ definition: string }>(
+      `SELECT pg_get_functiondef(
+        'finalize_outcome_hpn_pav_calculation()'::regprocedure) AS definition`
+    );
+    expect(hpnCalculationFinalizer.rows[0]?.definition).toContain(
+      'outcome_hpn_pav_effective_player_rows'
+    );
+    expect(hpnCalculationFinalizer.rows[0]?.definition).toContain(
+      'outcome_hpn_pav_effective_spell_source_rows'
+    );
 
     const triggers = await query<{ trigger_name: string }>(
       `SELECT trigger_name FROM information_schema.triggers WHERE trigger_schema = current_schema()`

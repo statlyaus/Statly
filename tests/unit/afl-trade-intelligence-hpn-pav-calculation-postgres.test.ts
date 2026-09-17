@@ -24,6 +24,10 @@ const migrationUrl = new URL(
   '../../prisma/afl-trade-outcomes/migrations/0033_hpn_pav_calculation_authority/migration.sql',
   import.meta.url
 );
+const selectionMigrationUrl = new URL(
+  '../../prisma/afl-trade-outcomes/migrations/0222_hpn_pav_statistical_selection_membership/migration.sql',
+  import.meta.url
+);
 const sha = (value: string) => sha256AflTradeCanonicalJson(value);
 const addressed = (prefix: string, value: string) => `${prefix}:${sha(value)}`;
 
@@ -42,7 +46,7 @@ const stats = (inside50s: number) => ({
   tackles: 3,
 });
 
-function calculation(calculatedAt: string) {
+function calculation(calculatedAt: string, selectedInside50s?: number) {
   const playerRows = [
     { playerId: 'player:a1', teamId: 'club:home', rowId: 'row:a1', stats: stats(10) },
     { playerId: 'player:a2', teamId: 'club:home', rowId: 'row:a2', stats: stats(11) },
@@ -52,19 +56,36 @@ function calculation(calculatedAt: string) {
     ...player,
     spellVersionId: addressed('acquisition-spell-version', `${player.playerId}:${player.teamId}`),
   }));
+  const effectivePlayerRows = playerRows.map((player, index) => ({
+    ...player,
+    stats:
+      index === 0 && selectedInside50s !== undefined
+        ? { ...player.stats, inside50s: selectedInside50s }
+        : player.stats,
+    sourceRowIds:
+      index === 0 && selectedInside50s !== undefined
+        ? [player.rowId, 'row:corroborating']
+        : [player.rowId],
+  }));
+  const homeInside50s = effectivePlayerRows
+    .filter(({ teamId }) => teamId === 'club:home')
+    .reduce((sum, player) => sum + player.stats.inside50s, 0);
+  const awayInside50s = effectivePlayerRows
+    .filter(({ teamId }) => teamId === 'club:away')
+    .reduce((sum, player) => sum + player.stats.inside50s, 0);
   const core = calculateAflTradeHpnPavCore([
     {
       teamId: 'club:home',
       pointsFor: 100,
       pointsAgainst: 80,
-      inside50sFor: 21,
-      inside50sAgainst: 25,
-      players: playerRows
+      inside50sFor: homeInside50s,
+      inside50sAgainst: awayInside50s,
+      players: effectivePlayerRows
         .filter(({ teamId }) => teamId === 'club:home')
-        .map(({ spellVersionId, playerId, rowId, stats: values }) => ({
+        .map(({ spellVersionId, playerId, sourceRowIds, stats: values }) => ({
           spellVersionId,
           playerId,
-          sourceRowIds: [rowId],
+          sourceRowIds,
           ...values,
         })),
     },
@@ -72,19 +93,19 @@ function calculation(calculatedAt: string) {
       teamId: 'club:away',
       pointsFor: 80,
       pointsAgainst: 100,
-      inside50sFor: 25,
-      inside50sAgainst: 21,
-      players: playerRows
+      inside50sFor: awayInside50s,
+      inside50sAgainst: homeInside50s,
+      players: effectivePlayerRows
         .filter(({ teamId }) => teamId === 'club:away')
-        .map(({ spellVersionId, playerId, rowId, stats: values }) => ({
+        .map(({ spellVersionId, playerId, sourceRowIds, stats: values }) => ({
           spellVersionId,
           playerId,
-          sourceRowIds: [rowId],
+          sourceRowIds,
           ...values,
         })),
     },
   ]);
-  const inputSetSha256 = sha('input-set');
+  const inputSetSha256 = sha(`input-set:${selectedInside50s ?? 'primary'}`);
   const methodBytes = new TextEncoder().encode('<html>HPN method</html>');
   const method = createAflTradeHpnPavMethod({
     sourceArtifact: createAflTradeByteArtifactRef(
@@ -195,7 +216,7 @@ async function insertCalculation(
 }
 
 describe('HPN PAV calculation PostgreSQL authority', () => {
-  it('finalizes the exact derived formula and rejects value tampering and late children', async () => {
+  it('finalizes the selected overlay and rejects value tampering and late children', async () => {
     const db = await PGlite.create({ extensions: { pgcrypto } });
     await db.exec(`
       CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -221,6 +242,31 @@ describe('HPN PAV calculation PostgreSQL authority', () => {
       BEGIN RAISE EXCEPTION 'append only'; END; $$ LANGUAGE plpgsql;
     `);
     await db.exec(await readFile(migrationUrl, 'utf8'));
+    await db.exec(`
+      CREATE TABLE outcome_hpn_pav_input_statistical_selection (
+        input_set_id text NOT NULL,selection_json jsonb NOT NULL
+      );
+      CREATE FUNCTION outcome_0222_replace_fragment(
+        signature text,old_fragment text,new_fragment text,expected_occurrences integer
+      ) RETURNS void LANGUAGE plpgsql AS $$
+      DECLARE definition text; occurrences integer;
+      BEGIN
+        SELECT pg_get_functiondef(to_regprocedure(signature)) INTO definition;
+        occurrences:=(length(definition)-length(replace(definition,old_fragment,'')))
+          /length(old_fragment);
+        IF occurrences<>expected_occurrences THEN
+          RAISE EXCEPTION 'Unexpected replacement count %',occurrences;
+        END IF;
+        EXECUTE replace(definition,old_fragment,new_fragment);
+      END $$;
+    `);
+    const selectionMigration = await readFile(selectionMigrationUrl, 'utf8');
+    const overlayStart = selectionMigration.indexOf('-- BEGIN 0222 CALCULATION OVERLAY');
+    const overlayEnd = selectionMigration.indexOf('-- END 0222 CALCULATION OVERLAY');
+    if (overlayStart < 0 || overlayEnd <= overlayStart) {
+      throw new Error('Migration 0222 calculation overlay section is missing.');
+    }
+    await db.exec(selectionMigration.slice(overlayStart, overlayEnd));
     await db.exec(`INSERT INTO outcome_club VALUES ('club:home'),('club:away');
       INSERT INTO outcome_player VALUES ('player:a1'),('player:a2'),('player:b1'),('player:b2');`);
     await db.exec('BEGIN');
@@ -228,7 +274,7 @@ describe('HPN PAV calculation PostgreSQL authority', () => {
       `SELECT date_trunc('milliseconds',transaction_timestamp()) AS value`
     );
     const calculatedAt = new Date(time.rows[0]!.value).toISOString();
-    const fixture = calculation(calculatedAt);
+    const fixture = calculation(calculatedAt, 20);
     for (const player of fixture.playerRows) {
       await db.query(`INSERT INTO outcome_acquisition_spell_version VALUES ($1)`, [
         player.spellVersionId,
@@ -372,7 +418,26 @@ describe('HPN PAV calculation PostgreSQL authority', () => {
           acquisitionSpell: {
             spellVersionId: fixture.playerRows[0]!.spellVersionId,
           },
-          stats: stats(10),
+          stats: stats(20),
+        }),
+      ]
+    );
+    await db.query(
+      `INSERT INTO outcome_hpn_pav_input_statistical_selection VALUES ($1,$2::jsonb)`,
+      [
+        fixture.value.content.inputSetId,
+        JSON.stringify({
+          selectedSource: 'corroborating',
+          selectedValue: 20,
+          candidate: {
+            scope: {
+              playerId: 'player:a1',
+              matchId: 'match:final',
+              clubId: 'club:home',
+              statistic: 'inside50s',
+            },
+            corroborating: { providerDecodedRowId: 'row:corroborating' },
+          },
         }),
       ]
     );

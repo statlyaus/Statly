@@ -232,8 +232,91 @@ CREATE TRIGGER outcome_hpn_pav_input_set_finalize_guard_v2 BEFORE UPDATE ON outc
    AND OLD.input_set_json#>>'{content,fieldMapAuthority}'='projected'))
  EXECUTE FUNCTION finalize_outcome_hpn_pav_input_set_v2();
 
+-- BEGIN 0222 CALCULATION OVERLAY
+-- The calculation finalizer must independently derive the same selected values and provenance
+-- as the application service. Raw retained input rows remain immutable.
+CREATE FUNCTION outcome_hpn_pav_effective_player_rows(requested_input TEXT)
+RETURNS TABLE(provider_decoded_row_id TEXT,row_json JSONB)
+LANGUAGE sql STABLE AS $$
+ WITH overrides AS (
+  SELECT selection.selection_json#>>'{candidate,scope,playerId}' AS player_id,
+    selection.selection_json#>>'{candidate,scope,matchId}' AS match_id,
+    selection.selection_json#>>'{candidate,scope,clubId}' AS club_id,
+    jsonb_object_agg(selection.selection_json#>>'{candidate,scope,statistic}',
+      selection.selection_json->'selectedValue') AS selected_stats
+  FROM outcome_hpn_pav_input_statistical_selection selection
+  WHERE selection.input_set_id=requested_input
+  GROUP BY 1,2,3
+ )
+ SELECT primary_row.provider_decoded_row_id,
+   jsonb_set(primary_row.row_json,'{stats}',
+     primary_row.row_json->'stats'||COALESCE(overrides.selected_stats,'{}'::jsonb),false)
+ FROM outcome_hpn_pav_input_row primary_row
+ LEFT JOIN overrides
+   ON overrides.player_id=primary_row.row_json#>>'{player,canonicalId}'
+  AND overrides.match_id=primary_row.row_json#>>'{match,canonicalId}'
+  AND overrides.club_id=primary_row.row_json#>>'{club,canonicalId}'
+ WHERE primary_row.input_set_id=requested_input
+   AND primary_row.row_kind='player_match_stats' AND primary_row.role='primary'
+$$;
+
+CREATE FUNCTION outcome_hpn_pav_effective_spell_source_rows(requested_input TEXT,requested_spell TEXT)
+RETURNS JSONB LANGUAGE sql STABLE AS $$
+ WITH source_rows AS (
+  SELECT primary_row.provider_decoded_row_id AS row_id
+  FROM outcome_hpn_pav_input_row primary_row
+  WHERE primary_row.input_set_id=requested_input
+    AND primary_row.row_kind='player_match_stats' AND primary_row.role='primary'
+    AND primary_row.row_json#>>'{acquisitionSpell,spellVersionId}'=requested_spell
+  UNION
+  SELECT selection.selection_json#>>'{candidate,corroborating,providerDecodedRowId}'
+  FROM outcome_hpn_pav_input_statistical_selection selection
+  JOIN outcome_hpn_pav_input_row primary_row
+    ON primary_row.input_set_id=selection.input_set_id
+   AND primary_row.row_kind='player_match_stats' AND primary_row.role='primary'
+   AND primary_row.row_json#>>'{player,canonicalId}'=
+       selection.selection_json#>>'{candidate,scope,playerId}'
+   AND primary_row.row_json#>>'{match,canonicalId}'=
+       selection.selection_json#>>'{candidate,scope,matchId}'
+   AND primary_row.row_json#>>'{club,canonicalId}'=
+       selection.selection_json#>>'{candidate,scope,clubId}'
+  WHERE selection.input_set_id=requested_input
+    AND selection.selection_json->>'selectedSource'='corroborating'
+    AND primary_row.row_json#>>'{acquisitionSpell,spellVersionId}'=requested_spell
+ )
+ SELECT COALESCE(jsonb_agg(to_jsonb(row_id) ORDER BY row_id),'[]'::jsonb) FROM source_rows
+$$;
+
+SELECT outcome_0222_replace_fragment('finalize_outcome_hpn_pav_calculation()',
+ $old$FROM "outcome_hpn_pav_input_row" row
+      WHERE row."input_set_id"=NEW."input_set_id"
+        AND row."row_kind"='player_match_stats' AND row."role"='primary'$old$,
+ $new$FROM outcome_hpn_pav_effective_player_rows(NEW."input_set_id") row$new$,4);
+
+SELECT outcome_0222_replace_fragment('finalize_outcome_hpn_pav_calculation()',
+ $old$SELECT 1 FROM "outcome_hpn_pav_input_row" row
+    WHERE row."input_set_id"=NEW."input_set_id"
+      AND row."row_kind"='player_match_stats' AND row."role"='primary'
+      AND NOT EXISTS$old$,
+ $new$SELECT 1 FROM outcome_hpn_pav_effective_player_rows(NEW."input_set_id") row
+    WHERE NOT EXISTS$new$,1);
+
+SELECT outcome_0222_replace_fragment('finalize_outcome_hpn_pav_calculation()',
+ $old$FROM "outcome_hpn_pav_input_row" row
+    WHERE row."input_set_id"=NEW."input_set_id"
+      AND row."row_kind"='player_match_stats' AND row."role"='primary'$old$,
+ $new$FROM outcome_hpn_pav_effective_player_rows(NEW."input_set_id") row$new$,1);
+
+SELECT outcome_0222_replace_fragment('finalize_outcome_hpn_pav_calculation()',
+ $old$jsonb_agg(to_jsonb(row."provider_decoded_row_id") ORDER BY row."provider_decoded_row_id") AS source_row_ids$old$,
+ $new$outcome_hpn_pav_effective_spell_source_rows(NEW."input_set_id",
+          row."row_json"#>>'{acquisitionSpell,spellVersionId}') AS source_row_ids$new$,1);
+-- END 0222 CALCULATION OVERLAY
+
 GRANT SELECT ON outcome_hpn_pav_input_statistical_selection TO afl_trade_private_valuation_scheduler_owner;
 DO $$ BEGIN
  EXECUTE format('ALTER FUNCTION require_outcome_hpn_pav_statistical_selections(TEXT,BOOLEAN) SET search_path TO %I,pg_temp',current_schema());
+ EXECUTE format('ALTER FUNCTION outcome_hpn_pav_effective_player_rows(TEXT) SET search_path TO %I,pg_temp',current_schema());
+ EXECUTE format('ALTER FUNCTION outcome_hpn_pav_effective_spell_source_rows(TEXT,TEXT) SET search_path TO %I,pg_temp',current_schema());
 END $$;
 DROP FUNCTION outcome_0222_replace_fragment(TEXT,TEXT,TEXT,INTEGER);
