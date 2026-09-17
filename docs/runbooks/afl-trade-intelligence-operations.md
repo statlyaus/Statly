@@ -2208,8 +2208,9 @@ snapshots requiring locked rechecks before promotion or consumption. This inspec
 of a derived statistic) require separate representation evidence; relabelling a normalized blank
 as measured cannot bypass that condition. Existing legacy input/calculation behavior is unchanged.
 `inspectReviewerAuthority` separately checks the authenticated operator against a governed
-`afl_trade_hpn_statistical_reviewer` registration. Migration0220 restricts that role to one AFLM
-season, scope `hpn-statistics:AFLM:<season>`, provider `statly_modeling` and capability
+`afl_trade_hpn_statistical_reviewer` registration. Migration
+`0220_hpn_statistical_reviewer_authority` restricts that role to one AFLM season, scope
+`hpn-statistics:AFLM:<season>`, provider `statly_modeling` and capability
 `adjudicate_hpn_statistics`. Identity-reviewer grants do not qualify. Authority evidence must carry
 exact `validFrom`/`validThrough` timestamps, exist and be custody-verified before the decision, and
 remain current and unexpired. Registration still requires the isolated non-production governance

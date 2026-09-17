@@ -71,7 +71,10 @@ const observationSchema = z
       ctx.addIssue({ code: 'custom', message: 'Source fields must be unique.' });
     }
     if (value.representation !== 'measured' && value.value !== 0) {
-      ctx.addIssue({ code: 'custom', message: 'A normalized blank can only represent zero.' });
+      ctx.addIssue({
+        code: 'custom',
+        message: 'A non-measured representation can only represent zero.',
+      });
     }
   });
 const candidateBody = z

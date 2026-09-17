@@ -189,7 +189,9 @@ export async function authenticateAflTradeHpnStatisticalSources(
     )!;
     requireExactObservationCustody(cell, observation, context, row);
     if (observation.representation !== 'measured' && !reviewedZero) {
-      throw new Error('Blank-normalized zero requires separate governed representation evidence.');
+      throw new Error(
+        'A non-measured zero representation requires separate governed representation evidence.'
+      );
     }
     if (
       reviewedZero &&
