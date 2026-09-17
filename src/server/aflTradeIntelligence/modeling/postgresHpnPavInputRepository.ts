@@ -1211,6 +1211,43 @@ function requireExactScopeReplay(
   return existing;
 }
 
+async function applyReviewedStatisticalSelections(
+  transaction: AflOutcomeSqlTransaction,
+  request: AflTradeHpnPavSeasonInputRequest,
+  inputSet: AflTradeHpnPavSeasonInputSet,
+  custodyCutoff: string,
+  buildInputSet: (
+    selections: Awaited<ReturnType<typeof loadAflTradeHpnStatisticalSelectionSet>>
+  ) => AflTradeHpnPavSeasonInputSet
+): Promise<AflTradeHpnPavSeasonInputSet> {
+  if (request.reviewedStatisticalDecisions === undefined) return inputSet;
+  if (
+    inputSet.content.schemaVersion !== 'afl-trade-hpn-pav-input-set/v3' &&
+    inputSet.content.schemaVersion !== 'afl-trade-hpn-pav-input-set/v4'
+  ) {
+    throw new AflTradeHpnPavInputError(
+      'SOURCE_AUTHORITY_MISMATCH',
+      'Statistical selection consumption requires private projected retrospective inputs.'
+    );
+  }
+  const selections = await loadAflTradeHpnStatisticalSelectionSet(
+    transaction,
+    request,
+    inputSet,
+    custodyCutoff
+  );
+  try {
+    return buildInputSet(selections);
+  } catch (error) {
+    throw new AflTradeHpnPavInputError(
+      'STATISTICAL_COVERAGE_INCOMPLETE',
+      error instanceof Error
+        ? error.message
+        : 'Statistical decisions do not exactly cover the source discrepancies.'
+    );
+  }
+}
+
 export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInputRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
@@ -1458,39 +1495,20 @@ export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInpu
                   'One HPN input set cannot mix legacy and projected field-map authority.'
                 );
               })();
-        if (request.reviewedStatisticalDecisions !== undefined) {
-          if (
-            inputSet.content.schemaVersion !== 'afl-trade-hpn-pav-input-set/v3' &&
-            inputSet.content.schemaVersion !== 'afl-trade-hpn-pav-input-set/v4'
-          ) {
-            throw new AflTradeHpnPavInputError(
-              'SOURCE_AUTHORITY_MISMATCH',
-              'Statistical selection consumption requires private projected retrospective inputs.'
-            );
-          }
-          const statisticalSelections = await loadAflTradeHpnStatisticalSelectionSet(
-            transaction,
-            request,
-            inputSet,
-            custodyCutoff
-          );
-          try {
-            inputSet = createAflTradeHpnPavSeasonInputSet({
+        inputSet = await applyReviewedStatisticalSelections(
+          transaction,
+          request,
+          inputSet,
+          custodyCutoff,
+          (statisticalSelections) =>
+            createAflTradeHpnPavSeasonInputSet({
               ...inputSetBase,
               environment: 'non_production',
               fieldMaps: fieldMaps.filter(isProjectedFieldMap),
               excludedSourceRows,
               statisticalSelections,
-            });
-          } catch (error) {
-            throw new AflTradeHpnPavInputError(
-              'STATISTICAL_COVERAGE_INCOMPLETE',
-              error instanceof Error
-                ? error.message
-                : 'Statistical decisions do not exactly cover the source discrepancies.'
-            );
-          }
-        }
+            })
+        );
         const replay = await transaction.query<{
           input_set_json: unknown;
           finalized_at: Date | string | null;
