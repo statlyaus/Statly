@@ -52,7 +52,12 @@ it('supersedes the existing head through an update and increments its revision',
   const f = setup({ decision_id: 'previous', revision: 1 }, 'previous');
   expect(
     await f.owner.apply(f.decision.decisionId, 'support', f.execution, f.reader)
-  ).toMatchObject({ revision: 2, idempotentReplay: false, calculationEligible: false });
+  ).toMatchObject({
+    revision: 2,
+    idempotentReplay: false,
+    calculationEligible: false,
+    publicationEligible: false,
+  });
   expect(
     f.statements.some((sql) => sql.startsWith('UPDATE outcome_hpn_statistical_current_selection'))
   ).toBe(true);
@@ -76,7 +81,12 @@ it('permits exact current replay without updating the head', async () => {
   });
   expect(
     await f.owner.apply(f.decision.decisionId, 'support', f.execution, f.reader)
-  ).toMatchObject({ revision: 1, idempotentReplay: true });
+  ).toMatchObject({
+    revision: 1,
+    idempotentReplay: true,
+    calculationEligible: false,
+    publicationEligible: false,
+  });
   expect(f.statements.some((sql) => sql.startsWith('UPDATE') || sql.startsWith('INSERT'))).toBe(
     false
   );

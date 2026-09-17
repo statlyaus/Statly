@@ -189,6 +189,15 @@ it('rejects direct SQL content/address drift and attempted authority escalation'
   ).rejects.toThrow('outcome_hpn_statistical_custody_integrity');
 });
 
+it('keeps supersession chronology ordered after migration', async () => {
+  const result = await pool.query(
+    `SELECT pg_get_functiondef('validate_outcome_hpn_statistical_current_selection()'::regprocedure) AS definition`
+  );
+  const definition = result.rows[0].definition as string;
+  expect(definition).toContain('OLD.applied_at');
+  expect(definition).toContain('predecessor.decision_json');
+});
+
 it('round-trips an independent migrated schema with the original registration timestamps', async () => {
   await repository.retainUnverified(f.result, reader);
   const { candidateId: _id, ...body } = f.candidate;

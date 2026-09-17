@@ -144,6 +144,7 @@ export class PostgresAflTradeHpnPrivateClearanceApplication {
           revision: head.rows[0].revision,
           idempotentReplay: true,
           calculationEligible: false as const,
+          publicationEligible: false as const,
         };
       }
       if ((head.rows[0]?.decision_id ?? null) !== retained.decision.supersedesDecisionId)
@@ -168,7 +169,13 @@ export class PostgresAflTradeHpnPrivateClearanceApplication {
           canonicalizeAflTradeJson(source.identities),
         ]
       );
-      return { decisionId, revision, idempotentReplay: false, calculationEligible: false as const };
+      return {
+        decisionId,
+        revision,
+        idempotentReplay: false,
+        calculationEligible: false as const,
+        publicationEligible: false as const,
+      };
     });
   }
 

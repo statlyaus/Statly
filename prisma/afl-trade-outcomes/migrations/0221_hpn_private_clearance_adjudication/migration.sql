@@ -211,6 +211,11 @@ BEGIN
  OR NEW.supersedes_decision_id IS DISTINCT FROM d.decision_json->>'supersedesDecisionId'
  OR (TG_OP='INSERT' AND (NEW.revision<>1 OR NEW.supersedes_decision_id IS NOT NULL))
  OR (TG_OP='UPDATE' AND (NEW.scope_key<>OLD.scope_key OR NEW.revision<>OLD.revision+1 OR NEW.supersedes_decision_id IS DISTINCT FROM OLD.decision_id))
+ OR (TG_OP='UPDATE' AND (OLD.applied_at>(d.decision_json->>'decidedAt')::timestamptz OR EXISTS (
+   SELECT 1 FROM outcome_hpn_statistical_decision_custody predecessor
+   WHERE predecessor.decision_id=OLD.decision_id
+   AND (predecessor.decision_json->>'decidedAt')::timestamptz>(d.decision_json->>'decidedAt')::timestamptz
+ )))
  OR NEW.applied_at<(d.decision_json->>'decidedAt')::timestamptz OR NEW.applied_at>clock_timestamp()
  OR NOT outcome_hpn_statistical_selection_is_current(NEW.decision_id,NEW.support_review_id,NEW.identity_json)
  THEN RAISE EXCEPTION 'Statistical selection requires exact current source, identity, reviewer and evidence authority'; END IF;
