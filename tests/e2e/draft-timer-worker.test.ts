@@ -1,6 +1,6 @@
 import { DraftDirection, DraftStatus, DraftType, LeagueRole, PrismaClient } from '@prisma/client';
 import { Queue } from 'bullmq';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { DEVELOPMENT_AUTH_EMAIL, DEVELOPMENT_AUTH_USER_ID } from '../../src/lib/devAuth';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategories';
@@ -52,6 +52,20 @@ function timerTextToSeconds(text: string): number {
   const minutes = Number(text.match(/(\d+)m/)?.[1] ?? 0);
   const seconds = Number(text.match(/(\d+)s/)?.[1] ?? 0);
   return minutes * 60 + seconds;
+}
+
+async function waitForDraftCommandRoutes(page: Page) {
+  for (const command of ['pause', 'resume'] as const) {
+    await expect
+      .poll(
+        async () =>
+          (await page.request.post(`/api/drafts/__route_warmup__/${command}`)).headers()[
+            'content-type'
+          ] ?? '',
+        { timeout: 30_000 }
+      )
+      .toContain('application/json');
+  }
 }
 
 async function seedLiveTimerFixture() {
@@ -310,6 +324,7 @@ test(
 
     const runtimeErrors = collectRuntimeErrors(page);
     await authenticateAsDevelopmentUser(page);
+    await waitForDraftCommandRoutes(page);
     const { deadlineAt } = await seedLiveTimerFixture();
 
     await page.goto(`/drafts/${FIXTURE.draftId}`);
