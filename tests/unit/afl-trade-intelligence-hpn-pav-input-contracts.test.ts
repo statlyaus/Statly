@@ -2,14 +2,27 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
+  createAflTradeByteArtifactRef,
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  applyAflTradeHpnStatisticalSelections,
   createAflTradeHpnPavFieldMap,
   createAflTradeHpnPavSeasonInputSet,
+  createAflTradeHpnStatisticalSelectionSet,
 } from '@/server/aflTradeIntelligence/modeling/hpnPavInputContracts';
+import { createAflTradeFinalizedHpnPavCalculationService } from '@/server/aflTradeIntelligence/modeling/hpnPavCalculationService';
+import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import { aflTradeHpnProjectedFieldMapSchema } from '@/server/aflTradeIntelligence/modeling/hpnProjectedFieldMap';
-
+import {
+  aflTradeHpnStatisticalDecisionSchema,
+  createAflTradeHpnStatisticalCell,
+} from '@/server/aflTradeIntelligence/modeling/hpnStatisticalAdjudication';
 const sha = (character: string) => character.repeat(64);
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const decision = (prefix: string, character: string) => ({
@@ -408,7 +421,228 @@ function fixture() {
   };
 }
 
+function statisticalSelectionFixture(options: { staleObservation?: boolean; uncovered?: boolean } = {}) {
+  const input = fixture();
+  const fieldMaps = input.fieldMaps.map((fieldMap, index) =>
+    projectedFieldMap(fieldMap, String(index + 1))
+  );
+  const sourceRuns = input.sourceRuns.map((run, index) => ({
+    ...run,
+    fieldMapId: fieldMaps[index]!.fieldMapId,
+  }));
+  const primary = input.rows.find(
+    (row) =>
+      row.kind === 'player_match_stats' &&
+      row.role === 'primary' &&
+      row.player.canonicalId === 'player:a1'
+  );
+  const corroborating = input.rows.find(
+    (row) =>
+      row.kind === 'player_match_stats' &&
+      row.role === 'corroborating' &&
+      row.player.canonicalId === 'player:a1'
+  );
+  if (
+    !primary ||
+    primary.kind !== 'player_match_stats' ||
+    !corroborating ||
+    corroborating.kind !== 'player_match_stats'
+  ) {
+    throw new Error('Missing statistical selection fixture rows');
+  }
+  corroborating.stats.tackles = 6;
+  corroborating.source.sourceValues.tackles = 6;
+  if (options.uncovered) {
+    const other = input.rows.find(
+      (row) =>
+        row.kind === 'player_match_stats' &&
+        row.role === 'corroborating' &&
+        row.player.canonicalId === 'player:a2'
+    );
+    if (!other || other.kind !== 'player_match_stats') throw new Error('Missing second fixture row');
+    other.stats.marks = 6;
+    other.source.sourceValues.marks = 6;
+  }
+  const observation = (
+    row: typeof primary,
+    role: 'primary' | 'corroborating'
+  ) => {
+    const run = sourceRuns.find(
+      ({ normalizationRunId }) => normalizationRunId === row.source.normalizationRunId
+    )!;
+    const map = fieldMaps.find(({ fieldMapId }) => fieldMapId === run.fieldMapId)!;
+    return {
+      normalizationRunId: row.source.normalizationRunId,
+      stagingSha256: run.stagingSha256,
+      provider: run.provider,
+      capabilityId: run.capabilityId,
+      captureId: run.captureId,
+      sourceSnapshotId: run.sourceSnapshotId,
+      sourceArtifactId: run.sourceArtifactId,
+      providerDecodedRowId: row.source.providerDecodedRowId,
+      sourceRowSha256:
+        options.staleObservation && role === 'primary' ? sha('0') : row.source.sourceRowSha256,
+      typedPayloadSha256: row.source.typedPayloadSha256,
+      fieldMapId: map.fieldMapId,
+      fieldMapSha256: sha256AflTradeCanonicalJson(map.content),
+      sourceFields: ['tackles'],
+      value: row.stats.tackles,
+      representation: 'measured' as const,
+    };
+  };
+  const candidate = createAflTradeHpnStatisticalCell({
+    schemaVersion: 'afl-trade-hpn-statistical-cell/v1',
+    scope: {
+      environment: 'non_production',
+      competitionId: 'AFLM',
+      season: input.seasonYear,
+      playerId: primary.player.canonicalId,
+      matchId: primary.match.canonicalId,
+      clubId: primary.club.canonicalId,
+      statistic: 'tackles',
+    },
+    primary: observation(primary, 'primary'),
+    corroborating: observation(corroborating, 'corroborating'),
+    createdAt: '2026-08-09T01:00:00.000Z',
+  });
+  const evidenceArtifact = createAflTradeCanonicalJsonArtifactRef(
+    { reviewedTackles: 6 },
+    '2026-08-09T02:00:00.000Z'
+  );
+  const decisionBody = {
+    schemaVersion: 'afl-trade-hpn-statistical-decision/v1' as const,
+    candidate,
+    selectedSource: 'corroborating' as const,
+    selectedValue: 6,
+    evidence: [
+      {
+        artifact: evidenceArtifact,
+        locator: 'reviewed-tackles',
+        observedValue: 6,
+        representation: 'measured' as const,
+      },
+    ],
+    reviewerId: 'reviewer:test',
+    rationale: 'Reviewed retained discrepancy.',
+    decidedAt: '2026-08-09T03:00:00.000Z',
+    supersedesDecisionId: null,
+    authority: 'requires_repository_verification' as const,
+    publicationEligible: false as const,
+  };
+  const statisticalDecision = aflTradeHpnStatisticalDecisionSchema.parse({
+    ...decisionBody,
+    decisionId: createAflTradeContentAddress('hpn-statistical-decision', decisionBody),
+  });
+  const statisticalSelections = createAflTradeHpnStatisticalSelectionSet(
+    [statisticalDecision],
+    [
+      {
+        scopeKey: createAflTradeContentAddress('hpn-statistical-scope', candidate.scope),
+        candidateId: candidate.candidateId,
+        decisionId: statisticalDecision.decisionId,
+        supportReviewId: `hpn-statistical-support:${sha('7')}`,
+        revision: 1,
+        appliedAt: '2026-08-09T04:00:00.000Z',
+        identitySha256: sha('8'),
+      },
+    ]
+  );
+  return {
+    input,
+    primary,
+    statisticalDecision,
+    request: {
+      ...input,
+      environment: 'non_production' as const,
+      knowledgePolicy: 'retrospective_as_recorded_by_input_creation' as const,
+      knowledgeCutoffAt: input.createdAt,
+      fieldMaps,
+      sourceRuns,
+      excludedSourceRows: [],
+      statisticalSelections,
+    },
+  };
+}
+
 describe('HPN PAV governed input contracts', () => {
+  it('seals complete reviewed discrepancies and overlays selected values without rewriting source rows', () => {
+    const fixture = statisticalSelectionFixture();
+    const inputSet = createAflTradeHpnPavSeasonInputSet(fixture.request);
+    const storedPrimary = inputSet.content.rows.find(
+      (row) =>
+        row.kind === 'player_match_stats' &&
+        row.role === 'primary' &&
+        row.player.canonicalId === 'player:a1'
+    );
+    if (!storedPrimary || storedPrimary.kind !== 'player_match_stats') {
+      throw new Error('Missing sealed primary row');
+    }
+    expect(inputSet.content.schemaVersion).toBe('afl-trade-hpn-pav-input-set/v5');
+    expect(storedPrimary.stats.tackles).toBe(5);
+    expect(applyAflTradeHpnStatisticalSelections(inputSet, storedPrimary).tackles).toBe(6);
+    expect(fixture.primary.stats.tackles).toBe(5);
+  });
+
+  it('calculates from selected values and records a selected corroborating row as provenance', async () => {
+    const selected = statisticalSelectionFixture();
+    const methodBytes = new TextEncoder().encode('<html><body>HPN PAV method</body></html>');
+    const method = createAflTradeHpnPavMethod({
+      sourceArtifact: createAflTradeByteArtifactRef(
+        methodBytes,
+        'text/html',
+        '2026-08-09T00:00:00.000Z'
+      ),
+      sourceBytes: methodBytes,
+      capturedAt: '2026-08-09T00:00:00.000Z',
+    });
+    const inputSet = createAflTradeHpnPavSeasonInputSet({
+      ...selected.request,
+      methodId: method.methodId,
+    });
+    const service = createAflTradeFinalizedHpnPavCalculationService({
+      inputRepository: {
+        loadFinalizedSeasonInputSet: async () => inputSet,
+      } as never,
+      methodAuthority: { loadExact: async () => ({ method, sourceBytes: methodBytes }) },
+      clock: { now: () => '2026-08-11T00:00:00.000Z' },
+    });
+
+    const calculation = await service.calculate(
+      {
+        inputSetId: inputSet.inputSetId,
+        environment: 'non_production',
+        competition: 'AFLM',
+        seasonYear: 2025,
+        methodId: method.methodId,
+      },
+      { environment: 'non_production' }
+    );
+    const player = calculation.content.players.find(({ playerId }) => playerId === 'player:a1');
+    expect(player?.source.tackles).toBe(6);
+    expect(player?.source.sourceRowIds).toEqual([
+      'provider-row:corroborating:a1',
+      'provider-row:primary:a1',
+    ]);
+    const rawPrimary = inputSet.content.rows.find(
+      (row) =>
+        row.kind === 'player_match_stats' &&
+        row.role === 'primary' &&
+        row.player.canonicalId === 'player:a1'
+    );
+    expect(rawPrimary?.kind === 'player_match_stats' && rawPrimary.stats.tackles).toBe(5);
+  });
+
+  it('rejects incomplete discrepancy coverage and stale retained observation identity', () => {
+    expect(() =>
+      createAflTradeHpnPavSeasonInputSet(statisticalSelectionFixture({ uncovered: true }).request)
+    ).toThrow(/exactly cover/i);
+    expect(() =>
+      createAflTradeHpnPavSeasonInputSet(
+        statisticalSelectionFixture({ staleObservation: true }).request
+      )
+    ).toThrow(/retained observations/i);
+  });
+
   it('conserves five reviewed unused substitutes separately without manufacturing measured zeros', () => {
     const input = fixture();
     const template = input.rows.find(

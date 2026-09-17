@@ -1521,11 +1521,36 @@ model OutcomeHpnPavInputSet {
   factualMatchMembers         OutcomeHpnPavInputFactualMatchMember[]
   factualAppearanceMembers    OutcomeHpnPavInputFactualAppearanceMember[]
   excludedSourceRows          OutcomeHpnPavInputExcludedSourceRow[]
+  statisticalSelections       OutcomeHpnPavInputStatisticalSelection[]
   calculations                OutcomeHpnPavCalculation[]
 
   @@unique([environment, competition, seasonYear, methodId, effectiveThrough], map: "outcome_hpn_pav_input_set_scope_key")
   @@index([environment, competition, status, seasonYear], map: "outcome_hpn_pav_input_set_status_idx")
   @@map("outcome_hpn_pav_input_set")
+}
+
+model OutcomeHpnPavInputStatisticalSelection {
+  inputSetId              String                                @map("input_set_id") @outcomes.Text
+  ordinal                 Int
+  scopeKey                String                                @map("scope_key") @outcomes.Text
+  candidateId             String                                @map("candidate_id") @outcomes.Text
+  decisionId              String                                @map("decision_id") @outcomes.Text
+  supportReviewId         String                                @map("support_review_id") @outcomes.Text
+  revision                Int
+  appliedAt               DateTime                              @map("applied_at") @outcomes.Timestamptz(3)
+  identityJson            Json                                  @map("identity_json")
+  identitySha256          String                                @map("identity_sha256") @outcomes.Text
+  selectionSha256         String                                @map("selection_sha256") @outcomes.Text
+  selectionCanonicalJson String                                @map("selection_canonical_json") @outcomes.Text
+  selectionJson           Json                                  @map("selection_json")
+  inputSet                OutcomeHpnPavInputSet                 @relation(fields: [inputSetId], references: [inputSetId], onDelete: Restrict, onUpdate: NoAction)
+  decision                OutcomeHpnStatisticalDecisionCustody @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  supportReview           OutcomeHpnStatisticalSupportReview    @relation(fields: [supportReviewId], references: [reviewId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@id([inputSetId, scopeKey])
+  @@unique([inputSetId, ordinal])
+  @@unique([inputSetId, decisionId])
+  @@map("outcome_hpn_pav_input_statistical_selection")
 }
 
 model OutcomeHpnPavInputExcludedSourceRow {
@@ -6318,6 +6343,7 @@ model OutcomeHpnStatisticalDecisionCustody {
   @@map("outcome_hpn_statistical_decision_custody")
   supportReviews OutcomeHpnStatisticalSupportReview[]
   currentSelections OutcomeHpnStatisticalCurrentSelection[]
+  pavInputSelections OutcomeHpnPavInputStatisticalSelection[]
 
 }
 
@@ -6343,6 +6369,7 @@ model OutcomeHpnStatisticalSupportReview {
   decision OutcomeHpnStatisticalDecisionCustody @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
   approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
   currentSelections OutcomeHpnStatisticalCurrentSelection[]
+  pavInputSelections OutcomeHpnPavInputStatisticalSelection[]
   @@map("outcome_hpn_statistical_support_review")
 }
 model OutcomeHpnStatisticalCurrentSelection {
