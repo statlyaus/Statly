@@ -1,3 +1,12 @@
+import { resolutionSql, clubResolutionSql } from './hpnCurrentResolutionSql';
+import {
+  digestFromId,
+  currentPlayerResolution,
+  currentResolution,
+  exactOneResolution,
+  choosePlayerClub,
+} from './hpnCurrentResolution';
+import { asObject, decodedScalar, nonnegativeInteger } from './hpnDecodedScalar';
 import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -18,7 +27,12 @@ import {
   type AflTradeHpnSemanticBindingCandidate,
 } from './hpnFieldMapCandidate';
 import { type AflTradeHpnProjectedFieldMap } from './hpnProjectedFieldMap';
-import { PostgresAflTradeHpnProjectedFieldMapAuthority } from './postgresHpnProjectedFieldMapAuthority';
+import {
+  loadAflTradeHpnSourceRuns,
+  requireAflTradeHpnSourceRunAuthority,
+  type AflTradeHpnSourceSelection as SourceSelection,
+  type AflTradeHpnSourceRunRow as RunRow,
+} from './postgresHpnSourceAuthority';
 import {
   AflTradeHpnPavInputError,
   aflTradeFinalizedHpnPavInputSetRequestSchema,
@@ -29,29 +43,6 @@ import {
   type AflTradeHpnPavSeasonInputRequest,
   type PersistedAflTradeHpnPavInputSet,
 } from './hpnPavInputRepository';
-
-type SourceSelection = AflTradeHpnPavSeasonInputRequest['sources'][number];
-
-interface RunRow {
-  normalization_run_id: string;
-  capture_id: string;
-  source_snapshot_id: string;
-  source_artifact_id: string;
-  capture_environment: string;
-  capture_provider: string;
-  capture_capability_id: string | null;
-  capture_status: string;
-  captured_at: Date | string;
-  finalized_at: Date | string | null;
-  staging_sha256: string;
-  source_row_count: number;
-  accepted_row_count: number;
-  quarantined_row_count: number;
-  issue_count: number;
-  run_status: string;
-  capability_id: string;
-  source_schema_sha256: string;
-}
 
 interface DecodedRow {
   provider_decoded_row_id: string;
@@ -136,13 +127,7 @@ interface FinalizedInputSetRow {
   factual_appearance_count: number;
 }
 
-type CurrentResolution = AflTradeHpnPavSeasonInputSet['content']['rows'][number] extends infer Row
-  ? Row extends { player: infer Resolution }
-    ? Resolution
-    : never
-  : never;
 type InputRow = AflTradeHpnPavSeasonInputSet['content']['rows'][number];
-type AssignedResolution = Exclude<CurrentResolution, { assignmentDecision: null }>;
 type PlayerInputRow = Extract<InputRow, { kind: 'player_match_stats' }>;
 type UnboundInputRow =
   Exclude<InputRow, { kind: 'player_match_stats' }> | Omit<PlayerInputRow, 'acquisitionSpell'>;
@@ -155,13 +140,6 @@ function iso(value: Date | string | null, label: string): string {
     throw new AflTradeHpnPavInputError('SOURCE_AUTHORITY_MISMATCH', `${label} is invalid.`);
   }
   return parsed.toISOString();
-}
-
-function transactionClient(transaction: AflOutcomeSqlTransaction): AflOutcomeSqlClient {
-  return {
-    query: transaction.query.bind(transaction),
-    transaction: async (work) => work(transaction),
-  };
 }
 
 function isoDate(value: Date | string | null, label: string): string {
@@ -177,158 +155,6 @@ function isoDate(value: Date | string | null, label: string): string {
     ].join('-');
   }
   throw new AflTradeHpnPavInputError('SOURCE_AUTHORITY_MISMATCH', `${label} is invalid.`);
-}
-
-function asObject(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new AflTradeHpnPavInputError('SOURCE_AUTHORITY_MISMATCH', `${label} is missing.`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function asString(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new AflTradeHpnPavInputError('SOURCE_AUTHORITY_MISMATCH', `${label} is invalid.`);
-  }
-  return value;
-}
-
-function asPositiveInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-    throw new AflTradeHpnPavInputError('RESOLUTION_NOT_CURRENT', `${label} is invalid.`);
-  }
-  return value;
-}
-
-function digestFromId(identifier: string, prefix: string): string {
-  const match = new RegExp(`^${prefix}:([a-f0-9]{64})$`).exec(identifier);
-  if (!match?.[1]) {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      `Current ${prefix} identity is invalid.`
-    );
-  }
-  return match[1];
-}
-
-function currentPlayerResolution(unparsed: unknown): CurrentResolution {
-  const value = asObject(unparsed, 'player resolution');
-  const decisionId = asString(value.decisionId, 'player decision');
-  if (value.resolutionScope === 'candidate_only') {
-    if (value.assignmentDecisionId !== null || value.assignmentStatus !== null) {
-      throw new AflTradeHpnPavInputError(
-        'RESOLUTION_NOT_CURRENT',
-        'Candidate-only player resolution cannot claim a reusable assignment.'
-      );
-    }
-    return {
-      entityKind: 'player',
-      resolutionScope: 'candidate_only',
-      canonicalId: asString(value.canonicalId, 'player canonical ID'),
-      revision: asPositiveInteger(value.revision, 'player revision'),
-      status: 'current_approved',
-      resolutionDecision: {
-        id: decisionId,
-        sha256: digestFromId(decisionId, 'provider-resolution-decision'),
-      },
-      assignmentDecision: null,
-    };
-  }
-  return currentResolution('player', value);
-}
-
-function currentResolution(
-  entityKind: 'player' | 'club' | 'match',
-  unparsed: unknown
-): AssignedResolution {
-  const value = asObject(unparsed, `${entityKind} resolution`);
-  const decisionId = asString(value.decisionId, `${entityKind} decision`);
-  const assignmentDecisionId = asString(
-    value.assignmentDecisionId,
-    `${entityKind} assignment decision`
-  );
-  if (decisionId !== assignmentDecisionId || value.assignmentStatus !== 'active') {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      `The ${entityKind} resolution does not own the current active assignment.`
-    );
-  }
-  const sha256 = digestFromId(decisionId, 'provider-resolution-decision');
-  return {
-    entityKind,
-    canonicalId: asString(value.canonicalId, `${entityKind} canonical ID`),
-    revision: asPositiveInteger(value.revision, `${entityKind} revision`),
-    status: 'current_approved',
-    resolutionDecision: { id: decisionId, sha256 },
-    assignmentDecision: { id: assignmentDecisionId, sha256 },
-  };
-}
-
-function exactOneResolution(
-  entityKind: 'club',
-  unparsed: unknown,
-  side: 'home' | 'away'
-): AssignedResolution {
-  if (!Array.isArray(unparsed) || unparsed.length !== 1) {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      `The ${side}-club resolution is absent or ambiguous.`
-    );
-  }
-  return currentResolution(entityKind, unparsed[0]);
-}
-
-function decodedScalar(payload: unknown, field: string): string | number | boolean | null {
-  const retained = asObject(payload, 'typed payload');
-  const enveloped = Object.hasOwn(retained, 'values');
-  if (enveloped && Object.hasOwn(retained, field)) {
-    throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', `${field} is ambiguous.`);
-  }
-  const values = enveloped ? asObject(retained.values, 'typed payload values') : retained;
-  const scalar = asObject(values[field], `typed field ${field}`);
-  const kind = scalar.kind;
-  if (
-    kind === 'missing' ||
-    kind === 'nan' ||
-    kind === 'positive_infinity' ||
-    kind === 'negative_infinity'
-  ) {
-    if (Object.keys(scalar).length !== 1) {
-      throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', `${field} is malformed.`);
-    }
-    return null;
-  }
-  if (kind === 'logical') {
-    if (typeof scalar.value !== 'boolean') {
-      throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', `${field} is not logical.`);
-    }
-    return scalar.value;
-  }
-  if (kind === 'integer' || kind === 'finite_number') {
-    const grammar = kind === 'integer' ? /^-?\d+$/ : /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
-    if (typeof scalar.value !== 'string' || !grammar.test(scalar.value)) {
-      throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', `${field} is not numeric.`);
-    }
-    const number = Number(scalar.value);
-    if (!Number.isFinite(number)) {
-      throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', `${field} is not finite.`);
-    }
-    return number;
-  }
-  if (kind === 'text' || kind === 'factor' || kind === 'date' || kind === 'datetime') {
-    return asString(scalar.value, field);
-  }
-  throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', `${field} has an unsupported type.`);
-}
-
-function nonnegativeInteger(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new AflTradeHpnPavInputError(
-      'INCOMPLETE_SOURCE_ROWS',
-      `${field} must be an observed nonnegative integer.`
-    );
-  }
-  return value;
 }
 
 function reviewedFields(fieldMap: AflTradeHpnPavInputFieldMap): string[] {
@@ -514,67 +340,6 @@ function projectedNonnegativeInteger(
   );
 }
 
-function resolutionSql(entity: 'player' | 'match', candidateAlias: string): string {
-  if (entity === 'player')
-    return `SELECT jsonb_build_object(
-      'canonicalId',resolution.player_id,'revision',head.revision,
-      'decisionId',resolution.decision_id,'resolutionScope',resolution.resolution_scope,
-      'assignmentDecisionId',CASE WHEN resolution.resolution_scope='candidate_only' THEN NULL ELSE resolution.decision_id END,
-      'assignmentStatus',assignment.status) AS value
-    FROM outcome_provider_player_resolution_head head
-    JOIN outcome_provider_player_resolution resolution ON resolution.resolution_id=head.resolution_id
-    LEFT JOIN outcome_provider_identity_assignment_head assignment
-      ON assignment.assignment_case_id=resolution.assignment_case_id
-    WHERE head.identity_candidate_id=${candidateAlias}.identity_candidate_id
-      AND resolution.identity_candidate_id=head.identity_candidate_id
-      AND resolution.outcome='approved'
-      AND ((resolution.resolution_scope='candidate_only'
-        AND resolution.assignment_case_id IS NULL AND resolution.player_identity_id IS NULL
-        AND resolution.decision_json#>>'{content,proposal,content,identityCandidateId}'=head.identity_candidate_id
-        AND resolution.decision_json#>>'{content,proposal,content,staging,providerDecodedRowId}'=${candidateAlias}.provider_decoded_row_id
-        AND resolution.decision_json#>>'{content,proposal,content,proposedTarget,scope}'='candidate_only'
-        AND resolution.decision_json#>>'{content,proposal,content,proposedTarget,playerId}'=resolution.player_id)
-        OR (resolution.resolution_scope IS DISTINCT FROM 'candidate_only'
-          AND outcome_provider_assignment_continuity_current(resolution.decision_id) AND assignment.status='active'))
-      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-        WHERE successor.supersedes_decision_id=resolution.decision_id)`;
-  const table = `outcome_provider_${entity}_resolution`;
-  const head = `outcome_provider_${entity}_resolution_head`;
-  const candidateColumn = 'match_candidate_id';
-  const canonicalColumn = 'match_id';
-  return `SELECT jsonb_build_object(
-      'canonicalId', resolution.${canonicalColumn}, 'revision', head.revision,
-      'decisionId', resolution.decision_id,
-      'assignmentDecisionId', resolution.decision_id,
-      'assignmentStatus', assignment.status) AS value
-    FROM ${head} head
-    JOIN ${table} resolution ON resolution.resolution_id=head.resolution_id
-    JOIN outcome_provider_identity_assignment_head assignment
-      ON assignment.assignment_case_id=resolution.assignment_case_id
-    WHERE head.${candidateColumn}=${candidateAlias}.${candidateColumn}
-      AND resolution.outcome='approved' AND outcome_provider_assignment_continuity_current(resolution.decision_id)
-      AND assignment.status='active'
-      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-        WHERE successor.supersedes_decision_id=resolution.decision_id)`;
-}
-
-function clubResolutionSql(side: 'home' | 'away'): string {
-  return `SELECT COALESCE(jsonb_agg(jsonb_build_object(
-      'canonicalId', resolution.club_id, 'revision', head.revision,
-      'decisionId', resolution.decision_id,
-      'assignmentDecisionId', resolution.decision_id,
-      'assignmentStatus', assignment.status)), '[]'::jsonb) AS values
-    FROM outcome_provider_club_resolution resolution
-    JOIN outcome_provider_club_resolution_head head ON head.resolution_id=resolution.resolution_id
-    JOIN outcome_provider_identity_assignment_head assignment
-      ON assignment.assignment_case_id=resolution.assignment_case_id
-    WHERE resolution.match_candidate_id=match_candidate.match_candidate_id
-      AND resolution.side='${side}' AND resolution.outcome='approved'
-      AND outcome_provider_assignment_continuity_current(resolution.decision_id) AND assignment.status='active'
-      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-        WHERE successor.supersedes_decision_id=resolution.decision_id)`;
-}
-
 async function loadDecodedRows(
   transaction: AflOutcomeSqlTransaction,
   runIds: readonly string[]
@@ -607,107 +372,6 @@ async function loadDecodedRows(
     [runIds]
   );
   return result.rows;
-}
-
-async function loadRuns(
-  transaction: AflOutcomeSqlTransaction,
-  selections: readonly SourceSelection[]
-): Promise<
-  Map<string, { row: RunRow; map: AflTradeHpnPavInputFieldMap; selection: SourceSelection }>
-> {
-  const requested = canonicalizeAflTradeJson(selections);
-  const result = await transaction.query<RunRow>(
-    `SELECT run.normalization_run_id, run.capture_id, capture.source_snapshot_id,
-            capture.source_artifact_id, capture.environment::text AS capture_environment,
-            capture.provider AS capture_provider,
-            capture.capability_id AS capture_capability_id,
-            capture.status::text AS capture_status, capture.captured_at, run.finalized_at,
-            run.staging_sha256, run.source_row_count, run.accepted_row_count,
-            run.quarantined_row_count, run.issue_count, run.status::text AS run_status,
-            decode_map.capability_id, decode_map.source_schema_sha256
-       FROM jsonb_to_recordset($1::jsonb) AS requested(
-         "normalizationRunId" text, "fieldMapId" text, "inputKind" text, role text)
-       JOIN outcome_provider_normalization_run run
-         ON run.normalization_run_id=requested."normalizationRunId"
-       JOIN outcome_provider_field_map decode_map ON decode_map.field_map_id=run.field_map_id
-       JOIN outcome_source_capture capture ON capture.capture_id=run.capture_id
-      ORDER BY run.normalization_run_id
-      FOR SHARE OF run, capture, decode_map`,
-    [requested]
-  );
-  if (result.rows.length !== selections.length) {
-    throw new AflTradeHpnPavInputError(
-      'SOURCE_AUTHORITY_MISMATCH',
-      'One or more reviewed source runs or field maps do not exist.'
-    );
-  }
-  const output = new Map<
-    string,
-    { row: RunRow; map: AflTradeHpnPavInputFieldMap; selection: SourceSelection }
-  >();
-  for (const fieldMapId of [...new Set(selections.map(({ fieldMapId }) => fieldMapId))].sort()) {
-    await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
-      `outcome-review-subject:provider_field_map:${fieldMapId}`,
-    ]);
-  }
-  for (const row of result.rows) {
-    const selection = selections.find(
-      ({ normalizationRunId }) => normalizationRunId === row.normalization_run_id
-    );
-    if (!selection)
-      throw new AflTradeHpnPavInputError('INVALID_REQUEST', 'Source selection drifted.');
-    const storedMap = await transaction.query<{
-      legacy_map_json: unknown;
-      current_approval: boolean;
-    }>(
-      `SELECT legacy.map_json AS legacy_map_json,
-              EXISTS (SELECT 1 FROM outcome_review_decision decision
-                WHERE decision.decision_id=legacy.approval_decision_id
-                  AND decision.subject_type='provider_field_map'
-                  AND decision.subject_id=legacy.field_map_id
-                  AND decision.decision='approved'
-                  AND legacy.map_json#>>'{content,approvalDecision,id}'=decision.decision_id
-                  AND legacy.map_json#>>'{content,approvalDecision,sha256}'=legacy.approval_decision_sha256
-                  AND legacy.approval_decision_sha256=split_part(decision.decision_id,':',2)
-                  AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
-                    WHERE successor.supersedes_decision_id=decision.decision_id)
-              ) AS current_approval
-         FROM outcome_hpn_pav_field_map legacy
-        WHERE legacy.field_map_id=$1 FOR SHARE OF legacy`,
-      [selection.fieldMapId]
-    );
-    const legacyMap = storedMap.rows[0]?.legacy_map_json
-      ? aflTradeHpnPavFieldMapSchema.parse(storedMap.rows[0].legacy_map_json)
-      : null;
-    if (legacyMap && storedMap.rows[0]?.current_approval !== true) {
-      throw new AflTradeHpnPavInputError(
-        'SOURCE_AUTHORITY_MISMATCH',
-        'The retained legacy HPN field-map approval is unavailable or superseded.'
-      );
-    }
-    let projectedMap: AflTradeHpnProjectedFieldMap | null;
-    try {
-      projectedMap = await new PostgresAflTradeHpnProjectedFieldMapAuthority(
-        transactionClient(transaction)
-      ).loadCurrentExact(selection.fieldMapId);
-    } catch (error) {
-      throw new AflTradeHpnPavInputError(
-        'SOURCE_AUTHORITY_MISMATCH',
-        error instanceof Error
-          ? error.message
-          : 'The projected HPN field map failed exact authentication.'
-      );
-    }
-    if ((legacyMap === null) === (projectedMap === null)) {
-      throw new AflTradeHpnPavInputError(
-        'SOURCE_AUTHORITY_MISMATCH',
-        'Each selected HPN field map must resolve to exactly one current authority.'
-      );
-    }
-    const map = legacyMap ?? projectedMap!;
-    output.set(row.normalization_run_id, { row, map, selection });
-  }
-  return output;
 }
 
 async function loadFactualUniverse(
@@ -793,75 +457,6 @@ async function loadFactualUniverse(
       clubId: appearance.club_id,
     })),
   };
-}
-
-async function requireRunAuthority(
-  transaction: AflOutcomeSqlTransaction,
-  request: AflTradeHpnPavSeasonInputRequest,
-  createdAt: string,
-  context: { row: RunRow; map: AflTradeHpnPavInputFieldMap; selection: SourceSelection }
-): Promise<void> {
-  const { row, map, selection } = context;
-  let captureAuthorized = row.capture_status === 'approved';
-  if (
-    row.capture_status === 'staged' &&
-    request.environment === 'non_production' &&
-    map.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1'
-  ) {
-    const authority = await transaction.query<{ staged_source_authority: boolean }>(
-      `SELECT outcome_hpn_source_first_projected_map_is_exact($1)
-        AND outcome_hpn_projected_field_map_authority_for_source_is_exact($1,$2,$3,$4::timestamptz)
-        AS staged_source_authority`,
-      [map.fieldMapId, row.capture_id, row.normalization_run_id, createdAt]
-    );
-    captureAuthorized = authority.rows[0]?.staged_source_authority === true;
-  }
-  if (
-    row.capture_environment !== request.environment ||
-    row.capture_provider !== map.content.provider ||
-    row.capture_capability_id !== map.content.capabilityId ||
-    !captureAuthorized ||
-    row.run_status !== 'staged' ||
-    row.finalized_at === null ||
-    row.source_row_count !== row.accepted_row_count ||
-    row.quarantined_row_count !== 0 ||
-    row.issue_count !== 0 ||
-    row.capability_id !== map.content.capabilityId ||
-    row.source_schema_sha256 !== map.content.sourceSchemaSha256 ||
-    map.fieldMapId !== selection.fieldMapId ||
-    map.content.inputKind !== selection.inputKind ||
-    map.content.environment !== request.environment ||
-    map.content.competition !== request.competition ||
-    request.seasonYear < map.content.validFromSeason ||
-    request.seasonYear > map.content.validThroughSeason ||
-    Date.parse(iso(row.captured_at, 'capture time')) >
-      Date.parse(request.knowledgeCutoffAt ?? request.effectiveThrough) ||
-    Date.parse(iso(row.finalized_at, 'run finalization')) > Date.parse(createdAt)
-  ) {
-    throw new AflTradeHpnPavInputError(
-      'SOURCE_AUTHORITY_MISMATCH',
-      `Run ${row.normalization_run_id} is not an exact clean reviewed source.`
-    );
-  }
-}
-
-function choosePlayerClub(row: DecodedRow, sourceClub: unknown): AssignedResolution {
-  if (typeof sourceClub !== 'string') {
-    throw new AflTradeHpnPavInputError('INCOMPLETE_SOURCE_ROWS', 'Player club is not observed.');
-  }
-  const home = sourceClub === row.home_club_native_id || sourceClub === row.home_club_name;
-  const away = sourceClub === row.away_club_native_id || sourceClub === row.away_club_name;
-  if (home === away) {
-    throw new AflTradeHpnPavInputError(
-      'RESOLUTION_NOT_CURRENT',
-      'Player club cannot be assigned to exactly one match side.'
-    );
-  }
-  return exactOneResolution(
-    'club',
-    home ? row.home_club_resolutions : row.away_club_resolutions,
-    home ? 'home' : 'away'
-  );
 }
 
 function buildRows(
@@ -1411,7 +1006,7 @@ async function loadFinalizedInputSetInTransaction(
     });
     const cutoff = 'knowledgeCutoffAt' in content ? content.knowledgeCutoffAt : content.createdAt;
     const universe = await loadFactualUniverse(transaction, currentRequest, cutoff);
-    const contexts = await loadRuns(transaction, currentRequest.sources);
+    const contexts = await loadAflTradeHpnSourceRuns(transaction, currentRequest.sources);
     for (const run of content.sourceRuns) {
       const context = contexts.get(run.normalizationRunId);
       if (!context)
@@ -1419,7 +1014,7 @@ async function loadFinalizedInputSetInTransaction(
           'SOURCE_AUTHORITY_MISMATCH',
           'Retained source authority is missing.'
         );
-      await requireRunAuthority(transaction, currentRequest, cutoff, context);
+      await requireAflTradeHpnSourceRunAuthority(transaction, currentRequest, cutoff, context);
       const actual = context.row;
       if (
         canonicalizeAflTradeJson(context.map) !==
@@ -1473,6 +1068,77 @@ async function loadFinalizedInputSetInTransaction(
     }
   }
   return inputSet;
+}
+
+function persistedSourceKeys(existing: AflTradeHpnPavSeasonInputSet) {
+  const persistedMaps = new Map(
+    existing.content.fieldMaps.map((fieldMap) => [fieldMap.fieldMapId, fieldMap])
+  );
+  return existing.content.sourceRuns
+    .map((run) => {
+      const fieldMap = persistedMaps.get(run.fieldMapId);
+      if (fieldMap?.content.inputKind === 'completed_match_result') {
+        return `${run.normalizationRunId}|${run.fieldMapId}|completed_match_result|`;
+      }
+      const roles = [
+        ...new Set(
+          existing.content.rows.flatMap((row) =>
+            row.kind === 'player_match_stats' &&
+            row.source.normalizationRunId === run.normalizationRunId
+              ? [row.role]
+              : []
+          )
+        ),
+      ];
+      return `${run.normalizationRunId}|${run.fieldMapId}|${fieldMap?.content.inputKind ?? ''}|${roles.length === 1 ? (roles[0] ?? '') : 'mixed'}`;
+    })
+    .sort();
+}
+
+function requireExactScopeReplay(
+  request: AflTradeHpnPavSeasonInputRequest,
+  record: { input_set_json: unknown; finalized_at: Date | string | null }
+): AflTradeHpnPavSeasonInputSet {
+  let existing: AflTradeHpnPavSeasonInputSet;
+  try {
+    existing = aflTradeHpnPavSeasonInputSetSchema.parse(record.input_set_json);
+  } catch {
+    throw new AflTradeHpnPavInputError(
+      'REPLAY_CONFLICT',
+      'The logical PAV input scope contains an unauthenticated immutable record.'
+    );
+  }
+  const requestedSources = request.sources
+    .map(
+      ({ normalizationRunId, fieldMapId, inputKind, role }) =>
+        `${normalizationRunId}|${fieldMapId}|${inputKind}|${role ?? ''}`
+    )
+    .sort();
+  const persistedSources = persistedSourceKeys(existing);
+
+  if (
+    record.finalized_at === null ||
+    ('knowledgePolicy' in existing.content ? existing.content.knowledgePolicy : undefined) !==
+      request.knowledgePolicy ||
+    ('knowledgeCutoffAt' in existing.content ? existing.content.knowledgeCutoffAt : undefined) !==
+      request.knowledgeCutoffAt ||
+    existing.content.factualUniverse.factualRunId !== request.factualRunId ||
+    canonicalizeAflTradeJson(
+      ('excludedSourceRows' in existing.content
+        ? existing.content.excludedSourceRows.map((row) => row.review.decision.id)
+        : []
+      ).sort()
+    ) !== canonicalizeAflTradeJson([...(request.reviewedNonparticipantDecisions ?? [])].sort()) ||
+    requestedSources.length !== persistedSources.length ||
+    requestedSources.some((source, index) => source !== persistedSources[index])
+  ) {
+    throw new AflTradeHpnPavInputError(
+      'REPLAY_CONFLICT',
+      'The logical PAV input scope already has different or unfinished immutable content.'
+    );
+  }
+
+  return existing;
 }
 
 export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInputRepository {
@@ -1595,69 +1261,7 @@ export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInpu
           ]
         );
         if (scopeReplay.rows[0]) {
-          let existing: AflTradeHpnPavSeasonInputSet;
-          try {
-            existing = aflTradeHpnPavSeasonInputSetSchema.parse(scopeReplay.rows[0].input_set_json);
-          } catch {
-            throw new AflTradeHpnPavInputError(
-              'REPLAY_CONFLICT',
-              'The logical PAV input scope contains an unauthenticated immutable record.'
-            );
-          }
-          const requestedSources = request.sources
-            .map(
-              ({ normalizationRunId, fieldMapId, inputKind, role }) =>
-                `${normalizationRunId}|${fieldMapId}|${inputKind}|${role ?? ''}`
-            )
-            .sort();
-          const persistedMaps = new Map(
-            existing.content.fieldMaps.map((fieldMap) => [fieldMap.fieldMapId, fieldMap])
-          );
-          const persistedSources = existing.content.sourceRuns
-            .map((run) => {
-              const fieldMap = persistedMaps.get(run.fieldMapId);
-              if (fieldMap?.content.inputKind === 'completed_match_result') {
-                return `${run.normalizationRunId}|${run.fieldMapId}|completed_match_result|`;
-              }
-              const roles = [
-                ...new Set(
-                  existing.content.rows.flatMap((row) =>
-                    row.kind === 'player_match_stats' &&
-                    row.source.normalizationRunId === run.normalizationRunId
-                      ? [row.role]
-                      : []
-                  )
-                ),
-              ];
-              return `${run.normalizationRunId}|${run.fieldMapId}|${fieldMap?.content.inputKind ?? ''}|${roles.length === 1 ? (roles[0] ?? '') : 'mixed'}`;
-            })
-            .sort();
-          if (
-            scopeReplay.rows[0].finalized_at === null ||
-            ('knowledgePolicy' in existing.content
-              ? existing.content.knowledgePolicy
-              : undefined) !== request.knowledgePolicy ||
-            ('knowledgeCutoffAt' in existing.content
-              ? existing.content.knowledgeCutoffAt
-              : undefined) !== request.knowledgeCutoffAt ||
-            existing.content.factualUniverse.factualRunId !== request.factualRunId ||
-            canonicalizeAflTradeJson(
-              ('excludedSourceRows' in existing.content
-                ? existing.content.excludedSourceRows.map((row) => row.review.decision.id)
-                : []
-              ).sort()
-            ) !==
-              canonicalizeAflTradeJson(
-                [...(request.reviewedNonparticipantDecisions ?? [])].sort()
-              ) ||
-            requestedSources.length !== persistedSources.length ||
-            requestedSources.some((source, index) => source !== persistedSources[index])
-          ) {
-            throw new AflTradeHpnPavInputError(
-              'REPLAY_CONFLICT',
-              'The logical PAV input scope already has different or unfinished immutable content.'
-            );
-          }
+          const existing = requireExactScopeReplay(request, scopeReplay.rows[0]);
           const current = await loadFinalizedInputSetInTransaction(
             transaction,
             {
@@ -1685,9 +1289,9 @@ export class PostgresAflTradeHpnPavInputRepository implements AflTradeHpnPavInpu
         }
         const custodyCutoff = request.knowledgeCutoffAt ?? createdAt;
         const factualUniverse = await loadFactualUniverse(transaction, request, custodyCutoff);
-        const contexts = await loadRuns(transaction, request.sources);
+        const contexts = await loadAflTradeHpnSourceRuns(transaction, request.sources);
         for (const context of contexts.values())
-          await requireRunAuthority(transaction, request, custodyCutoff, context);
+          await requireAflTradeHpnSourceRunAuthority(transaction, request, custodyCutoff, context);
         const decodedRows = await loadDecodedRows(transaction, [...contexts.keys()]);
         const expectedRows = [...contexts.values()].reduce(
           (sum, context) => sum + context.row.source_row_count,

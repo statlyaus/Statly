@@ -2190,6 +2190,61 @@ operational-role gates are satisfied.
    Firestore, fantasy user, league, team or roster row changed. Publication starts only through the
    separate factual-release procedure below.
 
+HPN statistical decision custody is a separate, unverified staging boundary. Migration
+`0219_hpn_statistical_decision_custody` retains immutable submissions through
+`PostgresAflTradeHpnStatisticalAdjudicationRepository.retainUnverified`; `loadUnverified` rechecks
+the complete contract and evidence bytes supplied by the retained artifact reader. Keep those bytes
+in the artifact store: the table retains decision JSON and references, not a second copy of artifacts.
+Exact concurrent replay preserves the first registration timestamp. Competing submissions may share
+a cell; neither retention nor a supplied supersession ID establishes a current decision.
+`inspectRetainedSources` compares both observations with their retained run/capture/snapshot/artifact,
+row hashes, reviewed statistic projection, season and candidate-time availability. It reuses current
+map/source authority checks in a transaction and reads only the two requested decoded rows. The
+result also inspects both rows' current canonical player/match/club resolutions using the existing
+HPN input predicates, including candidate-only player scope, assignment continuity and review
+supersession. The represented club must match exactly one source match side and that canonical
+side's club; canonical competition/season must agree. Returned resolution revisions are read-only
+snapshots requiring locked rechecks before promotion or consumption. This inspection alone establishes neither supporting evidence nor a current head. Typed zeros (including zero components
+of a derived statistic) require separate representation evidence; relabelling a normalized blank
+as measured cannot bypass that condition. Existing legacy input/calculation behavior is unchanged.
+`inspectReviewerAuthority` separately checks the authenticated operator against a governed
+`afl_trade_hpn_statistical_reviewer` registration. Migration
+`0220_hpn_statistical_reviewer_authority` restricts that role to one AFLM season, scope
+`hpn-statistics:AFLM:<season>`, provider `statly_modeling` and capability
+`adjudicate_hpn_statistics`. Identity-reviewer grants do not qualify. Authority evidence must carry
+exact `validFrom`/`validThrough` timestamps, exist and be custody-verified before the decision, and
+remain current and unexpired. Registration still requires the isolated non-production governance
+writer; the migration registers no principals. Passing this read-only check does not approve the
+statistical decision, its supporting evidence, or any calculation. Recheck at the eventual write boundary.
+SQL enforces canonical content addresses, selection consistency, chronology, unverified authority and
+immutability. It does not duplicate every nested contract check; repository reads reject malformed
+direct-SQL submissions. No source rights, identities, reviewer authority, current head, calculation
+eligibility or publication authority follows from custody. Consumption must use a versioned contract binding the exact current selections; partial selections
+do not satisfy season coverage. An independent table restore must preserve canonical bytes and timestamps and
+read back successfully with the retained evidence; it does not by itself prove artifact-store restore.
+
+Migration `0221_hpn_private_clearance_adjudication` adds the narrow private clearance owner
+`PostgresAflTradeHpnPrivateClearanceApplication`. `approveSupport` verifies a retained official AFL
+page transcription against its artifact bytes, exact CLR row, player, match date and current scoped
+reviewer. This evidence remains labelled `transcribed_official_browser_observation`; it does not
+establish a governed provider capture or independent collection. `apply` locks authority and the
+cell head, reauthenticates both unchanged provider rows and all identities, and enforces exact
+predecessor/revision transitions. Exact replay requires the same current support. `loadCurrent`
+locks the selected head through reauthentication; withdrawal makes it unavailable. Direct SQL
+receives equivalent source/identity/support guards; heads cannot be deleted or truncated.
+
+The isolated source-map helper retains the complete source-first verifier and permits only the
+`cameron-2018-private-pilot` statistical scope for 2018 and the exact capture/run. It does not extend
+the existing valuation scope policy. The caller must supply current support bound to the exact
+candidate and observation. Retained cache zeros remain `retained_zero_origin_unknown`, even when
+an explicit zero in the official transcription supports the selected value. Both original values
+remain immutable. Millisecond-truncated head timestamps avoid rounding into the future; the
+canonicalizer pins its owning schema so populated CHECK constraints survive an empty restore
+search path. Test application/replay, withdrawal, direct-write rejection and independent database
+plus artifact restoration before publishing a checkpoint. This owner always returns calculation
+and publication eligibility as false. Versioned HPN consumption and full-season admission remain
+separate prerequisites.
+
 For complete-season reconciliation, measure receipt construction and persistence before execution.
 Migration `0139_canonical_text_reconciliation_receipt` allows the exact complete canonical wrapper in
 text with a separately authenticated wrapper checksum, preserving legacy JSONB receipts. Use the
