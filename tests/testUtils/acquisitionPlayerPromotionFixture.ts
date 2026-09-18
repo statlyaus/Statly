@@ -51,6 +51,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     /** Full synthetic admitted receipts for private release/measurement composition tests. */
     completeCaptureReceipts?: boolean;
     tradeSeasonYear?: number;
+    providerEventId?: string;
     promoterThroughSeason?: number;
     draftSessions?: boolean;
     sessionProposalV5?: boolean;
@@ -101,18 +102,19 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const reviewedOfficialCombinedDraft = officialCombinedDraftYear !== null;
   if (reviewedOfficialCombinedDraft && !options.combinedDraftSessions)
     throw new Error('A reviewed Official profile requires combined draft sessions.');
-  if (
-    options.tradeSeasonYear !== undefined &&
-    (hasDraftSessions || options.lifecycle || options.partialTransactionDates)
-  )
+  if (options.tradeSeasonYear !== undefined && (hasDraftSessions || options.lifecycle))
     throw new Error('Custom year is limited to simple synthetic trades.');
   const seasonYear = officialCombinedDraftYear ?? options.tradeSeasonYear ?? 2024;
   const fixtureNamespace = reviewedOfficialCombinedDraft
     ? `official-${seasonYear}`
     : 'synthetic-2024';
-  const providerEventId = reviewedOfficialCombinedDraft
-    ? `official-${seasonYear}-promotion-fixture`
-    : 'promotion-fixture';
+  const providerEventId =
+    options.providerEventId ??
+    (reviewedOfficialCombinedDraft
+      ? `official-${seasonYear}-promotion-fixture`
+      : 'promotion-fixture');
+  if (providerEventId.trim().length === 0) throw new Error('Provider event ID is required.');
+  const tradeDate = options.partialTransactionDates ? null : `${seasonYear}-10-15`;
   const nativePlayerId = reviewedOfficialCombinedDraft
     ? `official-${seasonYear}-player`
     : 'synthetic-player';
@@ -161,7 +163,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const sourceBytes = new TextEncoder().encode(
     options.lifecycle
       ? `<p>${targets.playerName} joined ${targets.toClubName} on ${seasonYear}-10-15, moved to ${targets.fromClubName} on ${seasonYear}-10-20, and returned to ${targets.toClubName} on ${seasonYear}-10-25.</p>`
-      : `<p>${targets.playerName} joined ${targets.toClubName} on ${seasonYear}-10-15.</p>`
+      : `<p>${targets.playerName} joined ${targets.toClubName}${tradeDate === null ? ` during ${seasonYear}` : ` on ${tradeDate}`}.</p>`
   );
   const sourceArtifact = createAflTradeByteArtifactRef(
     sourceBytes,
@@ -493,7 +495,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               kind: 'transaction',
               nativeEventId: providerEventId,
               seasonYear,
-              occurredOn: options.partialTransactionDates ? null : `${seasonYear}-10-15`,
+              occurredOn: tradeDate,
               transactionType: 'trade',
               title: 'Synthetic player entry',
             },
@@ -1879,7 +1881,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         transactionId,
         providerEventId,
         seasonYear,
-        occurredOn: options.partialTransactionDates ? null : `${seasonYear}-10-15`,
+        occurredOn: tradeDate,
         transactionType: 'trade' as const,
         title: 'Synthetic player entry',
         parties: [targets.fromClubId, targets.toClubId].sort(),
@@ -2190,9 +2192,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       eventVersionId: assets.rows[0]!.event_version_id,
       assetVersionId: assets.rows[0]!.asset_version_id,
       get eventDate(): string {
-        if (options.partialTransactionDates)
-          throw new Error('Year-only trade has no exact-day spell entry.');
-        return `${seasonYear}-10-15`;
+        if (tradeDate === null) throw new Error('Year-only trade has no exact-day spell entry.');
+        return tradeDate;
       },
       evidence: [sourceArtifact],
     },

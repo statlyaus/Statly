@@ -58,6 +58,11 @@ export function createLocalAflTradePrivateValuationConstructionEvidence(options:
       claim: dispatch.claim,
     });
     const binding = evidence.binding;
+    if ('schemaVersion' in binding) {
+      throw new TypeError(
+        'Historical cohort binding requires the dedicated postseason construction adapter.'
+      );
+    }
     const factual = input.modelEvidence.privateFactualAuthority;
     if (
       binding.factualOutputId !== input.factualOutputId ||
