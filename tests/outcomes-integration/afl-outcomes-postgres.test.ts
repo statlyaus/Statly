@@ -1251,6 +1251,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0221_hpn_private_clearance_adjudication',
       '0222_hpn_pav_statistical_selection_membership',
       '0223_native_player_pav_qualification_evidence',
+      '0224_historical_pilot_cohort_binding',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1383,14 +1384,13 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'finalize_outcome_hpn_pav_input_set()',
       'finalize_outcome_hpn_pav_input_set_v2()',
     ]) {
-      expect(
-        hpnV5Functions.rows.find((row) => row.signature === signature)?.definition
-      ).toContain('require_outcome_hpn_pav_statistical_selections');
+      expect(hpnV5Functions.rows.find((row) => row.signature === signature)?.definition).toContain(
+        'require_outcome_hpn_pav_statistical_selections'
+      );
     }
     expect(
-      hpnV5Functions.rows.find(
-        (row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()'
-      )?.definition
+      hpnV5Functions.rows.find((row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()')
+        ?.definition
     ).toContain('outcome_hpn_acquisition_spell_is_current');
     const hpnSelectionGuard = await query<{ definition: string }>(
       `SELECT pg_get_functiondef(

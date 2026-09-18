@@ -7,8 +7,13 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { createAflTradePostseasonYearContext } from '@/server/aflTradeIntelligence/domain/postseasonYearContext';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { PostgresAflTradePrivateValuationTradeEvidence } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationTradeEvidence';
+import {
+  AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY,
+  AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
+} from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationCohortBinding';
 import { createLocalAflTradePrivateValuationConstructionEvidence } from '@/server/aflTradeIntelligence/development/localPrivateValuationConstructionEvidence';
 import { createAflTradeValuationInputBundleCandidate } from '@/server/aflTradeIntelligence/valuation/valuationInputBundleCandidate';
 import { createAflTradeValuationInputBundleConstructionFixture } from '../testUtils/valuationInputBundleConstructionFixture';
@@ -19,6 +24,9 @@ const request = {
   requestId: id('private-valuation-dispatch'),
   claim: { claimId: id('private-valuation-dispatch-claim'), leaseToken: 'b'.repeat(64) },
 };
+const historicalReviewDecisionId = 'review-decision:2020-jeremy-cameron';
+const historicalKnowledgeCutoffAt = '2026-08-01T00:00:00.000Z';
+const historicalEventVersionId = 'external-event-version:2020-jeremy-cameron';
 
 function evidenceFixture() {
   const snapshot = {
@@ -139,6 +147,116 @@ function reader(value: unknown) {
     },
   };
   return new PostgresAflTradePrivateValuationTradeEvidence(client);
+}
+
+function historicalEvidenceFixture() {
+  const retained = evidenceFixture();
+  resealRecord(retained, {
+    eventVersionId: historicalEventVersionId,
+    eventId: AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
+    seasonYear: 2020,
+    eventDate: null,
+    recordedAt: '2026-07-31T00:00:00.000Z',
+  });
+  const postseasonContext = createAflTradePostseasonYearContext({
+    schemaVersion: 'afl-trade-postseason-year-context/v1',
+    environment: 'non_production',
+    competition: 'AFLM',
+    tradeId: AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
+    promotionId: id('external-canonical-promotion'),
+    eventVersionId: historicalEventVersionId,
+    tradeYear: 2020,
+    tradeDate: null,
+    period: 'established_postseason',
+    reviewDecisionId: historicalReviewDecisionId,
+    reviewEvidence: {
+      artifactId: id('artifact'),
+      contentSha256: 'a'.repeat(64),
+      storageUri: `artifact://sha256/${'a'.repeat(64)}`,
+      mediaType: 'application/json',
+      byteLength: 42,
+      createdAt: '2026-07-31T00:00:00.000Z',
+    },
+    recordedAt: '2026-07-31T12:00:00.000Z',
+    knowledgeCutoffAt: historicalKnowledgeCutoffAt,
+    knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation',
+  });
+  const content = retained.releaseManifest.content;
+  retained.members[0]!.membership.canonicalRecordId = historicalEventVersionId;
+  content.canonicalMemberSetSha256 = sha256AflTradeCanonicalJson(content.canonicalMembers);
+  content.scopeKey = AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY;
+  content.validFromSeason = 2020;
+  content.validThroughSeason = 2020;
+  content.createdAt = historicalKnowledgeCutoffAt;
+  content.effectiveThrough = historicalKnowledgeCutoffAt;
+  retained.releaseManifest.releaseId = createAflTradeContentAddress('outcome-release', content);
+  const authorityContent = {
+    schemaVersion: 'afl-trade-private-historical-factual-authority/v1',
+    authorityBoundary: 'promotion_backed_postseason_factual_only',
+    requestId: request.requestId,
+    cohortScopeKey: AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY,
+    lineageAdmissionId: id('corpus-factual-lineage-admission'),
+    cohortReleaseId: retained.releaseManifest.releaseId,
+    reviewDecisionId: historicalReviewDecisionId,
+    postseasonContextId: postseasonContext.contextId,
+    transactionId: AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
+    eventVersionId: historicalEventVersionId,
+    tradeYear: 2020,
+    revision: 1,
+    knowledgeCutoffAt: historicalKnowledgeCutoffAt,
+  } as const;
+  const historicalRetained = {
+    ...retained,
+    binding: {
+      schemaVersion: 'afl-trade-private-valuation-cohort-binding/v2',
+      requestId: request.requestId,
+      historicalFactualAuthority: {
+        authorityId: createAflTradeContentAddress(
+          'private-valuation-historical-factual-authority',
+          authorityContent
+        ),
+        content: authorityContent,
+      },
+      lineageAdmissionId: authorityContent.lineageAdmissionId,
+      lineageId: id('corpus-factual-lineage'),
+      corpusId: content.corpusId,
+      cohortCandidateId: id('factual-release-candidate'),
+      cohortReleaseId: retained.releaseManifest.releaseId,
+      cohortScopeKey: AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY,
+      sourceMemberSetSha256: content.sourceMemberSetSha256,
+      canonicalMemberSetSha256: content.canonicalMemberSetSha256,
+      sourceCaptureSetSha256: content.sourceCaptureSetSha256,
+      promotionSourceSetSha256: content.promotionSourceSetSha256,
+      effectiveThrough: historicalKnowledgeCutoffAt,
+      cohortTransactionId: AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
+      tradeYear: 2020,
+      cohortTradeIds: [historicalEventVersionId],
+      postseasonYearContexts: [postseasonContext],
+    },
+  };
+  return { retained: historicalRetained, postseasonContext };
+}
+
+function historicalReader(value: unknown, postseasonContext: unknown) {
+  const client: AflOutcomeSqlClient = {
+    async query<Row>(sql: string) {
+      const rows = sql.includes('historical_trade_evidence') ? [{ evidence_json: value }] : [];
+      return { rows: rows as Row[], rowCount: rows.length };
+    },
+    async transaction(work) {
+      return work(client);
+    },
+  };
+  return new PostgresAflTradePrivateValuationTradeEvidence(
+    client,
+    { read: async () => Buffer.from('unused') },
+    async () => ({
+      context: postseasonContext as never,
+      acquisitionSpell: {} as never,
+      release: {} as never,
+      review: {} as never,
+    })
+  );
 }
 
 function resealRecord(
@@ -446,5 +564,34 @@ describe('private retained trade evidence reader', () => {
     const retained = evidenceFixture();
     retained.binding.cohortTradeIds = ['event-version:another'];
     await expect(reader(retained).load(request)).rejects.toThrow();
+  });
+
+  it('loads the exact reviewed historical pilot with a year-precise postseason date', async () => {
+    const { retained, postseasonContext } = historicalEvidenceFixture();
+    const result = await historicalReader(retained, postseasonContext).loadHistoricalPilot({
+      ...request,
+      reviewDecisionId: historicalReviewDecisionId,
+      knowledgeCutoffAt: historicalKnowledgeCutoffAt,
+    });
+    expect(result.binding).toEqual(retained.binding);
+    expect(result.trades).toEqual([
+      {
+        eventVersionId: historicalEventVersionId,
+        eventId: AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
+      },
+    ]);
+    expect(result.members[0]?.record.eventDate).toBeNull();
+    expect(result.members[0]?.record.recordedAt).toBe('2026-07-31T00:00:00.000Z');
+  });
+
+  it('requires physical review evidence before loading the historical pilot', async () => {
+    const { retained } = historicalEvidenceFixture();
+    await expect(
+      reader(retained).loadHistoricalPilot({
+        ...request,
+        reviewDecisionId: historicalReviewDecisionId,
+        knowledgeCutoffAt: historicalKnowledgeCutoffAt,
+      })
+    ).rejects.toThrow('requires physical review evidence');
   });
 });
