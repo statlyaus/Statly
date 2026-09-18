@@ -1250,6 +1250,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0220_hpn_statistical_reviewer_authority',
       '0221_hpn_private_clearance_adjudication',
       '0222_hpn_pav_statistical_selection_membership',
+      '0223_native_player_pav_qualification_evidence',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

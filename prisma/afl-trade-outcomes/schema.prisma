@@ -292,6 +292,10 @@ model OutcomeArtifactCustody {
   governedComponentRunAdmissions               OutcomeGovernedValuationComponentRun[]               @relation("GovernedValuationComponentRunAdmissionArtifact")
   governedComponentValidationNativeExecutions  OutcomeGovernedComponentValidationEvidence[]         @relation("GovernedComponentValidationNativeArtifact")
   governedComponentValidationReports           OutcomeGovernedComponentValidationEvidence[]         @relation("GovernedComponentValidationReportArtifact")
+  nativePlayerPavQualificationFinalEvidence    OutcomeGovernedNativePlayerPavQualificationEvidence[] @relation("NativePlayerPavQualificationFinalArtifact")
+  nativePlayerPavQualificationCriteria         OutcomeGovernedNativePlayerPavQualificationEvidence[] @relation("NativePlayerPavQualificationCriteriaArtifact")
+  nativePlayerPavQualificationCalibration      OutcomeGovernedNativePlayerPavQualificationEvidence[] @relation("NativePlayerPavQualificationCalibrationArtifact")
+  nativePlayerPavQualificationEvidence         OutcomeGovernedNativePlayerPavQualificationEvidence[] @relation("NativePlayerPavQualificationEvidenceArtifact")
   governedPickExecutionArtifacts               OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickExecutionArtifact")
   governedPickDatasetArtifacts                 OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickDatasetArtifact")
   governedPickAdmissionArtifacts               OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickAdmissionArtifact")
@@ -5158,6 +5162,7 @@ model OutcomeGovernedValuationComponentRun {
   datasetArtifact                    OutcomeArtifactCustody                      @relation("GovernedValuationComponentRunDatasetArtifact", fields: [datasetArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_governed_valuation_component_dataset_artifact_fkey")
   datasetAdmissionArtifact           OutcomeArtifactCustody                      @relation("GovernedValuationComponentRunAdmissionArtifact", fields: [datasetAdmissionArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_governed_valuation_component_admission_artifact_fkey")
   validationEvidence                 OutcomeGovernedComponentValidationEvidence?
+  nativePlayerPavQualificationEvidence OutcomeGovernedNativePlayerPavQualificationEvidence[]
 
   @@unique([nativeExecutionKind, nativeExecutionId], map: "outcome_governed_valuation_component_run_native_key")
   @@index([role, registeredAt, runId], map: "outcome_governed_valuation_component_run_role_idx")
@@ -5179,6 +5184,33 @@ model OutcomeGovernedComponentValidationEvidence {
   validationReportArtifact   OutcomeArtifactCustody?              @relation("GovernedComponentValidationReportArtifact", fields: [validationReportArtifactId], references: [artifactId], onDelete: Restrict)
 
   @@map("outcome_governed_component_validation_evidence")
+}
+
+model OutcomeGovernedNativePlayerPavQualificationEvidence {
+  evidenceId                         String                               @id @map("evidence_id") @outcomes.Text
+  runId                              String                               @map("run_id") @outcomes.Text
+  finalEvaluationId                  String                               @map("final_evaluation_id") @outcomes.Text
+  finalEvidenceArtifactId            String                               @map("final_evidence_artifact_id") @outcomes.Text
+  criteriaId                         String                               @map("criteria_id") @outcomes.Text
+  criteriaArtifactId                 String                               @map("criteria_artifact_id") @outcomes.Text
+  calibrationConfigurationArtifactId String                               @map("calibration_configuration_artifact_id") @outcomes.Text
+  evidenceArtifactId                 String                               @unique @map("evidence_artifact_id") @outcomes.Text
+  supportStatus                      String                               @map("support_status") @outcomes.Text
+  assessmentStatus                   String                               @map("assessment_status") @outcomes.Text
+  qualificationGranted               Boolean                              @map("qualification_granted")
+  contentSha256                      String                               @map("content_sha256") @outcomes.Char(64)
+  contentCanonicalJson               String                               @map("content_canonical_json") @outcomes.Text
+  evidenceJson                       Json                                 @map("evidence_json")
+  recordedAt                         DateTime                             @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  componentRun                       OutcomeGovernedValuationComponentRun @relation(fields: [runId], references: [runId], onDelete: Restrict, map: "outcome_native_player_pav_qualification_run_fkey")
+  finalEvidenceArtifact              OutcomeArtifactCustody               @relation("NativePlayerPavQualificationFinalArtifact", fields: [finalEvidenceArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_native_player_pav_qualification_final_artifact_fkey")
+  criteriaArtifact                   OutcomeArtifactCustody               @relation("NativePlayerPavQualificationCriteriaArtifact", fields: [criteriaArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_native_player_pav_qualification_criteria_artifact_fkey")
+  calibrationConfigurationArtifact   OutcomeArtifactCustody               @relation("NativePlayerPavQualificationCalibrationArtifact", fields: [calibrationConfigurationArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_native_pav_qual_calibration_artifact_fkey")
+  evidenceArtifact                   OutcomeArtifactCustody               @relation("NativePlayerPavQualificationEvidenceArtifact", fields: [evidenceArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_native_player_pav_qualification_evidence_artifact_fkey")
+
+  @@unique([runId, criteriaId], map: "outcome_native_player_pav_qualification_run_criteria_key")
+  @@index([runId, recordedAt, evidenceId], map: "outcome_native_player_pav_qualification_run_idx")
+  @@map("outcome_governed_native_player_pav_qualification_evidence")
 }
 
 model OutcomeGovernedValuationModelQualification {
