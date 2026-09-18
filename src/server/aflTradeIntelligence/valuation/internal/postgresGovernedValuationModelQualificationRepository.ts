@@ -369,6 +369,12 @@ async function authenticateArtifacts(input: {
         maximumArtifactBytes: input.maximumBytes,
       }),
     ]);
+    if (playerNative.kind === 'player_pav_final_evidence') {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'INTEGRITY_MISMATCH',
+        'Native player-PAV evidence is authenticated but unevaluated; qualification requires a reviewed native-PAV policy.'
+      );
+    }
     if (
       playerNative.kind !== 'player_contribution_and_availability' ||
       pickNative.kind !== 'draft_pick_and_future_pick_distribution' ||
