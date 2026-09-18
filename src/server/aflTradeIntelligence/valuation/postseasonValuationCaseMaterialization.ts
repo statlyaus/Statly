@@ -3,6 +3,9 @@ import {
   aflTradePostseasonSeasonWindow,
   aflTradePostseasonYearContextSchema,
 } from '../domain/postseasonYearContext';
+import { aflTradePostseasonMaterializationReviewSchema } from '../modeling/postseasonMaterializationReview';
+import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import { aflTradePromotionBackedFactualReleaseSchema } from '../outcomes/promotionBackedFactualReleaseContracts';
 import { aflTradePromotionBackedPublicArchiveSchema } from '../outcomes/promotionBackedPublicArchiveContracts';
 import { postseasonValuationParentsSchema } from './postseasonValuationParents';
 import {
@@ -18,6 +21,10 @@ import {
 
 type MaterializationInput = {
   archive: unknown;
+  authority: {
+    release: unknown;
+    review: unknown;
+  };
   context: unknown;
   laterAssessment: unknown;
   valuationParents: unknown;
@@ -26,12 +33,42 @@ type MaterializationInput = {
 /** Deterministically replays a reviewed postseason case without resolving mutable SQL authority. */
 export function materializeAflTradePostseasonValuationCase(input: MaterializationInput) {
   const archive = aflTradePromotionBackedPublicArchiveSchema.parse(input.archive);
+  const release = aflTradePromotionBackedFactualReleaseSchema.parse(input.authority.release);
+  const review = aflTradePostseasonMaterializationReviewSchema.parse(input.authority.review);
   const context = aflTradePostseasonYearContextSchema.parse(input.context);
   const laterAssessment = aflTradePostseasonValuationCaseContentSchema.shape.laterAssessment.parse(
     input.laterAssessment
   );
   const parents = postseasonValuationParentsSchema.parse(input.valuationParents);
   const { componentDrawSet, realizedContributionLedger, packagePolicy, lineageGraph } = parents;
+  const reviewed = review.content;
+  if (
+    reviewed.schemaVersion !== 'afl-trade-postseason-materialization-review/v2' ||
+    reviewed.releaseId !== release.releaseId ||
+    reviewed.environment !== release.content.environment ||
+    reviewed.scopeKey !== release.content.scopeKey ||
+    reviewed.competition !== release.content.competition ||
+    reviewed.tradeId !== context.content.tradeId ||
+    reviewed.promotionId !== context.content.promotionId ||
+    reviewed.eventVersionId !== context.content.eventVersionId ||
+    reviewed.tradeYear !== context.content.tradeYear ||
+    reviewed.tradeDate !== context.content.tradeDate ||
+    canonicalizeAflTradeJson(reviewed.reviewEvidence) !==
+      canonicalizeAflTradeJson(context.content.reviewEvidence) ||
+    archive.content.releaseId !== release.releaseId ||
+    archive.content.corpusId !== release.content.corpusId ||
+    archive.content.environment !== release.content.environment ||
+    archive.content.scopeKey !== release.content.scopeKey ||
+    archive.content.competition !== release.content.competition ||
+    archive.content.effectiveThrough !== release.content.effectiveThrough ||
+    archive.content.sourceMemberSetSha256 !== release.content.sourceMemberSetSha256 ||
+    archive.content.canonicalMemberSetSha256 !== release.content.canonicalMemberSetSha256 ||
+    !release.content.promotionSources.some(
+      ({ promotionId }) => promotionId === context.content.promotionId
+    )
+  ) {
+    throw new Error('Valuation archive differs from the reviewed release and promotion ancestry.');
+  }
   const trade = selectedTransaction(archive, context.content.tradeId);
   if (
     trade.eventVersionId !== context.content.eventVersionId ||

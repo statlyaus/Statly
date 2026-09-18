@@ -131,7 +131,7 @@ function sealedArchive(
       recordSha256: canonicalMembers[index]!.canonicalRecordSha256,
     })),
   });
-  const candidate = createAflTradePromotionBackedFactualRelease({
+  const factual = createAflTradePromotionBackedFactualRelease({
     corpus,
     scopeKey: 'synthetic-case',
     createdAt: '2026-08-31T23:59:59.000Z',
@@ -148,8 +148,15 @@ function sealedArchive(
     ],
     promotionSources: [{ promotionId, captureIds: ['capture:postseason'] }],
     canonicalMembers,
-  }).candidate;
-  return createAflTradePromotionBackedPublicArchive({ candidate, createdAt: at, records });
+  });
+  return {
+    archive: createAflTradePromotionBackedPublicArchive({
+      candidate: factual.candidate,
+      createdAt: at,
+      records,
+    }),
+    release: factual.release,
+  };
 }
 
 function fixture(
@@ -167,19 +174,23 @@ function fixture(
     return ref;
   };
   const evidence = { read: async (ref: { artifactId: string }) => retained.get(ref.artifactId)! };
+  const promotionId = id('external-canonical-promotion');
+  const eventVersionId = 'synthetic-event';
+  const tradeDate = yearOnly ? null : source.valuationCase.content.tradeEffectiveAt.slice(0, 10);
+  const sealed = sealedArchive(source, eventVersionId, tradeDate, promotionId, futurePickDraftYear);
   const review = createAflTradePostseasonMaterializationReview({
     schemaVersion: 'afl-trade-postseason-materialization-review/v2',
     authorityBoundary: 'private_factual_materialization_no_numerical_admission',
     environment: 'test_fixture',
     competition: 'AFLM',
     scopeKey: 'synthetic-case',
-    releaseId: id('outcome-release'),
+    releaseId: sealed.release.releaseId,
     spellVersionId: id('acquisition-spell-version'),
     tradeId: source.valuationCase.content.tradeId,
-    promotionId: id('external-canonical-promotion'),
-    eventVersionId: 'synthetic-event',
+    promotionId,
+    eventVersionId,
     tradeYear: 2024,
-    tradeDate: yearOnly ? null : source.valuationCase.content.tradeEffectiveAt.slice(0, 10),
+    tradeDate,
     period: 'established_postseason',
     reviewEvidence: retain({ synthetic: true }),
     createdAt: at,
@@ -207,20 +218,14 @@ function fixture(
     knowledgeCutoffAt: at,
     knowledgePolicy: 'retrospective_as_recorded_by_dataset_creation',
   });
-  const archive = sealedArchive(
-    source,
-    review.content.eventVersionId,
-    review.content.tradeDate,
-    review.content.promotionId,
-    futurePickDraftYear
-  );
+  const { archive } = sealed;
   const transfers = archive.content.records
     .map(({ record }) => record)
     .filter((record) => record.recordKind === 'transfer');
   const selection = {
     context,
     review,
-    release: { releaseId: review.content.releaseId, content: { createdAt: at } },
+    release: sealed.release,
   };
   const observation = { selection, observation: { content: { context } }, coverageBindings: [] };
   owners.observation.mockResolvedValue(observation);
@@ -271,6 +276,10 @@ it.each([false, true])(
     const assessmentInput = {
       archive: f.archive,
       valuationCase: result.valuationCase,
+      postseasonAuthority: {
+        release: f.observation.selection.release,
+        review: f.observation.selection.review,
+      },
       lineageGraph: result.valuationParents.lineageGraph,
       componentDrawSet: result.valuationParents.componentDrawSet,
       realizedContributionLedger: result.valuationParents.realizedContributionLedger,
@@ -312,6 +321,45 @@ it.each([false, true])(
     ).toThrow('cannot predate the valuation evidence');
   }
 );
+it('rejects a postseason assessment replayed through an archive outside its reviewed release', async () => {
+  const f = fixture();
+  const result = await f.run();
+  const foreign = sealedArchive(
+    f.source,
+    f.review.content.eventVersionId,
+    f.review.content.tradeDate,
+    `external-canonical-promotion:${'b'.repeat(64)}`,
+    2025
+  );
+  const calculation = calculateAflTradeValuation(
+    result.valuationCase,
+    result.valuationParents.componentDrawSet,
+    result.valuationParents.realizedContributionLedger,
+    result.valuationParents.packagePolicy
+  );
+  expect(() =>
+    assessAuthenticatedCompleteAflTrade({
+      archive: foreign.archive,
+      valuationCase: result.valuationCase,
+      postseasonAuthority: {
+        release: f.observation.selection.release,
+        review: f.observation.selection.review,
+      },
+      lineageGraph: result.valuationParents.lineageGraph,
+      componentDrawSet: result.valuationParents.componentDrawSet,
+      realizedContributionLedger: result.valuationParents.realizedContributionLedger,
+      packagePolicy: result.valuationParents.packagePolicy,
+      valuationCalculation: calculation,
+      selectedLayer: 'scarcityAdjusted',
+      valueUnit: {
+        valueUnitId: result.valuationCase.content.valueUnitId,
+        shortLabel: 'PAV',
+        explanation: 'Estimated AFL contribution in the publication value unit.',
+      },
+      assessedAt: at,
+    })
+  ).toThrow('archive differs from the reviewed release and promotion ancestry');
+});
 it('supports an authenticated future pick whose draft year is inside the original horizon', async () => {
   const f = fixture(false, 'future_pick_resolution');
   const result = await f.run();
@@ -325,6 +373,10 @@ it('supports an authenticated future pick whose draft year is inside the origina
     assessAuthenticatedCompleteAflTrade({
       archive: f.archive,
       valuationCase: result.valuationCase,
+      postseasonAuthority: {
+        release: f.observation.selection.release,
+        review: f.observation.selection.review,
+      },
       lineageGraph: result.valuationParents.lineageGraph,
       componentDrawSet: result.valuationParents.componentDrawSet,
       realizedContributionLedger: result.valuationParents.realizedContributionLedger,

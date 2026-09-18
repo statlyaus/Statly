@@ -69,6 +69,10 @@ export async function materializeAflTradePostseasonValuation(
     throw new Error('Valuation transfer authority is incomplete.');
   const valuationCase = materializeAflTradePostseasonValuationCase({
     archive,
+    authority: {
+      release: selection.release,
+      review: selection.review,
+    },
     context: selection.context,
     laterAssessment: {
       effectiveAt: parents.laterEffectiveAt,

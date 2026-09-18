@@ -1407,9 +1407,12 @@ Both materialization and SQL require exactly one current lineage custodian match
 recipient at the trade day, or at January 1 of Y+1 when only the year is known. This outcome-window
 boundary does not populate the unknown trade date; missing, expired or contradictory custody fails
 closed. Custody knowledge must be active at the reconstruction knowledge cutoff.
-Supported future-pick forecasts still require their separate calendar adapter. This assembles private
-contracts; it grants no numerical admission or execution. Guarded persistence/current replay now has
-a complete PostgreSQL case fixture; remaining acceptance and delivery checks are still required.
+Valuation case v2 admits an authenticated supported future pick only when the canonical draft season
+falls inside the original trade's Y+1 through Y+3 outcome calendar. Materialization binds the case to
+the reviewed release and immutable promotion ancestry, and PostgreSQL enforces the same calendar.
+This does not create horizon-aligned future-pick forecasts or grant numerical admission or execution;
+those artifacts still require their separate reviewed method path. Guarded persistence/current replay
+has a complete PostgreSQL case fixture; remaining acceptance and delivery checks are still required.
 
 The draft `private-evaluation-materialization-manifest/v2` repository persists derived observations
 in the existing immutable manifest owner and rederives current authority on every replay/current read.
@@ -1423,7 +1426,9 @@ Complete-case inserts now require the observation authority guard and an indepen
 The manifest embeds all four exact reviewed parent documents. SQL authenticates their canonical bytes,
 scoped custody and shared model IDs, reconstructs parties from approved canonical transfers, checks
 complete asset membership and release inclusion, and preserves receiving-party contribution roots,
-the original three-season horizon and one later assessment. Future-pick forecasts remain unsupported.
+the original three-season horizon and one later assessment. Supported future-pick artifacts inside
+Y+1 through Y+3 can pass case validation; their horizon-aligned forecasts and numerical admission must
+still be supplied and authenticated separately.
 The two-player synthetic exchange covers exact and year-only dates, persistence, replay and review
 withdrawal; a resealed direct-write forgery is rejected. Historical reads preserve withdrawn records
 without claiming current authority. Existing v1 and numerical-consumer rules remain in force.

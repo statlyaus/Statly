@@ -506,6 +506,10 @@ export type AflTradeCompleteAssessmentV2 = z.infer<typeof aflTradeCompleteAssess
 export interface AuthenticatedCompleteAflTradeAssessmentInput {
   archive: AflTradePromotionBackedPublicArchive;
   valuationCase: AflTradeAnyValuationCase;
+  postseasonAuthority?: {
+    release: unknown;
+    review: unknown;
+  };
   lineageGraph: AflTradeLineageGraph;
   componentDrawSet: AflTradeComponentDrawSet;
   realizedContributionLedger: AflTradeRealizedContributionLedger;
@@ -675,9 +679,14 @@ function authenticateAssessmentParents(input: AuthenticatedCompleteAflTradeAsses
   const archive = aflTradePromotionBackedPublicArchiveSchema.parse(input.archive);
   const valuationCase = aflTradeAnyValuationCaseSchema.parse(input.valuationCase);
   const calculation = aflTradeValuationCalculationSchema.parse(input.valuationCalculation);
-  const expectedCase = isAflTradePostseasonValuationCase(valuationCase)
+  const isPostseason = isAflTradePostseasonValuationCase(valuationCase);
+  if (isPostseason && input.postseasonAuthority === undefined) {
+    throw new RangeError('Postseason assessment requires its reviewed release authority.');
+  }
+  const expectedCase = isPostseason
     ? materializeAflTradePostseasonValuationCase({
         archive,
+        authority: input.postseasonAuthority!,
         context: valuationCase.content.context,
         laterAssessment: valuationCase.content.laterAssessment,
         valuationParents: {
