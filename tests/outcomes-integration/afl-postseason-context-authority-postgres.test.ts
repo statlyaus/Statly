@@ -1,5 +1,7 @@
 import { restorePostseasonFixtureSchema } from '../testUtils/restorePostseasonFixtureSchema';
 import { createAflTradeComponentDrawSet } from '@/server/aflTradeIntelligence/valuation/componentDrawSet';
+import { createAflTradePackagePolicy } from '@/server/aflTradeIntelligence/valuation/packagePolicy';
+import { createAflTradePostseasonValuationCase } from '@/server/aflTradeIntelligence/valuation/postseasonValuationCase';
 import { createAflTradeRealizedContributionLedger } from '@/server/aflTradeIntelligence/valuation/realizedContributionLedger';
 import { createAflTradeLineageGraphId } from '@/server/aflTradeIntelligence/valuation/valuationCaseContracts';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
@@ -40,9 +42,25 @@ import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('An explicitly disposable PostgreSQL database is required.');
 
-it.each([false, true])(
-  'authenticates reviewed release and spell with year-only date=%s',
-  async (yearOnly) => {
+it.each([
+  {
+    name: 'authenticates a reviewed exact-date trade with an in-window future pick',
+    yearOnly: false,
+    reciprocalFuturePickYearOffset: 1,
+  },
+  {
+    name: 'rejects an authenticated exact-date trade with an out-of-window future pick',
+    yearOnly: false,
+    reciprocalFuturePickYearOffset: 4,
+  },
+  {
+    name: 'authenticates a reviewed year-only player trade',
+    yearOnly: true,
+    reciprocalFuturePickYearOffset: undefined,
+  },
+])(
+  '$name',
+  async ({ yearOnly, reciprocalFuturePickYearOffset }) => {
     const schemaName = `postseason_context_${process.pid}_${Date.now()}`;
     const admin = new Pool({ connectionString: databaseUrl });
     const pool = new Pool({
@@ -89,7 +107,8 @@ it.each([false, true])(
       });
       const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
         fixtureCaptureExecutionReceipt: fixtureReceipt,
-        reciprocalPlayer: true,
+        reciprocalPlayer: reciprocalFuturePickYearOffset === undefined,
+        ...(reciprocalFuturePickYearOffset === undefined ? {} : { reciprocalFuturePickYearOffset }),
         ...(yearOnly ? { sessionProposalV5: true, partialTransactionDates: true } : {}),
       });
       const evidence = {
@@ -368,22 +387,52 @@ it.each([false, true])(
         )
       ).rejects.toThrow('append-only');
 
-      const fabricated = createFabricatedAflTradeValuationFixture('two_party_player_swap');
+      const fabricated = createFabricatedAflTradeValuationFixture(
+        reciprocalFuturePickYearOffset === undefined
+          ? 'two_party_player_swap'
+          : 'future_pick_resolution'
+      );
       const canonicalTransfers = (
-        await pool.query<{ asset_version_id: string; to_club_id: string }>(
-          "SELECT asset_version_id,to_club_id FROM outcome_event_asset WHERE event_version_id=$1 AND status='approved' ORDER BY asset_version_id",
+        await pool.query<{
+          asset_version_id: string;
+          kind: 'player' | 'future_pick';
+          to_club_id: string;
+        }>(
+          "SELECT asset_version_id,kind::text,to_club_id FROM outcome_event_asset WHERE event_version_id=$1 AND status='approved' ORDER BY asset_version_id",
           [entry.eventVersionId]
         )
       ).rows;
       expect(canonicalTransfers).toHaveLength(2);
       const replacements = new Map<string, string>();
-      fabricated.valuationCase.content.parties.forEach((party, index) => {
-        replacements.set(party.aflClubId, canonicalTransfers[index]!.to_club_id);
-        replacements.set(
-          party.receivedRootAssetIds[0]!,
-          canonicalTransfers[index]!.asset_version_id
+      if (reciprocalFuturePickYearOffset === undefined) {
+        fabricated.valuationCase.content.parties.forEach((party, index) => {
+          replacements.set(party.aflClubId, canonicalTransfers[index]!.to_club_id);
+          replacements.set(
+            party.receivedRootAssetIds[0]!,
+            canonicalTransfers[index]!.asset_version_id
+          );
+        });
+      } else {
+        const futureRoot = fabricated.componentDrawSet.content.assets.find(
+          ({ assetKind }) => assetKind === 'future_pick_entitlement'
         );
-      });
+        const playerRoot = fabricated.componentDrawSet.content.assets.find(
+          ({ assetKind }) => assetKind === 'player'
+        );
+        const futureTransfer = canonicalTransfers.find(({ kind }) => kind === 'future_pick');
+        const playerTransfer = canonicalTransfers.find(
+          ({ asset_version_id }) => asset_version_id === entry.assetVersionId
+        );
+        if (!futureRoot || !playerRoot || !futureTransfer || !playerTransfer)
+          throw new Error('Future-pick SQL fixture roots are incomplete.');
+        replacements.set(futureRoot.assetId, futureTransfer.asset_version_id);
+        replacements.set(playerRoot.assetId, playerTransfer.asset_version_id);
+        for (const party of fabricated.valuationCase.content.parties) {
+          const rootId = party.receivedRootAssetIds[0];
+          const transfer = rootId === futureRoot.assetId ? futureTransfer : playerTransfer;
+          replacements.set(party.aflClubId, transfer.to_club_id);
+        }
+      }
       const remap = <T>(value: T): T =>
         JSON.parse(JSON.stringify(value), (_key, v: unknown) =>
           typeof v === 'string' ? (replacements.get(v) ?? v) : v
@@ -398,7 +447,7 @@ it.each([false, true])(
           ...remap(fabricated.realizedContributionLedger.content),
           lineageGraphId: createAflTradeLineageGraphId(lineageGraph),
         }),
-        packagePolicy: fabricated.packagePolicy,
+        packagePolicy: createAflTradePackagePolicy(remap(fabricated.packagePolicy.content)),
       };
       const retainParent = async (value: unknown) => {
         const ref = createAflTradeCanonicalJsonArtifactRef(value, await now());
@@ -475,6 +524,77 @@ it.each([false, true])(
       expect(
         await exactParentBytes(parentDocuments, scope.environment, '2000-01-01T00:00:00.000Z')
       ).toBe(false);
+      const caseExact = async (document: unknown) =>
+        (
+          await pool.query<{ exact: boolean }>(
+            'SELECT outcome_postseason_valuation_case_exact($1::jsonb) AS exact',
+            [JSON.stringify(document)]
+          )
+        ).rows[0]!.exact;
+      if (reciprocalFuturePickYearOffset === 4) {
+        const observation = await client.transaction((tx) =>
+          materializeAflTradePostseasonObservation(tx, valuationRequest, methodAuthority, evidence)
+        );
+        const parties = (
+          await pool.query<{
+            afl_club_id: string;
+            club_name: string;
+            received_root_asset_ids: string[];
+          }>(
+            `SELECT party.club_id AS afl_club_id,club.current_name AS club_name,
+                    array_agg(asset.asset_version_id ORDER BY asset.asset_version_id) AS received_root_asset_ids
+               FROM outcome_event_party party
+               JOIN outcome_club club ON club.club_id=party.club_id
+               JOIN outcome_event_asset asset ON asset.event_version_id=party.event_version_id
+                 AND asset.to_club_id=party.club_id AND asset.status='approved'
+              WHERE party.event_version_id=$1
+              GROUP BY party.club_id,club.current_name
+              ORDER BY party.club_id`,
+            [entry.eventVersionId]
+          )
+        ).rows.map(({ afl_club_id, club_name, received_root_asset_ids }) => ({
+          aflClubId: afl_club_id,
+          clubName: club_name,
+          receivedRootAssetIds: received_root_asset_ids,
+        }));
+        const context = observation.selection.context;
+        const valuationCase = createAflTradePostseasonValuationCase({
+          publicAssetBoundary: 'source_native_afl_assets_no_user_or_fantasy_ownership',
+          calculationUnit: 'complete_multi_party_trade',
+          tradeId: context.content.tradeId,
+          context,
+          valuationBundleId: caseFixture.componentDrawSet.content.valuationBundleId,
+          ...(caseFixture.componentDrawSet.content.valuationInputBundleId
+            ? {
+                valuationInputBundleId: caseFixture.componentDrawSet.content.valuationInputBundleId,
+              }
+            : {}),
+          lineageGraphId: caseFixture.realizedContributionLedger.content.lineageGraphId,
+          componentDrawSetId: caseFixture.componentDrawSet.componentDrawSetId,
+          realizedContributionLedgerId:
+            caseFixture.realizedContributionLedger.realizedContributionLedgerId,
+          packagePolicyId: caseFixture.packagePolicy.packagePolicyId,
+          valueUnitId: caseFixture.componentDrawSet.content.valueUnitId,
+          parties,
+          laterAssessment: {
+            effectiveAt: valuationParents.laterEffectiveAt,
+            knowledgeCutoffAt: context.content.knowledgeCutoffAt,
+            valuationAsOf: context.content.knowledgeCutoffAt,
+          },
+          legacySourceMetricsTreatment:
+            'excluded_from_calculation_retained_only_by_separate_legacy_projection',
+        });
+        expect(
+          await caseExact({
+            environment: scope.environment,
+            request: { kind: 'complete_trade', selection: valuationRequest },
+            observation: observation.observation,
+            valuationParents: parentDocuments,
+            valuationCase,
+          })
+        ).toBe(false);
+        return;
+      }
       const assembled = await client.transaction((tx) =>
         materializeAflTradePostseasonValuation(tx, valuationRequest, methodAuthority, evidence)
       );
@@ -485,13 +605,6 @@ it.each([false, true])(
         valuationParents: assembled.valuationParents,
         valuationCase: assembled.valuationCase,
       };
-      const caseExact = async (document: unknown) =>
-        (
-          await pool.query<{ exact: boolean }>(
-            'SELECT outcome_postseason_valuation_case_exact($1::jsonb) AS exact',
-            [JSON.stringify(document)]
-          )
-        ).rows[0]!.exact;
       expect(await caseExact(caseDocument)).toBe(true);
       // Reseal and review every changed parent so rejection must come from recipient custody,
       // not stale hashes, missing custody bytes, or a mismatched lineage ID.

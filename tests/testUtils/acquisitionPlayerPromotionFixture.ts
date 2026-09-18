@@ -66,6 +66,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     ];
     lifecycle?: boolean;
     reciprocalPlayer?: boolean;
+    reciprocalFuturePickYearOffset?: number;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -94,6 +95,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       options.official2017CombinedDraft)
   )
     throw new Error('Mixed proof fixture requires synthetic v5 combined-session profile.');
+  if (options.reciprocalPlayer && options.reciprocalFuturePickYearOffset !== undefined)
+    throw new Error('Choose one reciprocal synthetic asset.');
+  if (
+    options.reciprocalFuturePickYearOffset !== undefined &&
+    (!Number.isSafeInteger(options.reciprocalFuturePickYearOffset) ||
+      options.reciprocalFuturePickYearOffset < 1)
+  )
+    throw new Error('Reciprocal future-pick year offset must be a positive integer.');
   const hasDraftSessions = options.draftSessions || options.combinedDraftSessions;
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
@@ -192,6 +201,21 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     transactionId,
     nativeTransferId: nativePlayerId,
   });
+  const reciprocalFuturePickTransferId = createAflTradeContentAddress('external-transfer', {
+    transactionId,
+    nativeTransferId: 'synthetic-reciprocal-future-pick',
+  });
+  const reciprocalFuturePickId = createAflTradeContentAddress('draft-pick', {
+    draftYear: seasonYear + (options.reciprocalFuturePickYearOffset ?? 1),
+    draftType: 'national',
+    roundNumber: 1,
+    originalClubId: targets.toClubId,
+  });
+  const reciprocalFuturePickCustodyId = createAflTradeContentAddress('external-pick-custody', {
+    pickId: reciprocalFuturePickId,
+    observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
+    currentClubId: targets.fromClubId,
+  });
   let reviewedAt: string;
   async function databaseNow() {
     const result = await outcomesPool.query<{ at: Date }>(
@@ -253,8 +277,15 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     const batch = evidenceBatch();
     await outcomesPool.query(
       `INSERT INTO outcome_competition_season (competition,season_year)
-     VALUES ('AFLM',$1) ON CONFLICT DO NOTHING`,
-      [seasonYear]
+       SELECT 'AFLM',unnest($1::integer[]) ON CONFLICT DO NOTHING`,
+      [
+        [
+          seasonYear,
+          ...(options.reciprocalFuturePickYearOffset === undefined
+            ? []
+            : [seasonYear + options.reciprocalFuturePickYearOffset]),
+        ],
+      ]
     );
     await outcomesPool.query(
       `INSERT INTO outcome_artifact_custody
@@ -463,6 +494,31 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                   nativeId: 'synthetic-reciprocal-player',
                   recordedName: 'Synthetic Reciprocal Player',
                 },
+              },
+            },
+          })
+        );
+      }
+      if (
+        options.reciprocalFuturePickYearOffset !== undefined &&
+        request.capabilityId === 'draftguru-trade-detail'
+      ) {
+        targetEvidence.push(
+          createAflTradeExternalEvidenceEnvelope({
+            ...evidence.content,
+            sourceRow: { ordinal: 20, sourceKey: 'synthetic-reciprocal-future-pick' },
+            claim: {
+              kind: 'directed_transfer',
+              nativeEventId: providerEventId,
+              nativeTransferId: 'synthetic-reciprocal-future-pick',
+              fromClub: { nativeId: null, recordedName: targets.toClubName },
+              toClub: { nativeId: null, recordedName: targets.fromClubName },
+              asset: {
+                kind: 'future_pick',
+                draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
+                draftType: 'national',
+                roundNumber: 1,
+                originalClub: { nativeId: null, recordedName: targets.toClubName },
               },
             },
           })
@@ -1868,7 +1924,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     }
     reviewedAt = await databaseNow();
   }
-  if (options.reciprocalPlayer) reviewedAt = await databaseNow();
+  if (options.reciprocalPlayer || options.reciprocalFuturePickYearOffset !== undefined)
+    reviewedAt = await databaseNow();
   const syntheticCandidateContent = {
     schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
     environment,
@@ -1895,6 +1952,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 }),
               ]
             : []),
+          ...(options.reciprocalFuturePickYearOffset === undefined
+            ? []
+            : [reciprocalFuturePickTransferId]),
         ].sort(),
         status: 'single_source' as const,
         evidenceIds: playerBatch.batch.content.evidence
@@ -1968,6 +2028,34 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             },
           ]
         : []),
+      ...(options.reciprocalFuturePickYearOffset === undefined
+        ? []
+        : [
+            {
+              transferId: reciprocalFuturePickTransferId,
+              transactionId,
+              fromClubId: targets.toClubId,
+              toClubId: targets.fromClubId,
+              asset: {
+                kind: 'pick_entitlement' as const,
+                pickId: reciprocalFuturePickId,
+                draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
+                draftType: 'national' as const,
+                nominalRound: 1,
+                nominalPick: null,
+                originalClubId: targets.toClubId,
+                recordedLabel: null,
+              },
+              status: 'single_source' as const,
+              evidenceIds: playerBatch.batch.content.evidence
+                .filter(
+                  (row) =>
+                    row.content.claim.kind === 'directed_transfer' &&
+                    row.content.claim.nativeTransferId === 'synthetic-reciprocal-future-pick'
+                )
+                .map((row) => row.evidenceId),
+            },
+          ]),
 
       {
         transferId,
@@ -2009,7 +2097,30 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }),
     ].sort((a, b) => a.transferId.localeCompare(b.transferId)),
     draftSelections,
-    pickCustody: [],
+    pickCustody:
+      options.reciprocalFuturePickYearOffset === undefined
+        ? []
+        : [
+            {
+              custodyId: reciprocalFuturePickCustodyId,
+              pickId: reciprocalFuturePickId,
+              observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
+              draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
+              draftType: 'national' as const,
+              roundNumber: 1,
+              recordedPickNumber: null,
+              originalClubId: targets.toClubId,
+              currentClubId: targets.fromClubId,
+              status: 'single_source' as const,
+              evidenceIds: playerBatch.batch.content.evidence
+                .filter(
+                  (row) =>
+                    row.content.claim.kind === 'directed_transfer' &&
+                    row.content.claim.nativeTransferId === 'synthetic-reciprocal-future-pick'
+                )
+                .map((row) => row.evidenceId),
+            },
+          ],
     pickLineage: [],
     issues: [],
     reconciledAt: reviewedAt,

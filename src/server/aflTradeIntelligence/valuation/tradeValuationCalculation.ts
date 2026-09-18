@@ -14,7 +14,10 @@ import {
   aflTradeRealizedContributionLedgerSchema,
   type AflTradeRealizedContributionLedger,
 } from './realizedContributionLedger';
-import { aflTradeValuationCaseSchema, type AflTradeValuationCase } from './valuationCaseContracts';
+import {
+  aflTradeAnyValuationCaseSchema,
+  type AflTradeAnyValuationCase,
+} from './valuationCaseAccess';
 
 const FLOAT_TOLERANCE = 1e-8;
 const finiteNumberSchema = z.number().finite();
@@ -482,7 +485,7 @@ export class AflTradeValuationCalculationInputError extends Error {
 }
 
 function assertCalculationInputs(
-  valuationCase: AflTradeValuationCase,
+  valuationCase: AflTradeAnyValuationCase,
   drawSet: AflTradeComponentDrawSet,
   ledger: AflTradeRealizedContributionLedger,
   policy: AflTradePackagePolicy
@@ -715,7 +718,7 @@ function realizedRootCalculation(
 }
 
 function forecastRootCalculations(
-  party: AflTradeValuationCase['content']['parties'][number],
+  party: AflTradeAnyValuationCase['content']['parties'][number],
   view: 'at_trade' | 'remaining',
   draw: AflTradeComponentDrawSet['content']['draws'][number],
   drawSet: AflTradeComponentDrawSet,
@@ -854,7 +857,7 @@ function forecastRootCalculations(
 }
 
 function buildPartyDraw(
-  party: AflTradeValuationCase['content']['parties'][number],
+  party: AflTradeAnyValuationCase['content']['parties'][number],
   draw: AflTradeComponentDrawSet['content']['draws'][number],
   drawSet: AflTradeComponentDrawSet,
   ledger: AflTradeRealizedContributionLedger,
@@ -907,12 +910,12 @@ function buildPartyDraw(
 }
 
 export function calculateAflTradeValuation(
-  unparsedValuationCase: AflTradeValuationCase,
+  unparsedValuationCase: AflTradeAnyValuationCase,
   unparsedDrawSet: AflTradeComponentDrawSet,
   unparsedLedger: AflTradeRealizedContributionLedger,
   unparsedPolicy: AflTradePackagePolicy
 ): AflTradeValuationCalculation {
-  const valuationCase = aflTradeValuationCaseSchema.parse(unparsedValuationCase);
+  const valuationCase = aflTradeAnyValuationCaseSchema.parse(unparsedValuationCase);
   const drawSet = aflTradeComponentDrawSetSchema.parse(unparsedDrawSet);
   const ledger = aflTradeRealizedContributionLedgerSchema.parse(unparsedLedger);
   const policy = aflTradePackagePolicySchema.parse(unparsedPolicy);
