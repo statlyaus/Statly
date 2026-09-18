@@ -93,8 +93,20 @@ export async function governedNativePlayerPavComponentFixture(input: {
   };
 
   const makeV5Parents = (custodyArtifact: AflTradeArtifactRef, custodyBytes: Uint8Array) => {
-    const fitEvidenceDocument = { fixture: 'retained native fit custody' };
-    const preFinalEvidenceDocument = { fixture: 'retained native pre-final custody' };
+    const fitEvidenceDocument = {
+      schemaVersion: 'afl-trade-native-pav-candidate-custody/v1',
+      authorityBoundary: 'train_only_no_evaluation_or_qualification',
+      rootIntentId: root.intentId,
+      fitIntentId: root.intentId,
+      candidateId: originalParents.candidate.candidateId,
+      candidateArtifact: originalParents.candidateArtifact,
+    };
+    const preFinalEvidenceDocument = {
+      ...fitEvidenceDocument,
+      schemaVersion: 'afl-trade-native-pav-candidate-custody/v2',
+      authorityBoundary: 'pre_final_numerical_evidence_no_final_test_or_qualification',
+      preFinalArtifact: originalParents.preFinalArtifact,
+    };
     const fitEvidence = createAflTradeCanonicalJsonArtifactRef(fitEvidenceDocument, at(1));
     const preFinalEvidence = createAflTradeCanonicalJsonArtifactRef(
       preFinalEvidenceDocument,
@@ -364,6 +376,17 @@ export async function governedNativePlayerPavComponentFixture(input: {
     };
   })();
   const execution = recovered.execution;
+  const completedCheckpoint = execution.content.recovery.checkpoints.find(
+    (checkpoint) => checkpoint.content.stage === 'final_test_completed'
+  );
+  if (!completedCheckpoint?.content.evidenceArtifact) {
+    throw new Error('Expected retained native completion evidence.');
+  }
+  await retain(
+    execution.content.recovery.completionEvidence,
+    execution.content.recovery.completionEvidence.recordedAt,
+    completedCheckpoint.content.evidenceArtifact
+  );
   const executionArtifact = await retain(execution, recovered.finishedAt);
   const protocolArtifact = await retain(
     source.protocol,

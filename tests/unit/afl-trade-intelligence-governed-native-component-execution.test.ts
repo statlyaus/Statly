@@ -204,6 +204,46 @@ describe('governed native component execution authentication', () => {
     ).rejects.toThrow(/artifact|bytes|custody/i);
   });
 
+  it('rejects missing progress and completion custody artifacts', async () => {
+    const required = [
+      ...retainedV5.execution.content.recovery.checkpoints
+        .filter((checkpoint) =>
+          [
+            'candidate_fitted',
+            'pre_final_retained',
+            'validation_plan_retained',
+            'final_test_completed',
+          ].includes(checkpoint.content.stage)
+        )
+        .map((checkpoint) => ({
+          value: retainedV5,
+          artifactId: checkpoint.content.evidenceArtifact!.artifactId,
+        })),
+      {
+        value: retainedV4,
+        artifactId: retainedV4.execution.content.recovery.checkpoints.find(
+          (checkpoint) => checkpoint.content.stage === 'final_test_completed'
+        )!.content.evidenceArtifact!.artifactId,
+      },
+    ];
+    expect(required).toHaveLength(5);
+    for (const { value, artifactId: missingArtifactId } of required) {
+      await expect(
+        loadGovernedNativeComponentValidationReport({
+          manifest: value.component,
+          artifactRepository: {
+            ...value.artifactRepository,
+            loadExact: (reference, maximumBytes) =>
+              reference.artifactId === missingArtifactId
+                ? Promise.resolve(null)
+                : value.artifactRepository.loadExact(reference, maximumBytes),
+          },
+          maximumArtifactBytes: 16 * 1024 * 1024,
+        })
+      ).rejects.toThrow(/artifact|bytes|custody/i);
+    }
+  });
+
   it('rejects exact custody that freezes different pre-final and validation-plan parents', async () => {
     await expect(
       loadGovernedNativeComponentValidationReport({

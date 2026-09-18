@@ -117,13 +117,18 @@ async function loadRetainedPlayerPavFinalEvidence(input: {
   const finalTestStarted = execution.content.recovery.checkpoints.find(
     (checkpoint) => checkpoint.content.stage === 'final_test_started'
   );
+  const finalTestCompleted = execution.content.recovery.checkpoints.find(
+    (checkpoint) => checkpoint.content.stage === 'final_test_completed'
+  );
   const completion = execution.content.recovery.completionEvidence;
   const finalEvidenceArtifact = execution.content.outcome.validationReportArtifact;
   if (
     !candidateLocked ||
     !finalTestStarted ||
+    !finalTestCompleted ||
     !candidateLocked.content.evidenceArtifact ||
     !finalTestStarted.content.evidenceArtifact ||
+    !finalTestCompleted.content.evidenceArtifact ||
     !doAflTradeArtifactRefsExactlyMatch(
       candidateLocked.content.evidenceArtifact,
       finalTestStarted.content.evidenceArtifact
@@ -146,7 +151,13 @@ async function loadRetainedPlayerPavFinalEvidence(input: {
     );
   }
   const final = finalEvidence.data.content;
+  const completionDocument = await loadExactJsonDocument({
+    reference: finalTestCompleted.content.evidenceArtifact,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
   if (
+    !exactlyEqual(completionDocument, completion) ||
     final.intentId !== rootIntent.intentId ||
     final.protocolId !== execution.content.modelProtocolId ||
     final.datasetId !== execution.content.datasetId ||
@@ -284,12 +295,74 @@ async function loadRetainedPlayerPavFinalEvidence(input: {
     preFinalArtifact: final.preFinalArtifact,
     validationPlanArtifact: final.validationPlanArtifact,
   });
+  const progressCheckpoints = execution.content.recovery.checkpoints.filter((checkpoint) =>
+    ['candidate_fitted', 'pre_final_retained', 'validation_plan_retained'].includes(
+      checkpoint.content.stage
+    )
+  );
+  const progressCustodyMatches =
+    execution.content.schemaVersion !== 'afl-trade-model-run/v5' ||
+    (progressCheckpoints.length === 3 &&
+      (
+        await Promise.all(
+          progressCheckpoints.map(async (checkpoint) => {
+            const reference = checkpoint.content.evidenceArtifact;
+            if (
+              reference === null ||
+              checkpoint.content.candidateArtifact === null ||
+              !doAflTradeArtifactRefsExactlyMatch(
+                checkpoint.content.candidateArtifact,
+                final.candidateArtifact
+              ) ||
+              (checkpoint.content.stage !== 'candidate_fitted' &&
+                Date.parse(final.preFinalArtifact.createdAt) >
+                  Date.parse(checkpoint.content.recordedAt)) ||
+              (checkpoint.content.stage === 'validation_plan_retained' &&
+                Date.parse(final.validationPlanArtifact.createdAt) >
+                  Date.parse(checkpoint.content.recordedAt))
+            ) {
+              return false;
+            }
+            const expected = {
+              schemaVersion:
+                checkpoint.content.stage === 'candidate_fitted'
+                  ? 'afl-trade-native-pav-candidate-custody/v1'
+                  : checkpoint.content.stage === 'pre_final_retained'
+                    ? 'afl-trade-native-pav-candidate-custody/v2'
+                    : 'afl-trade-native-pav-candidate-custody/v3',
+              authorityBoundary:
+                checkpoint.content.stage === 'candidate_fitted'
+                  ? 'train_only_no_evaluation_or_qualification'
+                  : 'pre_final_numerical_evidence_no_final_test_or_qualification',
+              rootIntentId: rootIntent.intentId,
+              fitIntentId: rootIntent.intentId,
+              candidateId: final.candidateId,
+              candidateArtifact: final.candidateArtifact,
+              ...(checkpoint.content.stage === 'candidate_fitted'
+                ? {}
+                : { preFinalArtifact: final.preFinalArtifact }),
+              ...(checkpoint.content.stage === 'validation_plan_retained'
+                ? { validationPlanArtifact: final.validationPlanArtifact }
+                : {}),
+            };
+            return exactlyEqual(
+              await loadExactJsonDocument({
+                reference,
+                artifactRepository: input.artifactRepository,
+                maximumArtifactBytes: input.maximumArtifactBytes,
+              }),
+              expected
+            );
+          })
+        )
+      ).every(Boolean));
   if (
     !candidateMatches ||
     !preFinalMatches ||
     !validationPlanMatches ||
     !baselineMatches ||
     !custodyMatches ||
+    !progressCustodyMatches ||
     Date.parse(final.preFinalArtifact.createdAt) > Date.parse(candidateLocked.content.recordedAt) ||
     Date.parse(final.validationPlanArtifact.createdAt) >
       Date.parse(candidateLocked.content.recordedAt)
