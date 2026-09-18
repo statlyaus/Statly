@@ -13,7 +13,7 @@ const interval = (bound: z.ZodNumber) =>
     .refine((value) => value.lower <= value.upper, 'Interval bounds must be ordered.');
 const orderedHorizons = <T extends { horizon: string }>(rows: T[]) =>
   rows.every((row, index) => row.horizon === horizons[index]);
-const inputSchema = z
+export const aflTradeNativePavAcceptanceInputSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-native-pav-acceptance-input/v1'),
     cumulativeCrps: pair.nullable(),
@@ -53,9 +53,46 @@ const inputSchema = z
   })
   .strict();
 
+export const aflTradeNativePavAcceptanceCriteriaContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-native-pav-acceptance-criteria/v1'),
+    target: z.literal('three_season_receiving_spell_pav'),
+    primaryMetric: z.literal('cumulative_crps'),
+    weighting: z.literal('equal_observation_exact_paired_support'),
+    minimumRelativeImprovement: z.literal(0.05),
+    nominalIntervalCoverage: z.literal(0.8),
+    acceptableCoverage: z.object({ lower: z.literal(0.75), upper: z.literal(0.85) }).strict(),
+    maximumMaeRatio: z.literal(1.05),
+    jointConfidence: z.literal(0.95),
+    precisionScope: z.literal('simultaneous_all_nine_criteria'),
+    horizons: z.tuple([
+      z.literal('annual_1'),
+      z.literal('annual_2'),
+      z.literal('annual_3'),
+      z.literal('cumulative_3'),
+    ]),
+    zeroReference: z.literal('inconclusive'),
+    pointArithmeticTolerance: z.literal(POINT_ARITHMETIC_TOLERANCE),
+    pointToleranceScale: z.literal('max_one_absolute_estimate'),
+    qualificationGranted: z.literal(false),
+  })
+  .strict();
+
+export const aflTradeNativePavAcceptanceCriteriaSchema = z
+  .object({
+    criteriaId: z.string().regex(/^native-pav-acceptance-criteria:[a-f0-9]{64}$/),
+    content: aflTradeNativePavAcceptanceCriteriaContentSchema,
+  })
+  .strict()
+  .refine(
+    ({ criteriaId, content }) =>
+      criteriaId === createAflTradeContentAddress('native-pav-acceptance-criteria', content),
+    'Native PAV acceptance criteria require exact content-addressed identity.'
+  );
+
 /** Retain through existing protocol artifact custody; creation supplies no review or run authority. */
 export function createAflTradeNativePavAcceptanceCriteria() {
-  const content = {
+  const content = aflTradeNativePavAcceptanceCriteriaContentSchema.parse({
     schemaVersion: 'afl-trade-native-pav-acceptance-criteria/v1' as const,
     target: 'three_season_receiving_spell_pav' as const,
     primaryMetric: 'cumulative_crps' as const,
@@ -71,28 +108,46 @@ export function createAflTradeNativePavAcceptanceCriteria() {
     pointArithmeticTolerance: POINT_ARITHMETIC_TOLERANCE,
     pointToleranceScale: 'max_one_absolute_estimate' as const,
     qualificationGranted: false as const,
-  };
-  return {
+  });
+  return aflTradeNativePavAcceptanceCriteriaSchema.parse({
     criteriaId: createAflTradeContentAddress('native-pav-acceptance-criteria', content),
     content,
-  };
+  });
 }
 
-type Status = 'pass' | 'fail' | 'inconclusive';
-type Criterion = {
-  criterion: string;
-  status: Status;
-  reason:
-    | 'within_tolerance'
-    | 'outside_tolerance'
-    | 'overlaps_tolerance'
-    | 'precision_unestablished'
-    | 'score_unavailable'
-    | 'zero_reference'
-    | 'point_outside_tolerance';
-  estimate: number | null;
-  rawScores: { candidate: number; baseline: number } | null;
-};
+const statusSchema = z.enum(['pass', 'fail', 'inconclusive']);
+const criterionSchema = z
+  .object({
+    criterion: z.string().trim().min(1),
+    status: statusSchema,
+    reason: z.enum([
+      'within_tolerance',
+      'outside_tolerance',
+      'overlaps_tolerance',
+      'precision_unestablished',
+      'score_unavailable',
+      'zero_reference',
+      'point_outside_tolerance',
+    ]),
+    estimate: z.number().finite().nullable(),
+    rawScores: pair.nullable(),
+  })
+  .strict();
+export const aflTradeNativePavAcceptanceAssessmentSchema = z
+  .object({
+    criteriaId: aflTradeNativePavAcceptanceCriteriaSchema.shape.criteriaId,
+    authorityBoundary: z.literal('conditional_numerical_assessment_no_method_or_model_approval'),
+    precisionMethodReference: z
+      .string()
+      .regex(/^artifact:[a-f0-9]{64}$/)
+      .nullable(),
+    status: statusSchema,
+    criteria: z.array(criterionSchema).length(9),
+    qualificationGranted: z.literal(false),
+  })
+  .strict();
+type Status = z.infer<typeof statusSchema>;
+type Criterion = z.infer<typeof criterionSchema>;
 
 function compare(
   criterion: string,
@@ -129,7 +184,7 @@ function compare(
  * review and final-run identity before using this diagnostic in the existing qualification review.
  */
 export function assessAflTradeNativePavAcceptance(unparsed: unknown) {
-  const input = inputSchema.parse(unparsed);
+  const input = aflTradeNativePavAcceptanceInputSchema.parse(unparsed);
   const definition = createAflTradeNativePavAcceptanceCriteria();
   const policy = definition.content;
   const crps = input.cumulativeCrps;
@@ -172,12 +227,12 @@ export function assessAflTradeNativePavAcceptance(unparsed: unknown) {
     : criteria.some((criterion) => criterion.status === 'inconclusive')
       ? 'inconclusive'
       : 'pass';
-  return {
+  return aflTradeNativePavAcceptanceAssessmentSchema.parse({
     criteriaId: definition.criteriaId,
     authorityBoundary: 'conditional_numerical_assessment_no_method_or_model_approval' as const,
     precisionMethodReference: input.precision?.methodReference ?? null,
     status,
     criteria,
     qualificationGranted: false as const,
-  };
+  });
 }
