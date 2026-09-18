@@ -8,7 +8,10 @@ import {
 import { canonicalizeAflTradeJson } from '../../artifacts/contentAddress';
 import type { AflTradeImmutableArtifactRepository } from '../../artifacts/immutableArtifactRepository';
 import { aflTradeNativePavPreFinalConfigurationSchema } from '../../modeling/admittedPlayerPavPreFinalEvaluation';
-import type { AflOutcomeSqlClient } from '../../outcomes/postgresOutcomeReleaseRepository';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '../../outcomes/postgresOutcomeReleaseRepository';
 import { loadGovernedNativeComponentValidationReport } from './governedNativeComponentExecution';
 import {
   deriveGovernedNativePlayerPavQualificationEvidence,
@@ -235,10 +238,14 @@ export class PostgresGovernedNativePlayerPavQualificationEvidenceRepository {
       readonly client: AflOutcomeSqlClient;
       readonly artifactRepository: AflTradeImmutableArtifactRepository;
       readonly maximumArtifactBytes: number;
-      readonly retainArtifact: (input: {
-        readonly document: unknown;
-        readonly createdAt: string;
-      }) => Promise<AflTradeArtifactRef>;
+      /** Register SQL custody through this transaction; do not open a nested transaction. */
+      readonly retainArtifact: (
+        input: {
+          readonly document: unknown;
+          readonly createdAt: string;
+        },
+        transaction: AflOutcomeSqlTransaction
+      ) => Promise<AflTradeArtifactRef>;
     }
   ) {
     if (
@@ -381,29 +388,6 @@ export class PostgresGovernedNativePlayerPavQualificationEvidenceRepository {
       criteriaArtifact,
       derived.calibrationConfigurationArtifact,
     ];
-    await requireExactSqlCustody(this.dependencies.client, parentArtifacts);
-    const evidenceArtifact = await this.dependencies.retainArtifact({
-      document: derived.evidence,
-      createdAt: recordedAt,
-    });
-    if (
-      Date.parse(evidenceArtifact.createdAt) > Date.parse(recordedAt) ||
-      parentArtifacts.some(
-        ({ createdAt }) => Date.parse(createdAt) > Date.parse(evidenceArtifact.createdAt)
-      ) ||
-      !doesAflTradeArtifactRefMatchCanonicalJson(evidenceArtifact, derived.evidence)
-    ) {
-      throw new GovernedNativePlayerPavQualificationEvidenceRepositoryError(
-        'INTEGRITY_MISMATCH',
-        'Retained native player-PAV qualification artifact differs from derived evidence.'
-      );
-    }
-    await requireExactSqlCustody(this.dependencies.client, [evidenceArtifact]);
-    await loadExactJson({
-      repository: this.dependencies.artifactRepository,
-      maximumBytes: this.dependencies.maximumArtifactBytes,
-      reference: evidenceArtifact,
-    });
     const outcome = await this.dependencies.client.transaction(async (transaction) => {
       await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
         `native-player-pav-qualification:${input.componentRunId}:${derived.criteria.criteriaId}`,
@@ -424,8 +408,34 @@ export class PostgresGovernedNativePlayerPavQualificationEvidenceRepository {
             'Native player-PAV qualification run and criteria already name different evidence.'
           );
         }
-        return 'replayed' as const;
+        return { state: 'replayed' as const };
       }
+      await requireExactSqlCustody(transaction, parentArtifacts);
+      const evidenceArtifact = await this.dependencies.retainArtifact(
+        {
+          document: derived.evidence,
+          createdAt: recordedAt,
+        },
+        transaction
+      );
+      if (
+        Date.parse(evidenceArtifact.createdAt) > Date.parse(recordedAt) ||
+        parentArtifacts.some(
+          ({ createdAt }) => Date.parse(createdAt) > Date.parse(evidenceArtifact.createdAt)
+        ) ||
+        !doesAflTradeArtifactRefMatchCanonicalJson(evidenceArtifact, derived.evidence)
+      ) {
+        throw new GovernedNativePlayerPavQualificationEvidenceRepositoryError(
+          'INTEGRITY_MISMATCH',
+          'Retained native player-PAV qualification artifact differs from derived evidence.'
+        );
+      }
+      await requireExactSqlCustody(transaction, [evidenceArtifact]);
+      await loadExactJson({
+        repository: this.dependencies.artifactRepository,
+        maximumBytes: this.dependencies.maximumArtifactBytes,
+        reference: evidenceArtifact,
+      });
       const content = derived.evidence.content;
       await transaction.query(
         `INSERT INTO outcome_governed_native_player_pav_qualification_evidence
@@ -451,9 +461,9 @@ export class PostgresGovernedNativePlayerPavQualificationEvidenceRepository {
           evidenceArtifact.createdAt,
         ]
       );
-      return 'inserted' as const;
+      return { state: 'inserted' as const };
     });
     const retained = await this.loadExact(derived.evidence.evidenceId);
-    return { ...retained, idempotentReplay: outcome === 'replayed' };
+    return { ...retained, idempotentReplay: outcome.state === 'replayed' };
   }
 }

@@ -11,6 +11,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import type { AflOutcomeSqlTransaction } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createGovernedNativePlayerPavQualificationCriteria } from '@/server/aflTradeIntelligence/valuation/internal/governedNativePlayerPavQualification';
 import { PostgresGovernedNativePlayerPavQualificationEvidenceRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedNativePlayerPavQualificationEvidenceRepository';
 import { PostgresGovernedValuationComponentRunRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationComponentRunRepository';
@@ -32,13 +33,17 @@ function scopedDatabaseUrl(schemaName: string) {
   return scoped.toString();
 }
 
-async function withDatabase<T>(name: string, work: (pool: Pool) => Promise<T>): Promise<T> {
+async function withDatabase<T>(
+  name: string,
+  work: (pool: Pool) => Promise<T>,
+  maximumConnections = 1
+): Promise<T> {
   const schemaName = `afl_native_pav_qualification_${name}_${process.pid}_${Date.now()}`;
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   const pool = new Pool({
     connectionString: databaseUrl,
     options: `-c search_path=${schemaName}`,
-    max: 1,
+    max: maximumConnections,
   });
   try {
     runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
@@ -56,11 +61,11 @@ afterAll(async () => {
 });
 
 async function registerCustody(
-  pool: Pool,
+  client: AflOutcomeSqlTransaction,
   reference: AflTradeArtifactRef,
   createdAt = reference.createdAt
 ) {
-  await pool.query(
+  await client.query(
     `INSERT INTO outcome_artifact_custody
       (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
        environment,custody_profile_id,created_at,verified_at,custody_json)
@@ -126,7 +131,7 @@ async function setup(pool: Pool, tamperFinalEvidenceCustody = false) {
     native.component.content.datasetArtifact,
     native.component.content.datasetAdmissionArtifact,
   ]) {
-    await registerCustody(pool, reference);
+    await registerCustody(client, reference);
   }
   await new PostgresGovernedValuationComponentRunRepository({
     client,
@@ -147,27 +152,35 @@ async function setup(pool: Pool, tamperFinalEvidenceCustody = false) {
     criteriaArtifact,
     new TextEncoder().encode(canonicalizeAflTradeJson(criteria))
   );
-  await registerCustody(pool, criteriaArtifact);
+  await registerCustody(client, criteriaArtifact);
   await registerCustody(
-    pool,
+    client,
     native.finalEvidenceArtifact,
     tamperFinalEvidenceCustody
       ? new Date(Date.parse(native.finalEvidenceArtifact.createdAt) + 1_000).toISOString()
       : native.finalEvidenceArtifact.createdAt
   );
-  await registerCustody(pool, calibrationConfigurationArtifact);
+  await registerCustody(client, calibrationConfigurationArtifact);
 
-  const retainArtifact = vi.fn(async (input: { document: unknown; createdAt: string }) => {
-    const reference = createAflTradeCanonicalJsonArtifactRef(input.document, input.createdAt);
-    const retained = await artifacts.putIfAbsent(
-      reference,
-      new TextEncoder().encode(canonicalizeAflTradeJson(input.document))
-    );
-    await registerCustody(pool, retained.reference);
-    return retained.reference;
-  });
+  const retainArtifact = vi.fn(
+    async (
+      input: { document: unknown; createdAt: string },
+      transaction: AflOutcomeSqlTransaction
+    ) => {
+      const reference = createAflTradeCanonicalJsonArtifactRef(input.document, input.createdAt);
+      const retained = await artifacts.putIfAbsent(
+        reference,
+        new TextEncoder().encode(canonicalizeAflTradeJson(input.document))
+      );
+      await registerCustody(transaction, retained.reference);
+      return retained.reference;
+    }
+  );
   const makeRepository = (
-    retain: (input: { document: unknown; createdAt: string }) => Promise<AflTradeArtifactRef>
+    retain: (
+      input: { document: unknown; createdAt: string },
+      transaction: AflOutcomeSqlTransaction
+    ) => Promise<AflTradeArtifactRef>
   ) =>
     new PostgresGovernedNativePlayerPavQualificationEvidenceRepository({
       client,
@@ -255,7 +268,7 @@ describe('governed native player-PAV qualification evidence PostgreSQL repositor
         conflictingArtifact,
         new TextEncoder().encode(canonicalizeAflTradeJson(conflictingEvidence))
       );
-      await registerCustody(pool, conflictingArtifact);
+      await registerCustody(createPgAflOutcomeSqlClient(pool), conflictingArtifact);
       await expect(
         pool.query(
           `INSERT INTO outcome_governed_native_player_pav_qualification_evidence
@@ -322,41 +335,57 @@ describe('governed native player-PAV qualification evidence PostgreSQL repositor
       expect(await authoritySnapshot(pool)).toEqual(before);
     }));
 
-  it('serializes concurrent retains with a single PostgreSQL connection', () =>
-    withDatabase('concurrent', async (pool) => {
-      const fixture = await setup(pool);
-      const results = await Promise.all([
-        fixture.repository.retain({
-          componentRunId: fixture.native.component.runId,
-          criteriaArtifact: fixture.criteriaArtifact,
-          recordedAt: fixture.recordedAt,
-        }),
-        fixture.repository.retain({
-          componentRunId: fixture.native.component.runId,
-          criteriaArtifact: fixture.criteriaArtifact,
-          recordedAt: fixture.recordedAt,
-        }),
-      ]);
-      expect(results.map(({ idempotentReplay }) => idempotentReplay).sort()).toEqual([false, true]);
-      expect(results[0]!.evidenceArtifact).toEqual(results[1]!.evidenceArtifact);
-      const rows = await pool.query(
-        'SELECT 1 FROM outcome_governed_native_player_pav_qualification_evidence'
-      );
-      expect(rows.rowCount).toBe(1);
-    }));
+  it('serializes concurrent retains before artifact custody', () =>
+    withDatabase(
+      'concurrent',
+      async (pool) => {
+        const fixture = await setup(pool);
+        const laterRecordedAt = new Date(Date.parse(fixture.recordedAt) + 60_000).toISOString();
+        const results = await Promise.all([
+          fixture.repository.retain({
+            componentRunId: fixture.native.component.runId,
+            criteriaArtifact: fixture.criteriaArtifact,
+            recordedAt: laterRecordedAt,
+          }),
+          fixture.repository.retain({
+            componentRunId: fixture.native.component.runId,
+            criteriaArtifact: fixture.criteriaArtifact,
+            recordedAt: fixture.recordedAt,
+          }),
+        ]);
+        expect(results.map(({ idempotentReplay }) => idempotentReplay).sort()).toEqual([
+          false,
+          true,
+        ]);
+        expect(results[0]!.evidenceArtifact).toEqual(results[1]!.evidenceArtifact);
+        expect(results[0]!.recordedAt).toBe(results[1]!.recordedAt);
+        expect([fixture.recordedAt, laterRecordedAt]).toContain(results[0]!.recordedAt);
+        expect(fixture.retainArtifact).toHaveBeenCalledTimes(1);
+        const rows = await pool.query(
+          'SELECT 1 FROM outcome_governed_native_player_pav_qualification_evidence'
+        );
+        expect(rows.rowCount).toBe(1);
+      },
+      4
+    ));
 
   it('adopts an authenticated artifact retained before an interrupted insert', () =>
     withDatabase('interrupted', async (pool) => {
       const fixture = await setup(pool);
       let interrupt = true;
-      const interruptedRetain = vi.fn(async (input: { document: unknown; createdAt: string }) => {
-        const retained = await fixture.retainArtifact(input);
-        if (interrupt) {
-          interrupt = false;
-          throw new Error('synthetic interruption after immutable artifact retention');
+      const interruptedRetain = vi.fn(
+        async (
+          input: { document: unknown; createdAt: string },
+          transaction: AflOutcomeSqlTransaction
+        ) => {
+          const retained = await fixture.retainArtifact(input, transaction);
+          if (interrupt) {
+            interrupt = false;
+            throw new Error('synthetic interruption after immutable artifact retention');
+          }
+          return retained;
         }
-        return retained;
-      });
+      );
       const repository = fixture.makeRepository(interruptedRetain);
       await expect(
         repository.retain({
@@ -389,9 +418,12 @@ describe('governed native player-PAV qualification evidence PostgreSQL repositor
     withDatabase('physical', async (pool) => {
       const fixture = await setup(pool);
       const missingPhysicalRetain = vi.fn(
-        async (input: { document: unknown; createdAt: string }) => {
+        async (
+          input: { document: unknown; createdAt: string },
+          transaction: AflOutcomeSqlTransaction
+        ) => {
           const reference = createAflTradeCanonicalJsonArtifactRef(input.document, input.createdAt);
-          await registerCustody(pool, reference);
+          await registerCustody(transaction, reference);
           return reference;
         }
       );
