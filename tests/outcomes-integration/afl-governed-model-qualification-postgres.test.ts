@@ -26,7 +26,9 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationModelQualificationRepository';
 
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import { governedNativePlayerPavComponentFixture } from '../testUtils/governedNativePlayerPavComponentFixture';
 import { seedGovernedQualificationComponentRuns } from '../testUtils/governedQualificationComponentRunsFixture';
+import { nativePavModelRunSqlFixture } from '../testUtils/nativePavModelRunSqlFixture';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -113,8 +115,15 @@ afterAll(async () => {
   await adminPool.end();
 });
 
-async function componentRuns() {
-  return seedGovernedQualificationComponentRuns({ pool, artifacts, retain, retainedAt });
+let componentRunsPromise: ReturnType<typeof seedGovernedQualificationComponentRuns> | undefined;
+function componentRuns() {
+  componentRunsPromise ??= seedGovernedQualificationComponentRuns({
+    pool,
+    artifacts,
+    retain,
+    retainedAt,
+  });
+  return componentRunsPromise;
 }
 async function qualificationFixture(
   runs: Awaited<ReturnType<typeof componentRuns>>,
@@ -298,6 +307,116 @@ async function insertPickNativeEvidenceDirectly(input: {
 }
 
 describe('governed model qualification PostgreSQL registry', () => {
+  it('rejects authenticated native player-PAV evidence before qualification writes', async () => {
+    const runs = await componentRuns();
+    const native = await governedNativePlayerPavComponentFixture({
+      manifestVersion: 'v5',
+      finalEvidenceVersion: 'v2',
+      source: await nativePavModelRunSqlFixture(),
+      artifactRepository: artifacts,
+    });
+    const nativeEvaluatedAt = '2026-09-03T00:00:00.000Z';
+    const policy = createGovernedValuationModelQualificationPolicy({
+      player: {
+        schemaVersion: 'governed-player-model-qualification-criteria/v1',
+        minimumComparableObservations: 100,
+        minimumRelativeMaeImprovement: 0.051,
+        minimumRelativeRmseImprovement: 0.05,
+        requiredAcceptanceOutcome: 'meets_declared_predictive_thresholds',
+      },
+      pick: {
+        schemaVersion: 'governed-pick-model-qualification-criteria/v1',
+        evaluatedScope: 'final_test',
+        minimumObservations: 1,
+        maximumMulticlassBrierScore: 0.701,
+        maximumMulticlassLogLoss: 2,
+        maximumRankedProbabilityScore: 0.35,
+        maximumContributionCrps: 25,
+        maximumMeanAbsoluteContributionError: 30,
+        maximumRootMeanSquaredContributionError: 40,
+        maximumMeanAbsoluteGamesError: 35,
+        maximumRootMeanSquaredGamesError: 45,
+        minimumEmpiricalP10P90Coverage: 0.7,
+        maximumEmpiricalP10P90Coverage: 1,
+        maximumMeanEmpiricalIntervalWidth: 80,
+        maximumZeroProbabilityObservationCount: 0,
+      },
+    });
+    const playerEvidence = {
+      ...deriveGovernedPlayerModelQualificationEvidence(runs.playerValidationReport),
+      validationReportId: createAflTradeContentAddress('player-validation-report', {
+        fixture: 'unevaluated-native-player-evidence-placeholder',
+      }),
+    };
+    const pickEvidence = {
+      ...deriveGovernedPickModelQualificationEvidence(runs.pickValidationReport),
+      validationReportId: createAflTradeContentAddress('pick-pav-validation-report', {
+        fixture: 'unevaluated-native-pick-evidence-placeholder',
+      }),
+    };
+    const qualification = createGovernedValuationModelQualification({
+      environment: 'non_production',
+      scopeKey: 'afl-men:native-pav-policy-pending',
+      evaluatedAt: nativeEvaluatedAt,
+      policy,
+      policyArtifact: await retain(policy, nativeEvaluatedAt),
+      components: {
+        player: {
+          role: 'player_contribution_and_availability',
+          runId: native.component.runId,
+          runArtifact: native.componentArtifact,
+          protocolId: native.component.content.protocolId,
+          protocolArtifact: native.component.content.protocolArtifact,
+          criteriaArtifact: await retain(policy.player, nativeEvaluatedAt),
+          validationEvidence: playerEvidence,
+          validationEvidenceArtifact: await retain(playerEvidence, nativeEvaluatedAt),
+        },
+        pick: {
+          role: 'draft_pick_and_future_pick_distribution',
+          runId: runs.pick.runId,
+          runArtifact: runs.pickArtifact,
+          protocolId: runs.pick.content.protocolId,
+          protocolArtifact: runs.pick.content.protocolArtifact,
+          criteriaArtifact: await retain(policy.pick, nativeEvaluatedAt),
+          validationEvidence: pickEvidence,
+          validationEvidenceArtifact: await retain(pickEvidence, nativeEvaluatedAt),
+        },
+      },
+    });
+    const qualificationArtifact = await retain(qualification, nativeEvaluatedAt);
+    const repository = new PostgresGovernedValuationModelQualificationRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository: artifacts,
+      maximumArtifactBytes: 16 * 1024 * 1024,
+    });
+    await expect(
+      repository.register({
+        qualification,
+        qualificationArtifact,
+        expectedGateLedgerRevision: 1,
+        expectedCurrentRevision: 0,
+      })
+    ).rejects.toThrow(/authenticated but unevaluated|reviewed native-PAV policy/iu);
+    const [qualificationRows, gateRows, currentRows] = await Promise.all([
+      pool.query(
+        'SELECT count(*)::integer AS count FROM outcome_governed_valuation_model_qualification WHERE qualification_id=$1',
+        [qualification.qualificationId]
+      ),
+      pool.query(
+        `SELECT count(*)::integer AS count FROM outcome_gate_decision
+         WHERE decision_key LIKE $1`,
+        [`${qualification.content.scopeKey}:%`]
+      ),
+      pool.query(
+        'SELECT count(*)::integer AS count FROM outcome_current_governed_valuation_model_pair WHERE scope_key=$1',
+        [qualification.content.scopeKey]
+      ),
+    ]);
+    expect(qualificationRows.rows[0]?.count).toBe(0);
+    expect(gateRows.rows[0]?.count).toBe(0);
+    expect(currentRows.rows[0]?.count).toBe(0);
+  }, 120_000);
+
   it('advances one passing pair atomically, replays it, and isolates failed or stale candidates', async () => {
     const runs = await componentRuns();
     const repository = new PostgresGovernedValuationModelQualificationRepository({

@@ -4,10 +4,19 @@ import {
   type AflTradeArtifactRef,
 } from '../../artifacts/artifactReference';
 import {
+  aflTradeModelRunManifestV4Schema,
+  aflTradeModelRunManifestV5Schema,
   aflTradeModelRunManifestV3Schema,
   type AflTradeModelRunManifestV3,
+  type AflTradeModelRunManifestV4,
+  type AflTradeModelRunManifestV5,
 } from '../../artifacts/modelRunManifest';
+import { canonicalizeAflTradeJson } from '../../artifacts/contentAddress';
 import type { AflTradeImmutableArtifactRepository } from '../../artifacts/immutableArtifactRepository';
+import { aflTradeAdmittedPlayerPavCandidateSchema } from '../../modeling/admittedPlayerPavCandidate';
+import { aflTradeNativePavPreFinalEvidenceSchema } from '../../modeling/admittedPlayerPavPreFinalContracts';
+import { aflTradeNativePavFinalEvidenceSchema } from '../../modeling/admittedPlayerPavReports';
+import { aflTradeNativePavValidationPlanEvidenceSchema } from '../../modeling/admittedPlayerPavValidationPlanContracts';
 import {
   governedAflTradePickPavModelExecutionSchema,
   type GovernedAflTradePickPavModelExecution,
@@ -62,11 +71,331 @@ export type GovernedNativeComponentValidationReport =
       validationReportArtifact: AflTradeArtifactRef;
     }>
   | Readonly<{
+      kind: 'player_pav_final_evidence';
+      execution: AflTradeModelRunManifestV4 | AflTradeModelRunManifestV5;
+      finalEvidence: ReturnType<typeof aflTradeNativePavFinalEvidenceSchema.parse>;
+      finalEvidenceArtifact: AflTradeArtifactRef;
+      qualificationState: 'not_evaluated';
+    }>
+  | Readonly<{
       kind: 'draft_pick_and_future_pick_distribution';
       execution: GovernedAflTradePickPavModelExecution;
       validationReport: AflTradePickPavValidationReport;
     }>;
 
+function exactlyEqual(left: unknown, right: unknown): boolean {
+  return canonicalizeAflTradeJson(left) === canonicalizeAflTradeJson(right);
+}
+
+async function doesV5ProgressCustodyMatch(input: {
+  readonly execution: AflTradeModelRunManifestV4 | AflTradeModelRunManifestV5;
+  readonly rootIntentId: string;
+  readonly final: ReturnType<typeof aflTradeNativePavFinalEvidenceSchema.parse>['content'];
+  readonly artifactRepository: AflTradeImmutableArtifactRepository;
+  readonly maximumArtifactBytes: number;
+}): Promise<boolean> {
+  if (input.execution.content.schemaVersion !== 'afl-trade-model-run/v5') return true;
+  const progressCheckpoints = input.execution.content.recovery.checkpoints.filter((checkpoint) =>
+    ['candidate_fitted', 'pre_final_retained', 'validation_plan_retained'].includes(
+      checkpoint.content.stage
+    )
+  );
+  if (progressCheckpoints.length !== 3) return false;
+  const matches = await Promise.all(
+    progressCheckpoints.map(async (checkpoint) => {
+      const reference = checkpoint.content.evidenceArtifact;
+      if (
+        reference === null ||
+        checkpoint.content.candidateArtifact === null ||
+        !doAflTradeArtifactRefsExactlyMatch(
+          checkpoint.content.candidateArtifact,
+          input.final.candidateArtifact
+        ) ||
+        (checkpoint.content.stage !== 'candidate_fitted' &&
+          Date.parse(input.final.preFinalArtifact.createdAt) >
+            Date.parse(checkpoint.content.recordedAt)) ||
+        (checkpoint.content.stage === 'validation_plan_retained' &&
+          Date.parse(input.final.validationPlanArtifact.createdAt) >
+            Date.parse(checkpoint.content.recordedAt))
+      ) {
+        return false;
+      }
+      const expected = {
+        schemaVersion:
+          checkpoint.content.stage === 'candidate_fitted'
+            ? 'afl-trade-native-pav-candidate-custody/v1'
+            : checkpoint.content.stage === 'pre_final_retained'
+              ? 'afl-trade-native-pav-candidate-custody/v2'
+              : 'afl-trade-native-pav-candidate-custody/v3',
+        authorityBoundary:
+          checkpoint.content.stage === 'candidate_fitted'
+            ? 'train_only_no_evaluation_or_qualification'
+            : 'pre_final_numerical_evidence_no_final_test_or_qualification',
+        rootIntentId: input.rootIntentId,
+        fitIntentId: input.rootIntentId,
+        candidateId: input.final.candidateId,
+        candidateArtifact: input.final.candidateArtifact,
+        ...(checkpoint.content.stage === 'candidate_fitted'
+          ? {}
+          : { preFinalArtifact: input.final.preFinalArtifact }),
+        ...(checkpoint.content.stage === 'validation_plan_retained'
+          ? { validationPlanArtifact: input.final.validationPlanArtifact }
+          : {}),
+      };
+      return exactlyEqual(
+        await loadExactJsonDocument({
+          reference,
+          artifactRepository: input.artifactRepository,
+          maximumArtifactBytes: input.maximumArtifactBytes,
+        }),
+        expected
+      );
+    })
+  );
+  return matches.every(Boolean);
+}
+
+async function loadRetainedPlayerPavFinalEvidence(input: {
+  readonly execution: AflTradeModelRunManifestV4 | AflTradeModelRunManifestV5;
+  readonly manifest: GovernedValuationComponentRunManifest;
+  readonly artifactRepository: AflTradeImmutableArtifactRepository;
+  readonly maximumArtifactBytes: number;
+}): Promise<
+  Extract<GovernedNativeComponentValidationReport, { kind: 'player_pav_final_evidence' }>
+> {
+  const { execution } = input;
+  const component = input.manifest.content;
+  if (
+    execution.runId !== component.nativeExecution.executionId ||
+    execution.content.environment !== 'non_production' ||
+    execution.content.outcome.status !== 'succeeded' ||
+    execution.content.datasetId !== component.datasetId ||
+    execution.content.datasetAdmissionId !== component.datasetAdmissionId ||
+    execution.content.modelProtocolId !== component.protocolId
+  ) {
+    throw new GovernedNativeComponentExecutionError(
+      'Governed native player-PAV recovery ancestry is invalid or unsuccessful.'
+    );
+  }
+
+  const rootIntent = execution.content.recovery.intentChain[0]!;
+  const candidateLocked = execution.content.recovery.checkpoints.find(
+    (checkpoint) => checkpoint.content.stage === 'candidate_locked'
+  );
+  const finalTestStarted = execution.content.recovery.checkpoints.find(
+    (checkpoint) => checkpoint.content.stage === 'final_test_started'
+  );
+  const finalTestCompleted = execution.content.recovery.checkpoints.find(
+    (checkpoint) => checkpoint.content.stage === 'final_test_completed'
+  );
+  const completion = execution.content.recovery.completionEvidence;
+  const finalEvidenceArtifact = execution.content.outcome.validationReportArtifact;
+  if (
+    !candidateLocked ||
+    !finalTestStarted ||
+    !finalTestCompleted ||
+    !candidateLocked.content.evidenceArtifact ||
+    !finalTestStarted.content.evidenceArtifact ||
+    !finalTestCompleted.content.evidenceArtifact ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      candidateLocked.content.evidenceArtifact,
+      finalTestStarted.content.evidenceArtifact
+    )
+  ) {
+    throw new GovernedNativeComponentExecutionError(
+      'Governed native player-PAV recovery omits required retained checkpoints.'
+    );
+  }
+
+  const finalDocument = await loadExactJsonDocument({
+    reference: finalEvidenceArtifact,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
+  const finalEvidence = aflTradeNativePavFinalEvidenceSchema.safeParse(finalDocument);
+  if (!finalEvidence.success) {
+    throw new GovernedNativeComponentExecutionError(
+      'Governed native player-PAV final evidence is invalid.'
+    );
+  }
+  const final = finalEvidence.data.content;
+  const completionDocument = await loadExactJsonDocument({
+    reference: finalTestCompleted.content.evidenceArtifact,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
+  if (
+    !exactlyEqual(completionDocument, completion) ||
+    final.intentId !== rootIntent.intentId ||
+    final.protocolId !== execution.content.modelProtocolId ||
+    final.datasetId !== execution.content.datasetId ||
+    final.datasetAdmissionId !== execution.content.datasetAdmissionId ||
+    final.observationSetId !== execution.content.observationSetId ||
+    final.candidateLockedCheckpointId !== candidateLocked.checkpointId ||
+    final.finalTestStartedCheckpointId !== finalTestStarted.checkpointId ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      final.candidateArtifact,
+      execution.content.outcome.modelArtifact
+    ) ||
+    !candidateLocked.content.candidateArtifact ||
+    !finalTestStarted.content.candidateArtifact ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      final.candidateArtifact,
+      candidateLocked.content.candidateArtifact
+    ) ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      final.candidateArtifact,
+      finalTestStarted.content.candidateArtifact
+    ) ||
+    !execution.content.outcome.selectionValidationReportArtifact ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      execution.content.outcome.selectionValidationReportArtifact,
+      final.preFinalArtifact
+    ) ||
+    Date.parse(finalEvidenceArtifact.createdAt) < Date.parse(completion.evaluatedAt) ||
+    Date.parse(finalEvidenceArtifact.createdAt) > Date.parse(completion.recordedAt)
+  ) {
+    throw new GovernedNativeComponentExecutionError(
+      'Governed native player-PAV final evidence ancestry or chronology is invalid.'
+    );
+  }
+
+  const [candidateDocument, preFinalDocument, validationPlanDocument, custodyDocument] =
+    await Promise.all([
+      loadExactJsonDocument({
+        reference: final.candidateArtifact,
+        artifactRepository: input.artifactRepository,
+        maximumArtifactBytes: input.maximumArtifactBytes,
+      }),
+      loadExactJsonDocument({
+        reference: final.preFinalArtifact,
+        artifactRepository: input.artifactRepository,
+        maximumArtifactBytes: input.maximumArtifactBytes,
+      }),
+      loadExactJsonDocument({
+        reference: final.validationPlanArtifact,
+        artifactRepository: input.artifactRepository,
+        maximumArtifactBytes: input.maximumArtifactBytes,
+      }),
+      loadExactJsonDocument({
+        reference: candidateLocked.content.evidenceArtifact,
+        artifactRepository: input.artifactRepository,
+        maximumArtifactBytes: input.maximumArtifactBytes,
+      }),
+    ]);
+  const candidate = aflTradeAdmittedPlayerPavCandidateSchema.safeParse(candidateDocument);
+  const preFinal = aflTradeNativePavPreFinalEvidenceSchema.safeParse(preFinalDocument);
+  const validationPlan =
+    aflTradeNativePavValidationPlanEvidenceSchema.safeParse(validationPlanDocument);
+  if (!candidate.success || !preFinal.success || !validationPlan.success) {
+    throw new GovernedNativeComponentExecutionError(
+      'Governed native player-PAV retained numerical parents are invalid.'
+    );
+  }
+
+  const candidateContent = candidate.data.content;
+  const preFinalContent = preFinal.data.content;
+  const planContent = validationPlan.data.content;
+  const commonBindings = {
+    intentId: final.intentId,
+    protocolId: final.protocolId,
+    datasetId: final.datasetId,
+    datasetAdmissionId: final.datasetAdmissionId,
+    observationSetId: final.observationSetId,
+    pavObservationSetId: final.pavObservationSetId,
+    methodId: final.methodId,
+  };
+  const candidateMatches =
+    candidate.data.candidateId === final.candidateId &&
+    Object.entries(commonBindings).every(
+      ([key, value]) => candidateContent[key as keyof typeof candidateContent] === value
+    ) &&
+    doAflTradeArtifactRefsExactlyMatch(
+      candidateContent.configurationArtifact,
+      rootIntent.content.configurationArtifact
+    );
+  const preFinalMatches =
+    preFinal.data.evaluationId === final.preFinalEvaluationId &&
+    Object.entries(commonBindings).every(
+      ([key, value]) => preFinalContent[key as keyof typeof preFinalContent] === value
+    ) &&
+    preFinalContent.candidateId === final.candidateId &&
+    doAflTradeArtifactRefsExactlyMatch(
+      preFinalContent.candidateArtifact,
+      final.candidateArtifact
+    ) &&
+    doAflTradeArtifactRefsExactlyMatch(
+      preFinalContent.calibrationConfigurationArtifact,
+      final.calibrationConfigurationArtifact
+    ) &&
+    preFinalContent.calibrationState.calibrationId === final.calibrationId;
+  const validationPlanMatches =
+    validationPlan.data.evaluationId === final.validationPlanEvaluationId &&
+    Object.entries(commonBindings).every(
+      ([key, value]) => planContent[key as keyof typeof planContent] === value
+    ) &&
+    planContent.primaryCandidateId === final.candidateId &&
+    planContent.primaryPreFinalEvaluationId === final.preFinalEvaluationId &&
+    doAflTradeArtifactRefsExactlyMatch(
+      planContent.calibrationConfigurationArtifact,
+      final.calibrationConfigurationArtifact
+    );
+  const baselineStates = planContent.evaluations.filter((item) => item.kind === 'baseline');
+  const baselineMatches =
+    baselineStates.length === final.baselineComparisons.length &&
+    baselineStates.every((state, index) => {
+      const comparison = final.baselineComparisons[index];
+      return (
+        comparison !== undefined &&
+        comparison.fitId === state.fitState.fitId &&
+        comparison.calibrationId === state.calibrationState.calibrationId &&
+        comparison.definitionKey === state.definition.definitionKey &&
+        exactlyEqual(comparison.definitionArtifact, state.definitionArtifact)
+      );
+    });
+  const custodyMatches = exactlyEqual(custodyDocument, {
+    schemaVersion: 'afl-trade-native-pav-candidate-custody/v3',
+    authorityBoundary: 'pre_final_numerical_evidence_no_final_test_or_qualification',
+    rootIntentId: rootIntent.intentId,
+    fitIntentId: rootIntent.intentId,
+    candidateId: final.candidateId,
+    candidateArtifact: final.candidateArtifact,
+    preFinalArtifact: final.preFinalArtifact,
+    validationPlanArtifact: final.validationPlanArtifact,
+  });
+  const progressCustodyMatches = await doesV5ProgressCustodyMatch({
+    execution,
+    rootIntentId: rootIntent.intentId,
+    final,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
+  if (
+    !candidateMatches ||
+    !preFinalMatches ||
+    !validationPlanMatches ||
+    !baselineMatches ||
+    !custodyMatches ||
+    !progressCustodyMatches ||
+    Date.parse(final.preFinalArtifact.createdAt) > Date.parse(candidateLocked.content.recordedAt) ||
+    Date.parse(final.validationPlanArtifact.createdAt) >
+      Date.parse(candidateLocked.content.recordedAt)
+  ) {
+    throw new GovernedNativeComponentExecutionError(
+      'Governed native player-PAV final evidence differs from retained numerical ancestry.'
+    );
+  }
+
+  return {
+    kind: 'player_pav_final_evidence',
+    execution,
+    finalEvidence: finalEvidence.data,
+    finalEvidenceArtifact,
+    qualificationState: 'not_evaluated',
+  };
+}
+
+/** Authenticates retained evidence ancestry only; it grants no execution or qualification authority. */
 export async function loadGovernedNativeComponentValidationReport(input: {
   readonly manifest: GovernedValuationComponentRunManifest;
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
@@ -87,8 +416,29 @@ export async function loadGovernedNativeComponentValidationReport(input: {
   });
   if (content.nativeExecution.kind === 'admitted_player_model_run') {
     const parsed = aflTradeModelRunManifestV3Schema.safeParse(document);
+    if (!parsed.success) {
+      const recoveredV5 = aflTradeModelRunManifestV5Schema.safeParse(document);
+      const recoveredV4 = recoveredV5.success
+        ? null
+        : aflTradeModelRunManifestV4Schema.safeParse(document);
+      const recovered = recoveredV5.success
+        ? recoveredV5.data
+        : recoveredV4?.success
+          ? recoveredV4.data
+          : null;
+      if (recovered === null) {
+        throw new GovernedNativeComponentExecutionError(
+          'Governed player native execution is not a supported retained manifest.'
+        );
+      }
+      return loadRetainedPlayerPavFinalEvidence({
+        execution: recovered,
+        manifest: input.manifest,
+        artifactRepository: input.artifactRepository,
+        maximumArtifactBytes: input.maximumArtifactBytes,
+      });
+    }
     if (
-      !parsed.success ||
       parsed.data.runId !== content.nativeExecution.executionId ||
       parsed.data.content.environment !== 'non_production' ||
       parsed.data.content.outcome.status !== 'succeeded' ||
