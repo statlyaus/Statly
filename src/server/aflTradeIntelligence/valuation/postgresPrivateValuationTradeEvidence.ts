@@ -95,14 +95,16 @@ function requireRecordIdentity(
   }
   if (membership.recordKind === 'transaction') {
     if ('schemaVersion' in binding) {
+      if (record.competition !== 'AFLM' || record.kind !== 'trade') {
+        throw new TypeError('Private trade record is not an approved AFL transaction.');
+      }
+      if (membership.canonicalRecordId !== binding.cohortTradeIds[0]) return;
       const postseason = binding.postseasonYearContexts[0].content;
       const eventDate = z.union([z.iso.date(), z.null()]).parse(record.eventDate);
       if (
-        record.competition !== 'AFLM' ||
         record.seasonYear !== binding.tradeYear ||
         record.eventId !== AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID ||
         record.eventVersionId !== binding.cohortTradeIds[0] ||
-        record.kind !== 'trade' ||
         eventDate !== postseason.tradeDate
       ) {
         throw new TypeError('Private trade record is not the reviewed historical pilot.');
@@ -162,7 +164,12 @@ function verifyEvidence(input: z.infer<typeof requestSchema>, rawEvidence: unkno
     return { ...member, membership: selected, ...snapshot };
   });
   const trades = members
-    .filter(({ recordKind }) => recordKind === 'transaction')
+    .filter(
+      ({ recordKind, membership }) =>
+        recordKind === 'transaction' &&
+        (!('schemaVersion' in binding) ||
+          binding.cohortTradeIds.includes(membership.canonicalRecordId))
+    )
     .map(({ record }) => ({
       eventVersionId: z.string().min(1).parse(record.eventVersionId),
       eventId: z.string().min(1).parse(record.eventId),
