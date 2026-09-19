@@ -1254,6 +1254,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0224_historical_pilot_cohort_binding',
       '0225_postseason_future_pick_calendar',
       '0226_historical_pilot_anchor_season_correction',
+      '0227_historical_pilot_release_target_membership',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

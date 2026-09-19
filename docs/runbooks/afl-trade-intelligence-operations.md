@@ -3354,5 +3354,7 @@ anchored to 2021 and contains the exact 2020 trade. Binding requires that exact 
 range, rather than using the trade year as its source anchor. It still requires the exact 2020
 canonical event, immutable release membership,
 current Gate 2 and source rights, reviewed acquisition spell, postseason context and live dispatch
-claim. This correction grants factual binding only; numerical qualification, grading and public
-activation follow their separate existing checks.
+claim. Migration 0227 permits the immutable release to contain other transactions, while requiring
+exactly one reviewed Cameron event version in its sealed membership. The reader authenticates every
+member's bytes but returns only Cameron as the pilot cohort trade. These corrections grant factual
+binding only; numerical qualification, grading and public activation follow separate checks.

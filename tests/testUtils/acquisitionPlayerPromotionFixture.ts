@@ -53,6 +53,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     tradeSeasonYear?: number;
     candidateAnchorSeasonYear?: number;
     providerEventId?: string;
+    fixtureNamespace?: string;
+    nativePlayerId?: string;
     promoterThroughSeason?: number;
     draftSessions?: boolean;
     sessionProposalV5?: boolean;
@@ -122,9 +124,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       candidateAnchorSeasonYear !== seasonYear + options.reciprocalFuturePickYearOffset)
   )
     throw new Error('Synthetic candidate anchor must be represented by its future pick year.');
-  const fixtureNamespace = reviewedOfficialCombinedDraft
-    ? `official-${seasonYear}`
-    : 'synthetic-2024';
+  const fixtureNamespace =
+    options.fixtureNamespace ??
+    (reviewedOfficialCombinedDraft ? `official-${seasonYear}` : 'synthetic-2024');
   const providerEventId =
     options.providerEventId ??
     (reviewedOfficialCombinedDraft
@@ -132,9 +134,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       : 'promotion-fixture');
   if (providerEventId.trim().length === 0) throw new Error('Provider event ID is required.');
   const tradeDate = options.partialTransactionDates ? null : `${seasonYear}-10-15`;
-  const nativePlayerId = reviewedOfficialCombinedDraft
-    ? `official-${seasonYear}-player`
-    : 'synthetic-player';
+  const nativePlayerId =
+    options.nativePlayerId ??
+    (reviewedOfficialCombinedDraft ? `official-${seasonYear}-player` : 'synthetic-player');
   const officialSelectionCount =
     officialCombinedDraftYear === 2016 ? 77 : officialCombinedDraftYear === 2017 ? 78 : null;
   const officialTerminalClubId = reviewedOfficialCombinedDraft
@@ -195,8 +197,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     admission: { leaseExpiresAt: new Date(Date.now() + 600_000).toISOString() },
   };
   const plannedAt = new Date(Date.parse(capturedAt) + 30_000).toISOString();
+  const indexSourceKey = options.fixtureNamespace
+    ? `${seasonYear}-${fixtureNamespace}-alpha-trade`
+    : `${seasonYear}-alpha-trade`;
   const indexBytes = new TextEncoder().encode(
-    `<a href="/trades/${seasonYear}-alpha-trade">Synthetic ${seasonYear} trade</a>`
+    `<a href="/trades/${indexSourceKey}">Synthetic ${seasonYear} trade</a>`
   );
   const sourceSha256 = digest(new TextDecoder().decode(indexBytes));
   const artifactId = `artifact:${sourceSha256}`;
@@ -261,12 +266,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         schemaVersion: 'afl-trade-external-evidence/v1',
         provider: 'draftguru',
         capture,
-        sourceRow: { ordinal: 1, sourceKey: `${seasonYear}-alpha-trade` },
+        sourceRow: { ordinal: 1, sourceKey: indexSourceKey },
         claim: {
           kind: 'trade_detail_link',
-          nativeEventId: `${seasonYear}-alpha-trade`,
+          nativeEventId: indexSourceKey,
           anchorSeasonYear: seasonYear,
-          sourceUrl: `https://www.draftguru.com.au/trades/${seasonYear}-alpha-trade`,
+          sourceUrl: `https://www.draftguru.com.au/trades/${indexSourceKey}`,
         },
         publicationEligible: false,
       }),
@@ -385,7 +390,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     const targetBytes =
       request.capabilityId === 'draftguru-trade-detail'
         ? sourceBytes
-        : new TextEncoder().encode(`<p>Synthetic ${seasonYear} draft selection.</p>`);
+        : new TextEncoder().encode(
+            options.fixtureNamespace
+              ? `<p>Synthetic ${seasonYear} draft selection ${fixtureNamespace}.</p>`
+              : `<p>Synthetic ${seasonYear} draft selection.</p>`
+          );
     const targetArtifact =
       request.capabilityId === 'draftguru-trade-detail'
         ? sourceArtifact
@@ -778,6 +787,16 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       'governed-evidence-approval-decision',
       { referenceId }
     );
+    const existingAuthority = await outcomesPool.query<{ evidence_canonical_json: string }>(
+      `SELECT evidence_canonical_json FROM outcome_governed_evidence_reference
+        WHERE reference_id=$1`,
+      [referenceId]
+    );
+    if (existingAuthority.rows.length > 0) {
+      if (existingAuthority.rows[0]!.evidence_canonical_json !== evidenceCanonicalJson)
+        throw new Error('Existing synthetic reviewer authority disagrees with its exact evidence.');
+      return referenceId;
+    }
     const connection = await outcomesPool.connect();
     try {
       await connection.query('BEGIN');
@@ -876,72 +895,83 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }
     );
     const authorityCanonical = canonicalizeAflTradeJson(authorityPayload);
-    await outcomesPool.query(
-      `INSERT INTO outcome_artifact_custody
+    const existingAuthority = await outcomesPool.query<{ evidence_canonical_json: string }>(
+      `SELECT evidence_canonical_json FROM outcome_governed_evidence_reference
+        WHERE reference_id=$1`,
+      [authorityId]
+    );
+    if (existingAuthority.rows.length > 0) {
+      if (existingAuthority.rows[0]!.evidence_canonical_json !== authorityCanonical)
+        throw new Error('Existing synthetic promoter authority disagrees with its exact evidence.');
+    }
+    if (existingAuthority.rows.length === 0) {
+      await outcomesPool.query(
+        `INSERT INTO outcome_artifact_custody
       (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
        environment,created_at,verified_at,custody_json)
      VALUES ($4,$1,$2,'application/json',$3,'derived_private',
              '${environment}','${reviewedAt}','${reviewedAt}','{}'::jsonb)`,
-      [
-        authoritySha,
-        `artifact://sha256/${authoritySha}`,
-        Buffer.byteLength(authorityCanonical),
-        `artifact-promotion-authority-${fixtureNamespace}`,
-      ]
-    );
-    const authorityClient = await outcomesPool.connect();
-    try {
-      await authorityClient.query('BEGIN');
-      await authorityClient.query(
-        `INSERT INTO outcome_review_decision
+        [
+          authoritySha,
+          `artifact://sha256/${authoritySha}`,
+          Buffer.byteLength(authorityCanonical),
+          `artifact-promotion-authority-${fixtureNamespace}`,
+        ]
+      );
+      const authorityClient = await outcomesPool.connect();
+      try {
+        await authorityClient.query('BEGIN');
+        await authorityClient.query(
+          `INSERT INTO outcome_review_decision
         (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
        VALUES ($1,'governed_evidence_reference',$2,'approved','Fixture authority approval',
                jsonb_build_object('referenceSha256',$3::text),'fixture-governance-reviewer',
                '${reviewedAt}')`,
-        [authorityApprovalId, authorityId, authoritySha]
-      );
-      await authorityClient.query(
-        `INSERT INTO outcome_governed_evidence_reference
+          [authorityApprovalId, authorityId, authoritySha]
+        );
+        await authorityClient.query(
+          `INSERT INTO outcome_governed_evidence_reference
         (reference_id,reference_sha256,evidence_kind,artifact_id,environment,status,
          approval_decision_id,created_at,evidence_canonical_json,evidence_json)
        VALUES ($1,$2,'reviewer_authority_evidence',$6,'${environment}',
                'approved',$3,'${reviewedAt}',$4,$5::jsonb)`,
-        [
-          authorityId,
-          authoritySha,
-          authorityApprovalId,
-          authorityCanonical,
-          authorityCanonical,
-          `artifact-promotion-authority-${fixtureNamespace}`,
-        ]
-      );
-      if (environment === 'non_production') {
-        const activeSchema = await authorityClient.query<{ schema_name: string }>(
-          'SELECT current_schema() AS schema_name'
+          [
+            authorityId,
+            authoritySha,
+            authorityApprovalId,
+            authorityCanonical,
+            authorityCanonical,
+            `artifact-promotion-authority-${fixtureNamespace}`,
+          ]
         );
-        await authorityClient.query(
-          'SET LOCAL ROLE afl_trade_nonproduction_governance_registry_writer'
-        );
-        await authorityClient.query("SELECT set_config('search_path',$1,TRUE)", [
-          activeSchema.rows[0]!.schema_name,
-        ]);
+        if (environment === 'non_production') {
+          const activeSchema = await authorityClient.query<{ schema_name: string }>(
+            'SELECT current_schema() AS schema_name'
+          );
+          await authorityClient.query(
+            'SET LOCAL ROLE afl_trade_nonproduction_governance_registry_writer'
+          );
+          await authorityClient.query("SELECT set_config('search_path',$1,TRUE)", [
+            activeSchema.rows[0]!.schema_name,
+          ]);
+        }
+        await authorityClient.query('COMMIT');
+      } catch (error) {
+        await authorityClient.query('ROLLBACK');
+        throw error;
+      } finally {
+        authorityClient.release();
       }
-      await authorityClient.query('COMMIT');
-    } catch (error) {
-      await authorityClient.query('ROLLBACK');
-      throw error;
-    } finally {
-      authorityClient.release();
-    }
-    await outcomesPool.query(
-      `INSERT INTO outcome_operational_principal_authority
+      await outcomesPool.query(
+        `INSERT INTO outcome_operational_principal_authority
       (authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,
        valid_from_season,valid_through_season,valid_from,valid_through)
      VALUES ($1,$2,'afl_trade_canonical_promoter','public-afl-draft-trade-outcomes','multi_source',
              'external_candidate_promotion','AFLM',$3,$4,
              '2026-01-01T00:00:00.000Z',NULL)`,
-      [authorityId, principalRef, seasonYear, options.promoterThroughSeason ?? seasonYear]
-    );
+        [authorityId, principalRef, seasonYear, options.promoterThroughSeason ?? seasonYear]
+      );
+    }
     const repository = new PostgresAflTradeExternalCanonicalPromotionReviewRepository(
       createPgAflOutcomeSqlClient(outcomesPool)
     );

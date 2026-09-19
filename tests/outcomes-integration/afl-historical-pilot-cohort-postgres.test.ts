@@ -181,7 +181,7 @@ async function admitGate2(candidateId: string) {
   return admitted.admissionId;
 }
 
-async function exercisePilot(anchorYear: 2021 | 2022) {
+async function exercisePilot(anchorYear: 2021 | 2022, withNeighbor: boolean) {
   await pool.query(
     `INSERT INTO outcome_player(player_id,display_name,status)
        VALUES ('afl-player:jeremy-cameron','Jeremy Cameron','approved');
@@ -208,6 +208,21 @@ async function exercisePilot(anchorYear: 2021 | 2022) {
       toClubName: 'Geelong',
     },
   });
+  if (withNeighbor) {
+    await createSyntheticAcquisitionPlayerPromotion(pool, {
+      environment: 'non_production',
+      completeCaptureReceipts: true,
+      tradeSeasonYear: 2020,
+      candidateAnchorSeasonYear: 2021,
+      reciprocalFuturePickYearOffset: 1,
+      promoterThroughSeason: 2021,
+      providerEventId: '2020-pilot-neighbor',
+      fixtureNamespace: 'synthetic-pilot-neighbor',
+      nativePlayerId: 'synthetic-pilot-neighbor-player',
+      sessionProposalV5: true,
+      partialTransactionDates: true,
+    });
+  }
   const event = (
     await pool.query<{ event_id: string; season_year: number; event_date: string | null }>(
       `SELECT root.event_id,root.season_year,to_char(version.event_date,'YYYY-MM-DD') event_date
@@ -286,6 +301,17 @@ async function exercisePilot(anchorYear: 2021 | 2022) {
     scopeKey: AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY,
     createdAt: await now(),
   });
+  if (withNeighbor) {
+    const members = await pool.query<{ count: number; target_count: number }>(
+      `SELECT count(*)::int count,
+              count(*) FILTER (WHERE item->>'canonicalRecordId'=$2)::int target_count
+         FROM outcome_release_manifest release,
+              jsonb_array_elements(release.manifest_json#>'{content,canonicalMembers}') item
+        WHERE release.release_id=$1 AND item->>'recordKind'='transaction'`,
+      [release.releaseId, promoted.entry.eventVersionId]
+    );
+    expect(members.rows).toEqual([{ count: 2, target_count: 1 }]);
+  }
   const admissionId = await admitGate2(release.candidateId);
   const review = createAflTradePostseasonMaterializationReview({
     schemaVersion: 'afl-trade-postseason-materialization-review/v1',
@@ -462,6 +488,9 @@ async function exercisePilot(anchorYear: 2021 | 2022) {
     knowledgeCutoffAt: selection.knowledgeCutoffAt,
   };
   const first = await tradeEvidence.loadHistoricalPilot(evidenceSelection);
+  if (withNeighbor) {
+    expect(first.members.filter(({ recordKind }) => recordKind === 'transaction')).toHaveLength(2);
+  }
   expect(first.trades).toEqual([
     {
       eventId: AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID,
@@ -474,8 +503,12 @@ async function exercisePilot(anchorYear: 2021 | 2022) {
   );
 }
 
-it.each([2021, 2022] as const)(
-  'binds the exact 2020 pilot only for its reviewed 2021 anchor (candidate anchor %i)',
+it.each([
+  [2021, false],
+  [2021, true],
+  [2022, false],
+] as const)(
+  'binds the exact 2020 pilot only for its reviewed 2021 anchor (candidate anchor %i, neighboring trade %s)',
   exercisePilot,
   180_000
 );
