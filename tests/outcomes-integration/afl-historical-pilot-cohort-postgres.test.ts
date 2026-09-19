@@ -181,13 +181,26 @@ async function admitGate2(candidateId: string) {
   return admitted.admissionId;
 }
 
-async function exercisePilot(anchorYear: 2021 | 2022, withNeighbor: boolean) {
+async function exercisePilot(
+  anchorYear: 2021 | 2022,
+  withNeighbor: boolean,
+  nativeIdentities: boolean
+) {
+  const playerId = nativeIdentities ? `player:${'a'.repeat(64)}` : 'afl-player:jeremy-cameron';
+  const fromClubId = nativeIdentities
+    ? `club:${'b'.repeat(64)}`
+    : 'afl-club:greater-western-sydney';
+  const toClubId = nativeIdentities ? `club:${'c'.repeat(64)}` : 'afl-club:geelong';
   await pool.query(
     `INSERT INTO outcome_player(player_id,display_name,status)
-       VALUES ('afl-player:jeremy-cameron','Jeremy Cameron','approved');
-       INSERT INTO outcome_club(club_id,current_name,status) VALUES
-         ('afl-club:greater-western-sydney','Greater Western Sydney','approved'),
-         ('afl-club:geelong','Geelong','approved')`
+       VALUES ($1,'Jeremy Cameron','approved')`,
+    [playerId]
+  );
+  await pool.query(
+    `INSERT INTO outcome_club(club_id,current_name,status) VALUES
+         ($1,'Greater Western Sydney','approved'),
+         ($2,'Geelong','approved')`,
+    [fromClubId, toClubId]
   );
   const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
@@ -200,11 +213,11 @@ async function exercisePilot(anchorYear: 2021 | 2022, withNeighbor: boolean) {
     sessionProposalV5: true,
     partialTransactionDates: true,
     existingTargets: {
-      playerId: 'afl-player:jeremy-cameron',
+      playerId,
       playerName: 'Jeremy Cameron',
-      fromClubId: 'afl-club:greater-western-sydney',
+      fromClubId,
       fromClubName: 'Greater Western Sydney',
-      toClubId: 'afl-club:geelong',
+      toClubId,
       toClubName: 'Geelong',
     },
   });
@@ -504,11 +517,12 @@ async function exercisePilot(anchorYear: 2021 | 2022, withNeighbor: boolean) {
 }
 
 it.each([
-  [2021, false],
-  [2021, true],
-  [2022, false],
+  [2021, false, false],
+  [2021, false, true],
+  [2021, true, true],
+  [2022, false, false],
 ] as const)(
-  'binds the exact 2020 pilot only for its reviewed 2021 anchor (candidate anchor %i, neighboring trade %s)',
+  'binds the exact 2020 pilot only for its reviewed 2021 anchor (candidate anchor %i, neighboring trade %s, native identities %s)',
   exercisePilot,
   180_000
 );
