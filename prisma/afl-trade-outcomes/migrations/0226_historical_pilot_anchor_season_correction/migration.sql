@@ -1,4 +1,4 @@
--- The lineage valid seasons are source-promotion anchor years, not trade event years.
+-- The exact pilot lineage is anchored to 2021 source promotions, not its 2020 trade year.
 -- The exact 2020 canonical trade is checked below against the immutable release and context.
 DO $membership$ BEGIN
   EXECUTE format('GRANT afl_trade_private_valuation_scheduler_owner TO %I',session_user);
@@ -65,7 +65,7 @@ BEGIN
      AND corpus.member_set_sha256=lineage.source_member_set_sha256
    WHERE admission.admission_id=target_admission_id AND lineage.environment='non_production'
      AND lineage.scope_key=pilot_scope AND lineage.competition='AFLM'
-;
+     AND lineage.valid_from_season=2021 AND lineage.valid_through_season=2021;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Historical cohort lineage admission is unavailable or mismatched';
   END IF;

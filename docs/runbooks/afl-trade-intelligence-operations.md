@@ -3350,8 +3350,9 @@ releases remain immutable; construct a successor with actual operation timestamp
 Migration 0226 corrects the exact Jeremy Cameron cohort binding: a promotion-backed lineage's
 `valid_from_season` and `valid_through_season` come from its source promotions' anchor years, while
 the retained canonical trade can have an earlier event year. The reviewed Cameron source promotion is
-anchored to 2021 and contains the exact 2020 trade. Binding no longer treats the lineage anchor range
-as a trade-year range. It still requires the exact 2020 canonical event, immutable release membership,
+anchored to 2021 and contains the exact 2020 trade. Binding requires that exact 2021–2021 anchor
+range, rather than using the trade year as its source anchor. It still requires the exact 2020
+canonical event, immutable release membership,
 current Gate 2 and source rights, reviewed acquisition spell, postseason context and live dispatch
 claim. This correction grants factual binding only; numerical qualification, grading and public
 activation follow their separate existing checks.
