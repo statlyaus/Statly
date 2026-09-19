@@ -3357,4 +3357,7 @@ current Gate 2 and source rights, reviewed acquisition spell, postseason context
 claim. Migration 0227 permits the immutable release to contain other transactions, while requiring
 exactly one reviewed Cameron event version in its sealed membership. The reader authenticates every
 member's bytes but returns only Cameron as the pilot cohort trade. These corrections grant factual
-binding only; numerical qualification, grading and public activation follow separate checks.
+binding only. Migration 0228 binds the reviewed spell's native player and receiving-club IDs to
+the unique approved player asset in that exact event's sealed release. It does not assume display
+name-shaped IDs; the release member's retained hash authenticates the comparison. Numerical
+qualification, grading and public activation follow separate checks.
