@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { Pool } from 'pg';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
 
 import { PostgresAflTradePromotionBackedCorpusRepository } from '@/server/aflTradeIntelligence/artifacts/postgresPromotionBackedCorpusRepository';
 import {
@@ -45,7 +45,7 @@ const admin = new Pool({ connectionString: databaseUrl });
 const pool = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schemaName}` });
 const sql = createPgAflOutcomeSqlClient(pool);
 
-beforeAll(async () => {
+beforeEach(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
@@ -67,9 +67,12 @@ beforeAll(async () => {
   );
 }, 120_000);
 
+afterEach(async () => {
+  await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+});
+
 afterAll(async () => {
   await pool.end();
-  await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
   await admin.end();
 });
 
@@ -178,7 +181,7 @@ async function admitGate2(candidateId: string) {
   return admitted.admissionId;
 }
 
-it('binds and reads the exact 2020 historical pilot through real retained authority owners', async () => {
+async function exercisePilot(anchorYear: 2021 | 2022) {
   await pool.query(
     `INSERT INTO outcome_player(player_id,display_name,status)
        VALUES ('afl-player:jeremy-cameron','Jeremy Cameron','approved');
@@ -190,6 +193,9 @@ it('binds and reads the exact 2020 historical pilot through real retained author
     environment: 'non_production',
     completeCaptureReceipts: true,
     tradeSeasonYear: 2020,
+    candidateAnchorSeasonYear: anchorYear,
+    reciprocalFuturePickYearOffset: anchorYear - 2020,
+    promoterThroughSeason: anchorYear,
     providerEventId: '2020-jeremy-cameron',
     sessionProposalV5: true,
     partialTransactionDates: true,
@@ -266,6 +272,15 @@ it('binds and reads the exact 2020 historical pilot through real retained author
     knowledgeCutoffAt: await now(),
     createdAt: await now(),
   });
+  expect(
+    (
+      await pool.query<{ anchor_season_range: unknown }>(
+        `SELECT corpus_json#>'{content,anchorSeasonRange}' anchor_season_range
+           FROM outcome_promotion_backed_corpus WHERE corpus_id=$1`,
+        [corpus.corpusId]
+      )
+    ).rows[0]!.anchor_season_range
+  ).toEqual({ from: anchorYear, through: anchorYear });
   const release = await new PostgresAflTradePromotionBackedFactualReleaseRepository(sql).build({
     corpusId: corpus.corpusId,
     scopeKey: AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY,
@@ -421,6 +436,20 @@ it('binds and reads the exact 2020 historical pilot through real retained author
     },
   ]);
   const bindingOwner = new PostgresAflTradePrivateValuationCohortBinding(sql, evidence);
+  if (anchorYear !== 2021) {
+    await expect(bindingOwner.bindHistoricalPilot(selection)).rejects.toThrow(
+      /lineage admission is unavailable or mismatched/i
+    );
+    expect(
+      (
+        await pool.query<{ count: number }>(
+          'SELECT count(*)::int count FROM outcome_private_valuation_cohort_binding WHERE request_id=$1',
+          [requestId]
+        )
+      ).rows
+    ).toEqual([{ count: 0 }]);
+    return;
+  }
   const binding = await bindingOwner.bindHistoricalPilot(selection);
   expect(binding.cohortTransactionId).toBe(AFL_TRADE_HISTORICAL_PILOT_TRANSACTION_ID);
   expect(binding.cohortTradeIds).toEqual([promoted.entry.eventVersionId]);
@@ -443,4 +472,10 @@ it('binds and reads the exact 2020 historical pilot through real retained author
   expect((await pool.query('SELECT count(*)::int count FROM outcome_active_release')).rows).toEqual(
     [{ count: 0 }]
   );
-}, 180_000);
+}
+
+it.each([2021, 2022] as const)(
+  'binds the exact 2020 pilot only for its reviewed 2021 anchor (candidate anchor %i)',
+  exercisePilot,
+  180_000
+);

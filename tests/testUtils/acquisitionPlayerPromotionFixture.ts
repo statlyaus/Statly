@@ -51,6 +51,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     /** Full synthetic admitted receipts for private release/measurement composition tests. */
     completeCaptureReceipts?: boolean;
     tradeSeasonYear?: number;
+    candidateAnchorSeasonYear?: number;
     providerEventId?: string;
     promoterThroughSeason?: number;
     draftSessions?: boolean;
@@ -114,6 +115,13 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   if (options.tradeSeasonYear !== undefined && (hasDraftSessions || options.lifecycle))
     throw new Error('Custom year is limited to simple synthetic trades.');
   const seasonYear = officialCombinedDraftYear ?? options.tradeSeasonYear ?? 2024;
+  const candidateAnchorSeasonYear = options.candidateAnchorSeasonYear ?? seasonYear;
+  if (
+    candidateAnchorSeasonYear !== seasonYear &&
+    (options.reciprocalFuturePickYearOffset === undefined ||
+      candidateAnchorSeasonYear !== seasonYear + options.reciprocalFuturePickYearOffset)
+  )
+    throw new Error('Synthetic candidate anchor must be represented by its future pick year.');
   const fixtureNamespace = reviewedOfficialCombinedDraft
     ? `official-${seasonYear}`
     : 'synthetic-2024';
@@ -1084,7 +1092,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     principalRef,
     provider: 'draftguru',
     validFromSeason: seasonYear,
-    validThroughSeason: seasonYear,
+    validThroughSeason: Math.max(seasonYear, candidateAnchorSeasonYear),
   });
   const clock = await outcomesPool.query<{ at: Date }>('SELECT clock_timestamp() AS at');
   reviewedAt = clock.rows[0]!.at.toISOString();
@@ -1930,7 +1938,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
     environment,
     competition: 'AFLM' as const,
-    anchorSeasonYear: seasonYear,
+    anchorSeasonYear: candidateAnchorSeasonYear,
     sourceBatchIds: sourceBatchIds.sort(),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
     transactions: [
@@ -2158,7 +2166,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     candidateSha256: candidate.candidateId.split(':')[1]!,
     environment,
     competition: 'AFLM',
-    anchorSeasonYear: seasonYear,
+    anchorSeasonYear: candidateAnchorSeasonYear,
     draftEventCoverage,
     transactionDateCoverage: candidate.content.transactions.map((transaction) => ({
       transactionId: transaction.transactionId,
