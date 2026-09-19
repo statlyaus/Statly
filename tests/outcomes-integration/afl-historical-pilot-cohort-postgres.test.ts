@@ -190,6 +190,9 @@ it('binds and reads the exact 2020 historical pilot through real retained author
     environment: 'non_production',
     completeCaptureReceipts: true,
     tradeSeasonYear: 2020,
+    candidateAnchorSeasonYear: 2021,
+    reciprocalFuturePickYearOffset: 1,
+    promoterThroughSeason: 2021,
     providerEventId: '2020-jeremy-cameron',
     sessionProposalV5: true,
     partialTransactionDates: true,
@@ -266,6 +269,15 @@ it('binds and reads the exact 2020 historical pilot through real retained author
     knowledgeCutoffAt: await now(),
     createdAt: await now(),
   });
+  expect(
+    (
+      await pool.query<{ anchor_season_range: unknown }>(
+        `SELECT corpus_json#>'{content,anchorSeasonRange}' anchor_season_range
+           FROM outcome_promotion_backed_corpus WHERE corpus_id=$1`,
+        [corpus.corpusId]
+      )
+    ).rows[0]!.anchor_season_range
+  ).toEqual({ from: 2021, through: 2021 });
   const release = await new PostgresAflTradePromotionBackedFactualReleaseRepository(sql).build({
     corpusId: corpus.corpusId,
     scopeKey: AFL_TRADE_HISTORICAL_PILOT_SCOPE_KEY,
