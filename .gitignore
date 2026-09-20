@@ -87,3 +87,6 @@ lint.config.js
 .eslintrc.js
 .gstack/
 .statly-local/
+
+# Local Redis snapshot written by the development socket/queue stack.
+dump.rdb
