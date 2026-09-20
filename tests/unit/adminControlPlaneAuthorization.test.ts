@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,7 +34,10 @@ vi.mock('@/server/workers/workerPool', () => ({ workerPool }));
 import { GET as GET_QUEUE, POST as POST_QUEUE } from '@/app/api/admin/queue/route';
 import { GET as GET_WORKERS, POST as POST_WORKERS } from '@/app/api/admin/workers/route';
 
-const operatorSecret = 'operator-secret';
+// Generated per run: the suite must exercise the configured-value comparison without any
+// credential-shaped literal appearing in the repository.
+const operatorSecret = randomUUID();
+const wrongSecret = randomUUID();
 const operatorHeaders = { 'x-admin-secret': operatorSecret };
 
 function request(path: string, init?: ConstructorParameters<typeof NextRequest>[1]): NextRequest {
@@ -83,9 +88,9 @@ describe('administrative control-plane authorization', () => {
 
     const responses = await Promise.all([
       GET_QUEUE(request('/api/admin/queue')),
-      queuePost({ 'x-admin-secret': 'wrong-secret' }),
+      queuePost({ 'x-admin-secret': wrongSecret }),
       GET_WORKERS(request('/api/admin/workers')),
-      workersPost({ 'x-admin-secret': 'wrong-secret' }),
+      workersPost({ 'x-admin-secret': wrongSecret }),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([403, 403, 403, 403]);

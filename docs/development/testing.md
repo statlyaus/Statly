@@ -257,11 +257,12 @@ Some endpoints require a credential by design and fail closed when it is absent:
   accepted when both `STATLY_ENABLE_DEV_AUTH` and `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH` are `true` and
   the process is not running in production mode.
 
-Set local values in `.env.local`, which is ignored and never committed:
+Set local values in `.env.local`, which is ignored and never committed. Generate one value per
+secret so no two environments share a credential:
 
 ```sh
-ADMIN_SECRET=local-only-operator-secret
-CRON_SECRET=local-only-scheduler-secret
+ADMIN_SECRET=<paste the output of: openssl rand -hex 32>
+CRON_SECRET=<paste a different output of: openssl rand -hex 32>
 ```
 
 `Scripts/dev/curl-admin.sh` loads those values without printing them and forwards them as headers:

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +18,8 @@ import { GET as GET_PRUNE_LOBBY } from '@/app/api/cron/prune-lobby/route';
 import { GET as GET_REMINDERS } from '@/app/api/cron/reminders/route';
 import { GET as GET_TRADES } from '@/app/api/cron/trades/route';
 
-const cronSecret = 'cron-secret';
+// Generated per run so no credential-shaped literal is committed.
+const cronSecret = randomUUID();
 const bearerHeaders = { authorization: `Bearer ${cronSecret}` };
 
 function request(path: string, init?: ConstructorParameters<typeof NextRequest>[1]): NextRequest {
@@ -49,7 +52,9 @@ describe('scheduled-job authorization', () => {
       GET_DAILY(request('/api/cron/daily')),
       GET_DAILY(request(`/api/cron/daily?token=${cronSecret}`)),
       GET_PRUNE_LOBBY(request(`/api/cron/prune-lobby?token=${cronSecret}`)),
-      GET_TRADES(request('/api/cron/trades', { headers: { authorization: 'Bearer wrong' } })),
+      GET_TRADES(
+        request('/api/cron/trades', { headers: { authorization: `Bearer ${randomUUID()}` } })
+      ),
       GET_REMINDERS(
         request('/api/cron/reminders', { headers: { authorization: `Bearer ${cronSecret}-extra` } })
       ),
