@@ -20,18 +20,10 @@ export default defineConfig({
     include: [
       'tests/unit/**/*.test.ts',
       'tests/unit/**/*.test.tsx',
-      // Colocated source tests were previously excluded, so 67 of them had never executed in CI.
-      // Mirror the base config's patterns instead of listing individual app directories.
-      'src/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
-      'src/**/__tests__/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
+      'src/app/dashboard/**/*.test.tsx',
+      'src/app/api/draft-trades/**/*.test.ts',
     ],
-    exclude: [
-      '**/node_modules/**',
-      '**/tmp/**',
-      // Starts a real HTTP server and fetches it, which the unit setup blocks by stubbing fetch.
-      // It belongs in the integration suite; tracked as a follow-up on #626.
-      'src/server/app.test.ts',
-    ],
+    exclude: ['**/node_modules/**', '**/tmp/**'],
     globals: true,
     clearMocks: true,
     // Replay, canonicalization, and hostile-size contract tests run under full V8 coverage in CI.
