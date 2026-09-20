@@ -165,6 +165,11 @@ describe('retained 2020 private calculation source use', () => {
       'away_points',
       'home_points',
     ]);
+    // The named rights must be the ones that permit the fields, not the archive-only original.
+    expect(assessment.content.rightsArtifactId).toBe(input.successor.sourceRights.rightsArtifactId);
+    expect(assessment.content.rightsArtifactId).not.toBe(
+      input.original.sourceRights.rightsArtifactId
+    );
   });
 
   it('rejects a successor whose authority is not current for the assessment instant', () => {

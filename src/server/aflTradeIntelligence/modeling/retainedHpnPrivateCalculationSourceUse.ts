@@ -90,7 +90,10 @@ export function assessRetainedCameron2020HpnPrivateCalculationSourceUse(input: {
     valuationScopeKey: 'cameron-2020-private-pilot',
     source: input.source,
     state: 'permitted_private_calculation' as const,
-    rightsArtifactId: originalRights.rightsArtifactId,
+    // The assessment names the rights that actually permit these fields, matching the sibling
+    // assessment's semantics. The archive-only original rights stay in evidenceRefs, because they
+    // block derived-feature creation by design.
+    rightsArtifactId: rebuilt.sourceRights.rightsArtifactId,
     fields: fields.map((sourceField) => ({
       sourceField,
       state: 'permitted_private_calculation' as const,
