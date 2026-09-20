@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import {
+  createAflTradeRetainedMethodSourceUse,
+  verifyAflTradeRetainedMethodSourceUse,
+} from './retainedMethodSourceUse';
 import { createAflTradeRetainedSourceUseSuccessor } from './retainedSourceUseSuccessor';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -71,6 +75,18 @@ const input = {
             public_display: 'blocked',
           },
         },
+        {
+          sourceField: 'player.age',
+          normalizedField: 'player.age',
+          attributionRequired: true,
+          notes: null,
+          uses: {
+            archive_fact: 'allowed',
+            model_training: 'blocked',
+            derived_feature: 'blocked',
+            public_display: 'blocked',
+          },
+        },
       ],
     },
   ],
@@ -105,5 +121,64 @@ describe('retained source-use successor', () => {
     expect(() =>
       createAflTradeRetainedSourceUseSuccessor(input, approval.replace('approved', 'rejected'))
     ).toThrow();
+  });
+});
+
+describe('retained method source-use binding', () => {
+  const method = {
+    methodArtifactId: id('artifact', '1'),
+    methodName: 'Cameron provisional valuation pilot',
+    operation: 'derived_feature_creation',
+    captureUses: [
+      {
+        captureId: capture.captureId,
+        rightsArtifactId: capture.rightsArtifactId,
+        sourceFields: ['player.name'],
+      },
+    ],
+    provenance: 'Reviewed Cameron factual release.',
+    coverageGaps: 'Numerical history is not yet admitted.',
+    uncertainty: 'No grade is available.',
+  } as const;
+
+  it('binds one method, operation, capture, rights proposal and consumed field set', () => {
+    const successor = createAflTradeRetainedSourceUseSuccessor(input, approval);
+    const binding = createAflTradeRetainedMethodSourceUse(successor, method);
+    expect(binding.methodUseId).toMatch(/^retained-source-method-use:[a-f0-9]{64}$/u);
+    expect(binding.content.captureUses).toEqual(method.captureUses);
+    expect(successor.content.originalRights[0]?.fields).toHaveLength(2);
+    expect(binding.content.captureUses[0]?.sourceFields).toEqual(['player.name']);
+    expect(verifyAflTradeRetainedMethodSourceUse(successor, binding)).toBe(true);
+    expect(
+      verifyAflTradeRetainedMethodSourceUse(successor, {
+        ...binding,
+        content: { ...binding.content, methodArtifactId: id('artifact', '2') },
+      })
+    ).toBe(false);
+  });
+
+  it('rejects an unretained field, a mismatched capture-right pair and duplicate capture use', () => {
+    const successor = createAflTradeRetainedSourceUseSuccessor(input, approval);
+    const use = method.captureUses[0];
+    expect(use).toBeDefined();
+    if (use === undefined) return;
+    expect(() =>
+      createAflTradeRetainedMethodSourceUse(successor, {
+        ...method,
+        captureUses: [{ ...use, sourceFields: ['player.height'] }],
+      })
+    ).toThrow('exact retained capture or field scope');
+    expect(() =>
+      createAflTradeRetainedMethodSourceUse(successor, {
+        ...method,
+        captureUses: [{ ...use, rightsArtifactId: id('source-rights', '9') }],
+      })
+    ).toThrow('exact retained capture or field scope');
+    expect(() =>
+      createAflTradeRetainedMethodSourceUse(successor, {
+        ...method,
+        captureUses: [use, use],
+      })
+    ).toThrow('repeat a retained source capture');
   });
 });

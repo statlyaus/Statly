@@ -131,10 +131,13 @@ their own exact inputs and method; they do not need a repeat of this owner decis
 This is an internal product-use risk assumption, not proof of a third-party licence or permission
 to redistribute raw source material. Preserve attribution, original URLs and byte custody;
 publish the method, source provenance, coverage gaps, uncertainty and provisional status where
-appropriate. A content-addressed successor use record must bind each applicable original rights
-proposal and capture to the owner decision and the operations and fields actually consumed. Source
-qualification must authenticate that record and the current factual release before training or
-public output. Factual inclusion does not itself prove a model, grade, or production deployment.
+appropriate. The content-addressed successor is the owner-approval envelope for the exact retained
+release, captures and original rights; its complete field list does not authorize every field for
+every method. Each consuming method also needs a content-addressed child record binding its method
+artifact, one approved operation, and the exact capture/right pairs and source-field subset it uses.
+Source qualification must authenticate both records against the current factual release before
+training or public output. Method-document custody, numerical admission and release activation remain
+separate gates. Factual inclusion does not itself prove a model, grade, or production deployment.
 
 ### Issue 574 admitted evidence boundary
 

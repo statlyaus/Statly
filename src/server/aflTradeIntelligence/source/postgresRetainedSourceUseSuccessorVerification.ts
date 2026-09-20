@@ -5,6 +5,10 @@ import {
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
+import {
+  verifyAflTradeRetainedMethodSourceUse,
+  type AflTradeRetainedMethodSourceUse,
+} from './retainedMethodSourceUse';
 import { aflTradeSourceRightsProposalSchema } from './sourceRights';
 import type { AflTradeRetainedSourceUseSuccessor } from './retainedSourceUseSuccessor';
 
@@ -127,5 +131,22 @@ export async function verifyPostgresAflTradeRetainedSourceUseSuccessor(
     releaseId: content.factualReleaseId,
     captureCount: rows.rows.length,
     rightsCount: seenRights.size,
+  };
+}
+
+/** Authenticate the exact method binding as well as its retained release and source custody. */
+export async function verifyPostgresAflTradeRetainedMethodSourceUse(
+  client: AflOutcomeSqlClient,
+  successor: AflTradeRetainedSourceUseSuccessor,
+  methodUse: AflTradeRetainedMethodSourceUse
+): Promise<{ successorId: string; methodUseId: string; methodArtifactId: string }> {
+  if (!verifyAflTradeRetainedMethodSourceUse(successor, methodUse)) {
+    throw new TypeError('Retained method source-use binding is invalid.');
+  }
+  const verified = await verifyPostgresAflTradeRetainedSourceUseSuccessor(client, successor);
+  return {
+    successorId: verified.successorId,
+    methodUseId: methodUse.methodUseId,
+    methodArtifactId: methodUse.content.methodArtifactId,
   };
 }
