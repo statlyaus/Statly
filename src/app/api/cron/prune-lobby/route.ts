@@ -5,10 +5,17 @@ export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.nextUrl.searchParams.get('token');
     const secret = process.env.CRON_SECRET;
 
-    if (secret && token !== secret) {
+    if (!secret) {
+      console.error('[CRON] CRON_SECRET is not configured; refusing the lobby prune job');
+      return NextResponse.json(
+        { ok: false, error: 'Scheduled jobs are not configured' },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    if (req.headers.get('authorization') !== `Bearer ${secret}`) {
       return NextResponse.json(
         { ok: false, error: 'unauthorized' },
         { status: 401, headers: { 'Cache-Control': 'no-store' } }

@@ -9,7 +9,16 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+
+  if (!cronSecret) {
+    logger.error('CRON_SECRET is not configured; refusing to process due league trades');
+    return NextResponse.json(
+      { ok: false, error: 'Scheduled jobs are not configured' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
+  if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } }

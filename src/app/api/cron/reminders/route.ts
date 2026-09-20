@@ -22,12 +22,15 @@ import { processPendingReminders } from '@/lib/reminders';
 export async function GET(request: NextRequest) {
   try {
     // Verify this is a legitimate cron request
-    const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+      logger.error('CRON_SECRET is not configured; refusing to process draft reminders');
+      return errorResponse('Scheduled jobs are not configured', 503, 'CRON_NOT_CONFIGURED');
+    }
+
+    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
       logger.warn('Unauthorized cron request', {
-        authHeader,
         userAgent: request.headers.get('user-agent'),
         ip: request.headers.get('x-forwarded-for'),
       });
