@@ -2238,9 +2238,33 @@ predecessor/revision transitions. Exact replay requires the same current support
 locks the selected head through reauthentication; withdrawal makes it unavailable. Direct SQL
 receives equivalent source/identity/support guards; heads cannot be deleted or truncated.
 
-The isolated source-map helper retains the complete source-first verifier and permits only the
-`cameron-2018-private-pilot` statistical scope for 2018 and the exact capture/run. It does not extend
-the existing valuation scope policy. The caller must supply current support bound to the exact
+The isolated source-map helper retains the complete source-first verifier. Migration
+`0229_cameron_hpn_statistical_season_scope` permits exact `cameron-<year>-private-pilot` keys for
+2018 and 2020–2023, bound to the matching source season, capture and normalization run. It leaves
+valuation dispatch scopes unchanged and still checks current Gate 0A and every consumed field.
+Migration `0230_cameron_2020_retained_private_source_use` accepts only the captures named in the
+seeded activation table `outcome_hpn_retained_source_successor_capture`, which this migration
+populates with the real identifiers below. Only the migration owner can extend the set: no runtime
+role receives `INSERT`, and the table rejects update, delete and truncate. The accepted evidence is:
+
+- `source-capture:05b6f05a…e7235c4` (`afl-tables-results`) over
+  `Away.Points, Away.Team, Date, Home.Points, Home.Team`.
+- `source-capture:89ce91b5…f1f6dc2de` (`afl-tables-player-stats`) over its exact 18-field set.
+
+Each seed row carries the origin gate decision, the origin source-rights artifact, its exact field
+set, the retained method-use and HPN PAV method identities, and the required owner-approval SHA-256.
+The successor is the immediate `version + 1` successor of that origin decision, with no later
+successor, and must carry scope dimensions `retained_source_capture`, `original_gate_decision`,
+`original_source_rights_artifact`, `retained_method_use`, `hpn_pav_method` and
+`owner_approval_sha256`; the owner-approval SHA-256 must also appear as `artifact:` evidence in the
+successor rights. Original acquisition manifests stay immutable. Expiry, withdrawal, altered fields,
+another capture or a changed Gate chain fails closed. The successor decision and proposal must be
+content-addressed; a hand-written ledger row with arbitrary identifiers is rejected.
+
+This grants private derived use only; it does not authorize training, public output, new capture or
+2020 valuation dispatch. The successor check is scoped to the isolated statistical verifier, so the
+shared private-source guard and every valuation caller keep their existing rights checks. The
+caller must supply current support bound to the exact
 candidate and observation. Retained cache zeros remain `retained_zero_origin_unknown`, even when
 an explicit zero in the official transcription supports the selected value. Both original values
 remain immutable. Millisecond-truncated head timestamps avoid rounding into the future; the

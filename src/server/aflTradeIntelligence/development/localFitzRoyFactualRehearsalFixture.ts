@@ -256,7 +256,7 @@ function approvedSourceAuthority(
       environment: 'non_production',
       rightsArtifactId: sourceRights.rightsArtifactId,
       competition: 'AFLM',
-      season: 2026,
+      season: captureRequest.authorizationSeason,
       accessMechanism: 'automated_web',
       capabilityId: captureRequest.capabilityId,
       geography: 'global',
@@ -312,7 +312,8 @@ function durableRepository(artifactClass: 'raw_source' | 'capture_metadata') {
 function captureDiagnostics(
   invocation: ReturnType<typeof createAflTradeFitzRoyInvocation>,
   fields = LOCAL_FITZROY_REHEARSAL_FIELDS,
-  missingCompletionStatus = false
+  missingCompletionStatus = false,
+  seasonYear = 2026
 ): AflTradeFitzRoyCaptureDiagnostics {
   return {
     schemaVersion: 'afl-trade-fitzroy-diagnostics/v1',
@@ -330,7 +331,7 @@ function captureDiagnostics(
       positiveInfinityCount: 0,
       negativeInfinityCount: 0,
     })),
-    observedSeasonValues: ['2026'],
+    observedSeasonValues: [String(seasonYear)],
     observedRoundValues: ['Round 1'],
     observedDateRange: null,
     originObservation: 'not_exposed_by_fitzroy',
@@ -366,7 +367,8 @@ function decodedTableExecutor(
   profile?: RehearsalProfile,
   missingCompletionStatus = false,
   mixedCaseResultFields = false,
-  hpnPlayerSide: 'home' | 'away' = 'home'
+  hpnPlayerSide: 'home' | 'away' = 'home',
+  seasonYear = 2026
 ): AflTradeFitzRoyDecoderExecutor {
   return {
     executionBoundary: 'offline_container_no_network',
@@ -396,7 +398,7 @@ function decodedTableExecutor(
             ? [
                 [
                   { kind: 'finite_number', value: '1001' },
-                  { kind: 'date', value: '2026-03-20', rawDays: '20532' },
+                  { kind: 'date', value: `${seasonYear}-03-20`, rawDays: String(Date.UTC(seasonYear, 2, 20) / 86_400_000) },
                   { kind: 'text', value: 'Round 1' },
                   { kind: 'text', value: 'Carlton' },
                   { kind: 'integer', value: '12' },
@@ -408,16 +410,16 @@ function decodedTableExecutor(
                   { kind: 'integer', value: '72' },
                   { kind: 'text', value: 'Synthetic Venue' },
                   { kind: 'integer', value: '12' },
-                  { kind: 'finite_number', value: '2026' },
+                  { kind: 'finite_number', value: String(seasonYear) },
                   { kind: 'text', value: 'Regular' },
                   { kind: 'integer', value: '1' },
                 ],
               ]
             : [
                 [
-                  { kind: 'integer', value: '2026' },
+                  { kind: 'integer', value: String(seasonYear) },
                   { kind: 'text', value: 'provider-match-1' },
-                  { kind: 'text', value: '2026-03-20T08:00:00.000Z' },
+                  { kind: 'text', value: `${seasonYear}-03-20T08:00:00.000Z` },
                   missingCompletionStatus ? { kind: 'missing' } : { kind: 'text', value: 'Final' },
                   {
                     kind: 'text',
@@ -502,10 +504,14 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
   profile?: RehearsalProfile;
   missingCompletionStatus?: boolean;
   mixedCaseResultFields?: boolean;
+  seasonYear?: number;
 }) {
   if (options?.hpnPlayerSide && options.profile !== 'hpn_player_stats')
     throw new TypeError('An explicit player side requires the synthetic HPN profile.');
   const generation = options?.generation ?? 'replacement';
+  const seasonYear = options?.seasonYear ?? 2026;
+  if (!Number.isInteger(seasonYear) || seasonYear < 2018 || seasonYear > 2026)
+    throw new TypeError('The synthetic rehearsal season is unsupported.');
   const provider = options?.provider ?? 'footywire';
   if (
     options?.profile === 'match_only' &&
@@ -531,18 +537,18 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
           schemaVersion: AFL_TRADE_FITZROY_CAPTURE_REQUEST_SCHEMA_VERSION,
           capabilityId: 'afl-tables-results',
           competition: 'AFLM',
-          authorizationSeason: 2026,
-          parameters: { season: 2026, roundNumber: null },
+          authorizationSeason: seasonYear,
+          parameters: { season: seasonYear, roundNumber: null },
         }
       : ({
           schemaVersion: AFL_TRADE_FITZROY_CAPTURE_REQUEST_SCHEMA_VERSION,
           capabilityId,
           competition: 'AFLM',
-          authorizationSeason: 2026,
+          authorizationSeason: seasonYear,
           parameters:
             provider === 'footywire'
-              ? { season: 2026, checkExisting: generation === 'replacement' }
-              : { season: 2026, rescrape: generation === 'replacement', rescrapeStartSeason: 2026 },
+              ? { season: seasonYear, checkExisting: generation === 'replacement' }
+              : { season: seasonYear, rescrape: generation === 'replacement', rescrapeStartSeason: seasonYear },
         } as const);
   const invocation = createAflTradeFitzRoyInvocation(captureRequest);
   const sourceBytes = Uint8Array.from([
@@ -566,7 +572,7 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
     throw new Error('The synthetic capture requires an explicit provider rate.');
   const rawArtifactRepository = durableRepository('raw_source');
   const metadataArtifactRepository = durableRepository('capture_metadata');
-  const diagnostics = captureDiagnostics(invocation, fields, options?.missingCompletionStatus);
+  const diagnostics = captureDiagnostics(invocation, fields, options?.missingCompletionStatus, seasonYear);
   const diagnosticsBytes = encoded(diagnostics);
   const egressCondition = command.sourceRights.content.conditions.find(
     ({ conditionId }) => conditionId === 'provider-egress-control'
@@ -629,7 +635,7 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
   const fieldMap = parseAflTradeFitzRoyFieldMap(
     options?.profile === 'match_only'
       ? {
-          ...createLocalAflTradeAflTablesResultsAuthority(2026).fieldMap,
+          ...createLocalAflTradeAflTablesResultsAuthority(seasonYear).fieldMap,
           mapId: 'synthetic-afl-tables-match-only-v1',
           approvedAt: '2026-08-11T23:59:00.000Z',
           approvalDecisionId: 'synthetic-afl-tables-match-only-review',
@@ -661,8 +667,8 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
             : {}),
           competition: 'AFLM',
           invocationArgumentsSha256: sha256AflTradeCanonicalJson(invocation.arguments),
-          validFromSeason: 2026,
-          validThroughSeason: 2026,
+          validFromSeason: seasonYear,
+          validThroughSeason: seasonYear,
           seasonField: { sourceField: 'season', required: true },
           roundLabelField: { sourceField: 'round', required: true },
           observedDateField: { sourceField: 'match_date', required: true },
@@ -752,7 +758,8 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
       options?.profile,
       options?.missingCompletionStatus,
       options?.mixedCaseResultFields,
-      options?.hpnPlayerSide
+      options?.hpnPlayerSide,
+      seasonYear
     ),
     gateDecisionId: command.ledger.decisions[0]!.decisionId,
   };
