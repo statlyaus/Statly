@@ -252,6 +252,7 @@
   "homepage": "https://github.com/statlyaus/Statly#readme",
   "overrides": {
     "uuid": "$uuid",
+    "deepmerge-ts": "^8.0.0",
     "openai": {
       "zod": "^4.0.0"
     },
