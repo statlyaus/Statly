@@ -194,7 +194,7 @@
     "@eslint/compat": "^1.4.1",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "1.62.0",
-    "@storybook/react": "^9.1.20",
+    "@storybook/react": "^10.6.0",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
