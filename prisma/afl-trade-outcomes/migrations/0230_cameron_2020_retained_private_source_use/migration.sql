@@ -1,6 +1,72 @@
--- An exact, finite internal-use successor for the two retained 2020 Cameron
+-- An exact, finite internal-use successor for the retained 2020 Cameron
 -- statistical captures. The original archive-only manifests and Gate 0A
 -- decisions remain immutable. No training, public or new-capture grant.
+--
+-- The accepted capture identity is seeded data rather than hard-coded branches, so the gate can be
+-- exercised against synthetic provenance while production still accepts exactly the two captures it
+-- accepted before. Only the migration owner may extend the set: no runtime role receives INSERT.
+CREATE TABLE outcome_hpn_retained_source_successor_capture (
+  capture_id TEXT PRIMARY KEY,
+  capability_id TEXT NOT NULL,
+  origin_gate_decision_id TEXT NOT NULL,
+  origin_rights_artifact_id TEXT NOT NULL,
+  expected_fields JSONB NOT NULL,
+  method_use_id TEXT NOT NULL,
+  hpn_pav_method_id TEXT NOT NULL,
+  owner_approval_sha256 TEXT NOT NULL,
+  seeded_at TIMESTAMPTZ(3) NOT NULL DEFAULT clock_timestamp(),
+  CONSTRAINT outcome_hpn_retained_successor_capture_id_check
+    CHECK (capture_id ~ '^source-capture:[a-f0-9]{64}$'),
+  CONSTRAINT outcome_hpn_retained_successor_capture_gate_check
+    CHECK (origin_gate_decision_id ~ '^gate-decision:[a-f0-9]{64}$'),
+  CONSTRAINT outcome_hpn_retained_successor_capture_rights_check
+    CHECK (origin_rights_artifact_id ~ '^source-rights:[a-f0-9]{64}$'),
+  CONSTRAINT outcome_hpn_retained_successor_capture_method_check
+    CHECK (method_use_id ~ '^cameron-2020-hpn-method-use:[a-f0-9]{64}$'),
+  CONSTRAINT outcome_hpn_retained_successor_capture_pav_check
+    CHECK (hpn_pav_method_id ~ '^hpn-pav-method:[a-f0-9]{64}$'),
+  CONSTRAINT outcome_hpn_retained_successor_capture_approval_check
+    CHECK (owner_approval_sha256 ~ '^[a-f0-9]{64}$'),
+  CONSTRAINT outcome_hpn_retained_successor_capture_fields_check
+    CHECK (jsonb_typeof(expected_fields) = 'array' AND jsonb_array_length(expected_fields) > 0)
+);
+
+CREATE FUNCTION reject_outcome_hpn_retained_successor_capture_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'The retained source-use activation set is immutable';
+END $$;
+CREATE TRIGGER outcome_hpn_retained_successor_capture_immutable
+  BEFORE UPDATE OR DELETE ON outcome_hpn_retained_source_successor_capture
+  FOR EACH ROW EXECUTE FUNCTION reject_outcome_hpn_retained_successor_capture_mutation();
+CREATE TRIGGER outcome_hpn_retained_successor_capture_no_truncate
+  BEFORE TRUNCATE ON outcome_hpn_retained_source_successor_capture
+  FOR EACH STATEMENT EXECUTE FUNCTION reject_outcome_hpn_retained_successor_capture_mutation();
+
+REVOKE ALL ON outcome_hpn_retained_source_successor_capture FROM PUBLIC;
+GRANT SELECT ON outcome_hpn_retained_source_successor_capture
+  TO afl_trade_private_valuation_scheduler_owner, afl_trade_private_evaluation_coordinator;
+
+INSERT INTO outcome_hpn_retained_source_successor_capture (capture_id, capability_id,
+  origin_gate_decision_id, origin_rights_artifact_id, expected_fields, method_use_id,
+  hpn_pav_method_id, owner_approval_sha256) VALUES
+  ('source-capture:05b6f05a55c00f8bc13767cd5068672513ee10dcd4fe4050f445e00eae7235c4',
+    'afl-tables-results',
+    'gate-decision:612d36def777aee857abddcef923871d00ba4f75ee78d3d8008168b36594bcd6',
+    'source-rights:07808766f3c31e42d1756a8838b3952e0fe0bcc800a4a0ae5e5311175e62a629',
+    '["Away.Points","Away.Team","Date","Home.Points","Home.Team"]'::JSONB,
+    'cameron-2020-hpn-method-use:551baef6f952a1d8a9a2e4e3722bc559fa9081585733b4e581b5aff393363053',
+    'hpn-pav-method:a8cef6b18b27d848c99773ac8b4fc1c4764c3c6fe48d1872816e217f3a209b43',
+    'ea7eb5fa2ffce3637f45b9e5808bf35b961147b08b6ed302ff96f4d4d72d4210'),
+  ('source-capture:89ce91b505933e189443b96685a916d7745a50eea6708f38c1fbf63f1f6dc2de',
+    'afl-tables-player-stats',
+    'gate-decision:584592763763b19c01d6f0b0ebe22bd49f9fc1cdfc57de35bb8a3c54e6e2049c',
+    'source-rights:90bdf688968e480793fe18bbd59cc89df2906307f2155e5f92145317b737c116',
+    '["Away.team","Behinds","Clearances","Date","Frees.Against","Frees.For","Goal.Assists","Goals","Hit.Outs","Home.team","ID","Inside.50s","Marks","Marks.Inside.50","One.Percenters","Playing.for","Rebounds","Tackles"]'::JSONB,
+    'cameron-2020-hpn-method-use:551baef6f952a1d8a9a2e4e3722bc559fa9081585733b4e581b5aff393363053',
+    'hpn-pav-method:a8cef6b18b27d848c99773ac8b4fc1c4764c3c6fe48d1872816e217f3a209b43',
+    'ea7eb5fa2ffce3637f45b9e5808bf35b961147b08b6ed302ff96f4d4d72d4210');
+
 CREATE FUNCTION outcome_hpn_cameron_2020_retained_use_is_current(
   target_capture_id TEXT, consumed_fields JSONB, target_at TIMESTAMPTZ
 ) RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $$
@@ -9,6 +75,9 @@ DECLARE
   expected_capability TEXT;
   expected_origin_gate TEXT;
   expected_origin_rights TEXT;
+  expected_method_use TEXT;
+  expected_hpn_pav_method TEXT;
+  expected_owner_approval TEXT;
   source RECORD;
   origin RECORD;
   successor RECORD;
@@ -16,17 +85,13 @@ DECLARE
   expected_rights_fields JSONB;
   expected_dimensions JSONB;
 BEGIN
-  IF target_capture_id='source-capture:05b6f05a55c00f8bc13767cd5068672513ee10dcd4fe4050f445e00eae7235c4' THEN
-    expected_capability:='afl-tables-results';
-    expected_origin_gate:='gate-decision:612d36def777aee857abddcef923871d00ba4f75ee78d3d8008168b36594bcd6';
-    expected_origin_rights:='source-rights:07808766f3c31e42d1756a8838b3952e0fe0bcc800a4a0ae5e5311175e62a629';
-    expected_fields:='["Away.Points","Away.Team","Date","Home.Points","Home.Team"]'::JSONB;
-  ELSIF target_capture_id='source-capture:89ce91b505933e189443b96685a916d7745a50eea6708f38c1fbf63f1f6dc2de' THEN
-    expected_capability:='afl-tables-player-stats';
-    expected_origin_gate:='gate-decision:584592763763b19c01d6f0b0ebe22bd49f9fc1cdfc57de35bb8a3c54e6e2049c';
-    expected_origin_rights:='source-rights:90bdf688968e480793fe18bbd59cc89df2906307f2155e5f92145317b737c116';
-    expected_fields:='["Away.team","Behinds","Clearances","Date","Frees.Against","Frees.For","Goal.Assists","Goals","Hit.Outs","Home.team","ID","Inside.50s","Marks","Marks.Inside.50","One.Percenters","Playing.for","Rebounds","Tackles"]'::JSONB;
-  ELSE RETURN FALSE; END IF;
+  SELECT seed.capability_id, seed.origin_gate_decision_id, seed.origin_rights_artifact_id,
+    seed.expected_fields, seed.method_use_id, seed.hpn_pav_method_id, seed.owner_approval_sha256
+    INTO expected_capability, expected_origin_gate, expected_origin_rights, expected_fields,
+      expected_method_use, expected_hpn_pav_method, expected_owner_approval
+    FROM outcome_hpn_retained_source_successor_capture seed
+   WHERE seed.capture_id=target_capture_id;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
   IF consumed_fields IS DISTINCT FROM expected_fields OR target_at>clock_timestamp()
   THEN RETURN FALSE; END IF;
 
@@ -99,11 +164,11 @@ BEGIN
     UNION ALL SELECT jsonb_build_object('name','original_gate_decision','values',jsonb_build_array(expected_origin_gate))
     UNION ALL SELECT jsonb_build_object('name','original_source_rights_artifact','values',jsonb_build_array(expected_origin_rights))
     UNION ALL SELECT jsonb_build_object('name','retained_method_use','values',jsonb_build_array(
-      'cameron-2020-hpn-method-use:551baef6f952a1d8a9a2e4e3722bc559fa9081585733b4e581b5aff393363053'))
+      expected_method_use))
     UNION ALL SELECT jsonb_build_object('name','hpn_pav_method','values',jsonb_build_array(
-      'hpn-pav-method:a8cef6b18b27d848c99773ac8b4fc1c4764c3c6fe48d1872816e217f3a209b43'))
+      expected_hpn_pav_method))
     UNION ALL SELECT jsonb_build_object('name','owner_approval_sha256','values',jsonb_build_array(
-      'ea7eb5fa2ffce3637f45b9e5808bf35b961147b08b6ed302ff96f4d4d72d4210'))
+      expected_owner_approval))
   ) dimensions;
   RETURN COALESCE(
     successor.decision_json#>>'{content,proposalId}'=successor.proposal_id
@@ -137,7 +202,7 @@ BEGIN
     AND (successor.rights_json#>'{content,rightsEvidenceIds}') @>
       (source.original_rights_json#>'{content,rightsEvidenceIds}')
     AND (successor.rights_json#>'{content,rightsEvidenceIds}') ?
-      'artifact:ea7eb5fa2ffce3637f45b9e5808bf35b961147b08b6ed302ff96f4d4d72d4210'
+      ('artifact:'||expected_owner_approval)
     AND outcome_hpn_private_source_rights_permit(successor.rights_json,consumed_fields,
       'AFLM',2020,target_at),FALSE);
 EXCEPTION WHEN OTHERS THEN RETURN FALSE;
