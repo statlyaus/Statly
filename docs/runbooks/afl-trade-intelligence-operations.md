@@ -2238,9 +2238,12 @@ predecessor/revision transitions. Exact replay requires the same current support
 locks the selected head through reauthentication; withdrawal makes it unavailable. Direct SQL
 receives equivalent source/identity/support guards; heads cannot be deleted or truncated.
 
-The isolated source-map helper retains the complete source-first verifier and permits only the
-`cameron-2018-private-pilot` statistical scope for 2018 and the exact capture/run. It does not extend
-the existing valuation scope policy. The caller must supply current support bound to the exact
+The isolated source-map helper retains the complete source-first verifier. Migration
+`0229_cameron_hpn_statistical_season_scope` permits exact `cameron-<year>-private-pilot` keys for
+2018 and 2020–2023, bound to the matching source season, capture and normalization run. It leaves
+valuation dispatch scopes unchanged and still checks current Gate 0A and every consumed field;
+the archive-only 2020 captures remain unavailable for calculation until exact successor authority
+is admitted. The caller must supply current support bound to the exact
 candidate and observation. Retained cache zeros remain `retained_zero_origin_unknown`, even when
 an explicit zero in the official transcription supports the selected value. Both original values
 remain immutable. Millisecond-truncated head timestamps avoid rounding into the future; the
