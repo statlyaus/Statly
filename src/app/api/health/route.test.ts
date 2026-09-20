@@ -27,6 +27,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({
         get: vi.fn(() => Promise.resolve()),
       })),
       doc: vi.fn(() => ({
+        get: vi.fn(() => Promise.resolve()),
         set: vi.fn(() => Promise.resolve()),
         delete: vi.fn(() => Promise.resolve()),
       })),
@@ -75,6 +76,16 @@ vi.mock('@/lib/metrics', () => ({
   },
 }));
 
+vi.mock('@/server/health/relationalDatabaseHealth', () => ({
+  checkRelationalDatabase: vi.fn(() =>
+    Promise.resolve({
+      status: 'healthy',
+      responseTime: 5,
+      lastChecked: new Date().toISOString(),
+    })
+  ),
+}));
+
 describe('Health API', () => {
   let mockRequest: NextRequest;
 
@@ -106,6 +117,7 @@ describe('Health API', () => {
       expect(data.success).toBe(true);
       expect(data.data.status).toBe('healthy');
       expect(data.data.services).toHaveProperty('database');
+      expect(data.data.services).toHaveProperty('relationalDatabase');
       expect(data.data.services).toHaveProperty('memory');
       expect(data.data.services).toHaveProperty('redis');
       expect(data.data.services).toHaveProperty('metrics');

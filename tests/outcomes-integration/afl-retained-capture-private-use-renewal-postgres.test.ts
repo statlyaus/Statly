@@ -165,6 +165,15 @@ afterAll(async () => {
   await admin.end();
 });
 
+it('keeps the exact Cameron 2020 successor closed to other retained captures', async () => {
+  const result = await client.query<{ permitted: boolean }>(
+    `SELECT outcome_hpn_cameron_2020_retained_use_is_current(
+       $1,$2::jsonb,clock_timestamp()) AS permitted`,
+    [captureId, JSON.stringify(['home_points', 'away_points'])]
+  );
+  expect(result.rows).toEqual([{ permitted: false }]);
+});
+
 // Synthetic bytes/reviews only. Real ledger, source-capture and private-use guards remain enabled.
 it('permits only the explicitly renewed retained capture without rewriting its original manifest', async () => {
   const connection = await pool.connect();

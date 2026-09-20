@@ -6404,6 +6404,19 @@ model OutcomeHpnStatisticalSupportReview {
   pavInputSelections OutcomeHpnPavInputStatisticalSelection[]
   @@map("outcome_hpn_statistical_support_review")
 }
+model OutcomeHpnRetainedSourceSuccessorCapture {
+  captureId String @id @map("capture_id")
+  capabilityId String @map("capability_id")
+  originGateDecisionId String @map("origin_gate_decision_id")
+  originRightsArtifactId String @map("origin_rights_artifact_id")
+  expectedFields Json @map("expected_fields")
+  methodUseId String @map("method_use_id")
+  hpnPavMethodId String @map("hpn_pav_method_id")
+  ownerApprovalSha256 String @map("owner_approval_sha256")
+  seededAt DateTime @default(dbgenerated("clock_timestamp()")) @map("seeded_at") @outcomes.Timestamptz(3)
+  @@map("outcome_hpn_retained_source_successor_capture")
+}
+
 model OutcomeHpnStatisticalCurrentSelection {
   scopeKey String @id @map("scope_key")
   decisionId String @map("decision_id")
