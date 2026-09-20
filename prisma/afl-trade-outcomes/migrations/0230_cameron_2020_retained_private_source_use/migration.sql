@@ -107,6 +107,10 @@ BEGIN
   ) dimensions;
   RETURN COALESCE(
     successor.decision_json#>>'{content,proposalId}'=successor.proposal_id
+    AND successor.decision_id='gate-decision:'||encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(successor.decision_json->'content'),'UTF8')),'hex')
+    AND successor.proposal_id='gate-proposal:'||encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(successor.proposal_json->'content'),'UTF8')),'hex')
     AND successor.decision_json#>'{content,scope}'=successor.proposal_json#>'{content,scope}'
     AND successor.decision_json#>'{content,conditionResults}'=
       source.origin_decision_json#>'{content,conditionResults}'
@@ -147,24 +151,35 @@ REVOKE ALL ON FUNCTION outcome_hpn_cameron_2020_retained_use_is_current(TEXT,JSO
 GRANT EXECUTE ON FUNCTION outcome_hpn_cameron_2020_retained_use_is_current(TEXT,JSONB,TIMESTAMPTZ)
   TO afl_trade_private_evaluation_coordinator;
 
--- Preserve all existing source guards; add only this exact successor precheck.
-DO $$ DECLARE definition TEXT; marker TEXT := 'expected_dimensions JSONB; BEGIN'; BEGIN
-  definition:=pg_get_functiondef('require_outcome_private_hpn_source_fields(text,jsonb)'::regprocedure);
+-- Keep the shared private-source guard byte-identical. The isolated statistical verifier inherits
+-- the helper call from the source-first verifier, so gate that call site rather than the shared body.
+DO $$ DECLARE definition TEXT; corrected TEXT; marker TEXT :=
+  E'\n  PERFORM require_outcome_private_hpn_source_fields(source.capture_id,fields);';
+  replacement TEXT := E'\n  IF NOT outcome_hpn_cameron_2020_retained_use_is_current(source.capture_id,fields,clock_timestamp()) THEN\n    PERFORM require_outcome_private_hpn_source_fields(source.capture_id,fields);\n  END IF;';
+BEGIN
+  definition:=pg_get_functiondef('outcome_hpn_statistical_source_map_is_exact(text,text,text)'::regprocedure);
   IF (length(definition)-length(replace(definition,marker,'')))/length(marker)<>1
-  THEN RAISE EXCEPTION 'Expected private source guard before Cameron successor is unavailable'; END IF;
-  EXECUTE replace(definition,marker,marker||E'\n    IF outcome_hpn_cameron_2020_retained_use_is_current(target_capture_id,consumed_fields,clock_timestamp()) THEN RETURN; END IF;');
+  THEN RAISE EXCEPTION 'Expected isolated statistical helper call before Cameron successor is unavailable'; END IF;
+  corrected:=replace(definition,marker,replacement);
+  IF replace(corrected,replacement,marker) IS DISTINCT FROM definition
+  THEN RAISE EXCEPTION 'Isolated Cameron statistical helper rewrite altered unrelated bytes'; END IF;
+  EXECUTE corrected;
 END $$;
 
-DO $$ DECLARE definition TEXT; old_clause TEXT :=
+DO $$ DECLARE definition TEXT; corrected TEXT; old_clause TEXT :=
   'AND outcome_hpn_private_source_rights_permit(source.manifest_json->''sourceRightsProposal'',fields,
       ''AFLM'',source.anchor_season_year,(content->>''evaluatedAt'')::TIMESTAMPTZ)';
+  new_clause TEXT :=
+  'AND (outcome_hpn_private_source_rights_permit(source.manifest_json->''sourceRightsProposal'',fields,
+      ''AFLM'',source.anchor_season_year,(content->>''evaluatedAt'')::TIMESTAMPTZ)
+      OR outcome_hpn_cameron_2020_retained_use_is_current(source.capture_id,fields,
+        (content->>''evaluatedAt'')::TIMESTAMPTZ))';
 BEGIN
   definition:=pg_get_functiondef('outcome_hpn_statistical_source_map_is_exact(text,text,text)'::regprocedure);
   IF (length(definition)-length(replace(definition,old_clause,'')))/length(old_clause)<>1
   THEN RAISE EXCEPTION 'Expected isolated statistical source-map rights guard is unavailable'; END IF;
-  EXECUTE replace(definition,old_clause,
-    'AND (outcome_hpn_private_source_rights_permit(source.manifest_json->''sourceRightsProposal'',fields,
-      ''AFLM'',source.anchor_season_year,(content->>''evaluatedAt'')::TIMESTAMPTZ)
-      OR outcome_hpn_cameron_2020_retained_use_is_current(source.capture_id,fields,
-        (content->>''evaluatedAt'')::TIMESTAMPTZ))');
+  corrected:=replace(definition,old_clause,new_clause);
+  IF replace(corrected,new_clause,old_clause) IS DISTINCT FROM definition
+  THEN RAISE EXCEPTION 'Isolated Cameron statistical rights rewrite altered unrelated bytes'; END IF;
+  EXECUTE corrected;
 END $$;

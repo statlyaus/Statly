@@ -1,17 +1,24 @@
-import { canonicalizeAflTradeJson, createAflTradeContentAddress } from '../artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '../artifacts/contentAddress';
 import {
   doesAflTradeArtifactRefMatchCanonicalJson,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
-import type { AflTradeGateDecisionProposal, AflTradeGateDecisionRecord } from '../governance/gateDecisionTypes';
+import type {
+  AflTradeGateDecisionProposal,
+  AflTradeGateDecisionRecord,
+} from '../governance/gateDecisionTypes';
 import {
   aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema,
   type AflTradeHpnSourceFirstCalculationSourceUseAssessment,
 } from './hpnPrivateCalculationSourceUse';
+import { createRetainedFitzRoyDerivedUseSuccessor } from '../source/retainedFitzRoyDerivedUseSuccessor';
 import {
-  createRetainedFitzRoyDerivedUseSuccessor,
-} from '../source/retainedFitzRoyDerivedUseSuccessor';
-import { aflTradeSourceRightsProposalSchema, type AflTradeSourceRightsProposal } from '../source/sourceRights';
+  aflTradeSourceRightsProposalSchema,
+  type AflTradeSourceRightsProposal,
+} from '../source/sourceRights';
 
 type Source = AflTradeHpnSourceFirstCalculationSourceUseAssessment['content']['source'];
 
@@ -35,9 +42,11 @@ export function assessRetainedCameron2020HpnPrivateCalculationSourceUse(input: {
   const reviewer = successorDecision.reviewers[0];
   if (
     successorDecision.effectiveAt === null ||
-    successorDecision.reviewers.length !== 1 || reviewer === undefined ||
+    successorDecision.reviewers.length !== 1 ||
+    reviewer === undefined ||
     !doesAflTradeArtifactRefMatchCanonicalJson(input.originalRightsArtifact, originalRights)
-  ) throw new TypeError('Retained HPN source-use successor evidence is incomplete.');
+  )
+    throw new TypeError('Retained HPN source-use successor evidence is incomplete.');
   const rebuilt = createRetainedFitzRoyDerivedUseSuccessor({
     ...input.original,
     methodUseCandidate: input.methodUseCandidate,
@@ -55,19 +64,23 @@ export function assessRetainedCameron2020HpnPrivateCalculationSourceUse(input: {
     Date.parse(input.evaluatedAt) < Date.parse(successorDecision.effectiveAt) ||
     Date.parse(input.evaluatedAt) >= Date.parse(successorDecision.revalidateAt ?? '') ||
     !Number.isFinite(Date.parse(input.evaluatedAt))
-  ) throw new TypeError('Retained HPN source-use successor is not current for this capture.');
+  )
+    throw new TypeError('Retained HPN source-use successor is not current for this capture.');
   const fields = [...input.sourceFields].sort((left, right) => left.localeCompare(right));
   const enabled = rebuilt.sourceRights.content.fields
     .filter((field) => field.uses.derived_feature === 'allowed')
-    .map((field) => field.sourceField).sort((left, right) => left.localeCompare(right));
+    .map((field) => field.sourceField)
+    .sort((left, right) => left.localeCompare(right));
   if (
-    fields.length === 0 || new Set(fields).size !== fields.length ||
+    fields.length === 0 ||
+    new Set(fields).size !== fields.length ||
     canonicalizeAflTradeJson(fields) !== canonicalizeAflTradeJson(enabled) ||
     rebuilt.sourceRights.content.operations.derived_feature_creation !== 'allowed' ||
     rebuilt.sourceRights.content.operations.model_training !== 'blocked' ||
     rebuilt.sourceRights.content.operations.public_derived_output !== 'blocked' ||
     rebuilt.sourceRights.content.operations.public_fact_display !== 'blocked'
-  ) throw new TypeError('Retained HPN assessment exceeds exact private source fields.');
+  )
+    throw new TypeError('Retained HPN assessment exceeds exact private source fields.');
   const content = {
     schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v2' as const,
     environment: 'non_production' as const,
@@ -78,14 +91,18 @@ export function assessRetainedCameron2020HpnPrivateCalculationSourceUse(input: {
     source: input.source,
     state: 'permitted_private_calculation' as const,
     rightsArtifactId: originalRights.rightsArtifactId,
-    fields: fields.map((sourceField) => ({ sourceField,
-      state: 'permitted_private_calculation' as const, reasons: [] })),
+    fields: fields.map((sourceField) => ({
+      sourceField,
+      state: 'permitted_private_calculation' as const,
+      reasons: [],
+    })),
     reasons: [],
     evidenceRefs: [input.originalRightsArtifact] as const,
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false as const,
     publicationProhibited: true as const,
-    limitation: 'Retained source-use assessment only; current source, field-map review, and database authority remain required. No model training or publication authority.' as const,
+    limitation:
+      'Retained source-use assessment only; current source, field-map review, and database authority remain required. No model training or publication authority.' as const,
   };
   return aflTradeHpnSourceFirstCalculationSourceUseAssessmentSchema.parse({
     assessmentId: createAflTradeContentAddress('hpn-private-source-use-assessment', content),

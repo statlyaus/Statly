@@ -1,9 +1,11 @@
 -- Permit exact Cameron pilot seasons in the isolated statistical-map verifier.
--- Valuation dispatch scopes and source-use rights remain unchanged; archive-only
--- 2020 captures still fail the verifier's existing Gate 0A and field-rights checks.
+-- Valuation dispatch scopes and source-use rights remain unchanged; every accepted
+-- season still fails closed on Gate 0A and per-field rights unless a later migration
+-- authorizes that exact capture and field set.
 DO $$
 DECLARE
   definition TEXT;
+  corrected TEXT;
   previous_scope TEXT :=
     '(content->>''valuationScopeKey''=''cameron-2018-private-pilot'' AND source.anchor_season_year=2018 AND source.capture_id=target_capture_id AND source.normalization_run_id=target_run_id)';
   pilot_scope TEXT :=
@@ -16,5 +18,10 @@ BEGIN
   THEN
     RAISE EXCEPTION 'Expected isolated Cameron statistical-map scope is unavailable';
   END IF;
-  EXECUTE replace(definition,previous_scope,pilot_scope);
+  corrected := replace(definition,previous_scope,pilot_scope);
+  IF replace(corrected,pilot_scope,previous_scope) IS DISTINCT FROM definition
+  THEN
+    RAISE EXCEPTION 'Isolated Cameron statistical-map rewrite altered unrelated bytes';
+  END IF;
+  EXECUTE corrected;
 END $$;
