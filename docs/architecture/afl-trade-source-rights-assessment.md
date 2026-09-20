@@ -116,6 +116,29 @@ Australia-only storage, a blanket 30-day expiry and a qualified independent revi
 requirements of this decision. Synthetic tests establish technical behavior; authentic source
 bytes, exact dates and current identity/source decisions remain necessary for genuine facts.
 
+### Retained-source use successor for trade grading
+
+On 2026-09-19 the Statly product owner approved using retained trade-grading evidence despite
+incomplete information for documented model training and approval, derived features, valuation,
+public data and grades, live activation, and other documented methods. This supersedes the
+product-use limits above for the exact retained sources used by those methods; it does not change
+the original capture-linked decisions. The accountable-owner record is retained in the private
+trade-grading handoff as `source-package/admission-preparation/cameron-pav/accountable-owner-approval.json`.
+The first scoped application is the Jeremy Cameron factual release's 96 captures and 16 distinct
+Draftguru/Official AFL source-rights proposals. Other captures or field/year scopes must identify
+their own exact inputs and method; they do not need a repeat of this owner decision.
+
+This is an internal product-use risk assumption, not proof of a third-party licence or permission
+to redistribute raw source material. Preserve attribution, original URLs and byte custody;
+publish the method, source provenance, coverage gaps, uncertainty and provisional status where
+appropriate. The content-addressed successor is the owner-approval envelope for the exact retained
+release, captures and original rights; its complete field list does not authorize every field for
+every method. Each consuming method also needs a content-addressed child record binding its method
+artifact, one approved operation, and the exact capture/right pairs and source-field subset it uses.
+Source qualification must authenticate both records against the current factual release before
+training or public output. Method-document custody, numerical admission and release activation remain
+separate gates. Factual inclusion does not itself prove a model, grade, or production deployment.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five
