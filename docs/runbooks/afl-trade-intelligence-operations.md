@@ -2241,9 +2241,14 @@ receives equivalent source/identity/support guards; heads cannot be deleted or t
 The isolated source-map helper retains the complete source-first verifier. Migration
 `0229_cameron_hpn_statistical_season_scope` permits exact `cameron-<year>-private-pilot` keys for
 2018 and 2020–2023, bound to the matching source season, capture and normalization run. It leaves
-valuation dispatch scopes unchanged and still checks current Gate 0A and every consumed field;
-the archive-only 2020 captures remain unavailable for calculation until exact successor authority
-is admitted. The caller must supply current support bound to the exact
+valuation dispatch scopes unchanged and still checks current Gate 0A and every consumed field.
+Migration `0230_cameron_2020_retained_private_source_use` accepts only the two documented 2020
+AFL Tables captures and their exact 5- and 18-field sets when a current, at-most-30-day Gate 0A
+successor binds the original capture, rights and decision to the retained HPN method and owner
+approval hash. Original acquisition manifests stay immutable. Expiry, withdrawal, altered fields,
+another capture or a changed Gate chain fails closed. This grants private derived use only; it does
+not authorize training, public output, new capture or 2020 valuation dispatch. The caller must
+supply current support bound to the exact
 candidate and observation. Retained cache zeros remain `retained_zero_origin_unknown`, even when
 an explicit zero in the official transcription supports the selected value. Both original values
 remain immutable. Millisecond-truncated head timestamps avoid rounding into the future; the
