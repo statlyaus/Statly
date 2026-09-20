@@ -19,7 +19,8 @@ export async function stageLocalAflTradeFitzRoyFixture(
   const fieldMapSha256 = createAflTradeFitzRoyFieldMapSha256(fieldMap);
   await client.query(
     `INSERT INTO outcome_competition_season (competition,season_year)
-     VALUES ('AFLM',2026) ON CONFLICT DO NOTHING`
+     VALUES ('AFLM',$1) ON CONFLICT DO NOTHING`,
+    [options?.seasonYear ?? 2026]
   );
   await client.query(
     `INSERT INTO outcome_review_decision

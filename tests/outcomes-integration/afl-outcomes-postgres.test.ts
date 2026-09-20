@@ -1256,6 +1256,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0226_historical_pilot_anchor_season_correction',
       '0227_historical_pilot_release_target_membership',
       '0228_historical_pilot_native_identity_binding',
+      '0229_cameron_hpn_statistical_season_scope',
+      '0230_cameron_2020_retained_private_source_use',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
