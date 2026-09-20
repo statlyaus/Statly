@@ -217,12 +217,10 @@ it('permits the seeded capture and exact field set, and fails closed on every ot
     const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
     await ledger.appendBatch({
       expectedRevision: (await ledger.load()).revision,
-      updatedAt: decision.content.decidedAt,
       records: [{ sourceRights, proposal, decision }],
     });
     await ledger.appendBatch({
       expectedRevision: (await ledger.load()).revision,
-      updatedAt: successor.decision.content.decidedAt,
       records: [
         {
           sourceRights: successor.sourceRights,
