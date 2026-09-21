@@ -24,8 +24,9 @@ import {
   type PostgresGovernedPrivateEvaluationBatchRepository,
 } from './internal/postgresGovernedPrivateEvaluationBatchRepository';
 import {
-  AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY,
+  type AflTradePrivateEvaluationCohortExecutionLimits,
   classifyAflTradePrivateEvaluationExecutionError,
+  resolveAflTradePrivateEvaluationCohortExecutionLimits,
 } from './privateEvaluationCohortExecution';
 import {
   PostgresAflTradePrivateEvaluationCohortExecutionRepository,
@@ -135,14 +136,16 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
   readonly executionRepository?: PostgresAflTradePrivateEvaluationCohortExecutionRepository;
   readonly workerId?: string;
   readonly heartbeatMilliseconds?: number;
+  readonly executionLimits?: AflTradePrivateEvaluationCohortExecutionLimits;
 }) {
+  const executionLimits =
+    dependencies.executionLimits ?? resolveAflTradePrivateEvaluationCohortExecutionLimits();
   const executionRepository =
     dependencies.executionRepository ??
     new PostgresAflTradePrivateEvaluationCohortExecutionRepository(dependencies.client);
   const workerId = dependencies.workerId ?? 'system:weekly-valuation-coordinator';
   const heartbeatMilliseconds =
-    dependencies.heartbeatMilliseconds ??
-    AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY.heartbeatSeconds * 1_000;
+    dependencies.heartbeatMilliseconds ?? executionLimits.heartbeatMilliseconds;
   if (!Number.isSafeInteger(heartbeatMilliseconds) || heartbeatMilliseconds < 1) {
     throw new TypeError('Private evaluation execution heartbeat must be a positive integer.');
   }
@@ -616,6 +619,7 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
       return executionCyclePromise;
     };
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: executionLimits.maximumConcurrency,
       captureCurrent: async () => captured,
       stageTrade: async (input) => {
         const executionCycle = await loadExecutionCycle();
