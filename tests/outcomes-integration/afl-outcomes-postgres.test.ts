@@ -1019,6 +1019,18 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
     expect(identity.rows[0]!.stamped_at).toBeInstanceOf(Date);
   });
 
+  it('sorts the legacy registration evidence locks before acquiring them', async () => {
+    // The v1 registration owner takes one advisory key per governed evidence reference. Taking them
+    // in document order could deadlock against the v2 owner, which orders the same family.
+    const definition = await query<{ definition: string }>(
+      `SELECT pg_get_functiondef(
+         'register_outcome_reviewed_canonical_target(text,text,text,text)'::regprocedure) AS definition`
+    );
+    expect(definition.rows[0]!.definition).toContain(
+      `ELSE '[]'::JSONB END) ORDER BY value->>'id' LOOP`
+    );
+  });
+
   it('deploys the complete ordered migration history and has no structural datamodel drift', () => {
     const applied = runOutcomesPrismaTestCommand(
       [
@@ -1275,6 +1287,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0229_cameron_hpn_statistical_season_scope',
       '0230_cameron_2020_retained_private_source_use',
       '0231_outcome_database_identity',
+      '0232_reviewed_registration_lock_order',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
