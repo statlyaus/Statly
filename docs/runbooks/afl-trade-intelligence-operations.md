@@ -229,16 +229,21 @@ Evidence is retained in two layers with different lifetimes.
 transition intents, completions, generations, and every canonical JSON payload that names them. These
 are what make a claim checkable, and nothing in this policy authorises deleting them.
 
-**Retained for 90 days** — raw payload bytes: the capture bodies themselves (the HTML or JSON a
-provider served, and derived artifacts whose bytes are only needed to reproduce a reading). After the
-window those bytes may be pruned.
+**Retained for at least 90 days, and for the capture's recorded retention term where that is
+longer** — raw payload bytes: the capture bodies themselves (the HTML or JSON a provider served, and
+derived artifacts whose bytes are only needed to reproduce a reading). Approved external captures
+record `rawRetentionDays` in their admission terms, and `outcome_external_retained_target_is_current`
+enforces `at_time < captured_at + rawRetentionDays`. Pruning earlier than that term would leave a
+capture the guard still treats as retained while its payload is unavailable, so the recorded term
+wins over the 90-day floor.
 
 After pruning, evidence is **verifiable but not replayable**. The custody row still proves which bytes
-were retained and what they hashed to, and the receipt chain still proves the order of events, but
-`loadExact` on the artifact repository refuses because the bytes are gone, and the failure carries no
+were retained and what they hashed to, and the receipt chain still proves the order of events. A
+repository read of a removed object does not raise: `loadExact` returns `null`, and the higher-level
+`verifyAflTradeArtifactReadback` escalates that into a generic `READBACK_MISMATCH` error carrying no
 way to say why. Every procedure that depends on re-reading a payload — rehearsing a capture,
 reconciling a provider claim from its raw body, rebuilding a prepared input set from source bytes —
-must therefore complete inside the window, or the bytes must be restored from backup first.
+must therefore complete inside the retention term, or the bytes must be restored from backup first.
 
 This policy changes no custody check. `outcome_external_retained_artifact_current` matches the custody
 row, which survives; it does not read bytes.
@@ -258,19 +263,23 @@ Pruning therefore requires, in the same change:
 
 Until both exist, retain everything.
 
-The 90-day window is deliberately not recorded in the execution policy or any other constant
+The 90-day floor is deliberately not recorded in the execution policy or any other constant
 beforehand. Recording a value before the reader that consumes it exists is precisely the defect the
-private evaluation execution policy carried until it was hardened; the window becomes a recorded
-policy value only in the change that introduces its consumer.
+private evaluation execution policy carried until it was hardened; the floor becomes a recorded
+policy value only in the change that introduces its consumer, and even then the per-capture
+`rawRetentionDays` term takes precedence over it.
 
-### Autovacuum expectations
+### Where the bytes live, and what vacuum has to do with it
 
-The outcomes database is append-mostly, so most tables accumulate few dead tuples and the defaults
-are adequate. A prune is a mass delete and is the exception: the affected tables accumulate dead
-tuples that autovacuum must reclaim before the space is reusable. Expect per-table
-`autovacuum_vacuum_threshold` and `autovacuum_vacuum_scale_factor` overrides for the pruned tables,
-and check `pg_stat_user_tables` after each window to confirm dead-tuple ratios settle. The registry,
-gate, review and receipt tables are small and are unaffected by pruning.
+Payload bytes are held in object storage, not in PostgreSQL: `outcome_artifact_custody` retains the
+reference and its `content_sha256` only. Deleting payloads is therefore an object-store operation, it
+creates no dead tuples, and it needs no `VACUUM` policy today.
+
+If a later change moves payload bodies into a table, that table becomes the first in this domain to
+take bulk deletes, and it will need explicit `autovacuum_vacuum_threshold` and
+`autovacuum_vacuum_scale_factor` overrides plus a `pg_stat_user_tables` check after each window. Until
+then the append-mostly defaults are adequate: the registry, gate, review, receipt and custody tables
+are small or append-only and are unaffected by pruning.
 
 ## Capturing source evidence
 
