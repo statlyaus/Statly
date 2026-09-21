@@ -6,23 +6,28 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillsRoot = path.join(repoRoot, '.agents', 'skills');
 
-const requiredUpstreamSkills = [
-  'ask-matt',
-  'code-review',
-  'codebase-design',
-  'diagnosing-bugs',
-  'domain-modeling',
-  'grill-with-docs',
-  'grilling',
-  'implement',
-  'prototype',
-  'research',
-  'resolving-merge-conflicts',
-  'setup-matt-pocock-skills',
-  'tdd',
-  'to-spec',
-  'to-tickets',
-].sort();
+// Every vendored upstream skill is pinned to the reviewed repository it came from. Adding a name
+// here also requires a matching skills-lock.json entry and a Statly-owned routing entry.
+const approvedUpstreamSkills = {
+  'ask-matt': 'mattpocock/skills',
+  'code-review': 'mattpocock/skills',
+  'codebase-design': 'mattpocock/skills',
+  'diagnosing-bugs': 'mattpocock/skills',
+  'domain-modeling': 'mattpocock/skills',
+  'grill-with-docs': 'mattpocock/skills',
+  grilling: 'mattpocock/skills',
+  implement: 'mattpocock/skills',
+  prototype: 'mattpocock/skills',
+  research: 'mattpocock/skills',
+  'resolving-merge-conflicts': 'mattpocock/skills',
+  'setup-matt-pocock-skills': 'mattpocock/skills',
+  tdd: 'mattpocock/skills',
+  'to-spec': 'mattpocock/skills',
+  'to-tickets': 'mattpocock/skills',
+  'typesafe-ai': 'typesafe-ai/skills',
+};
+
+const requiredUpstreamSkills = Object.keys(approvedUpstreamSkills).sort();
 
 const explicitInvocationSkills = [
   'ask-matt',
@@ -48,6 +53,7 @@ const requiredWorkflowSkills = [
   'tdd',
   'to-spec',
   'to-tickets',
+  'typesafe-ai',
 ];
 
 async function readRepoFile(relativePath) {
@@ -155,7 +161,10 @@ async function checkLockfile() {
 
   for (const name of requiredUpstreamSkills) {
     const locked = lockfile.skills[name];
-    assert(locked.source === 'mattpocock/skills', `${name} must be locked to mattpocock/skills`);
+    assert(
+      locked.source === approvedUpstreamSkills[name],
+      `${name} must be locked to ${approvedUpstreamSkills[name]}`
+    );
     assert(locked.sourceType === 'github', `${name} must use the GitHub source type`);
     assert(locked.skillPath?.endsWith(`/${name}/SKILL.md`), `${name} has an unexpected skill path`);
     assert(

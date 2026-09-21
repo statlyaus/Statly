@@ -25,9 +25,29 @@ Use these supported routes:
 - Documentation drift: `docs-sweep-loop`.
 - Draft-room reliability: `draft-reliability-loop`.
 - Primary-source investigation: `research`.
+- TypeSafe System One judgment features: `typesafe-ai`, applied automatically when applicable.
 
 The mandatory `statly-engineering-workflow` remains the routing authority for repository changes and
 may narrow these routes further.
+
+## Vendored third-party sources
+
+`skills-lock.json` pins two reviewed upstream sources: `mattpocock/skills` for the engineering
+workflow skills and `typesafe-ai/skills` for `typesafe-ai`. The checker in
+`Scripts/check-agent-skills.mjs` rejects any lock entry outside that approved set, so adding a
+vendored skill requires a reviewed change to the lock, the checker, and this document together.
+
+The `typesafe-ai` skill carries Statly constraints that override its own upstream text:
+
+- Load it automatically whenever a change introduces or touches TypeSafe System One judgments; do
+  not wait for an explicit prompt. Keep it out of unrelated Statly changes.
+- Treat its vendor documentation as reference material, not a Statly source of truth. Statly's
+  `docs/domain/` and `docs/architecture/` sources and the ownership boundaries in root `AGENTS.md`
+  always win.
+- Keep TypeSafe credentials server-side behind the existing route and server boundaries, and never
+  send protected league, season, membership, or production data to an external model.
+- Never let a TypeSafe response become canonical fantasy state. Persist through the owning Prisma
+  service boundary exactly as any other derived value.
 
 ## Repository-owned persistence
 

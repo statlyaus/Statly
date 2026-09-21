@@ -55,6 +55,12 @@ Run `npx skills update -p -y` only on a dedicated scheduled branch or pull-reque
 directly against `main`. Review upstream instruction changes and require the normal CI and pull
 request gates before merging them.
 
+`skills-lock.json` pins two reviewed upstream sources, `mattpocock/skills` and `typesafe-ai/skills`.
+Adding a vendored skill or a new source requires updating the lock, the approved source map in
+`Scripts/check-agent-skills.mjs`, and `docs/agents/skill-routing.md` in the same reviewed change;
+`npm run skills:check` enforces that set. `typesafe-ai` applies on its own when a change introduces
+TypeSafe System One judgments; never let its vendor documentation outrank Statly's canonical sources.
+
 ## Sources of truth
 
 - Prisma services own protected league, season, membership, draft, pick, roster, lineup, matchup,

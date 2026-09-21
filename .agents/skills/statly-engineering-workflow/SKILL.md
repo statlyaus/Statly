@@ -39,6 +39,9 @@ skill conflicts with repository policy.
 - For an architecture or domain-language decision, load `codebase-design` and `domain-modeling`.
   Preserve Prisma, Firebase, Firestore, Redis, league/season scoping, ETL, and realtime ownership
   boundaries defined by Statly documentation.
+- For a feature that introduces or touches TypeSafe System One judgments, load `typesafe-ai` without
+  waiting for an explicit prompt. Keep its vendor documentation subordinate to Statly's canonical
+  `docs/domain/` and `docs/architecture/` sources, and keep credentials server-side.
 - At completion, load `code-review` and review against both repository standards and the approved
   request, specification, or tickets. Resolve actionable findings before declaring the work done.
 - For delivery, follow `docs/development/delivery.md` exactly.
