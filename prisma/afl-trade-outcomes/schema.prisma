@@ -117,6 +117,15 @@ model OutcomeRegistryHead {
   @@map("outcome_registry_head")
 }
 
+model OutcomeDatabaseIdentity {
+  singletonId   Int      @id @map("singleton_id")
+  applicationId String   @map("application_id")
+  schemaFormat  Int      @map("schema_format")
+  stampedAt     DateTime @default(dbgenerated("clock_timestamp()")) @map("stamped_at") @outcomes.Timestamptz(3)
+
+  @@map("outcome_database_identity")
+}
+
 model OutcomeReleaseManifest {
   releaseId                           String                                      @id @map("release_id")
   scopeKey                            String                                      @map("scope_key")
