@@ -968,6 +968,40 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(insertBatchParent(forged)).rejects.toThrow(/identity|ancestry/i);
   });
 
+  it('refuses a direct-SQL activation of an incomplete batch', async () => {
+    // Cover the database's own refusal, not only the caller's. The parent declares its entry counts,
+    // and no entries are inserted, so the completeness guard cannot pass. The activation therefore
+    // has to fail inside the SQL function rather than being prevented by the repository first.
+    const retained = batch('2026-08-20T09:00:00.005Z');
+    await insertBatchParent(retained);
+
+    // The target-not-found guard raises the same message, so assert the completeness validator
+    // itself is the reason the activation is refused.
+    const complete = await pool.query<{ ok: boolean }>(
+      `SELECT validate_outcome_private_evaluation_batch_complete($1,$2) AS ok`,
+      [scopeKey, retained.batchId]
+    );
+    expect(complete.rows).toEqual([{ ok: false }]);
+
+    await expect(
+      pool.query(
+        `SELECT * FROM advance_outcome_current_private_evaluation_batch($1,$2,$3,$4,'activate',$5)`,
+        [
+          scopeKey,
+          retained.batchId,
+          0,
+          createGovernedPrivateEvaluationBatchOperationId({
+            scopeKey,
+            batchId: retained.batchId,
+            expectedRevision: 0,
+            action: 'activate',
+          }),
+          'system:weekly-valuation-coordinator',
+        ]
+      )
+    ).rejects.toThrow(/incomplete or cross-scope/i);
+  });
+
   it('retains unexpected runner diagnostics and preserves the current batch', async () => {
     const manifestDigest = '7'.repeat(64);
     const readyEntry = {
