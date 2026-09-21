@@ -1331,7 +1331,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         async () => true
       ),
       executionRepository,
-      heartbeatMilliseconds: 5,
+      executionLimits: { maximumConcurrency: 8, heartbeatMilliseconds: 5 },
       workspace: {
         stageAutomated: async ({ selector, operationId }) => {
           await vi.waitFor(() => expect(heartbeat).toHaveBeenCalledOnce());

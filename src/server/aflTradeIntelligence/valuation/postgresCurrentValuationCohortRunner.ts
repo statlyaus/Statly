@@ -135,7 +135,6 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
   readonly batchRepository: PostgresGovernedPrivateEvaluationBatchRepository;
   readonly executionRepository?: PostgresAflTradePrivateEvaluationCohortExecutionRepository;
   readonly workerId?: string;
-  readonly heartbeatMilliseconds?: number;
   readonly executionLimits?: AflTradePrivateEvaluationCohortExecutionLimits;
 }) {
   const executionLimits =
@@ -144,8 +143,9 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
     dependencies.executionRepository ??
     new PostgresAflTradePrivateEvaluationCohortExecutionRepository(dependencies.client);
   const workerId = dependencies.workerId ?? 'system:weekly-valuation-coordinator';
-  const heartbeatMilliseconds =
-    dependencies.heartbeatMilliseconds ?? executionLimits.heartbeatMilliseconds;
+  // Concurrency and heartbeat both come from the resolved limits. A separate heartbeat override
+  // would let a caller run with the concurrency of one policy and the heartbeat of another.
+  const heartbeatMilliseconds = executionLimits.heartbeatMilliseconds;
   if (!Number.isSafeInteger(heartbeatMilliseconds) || heartbeatMilliseconds < 1) {
     throw new TypeError('Private evaluation execution heartbeat must be a positive integer.');
   }
