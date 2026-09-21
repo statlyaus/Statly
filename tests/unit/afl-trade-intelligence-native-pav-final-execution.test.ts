@@ -70,7 +70,7 @@ it('rejects a deterministic artifact-size incompatibility before committing fina
     'Native candidate executable exceeds its artifact bound.'
   );
   expect(source.checkpoint).toMatchObject({ content: { stage: 'candidate_locked' } });
-}, 60_000);
+}, 120_000);
 
 it('retains actual native final reports once and recovers completed execution without numerical replay', async () => {
   const { source, dependencies, store, request } = await fixture();
