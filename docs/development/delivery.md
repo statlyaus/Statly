@@ -41,6 +41,31 @@ The pull-request description records:
 Open complex work as a draft, review the rendered diff, address actionable review feedback on the same
 branch, then mark it ready. Do not close/recreate a pull request merely to update it.
 
+## Review feedback
+
+Automated and human review comments are part of the change, not advisory. A change is not done while
+it has unread comments.
+
+Read them before marking a pull request ready, before enabling auto-merge, and after any push that may
+have triggered a fresh review:
+
+```sh
+gh pr view <number> --json reviews --jq '.reviews[].body'
+gh api repos/statlyaus/Statly/pulls/<number>/comments \
+  --jq '.[] | .path + ":" + (.line|tostring) + " " + .body'
+```
+
+Decide each finding explicitly, and record the decision in the pull-request description or a reply:
+
+- **structurally correct** — implement it on the same branch and state what changed;
+- **wrong for this repository** — reply with the reason and the evidence, so the next reader does not
+  re-raise it;
+- **out of scope** — name the boundary it belongs to and record it as a follow-up.
+
+A finding can be correct while every check passes. A split source of truth, a policy that contradicts a
+persisted contract, or a test that passes vacuously are all invisible to a suite that does not assert
+them, which is precisely when an unread comment costs most. A green check is not a decision.
+
 ## Merge gates
 
 The default-branch ruleset requires a pull request, an up-to-date branch, resolved review conversations,
