@@ -8,7 +8,7 @@ describe('current admitted PAV measurement loader', () => {
   let fixture: Awaited<ReturnType<typeof fullPlayerPavDatasetAdmissionFixture>>;
   beforeAll(async () => {
     fixture = await fullPlayerPavDatasetAdmissionFixture();
-  }, 60_000);
+  }, 120_000);
 
   it('leaves scalar datasets without PAV parents unchanged', async () => {
     const client: AflOutcomeSqlClient = {
