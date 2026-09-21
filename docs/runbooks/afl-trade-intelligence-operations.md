@@ -220,6 +220,58 @@ Until the source and factual checklist passes, the public archive may expose onl
 historical records and truthful factual-unavailable states. Until the additional model checklist passes, it may
 expose reviewed factual outcomes but must keep valuation numerical states unavailable.
 
+## Raw evidence payload retention
+
+Evidence is retained in two layers with different lifetimes.
+
+**Retained indefinitely** — the verifiable chain: artifact custody rows, artifact ids and
+`content_sha256` digests, source captures, evidence batches, gate decisions, execution receipts,
+transition intents, completions, generations, and every canonical JSON payload that names them. These
+are what make a claim checkable, and nothing in this policy authorises deleting them.
+
+**Retained for 90 days** — raw payload bytes: the capture bodies themselves (the HTML or JSON a
+provider served, and derived artifacts whose bytes are only needed to reproduce a reading). After the
+window those bytes may be pruned.
+
+After pruning, evidence is **verifiable but not replayable**. The custody row still proves which bytes
+were retained and what they hashed to, and the receipt chain still proves the order of events, but
+`loadExact` on the artifact repository refuses because the bytes are gone, and the failure carries no
+way to say why. Every procedure that depends on re-reading a payload — rehearsing a capture,
+reconciling a provider claim from its raw body, rebuilding a prepared input set from source bytes —
+must therefore complete inside the window, or the bytes must be restored from backup first.
+
+This policy changes no custody check. `outcome_external_retained_artifact_current` matches the custody
+row, which survives; it does not read bytes.
+
+### Pruning is not permitted until a pruned payload is distinguishable from a lost one
+
+Today the two are indistinguishable: after pruning the custody check still passes, while the byte
+reader fails generically, so a deliberate policy decision would look exactly like custody corruption
+to an operator and to the fail-closed guards.
+
+Pruning therefore requires, in the same change:
+
+1. a marker on the artifact custody row (for example `payload_pruned_at`, with the retention basis),
+   written when the bytes are removed, so a reader can tell pruned from missing; and
+2. the pruning job itself, deleting in bounded batches so locks stay short and autovacuum can reclaim
+   the space.
+
+Until both exist, retain everything.
+
+The 90-day window is deliberately not recorded in the execution policy or any other constant
+beforehand. Recording a value before the reader that consumes it exists is precisely the defect the
+private evaluation execution policy carried until it was hardened; the window becomes a recorded
+policy value only in the change that introduces its consumer.
+
+### Autovacuum expectations
+
+The outcomes database is append-mostly, so most tables accumulate few dead tuples and the defaults
+are adequate. A prune is a mass delete and is the exception: the affected tables accumulate dead
+tuples that autovacuum must reclaim before the space is reusable. Expect per-table
+`autovacuum_vacuum_threshold` and `autovacuum_vacuum_scale_factor` overrides for the pruned tables,
+and check `pg_stat_user_tables` after each window to confirm dead-tuple ratios settle. The registry,
+gate, review and receipt tables are small and are unaffected by pruning.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
