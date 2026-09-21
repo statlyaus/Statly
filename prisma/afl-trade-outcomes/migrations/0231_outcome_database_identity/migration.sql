@@ -36,4 +36,9 @@ BEGIN
   THEN RAISE EXCEPTION 'Outcome database identity is not the expected application and schema format'; END IF;
 END $$;
 
+-- Reading the identity is the purpose of the row. Mirror the existing cross-domain read-table
+-- convention and grant SELECT explicitly, because a role outside this list receives permission
+-- denied rather than a compatibility answer. A new reader must be added here.
 REVOKE ALL ON TABLE outcome_database_identity FROM PUBLIC;
+GRANT SELECT ON outcome_database_identity
+  TO afl_trade_current_valuation_refresh_owner, afl_trade_private_evaluation_coordinator;
