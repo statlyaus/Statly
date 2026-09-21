@@ -866,6 +866,30 @@ workbook lookup or legacy `Expected`/`Actual` field.
 Redis may coordinate locks, queues, and caches but never owns durable analytical state. A projection
 failure must not cause Firestore, CSV, or a client fallback to become canonical.
 
+### Advisory-lock ordering
+
+The analytical schema serializes contested writes with transaction-scoped advisory locks taken inside
+its SQL functions, rather than by widening isolation levels. Those locks are taken parent-first, then
+in a sorted set: a function locks the entity it is acting on first, and any set of related keys is
+ordered (`ORDER BY value`, `ORDER BY 1`) before it is locked, so two transactions touching the same
+keys cannot take them in opposite orders.
+
+A new or changed lock site must follow that order. Order the keys explicitly, and keep any set-based
+lock loop sorted before it locks.
+
+Two limits are worth stating for the next reader, because both were discovered by getting them wrong:
+
+- **Nothing enforces the convention.** No check verifies that a multi-lock function sorts its keys, so
+  it holds by author diligence. The one place it had been broken — a legacy registration function
+  locking one family in document order while its successor ordered the same family — was found by
+  reading the deployed function bodies and is fixed by `0232`.
+- **Comparing lock families across functions is not evidence of a conflict.** The same outer prefix
+  carries different id namespaces, so two functions can appear to take "the same two families" in
+  opposite orders while their concrete keys can never collide. For example `outcome-release-parent:` is
+  used with release ids (`^outcome-release:[a-f0-9]{64}$`) in one function and with spell version ids
+  in another. A contradiction is only real once the concrete keys can be the same; family prefixes are
+  not.
+
 ## Gate 1: architecture and authority
 
 Gate 1 exists to approve or reject a complete design. It does not make a proposed database, artifact
