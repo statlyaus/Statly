@@ -6,9 +6,10 @@
  * carry a reason, and an entry whose route no longer exists fails the test, so this list cannot drift
  * away from the code it describes.
  *
- * Reasons beginning with `REVIEW:` are known gaps rather than approvals. They are recorded so the
- * exposure is visible and tracked instead of silently accepted, and each one needs a decision about
- * whether the route should require a caller or move behind an operator credential.
+ * Reasons beginning with `BLOCKED ON CLIENT:` are known gaps rather than approvals: the route should
+ * require a caller, but its existing client does not send a verifiable credential yet, so gating the
+ * route would break that client in production while still working in development. The reason names
+ * the client that has to move to `authenticatedFetch` first.
  */
 export interface PublicRouteEntry {
   /** Route path relative to `/api`, for example `/players`. */
@@ -91,42 +92,41 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
   {
     route: '/drafts/list',
     reason:
-      'REVIEW: debug endpoint. Returns every draft with its league name and settings to any caller, and the dashboard reads it, so it needs a deliberate decision rather than a blind gate.',
-  },
-  {
-    route: '/drafts/[id]/lobby',
-    reason: 'REVIEW: lobby state is readable without a membership check.',
+      'BLOCKED ON CLIENT: a debug endpoint that returns every draft with its league name and settings. Its caller, src/components/dashboard/LiveDraftModule.tsx, uses fetchApi, which only attaches a credential when development auth is enabled, so requiring a caller here would break the dashboard in production while still working in development. Move that caller to authenticatedFetch first, then require a caller.',
   },
   {
     route: '/drafts/[id]/participants',
     reason:
-      'REVIEW: accepts a client-supplied userId and updates presence for it, so the actor is never proven.',
+      'BLOCKED ON CLIENT: accepts a client-supplied userId and updates presence for it, so the actor is never proven. The caller, src/hooks/useDraftService.ts, uses fetchApi. Move it to authenticatedFetch, then derive the actor from the credential instead of the body.',
   },
   {
     route: '/drafts/[id]/analytics',
-    reason: 'REVIEW: pick analytics read without a membership check.',
+    reason:
+      'BLOCKED ON CLIENT: pick analytics read without a membership check. Called from src/hooks/useDraftService.ts through fetchApi.',
   },
   {
     route: '/drafts/[id]/players',
-    reason: 'REVIEW: draft player pool read without a membership check.',
+    reason:
+      'BLOCKED ON CLIENT: draft player pool read without a membership check. Called through fetchApi.',
   },
   {
     route: '/drafts/[id]/schedule',
-    reason: 'REVIEW: draft schedule read without a membership check.',
+    reason:
+      'BLOCKED ON CLIENT: draft schedule read without a membership check. src/components/draft/DraftScheduleManager.tsx calls it with a bare fetch, which sends no credential at all.',
   },
 
   // Realtime transport.
   {
     route: '/socketio',
     reason:
-      'REVIEW: purpose not established during this audit. Confirm whether it should require a caller or move behind an operator credential.',
+      'Returns a constant 404 telling Socket.IO polling clients to use the dedicated socket server, and reads nothing. It also sets Access-Control-Allow-Origin: * unnecessarily.',
   },
 
   // Private evaluation export.
   {
     route: '/dev/afl-trade-evaluation/[tradeId]/export',
     reason:
-      'REVIEW: exports private evaluation data. Confirm the delegated handler enforces its own access boundary before relying on this entry.',
+      'Development-only surface: it reads through privateLocalWorkbookReads, which carries local test-fixture custody and cannot operate against a production environment.',
   },
 
   // Covered by the in-flight API authorization change; remove each entry once that change is merged.
