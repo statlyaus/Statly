@@ -968,6 +968,55 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(insertBatchParent(forged)).rejects.toThrow(/identity|ancestry/i);
   });
 
+  it('refuses a direct-SQL activation of an incomplete batch', async () => {
+    // Cover the database's own refusal, not only the caller's. The parent declares its entry counts,
+    // and no entries are inserted, so the completeness guard cannot pass. The activation therefore
+    // has to fail inside the SQL function rather than being prevented by the repository first.
+    const retained = batch('2026-08-20T09:00:00.005Z');
+    await insertBatchParent(retained);
+
+    // The target-not-found guard (0066:462) raises the same message as the incompleteness guard
+    // (0066:496), so read both validators: their values say which layer refused the activation
+    // instead of leaving it to a shared message. Note the subsumption recorded in the plan:
+    // validate_outcome_private_evaluation_batch_activation_target calls
+    // validate_outcome_private_evaluation_batch_complete itself (0066:265) and ANDs it with three
+    // further conditions, so this batch is refused by the incompleteness family transitively.
+    const complete = await pool.query<{ ok: boolean }>(
+      `SELECT validate_outcome_private_evaluation_batch_complete($1,$2) AS ok`,
+      [scopeKey, retained.batchId]
+    );
+    const activationTarget = await pool.query<{ ok: boolean }>(
+      `SELECT validate_outcome_private_evaluation_batch_activation_target($1,$2) AS ok`,
+      [scopeKey, retained.batchId]
+    );
+    const guardReport =
+      `layer: batch completeness (validator 0066:245, guard 0066:496) — ` +
+      `at custody read complete=${String(complete.rows[0]?.ok)} ` +
+      `activationTarget=${String(activationTarget.rows[0]?.ok)}`;
+    expect(complete.rows, `${guardReport}; this batch declares entries it does not have`).toEqual([
+      { ok: false },
+    ]);
+
+    await expect(
+      pool.query(
+        `SELECT * FROM advance_outcome_current_private_evaluation_batch($1,$2,$3,$4,'activate',$5)`,
+        [
+          scopeKey,
+          retained.batchId,
+          0,
+          createGovernedPrivateEvaluationBatchOperationId({
+            scopeKey,
+            batchId: retained.batchId,
+            expectedRevision: 0,
+            action: 'activate',
+          }),
+          'system:weekly-valuation-coordinator',
+        ]
+      ),
+      `${guardReport}; the SQL function, not the repository, must be the layer that refuses`
+    ).rejects.toThrow(/incomplete or cross-scope/i);
+  });
+
   it('retains unexpected runner diagnostics and preserves the current batch', async () => {
     const manifestDigest = '7'.repeat(64);
     const readyEntry = {
@@ -1983,6 +2032,231 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       )
     ).resolves.toMatchObject({ rows: [{ diagnostic_json: expect.any(Object) }] });
   });
+
+  it('resumes staging after a crash before the lifecycle receipt without duplicating the generation', async () => {
+    // The staging repository commits the transition intent and the generation in one transaction, so
+    // the only reachable crash boundary is between that commit and the lifecycle receipt. A crash
+    // there must resume without staging a second intent or generation.
+    const authorityRows = await pool.query<{
+      readonly prepared_revision: number;
+      readonly factual_revision: number;
+    }>(
+      `SELECT prepared_head.revision AS prepared_revision,
+              active_release.revision AS factual_revision
+         FROM outcome_current_prepared_valuation_input_set prepared_head
+         JOIN outcome_prepared_valuation_input_set prepared
+           ON prepared.prepared_input_set_id=prepared_head.prepared_input_set_id
+         JOIN outcome_active_release active_release
+           ON active_release.scope_key=prepared.factual_release_scope_key
+        WHERE prepared_head.scope_key=$1`,
+      [scopeKey]
+    );
+    const crashAuthorityRevision = authorityRows.rows[0]!;
+    const inspectedAt = await trustedNow();
+    const tradeId = 'trade-crash';
+    // The snapshot's calculation authority must be ready for this trade, and readiness is established by
+    // the prepared-input entry plus the set counts — enforced by the intent trigger in 0065, not by the
+    // staging repository, which is why a fresh trade needs this before it can be staged.
+    const crashRevision = crashAuthorityRevision.prepared_revision + 1;
+    const prepared = await pool.connect();
+    try {
+      await prepared.query('BEGIN');
+      await prepared.query(`SET LOCAL session_replication_role='replica'`);
+      await prepared.query(
+        `UPDATE outcome_prepared_valuation_input_set
+            SET trade_count=trade_count+1,ready_count=ready_count+1
+          WHERE prepared_input_set_id=$1`,
+        [preparedInputSetId]
+      );
+      await prepared.query(
+        `UPDATE outcome_current_prepared_valuation_input_set SET revision=$2 WHERE scope_key=$1`,
+        [scopeKey, crashRevision]
+      );
+      await prepared.query('COMMIT');
+    } catch (error) {
+      await prepared.query('ROLLBACK');
+      throw error;
+    } finally {
+      prepared.release();
+    }
+    const authority = await seedReadyRunnerAuthority({
+      tradeId,
+      generatedAt: inspectedAt,
+      preparedInputSetRevision: crashRevision,
+      factualReleaseRevision: crashAuthorityRevision.factual_revision,
+    });
+    const crashEntry = {
+      tradeId,
+      state: 'ready' as const,
+      materializationManifestId: authority.manifestId,
+      materializationManifestArtifact: authority.manifestArtifact,
+    };
+    // Bypass the finalized-set triggers exactly as the cohort seeding does: this is synthetic custody.
+    const entryWriter = await pool.connect();
+    try {
+      await entryWriter.query('BEGIN');
+      await entryWriter.query(`SET LOCAL session_replication_role='replica'`);
+      await entryWriter.query(
+        `INSERT INTO outcome_prepared_valuation_input_entry
+          (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
+         VALUES ($1,(SELECT COALESCE(max(ordinal),0)+1
+                       FROM outcome_prepared_valuation_input_entry
+                      WHERE prepared_input_set_id=$1),$2,'ready',$3::text,$3::jsonb)`,
+        [preparedInputSetId, tradeId, canonicalizeAflTradeJson(crashEntry)]
+      );
+      await entryWriter.query('COMMIT');
+    } catch (error) {
+      await entryWriter.query('ROLLBACK');
+      throw error;
+    } finally {
+      entryWriter.release();
+    }
+    const baseReplay = replayGovernedPrivateEvaluationMaterialization({
+      ...createGovernedPrivateEvaluationAuthenticatedCalculationFixture(),
+      playerObservations: [],
+    });
+    if (baseReplay.state !== 'ready') throw new Error('Expected ready fixture replay.');
+    const narrativeContent = {
+      ...createGovernedPrivateEvaluationNarrativeFixture().content,
+      tradeId,
+    };
+    const replay = {
+      ...baseReplay,
+      narrative: {
+        narrativeId: createAflTradeContentAddress('trade-calculation-narrative', narrativeContent),
+        content: narrativeContent,
+      },
+    };
+    const stagingRepository = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      enableAutomatedPrivateCalculation: true,
+    });
+
+    const lifecycleRepository = createPostgresGovernedPrivateEvaluationLifecycleRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      enableAutomatedPrivateCalculation: true,
+    });
+    let failCommit = false;
+    // Which layer served the recovery. A re-call finds the committed intent and generation through
+    // loadStaged and resumes through commit; the full staging path is separately idempotent per
+    // operation id, so both routes converge. Recording the route means a failure names the layer
+    // that ran, not only the outcome that broke.
+    const route: string[] = [];
+    const automated = createAutomatedGovernedPrivateEvaluationStagingService({
+      trustedNow: async () => inspectedAt,
+      loadStaged: async (operationId) => {
+        route.push('loadStaged');
+        // Reads the intent, generation and inspection receipt. The lifecycle receipt is deliberately
+        // not joined, because the crash boundary this test covers is exactly the gap before it.
+        const retained = await pool.query<{
+          readonly intent_json: unknown;
+          readonly generation_id: string;
+          readonly receipt_json: { readonly content?: { readonly lastTransitionId?: unknown } };
+        }>(
+          `SELECT intent.intent_json,generation.generation_id,inspection.receipt_json
+             FROM outcome_private_evaluation_transition_intent intent
+             JOIN outcome_local_private_trade_evaluation_generation generation
+               ON generation.transition_intent_id=intent.transition_intent_id
+             JOIN outcome_private_evaluation_inspection_receipt inspection
+               ON inspection.inspection_id=intent.inspection_id
+            WHERE intent.operation_id=$1`,
+          [operationId]
+        );
+        if (retained.rows[0] === undefined) {
+          route.push('loadStaged:empty');
+          return null;
+        }
+        route.push('loadStaged:resumed');
+        const intent = automatedGovernedPrivateEvaluationTransitionIntentSchema.parse(
+          retained.rows[0].intent_json
+        );
+        const previousTransitionId = retained.rows[0].receipt_json.content?.lastTransitionId;
+        if (previousTransitionId !== null && typeof previousTransitionId !== 'string') {
+          throw new TypeError('Fixture replay lost its exact predecessor.');
+        }
+        return {
+          selector: intent.content.selector,
+          principalId: intent.content.constructionAuthority.principalId,
+          generationId: retained.rows[0].generation_id,
+          intent,
+          previousTransitionId,
+        };
+      },
+      captureAuthority: async ({ selector }) => ({
+        state: 'ready' as const,
+        selector,
+        inspectionId: authority.inspectionId,
+        authoritySnapshotId: authority.snapshotId,
+        validThrough: authority.validThrough,
+        head: authority.head,
+        previousTransitionId: authority.previousTransitionId,
+        materializationManifestId: authority.manifestId,
+      }),
+      replayMaterialization: async () => replay,
+      stage: (input) => {
+        route.push('stage');
+        return stagingRepository.stage(input);
+      },
+      retainArtifact: (input) => {
+        route.push('retainArtifact');
+        return stagingRepository.retainArtifact(input);
+      },
+      commit: async (input) => {
+        if (failCommit) {
+          route.push('commit:threw');
+          throw new Error('simulated crash before the lifecycle receipt');
+        }
+        route.push('commit');
+        return lifecycleRepository.commitAutomated(input);
+      },
+    });
+    const operationId = createAflTradeContentAddress('private-evaluation-operation', { tradeId });
+    const request = { selector: { valuationScopeKey: scopeKey, tradeId }, operationId };
+    const counts = async () =>
+      (
+        await pool.query<{ intents: number; generations: number; receipts: number }>(
+          `SELECT
+             (SELECT count(*)::int FROM outcome_private_evaluation_transition_intent
+               WHERE operation_id=$1) AS intents,
+             (SELECT count(*)::int FROM outcome_local_private_trade_evaluation_generation generation
+                JOIN outcome_private_evaluation_transition_intent intent
+                  ON intent.transition_intent_id=generation.transition_intent_id
+               WHERE intent.operation_id=$1) AS generations,
+             (SELECT count(*)::int FROM outcome_private_evaluation_transition_receipt receipt
+                JOIN outcome_private_evaluation_transition_intent intent
+                  ON intent.transition_intent_id=receipt.transition_intent_id
+               WHERE intent.operation_id=$1) AS receipts`,
+          [operationId]
+        )
+      ).rows[0]!;
+
+    // `counts()` reads three tables for one operation id, so a mismatch already names the table
+    // (intents / generations / receipts); the recorded route says which layer produced that count.
+    const routeReport = (phase: string) =>
+      `layer: ${phase} — route ${route.join(' -> ') || '(none)'}`;
+
+    failCommit = true;
+    await expect(automated.stage(request)).rejects.toThrow(/simulated crash/i);
+    expect(
+      route,
+      'layer: the crash must originate at the commit seam, the only reachable boundary'
+    ).toContain('commit:threw');
+    await expect(
+      counts(),
+      `${routeReport('after the simulated crash')}; the intent and generation are committed, the lifecycle receipt is not`
+    ).resolves.toEqual({ intents: 1, generations: 1, receipts: 0 });
+
+    failCommit = false;
+    await expect(automated.stage(request)).resolves.toMatchObject({ state: 'activated' });
+    await expect(
+      counts(),
+      `${routeReport('after the re-call')}; a second intent or generation means recovery re-staged instead of resuming`
+    ).resolves.toEqual({ intents: 1, generations: 1, receipts: 1 });
+  }, 120_000);
 
   it('persists an exhaustive 783-trade cohort with bounded SQL work and exact unchanged replay', async () => {
     const before = await pool.query<{
