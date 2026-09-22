@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
+import { optimizeMemberLineup } from '@/server/leagues/lineupOptimizationService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -108,6 +109,32 @@ export async function POST(
 
     if (!member) {
       return errorResponse('User is not a member of this league', 404);
+    }
+
+    // Lineup optimisation is a member-scoped command, not a queued team action: it resolves and
+    // persists the optimised lineup synchronously so the response reflects the persisted result.
+    if (actionType === 'OPTIMIZE_LINEUP') {
+      const optimization = await optimizeMemberLineup({ leagueId, memberId: member.id });
+      if (!optimization.ok) {
+        return errorResponse(optimization.error, optimization.status);
+      }
+
+      await Promise.allSettled([revalidateTag(tags.league(leagueId), { expire: 0 })]);
+
+      return successResponse({
+        action: {
+          actionType: 'OPTIMIZE_LINEUP',
+          status: 'PROCESSED',
+          round: optimization.round,
+        },
+        optimization: {
+          round: optimization.round,
+          activeProjectedValue: optimization.activeProjectedValue,
+          promotedPlayerIds: optimization.promotedPlayerIds,
+          demotedPlayerIds: optimization.demotedPlayerIds,
+          unchangedPlayerIds: optimization.unchangedPlayerIds,
+        },
+      });
     }
 
     // Validate action based on type
@@ -340,8 +367,9 @@ async function validateTeamAction(
     }
 
     case 'OPTIMIZE_LINEUP': {
-      // Optimization requests are always valid
-      return { valid: true };
+      // Handled as a direct command before team-action validation. Retained as a safety net so a
+      // request that bypasses that branch cannot create an action row the processor cannot honour.
+      return { valid: false, error: 'Lineup optimisation is not a queued team action.' };
     }
 
     default:
@@ -351,7 +379,7 @@ async function validateTeamAction(
 
 // Determine if action should be processed immediately
 function shouldProcessImmediately(actionType: string): boolean {
-  return ['SET_CAPTAIN', 'SET_VICE_CAPTAIN', 'OPTIMIZE_LINEUP'].includes(actionType);
+  return ['SET_CAPTAIN', 'SET_VICE_CAPTAIN'].includes(actionType);
 }
 
 async function processDropPlayerAction(actionId: string): Promise<void> {
@@ -462,10 +490,15 @@ async function processTeamAction(actionId: string): Promise<void> {
         `;
         break;
 
-      case 'OPTIMIZE_LINEUP':
-        // Implement lineup optimization logic
-        await optimizeLineup(String(action.leagueId), String(action.memberId));
+      case 'OPTIMIZE_LINEUP': {
+        // Legacy pending rows created before optimisation became a direct command.
+        const optimization = await optimizeMemberLineup({
+          leagueId: String(action.leagueId),
+          memberId: String(action.memberId),
+        });
+        if (!optimization.ok) throw new Error(optimization.error);
         break;
+      }
 
       // Additional action processing...
     }
@@ -496,44 +529,3 @@ async function processTeamAction(actionId: string): Promise<void> {
   }
 }
 
-// Optimize lineup logic
-async function optimizeLineup(leagueId: string, memberId: string): Promise<void> {
-  try {
-    // Get current roster
-    const rosterRows = (await prisma.$queryRaw`
-      SELECT * FROM LeagueRoster 
-      WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-      LIMIT 1
-    `) as Record<string, unknown>[];
-
-    const roster = rosterRows[0];
-    if (!roster) {
-      throw new Error('Roster not found');
-    }
-
-    const playerList = JSON.parse(String(roster.playerList || '[]'));
-
-    // Implement basic optimization logic
-    // This is a simplified example - real optimization would be more complex
-    const optimizedLineup = playerList.sort(
-      (a: { averagePoints?: number }, b: { averagePoints?: number }) => {
-        return (b.averagePoints || 0) - (a.averagePoints || 0);
-      }
-    );
-
-    await prisma.$executeRaw`
-      UPDATE LeagueRoster 
-      SET playerList = ${JSON.stringify(optimizedLineup)}
-      WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-    `;
-
-    logger.info('Optimized lineup', { leagueId, memberId });
-  } catch (error) {
-    logger.error('Failed to optimize lineup', {
-      leagueId,
-      memberId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}

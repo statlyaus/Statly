@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import MyTeamPanel from '@/components/MyTeamPanel';
@@ -69,7 +69,25 @@ describe('MyTeamPanel', () => {
     expect(within(table).queryByRole('columnheader', { name: 'Avg' })).not.toBeInTheDocument();
 
     expect(screen.queryByText('No Team Selected')).not.toBeInTheDocument();
-    expect(screen.queryByText('Optimize Lineup')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Optimize' })).toBeInTheDocument();
+  });
+
+  it('dispatches the lineup optimisation action from the panel control', () => {
+    useRankingsMock.mockReturnValue({ rankings: [], loading: false, error: null });
+    const onTeamAction = vi.fn();
+
+    render(
+      <MyTeamPanel
+        team={{ id: 'team-1', name: 'Robbo Rockers', players: [] }}
+        players={[]}
+        showAdvancedFeatures
+        onTeamAction={onTeamAction}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Optimize' }));
+
+    expect(onTeamAction).toHaveBeenCalledWith('optimize');
   });
 
   it('renders zero Statly Z as a real value when rankings match', () => {

@@ -217,8 +217,10 @@ export function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRo
           void refreshRoster();
         }, 1000);
       } else {
-        const error = await response.json();
-        setLastAction(`Error: ${error.message || 'Action failed'}`);
+        const payload = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        setLastAction(`Error: ${payload?.error?.message ?? 'Action failed'}`);
       }
     } catch (error) {
       console.error('Team action failed:', error);
