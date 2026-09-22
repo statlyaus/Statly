@@ -18,28 +18,46 @@ export async function seedGovernedQualificationComponentRuns(input: {
   artifacts: AflTradeImmutableArtifactRepository;
   retain: (document: unknown, createdAt?: string) => Promise<AflTradeArtifactRef>;
   retainedAt: string;
+  variant?: string;
 }) {
-  const { pool, artifacts, retain, retainedAt } = input;
+  const { pool, artifacts, retain, retainedAt, variant = '' } = input;
+  // An optional variant produces a second, distinct player run so a test can register a newer
+  // qualified pair. The default keeps every seed byte-identical, so existing callers are unaffected.
+  // Only the player side varies: a pair is new if either run is new, and the dispatch fence in 0079
+  // keys on the run pair rather than on the model version.
+  const variantSeed = (value: string) => (variant === '' ? value : `${value}-${variant}`);
   const repository = new PostgresGovernedValuationComponentRunRepository({
     client: createPgAflOutcomeSqlClient(pool),
     artifactRepository: artifacts,
     maximumArtifactBytes: 1024 * 1024,
   });
-  const playerDatasetId = createAflTradeContentAddress('dataset', 'player-dataset');
+  const playerDatasetId = createAflTradeContentAddress('dataset', variantSeed('player-dataset'));
   const playerDatasetAdmissionId = createAflTradeContentAddress(
     'dataset-admission',
-    'player-dataset-admission'
+    variantSeed('player-dataset-admission')
   );
-  const playerProtocolId = createAflTradeContentAddress('model-protocol', 'player-protocol');
+  const playerProtocolId = createAflTradeContentAddress(
+    'model-protocol',
+    variantSeed('player-protocol')
+  );
   const playerValidationContent = {
     schemaVersion: 'afl-trade-player-validation-report/v1' as const,
     publicIdentityBoundary: 'source_native_no_fantasy_ownership' as const,
-    observationSetId: createAflTradeContentAddress('player-observation-set', 'player-observations'),
-    baselineFitId: createAflTradeContentAddress('player-baseline-fit', 'player-baseline'),
-    predictionSetId: createAflTradeContentAddress('player-prediction-set', 'player-predictions'),
+    observationSetId: createAflTradeContentAddress(
+      'player-observation-set',
+      variantSeed('player-observations')
+    ),
+    baselineFitId: createAflTradeContentAddress(
+      'player-baseline-fit',
+      variantSeed('player-baseline')
+    ),
+    predictionSetId: createAflTradeContentAddress(
+      'player-prediction-set',
+      variantSeed('player-predictions')
+    ),
     valueUnitId: 'player-contribution-above-replacement',
     evaluatedPartition: 'final_test' as const,
-    candidateModelId: 'player-contribution-v1',
+    candidateModelId: variantSeed('player-contribution-v1'),
     config: {
       schemaVersion: 'afl-trade-player-validation-config/v1' as const,
       minimumComparableObservations: 100,
@@ -78,25 +96,25 @@ export async function seedGovernedQualificationComponentRuns(input: {
   const playerRunContent = {
     schemaVersion: 'afl-trade-model-run/v3' as const,
     environment: 'non_production' as const,
-    modelId: 'player-contribution-v1',
+    modelId: variantSeed('player-contribution-v1'),
     modelVersion: '1.0.0',
     datasetId: playerDatasetId,
     datasetAdmissionId: playerDatasetAdmissionId,
     modelProtocolId: playerProtocolId,
-    runIntentId: createAflTradeContentAddress('model-run-intent', 'player-intent'),
+    runIntentId: createAflTradeContentAddress('model-run-intent', variantSeed('player-intent')),
     runAuthorizationId: createAflTradeContentAddress(
       'model-run-authorization',
-      'player-authorization'
+      variantSeed('player-authorization')
     ),
     observationSetId: playerValidationContent.observationSetId,
     modelTrainingEvaluationReceiptIds: [
-      createAflTradeContentAddress('gate0a-evaluation', 'player-evaluation'),
+      createAflTradeContentAddress('gate0a-evaluation', variantSeed('player-evaluation')),
     ],
     codeCommitSha: 'a'.repeat(40),
     cleanWorktree: true as const,
     seed: 1,
     job: {
-      jobId: 'player-model-job',
+      jobId: variantSeed('player-model-job'),
       attempt: 1,
       initiatedBy: 'statly-model-qualification-agent',
       workerIdentity: 'statly-model-worker',
@@ -178,7 +196,8 @@ export async function seedGovernedQualificationComponentRuns(input: {
          dataset_admission_gate_ledger_revision,protocol_id,protocol_artifact_id,
          execution_artifact_id,final_test_evaluation_started_at,completed_at,
          content_sha256,content_canonical_json,execution_json)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
+       ON CONFLICT (execution_id) DO NOTHING`,
       [
         pickExecution.executionId,
         pickContent.observationSetId,
