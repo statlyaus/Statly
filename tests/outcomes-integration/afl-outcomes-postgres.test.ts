@@ -10,6 +10,7 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { OUTCOME_DATABASE_IDENTITY } from '@/server/aflTradeIntelligence/outcomes/outcomeDatabaseIdentity';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { AflDraftTradeOutcomeReleaseRepositoryError } from '@/server/aflTradeIntelligence/outcomes/outcomeReleaseRepository';
 import { createAflTradeFactualProjectionItemSet } from '@/server/aflTradeIntelligence/outcomes/factualProjectionItemSetContracts';
@@ -1003,6 +1004,21 @@ afterAll(async () => {
 });
 
 describe('isolated AFL outcomes PostgreSQL migration', () => {
+  it('states the application and schema format it satisfies', async () => {
+    // The database answers "who are you, and which contract do you satisfy?" the way a SQLite file
+    // answers it from its header, so a reader never has to infer it from a migration ledger.
+    const identity = await query<{
+      application_id: string;
+      schema_format: number;
+      stamped_at: Date;
+    }>('SELECT application_id,schema_format,stamped_at FROM outcome_database_identity');
+
+    expect(identity.rows).toHaveLength(1);
+    expect(identity.rows[0]!.application_id).toBe(OUTCOME_DATABASE_IDENTITY.applicationId);
+    expect(identity.rows[0]!.schema_format).toBe(OUTCOME_DATABASE_IDENTITY.schemaFormat);
+    expect(identity.rows[0]!.stamped_at).toBeInstanceOf(Date);
+  });
+
   it('deploys the complete ordered migration history and has no structural datamodel drift', () => {
     const applied = runOutcomesPrismaTestCommand(
       [
@@ -1258,6 +1274,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0228_historical_pilot_native_identity_binding',
       '0229_cameron_hpn_statistical_season_scope',
       '0230_cameron_2020_retained_private_source_use',
+      '0231_outcome_database_identity',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
