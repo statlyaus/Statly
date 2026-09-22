@@ -24,7 +24,10 @@ export async function seedGovernedQualificationComponentRuns(input: {
   // An optional variant produces a second, distinct player run so a test can register a newer
   // qualified pair. The default keeps every seed byte-identical, so existing callers are unaffected.
   // Only the player side varies: a pair is new if either run is new, and the dispatch fence in 0079
-  // keys on the run pair rather than on the model version.
+  // keys on the run pair rather than on the model version. The variant is confined to run-scoped
+  // identities — dataset, protocol, intent, authorization, job and validation ids — and leaves the
+  // model identity alone, so the second pair is a newer version of the same model rather than a
+  // differently named model.
   const variantSeed = (value: string) => (variant === '' ? value : `${value}-${variant}`);
   const repository = new PostgresGovernedValuationComponentRunRepository({
     client: createPgAflOutcomeSqlClient(pool),
@@ -57,7 +60,7 @@ export async function seedGovernedQualificationComponentRuns(input: {
     ),
     valueUnitId: 'player-contribution-above-replacement',
     evaluatedPartition: 'final_test' as const,
-    candidateModelId: variantSeed('player-contribution-v1'),
+    candidateModelId: 'player-contribution-v1',
     config: {
       schemaVersion: 'afl-trade-player-validation-config/v1' as const,
       minimumComparableObservations: 100,
@@ -96,7 +99,7 @@ export async function seedGovernedQualificationComponentRuns(input: {
   const playerRunContent = {
     schemaVersion: 'afl-trade-model-run/v3' as const,
     environment: 'non_production' as const,
-    modelId: variantSeed('player-contribution-v1'),
+    modelId: 'player-contribution-v1',
     modelVersion: '1.0.0',
     datasetId: playerDatasetId,
     datasetAdmissionId: playerDatasetAdmissionId,
@@ -189,6 +192,8 @@ export async function seedGovernedQualificationComponentRuns(input: {
       ]
     );
     const pickContent = pickExecution.content;
+    // The pick side is shared by both variants, so seeding a successor re-inserts the same row with
+    // identical values. Tolerate that replay here rather than relying on every caller to skip it.
     await seed.query(
       `INSERT INTO outcome_governed_pick_pav_model_execution
         (execution_id,observation_set_id,dataset_id,dataset_artifact_id,
