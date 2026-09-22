@@ -1294,8 +1294,54 @@ over the evaluation horizon or establish historical 668/668 coverage. Authentica
 and compute that requirement separately. The `preflight-genuine-local` command remains an
 empty-database bootstrap smoke check, not an inspection of this populated runtime.
 
+### Provisioned genuine composition acceptance
+
+`npm run outcomes:valuation:provision-and-dispatch-local` is the acceptance command for the local
+private valuation composition root. With no local launch environment it provisions and owns one
+disposable loopback PostgreSQL container, applies the complete migration history, installs its own
+runtime identity nonce and never prints it, then inspects and composes the declared scope. With
+`AFL_OUTCOMES_DATABASE_URL` supplied it instead requires that admitted loopback `statly_outcomes_test`
+database and its exact `STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE`, refuses any other host, database name,
+query option or fragment, and provisions nothing. Either way it writes no shared authority, dispatches
+nothing public, and accepts no arbitrary scope: `--scope` is limited to `afl-men:2025-trades` and
+`afl-men:2026-trades`, and the default is `afl-men:2025-trades`.
+
+```sh
+npm run outcomes:valuation:provision-and-dispatch-local
+npm run outcomes:valuation:provision-and-dispatch-local -- --scope afl-men:2025-trades
+```
+
+The command prints exactly one JSON receipt with purpose `genuine_composition_acceptance`,
+`databaseOrigin`, the scope, `constructionState`, `qualificationGranted: false`, and either the named
+`blockerCodes` and `blockers` or the retained dispatch request id and terminal result. Exit code `2`
+means the scope was inspected and blocked by named authority, `1` means the acceptance run itself
+failed, and `0` means the chain composed and a private batch reached a terminal state. Retain receipts
+outside Git alongside the corresponding persistent database/artefact checkpoint; never retain the nonce.
+
+`blockerCodes` is the composition root's stable vocabulary. Each code names reviewed authority the
+scope must supply, or the one composition owner that does not exist yet; it is never a generic failure:
+
+| Code                                             | Meaning                                                                                                                                                                                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hpn_source_authority_missing`                   | The named `subject.id` source role has no exact reviewed authority for the scope's season. For 2025 that is the `hpn_corroborating_player_stats` lane only, because the completed-results and primary-player-stat lanes resolve. |
+| `hpn_preparation_authority_not_declared`         | No reviewed HPN source, factual, method and capture authority was declared, so HPN preparation has no exact inputs.                                                                                                              |
+| `construction_selection_not_supplied`            | No reviewed construction selection was declared, so no policy, component run, specification or target was selected.                                                                                                              |
+| `construction_selection_field_missing`           | The declared selection omits the named `subject.id` field.                                                                                                                                                                       |
+| `cohort_trade_construction_owner_missing`        | No genuine evidence-derived per-trade valuation-input assembly owner exists yet, so the private cohort cannot construct a trade.                                                                                                 |
+| `construction_readiness_unavailable`             | The selected inputs could not be assessed at all; the reason names the assessment's own blocker code, such as `calculation_input_package_missing` or `policy_missing`.                                                           |
+| `construction_view_incompatible`                 | The named asset and view of the declared valuation case cannot be packaged, and the reason is the assessment's own reason for that asset and view.                                                                               |
+| `construction_artifact_not_retained`             | A reference the declared selection names is not in private artifact custody, so it cannot be used.                                                                                                                               |
+| `construction_scope_unsupported`                 | The scope is outside the supported `afl-men:<season>-trades` policy.                                                                                                                                                             |
+| `cohort_construction_evidence_scope_unsupported` | The local construction-evidence owner is configured for one exact 2025 dispatch and claim.                                                                                                                                       |
+
+A `blocked` receipt is the expected result on an empty or scope-less disposable database, and it is
+the honest result until the named authority exists. A receipt that reports `composable` while the
+retained parents it depends on are absent is wrong; investigate it rather than trusting it.
+
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
+provisioned composition acceptance command above now composes the chain and reports each missing
+authority by name; it still cannot complete a genuine run. The
 current HPN preparation implementation admits both `afl-men:2025-trades` and
 `afl-men:2026-trades` through an exact scope-to-season policy. The default local 2025 source resolver
 still fails closed until a genuinely reviewed independent corroborating player-stat source, its

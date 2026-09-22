@@ -2490,10 +2490,26 @@ The local private worker now delegates dispatch to the existing recalculation co
 factual evidence must pass the existing model-evidence composition and prepared-cohort owner before
 batch execution. Its optional construction input supplies the exact model-pair and cohort dependencies;
 it does not select or manufacture admission, methodology or qualification authority. Missing construction
-configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path.
-Unavailable factual refreshes remain unavailable, while substantive no-change dispatches retain the
-existing batch reuse path. The command-line composition does not yet supply genuine construction
-configuration, and this wiring does not complete native PAV execution or the genuine-data rehearsal.
+configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path, and
+that failure now carries the composition root's named `blockerCodes` instead of only a generic message.
+A dispatch-bound cohort half is accepted as well as fixed dependencies, because construction evidence
+authenticates exactly one live dispatch identity. Unavailable factual refreshes remain unavailable,
+while substantive no-change dispatches retain the existing batch reuse path. The command-line
+composition does not yet supply genuine reviewed construction authority, and this wiring does not
+complete native PAV execution or the genuine-data rehearsal.
+
+`development/localPrivateValuationConstruction.ts` is the composition root for a declared scope. It
+resolves the declared scope policy, asks the HPN owner's own lane resolver which reviewed source
+authority each lane has, reports each field a declared selection omits, and reports the per-trade
+construction owner that does not exist yet. It composes only from owners that already exist —
+`localGenuineAdmittedPlayerContribution.ts`, `postgresGenuineDispatchBoundPickPav.ts`,
+`localPrivateValuationQualification.ts`, `localPrivateValuationHpnCapture.ts`,
+`postgresPrivateValuationHpnPreparation.ts`, `retainedValuationInputBundleConstruction.ts` and
+`localPrivateValuationConstructionEvidence.ts` — and never substitutes fixture or synthetic authority
+for a reviewed declaration. Inspection is read-only and reports `qualificationGranted: false`;
+composition returns a `blocked` verdict naming every missing authority, and never claims the chain is
+complete while any is missing. The report is reported once, at the root, so the command, the worker and
+the preflight read the same verdict rather than a second workflow ledger.
 
 The `outcomes:valuation:inspect-local` command reads an existing admitted loopback database using
 the existing inventory owner. Runtime identity and inventory share one repeatable-read, read-only
