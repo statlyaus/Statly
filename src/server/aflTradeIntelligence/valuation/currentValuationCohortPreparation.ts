@@ -233,7 +233,7 @@ export type AflTradeCurrentValuationCohortPreparationResult =
     }>;
 
 interface AflTradeCurrentValuationCohortPreparationDependencies {
-  readonly maximumConcurrency?: number;
+  readonly maximumConcurrency: number;
   readonly captureCurrent: (
     request: AflTradeCurrentValuationCohortPreparationRequest
   ) => Promise<AflTradeCurrentValuationCohortConstructionContext>;
@@ -258,7 +258,7 @@ export class AflTradeCurrentValuationTradeUnavailableError extends Error {}
 export function createAflTradeCurrentValuationCohortCoordinator(
   dependencies: AflTradeCurrentValuationCohortPreparationDependencies
 ): AflTradeCurrentValuationCohortCoordinator {
-  const maximumConcurrency = dependencies.maximumConcurrency ?? 8;
+  const { maximumConcurrency } = dependencies;
   if (
     !Number.isSafeInteger(maximumConcurrency) ||
     maximumConcurrency < 1 ||

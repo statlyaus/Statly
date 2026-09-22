@@ -407,6 +407,19 @@ shared or production PostgreSQL database.
 `tests/race` has no test files, so it must not be advertised as coverage or added to aggregate CI until
 real race specifications exist.
 
+## Timeout budgets
+
+The unit configuration keeps a 30 second default so ordinary tests stay bounded. Tests that build the
+large retained native-PAV artifact graphs are genuinely heavy: the slowest runs about 42 seconds in
+isolation and eight more sit between 24 and 39 seconds. That family declares an explicit `120_000`
+budget at the call site instead of the default.
+
+120 seconds is the ceiling. It is roughly twice the worst contended runtime observed on a shared
+runner, and it matches the budget part of that family already used. A test that needs more than that
+is signalling that its work is reducible, and should be profiled rather than given a larger number.
+Do not drop a heavy test back to 60 seconds to make the suite look tidier: at that setting the family
+times out whenever the suite is under load.
+
 ## Browser fixtures
 
 Playwright starts an isolated application server and defaults to the repository's deterministic E2E
