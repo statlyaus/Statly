@@ -3409,6 +3409,35 @@ fixture-only observations, hand-worked numerical expectations, held-out-label su
 retrospective custody, short histories, departure/censoring, exact horizons and overflow regressions.
 These tests establish implementation behavior, not predictive performance on genuine AFL seasons.
 
+### Private evaluation read contract
+
+The private workspace reader is per-trade and self-consistent. A request names one selector (valuation
+scope plus trade) and one selection — `{kind:'current'}` or `{kind:'generation', generationId}` — and an
+available result returns the `generationId`, the `projectionManifestId`, the lifecycle, the document
+reference and the artifact bytes. A generation id pins one trade, because generations are per-trade
+(`g.trade_id=e.trade_id`), so it cannot pin a batch across trades.
+
+The `current` selection resolves in a single query that joins the one head row
+(`outcome_current_private_evaluation_batch`) with the entry, the generation and any withdrawal
+(`postgresGovernedPrivateEvaluationReadRepository.ts:191-203`). A read therefore cannot straddle two
+batches, and it needs no batch identifier to be consistent with itself.
+
+Cross-trade batch pinning is deliberately deferred until a multi-trade reader exists. No list, page,
+pagination or export path reads more than one trade today, and the workspace is instantiated only in
+local development. When the first such reader is built it will need batch identity anyway, and the
+shape is already decided so it can be added additively: a `batchId` field on the available result, so a
+caller learns which batch it read, plus a `{kind:'batch', batchId}` member on the selection union so a
+caller can pin it. Existing selections and results are unchanged, and the head row already carries
+`batch_id`, so no schema change is required. Estimate two to four hours when that reader is built.
+
+### Automated model-validity authority
+
+The automated model-validity authority is carried by `authorityKind: 'automated_validation_record'`
+inside the existing `afl-trade-gate-decision/v1` record — not by a separate v2 schema, and there is no
+`gate-decision/v2` anywhere in the repository. The v1 record was extended in place because its records
+are already written and consumed, and versioning them retroactively would break consumers to satisfy a
+label. Read the authority from `authorityKind`, not from a version number.
+
 ### Current valuation refresh trace
 
 The backend current-valuation refresh operation now retains the restart-safe terminal case where no
