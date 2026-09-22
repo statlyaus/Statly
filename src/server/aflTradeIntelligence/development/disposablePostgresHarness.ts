@@ -294,6 +294,12 @@ export async function withDisposableAflTradeOutcomesPostgres<Result>(
           'checkpoint_timeout=30s',
           '-c',
           'checkpoint_completion_target=0.9',
+          // Each suite schema holds the complete ordered migration history, about 1,200 relations, and
+          // DROP SCHEMA ... CASCADE has to lock every one of them. The default ceiling of 64 fails that
+          // teardown with "out of shared memory", which surfaces as a lock-space error or a misleading
+          // per-test timeout once several suites run together.
+          '-c',
+          'max_locks_per_transaction=2048',
         ],
         output: 'pipe',
         timeoutMs: 60_000,
