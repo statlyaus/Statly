@@ -1019,6 +1019,33 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
     expect(identity.rows[0]!.stamped_at).toBeInstanceOf(Date);
   });
 
+  it('orders every legacy registration lock loop that locks governed evidence', async () => {
+    // The v1 registration owner takes one advisory key per governed evidence reference. Taking them
+    // in document order could deadlock against the v2 owner, which orders the same family.
+    //
+    // Assert the property over every lock loop in the deployed body rather than looking for expected
+    // text: a body that keeps an unsorted loop beside the sorted one, or reuses the fragment in an
+    // unrelated expression, must still fail.
+    const definition = await query<{ definition: string }>(
+      `SELECT pg_get_functiondef(
+         'register_outcome_reviewed_canonical_target(text,text,text,text)'::regprocedure) AS definition`
+    );
+    const body = definition.rows[0]!.definition;
+    const loopBody = (match: RegExpMatchArray) =>
+      body.slice(match.index! + match[0].length, match.index! + match[0].length + 400);
+
+    const evidenceLockLoops = [...body.matchAll(/FOR\s+\w+\s+IN\b([\s\S]*?)LOOP/g)].filter(
+      (match) =>
+        loopBody(match).includes('pg_advisory_xact_lock') &&
+        loopBody(match).includes('governed_evidence_reference')
+    );
+
+    expect(evidenceLockLoops.length).toBeGreaterThan(0);
+    for (const loop of evidenceLockLoops) {
+      expect(loop[1]).toMatch(/ORDER BY/i);
+    }
+  });
+
   it('deploys the complete ordered migration history and has no structural datamodel drift', () => {
     const applied = runOutcomesPrismaTestCommand(
       [
@@ -1275,6 +1302,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0229_cameron_hpn_statistical_season_scope',
       '0230_cameron_2020_retained_private_source_use',
       '0231_outcome_database_identity',
+      '0232_reviewed_registration_lock_order',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
