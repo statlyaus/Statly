@@ -289,15 +289,15 @@ async function retentionBlockers(
   ) {
     return [];
   }
-  const declared = [
-    'valuationInputBundleConstructionSpecificationArtifact',
-    'constructionSpecificationArtifact',
-    'calculationInputPackage',
-    'constructionPolicy',
-  ].map((field) => ({
-    artifactId: aflTradeArtifactRefSchema.parse(
-      selection[field as keyof LocalPrivateValuationConstructionSelection]
-    ).artifactId,
+  const declared = (
+    [
+      'valuationInputBundleConstructionSpecificationArtifact',
+      'constructionSpecificationArtifact',
+      'calculationInputPackage',
+      'constructionPolicy',
+    ] as const
+  ).map((field) => ({
+    artifactId: aflTradeArtifactRefSchema.parse(selection[field]).artifactId,
     field,
   }));
   const retained = await pool.query(

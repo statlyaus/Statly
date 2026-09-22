@@ -89,26 +89,3 @@ export function createLocalPrivateValuationConstructionReport(input: {
     blockers,
   });
 }
-
-/**
- * Raised when the chain cannot compose. It names every missing authority instead of a generic
- * configuration failure, because naming the gap is the whole point of the composition root.
- */
-export class AflTradeLocalPrivateValuationConstructionUnavailableError extends Error {
-  readonly code = 'CONSTRUCTION_AUTHORITY_UNAVAILABLE';
-  readonly blockers: readonly LocalPrivateValuationConstructionBlocker[];
-  readonly blockerCodes: readonly string[];
-
-  constructor(blockers: readonly LocalPrivateValuationConstructionBlocker[]) {
-    const report = createLocalPrivateValuationConstructionReport({
-      scopeKey: 'unknown',
-      blockers,
-    });
-    super(
-      `Local private valuation construction is unavailable: ${report.blockerCodes.join(', ')}.`
-    );
-    this.name = 'AflTradeLocalPrivateValuationConstructionUnavailableError';
-    this.blockers = report.blockers;
-    this.blockerCodes = report.blockerCodes;
-  }
-}
