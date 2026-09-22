@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { LocalPrivateValuationConstructionReadinessReport } from './localPrivateValuationConstructionReadiness';
+
 const SCOPE_KEY = 'afl-men:2025-trades';
 
 const inventoryRowSchema = z
@@ -31,7 +33,7 @@ export interface LocalPrivateValuationPreflightQueryClient {
 type RetainedHead = Readonly<{ present: boolean; revision: number | null }>;
 
 export interface Exact2025AflPrivateValuationRehearsalPreflight {
-  readonly schemaVersion: 'afl-private-valuation-rehearsal-preflight/v3';
+  readonly schemaVersion: 'afl-private-valuation-rehearsal-preflight/v4';
   readonly scopeKey: typeof SCOPE_KEY;
   readonly competitionCode: 'AFLM';
   readonly season: 2025;
@@ -42,6 +44,16 @@ export interface Exact2025AflPrivateValuationRehearsalPreflight {
   readonly sourceAuthority: {
     readonly genuineDraftTrade: 'not_inspected';
     readonly genuineHpnCorroboration: 'not_inspected';
+  };
+  /**
+   * Construction compatibility of the selected policy and input metadata, reported separately from
+   * `sourceAuthority`: composition inputs do not establish source rights or admission. Without a
+   * supplied selection this stays `not_inspected` with a named reason rather than assuming success.
+   */
+  readonly constructionReadiness: {
+    readonly status: 'inspected' | 'not_inspected';
+    readonly reason: 'selection_not_supplied' | null;
+    readonly report: LocalPrivateValuationConstructionReadinessReport | null;
   };
   readonly retainedSourceInventory: {
     readonly cohortCandidates: {
@@ -76,7 +88,11 @@ export interface Exact2025AflPrivateValuationRehearsalPreflight {
  * declare the complete rehearsal ready even when every retained stage is present.
  */
 export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
-  client: LocalPrivateValuationPreflightQueryClient
+  client: LocalPrivateValuationPreflightQueryClient,
+  options: {
+    /** Supplied by a caller able to select the construction policy and inputs through current authority. */
+    readonly inspectConstructionReadiness?: () => Promise<LocalPrivateValuationConstructionReadinessReport>;
+  } = {}
 ): Promise<Exact2025AflPrivateValuationRehearsalPreflight> {
   const result = await client.query(
     `WITH factual AS (
@@ -192,6 +208,13 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
     throw new TypeError('Exact 2025 private valuation authority inventory is not unique.');
   }
   const row = inventoryRowSchema.parse(result.rows[0]);
+  // Inspect the caller-selected construction inputs when they are available, so a blocked asset or view
+  // is named rather than assumed. Composition inputs do not establish source rights, so this is
+  // reported beside `sourceAuthority` and never as a substitute for it.
+  const constructionReadiness =
+    options.inspectConstructionReadiness === undefined
+      ? null
+      : await options.inspectConstructionReadiness();
   const blockerCodes = [
     ...(row.private_factual_present ? [] : ['current_private_factual_head_missing']),
     ...(row.qualified_model_present ? [] : ['qualified_model_evidence_missing']),
@@ -209,10 +232,11 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
     row.max_finalized_hpn_corroborating_player_row_count > 0
       ? []
       : ['retained_hpn_corroboration_missing']),
+    ...(constructionReadiness?.blockerCodes ?? []),
   ];
 
   return {
-    schemaVersion: 'afl-private-valuation-rehearsal-preflight/v3',
+    schemaVersion: 'afl-private-valuation-rehearsal-preflight/v4',
     scopeKey: SCOPE_KEY,
     competitionCode: 'AFLM',
     season: 2025,
@@ -259,6 +283,10 @@ export async function inspectExact2025AflPrivateValuationRehearsalPreflight(
       },
     },
     blockerCodes,
+    constructionReadiness:
+      constructionReadiness === null
+        ? ({ status: 'not_inspected', reason: 'selection_not_supplied', report: null } as const)
+        : ({ status: 'inspected', reason: null, report: constructionReadiness } as const),
     limitationCodes: [
       'source_authority_authentication_not_performed',
       'retained_artifact_replay_not_performed',
