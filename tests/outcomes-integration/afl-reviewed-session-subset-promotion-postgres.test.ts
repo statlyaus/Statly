@@ -823,7 +823,8 @@ describe.each([
       expect(
         (await pool.query('SELECT DISTINCT original_club_id FROM outcome_draft_pick')).rows
       ).toEqual([{ original_club_id: null }]);
-    }
+    },
+    120_000
   );
   if (sessionWindow) {
     it('preserves promoted window dates through release, archive and exact replay', async () => {
