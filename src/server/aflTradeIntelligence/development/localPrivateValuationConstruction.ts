@@ -23,6 +23,7 @@ import { requireAflTradePrivateValuationHpnScopePolicy } from '../valuation/priv
 import { createPostgresAflTradeRetainedValuationInputBundleSelector } from '../valuation/retainedValuationInputBundleConstruction';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from './localFileConditionalObjectStore';
 import { createLocalAflTradeGenuineAdmittedPlayerExecutor } from './localGenuineAdmittedPlayerContribution';
+import { inspectLocalPrivateValuationConstructionReadiness } from './localPrivateValuationConstructionReadiness';
 import { createLocalAflTradePrivateValuationConstructionEvidence } from './localPrivateValuationConstructionEvidence';
 import {
   createLocalPrivateValuationConstructionBlocker,
@@ -67,6 +68,9 @@ export type AflTradeLocalPrivateValuationTradeConstructor = NonNullable<
 export class AflTradeLocalPrivateValuationConstructionSelectionError extends TypeError {
   readonly code = 'CONSTRUCTION_SELECTION_INVALID';
 }
+
+/** Matches the ceiling the readiness assessment loads its own evidence with. */
+const READINESS_MAXIMUM_ARTIFACT_BYTES = 2_000_000;
 
 export type LocalPrivateValuationConstructionSelection = Readonly<{
   readonly qualificationPolicyArtifactId: string;
@@ -318,6 +322,61 @@ async function retentionBlockers(
     );
 }
 
+/**
+ * Whether the selected inputs could actually be packaged for construction. Uses the
+ * qualification-free construction-readiness assessment so a blocked verdict names the asset, the view
+ * and the reason rather than failing later inside the packager. Read-only; it never grants
+ * qualification.
+ */
+async function readinessBlockers(input: {
+  readonly artifactRoot: string;
+  readonly maximumArtifactBytes: number;
+  readonly selection: LocalPrivateValuationConstructionSelectionDeclaration | undefined;
+}): Promise<readonly LocalPrivateValuationConstructionBlocker[]> {
+  const declarationCandidate = input.selection;
+  if (
+    declarationCandidate === undefined ||
+    LOCAL_PRIVATE_VALUATION_CONSTRUCTION_SELECTION_FIELDS.some(
+      (field) => declarationCandidate[field] === undefined || declarationCandidate[field] === null
+    )
+  ) {
+    return [];
+  }
+  const selection = localPrivateValuationConstructionSelectionSchema.parse(input.selection);
+  const repository = createLocalAflTradePrivateDerivedArtifactRepository({
+    rootDirectory: input.artifactRoot,
+    repositoryId: 'governed-private-evaluation',
+    maximumObjectBytes: Math.max(input.maximumArtifactBytes, READINESS_MAXIMUM_ARTIFACT_BYTES),
+  });
+  const assessment = await inspectLocalPrivateValuationConstructionReadiness({
+    repository,
+    environment: 'non_production',
+    assessedAt: new Date().toISOString(),
+    selection: {
+      calculationInputPackage: aflTradeArtifactRefSchema.parse(selection.calculationInputPackage),
+      policy: aflTradeArtifactRefSchema.parse(selection.constructionPolicy),
+      runs: selection.constructionRuns,
+    },
+  });
+  if (assessment.assessmentState === 'compatible') return [];
+  if (assessment.assessmentState !== 'incompatible') {
+    return [
+      declaration({
+        code: 'construction_readiness_unavailable',
+        field: assessment.policyArtifactId,
+        reason: `Construction compatibility could not be assessed: ${assessment.blockerCodes.join(', ')}.`,
+      }),
+    ];
+  }
+  return assessment.issues.map((issue) =>
+    createLocalPrivateValuationConstructionBlocker({
+      code: 'construction_view_incompatible',
+      subject: { kind: 'asset', id: issue.assetId, view: issue.view },
+      reason: issue.reason,
+    })
+  );
+}
+
 function blockersFor(
   input: LocalPrivateValuationConstructionInput & { readonly scopeKey: string }
 ): readonly LocalPrivateValuationConstructionBlocker[] {
@@ -355,6 +414,11 @@ export async function inspectLocalAflTradePrivateValuationConstruction(
     blockers: [
       ...blockersFor({ ...input, scopeKey }),
       ...(await retentionBlockers(input.pool, input.selection)),
+      ...(await readinessBlockers({
+        artifactRoot: input.artifactRoot,
+        maximumArtifactBytes: input.maximumArtifactBytes ?? DEFAULT_MAXIMUM_ARTIFACT_BYTES,
+        selection: input.selection,
+      })),
     ],
   });
 }

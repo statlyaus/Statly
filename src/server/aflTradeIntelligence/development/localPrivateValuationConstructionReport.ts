@@ -5,13 +5,21 @@ export const LOCAL_PRIVATE_VALUATION_CONSTRUCTION_REPORT_SCHEMA_VERSION =
 
 /**
  * Where a blocker sits. `source_role` and `declaration` name reviewed authority the scope must
- * supply; `owner` names a composition owner that does not exist yet; `scope` names the scope itself.
+ * supply; `owner` names a composition owner that does not exist yet; `asset` names one asset and view
+ * of the declared valuation case; `scope` names the scope itself.
  */
 const subjectSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('scope'), id: z.string().min(1).max(200) }).strict(),
   z.object({ kind: z.literal('source_role'), id: z.string().min(1).max(200) }).strict(),
   z.object({ kind: z.literal('declaration'), id: z.string().min(1).max(200) }).strict(),
   z.object({ kind: z.literal('owner'), id: z.string().min(1).max(200) }).strict(),
+  z
+    .object({
+      kind: z.literal('asset'),
+      id: z.string().min(1).max(200),
+      view: z.string().min(1).max(100),
+    })
+    .strict(),
 ]);
 
 export const localPrivateValuationConstructionBlockerSchema = z

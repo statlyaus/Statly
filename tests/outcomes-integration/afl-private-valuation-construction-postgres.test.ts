@@ -5,8 +5,12 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import type { AflTradeArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeCanonicalJsonArtifactRef,
+  type AflTradeArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import {
   composeLocalAflTradePrivateValuationConstruction,
   inspectLocalAflTradePrivateValuationConstruction,
@@ -14,6 +18,7 @@ import {
 import { AflTradeLocalPrivateValuationConfigurationError } from '@/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 import type { AflTradePrivateValuationHpnPreparationDependencies } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationHpnPreparation';
 
+import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
@@ -26,6 +31,25 @@ const retainedAt = '2026-09-11T00:00:00.000Z';
 
 function artifact(label: string): AflTradeArtifactRef {
   return createAflTradeCanonicalJsonArtifactRef({ label }, retainedAt);
+}
+
+/** Retain the custody row for a reference. Artifact custody is append-only, so this only adds. */
+async function retain(reference: AflTradeArtifactRef) {
+  await pool.query(
+    `INSERT INTO outcome_artifact_custody
+       (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+        environment,created_at,verified_at,custody_json)
+     VALUES ($1,$2,$3,$4,$5,'derived_private','non_production',$6,$6,'{}')
+     ON CONFLICT (artifact_id) DO NOTHING`,
+    [
+      reference.artifactId,
+      reference.contentSha256,
+      reference.storageUri,
+      reference.mediaType,
+      reference.byteLength,
+      reference.createdAt,
+    ]
+  );
 }
 
 /**
@@ -151,6 +175,7 @@ describe('local private valuation construction root', () => {
     expect(inspection.blockerCodes).toEqual([
       'cohort_trade_construction_owner_missing',
       'construction_artifact_not_retained',
+      'construction_readiness_unavailable',
       'hpn_source_authority_missing',
     ]);
 
@@ -180,23 +205,6 @@ describe('local private valuation construction root', () => {
   });
 
   it('stops reporting an unretained reference once it is retained', async () => {
-    const retain = async (reference: AflTradeArtifactRef) => {
-      await pool.query(
-        `INSERT INTO outcome_artifact_custody
-           (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
-            environment,created_at,verified_at,custody_json)
-         VALUES ($1,$2,$3,$4,$5,'derived_private','non_production',$6,$6,'{}')
-         ON CONFLICT (artifact_id) DO NOTHING`,
-        [
-          reference.artifactId,
-          reference.contentSha256,
-          reference.storageUri,
-          reference.mediaType,
-          reference.byteLength,
-          reference.createdAt,
-        ]
-      );
-    };
     const references = [
       declaredSelection.valuationInputBundleConstructionSpecificationArtifact,
       declaredSelection.constructionSpecificationArtifact,
@@ -224,6 +232,97 @@ describe('local private valuation construction root', () => {
       authority: { hpnPreparation: undeclaredAuthority },
     });
     expect(after.blockerCodes).not.toContain('construction_artifact_not_retained');
+  });
+
+  it('names the blocked asset and view when the declared selection cannot be packaged', async () => {
+    const fixture = createGovernedPrivateEvaluationAuthenticatedCalculationFixture();
+    const valuationCase = fixture.calculationInputPackage.content.valuationCase;
+    const componentDrawSet = fixture.calculationInputPackage.content.componentDrawSet;
+    const repository = createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: artifactRoot,
+      repositoryId: 'governed-private-evaluation',
+      maximumObjectBytes: 4 * 1024 * 1024,
+    });
+    const store = async (value: unknown) => {
+      const reference = createAflTradeCanonicalJsonArtifactRef(value, retainedAt);
+      await repository.putIfAbsent(
+        reference,
+        new TextEncoder().encode(canonicalizeAflTradeJson(value))
+      );
+      await retain(reference);
+      return reference;
+    };
+    const selectedRuns = {
+      player: fixture.trace.content.components.find(
+        (component) => component.role === 'player_contribution_and_availability'
+      )!.runId,
+      pick: fixture.trace.content.components.find(
+        (component) => component.role === 'draft_pick_and_future_pick_distribution'
+      )!.runId,
+    };
+    const year = Number(valuationCase.content.tradeEffectiveAt.slice(0, 4));
+    const requirements = valuationCase.content.parties.flatMap((party) =>
+      party.receivedRootAssetIds.flatMap((assetId) =>
+        valuationCase.content.viewContexts.map((context) => {
+          const assetKind = componentDrawSet.content.assets.find(
+            (asset) => asset.assetId === assetId
+          )!.assetKind;
+          return {
+            assetId,
+            view: context.view,
+            runId: assetKind === 'player' ? selectedRuns.player : selectedRuns.pick,
+            methodId: 'rehearsal-method',
+            valueUnitId: valuationCase.content.valueUnitId,
+            receivingClubId: party.aflClubId,
+            receivingSpellId: assetKind === 'player' ? `spell:${assetId}` : null,
+            seasons: [year + 2, year + 3, year + 4],
+            assetKind,
+            // Absent evidence is the declared incompatibility under test.
+            evidence: null,
+          };
+        })
+      )
+    );
+    const specification = await store({
+      schemaVersion: 'afl-trade-construction-compatibility-policy/v1',
+      environment: 'non_production',
+      tradeId: valuationCase.content.tradeId,
+      valuationInputBundleId: valuationCase.content.valuationInputBundleId,
+      requirements,
+    });
+    const report = await inspectLocalAflTradePrivateValuationConstruction({
+      pool,
+      artifactRoot,
+      selection: {
+        ...declaredSelection,
+        calculationInputPackage: await store(fixture.calculationInputPackage),
+        constructionPolicy: specification,
+        constructionRuns: selectedRuns,
+      },
+      authority: { hpnPreparation: undeclaredAuthority },
+    });
+
+    expect(report.blockerCodes).toContain('construction_view_incompatible');
+    const incompatible = report.blockers.filter(
+      (blocker) => blocker.code === 'construction_view_incompatible'
+    );
+    expect(incompatible.length).toBeGreaterThan(0);
+    for (const blocker of incompatible) {
+      expect(blocker.subject).toMatchObject({ kind: 'asset' });
+      expect(blocker.reason).toBe('evidence_reference_missing');
+    }
+    const expectedViewKeys = requirements
+      .map((requirement) => `${requirement.assetId}/${requirement.view}`)
+      .sort((left, right) => left.localeCompare(right));
+    expect(
+      incompatible
+        .map((blocker) =>
+          blocker.subject.kind === 'asset'
+            ? `${blocker.subject.id}/${blocker.subject.view}`
+            : 'unexpected'
+        )
+        .sort((left, right) => left.localeCompare(right))
+    ).toEqual(expectedViewKeys);
   });
 
   it('inspects without writing retained authority', async () => {
