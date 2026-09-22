@@ -66,6 +66,19 @@ A finding can be correct while every check passes. A split source of truth, a po
 persisted contract, or a test that passes vacuously are all invisible to a suite that does not assert
 them, which is precisely when an unread comment costs most. A green check is not a decision.
 
+`gh pr checks` answers whether a reviewer ran. Only the commands above answer what it said. They are
+different gates, and a change can be green on the first while failing the second.
+
+Confirm that a review happened before trusting its silence. A reviewer that skipped, exhausted its
+budget, or is disabled for the base branch leaves no comments, and a skipped check reads as satisfied
+to anyone who only looks at status. Record which reviewers ran and what they found. When none ran,
+self-review the diff against the review rules in root `AGENTS.md` and say so in the pull request, so an
+unreviewed change is a stated fact rather than an invisible one.
+
+A reviewer's own "addressed in `<sha>`" annotation is not evidence. Verify the claim in the code or by
+reproducing the failure: an annotation has been wrong in both directions, reporting a finding as
+addressed when it was not, and a finding was fixed in a later commit without any annotation at all.
+
 ## Merge gates
 
 The default-branch ruleset requires a pull request, an up-to-date branch, resolved review conversations,
