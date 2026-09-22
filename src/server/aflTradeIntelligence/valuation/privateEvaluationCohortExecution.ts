@@ -45,16 +45,59 @@ export type AflTradePrivateEvaluationCohortExecutionAuthority = z.infer<
   typeof aflTradePrivateEvaluationCohortExecutionAuthoritySchema
 >;
 
+/**
+ * The retry schedule is deliberately absent from this policy. The persisted backoff is the body of
+ * `complete_outcome_private_evaluation_work` in `0068_durable_private_evaluation_execution`, and
+ * that versioned migration is its authoritative record. Recording the same values here as well
+ * would advertise an authority no reader has, which is the defect this object previously carried.
+ */
 export const AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY = {
   schemaVersion: 'private-evaluation-cohort-execution-policy/v1',
   maximumAttemptsPerCycle: 3,
   maximumConcurrency: 8,
   leaseSeconds: 120,
   heartbeatSeconds: 30,
-  retryBaseSeconds: 5,
-  retryMaximumSeconds: 60,
   concurrencyPolicy: 'bounded_local_workers',
 } as const;
+
+/**
+ * Exactly the values the cohort components must be configured with, and nothing else: a limit the
+ * components do not read does not belong here.
+ */
+export interface AflTradePrivateEvaluationCohortExecutionLimits {
+  readonly maximumConcurrency: number;
+  readonly heartbeatMilliseconds: number;
+}
+
+/** The subset of the recorded policy that configures the cohort components. */
+export interface AflTradePrivateEvaluationCohortExecutionPolicyShape {
+  readonly maximumConcurrency: number;
+  readonly heartbeatSeconds: number;
+}
+
+/**
+ * Resolve the recorded policy into the values the cohort components must be configured with. The
+ * policy is a defaulted parameter, so callers and tests cross the same seam: a test supplies a
+ * policy directly rather than mocking this module.
+ */
+export function resolveAflTradePrivateEvaluationCohortExecutionLimits(
+  policy: AflTradePrivateEvaluationCohortExecutionPolicyShape =
+    AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY
+): AflTradePrivateEvaluationCohortExecutionLimits {
+  const { maximumConcurrency, heartbeatSeconds } = policy;
+  if (
+    !Number.isSafeInteger(maximumConcurrency) ||
+    maximumConcurrency < 1 ||
+    maximumConcurrency > 32
+  ) {
+    throw new TypeError('Recorded private evaluation concurrency must be between 1 and 32.');
+  }
+  const heartbeatMilliseconds = heartbeatSeconds * 1_000;
+  if (!Number.isSafeInteger(heartbeatMilliseconds) || heartbeatMilliseconds < 1) {
+    throw new TypeError('Recorded private evaluation heartbeat must be a positive integer.');
+  }
+  return { maximumConcurrency, heartbeatMilliseconds };
+}
 
 const cycleContentSchema = z
   .object({

@@ -594,6 +594,7 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
     });
     const postgresClient = createPgAflOutcomeSqlClient(pool);
     const coordinator = createAflTradeCurrentValuationCohortCoordinator({
+      maximumConcurrency: 8,
       captureCurrent: createPostgresAflTradeCurrentValuationCohortAuthorityCapture({
         client: postgresClient,
         factualReleaseScopeKey: first.content.factualReleaseScopeKey,
