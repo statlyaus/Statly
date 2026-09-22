@@ -150,6 +150,7 @@ describe('local private valuation construction root', () => {
     expect(inspection.state).toBe('blocked');
     expect(inspection.blockerCodes).toEqual([
       'cohort_trade_construction_owner_missing',
+      'construction_artifact_not_retained',
       'hpn_source_authority_missing',
     ]);
 
@@ -176,6 +177,53 @@ describe('local private valuation construction root', () => {
     });
     expect(error.blockerCodes).toEqual(report.blockerCodes);
     for (const code of report.blockerCodes) expect(error.message).toContain(code);
+  });
+
+  it('stops reporting an unretained reference once it is retained', async () => {
+    const retain = async (reference: AflTradeArtifactRef) => {
+      await pool.query(
+        `INSERT INTO outcome_artifact_custody
+           (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+            environment,created_at,verified_at,custody_json)
+         VALUES ($1,$2,$3,$4,$5,'derived_private','non_production',$6,$6,'{}')
+         ON CONFLICT (artifact_id) DO NOTHING`,
+        [
+          reference.artifactId,
+          reference.contentSha256,
+          reference.storageUri,
+          reference.mediaType,
+          reference.byteLength,
+          reference.createdAt,
+        ]
+      );
+    };
+    const references = [
+      declaredSelection.valuationInputBundleConstructionSpecificationArtifact,
+      declaredSelection.constructionSpecificationArtifact,
+      declaredSelection.calculationInputPackage,
+      declaredSelection.constructionPolicy,
+    ] as const;
+
+    const before = await inspectLocalAflTradePrivateValuationConstruction({
+      pool,
+      artifactRoot,
+      selection: declaredSelection,
+      authority: { hpnPreparation: undeclaredAuthority },
+    });
+    expect(before.blockerCodes).toContain('construction_artifact_not_retained');
+    expect(
+      before.blockers.filter((blocker) => blocker.code === 'construction_artifact_not_retained')
+    ).toHaveLength(4);
+
+    // Custody is append-only, so this only ever adds the declared references.
+    for (const reference of references) await retain(reference);
+    const after = await inspectLocalAflTradePrivateValuationConstruction({
+      pool,
+      artifactRoot,
+      selection: declaredSelection,
+      authority: { hpnPreparation: undeclaredAuthority },
+    });
+    expect(after.blockerCodes).not.toContain('construction_artifact_not_retained');
   });
 
   it('inspects without writing retained authority', async () => {

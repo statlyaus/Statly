@@ -271,6 +271,53 @@ function scopeBlockers(scopeKey: string): readonly LocalPrivateValuationConstruc
   }
 }
 
+/**
+ * Whether the references a declared selection names are actually retained. No other owner checks the
+ * bundle-construction specification, construction specification, construction policy or calculation
+ * input package before use, so the root checks them together instead of letting a declared-but-absent
+ * artifact fail deep inside an adapter. Only declared references are read.
+ */
+async function retentionBlockers(
+  pool: AflOutcomePgPool,
+  selection: LocalPrivateValuationConstructionSelectionDeclaration | undefined
+): Promise<readonly LocalPrivateValuationConstructionBlocker[]> {
+  if (
+    selection === undefined ||
+    LOCAL_PRIVATE_VALUATION_CONSTRUCTION_SELECTION_FIELDS.some(
+      (field) => selection[field] === undefined || selection[field] === null
+    )
+  ) {
+    return [];
+  }
+  const declared = [
+    'valuationInputBundleConstructionSpecificationArtifact',
+    'constructionSpecificationArtifact',
+    'calculationInputPackage',
+    'constructionPolicy',
+  ].map((field) => ({
+    artifactId: aflTradeArtifactRefSchema.parse(
+      selection[field as keyof LocalPrivateValuationConstructionSelection]
+    ).artifactId,
+    field,
+  }));
+  const retained = await pool.query(
+    `SELECT artifact_id FROM outcome_artifact_custody WHERE artifact_id = ANY($1::text[])`,
+    [declared.map(({ artifactId }) => artifactId)]
+  );
+  const present = new Set(
+    retained.rows.map((row) => (row as { readonly artifact_id: string }).artifact_id)
+  );
+  return declared
+    .filter(({ artifactId }) => !present.has(artifactId))
+    .map(({ artifactId, field }) =>
+      declaration({
+        code: 'construction_artifact_not_retained',
+        field: artifactId,
+        reason: `The declared construction selection field ${field} is not retained in private artifact custody.`,
+      })
+    );
+}
+
 function blockersFor(
   input: LocalPrivateValuationConstructionInput & { readonly scopeKey: string }
 ): readonly LocalPrivateValuationConstructionBlocker[] {
@@ -305,7 +352,10 @@ export async function inspectLocalAflTradePrivateValuationConstruction(
   const scopeKey = input.scopeKey ?? 'afl-men:2025-trades';
   return createLocalPrivateValuationConstructionReport({
     scopeKey,
-    blockers: blockersFor({ ...input, scopeKey }),
+    blockers: [
+      ...blockersFor({ ...input, scopeKey }),
+      ...(await retentionBlockers(input.pool, input.selection)),
+    ],
   });
 }
 

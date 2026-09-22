@@ -131,13 +131,17 @@ describe('local runtime recalculation wiring', () => {
                 lease_expires_at: '2026-09-02T00:02:00.000Z',
               },
             ],
+            rowCount: 1,
           };
         if (sql.includes('load_outcome_current_valuation_evidence'))
-          return { rows: [{ retained_source_keys: [], result_json: retainedFacts() }] };
+          return {
+            rows: [{ retained_source_keys: [], result_json: retainedFacts() }],
+            rowCount: 1,
+          };
         if (!/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL ROLE)/u.test(sql)) {
           throw new Error(`Unexpected database operation before model preparation: ${sql}`);
         }
-        return { rows: [] };
+        return { rows: [], rowCount: 0 };
       },
       async connect() {
         return { query: pool.query, release() {} };
