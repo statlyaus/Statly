@@ -30,6 +30,7 @@ import {
   PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority,
 } from '../valuation/postgresPrivateReviewedEvidenceEvaluationAuthority';
 import { createLocalAflTradeCurrentValuationReconciliationAuthority } from './localCurrentValuationReconciliationAuthority';
+import type { LocalPrivateValuationConstructionBlocker } from './localPrivateValuationConstructionReport';
 import { createLocalAflTradeDockerFitzRoyCaptureExecutor } from './localDockerFitzRoyCaptureExecutor';
 import { createLocalAflTradeDockerFitzRoyDecodeExecutor } from './localDockerFitzRoyDecodeExecutor';
 import { createLocalAflTradeEgressSigningAuthority } from './localEgressSigningAuthority';
@@ -47,23 +48,47 @@ function now(): string {
   return new Date().toISOString();
 }
 
+type AflTradeLocalPrivateValuationCohortDependencies = Omit<
+  Parameters<typeof createPostgresAflTradePrivateCurrentValuationCohortCoordinator>[0],
+  'client' | 'artifactRepository' | 'maximumArtifactBytes'
+>;
+
 export interface AflTradeLocalPrivateValuationConstruction {
   readonly modelPair: Parameters<
     typeof composePostgresAflTradeCurrentValuationModelEvidenceDispatch
   >[0]['modelPair'];
-  readonly cohort: Omit<
-    Parameters<typeof createPostgresAflTradePrivateCurrentValuationCohortCoordinator>[0],
-    'client' | 'artifactRepository' | 'maximumArtifactBytes'
-  >;
+  /**
+   * Either fixed cohort dependencies, or a builder the runtime calls with the live claimed dispatch.
+   * Construction evidence authenticates exactly one dispatch identity, which only exists per
+   * dispatch, so a dispatch-bound cohort half is the only honest way to compose it.
+   */
+  readonly cohort:
+    | AflTradeLocalPrivateValuationCohortDependencies
+    | ((input: {
+        readonly requestId: string;
+        readonly claim: { readonly claimId: string; readonly leaseToken: string };
+      }) => AflTradeLocalPrivateValuationCohortDependencies);
 }
 
 export class AflTradeLocalPrivateValuationConfigurationError extends Error {
   readonly code = 'MISSING_CONSTRUCTION_CONFIGURATION';
-  constructor() {
+  /** Every named authority the composition root reported as missing, in stable code order. */
+  readonly blockerCodes: readonly string[];
+  readonly blockers: readonly LocalPrivateValuationConstructionBlocker[];
+
+  constructor(blockers: readonly LocalPrivateValuationConstructionBlocker[] = []) {
+    const blockerCodes = [...new Set(blockers.map((blocker) => blocker.code))].sort((left, right) =>
+      left.localeCompare(right)
+    );
     super(
-      'Changed factual evidence requires exact admitted model and cohort construction configuration; local batch execution is blocked.'
+      'Changed factual evidence requires exact admitted model and cohort construction configuration; ' +
+        `local batch execution is blocked${
+          blockerCodes.length === 0 ? '' : ` by ${blockerCodes.join(', ')}`
+        }.`
     );
     this.name = 'AflTradeLocalPrivateValuationConfigurationError';
+    this.blockerCodes = blockerCodes;
+    this.blockers = blockers;
   }
 }
 
@@ -72,6 +97,8 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
   readonly artifactRoot: string;
   readonly workerId?: string;
   readonly construction?: AflTradeLocalPrivateValuationConstruction;
+  /** Why `construction` is absent, so the configuration failure names each missing authority. */
+  readonly constructionBlockers?: readonly LocalPrivateValuationConstructionBlocker[];
 }): ReturnType<typeof createPostgresAflTradePrivateValuationDispatcher> {
   const client = createPgAflOutcomeSqlClient(input.pool);
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);
@@ -284,15 +311,19 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     workerId: input.workerId,
   });
   const construction = input.construction;
-  const prepared =
+  const constructionBlockers = input.constructionBlockers ?? [];
+  const buildPrepared =
     construction === undefined
       ? null
-      : createPostgresAflTradePrivateCurrentValuationCohortCoordinator({
-          ...construction.cohort,
-          client,
-          artifactRepository: artifacts,
-          maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
-        });
+      : (requestId: string, claim: { readonly claimId: string; readonly leaseToken: string }) =>
+          createPostgresAflTradePrivateCurrentValuationCohortCoordinator({
+            ...(typeof construction.cohort === 'function'
+              ? construction.cohort({ requestId, claim })
+              : construction.cohort),
+            client,
+            artifactRepository: artifacts,
+            maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
+          });
   const coordinator = createAflTradePrivateRecalculationCoordinator({
     evidence: {
       refreshCurrent: async (request) => {
@@ -311,7 +342,8 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     },
     modelEvidence: {
       refresh: async ({ dispatch, factual }) => {
-        if (construction === undefined) throw new AflTradeLocalPrivateValuationConfigurationError();
+        if (construction === undefined)
+          throw new AflTradeLocalPrivateValuationConfigurationError(constructionBlockers);
         return composePostgresAflTradeCurrentValuationModelEvidenceDispatch({
           client,
           dispatch,
@@ -327,8 +359,12 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     },
     prepared: {
       prepare: async ({ request, claim }) => {
-        if (prepared === null) throw new AflTradeLocalPrivateValuationConfigurationError();
-        return prepared.prepare({ requestId: request.requestId, claim });
+        if (buildPrepared === null)
+          throw new AflTradeLocalPrivateValuationConfigurationError(constructionBlockers);
+        return buildPrepared(request.requestId, claim).prepare({
+          requestId: request.requestId,
+          claim,
+        });
       },
     },
     batch: runner,
