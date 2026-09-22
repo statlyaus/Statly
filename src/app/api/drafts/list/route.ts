@@ -1,14 +1,21 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { prisma } from '@/lib/prisma';
 
 /**
  * List all drafts for debugging
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
     const drafts = await prisma.draft.findMany({
+      where: { league: { members: { some: { userId, isActive: true } } } },
       select: {
         id: true,
         status: true,

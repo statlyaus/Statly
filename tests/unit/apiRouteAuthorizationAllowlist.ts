@@ -89,31 +89,6 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
     reason:
       'Authorizes inside handlePickCommand: getAuthenticatedUserId, then a league and draft membership check.',
   },
-  {
-    route: '/drafts/list',
-    reason:
-      'BLOCKED ON CLIENT: a debug endpoint that returns every draft with its league name and settings. Its caller, src/components/dashboard/LiveDraftModule.tsx, uses fetchApi, which only attaches a credential when development auth is enabled, so requiring a caller here would break the dashboard in production while still working in development. Move that caller to authenticatedFetch first, then require a caller.',
-  },
-  {
-    route: '/drafts/[id]/participants',
-    reason:
-      'BLOCKED ON CLIENT: accepts a client-supplied userId and updates presence for it, so the actor is never proven. The caller, src/hooks/useDraftService.ts, uses fetchApi. Move it to authenticatedFetch, then derive the actor from the credential instead of the body.',
-  },
-  {
-    route: '/drafts/[id]/analytics',
-    reason:
-      'BLOCKED ON CLIENT: pick analytics read without a membership check. Called from src/hooks/useDraftService.ts through fetchApi.',
-  },
-  {
-    route: '/drafts/[id]/players',
-    reason:
-      'BLOCKED ON CLIENT: draft player pool read without a membership check. Called through fetchApi.',
-  },
-  {
-    route: '/drafts/[id]/schedule',
-    reason:
-      'BLOCKED ON CLIENT: draft schedule read without a membership check. src/components/draft/DraftScheduleManager.tsx calls it with a bare fetch, which sends no credential at all.',
-  },
 
   // Realtime transport.
   {

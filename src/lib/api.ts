@@ -55,8 +55,30 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: FetchJsonIni
 
 // src/lib/api.ts
 
-import { isDevelopmentAuthEnabled, readStoredDevelopmentAuthUserId } from '@/lib/devAuth';
+import { readStoredDevelopmentAuthUserId } from '@/lib/devAuth';
 import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewStore';
+
+/**
+ * Attach the caller's credential to an outgoing request.
+ *
+ * A signed-in browser session supplies a Firebase ID token; local development without a signed-in
+ * user falls back to the development credential. The auth helper is imported dynamically so this
+ * module stays importable from the server, where there is no client credential to attach.
+ */
+async function attachCredential(headers: Headers): Promise<void> {
+  if (headers.has('Authorization')) return;
+  if (typeof window === 'undefined') return;
+
+  try {
+    const { getAuthHeader } = await import('@/lib/authenticatedFetch');
+    const authorization = await getAuthHeader(readStoredDevelopmentAuthUserId() ?? undefined);
+    if (authorization) {
+      headers.set('Authorization', authorization);
+    }
+  } catch {
+    // A credential is optional at this layer. A gated route answers 401 and the caller decides.
+  }
+}
 
 /**
  * A reusable fetch wrapper for making API calls.
@@ -84,12 +106,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  if (!headers.has('Authorization') && isDevelopmentAuthEnabled()) {
-    const developmentUserId = readStoredDevelopmentAuthUserId();
-    if (developmentUserId) {
-      headers.set('Authorization', `Bearer dev:${developmentUserId}`);
-    }
-  }
+  await attachCredential(headers);
 
   const response = await fetch(url, {
     ...options,
