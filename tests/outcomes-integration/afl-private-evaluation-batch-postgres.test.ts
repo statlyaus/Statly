@@ -975,13 +975,27 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     const retained = batch('2026-08-20T09:00:00.005Z');
     await insertBatchParent(retained);
 
-    // The target-not-found guard raises the same message, so assert the completeness validator
-    // itself is the reason the activation is refused.
+    // The target-not-found guard (0066:462) raises the same message as the incompleteness guard
+    // (0066:496), so read both validators: their values say which layer refused the activation
+    // instead of leaving it to a shared message. Note the subsumption recorded in the plan:
+    // validate_outcome_private_evaluation_batch_activation_target calls
+    // validate_outcome_private_evaluation_batch_complete itself (0066:265) and ANDs it with three
+    // further conditions, so this batch is refused by the incompleteness family transitively.
     const complete = await pool.query<{ ok: boolean }>(
       `SELECT validate_outcome_private_evaluation_batch_complete($1,$2) AS ok`,
       [scopeKey, retained.batchId]
     );
-    expect(complete.rows).toEqual([{ ok: false }]);
+    const activationTarget = await pool.query<{ ok: boolean }>(
+      `SELECT validate_outcome_private_evaluation_batch_activation_target($1,$2) AS ok`,
+      [scopeKey, retained.batchId]
+    );
+    const guardReport =
+      `layer: batch completeness (validator 0066:245, guard 0066:496) — ` +
+      `at custody read complete=${String(complete.rows[0]?.ok)} ` +
+      `activationTarget=${String(activationTarget.rows[0]?.ok)}`;
+    expect(complete.rows, `${guardReport}; this batch declares entries it does not have`).toEqual([
+      { ok: false },
+    ]);
 
     await expect(
       pool.query(
@@ -998,7 +1012,8 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           }),
           'system:weekly-valuation-coordinator',
         ]
-      )
+      ),
+      `${guardReport}; the SQL function, not the repository, must be the layer that refuses`
     ).rejects.toThrow(/incomplete or cross-scope/i);
   });
 
@@ -2126,11 +2141,17 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       enableAutomatedPrivateCalculation: true,
     });
     let failCommit = false;
+    // Which layer served the recovery. A re-call finds the committed intent and generation through
+    // loadStaged and resumes through commit; the full staging path is separately idempotent per
+    // operation id, so both routes converge. Recording the route means a failure names the layer
+    // that ran, not only the outcome that broke.
+    const route: string[] = [];
     const automated = createAutomatedGovernedPrivateEvaluationStagingService({
       trustedNow: async () => inspectedAt,
       loadStaged: async (operationId) => {
-        // Reads the receipt too, so a receipt-less operation does not take the resume path: the full
-        // staging path re-runs, which is what a crash before the receipt must survive.
+        route.push('loadStaged');
+        // Reads the intent, generation and inspection receipt. The lifecycle receipt is deliberately
+        // not joined, because the crash boundary this test covers is exactly the gap before it.
         const retained = await pool.query<{
           readonly intent_json: unknown;
           readonly generation_id: string;
@@ -2145,7 +2166,11 @@ describe('PostgreSQL atomic private evaluation batches', () => {
             WHERE intent.operation_id=$1`,
           [operationId]
         );
-        if (retained.rows[0] === undefined) return null;
+        if (retained.rows[0] === undefined) {
+          route.push('loadStaged:empty');
+          return null;
+        }
+        route.push('loadStaged:resumed');
         const intent = automatedGovernedPrivateEvaluationTransitionIntentSchema.parse(
           retained.rows[0].intent_json
         );
@@ -2172,10 +2197,20 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         materializationManifestId: authority.manifestId,
       }),
       replayMaterialization: async () => replay,
-      stage: (input) => stagingRepository.stage(input),
-      retainArtifact: (input) => stagingRepository.retainArtifact(input),
+      stage: (input) => {
+        route.push('stage');
+        return stagingRepository.stage(input);
+      },
+      retainArtifact: (input) => {
+        route.push('retainArtifact');
+        return stagingRepository.retainArtifact(input);
+      },
       commit: async (input) => {
-        if (failCommit) throw new Error('simulated crash before the lifecycle receipt');
+        if (failCommit) {
+          route.push('commit:threw');
+          throw new Error('simulated crash before the lifecycle receipt');
+        }
+        route.push('commit');
         return lifecycleRepository.commitAutomated(input);
       },
     });
@@ -2199,13 +2234,28 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         )
       ).rows[0]!;
 
+    // `counts()` reads three tables for one operation id, so a mismatch already names the table
+    // (intents / generations / receipts); the recorded route says which layer produced that count.
+    const routeReport = (phase: string) =>
+      `layer: ${phase} — route ${route.join(' -> ') || '(none)'}`;
+
     failCommit = true;
     await expect(automated.stage(request)).rejects.toThrow(/simulated crash/i);
-    await expect(counts()).resolves.toEqual({ intents: 1, generations: 1, receipts: 0 });
+    expect(
+      route,
+      'layer: the crash must originate at the commit seam, the only reachable boundary'
+    ).toContain('commit:threw');
+    await expect(
+      counts(),
+      `${routeReport('after the simulated crash')}; the intent and generation are committed, the lifecycle receipt is not`
+    ).resolves.toEqual({ intents: 1, generations: 1, receipts: 0 });
 
     failCommit = false;
     await expect(automated.stage(request)).resolves.toMatchObject({ state: 'activated' });
-    await expect(counts()).resolves.toEqual({ intents: 1, generations: 1, receipts: 1 });
+    await expect(
+      counts(),
+      `${routeReport('after the re-call')}; a second intent or generation means recovery re-staged instead of resuming`
+    ).resolves.toEqual({ intents: 1, generations: 1, receipts: 1 });
   }, 120_000);
 
   it('persists an exhaustive 783-trade cohort with bounded SQL work and exact unchanged replay', async () => {

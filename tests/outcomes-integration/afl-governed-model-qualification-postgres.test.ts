@@ -1645,7 +1645,8 @@ describe('governed model qualification PostgreSQL registry', () => {
         expectedGateLedgerRevision: await ledgerRevision(),
         expectedCurrentRevision: 0,
         gateRecords: firstGates,
-      })
+      }),
+      'layer: the first pair must establish outcome_current_governed_valuation_model_pair at revision 1'
     ).resolves.toMatchObject({
       status: 'advanced',
       idempotentReplay: false,
@@ -1670,7 +1671,9 @@ describe('governed model qualification PostgreSQL registry', () => {
         expectedGateLedgerRevision: await ledgerRevision(),
         expectedCurrentRevision: 1,
         gateRecords: secondGates,
-      })
+      }),
+      'layer: the superseding pair must advance the head 1 -> 2 through the gate ledger CAS; a ' +
+        'STALE_GATE_LEDGER or STALE_CURRENT_PAIR code here means the successor was refused, not applied'
     ).resolves.toMatchObject({
       status: 'advanced',
       idempotentReplay: false,
@@ -1683,7 +1686,9 @@ describe('governed model qualification PostgreSQL registry', () => {
         `SELECT count(*)::int AS count FROM outcome_gate_decision
           WHERE supersedes_decision_id=ANY($1::text[])`,
         [[firstGates[0].decision.decisionId, firstGates[1].decision.decisionId]]
-      )
+      ),
+      'layer: outcome_gate_decision.supersedes_decision_id must link both v1 decisions to their ' +
+        'successors; fewer than two means the earlier authority was replaced rather than superseded'
     ).resolves.toMatchObject({ rows: [{ count: 2 }] });
   }, 120_000);
 });
