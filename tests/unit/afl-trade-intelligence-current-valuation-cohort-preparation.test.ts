@@ -31,6 +31,7 @@ describe('current AFL trade valuation cohort preparation', () => {
       pickRunId: 'model-run:' + digest('a'),
     });
     const coordinator = createAflTradeCurrentValuationCohortCoordinator({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({
         operationId: 'valuation-cohort-preparation-operation:' + digest('1'),
         scopeKey: 'afl-men:2026-trades',
@@ -171,6 +172,7 @@ describe('current AFL trade valuation cohort preparation', () => {
       expectedPreparedInputRevision: 12,
     });
     const coordinator = createAflTradeCurrentValuationCohortCoordinator({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({
         operationId,
         scopeKey: modelEvidence.scopeKey,
@@ -229,6 +231,7 @@ describe('current AFL trade valuation cohort preparation', () => {
       pickRunId: 'model-run:' + digest('a'),
     });
     const coordinator = createAflTradeCurrentValuationCohortCoordinator({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({
         operationId: 'valuation-cohort-preparation-operation:' + digest('1'),
         scopeKey: 'afl-men:2026-trades',

@@ -171,7 +171,7 @@ type CurrentBatch = Readonly<{
 }>;
 
 interface Dependencies {
-  readonly maximumConcurrency?: number;
+  readonly maximumConcurrency: number;
   readonly captureCurrent: (request: Request) => Promise<{
     readonly capture: Capture;
     readonly currentBatch: CurrentBatch | null;
@@ -275,7 +275,7 @@ function isAlreadyCurrent(capture: Capture, current: CurrentBatch | null): curre
 }
 
 export function createAflTradePrivateEvaluationCohortRunner(dependencies: Dependencies) {
-  const maximumConcurrency = dependencies.maximumConcurrency ?? 8;
+  const { maximumConcurrency } = dependencies;
   if (
     !Number.isSafeInteger(maximumConcurrency) ||
     maximumConcurrency < 1 ||

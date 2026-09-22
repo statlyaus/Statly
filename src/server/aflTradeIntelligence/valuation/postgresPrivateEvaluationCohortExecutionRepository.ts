@@ -11,7 +11,6 @@ import type {
   AflOutcomeSqlTransaction,
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
-  AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY,
   aflTradePrivateEvaluationCohortExecutionCycleSchema,
   aflTradePrivateEvaluationExecutionCauseSchema,
   aflTradePrivateEvaluationExecutionResultSchema,
@@ -460,9 +459,6 @@ export class PostgresAflTradePrivateEvaluationCohortExecutionRepository {
     return result.rows.map((row) => row['QUERY PLAN']);
   }
 }
-
-export const AFL_TRADE_PRIVATE_EVALUATION_MAXIMUM_CONCURRENCY =
-  AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY.maximumConcurrency;
 
 export function createAflTradePrivateEvaluationExecutionOperationId(input: {
   readonly cycleId: string;
