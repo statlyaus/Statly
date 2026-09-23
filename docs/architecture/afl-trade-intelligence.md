@@ -2578,7 +2578,27 @@ policy and finalized HPN ancestry, without selecting the active public release. 
 owner now also supplies exact retained selection, and `localPrivateValuationConstructionEvidence.ts`
 composes the sealed reader, bundle constructor and artifact custody within the prepared-cohort
 transaction. Evidence-derived per-trade input assembly and full worker composition remain required.
-Replaying a retained fixture manifest proves none of this genuine fresh-construction evidence.
+The exact shape of that remaining assembly is now enumerated, because it is the difference between
+"the owners exist" and "the chain runs". Each parent of a current private trade construction has a
+producer that no `src/` or `Scripts/` caller invokes, so the assembly is net-new work over existing
+contracts rather than a new model:
+
+| Manifest parent             | Producer                                                                                                                | What the producer needs                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input_trace`               | `createGovernedPrivateEvaluationInputTrace`                                                                             | selector, factual release id, bundle id, both component runs, and the trade transaction projected into clubs, transfers, season universe, player horizons and pick lineages |
+| `calculation_input_package` | `materializeAflTradeValuationCase` over `createAflTradeComponentDrawSet` and `createAflTradeRealizedContributionLedger` | the trade's promotion-backed archive membership, the draw set, the realized contribution ledger and the package policy                                                      |
+| `explanation_policy`        | `createGovernedPrivateEvaluationExplanationPolicy`                                                                      | the retained policy content the bundle's `explanationPolicyArtifact` refers to                                                                                              |
+| `lineage_graph`             | `createAflTradeLineageGraph`                                                                                            | asset lineage evidence for the trade's player and pick assets                                                                                                               |
+| `pick_benchmark`            | `fitAflTradePickPavDistributionBenchmark`                                                                               | a retained pick PAV observation set                                                                                                                                         |
+| `player_observation`        | `createAflTradePlayerPavObservation`                                                                                    | retained private player PAV observations per spell                                                                                                                          |
+
+`createGovernedPrivateEvaluationInputTrace` and `createGovernedPrivateEvaluationExplanationPolicy`
+have no production caller at all today; every existing exercise of them is a fixture. The sealed
+trade reader and the retained release membership supply the trade's assets, so the projection from
+membership into the trace's transaction shape is the first concrete step, and the fail-closed planner
+in `privateValuationTradeConstructionPlan.ts` is what decides, per trade, whether that projection can
+proceed. Replaying a retained fixture manifest proves none of this genuine fresh-construction
+evidence.
 
 ### Retained construction compatibility assessment
 
