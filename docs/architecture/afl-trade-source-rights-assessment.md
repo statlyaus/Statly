@@ -196,6 +196,57 @@ isolated capture process, and restores the namespace on exit. Object drift fails
 technical acquisition compatibility measure, not source normalization, completeness evidence,
 identity resolution, reconciliation approval, or release authority.
 
+## Recovered-archive evidence inventory
+
+A read-only inventory on 2026-09-23 of the recovered preserved archive (`combined-2026-09-11.dump`,
+292 public tables) separates what the archive holds from what the construction path requires. The
+source and reconciliation plane is populated: 668 player identities, 29,808 approved player
+resolutions, 60,048 club resolutions, 20,088 match resolutions, 247 approved acquisition-spell
+versions, 461 draft picks, 18 clubs, 216 matches and 935 promoted canonical records. Those 935
+promoted records are draft records only — 461 draft-player assets, 461 draft selections and 13 draft
+events — so the promotion corpus contains no transaction.
+
+The admitted-evidence plane reads empty. Every `outcome_release*` table is zero, as are
+`outcome_active_release` and `outcome_factual_release_candidate`; so are
+`outcome_valuation_input_bundle_construction_operation` and the `outcome_valuation_model_run*` tables,
+`outcome_valuation_publication_*`, `outcome_private_reviewed_evidence_bundle`,
+`outcome_hpn_pav_input_set`/`_run`/`_match`/`_row`, `outcome_hpn_pav_calculation*`,
+`outcome_hpn_reviewed_season_universe`/`_member`, `outcome_external_trade_discovery_inventory`/`_link`,
+`outcome_external_reconciliation_transaction`/`_transfer`/`_pick_custody`/`_pick_lineage`,
+`outcome_pick_lineage_edge`, `outcome_pick_custody_observation`,
+`outcome_workbook_transaction_review_set` and `outcome_promotion_backed_corpus*`. The populated counts
+were read while the archive's own restore was still finalising its largest table copies, so they are
+lower bounds; the empty sets are corroborated independently by the source package manifest, which
+records governance approval, governed capture, cohort admission, training and public use as unissued or
+unexecuted.
+
+Four consequences follow for construction. Each is a separate blocker, and none of them is the missing
+`cohort.constructTrade` owner:
+
+1. **Season boundaries have no genuine source.** Season identities exist —
+   `outcome_competition_season` enumerates AFLM 2008–2025 — but every `starts_on` and `ends_on` is null,
+   and `outcome_source_capture_season` holds only capture, competition and year. The trace's
+   `startsAt`/`endsAt` instants therefore have no evidence, `outcome_hpn_reviewed_season_universe` is
+   empty, and no module under `src/` or `Scripts/` produces a season universe at all, so every existing
+   `seasonUniverse` is a fixture.
+2. **Pick lineages have no genuine source.** All four pick-custody and pick-lineage tables are empty, so
+   `pickLineages` cannot be projected from the archive at any price.
+3. **Player horizons are capped at the registered cohort.** Approved acquisition spells exist for 247 of
+   668 players, so a horizon can be derived only for those.
+4. **There is no trade to construct.** With no factual release, no valuation input bundle and no model
+   run, the current-valuation cohort has no members.
+
+The 975-trade Draftguru archive these evaluations need is captured and index-verified on local storage
+under `~/Documents/Statly/2025-trade-grading-data/source-package/full-archive`, covering 1988–2025
+across 38 year pages with `indexVerifiedCount` 975, an exact native-parser set match, a 944/25/6 party
+distribution and captured detail bodies. Its freeze records
+`authority: local_evidence_only_not_canonical_admission` and
+`status: index_verified_transaction_validation_pending`, and its package manifest records
+`governanceApprovalIssued`, `governedCaptureExecuted`, `cohortAdmissionCreated`, `trainingAllowed` and
+`publicUseAllowed` all false. Admitting it is a governance decision rather than a code change. The only
+release producer in the repository is the explicitly synthetic fitzRoy rehearsal, which the
+admitted-data requirement excludes.
+
 ## Source precedence and reconciliation
 
 No provider silently overwrites another provider's observation.
