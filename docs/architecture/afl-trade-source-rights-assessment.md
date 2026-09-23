@@ -214,11 +214,11 @@ The admitted-evidence plane reads empty. Every `outcome_release*` table is zero,
 `outcome_hpn_reviewed_season_universe`/`_member`, `outcome_external_trade_discovery_inventory`/`_link`,
 `outcome_external_reconciliation_transaction`/`_transfer`/`_pick_custody`/`_pick_lineage`,
 `outcome_pick_lineage_edge`, `outcome_pick_custody_observation`,
-`outcome_workbook_transaction_review_set` and `outcome_promotion_backed_corpus*`. The populated counts
-were read while the archive's own restore was still finalising its largest table copies, so they are
-lower bounds; the empty sets are corroborated independently by the source package manifest, which
-records governance approval, governed capture, cohort admission, training and public use as unissued or
-unexecuted.
+`outcome_workbook_transaction_review_set` and `outcome_promotion_backed_corpus*`. The archive's own
+restore completed with exit status zero before these counts were taken, so they are final readings of
+the recovered dump rather than partial ones, and the empty sets are independently corroborated by the
+source package manifest, which records governance approval, governed capture, cohort admission,
+training and public use as unissued or unexecuted.
 
 Four consequences follow for construction. Each is a separate blocker, and none of them is the missing
 `cohort.constructTrade` owner:
