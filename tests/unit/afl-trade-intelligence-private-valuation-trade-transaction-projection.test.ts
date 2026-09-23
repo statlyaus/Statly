@@ -185,7 +185,7 @@ describe('private valuation trade transaction projection', () => {
           transfer({
             recordId: 'transfer-0002',
             assetKind: 'current_pick',
-            fromClub: { clubId: 'club-z', name: 'Club Z', abbreviation: null },
+            fromClub: { clubId: 'club-z', name: 'Club Z', abbreviation: 'CZ' },
             toClub: clubA,
           }),
         ],

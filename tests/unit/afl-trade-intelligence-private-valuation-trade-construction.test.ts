@@ -6,6 +6,7 @@ import {
   type PrivateValuationTradeConstructor,
   type PrivateValuationTradeConstructionOutcome,
   type PrivateValuationTradeResolvedEvidence,
+  type PrivateValuationTradeRetained,
 } from '@/server/aflTradeIntelligence/valuation/internal/privateValuationTradeConstruction';
 
 const at = '2026-09-23T00:00:00.000Z';
@@ -23,11 +24,18 @@ function retained<T>(label: string, value: T) {
 }
 
 /**
- * The construction boundary validates these documents deeply. These stand-ins only carry identity,
- * because the assembler's contract is *which* resolved evidence it passes, not what the document
- * contains; deep validation is covered by the boundary's own tests.
+ * A stand-in whose `value` is `never`, so it is assignable to every retained-document type. The
+ * assembler only forwards references and bytes, never reading a value, and document *content* is the
+ * construction boundary's subject; its own tests cover that.
  */
-const document = <T>(label: string) => retained(label, {} as T);
+const document = (label: string): PrivateValuationTradeRetained<never> =>
+  retained(label, undefined as never);
+
+/**
+ * The four derived documents are handed over bare — the packager content-addresses and retains them
+ * itself — so an uninhabited `never` value fits every one of their types.
+ */
+const derivedDocument = () => undefined as never;
 
 const component = (role: ComponentAuthority['role']): ComponentAuthority =>
   ({ role, runId: `${role}-run` }) as unknown as ComponentAuthority;
@@ -70,10 +78,10 @@ function fullEvidence(
     ],
     trace: document('trace'),
     explanationPolicy: document('explanation-policy'),
-    valuationCase: document('valuation-case'),
-    componentDrawSet: document('draw-set'),
-    realizedContributionLedger: document('ledger'),
-    packagePolicy: document('package-policy'),
+    valuationCase: derivedDocument(),
+    componentDrawSet: derivedDocument(),
+    realizedContributionLedger: derivedDocument(),
+    packagePolicy: derivedDocument(),
     lineageGraph: document('lineage-graph'),
     pickBenchmarks: [document('benchmark')],
     playerObservations: [document('observation')],
