@@ -1625,7 +1625,10 @@ spells, acquisition rules, event versions, event assets, or registered HPN metho
 player/club pairs lacked an approved acquisition spell, and no genuine HPN input set was created.
 A later owned-target step registered the retained HPN method through its existing owner. Genuine
 acquisition ancestry remains outstanding; the participation decisions supply neither entry dates nor
-spell authority.
+spell authority. After the preserved-archive recovery the measured position is 247 of the 668
+cohort players holding a registered, fully approved spell spanning 2018-11-22 to 2024-11-21, with
+identity reconciliation complete for all 668; the exact counts and their derivation are recorded in
+the private acquisition evidence decision for issue 579.
 
 Acquisition registration now has a dedicated public repository and migration 0142. Before applying
 that migration to an owned target, complete the scoped PostgreSQL regressions and independent review,

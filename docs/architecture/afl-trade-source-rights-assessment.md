@@ -91,6 +91,23 @@ internal source-use risk assumption without waiting for separate written provide
 it is not a claim of a provider licence or resolved legal uncertainty. The actual approval is
 retained with the exact source-use proposal and its digest.
 
+The 668 is a **player** count, not a spell count: `outcome_player_identity` holds exactly 668 rows
+(provider `afl_tables`), and `outcome_provider_player_resolution` assigns all 668 to canonical
+`outcome_player` rows under 29,808 approved resolution records. Measured directly from the preserved
+archive (`~/Documents/Statly/database-archive/combined-2026-09-11.dump`, sha256
+`1b1e1e5c…1096`) by restoring it into a disposable PostgreSQL:
+
+- registered acquisition spells: **247**, all `approved` and fully registered
+  (`registration_canonical_json`, `registration_approval_decision_id`, `registered_at`);
+- players with a registered spell: **247 of 668**, so **421 players (63%) have no acquisition spell**;
+- spell dates span **2018-11-22 to 2024-11-21** across 18 clubs, with **no 2025 spell**;
+- identity reconciliation for the whole cohort is already complete and approved.
+
+So the outstanding acquisition work is 421 enumerated players whose acquisition evidence falls
+outside the recovered window — overwhelmingly the pre-2018 era, plus 2025 — and not an
+undifferentiated 668-spell backlog. The per-player list is reproducible with the query above; the
+recovered 247 are a reconciliation-complete head start rather than a partial one.
+
 The decision covers local non-production recruitment/date evidence, identity reconciliation,
 canonical promotion, acquisition spell registration, HPN input ancestry and deterministic replay.
 It does not authorize model training, forecasting, new predictive features, public display/output,
