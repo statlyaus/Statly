@@ -86,6 +86,17 @@ and the stable checks emitted by the repository workflows and configured securit
 single-collaborator repository, so it does not require an impossible self-approval; deterministic gates
 and review conversations remain mandatory.
 
+Branches based on anything other than `main` receive no code CI, because the workflow triggers on
+`pull_request` for `main` only. That is safe rather than a gap, and the reason is worth recording so it
+is not "fixed" later: a stacked pull request's commits reach `main` only through its parent, merging the
+child moves the parent's head, and the ruleset's strict required checks then demand a fresh `CI Gate` for
+that head. The suites run against the combined code before it can merge.
+
+Do not widen the trigger to close the apparent gap. It duplicates the outcomes suite on every stacked
+pull request and buys earlier feedback only, not correctness. When a stacked pull request needs its own
+verification before that point, dispatch `CI` for its branch with `workflow_dispatch`; that is how the
+run for the lock-order branch was produced.
+
 Native GitHub auto-merge is the only automatic merger. Enable squash auto-merge only when:
 
 - the acceptance criteria and documentation are complete;
