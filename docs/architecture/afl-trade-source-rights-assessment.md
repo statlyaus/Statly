@@ -247,6 +247,28 @@ distribution and captured detail bodies. Its freeze records
 release producer in the repository is the explicitly synthetic fitzRoy rehearsal, which the
 admitted-data requirement excludes.
 
+### Trade-detail transaction validation
+
+`Scripts/validate-draftguru-trade-details.ts` validates a captured archive against the parser the
+ingestion pipeline itself uses. It writes nothing, admits nothing, and is read-only over the capture.
+On 2026-09-24 it reported 975 captured details, **975 parsed with no issues**, no body failing its
+recorded sha256, and **3,100 directed transfers** — 1,674 current picks, 990 players, 415 future picks
+and 21 special picks. Parsed parties reproduce the frozen distribution exactly (944 two-party, 25
+three-party, 6 four-party), and no transfer identity, movement or whole transfer set repeats within or
+across the 975 trades, which closes the semantic-duplicate question.
+
+Three limitations remain, and none of them is repairable by code:
+
+1. **The source carries no exact date.** The parser records `occurredOn: null` for every trade and not
+   one captured page states a calendar date, so an input trace's `transaction.effectiveAt` cannot be
+   sourced from Draftguru. Some other evidence has to establish when a trade happened.
+2. **Twenty-one movements are `special_pick`**, which the trace vocabulary (`player`,
+   `current_pick_entitlement`, `future_pick_entitlement`) cannot express, so those trades cannot be
+   constructed without widening the trace.
+3. **The capture's authority is `public_inspection_not_governed_capture` with `factsValidated: false`
+   throughout**, so this remains local evidence rather than an admitted release: validating a capture is
+   not admitting it.
+
 ## Source precedence and reconciliation
 
 No provider silently overwrites another provider's observation.
