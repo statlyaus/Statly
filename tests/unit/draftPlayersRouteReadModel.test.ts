@@ -40,6 +40,18 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+const authMocks = vi.hoisted(() => ({
+  getAuthenticatedUserId: vi.fn(),
+}));
+
+const membershipMocks = vi.hoisted(() => ({
+  getDraftMembershipAccess: vi.fn(),
+}));
+
+vi.mock('@/lib/serverAuth', () => authMocks);
+
+vi.mock('@/server/leagues/membership', () => membershipMocks);
+
 import { GET } from '@/app/api/drafts/[id]/players/route';
 
 function request(path = '/api/drafts/cmq29ngg50004ux5s39ya2azu/players?page=1&pageSize=2') {
@@ -49,6 +61,14 @@ function request(path = '/api/drafts/cmq29ngg50004ux5s39ya2azu/players?page=1&pa
 describe('draft players read model route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
+    membershipMocks.getDraftMembershipAccess.mockResolvedValue({
+      leagueId: 'league-1',
+      userId: 'user-1',
+      isMember: true,
+      canManage: false,
+    });
 
     prismaMocks.pick.findFirst.mockResolvedValue(null);
     prismaMocks.draft.findUnique.mockResolvedValue({
@@ -154,6 +174,32 @@ describe('draft players read model route', () => {
         stats: {},
       },
     ]);
+  });
+
+  it('refuses an unauthenticated caller', async () => {
+    authMocks.getAuthenticatedUserId.mockResolvedValue(null);
+
+    const response = await GET(request(), {
+      params: Promise.resolve({ id: 'cmq29ngg50004ux5s39ya2azu' }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('refuses a caller who is not a member of the draft league', async () => {
+    authMocks.getAuthenticatedUserId.mockResolvedValue('outsider');
+    membershipMocks.getDraftMembershipAccess.mockResolvedValue({
+      leagueId: 'league-1',
+      userId: 'outsider',
+      isMember: false,
+      canManage: false,
+    });
+
+    const response = await GET(request(), {
+      params: Promise.resolve({ id: 'cmq29ngg50004ux5s39ya2azu' }),
+    });
+
+    expect(response.status).toBe(403);
   });
 
   it('returns selected league categories and stat-enriched available players', async () => {
