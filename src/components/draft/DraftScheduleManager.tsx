@@ -6,6 +6,7 @@ import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import Alert from '@/components/ui/Alert';
 import { useConfirmation } from '@/components/ui/Modal';
+import { fetchApi } from '@/lib/api';
 import {
   COMMON_TIMEZONES,
   getBrowserTimeZone,
@@ -78,7 +79,7 @@ export default function DraftScheduleManager({
     setSuccess(null);
 
     try {
-      const response = await fetch(`/api/drafts/${draftId}/schedule`, {
+      const response = await fetchApi(`/api/drafts/${draftId}/schedule`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +121,7 @@ export default function DraftScheduleManager({
         setSuccess(null);
 
         try {
-          const response = await fetch(`/api/drafts/${draftId}/schedule`, {
+          const response = await fetchApi(`/api/drafts/${draftId}/schedule`, {
             method: 'DELETE',
           });
 

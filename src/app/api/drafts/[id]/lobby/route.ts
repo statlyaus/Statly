@@ -5,7 +5,9 @@ import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { getLobbyState } from '@/lib/draftLobby';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 import { observeHistogram, registerHistogram } from '@/server/metrics';
 
 // Register histograms once in this module context
@@ -31,6 +33,18 @@ export async function GET(
     }
     draftId = parsed.data.id;
 
+    // Lobby state describes who is present in a draft, so it is scoped to that draft's membership
+    // rather than being readable by any caller.
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const access = await getDraftMembershipAccess(draftId, userId);
+    if (!access.isMember) {
+      return errorResponse('Draft access required', 403);
+    }
+
     logger.info('Lobby API called', { draftId });
 
     const lobbyState = await getLobbyState(draftId);
@@ -48,5 +62,3 @@ export async function GET(
     return errorResponse('Failed to get lobby state', 500);
   }
 }
-
-// POST stays as you pasted (already unified), no markers needed
