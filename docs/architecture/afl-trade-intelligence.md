@@ -866,6 +866,30 @@ workbook lookup or legacy `Expected`/`Actual` field.
 Redis may coordinate locks, queues, and caches but never owns durable analytical state. A projection
 failure must not cause Firestore, CSV, or a client fallback to become canonical.
 
+### Advisory-lock ordering
+
+The analytical schema serializes contested writes with transaction-scoped advisory locks taken inside
+its SQL functions, rather than by widening isolation levels. Those locks are taken parent-first, then
+in a sorted set: a function locks the entity it is acting on first, and any set of related keys is
+ordered (`ORDER BY value`, `ORDER BY 1`) before it is locked, so two transactions touching the same
+keys cannot take them in opposite orders.
+
+A new or changed lock site must follow that order. Order the keys explicitly, and keep any set-based
+lock loop sorted before it locks.
+
+Two limits are worth stating for the next reader, because both were discovered by getting them wrong:
+
+- **Nothing enforces the convention.** No check verifies that a multi-lock function sorts its keys, so
+  it holds by author diligence. The one place it had been broken — a legacy registration function
+  locking one family in document order while its successor ordered the same family — was found by
+  reading the deployed function bodies and is fixed by `0232`.
+- **Comparing lock families across functions is not evidence of a conflict.** The same outer prefix
+  carries different id namespaces, so two functions can appear to take "the same two families" in
+  opposite orders while their concrete keys can never collide. For example `outcome-release-parent:` is
+  used with release ids (`^outcome-release:[a-f0-9]{64}$`) in one function and with spell version ids
+  in another. A contradiction is only real once the concrete keys can be the same; family prefixes are
+  not.
+
 ## Gate 1: architecture and authority
 
 Gate 1 exists to approve or reject a complete design. It does not make a proposed database, artifact
@@ -2466,10 +2490,26 @@ The local private worker now delegates dispatch to the existing recalculation co
 factual evidence must pass the existing model-evidence composition and prepared-cohort owner before
 batch execution. Its optional construction input supplies the exact model-pair and cohort dependencies;
 it does not select or manufacture admission, methodology or qualification authority. Missing construction
-configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path.
-Unavailable factual refreshes remain unavailable, while substantive no-change dispatches retain the
-existing batch reuse path. The command-line composition does not yet supply genuine construction
-configuration, and this wiring does not complete native PAV execution or the genuine-data rehearsal.
+configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path, and
+that failure now carries the composition root's named `blockerCodes` instead of only a generic message.
+A dispatch-bound cohort half is accepted as well as fixed dependencies, because construction evidence
+authenticates exactly one live dispatch identity. Unavailable factual refreshes remain unavailable,
+while substantive no-change dispatches retain the existing batch reuse path. The command-line
+composition does not yet supply genuine reviewed construction authority, and this wiring does not
+complete native PAV execution or the genuine-data rehearsal.
+
+`development/localPrivateValuationConstruction.ts` is the composition root for a declared scope. It
+resolves the declared scope policy, asks the HPN owner's own lane resolver which reviewed source
+authority each lane has, reports each field a declared selection omits, and reports the per-trade
+construction owner that does not exist yet. It composes only from owners that already exist —
+`localGenuineAdmittedPlayerContribution.ts`, `postgresGenuineDispatchBoundPickPav.ts`,
+`localPrivateValuationQualification.ts`, `localPrivateValuationHpnCapture.ts`,
+`postgresPrivateValuationHpnPreparation.ts`, `retainedValuationInputBundleConstruction.ts` and
+`localPrivateValuationConstructionEvidence.ts` — and never substitutes fixture or synthetic authority
+for a reviewed declaration. Inspection is read-only and reports `qualificationGranted: false`;
+composition returns a `blocked` verdict naming every missing authority, and never claims the chain is
+complete while any is missing. The report is reported once, at the root, so the command, the worker and
+the preflight read the same verdict rather than a second workflow ledger.
 
 The `outcomes:valuation:inspect-local` command reads an existing admitted loopback database using
 the existing inventory owner. Runtime identity and inventory share one repeatable-read, read-only
@@ -2538,7 +2578,27 @@ policy and finalized HPN ancestry, without selecting the active public release. 
 owner now also supplies exact retained selection, and `localPrivateValuationConstructionEvidence.ts`
 composes the sealed reader, bundle constructor and artifact custody within the prepared-cohort
 transaction. Evidence-derived per-trade input assembly and full worker composition remain required.
-Replaying a retained fixture manifest proves none of this genuine fresh-construction evidence.
+The exact shape of that remaining assembly is now enumerated, because it is the difference between
+"the owners exist" and "the chain runs". Each parent of a current private trade construction has a
+producer that no `src/` or `Scripts/` caller invokes, so the assembly is net-new work over existing
+contracts rather than a new model:
+
+| Manifest parent             | Producer                                                                                                                | What the producer needs                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input_trace`               | `createGovernedPrivateEvaluationInputTrace`                                                                             | selector, factual release id, bundle id, both component runs, and the trade transaction projected into clubs, transfers, season universe, player horizons and pick lineages |
+| `calculation_input_package` | `materializeAflTradeValuationCase` over `createAflTradeComponentDrawSet` and `createAflTradeRealizedContributionLedger` | the trade's promotion-backed archive membership, the draw set, the realized contribution ledger and the package policy                                                      |
+| `explanation_policy`        | `createGovernedPrivateEvaluationExplanationPolicy`                                                                      | the retained policy content the bundle's `explanationPolicyArtifact` refers to                                                                                              |
+| `lineage_graph`             | `createAflTradeLineageGraph`                                                                                            | asset lineage evidence for the trade's player and pick assets                                                                                                               |
+| `pick_benchmark`            | `fitAflTradePickPavDistributionBenchmark`                                                                               | a retained pick PAV observation set                                                                                                                                         |
+| `player_observation`        | `createAflTradePlayerPavObservation`                                                                                    | retained private player PAV observations per spell                                                                                                                          |
+
+`createGovernedPrivateEvaluationInputTrace` and `createGovernedPrivateEvaluationExplanationPolicy`
+have no production caller at all today; every existing exercise of them is a fixture. The sealed
+trade reader and the retained release membership supply the trade's assets, so the projection from
+membership into the trace's transaction shape is the first concrete step, and the fail-closed planner
+in `privateValuationTradeConstructionPlan.ts` is what decides, per trade, whether that projection can
+proceed. Replaying a retained fixture manifest proves none of this genuine fresh-construction
+evidence.
 
 ### Retained construction compatibility assessment
 
@@ -3408,6 +3468,35 @@ larger requests fail explicitly rather than silently sampling a cohort. Public-i
 fixture-only observations, hand-worked numerical expectations, held-out-label substitutions,
 retrospective custody, short histories, departure/censoring, exact horizons and overflow regressions.
 These tests establish implementation behavior, not predictive performance on genuine AFL seasons.
+
+### Private evaluation read contract
+
+The private workspace reader is per-trade and self-consistent. A request names one selector (valuation
+scope plus trade) and one selection — `{kind:'current'}` or `{kind:'generation', generationId}` — and an
+available result returns the `generationId`, the `projectionManifestId`, the lifecycle, the document
+reference and the artifact bytes. A generation id pins one trade, because generations are per-trade
+(`g.trade_id=e.trade_id`), so it cannot pin a batch across trades.
+
+The `current` selection resolves in a single query that joins the one head row
+(`outcome_current_private_evaluation_batch`) with the entry, the generation and any withdrawal
+(`postgresGovernedPrivateEvaluationReadRepository.ts:191-203`). A read therefore cannot straddle two
+batches, and it needs no batch identifier to be consistent with itself.
+
+Cross-trade batch pinning is deliberately deferred until a multi-trade reader exists. No list, page,
+pagination or export path reads more than one trade today, and the workspace is instantiated only in
+local development. When the first such reader is built it will need batch identity anyway, and the
+shape is already decided so it can be added additively: a `batchId` field on the available result, so a
+caller learns which batch it read, plus a `{kind:'batch', batchId}` member on the selection union so a
+caller can pin it. Existing selections and results are unchanged, and the head row already carries
+`batch_id`, so no schema change is required. Estimate two to four hours when that reader is built.
+
+### Automated model-validity authority
+
+The automated model-validity authority is carried by `authorityKind: 'automated_validation_record'`
+inside the existing `afl-trade-gate-decision/v1` record — not by a separate v2 schema, and there is no
+`gate-decision/v2` anywhere in the repository. The v1 record was extended in place because its records
+are already written and consumed, and versioning them retroactively would break consumers to satisfy a
+label. Read the authority from `authorityKind`, not from a version number.
 
 ### Current valuation refresh trace
 
