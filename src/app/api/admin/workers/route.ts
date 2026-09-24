@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { adminForbiddenResponse, isAdminRequest } from '@/lib/adminAuth';
 import { logger } from '@/lib/logger';
 
 // Configurable delay (ms) to wait after stopping the pool before starting it again
@@ -12,6 +13,8 @@ async function getWorkerPool() {
 }
 
 export async function GET(request: NextRequest) {
+  if (!isAdminRequest(request)) return adminForbiddenResponse(request);
+
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
@@ -65,6 +68,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isAdminRequest(request)) return adminForbiddenResponse(request);
+
   try {
     const body = await request.json();
     const { action, workerId } = body;

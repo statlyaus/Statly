@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { adminForbiddenResponse, isAdminRequest } from '@/lib/adminAuth';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { draftQueue } from '@/server/queue/draftQueue';
@@ -32,6 +33,8 @@ interface QueueHealth {
 }
 
 export async function GET(request: NextRequest) {
+  if (!isAdminRequest(request)) return adminForbiddenResponse(request);
+
   try {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
@@ -336,6 +339,8 @@ async function getQueueOverview() {
 
 // POST endpoint for queue management actions
 export async function POST(request: NextRequest) {
+  if (!isAdminRequest(request)) return adminForbiddenResponse(request);
+
   try {
     const body = await request.json();
     const { action, jobId, data } = body;

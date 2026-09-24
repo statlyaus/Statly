@@ -247,6 +247,41 @@ PGlite's PostgreSQL socket compatibility layer is for local development only and
 a one-connection `test_fixture` read pool. Migration triggers and concurrent repository behavior remain
 owned by the disposable real-PostgreSQL outcomes integration job described below.
 
+## Secured endpoint testing
+
+Some endpoints require a credential by design and fail closed when it is absent:
+
+- `/api/admin/*` requires the `x-admin-secret` header carrying `ADMIN_SECRET`.
+- `/api/cron/*` requires `Authorization: Bearer $CRON_SECRET`.
+- `/api/user/*` routes require a verified identity. In local development the scripted identity is
+  accepted when both `STATLY_ENABLE_DEV_AUTH` and `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH` are `true` and
+  the process is not running in production mode.
+
+Set local values in `.env.local`, which is ignored and never committed. Generate one value per
+secret so no two environments share a credential:
+
+```sh
+ADMIN_SECRET=<paste the output of: openssl rand -hex 32>
+CRON_SECRET=<paste a different output of: openssl rand -hex 32>
+```
+
+`Scripts/dev/curl-admin.sh` loads those values without printing them and forwards them as headers:
+
+```sh
+Scripts/dev/curl-admin.sh admin /api/admin/queue
+Scripts/dev/curl-admin.sh cron /api/cron/daily
+Scripts/dev/curl-admin.sh user /api/user/leagues
+```
+
+Calling without the credential must return 403, 503, or 401; calling with it must succeed. The
+contract is enforced by `tests/unit/adminControlPlaneAuthorization.test.ts`,
+`tests/unit/userScopedRouteAuthorization.test.ts`, and `tests/unit/cronRouteAuthorization.test.ts`,
+which run in the unit lane without Firebase, Redis, or a running server.
+
+Never weaken these checks to make local testing easier and never add a development bypass that
+behaves differently from production; use local credential values instead. See the
+[authorization model](../architecture/authorization.md) for the tier these endpoints belong to.
+
 ## CI architecture
 
 The CI workflow has five explicit ownership boundaries:
