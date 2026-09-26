@@ -116,9 +116,9 @@ it('promotes two evidenced sessions of one draft with separate exact dates and s
       await approve('acquisition_spell_registration', spell.spellVersionId, spell),
       scope
     );
-    expect(
-      (await repository.loadCurrentExact(spell.spellVersionId, scope)).content.entry.eventDate
-    ).toBe(draft.event_date);
+    expect((await repository.loadCurrentExact(spell.spellVersionId, scope)).content).toMatchObject({
+      entry: { eventDate: draft.event_date },
+    });
   }
   const exact = async (content: unknown) =>
     (

@@ -1303,6 +1303,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0230_cameron_2020_retained_private_source_use',
       '0231_outcome_database_identity',
       '0232_reviewed_registration_lock_order',
+      '0233_appearance_membership_spells',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

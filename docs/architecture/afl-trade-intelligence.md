@@ -1742,6 +1742,16 @@ conflicting or quarantined evidence withholds the value. Achievements and awards
 separate season-, round-, or event-grain facts: they are never inferred from numeric statistics or
 summed merely to fit the acquisition-spell metric shape.
 
+Appearance membership (acquisition registration v3) is a deliberately narrower spell used only to
+attribute HPN season PAV. Season PAV needs every appearing player in a season bound to exactly one
+current spell, while reviewed entry spells need a promoted incoming asset that most league players do
+not yet have. A v3 spell binds a player, represented club and season to the first and last reviewed
+appearance facts and asserts nothing about entry, departure or trade custody, so metric, release,
+valuation dataset, player PAV observation and postseason consumers reject it. It is a bridge: a current
+reviewed entry spell covering its window retires it automatically, player by player, and it must not be
+used where acquisition timing matters.
+The operations runbook records its storage and guard details.
+
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
 conflicting evidence, and advances a canonical achievement head by compare-and-swap. Only the current

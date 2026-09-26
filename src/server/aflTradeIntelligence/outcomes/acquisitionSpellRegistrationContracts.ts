@@ -47,10 +47,31 @@ const windowRuleContent = ruleContent.extend({
   intervals: z.literal('possible_and_certain_membership_no_inferred_boundary_days'),
 });
 
+/**
+ * Appearance membership (v3): a labelled bridge for HPN season PAV attribution only. It binds one
+ * player, represented club and season to its first and last reviewed appearance facts and makes no
+ * entry, departure, or trade-attribution claim. A reviewed entry spell supersedes it.
+ */
+const appearanceRuleContent = z
+  .object({
+    schemaVersion: z.literal('afl-trade-acquisition-registration-rule/v3'),
+    ...scope,
+    ruleVersion: id,
+    entry: z.literal('first_reviewed_appearance_fact_in_season'),
+    departure: z.literal('none_last_reviewed_appearance_fact_in_season'),
+    intervals: z.literal('reviewed_appearance_window_within_one_season'),
+    missingEvidence: z.literal('reject_rows_outside_reviewed_appearance_window'),
+    purpose: z.literal('hpn_season_pav_attribution_only'),
+    retirement: z.literal('retired_by_covering_reviewed_entry_spell'),
+    evidence,
+    createdAt: instant,
+  })
+  .strict();
+
 export const aflTradeAcquisitionSpellRegistrationRuleSchema = z
   .object({
     ruleId: aflTradeContentAddressedIdSchema('acquisition-spell-rule'),
-    content: z.union([ruleContent, windowRuleContent]),
+    content: z.union([ruleContent, windowRuleContent, appearanceRuleContent]),
   })
   .strict()
   .superRefine((record, context) => {
@@ -109,6 +130,33 @@ const windowSpellContent = spellContent.extend({
   departure: z.union([precisionEvent, canonicalDepartureSpellBindingSchema]).nullable(),
 });
 
+const appearanceBinding = z
+  .object({
+    appearanceFactId: id,
+    matchId: id,
+    date: z.string().date(),
+  })
+  .strict();
+
+const appearanceSpellContent = z
+  .object({
+    schemaVersion: z.literal('afl-trade-acquisition-registration/v3'),
+    ...scope,
+    playerId: id,
+    clubId: id,
+    seasonYear: z.number().int().min(1897).max(2200),
+    firstAppearance: appearanceBinding,
+    lastAppearance: appearanceBinding,
+    ruleId: aflTradeContentAddressedIdSchema('acquisition-spell-rule'),
+    version: z.number().int().positive(),
+    supersedesSpellVersionId: aflTradeContentAddressedIdSchema(
+      'acquisition-spell-version'
+    ).nullable(),
+    observedThrough: z.string().date(),
+    createdAt: instant,
+  })
+  .strict();
+
 function eventBounds(
   value: z.infer<typeof precisionEvent> | z.infer<typeof canonicalDepartureSpellBindingSchema>
 ) {
@@ -120,10 +168,38 @@ function eventBounds(
 export const aflTradeAcquisitionSpellRegistrationSchema = z
   .object({
     spellVersionId: aflTradeContentAddressedIdSchema('acquisition-spell-version'),
-    content: z.union([spellContent, windowSpellContent]),
+    content: z.union([spellContent, windowSpellContent, appearanceSpellContent]),
   })
   .strict()
   .superRefine((record, context) => {
+    if (
+      record.spellVersionId !==
+      createAflTradeContentAddress('acquisition-spell-version', record.content)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['spellVersionId'],
+        message: 'Spell content address differs.',
+      });
+    }
+    if (record.content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
+      const c = record.content;
+      const season = String(c.seasonYear);
+      if (
+        c.firstAppearance.date > c.lastAppearance.date ||
+        c.firstAppearance.date.slice(0, 4) !== season ||
+        c.lastAppearance.date.slice(0, 4) !== season ||
+        c.observedThrough !== c.lastAppearance.date ||
+        c.observedThrough > c.createdAt.slice(0, 10) ||
+        (c.version === 1) !== (c.supersedesSpellVersionId === null)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Appearance membership chronology or version ancestry is invalid.',
+        });
+      }
+      return;
+    }
     const c = record.content;
     const entry = eventBounds(c.entry);
     const departure = c.departure === null ? null : eventBounds(c.departure);
@@ -151,16 +227,6 @@ export const aflTradeAcquisitionSpellRegistrationSchema = z
         message: 'Spell chronology or version ancestry is invalid.',
       });
     }
-    if (
-      record.spellVersionId !==
-      createAflTradeContentAddress('acquisition-spell-version', record.content)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['spellVersionId'],
-        message: 'Spell content address differs.',
-      });
-    }
   });
 
 export type AflTradeAcquisitionSpellRegistrationRule = z.infer<
@@ -169,6 +235,10 @@ export type AflTradeAcquisitionSpellRegistrationRule = z.infer<
 export type AflTradeAcquisitionSpellRegistration = z.infer<
   typeof aflTradeAcquisitionSpellRegistrationSchema
 >;
+/** A reviewed entry spell (v1 exact or v2 window): the only kind trade attribution may consume. */
+export type AflTradeReviewedAcquisitionSpellRegistration = AflTradeAcquisitionSpellRegistration & {
+  content: z.infer<typeof spellContent> | z.infer<typeof windowSpellContent>;
+};
 
 export function createAflTradeAcquisitionSpellRegistrationRule(
   input: Omit<
@@ -226,20 +296,85 @@ export function createAflTradeWindowAcquisitionSpellRegistrationRule(
 
 export function createAflTradeWindowAcquisitionSpellRegistration(
   input: Omit<z.input<typeof windowSpellContent>, 'schemaVersion'>
-): AflTradeAcquisitionSpellRegistration {
+): AflTradeAcquisitionSpellRegistration & { content: z.infer<typeof windowSpellContent> } {
   const content = windowSpellContent.parse({
     ...input,
     schemaVersion: 'afl-trade-acquisition-registration/v2',
   });
-  return aflTradeAcquisitionSpellRegistrationSchema.parse({
+  const registration = aflTradeAcquisitionSpellRegistrationSchema.parse({
     spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
     content,
   });
+  return { ...registration, content };
+}
+
+export function createAflTradeAppearanceMembershipSpellRule(
+  input: Omit<
+    z.input<typeof appearanceRuleContent>,
+    | 'schemaVersion'
+    | 'entry'
+    | 'departure'
+    | 'intervals'
+    | 'missingEvidence'
+    | 'purpose'
+    | 'retirement'
+  >
+): AflTradeAcquisitionSpellRegistrationRule {
+  const content = appearanceRuleContent.parse({
+    ...input,
+    schemaVersion: 'afl-trade-acquisition-registration-rule/v3',
+    entry: 'first_reviewed_appearance_fact_in_season',
+    departure: 'none_last_reviewed_appearance_fact_in_season',
+    intervals: 'reviewed_appearance_window_within_one_season',
+    missingEvidence: 'reject_rows_outside_reviewed_appearance_window',
+    purpose: 'hpn_season_pav_attribution_only',
+    retirement: 'retired_by_covering_reviewed_entry_spell',
+  });
+  return aflTradeAcquisitionSpellRegistrationRuleSchema.parse({
+    ruleId: createAflTradeContentAddress('acquisition-spell-rule', content),
+    content,
+  });
+}
+
+export function createAflTradeAppearanceMembershipSpell(
+  input: Omit<z.input<typeof appearanceSpellContent>, 'schemaVersion' | 'observedThrough'>
+): AflTradeAcquisitionSpellRegistration & { content: z.infer<typeof appearanceSpellContent> } {
+  const content = appearanceSpellContent.parse({
+    ...input,
+    schemaVersion: 'afl-trade-acquisition-registration/v3',
+    observedThrough: input.lastAppearance.date,
+  });
+  const registration = aflTradeAcquisitionSpellRegistrationSchema.parse({
+    spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
+    content,
+  });
+  return { ...registration, content };
+}
+
+export function isAflTradeAppearanceMembershipSpell(
+  spell: AflTradeAcquisitionSpellRegistration
+): spell is AflTradeAcquisitionSpellRegistration & {
+  content: z.infer<typeof appearanceSpellContent>;
+} {
+  return spell.content.schemaVersion === 'afl-trade-acquisition-registration/v3';
 }
 
 /** Logical membership bounds from reviewed dates and continuity; does not grant source authority. */
 export function deriveAflTradeAcquisitionMembershipBounds(input: unknown) {
   const { content } = aflTradeAcquisitionSpellRegistrationSchema.parse(input);
+  if (content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
+    const window = {
+      startDate: content.firstAppearance.date,
+      endDate: content.lastAppearance.date,
+    };
+    return {
+      exactStartDate: window.startDate,
+      exactEndDate: window.endDate,
+      observedThrough: content.observedThrough,
+      possible: window,
+      certain: window,
+    };
+  }
   const entry = eventBounds(content.entry);
   const departure = content.departure === null ? null : eventBounds(content.departure);
   const previousDay = (date: string) =>
