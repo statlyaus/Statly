@@ -62,7 +62,7 @@ const appearanceRuleContent = z
     intervals: z.literal('reviewed_appearance_window_within_one_season'),
     missingEvidence: z.literal('reject_rows_outside_reviewed_appearance_window'),
     purpose: z.literal('hpn_season_pav_attribution_only'),
-    retirement: z.literal('superseded_by_reviewed_entry_spell_for_same_player_club'),
+    retirement: z.literal('retired_by_covering_reviewed_entry_spell'),
     evidence,
     createdAt: instant,
   })
@@ -328,7 +328,7 @@ export function createAflTradeAppearanceMembershipSpellRule(
     intervals: 'reviewed_appearance_window_within_one_season',
     missingEvidence: 'reject_rows_outside_reviewed_appearance_window',
     purpose: 'hpn_season_pav_attribution_only',
-    retirement: 'superseded_by_reviewed_entry_spell_for_same_player_club',
+    retirement: 'retired_by_covering_reviewed_entry_spell',
   });
   return aflTradeAcquisitionSpellRegistrationRuleSchema.parse({
     ruleId: createAflTradeContentAddress('acquisition-spell-rule', content),

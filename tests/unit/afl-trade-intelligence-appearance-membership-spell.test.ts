@@ -62,7 +62,7 @@ describe('appearance-membership acquisition contracts', () => {
     expect(rule.content).toMatchObject({
       schemaVersion: 'afl-trade-acquisition-registration-rule/v3',
       purpose: 'hpn_season_pav_attribution_only',
-      retirement: 'superseded_by_reviewed_entry_spell_for_same_player_club',
+      retirement: 'retired_by_covering_reviewed_entry_spell',
       missingEvidence: 'reject_rows_outside_reviewed_appearance_window',
     });
     expect(aflTradeAcquisitionSpellRegistrationRuleSchema.parse(rule)).toEqual(rule);
@@ -203,5 +203,56 @@ describe('deriving appearance-membership spells', () => {
         facts: [fact({ appearanceFactId: 'a', effectiveAt: '2022-01-02T00:00:00.000Z' })],
       })
     ).toThrow('outside season');
+  });
+
+  it('skips unchanged windows and supersedes a current spell whose window grew', () => {
+    const roundThree = [
+      fact({ appearanceFactId: 'a', effectiveAt: '2021-03-20T09:30:00.000Z' }),
+      fact({ appearanceFactId: 'b', effectiveAt: '2021-04-03T09:30:00.000Z' }),
+      fact({ appearanceFactId: 'z', playerId: 'player:two', clubId: 'club:two' }),
+    ];
+    const [one, two] = deriveAflTradeAppearanceMembershipSpells({ ...base, facts: roundThree });
+    const later = deriveAflTradeAppearanceMembershipSpells({
+      ...base,
+      createdAt: '2026-09-11T00:00:00.000Z',
+      currentSpells: [one!, two!],
+      facts: [
+        ...roundThree,
+        fact({ appearanceFactId: 'c', effectiveAt: '2021-04-10T09:30:00.000Z' }),
+      ],
+    });
+    expect(later).toHaveLength(1);
+    expect(later[0]!.content).toMatchObject({
+      playerId: 'player:one',
+      version: 2,
+      supersedesSpellVersionId: one!.spellVersionId,
+      firstAppearance: { appearanceFactId: 'a' },
+      lastAppearance: { appearanceFactId: 'c', date: '2021-04-10' },
+    });
+    expect(
+      deriveAflTradeAppearanceMembershipSpells({
+        ...base,
+        currentSpells: [one!, two!],
+        facts: roundThree,
+      })
+    ).toEqual([]);
+  });
+
+  it('rejects current spells from another season or duplicated for one player and club', () => {
+    const [one] = deriveAflTradeAppearanceMembershipSpells({
+      ...base,
+      facts: [fact({ appearanceFactId: 'a' })],
+    });
+    expect(() =>
+      deriveAflTradeAppearanceMembershipSpells({
+        ...base,
+        seasonYear: 2022,
+        currentSpells: [one!],
+        facts: [],
+      })
+    ).toThrow('is not appearance membership');
+    expect(() =>
+      deriveAflTradeAppearanceMembershipSpells({ ...base, currentSpells: [one!, one!], facts: [] })
+    ).toThrow('More than one current spell');
   });
 });

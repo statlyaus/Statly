@@ -9,7 +9,7 @@
 -- appearance facts in that season. It carries no entry or departure event and claims nothing about
 -- how or when the player joined or left. It may be consumed only by HPN season PAV calculation;
 -- every trade-attribution consumer (metrics, releases, valuation datasets, player PAV observations)
--- keeps rejecting it. A reviewed entry spell for the same player and club supersedes it.
+-- keeps rejecting it. A current reviewed entry spell covering its window retires it.
 --
 -- Existing function bodies that are assembled by fragment replacement across earlier migrations are
 -- edited in place from their deployed definitions, and every edit asserts its exact fragment first.
@@ -59,7 +59,7 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
             'intervals','reviewed_appearance_window_within_one_season',
             'missingEvidence','reject_rows_outside_reviewed_appearance_window',
             'purpose','hpn_season_pav_attribution_only',
-            'retirement','superseded_by_reviewed_entry_spell_for_same_player_club',
+            'retirement','retired_by_covering_reviewed_entry_spell',
             'evidence',c->'evidence','createdAt',c->'createdAt'))
       )
       AND c->>'environment' IN ('test_fixture','non_production')
@@ -142,10 +142,23 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
       'acquisition_spell_registration',spell.spell_version_id,
       jsonb_build_object('spellVersionId',spell.spell_version_id,'content',c),spell.recorded_at,spell.registered_at,cutoff)
     AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor WHERE successor.supersedes_spell_version_id=spell.spell_version_id)
+    -- A reviewed entry spell covering this window retires it: appearance membership is a bridge only.
+    AND NOT EXISTS (
+      SELECT 1 FROM outcome_acquisition_spell_version reviewed
+      WHERE reviewed.player_id=spell.player_id AND reviewed.club_id=spell.club_id
+        AND reviewed.status='approved' AND reviewed.registration_canonical_json IS NOT NULL
+        AND reviewed.registration_canonical_json::JSONB->>'schemaVersion' IN
+          ('afl-trade-acquisition-registration/v1','afl-trade-acquisition-registration/v2')
+        AND reviewed.recorded_at<=cutoff
+        AND outcome_acquisition_possible_membership(reviewed) && daterange(spell.start_date,spell.end_date,'[]')
+        AND outcome_acquisition_spell_registration_current(reviewed.spell_version_id,cutoff))
     AND ((spell.version=1 AND spell.supersedes_spell_version_id IS NULL AND spell.spell_id=spell.spell_version_id)
       OR EXISTS (SELECT 1 FROM outcome_acquisition_spell_version predecessor
         WHERE predecessor.spell_version_id=spell.supersedes_spell_version_id
           AND predecessor.registration_canonical_json IS NOT NULL
+          -- Appearance membership only extends appearance membership for the same season.
+          AND predecessor.registration_canonical_json::JSONB->>'schemaVersion'='afl-trade-acquisition-registration/v3'
+          AND predecessor.registration_canonical_json::JSONB->>'seasonYear'=c->>'seasonYear'
           AND predecessor.spell_id=spell.spell_id AND predecessor.player_id=spell.player_id
           AND predecessor.club_id=spell.club_id AND predecessor.version+1=spell.version
           AND predecessor.recorded_at<=spell.recorded_at))
@@ -226,6 +239,16 @@ BEGIN
             RAISE EXCEPTION 'Acquisition spells require an exact approved start asset and rule';$new$;
  IF position(old_fragment IN definition)=0 THEN RAISE EXCEPTION 'Expected acquisition start-asset guard end'; END IF;
  EXECUTE replace(definition,old_fragment,new_fragment);
+
+ -- Overlap: a reviewed entry spell may cover current appearance-membership windows for the same
+ -- player and club, which it retires (their currentness requires no covering reviewed spell). A v3
+ -- spell still cannot overlap any current spell.
+ definition:=pg_get_functiondef('validate_outcome_version_chain()'::regprocedure);
+ old_fragment:=$old$              AND current_spell."spell_version_id" IS DISTINCT FROM NEW."supersedes_spell_version_id"$old$;
+ IF position(old_fragment IN definition)=0 THEN RAISE EXCEPTION 'Expected acquisition overlap guard'; END IF;
+ EXECUTE replace(definition,old_fragment,old_fragment||$new$
+              AND NOT (COALESCE(NEW."registration_canonical_json"::JSONB->>'schemaVersion','')<>'afl-trade-acquisition-registration/v3'
+                AND COALESCE(current_spell."registration_canonical_json"::JSONB->>'schemaVersion','')='afl-trade-acquisition-registration/v3')$new$);
 
  -- HPN input finalization (v2 guard): a v3 spell satisfies the start-asset join by being
  -- appearance membership; exact spell columns compare NULL-safely. The v1 guard is unchanged and

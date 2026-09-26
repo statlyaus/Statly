@@ -393,3 +393,278 @@ it('treats an existing appearance window as current membership for its player an
     repository.registerReviewedSpell(overlapping, 'overlapping-window-approval', execution)
   ).rejects.toThrow('cannot overlap');
 });
+
+/** Seeds reviewed factual prerequisites for later tests; their own owners are covered elsewhere. */
+async function seedLaterAppearances(input: {
+  season: number;
+  batch: string;
+  matches: readonly { id: string; at: string }[];
+  facts: readonly { factId: string; player: string; club: string; match: string; at: string }[];
+  players?: readonly string[];
+}) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL session_replication_role='replica'`);
+    for (const player of input.players ?? []) {
+      await client.query(
+        `INSERT INTO outcome_player(player_id,display_name,status) VALUES ($1,$1,'approved')`,
+        [player]
+      );
+    }
+    await client.query(
+      `INSERT INTO outcome_competition_season(competition,season_year) VALUES ('AFLM',$1)
+       ON CONFLICT DO NOTHING`,
+      [input.season]
+    );
+    for (const match of input.matches) {
+      await client.query(
+        `INSERT INTO outcome_match
+          (match_id,competition,season_year,provider,native_match_id,round_label,match_date,
+           home_club_id,away_club_id)
+         VALUES ($1,'AFLM',$2,NULL,NULL,$1,$3,'club:a','club:b')`,
+        [match.id, input.season, match.at]
+      );
+    }
+    const finalization = sha256(`finalization:${input.batch}`);
+    await client.query(
+      `INSERT INTO outcome_provider_fact_batch
+        (fact_batch_id,normalization_run_id,capture_id,environment,provider,capability_id,
+         competition,season_year,extractor_version,normalization_finalization_id,
+         normalization_finalization_sha256,normalization_finalized_at,source_staging_sha256,
+         source_row_set_sha256,source_issue_set_sha256,fact_batch_sha256,status,
+         source_row_count,match_fact_count,appearance_fact_count,metric_fact_count,
+         achievement_fact_count,issue_count,normalized_row_count,non_normalized_row_count,
+         started_at,completed_at,finalized_at,receipt_json)
+       VALUES ($1,'run:later','capture:later','test_fixture','afl_tables','player-stats',
+         'AFLM',$2,'synthetic-v1',$3,$4,'2026-08-01T00:00:00.000Z',$5,$5,$5,$5,'approved',
+         0,0,0,0,0,0,0,0,'2026-08-01T00:00:00.000Z','2026-08-01T00:00:00.000Z',
+         '2026-08-01T00:00:00.000Z','{}'::jsonb)`,
+      [
+        input.batch,
+        input.season,
+        `provider-normalization-finalization:${finalization}`,
+        finalization,
+        sha256(input.batch),
+      ]
+    );
+    for (const [index, item] of input.facts.entries()) {
+      const candidate = sha256(`candidate:${item.factId}`);
+      await client.query(
+        `INSERT INTO outcome_provider_player_appearance_fact
+          (appearance_fact_id,fact_batch_id,normalization_run_id,provider_decoded_row_id,
+           appearance_candidate_id,identity_candidate_id,match_candidate_id,
+           player_resolution_decision_id,player_assignment_decision_id,
+           match_resolution_decision_id,match_assignment_decision_id,
+           represented_club_resolution_decision_id,represented_club_assignment_decision_id,
+           player_identity_id,match_identity_id,represented_club_identity_id,player_id,match_id,
+           represented_club_id,competition,season_year,availability,appeared,reason_code,
+           effective_at,recorded_at,candidate_sha256,candidate_digests_json,fact_sha256,fact_json)
+         VALUES ($1,$2,'run:later',$3,$4,$4,$4,'d','d','d','d','d','d',$5,$6,$7,$8,$9,$10,
+           'AFLM',$11,'measured',TRUE,NULL,$12,date_trunc('milliseconds',clock_timestamp()),$13::text,
+           jsonb_build_object('appearance',$13::text,'identity','i','match','m'),$14::text,'{}'::jsonb)`,
+        [
+          item.factId,
+          input.batch,
+          `row:${input.batch}:${index}`,
+          `candidate:${item.factId}`,
+          `identity:${item.player}`,
+          `match-identity:${item.match}`,
+          `club-identity:${item.club}`,
+          item.player,
+          item.match,
+          item.club,
+          input.season,
+          item.at,
+          candidate,
+          sha256(`fact:${item.factId}`),
+        ]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function registerApproved(spell: AflTradeAcquisitionSpellRegistration, decisionId: string) {
+  await approveSpell(spell, decisionId);
+  return repository.registerReviewedSpell(spell, decisionId, execution);
+}
+
+async function isCurrent(spellVersionId: string): Promise<boolean> {
+  const result = await pool.query<{ current: boolean }>(
+    `SELECT outcome_acquisition_spell_registration_current($1,clock_timestamp()) AS current`,
+    [spellVersionId]
+  );
+  return result.rows[0]!.current;
+}
+
+it('extends a registered window as later appearances arrive by superseding it', async () => {
+  const current = await pool.query<{
+    registration_canonical_json: string;
+    spell_version_id: string;
+  }>(
+    `SELECT spell.spell_version_id,spell.registration_canonical_json
+       FROM outcome_acquisition_spell_version spell
+      WHERE spell.player_id='player:one' AND spell.club_id='club:a'
+        AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor
+          WHERE successor.supersedes_spell_version_id=spell.spell_version_id)`
+  );
+  expect(current.rows).toHaveLength(1);
+  const registered = await repository.loadCurrentExact(
+    current.rows[0]!.spell_version_id,
+    execution
+  );
+  await seedLaterAppearances({
+    season: seasonYear,
+    batch: 'fact-batch:round-four',
+    matches: [{ id: 'match:r4', at: '2021-04-10T09:30:00.000Z' }],
+    facts: [
+      {
+        factId: 'fact:p1:r4',
+        player: 'player:one',
+        club: 'club:a',
+        match: 'match:r4',
+        at: '2021-04-10T09:30:00.000Z',
+      },
+    ],
+  });
+  // The earlier window stays current for the facts it was registered against.
+  expect(await isCurrent(registered.spellVersionId)).toBe(true);
+  const facts = [
+    ...appearances,
+    {
+      factId: 'fact:p1:r4',
+      player: 'player:one',
+      club: 'club:a',
+      match: 'match:r4',
+      at: '2021-04-10T09:30:00.000Z',
+      appeared: true,
+    },
+  ];
+  const next = deriveAflTradeAppearanceMembershipSpells({
+    ...execution,
+    seasonYear,
+    ruleId: rule.ruleId,
+    createdAt: await proposalTime(),
+    currentSpells: [registered],
+    facts: facts
+      .filter((item) => item.player === 'player:one')
+      .map((item) => ({
+        appearanceFactId: item.factId,
+        playerId: item.player,
+        clubId: item.club,
+        matchId: item.match,
+        competition: 'AFLM' as const,
+        seasonYear,
+        effectiveAt: item.at,
+        availability: 'measured' as const,
+        appeared: item.appeared,
+      })),
+  });
+  expect(next).toHaveLength(1);
+  expect(next[0]!.content).toMatchObject({
+    version: 2,
+    supersedesSpellVersionId: registered.spellVersionId,
+    lastAppearance: { appearanceFactId: 'fact:p1:r4', date: '2021-04-10' },
+  });
+  await expect(registerApproved(next[0]!, 'extended-window-approval')).resolves.toEqual(next[0]);
+  expect(await isCurrent(next[0]!.spellVersionId)).toBe(true);
+  expect(await isCurrent(registered.spellVersionId)).toBe(false);
+});
+
+it('supersedes appearance membership only with the same season', async () => {
+  await seedLaterAppearances({
+    season: 2022,
+    batch: 'fact-batch:player-five',
+    players: ['player:five'],
+    matches: [
+      { id: 'match:2021-r5', at: '2021-04-17T09:30:00.000Z' },
+      { id: 'match:2022-r1', at: '2022-03-19T09:30:00.000Z' },
+    ],
+    facts: [
+      {
+        factId: 'fact:p5:2022',
+        player: 'player:five',
+        club: 'club:b',
+        match: 'match:2022-r1',
+        at: '2022-03-19T09:30:00.000Z',
+      },
+    ],
+  });
+  await seedLaterAppearances({
+    season: seasonYear,
+    batch: 'fact-batch:player-five-2021',
+    matches: [],
+    facts: [
+      {
+        factId: 'fact:p5:2021',
+        player: 'player:five',
+        club: 'club:b',
+        match: 'match:2021-r5',
+        at: '2021-04-17T09:30:00.000Z',
+      },
+    ],
+  });
+  const later = createAflTradeAppearanceMembershipSpell({
+    ...execution,
+    playerId: 'player:five',
+    clubId: 'club:b',
+    seasonYear: 2022,
+    firstAppearance: {
+      appearanceFactId: 'fact:p5:2022',
+      matchId: 'match:2022-r1',
+      date: '2022-03-19',
+    },
+    lastAppearance: {
+      appearanceFactId: 'fact:p5:2022',
+      matchId: 'match:2022-r1',
+      date: '2022-03-19',
+    },
+    ruleId: rule.ruleId,
+    version: 1,
+    supersedesSpellVersionId: null,
+    createdAt: await proposalTime(),
+  });
+  await registerApproved(later, 'player-five-2022-approval');
+  const earlierInput = {
+    ...execution,
+    playerId: 'player:five',
+    clubId: 'club:b',
+    seasonYear,
+    firstAppearance: {
+      appearanceFactId: 'fact:p5:2021',
+      matchId: 'match:2021-r5',
+      date: '2021-04-17',
+    },
+    lastAppearance: {
+      appearanceFactId: 'fact:p5:2021',
+      matchId: 'match:2021-r5',
+      date: '2021-04-17',
+    },
+    ruleId: rule.ruleId,
+  };
+  const crossSeason = createAflTradeAppearanceMembershipSpell({
+    ...earlierInput,
+    version: 2,
+    supersedesSpellVersionId: later.spellVersionId,
+    createdAt: await proposalTime(),
+  });
+  await expect(registerApproved(crossSeason, 'cross-season-approval')).rejects.toThrow(
+    'exact current review'
+  );
+  expect(await isCurrent(later.spellVersionId)).toBe(true);
+  const sameSeason = createAflTradeAppearanceMembershipSpell({
+    ...earlierInput,
+    version: 1,
+    supersedesSpellVersionId: null,
+    createdAt: await proposalTime(),
+  });
+  await expect(registerApproved(sameSeason, 'player-five-2021-approval')).resolves.toEqual(
+    sameSeason
+  );
+});

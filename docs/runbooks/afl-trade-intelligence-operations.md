@@ -3289,7 +3289,7 @@ batch). It has no entry or departure event: `start_event_version_id` and `start_
 null only for v3, `start_date`/`end_date` are the first/last appearance days and `end_reason` is
 `last_reviewed_appearance_in_season`. Currentness also requires that no reviewed appearance for that
 player, club and season lies outside the window. The v3 rule fixes `purpose:
-hpn_season_pav_attribution_only` and `retirement: superseded_by_reviewed_entry_spell_for_same_player_club`.
+hpn_season_pav_attribution_only` and `retirement: retired_by_covering_reviewed_entry_spell`.
 
 `deriveAflTradeAppearanceMembershipSpells` proposes one v3 spell per player and club for a season from
 the stored facts; non-appearances are ignored, never inferred. Each proposal still needs its rule-bound
@@ -3298,9 +3298,16 @@ metric, release, valuation dataset and player PAV observation consumer; only
 `outcome_hpn_pav_calculation_player` accepts it. The postseason authority and postseason observation
 contract reject it explicitly, and the v2 HPN input finalizer accepts it through
 `outcome_acquisition_is_appearance_membership` (the legacy v1 finalizer does not). Trade attribution, pick
-benchmarks and realized contribution therefore still require reviewed entry spells. The same-club overlap
-guard applies, so a reviewed entry spell covering the same membership must supersede the v3 spell rather
-than coexist with it. Fixture registration does not establish genuine admission, PAV or grading.
+benchmarks and realized contribution therefore still require reviewed entry spells.
+
+A v3 spell may supersede only a v3 spell for the same season; that is how a window grows during a
+season (`deriveAflTradeAppearanceMembershipSpells` takes the current v3 spells, skips unchanged windows
+and proposes the next version for changed ones). Retirement needs no supersession: a v3 spell is not
+current while a current reviewed v1/v2 spell for the same player and club covers its window, and the
+same-club overlap guard admits a reviewed spell over current v3 windows (never the reverse), so one
+multi-season entry spell retires every covered season window at once. Inputs retained against a retired
+window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
+grading.
 
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,

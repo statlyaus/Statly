@@ -19,7 +19,12 @@ import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeli
 import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
-import { createAflTradeAppearanceMembershipSpellRule } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
+import {
+  createAflTradeAcquisitionSpellRegistration,
+  createAflTradeAcquisitionSpellRegistrationRule,
+  createAflTradeAppearanceMembershipSpellRule,
+} from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
+import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
 import { deriveAflTradeAppearanceMembershipSpells } from '@/server/aflTradeIntelligence/outcomes/appearanceMembershipSpellDerivation';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
@@ -324,4 +329,85 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
       proposals[0]!.spellVersionId,
     ])
   ).rejects.toThrow('limited to HPN season PAV attribution');
+
+  // Retirement: a reviewed entry spell covering the home player's window is admitted over the
+  // current appearance-membership spell and makes it non-current, with no manual supersession.
+  const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
+    environment: 'non_production',
+    completeCaptureReceipts: true,
+    draftSessions: true,
+    existingDraftTargets: [
+      {
+        playerId: 'afl-player:local-rehearsal',
+        playerName: 'Player One',
+        clubId: 'afl-club:local-rehearsal',
+        clubName: 'Carlton',
+      },
+      {
+        playerId: 'afl-player:local-rehearsal-away',
+        playerName: 'Player Two',
+        clubId: 'afl-club:local-rehearsal-away',
+        clubName: 'Fremantle',
+      },
+    ],
+    existingTargets: {
+      playerId: 'afl-player:local-rehearsal',
+      playerName: 'Player One',
+      fromClubId: 'afl-club:local-rehearsal-away',
+      fromClubName: 'Fremantle',
+      toClubId: 'afl-club:local-rehearsal',
+      toClubName: 'Carlton',
+    },
+  });
+  const reviewedSpells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(client, {
+    read: async (reference) => {
+      const artifact = promoted.retainedArtifacts.get(reference.artifactId);
+      if (!artifact) throw new Error('Missing exact retained fixture artifact.');
+      return artifact.bytes;
+    },
+  });
+  const entryRule = createAflTradeAcquisitionSpellRegistrationRule({
+    ...scope,
+    ruleVersion: 'synthetic-reviewed-entry-v1',
+    evidence: [promoted.sourceArtifact],
+    createdAt: await instant(),
+  });
+  await reviewedSpells.registerReviewedRule(
+    entryRule,
+    await approve('acquisition_spell_rule', entryRule.ruleId, entryRule),
+    scope
+  );
+  const reviewedSpell = createAflTradeAcquisitionSpellRegistration({
+    ...scope,
+    playerId: promoted.playerId,
+    clubId: promoted.clubId,
+    entry: promoted.entry,
+    departure: null,
+    ruleId: entryRule.ruleId,
+    version: 1,
+    supersedesSpellVersionId: null,
+    observedThrough: '2026-03-20',
+    continuityEvidence: promoted.entry.evidence,
+    createdAt: await instant(),
+  });
+  await reviewedSpells.registerReviewedSpell(
+    reviewedSpell,
+    await approve('acquisition_spell_registration', reviewedSpell.spellVersionId, reviewedSpell),
+    scope
+  );
+  const currentness = async (spellVersionId: string) =>
+    (
+      await pool.query<{ current: boolean }>(
+        'SELECT outcome_acquisition_spell_registration_current($1,clock_timestamp()) AS current',
+        [spellVersionId]
+      )
+    ).rows[0]!.current;
+  const homeWindow = spellFor.get('afl-player:local-rehearsal')!;
+  const awayWindow = spellFor.get('afl-player:local-rehearsal-away')!;
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
+  expect(await currentness(homeWindow.spellVersionId)).toBe(false);
+  expect(await currentness(awayWindow.spellVersionId)).toBe(true);
+  // The retained input bound to the retired window now fails current-authority reads; the logical
+  // input scope is immutable, so a successor calculation belongs to a new scope, not this test.
+  await expect(repository.loadCurrentFinalizedSeasonInputSet(read, scope)).rejects.toThrow();
 });

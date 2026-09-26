@@ -24,12 +24,19 @@ export interface DeriveAflTradeAppearanceMembershipSpellsInput {
   readonly ruleId: string;
   readonly createdAt: string;
   readonly facts: readonly AflTradeAppearanceFactForMembership[];
+  /**
+   * Current registered appearance-membership spells for this season. An unchanged window is skipped;
+   * a changed window becomes the next version superseding the current one, so a window can grow as
+   * new appearance facts arrive during the season. Omit or pass none for a first registration.
+   */
+  readonly currentSpells?: readonly AflTradeAcquisitionSpellRegistration[];
 }
 
 const compare = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
 
 /**
  * Proposes one appearance-membership (v3) spell per player and represented club for one season,
+ * or the next version of a supplied current spell whose window changed,
  * spanning the first and last reviewed measured appearance. Only facts with `availability`
  * `measured` and `appeared === true` count; everything else is ignored rather than inferred.
  *
@@ -92,29 +99,64 @@ export function deriveAflTradeAppearanceMembershipSpells(
     if (compare(point.key, current.first.key) < 0) current.first = point;
     if (compare(point.key, current.last.key) > 0) current.last = point;
   }
+  const current = new Map<string, AflTradeAcquisitionSpellRegistration>();
+  for (const spell of input.currentSpells ?? []) {
+    const c = spell.content;
+    if (
+      c.schemaVersion !== 'afl-trade-acquisition-registration/v3' ||
+      c.environment !== input.environment ||
+      c.competition !== input.competition ||
+      c.seasonYear !== input.seasonYear
+    ) {
+      throw new TypeError(
+        `Spell ${spell.spellVersionId} is not appearance membership for ${input.competition} ${input.seasonYear}.`
+      );
+    }
+    const scope = `${c.playerId}\u0000${c.clubId}`;
+    if (current.has(scope)) {
+      throw new TypeError(
+        `More than one current spell is supplied for ${c.playerId} at ${c.clubId}.`
+      );
+    }
+    current.set(scope, spell);
+  }
   return [...windows.entries()]
     .sort(([left], [right]) => compare(left, right))
-    .map(([, window]) =>
-      createAflTradeAppearanceMembershipSpell({
-        environment: input.environment,
-        competition: input.competition,
-        playerId: window.playerId,
-        clubId: window.clubId,
-        seasonYear: input.seasonYear,
-        firstAppearance: {
-          appearanceFactId: window.first.appearanceFactId,
-          matchId: window.first.matchId,
-          date: window.first.date,
-        },
-        lastAppearance: {
-          appearanceFactId: window.last.appearanceFactId,
-          matchId: window.last.matchId,
-          date: window.last.date,
-        },
-        ruleId: input.ruleId,
-        version: 1,
-        supersedesSpellVersionId: null,
-        createdAt: input.createdAt,
-      })
-    );
+    .flatMap(([scope, window]) => {
+      const existing = current.get(scope);
+      const existingContent =
+        existing?.content.schemaVersion === 'afl-trade-acquisition-registration/v3'
+          ? existing.content
+          : undefined;
+      if (
+        existingContent &&
+        existingContent.firstAppearance.appearanceFactId === window.first.appearanceFactId &&
+        existingContent.lastAppearance.appearanceFactId === window.last.appearanceFactId
+      ) {
+        return [];
+      }
+      return [
+        createAflTradeAppearanceMembershipSpell({
+          environment: input.environment,
+          competition: input.competition,
+          playerId: window.playerId,
+          clubId: window.clubId,
+          seasonYear: input.seasonYear,
+          firstAppearance: {
+            appearanceFactId: window.first.appearanceFactId,
+            matchId: window.first.matchId,
+            date: window.first.date,
+          },
+          lastAppearance: {
+            appearanceFactId: window.last.appearanceFactId,
+            matchId: window.last.matchId,
+            date: window.last.date,
+          },
+          ruleId: input.ruleId,
+          version: existingContent ? existingContent.version + 1 : 1,
+          supersedesSpellVersionId: existing ? existing.spellVersionId : null,
+          createdAt: input.createdAt,
+        }),
+      ];
+    });
 }
