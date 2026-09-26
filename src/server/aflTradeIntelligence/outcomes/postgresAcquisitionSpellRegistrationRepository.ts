@@ -93,6 +93,37 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
       ]);
       const c = spell.content;
       await this.authenticateRule(transaction, c.ruleId);
+      if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') {
+        // Appearance membership: no entry event; the window is the first and last reviewed
+        // appearance in one season, verified against appearance facts by the database guard.
+        await transaction.query(
+          `INSERT INTO outcome_acquisition_spell_version
+            (spell_version_id,spell_id,version,player_id,club_id,start_event_version_id,
+             start_asset_version_id,start_date,end_date,end_reason,rule_id,status,
+             supersedes_spell_version_id,recorded_at,registration_canonical_json,
+             registration_approval_decision_id,registered_at)
+           SELECT $1,COALESCE((SELECT spell_id FROM outcome_acquisition_spell_version
+                      WHERE spell_version_id=$2),$1),$3,$4,$5,NULL,NULL,$6::date,$7::date,
+             'last_reviewed_appearance_in_season',$8,'approved',$2,$9,$10,$11,
+             date_trunc('milliseconds',transaction_timestamp())
+           WHERE NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version WHERE spell_version_id=$1)
+           ON CONFLICT (spell_version_id) DO NOTHING`,
+          [
+            spell.spellVersionId,
+            c.supersedesSpellVersionId,
+            c.version,
+            c.playerId,
+            c.clubId,
+            c.firstAppearance.date,
+            c.lastAppearance.date,
+            c.ruleId,
+            c.createdAt,
+            canonicalizeAflTradeJson(c),
+            approvalDecisionId,
+          ]
+        );
+        return this.requireRegistered(transaction, spell, approvalDecisionId);
+      }
       await transaction.query(
         `INSERT INTO outcome_acquisition_spell_version
           (spell_version_id,spell_id,version,player_id,club_id,start_event_version_id,
@@ -122,18 +153,26 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
           approvalDecisionId,
         ]
       );
-      const result = await transaction.query<{ registration_canonical_json: string }>(
-        `SELECT registration_canonical_json FROM outcome_acquisition_spell_version
-         WHERE spell_version_id=$1 AND registration_canonical_json=$2
-           AND registration_approval_decision_id=$3
-           AND outcome_acquisition_spell_registration_current(spell_version_id,transaction_timestamp())
-         FOR SHARE`,
-        [spell.spellVersionId, canonicalizeAflTradeJson(c), approvalDecisionId]
-      );
-      if (result.rows.length !== 1)
-        throw new Error('Acquisition spell authority is not current and exact.');
-      return spell;
+      return this.requireRegistered(transaction, spell, approvalDecisionId);
     });
+  }
+
+  private async requireRegistered(
+    transaction: AflOutcomeSqlTransaction,
+    spell: AflTradeAcquisitionSpellRegistration,
+    approvalDecisionId: string
+  ): Promise<AflTradeAcquisitionSpellRegistration> {
+    const result = await transaction.query<{ registration_canonical_json: string }>(
+      `SELECT registration_canonical_json FROM outcome_acquisition_spell_version
+       WHERE spell_version_id=$1 AND registration_canonical_json=$2
+         AND registration_approval_decision_id=$3
+         AND outcome_acquisition_spell_registration_current(spell_version_id,transaction_timestamp())
+       FOR SHARE`,
+      [spell.spellVersionId, canonicalizeAflTradeJson(spell.content), approvalDecisionId]
+    );
+    if (result.rows.length !== 1)
+      throw new Error('Acquisition spell authority is not current and exact.');
+    return spell;
   }
 
   async loadCurrentExact(
@@ -188,6 +227,9 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
     const c = spell.content;
     if (c.environment !== execution.environment || c.competition !== execution.competition)
       throw new Error('Acquisition spell registration scope differs.');
+    // Appearance membership (v3) binds reviewed appearance facts, which the database authenticates;
+    // it carries no retained evidence bytes of its own.
+    if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') return;
     for (const ref of [
       ...c.entry.evidence,
       ...c.continuityEvidence,

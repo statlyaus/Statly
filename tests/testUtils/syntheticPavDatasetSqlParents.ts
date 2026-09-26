@@ -259,6 +259,9 @@ export async function seedSyntheticPavDatasetSqlParents(
         spell_id: observation.acquisitionSpell.spellId,
         player_id: observation.playerId,
         club_id: observation.acquisitionSpell.clubId,
+        // Entry columns are nullable only for appearance membership (v3); reviewed spells need both.
+        start_event_version_id: 'synthetic-upstream',
+        start_asset_version_id: 'synthetic-upstream',
         status: 'approved',
         start_date: observation.acquisitionSpell.effectiveFrom,
         end_date: null,

@@ -65,6 +65,9 @@ interface Validation {
 }
 
 function hasCompatibleTradeDate({ record, bounds }: Validation): boolean {
+  if (record.acquisitionSpell.content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
+    return false;
+  }
   const knownEntry = record.acquisitionSpell.content.entry.eventDate;
   const tradeDate = record.context.content.tradeDate;
   if (knownEntry !== null) return knownEntry === tradeDate;
@@ -76,6 +79,10 @@ function validateAcquisition(check: Validation): void {
   const { record, bounds, cutoff, issue } = check;
   const context = record.context.content;
   const spell = record.acquisitionSpell.content;
+  if (spell.schemaVersion === 'afl-trade-acquisition-registration/v3') {
+    issue('Appearance membership cannot bind a postseason trade acquisition.');
+    return;
+  }
   const bindingMatches =
     spell.environment === context.environment &&
     spell.competition === context.competition &&

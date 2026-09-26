@@ -145,6 +145,9 @@ export async function loadCurrentAflTradePostseasonContext(
     },
     evidence
   ).loadCurrentExact(c.spellVersionId, { environment: c.environment, competition: c.competition });
+  if (acquisitionSpell.content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
+    throw new Error('Postseason acquisition requires a reviewed entry spell.');
+  }
   const entry = acquisitionSpell.content.entry;
   if (
     entry.promotionId !== c.promotionId ||
