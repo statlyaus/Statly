@@ -5,7 +5,7 @@ import {
   createAflTradeAcquisitionSpellRegistration,
   createAflTradeWindowAcquisitionSpellRegistration,
   createAflTradeWindowAcquisitionSpellRegistrationRule,
-  type AflTradeAcquisitionSpellRegistration,
+  type AflTradeReviewedAcquisitionSpellRegistration,
   createAflTradeAcquisitionSpellRegistrationRule,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
@@ -19,7 +19,7 @@ export async function verifySessionAcquisitionCurrentness(
   > & {
     draftEntries: Array<{
       player_id: string;
-      entry: AflTradeAcquisitionSpellRegistration['content']['entry'];
+      entry: AflTradeReviewedAcquisitionSpellRegistration['content']['entry'];
     }>;
   }
 ): Promise<void> {

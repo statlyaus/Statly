@@ -235,6 +235,10 @@ export type AflTradeAcquisitionSpellRegistrationRule = z.infer<
 export type AflTradeAcquisitionSpellRegistration = z.infer<
   typeof aflTradeAcquisitionSpellRegistrationSchema
 >;
+/** A reviewed entry spell (v1 exact or v2 window): the only kind trade attribution may consume. */
+export type AflTradeReviewedAcquisitionSpellRegistration = AflTradeAcquisitionSpellRegistration & {
+  content: z.infer<typeof spellContent> | z.infer<typeof windowSpellContent>;
+};
 
 export function createAflTradeAcquisitionSpellRegistrationRule(
   input: Omit<
@@ -292,15 +296,16 @@ export function createAflTradeWindowAcquisitionSpellRegistrationRule(
 
 export function createAflTradeWindowAcquisitionSpellRegistration(
   input: Omit<z.input<typeof windowSpellContent>, 'schemaVersion'>
-): AflTradeAcquisitionSpellRegistration {
+): AflTradeAcquisitionSpellRegistration & { content: z.infer<typeof windowSpellContent> } {
   const content = windowSpellContent.parse({
     ...input,
     schemaVersion: 'afl-trade-acquisition-registration/v2',
   });
-  return aflTradeAcquisitionSpellRegistrationSchema.parse({
+  const registration = aflTradeAcquisitionSpellRegistrationSchema.parse({
     spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
     content,
   });
+  return { ...registration, content };
 }
 
 export function createAflTradeAppearanceMembershipSpellRule(
