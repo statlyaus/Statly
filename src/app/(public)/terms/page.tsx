@@ -1,3 +1,5 @@
+import { PUBLIC_CONTACT_EMAIL } from '@/lib/publicContact';
+
 export const metadata = {
   title: 'Terms of Service | Statly',
   description: 'The terms and conditions for using Statly.',
@@ -8,9 +10,7 @@ export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
-      <p className="text-sm text-base-content/60 mb-8">
-        Last updated: {new Date().toLocaleDateString()}
-      </p>
+      <p className="text-sm text-base-content/60 mb-8">Last updated: 11 August 2026</p>
 
       <section className="prose prose-neutral dark:prose-invert max-w-none">
         <p>
@@ -34,8 +34,8 @@ export default function TermsPage() {
         </p>
         <h2>Contact</h2>
         <p>
-          For questions about these Terms, please contact us through the contact details on our
-          website.
+          For questions about these Terms, email{' '}
+          <a href={`mailto:${PUBLIC_CONTACT_EMAIL}`}>{PUBLIC_CONTACT_EMAIL}</a>.
         </p>
       </section>
     </div>

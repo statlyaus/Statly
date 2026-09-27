@@ -39,7 +39,7 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
   return (
     <div className="space-y-8" aria-labelledby="outcome-methodology-heading">
       <section className="rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        <p className="text-xs font-semibold text-muted-foreground">
           Factual outcomes · release status
         </p>
         <h2

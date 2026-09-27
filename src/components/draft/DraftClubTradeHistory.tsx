@@ -4,11 +4,7 @@ import { useDeferredValue, useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
-import {
-  draftHubHeroShellClass,
-  draftHubHeroTopAccentClass,
-  draftHubSkyPillClass,
-} from '@/components/draft/draftHubChrome';
+import { draftHubHeroShellClass, draftHubSkyPillClass } from '@/components/draft/draftHubChrome';
 import type { DraftClubTradeRefRow } from '@/lib/draftTrades/contracts';
 import { filterClubTradeRefs } from '@/lib/draftTrades/clubTradeRefSearch';
 import {
@@ -53,9 +49,7 @@ function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) 
         {grade.grade}
       </span>
       {grade.state === 'provisional' ? (
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Provisional
-        </span>
+        <span className="text-xs font-semibold text-muted-foreground">Provisional</span>
       ) : null}
     </span>
   );
@@ -98,12 +92,9 @@ export function DraftClubTradeHistory({
   return (
     <section className="space-y-6">
       <div className={draftHubHeroShellClass}>
-        <div className={draftHubHeroTopAccentClass} />
         <div className="mb-5 flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-info">
-              Club trade history
-            </p>
+            <p className="text-xs font-semibold text-info">Club trade history</p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <DraftTeamLogo team={clubName} size={36} withCircle />
               <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
@@ -145,9 +136,7 @@ export function DraftClubTradeHistory({
 
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Trades on file
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Trades on file</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {refs.length}
             </p>
@@ -156,18 +145,14 @@ export function DraftClubTradeHistory({
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Year span
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Year span</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {yearSpan ? `${yearSpan.min}–${yearSpan.max}` : '—'}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">Coverage in the current dataset.</p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Export anchor year
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Export anchor year</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {exportYear ?? '—'}
             </p>
@@ -199,7 +184,7 @@ export function DraftClubTradeHistory({
           </p>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-base-content/70">
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="badge badge-outline">{filtered.length} results</span>
           <span className="badge badge-primary badge-outline">{clubName}</span>
           {query.trim() ? (
@@ -268,7 +253,7 @@ export function DraftClubTradeHistory({
           </article>
         ))}
         {filtered.length === 0 && refs.length > 0 && (
-          <div className="rounded-2xl border border-base-300 bg-base-100 py-10 text-center text-sm text-base-content/70 shadow-sm">
+          <div className="rounded-2xl border border-border bg-background py-10 text-center text-sm text-muted-foreground shadow-sm">
             No rows match your search.
           </div>
         )}
@@ -277,9 +262,7 @@ export function DraftClubTradeHistory({
       <div className="hidden md:block">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Trade index
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Trade index</p>
             <h3 className="text-xl font-semibold text-foreground">Scan this club</h3>
             <p className="text-sm text-muted-foreground">
               Newest season first. Click a trade title for the full page.
@@ -291,7 +274,7 @@ export function DraftClubTradeHistory({
         </div>
 
         {filtered.length === 0 && refs.length > 0 ? (
-          <div className="rounded-2xl border border-base-300 bg-base-100 py-14 text-center text-sm text-base-content/70 shadow-sm">
+          <div className="rounded-2xl border border-border bg-background py-14 text-center text-sm text-muted-foreground shadow-sm">
             <p>No rows match your search.</p>
           </div>
         ) : (
@@ -301,7 +284,7 @@ export function DraftClubTradeHistory({
               className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"
             >
               <thead>
-                <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
+                <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:text-muted-foreground">
                   <th scope="col" className="text-left">
                     Year
                   </th>

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
 import {
   draftHubHeroShellClass,
-  draftHubHeroTopAccentClass,
   draftHubSkyPillClass,
   draftHubSkyPillSmClass,
   draftHubSlatePillSmClass,
@@ -65,7 +64,7 @@ function clubLinkLabel(club: DraftClubListItem): string {
 }
 
 const sortThBtnClass =
-  'inline-flex min-h-10 w-full items-center justify-end gap-1 rounded-md px-2 py-2 text-xs font-semibold uppercase tracking-wide text-base-content/65 transition hover:bg-base-200/80 hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:min-h-0';
+  'inline-flex min-h-10 w-full items-center justify-end gap-1 rounded-md px-2 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:min-h-0';
 
 export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
   const [view, setView] = useState<ViewMode>('table');
@@ -94,12 +93,9 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
   return (
     <section className="space-y-6" aria-labelledby="club-directory-heading">
       <header className={draftHubHeroShellClass}>
-        <div className={draftHubHeroTopAccentClass} />
         <div className="flex flex-col gap-5 border-b border-info/20 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-info">
-              Club lens
-            </p>
+            <p className="text-xs font-semibold text-info">Club lens</p>
             <h2
               id="club-directory-heading"
               className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl"
@@ -172,21 +168,19 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="rounded-2xl border border-border bg-background p-3 text-center shadow-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Assets
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground">Assets</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-foreground">
                     {club.assetCount}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border bg-background p-3 text-center shadow-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Club sides
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground">Club sides</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-foreground">
                     {club.partyCount}
                   </p>
-                  <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">Rows as a party</p>
+                  <p className="mt-0.5 text-xs leading-tight text-muted-foreground">
+                    Rows as a party
+                  </p>
                 </div>
               </div>
             </article>
@@ -211,7 +205,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
               <col className="w-36" />
             </colgroup>
             <thead>
-              <tr className="border-b border-base-200 bg-base-200/50 [&>th]:text-sm [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-base-content/65">
+              <tr className="border-b border-border bg-muted/50 [&>th]:text-sm [&>th]:font-semibold [&>th]:text-muted-foreground">
                 <th scope="col" className="text-left">
                   Club
                 </th>
@@ -238,7 +232,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                   >
                     Trades
                     {tableSort.key === 'trades' ? (
-                      <span className="text-base-content/80" aria-hidden="true">
+                      <span className="text-foreground/80" aria-hidden="true">
                         {tableSort.dir === 'desc' ? '↓' : '↑'}
                       </span>
                     ) : null}
@@ -267,7 +261,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                   >
                     Assets
                     {tableSort.key === 'assets' ? (
-                      <span className="text-base-content/80" aria-hidden="true">
+                      <span className="text-foreground/80" aria-hidden="true">
                         {tableSort.dir === 'desc' ? '↓' : '↑'}
                       </span>
                     ) : null}
@@ -278,7 +272,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                 </th>
               </tr>
             </thead>
-            <tbody className="[&>tr]:border-b [&>tr]:border-base-200/80 [&>tr:last-child]:border-b-0">
+            <tbody className="[&>tr]:border-b [&>tr]:border-border/80 [&>tr:last-child]:border-b-0">
               {sortedClubs.map((club) => (
                 <tr key={club.clubSlug} className="hover">
                   <td className="min-w-0 align-middle">
