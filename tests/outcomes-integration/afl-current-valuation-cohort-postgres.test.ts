@@ -137,6 +137,7 @@ function coordinator() {
     return prepared;
   };
   return createAflTradeCurrentValuationCohortCoordinator({
+    maximumConcurrency: 8,
     captureCurrent,
     prepareTrade: async ({ tradeId, context }) => ({
       tradeId,
@@ -217,6 +218,7 @@ describe('automatic current valuation cohort PostgreSQL coordination', () => {
     async function buildPrepared(context: Awaited<ReturnType<typeof capture>>) {
       let retained: AflTradePreparedValuationInputSet | null = null;
       await createAflTradeCurrentValuationCohortCoordinator({
+        maximumConcurrency: 8,
         captureCurrent: async () => context,
         prepareTrade: async ({ tradeId }) => ({
           tradeId,

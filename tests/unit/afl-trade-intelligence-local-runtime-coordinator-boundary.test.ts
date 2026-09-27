@@ -103,4 +103,62 @@ describe('local runtime recalculation wiring', () => {
       statements.some((sql) => /private_evaluation_batch|current_prepared_valuation/u.test(sql))
     ).toBe(false);
   });
+
+  it('names the composition root blockers in the configuration failure', async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), 'statly-runtime-coordinator-'));
+    directories.push(artifactRoot);
+    const blockers = [
+      {
+        code: 'cohort_trade_construction_owner_missing',
+        subject: { kind: 'owner' as const, id: 'private-cohort-trade-construction' },
+        reason: 'No genuine evidence-derived per-trade valuation-input assembly owner exists yet.',
+      },
+      {
+        code: 'hpn_source_authority_missing',
+        subject: { kind: 'source_role' as const, id: 'hpn_corroborating_player_stats' },
+        reason: 'No exact reviewed corroborating player-stat authority is configured.',
+      },
+    ];
+    const pool: AflOutcomePgPool = {
+      async query(sql) {
+        if (sql.includes('claim_outcome_private_valuation_dispatch'))
+          return {
+            rows: [
+              {
+                request_id: request.requestId,
+                request_json: request,
+                claim_id: id('private-valuation-dispatch-claim'),
+                lease_expires_at: '2026-09-02T00:02:00.000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('load_outcome_current_valuation_evidence'))
+          return {
+            rows: [{ retained_source_keys: [], result_json: retainedFacts() }],
+            rowCount: 1,
+          };
+        if (!/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL ROLE)/u.test(sql)) {
+          throw new Error(`Unexpected database operation before model preparation: ${sql}`);
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      async connect() {
+        return { query: pool.query, release() {} };
+      },
+    };
+    const runtime = createLocalAflTradePrivateValuationRuntime({
+      pool,
+      artifactRoot,
+      constructionBlockers: blockers,
+    });
+    const failure = await runtime.dispatchOne().catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      code: 'MISSING_CONSTRUCTION_CONFIGURATION',
+      blockerCodes: ['cohort_trade_construction_owner_missing', 'hpn_source_authority_missing'],
+      blockers,
+    });
+    expect((failure as Error).message).toContain('cohort_trade_construction_owner_missing');
+    expect((failure as Error).message).toContain('hpn_source_authority_missing');
+  });
 });

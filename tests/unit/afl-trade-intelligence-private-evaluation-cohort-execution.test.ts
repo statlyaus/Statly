@@ -75,8 +75,6 @@ describe('private evaluation cohort durable execution policy', () => {
       maximumConcurrency: 8,
       leaseSeconds: 120,
       heartbeatSeconds: 30,
-      retryBaseSeconds: 5,
-      retryMaximumSeconds: 60,
       concurrencyPolicy: 'bounded_local_workers',
     });
   });

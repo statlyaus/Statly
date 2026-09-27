@@ -118,10 +118,15 @@ Use disposable databases or fixtures for verification. Never use `prisma/dev.db`
 4. Reject Firestore or fallback data becoming canonical through an error path.
 5. For UI work, preserve semantic tokens, keyboard access, accessible names, focus visibility, and
    mobile reflow; use `.agents/skills/product-design-review/SKILL.md` for product-level reviews.
+6. Read review comments before calling a change reviewed, and confirm a review actually ran: a reviewer
+   that skipped or exhausted its budget leaves nothing to read, so silence is not approval. Verify a
+   claimed fix in the code or by reproducing it rather than trusting an "addressed in `<sha>`"
+   annotation, which has been wrong in both directions.
 
 ## Done
 
 A change is done when the requested behavior and owning boundary are correct, focused regression
 coverage passes, relevant lint/type/test/build checks pass, browser behavior is verified when user
-flows changed, documentation matches the result, and the diff contains no protected or unrelated
-files. Delivery follows [the pull-request runbook](docs/development/delivery.md).
+flows changed, documentation matches the result, every review comment carries a recorded decision with
+any claimed fix verified, and the diff contains no protected or unrelated files. Delivery follows
+[the pull-request runbook](docs/development/delivery.md).

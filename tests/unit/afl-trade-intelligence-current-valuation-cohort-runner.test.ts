@@ -82,6 +82,7 @@ describe('automatic private evaluation cohort runner', () => {
     const registerBatch = vi.fn();
     const advanceBatch = vi.fn();
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({ capture: authority, currentBatch: null }),
       stageTrade: async ({ selector }) =>
         selector.tradeId === 'trade-a'
@@ -132,6 +133,7 @@ describe('automatic private evaluation cohort runner', () => {
       activatedAt: '2026-08-21T09:01:00.000Z',
     }));
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({ capture: currentAuthority, currentBatch: retainedCurrent }),
       stageTrade: async ({ selector }) => {
         attempts.set(selector.tradeId, (attempts.get(selector.tradeId) ?? 0) + 1);
@@ -186,6 +188,7 @@ describe('automatic private evaluation cohort runner', () => {
     const registerBatch = vi.fn();
     const advanceBatch = vi.fn();
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({ capture: authority, currentBatch: null }),
       stageTrade: async ({ selector }) => {
         attempted.push(selector.tradeId);
@@ -225,6 +228,7 @@ describe('automatic private evaluation cohort runner', () => {
     const authority = capture(['trade-Z', 'trade-a']);
     const retainUnexpectedDiagnostics = vi.fn(async ({ diagnostics }) => diagnostics);
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({ capture: authority, currentBatch: null }),
       stageTrade: async ({ selector }) => {
         throw new Error(`Failure for ${selector.tradeId}.`);
@@ -253,6 +257,7 @@ describe('automatic private evaluation cohort runner', () => {
           : createGovernedPrivateEvaluationMultiClubNarrativeFixture(clubCount as 3 | 4);
       const authority = capture([narrative.content.tradeId]);
       const runner = createAflTradePrivateEvaluationCohortRunner({
+        maximumConcurrency: 8,
         captureCurrent: async () => ({ capture: authority, currentBatch: null }),
         stageTrade: async ({ selector, operationId }) => {
           const materialization = createAutomatedGovernedPrivateEvaluationGeneration({
@@ -313,6 +318,7 @@ describe('automatic private evaluation cohort runner', () => {
     });
     const stageTrade = vi.fn();
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({
         capture: authority,
         currentBatch: {
@@ -363,6 +369,7 @@ describe('automatic private evaluation cohort runner', () => {
     });
     const stageTrade = vi.fn();
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({
         capture: authority,
         currentBatch: {
@@ -398,6 +405,7 @@ describe('automatic private evaluation cohort runner', () => {
   it('does not relabel an unexpected current-connection repository defect as stale', async () => {
     const authority = capture(['trade-a']);
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({ capture: authority, currentBatch: null }),
       stageTrade: async () => ({
         state: 'activated',
@@ -420,6 +428,7 @@ describe('automatic private evaluation cohort runner', () => {
     const authority = capture(['trade-a']);
     const retainUnexpectedDiagnostics = vi.fn();
     const runner = createAflTradePrivateEvaluationCohortRunner({
+      maximumConcurrency: 8,
       captureCurrent: async () => ({ capture: authority, currentBatch: null }),
       stageTrade: async () => {
         const malformed = new Error(`  ${'x'.repeat(5_000)}  `);

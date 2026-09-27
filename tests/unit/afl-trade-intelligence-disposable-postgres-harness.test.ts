@@ -329,6 +329,8 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
         'checkpoint_timeout=30s',
         '-c',
         'checkpoint_completion_target=0.9',
+        '-c',
+        'max_locks_per_transaction=2048',
       ],
       output: 'pipe',
       timeoutMs: 60_000,

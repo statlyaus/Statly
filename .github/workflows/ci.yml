@@ -130,6 +130,10 @@ jobs:
     services:
       postgres:
         image: postgres:16-alpine
+        # Each suite schema holds the complete ordered migration history, about 1,200 relations, and
+        # DROP SCHEMA ... CASCADE has to lock every one of them. The image default of 64 locks fails
+        # that teardown with "out of shared memory" once suites run in parallel.
+        command: -c max_locks_per_transaction=2048
         env:
           POSTGRES_DB: statly_outcomes_test
           POSTGRES_USER: statly_test

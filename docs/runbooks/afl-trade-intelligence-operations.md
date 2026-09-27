@@ -220,6 +220,67 @@ Until the source and factual checklist passes, the public archive may expose onl
 historical records and truthful factual-unavailable states. Until the additional model checklist passes, it may
 expose reviewed factual outcomes but must keep valuation numerical states unavailable.
 
+## Raw evidence payload retention
+
+Evidence is retained in two layers with different lifetimes.
+
+**Retained indefinitely** — the verifiable chain: artifact custody rows, artifact ids and
+`content_sha256` digests, source captures, evidence batches, gate decisions, execution receipts,
+transition intents, completions, generations, and every canonical JSON payload that names them. These
+are what make a claim checkable, and nothing in this policy authorises deleting them.
+
+**Retained for at least 90 days, and for the capture's recorded retention term where that is
+longer** — raw payload bytes: the capture bodies themselves (the HTML or JSON a provider served, and
+derived artifacts whose bytes are only needed to reproduce a reading). Approved external captures
+record `rawRetentionDays` in their admission terms, and `outcome_external_retained_target_is_current`
+enforces `at_time < captured_at + rawRetentionDays`. Pruning earlier than that term would leave a
+capture the guard still treats as retained while its payload is unavailable, so the recorded term
+wins over the 90-day floor.
+
+After pruning, evidence is **verifiable but not replayable**. The custody row still proves which bytes
+were retained and what they hashed to, and the receipt chain still proves the order of events. A
+repository read of a removed object does not raise: `loadExact` returns `null`, and the higher-level
+`verifyAflTradeArtifactReadback` escalates that into a generic `READBACK_MISMATCH` error carrying no
+way to say why. Every procedure that depends on re-reading a payload — rehearsing a capture,
+reconciling a provider claim from its raw body, rebuilding a prepared input set from source bytes —
+must therefore complete inside the retention term, or the bytes must be restored from backup first.
+
+This policy changes no custody check. `outcome_external_retained_artifact_current` matches the custody
+row, which survives; it does not read bytes.
+
+### Pruning is not permitted until a pruned payload is distinguishable from a lost one
+
+Today the two are indistinguishable: after pruning the custody check still passes, while the byte
+reader fails generically, so a deliberate policy decision would look exactly like custody corruption
+to an operator and to the fail-closed guards.
+
+Pruning therefore requires, in the same change:
+
+1. a marker on the artifact custody row (for example `payload_pruned_at`, with the retention basis),
+   written when the bytes are removed, so a reader can tell pruned from missing; and
+2. the pruning job itself, deleting in bounded batches so locks stay short and autovacuum can reclaim
+   the space.
+
+Until both exist, retain everything.
+
+The 90-day floor is deliberately not recorded in the execution policy or any other constant
+beforehand. Recording a value before the reader that consumes it exists is precisely the defect the
+private evaluation execution policy carried until it was hardened; the floor becomes a recorded
+policy value only in the change that introduces its consumer, and even then the per-capture
+`rawRetentionDays` term takes precedence over it.
+
+### Where the bytes live, and what vacuum has to do with it
+
+Payload bytes are held in object storage, not in PostgreSQL: `outcome_artifact_custody` retains the
+reference and its `content_sha256` only. Deleting payloads is therefore an object-store operation, it
+creates no dead tuples, and it needs no `VACUUM` policy today.
+
+If a later change moves payload bodies into a table, that table becomes the first in this domain to
+take bulk deletes, and it will need explicit `autovacuum_vacuum_threshold` and
+`autovacuum_vacuum_scale_factor` overrides plus a `pg_stat_user_tables` check after each window. Until
+then the append-mostly defaults are adequate: the registry, gate, review, receipt and custody tables
+are small or append-only and are unaffected by pruning.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
@@ -1233,8 +1294,54 @@ over the evaluation horizon or establish historical 668/668 coverage. Authentica
 and compute that requirement separately. The `preflight-genuine-local` command remains an
 empty-database bootstrap smoke check, not an inspection of this populated runtime.
 
+### Provisioned genuine composition acceptance
+
+`npm run outcomes:valuation:provision-and-dispatch-local` is the acceptance command for the local
+private valuation composition root. With no local launch environment it provisions and owns one
+disposable loopback PostgreSQL container, applies the complete migration history, installs its own
+runtime identity nonce and never prints it, then inspects and composes the declared scope. With
+`AFL_OUTCOMES_DATABASE_URL` supplied it instead requires that admitted loopback `statly_outcomes_test`
+database and its exact `STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE`, refuses any other host, database name,
+query option or fragment, and provisions nothing. Either way it writes no shared authority, dispatches
+nothing public, and accepts no arbitrary scope: `--scope` is limited to `afl-men:2025-trades` and
+`afl-men:2026-trades`, and the default is `afl-men:2025-trades`.
+
+```sh
+npm run outcomes:valuation:provision-and-dispatch-local
+npm run outcomes:valuation:provision-and-dispatch-local -- --scope afl-men:2025-trades
+```
+
+The command prints exactly one JSON receipt with purpose `genuine_composition_acceptance`,
+`databaseOrigin`, the scope, `constructionState`, `qualificationGranted: false`, and either the named
+`blockerCodes` and `blockers` or the retained dispatch request id and terminal result. Exit code `2`
+means the scope was inspected and blocked by named authority, `1` means the acceptance run itself
+failed, and `0` means the chain composed and a private batch reached a terminal state. Retain receipts
+outside Git alongside the corresponding persistent database/artefact checkpoint; never retain the nonce.
+
+`blockerCodes` is the composition root's stable vocabulary. Each code names reviewed authority the
+scope must supply, or the one composition owner that does not exist yet; it is never a generic failure:
+
+| Code                                             | Meaning                                                                                                                                                                                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hpn_source_authority_missing`                   | The named `subject.id` source role has no exact reviewed authority for the scope's season. For 2025 that is the `hpn_corroborating_player_stats` lane only, because the completed-results and primary-player-stat lanes resolve. |
+| `hpn_preparation_authority_not_declared`         | No reviewed HPN source, factual, method and capture authority was declared, so HPN preparation has no exact inputs.                                                                                                              |
+| `construction_selection_not_supplied`            | No reviewed construction selection was declared, so no policy, component run, specification or target was selected.                                                                                                              |
+| `construction_selection_field_missing`           | The declared selection omits the named `subject.id` field.                                                                                                                                                                       |
+| `cohort_trade_construction_owner_missing`        | No genuine evidence-derived per-trade valuation-input assembly owner exists yet, so the private cohort cannot construct a trade.                                                                                                 |
+| `construction_readiness_unavailable`             | The selected inputs could not be assessed at all; the reason names the assessment's own blocker code, such as `calculation_input_package_missing` or `policy_missing`.                                                           |
+| `construction_view_incompatible`                 | The named asset and view of the declared valuation case cannot be packaged, and the reason is the assessment's own reason for that asset and view.                                                                               |
+| `construction_artifact_not_retained`             | A reference the declared selection names is not in private artifact custody, so it cannot be used.                                                                                                                               |
+| `construction_scope_unsupported`                 | The scope is outside the supported `afl-men:<season>-trades` policy.                                                                                                                                                             |
+| `cohort_construction_evidence_scope_unsupported` | The local construction-evidence owner is configured for one exact 2025 dispatch and claim.                                                                                                                                       |
+
+A `blocked` receipt is the expected result on an empty or scope-less disposable database, and it is
+the honest result until the named authority exists. A receipt that reports `composable` while the
+retained parents it depends on are absent is wrong; investigate it rather than trusting it.
+
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
+provisioned composition acceptance command above now composes the chain and reports each missing
+authority by name; it still cannot complete a genuine run. The
 current HPN preparation implementation admits both `afl-men:2025-trades` and
 `afl-men:2026-trades` through an exact scope-to-season policy. The default local 2025 source resolver
 still fails closed until a genuinely reviewed independent corroborating player-stat source, its
@@ -1518,7 +1625,10 @@ spells, acquisition rules, event versions, event assets, or registered HPN metho
 player/club pairs lacked an approved acquisition spell, and no genuine HPN input set was created.
 A later owned-target step registered the retained HPN method through its existing owner. Genuine
 acquisition ancestry remains outstanding; the participation decisions supply neither entry dates nor
-spell authority.
+spell authority. After the preserved-archive recovery the measured position is 247 of the 668
+cohort players holding a registered, fully approved spell spanning 2018-11-22 to 2024-11-21, with
+identity reconciliation complete for all 668; the exact counts and their derivation are recorded in
+the private acquisition evidence decision for issue 579.
 
 Acquisition registration now has a dedicated public repository and migration 0142. Before applying
 that migration to an owned target, complete the scoped PostgreSQL regressions and independent review,
@@ -3168,6 +3278,51 @@ Migration0206 repairs the shared exact-acquisition guard: valuation dataset rows
 `acquisition_spell_version_id`; the six metric, release, calculation and observation consumers use
 `spell_version_id`. It preserves v2 rejection on inserts and updates and changes no stored data.
 Apply this forward repair without editing the immutable0197 migration.
+
+Acquisition registration v3 (migration0233) is **appearance membership**, a labelled bridge for league-wide
+HPN season PAV attribution only. HPN season PAV aggregates every primary player-match row under exactly
+one current spell, so a season cannot be calculated until every appearing player has one; reviewed entry
+spells (v1/v2) require a promoted incoming asset that most league players do not yet have. A v3 spell
+binds one player, one represented club and one season to its first and last reviewed appearance facts
+(`outcome_provider_player_appearance_fact`, `availability='measured'`, `appeared=TRUE`, approved fact
+batch). It has no entry or departure event: `start_event_version_id` and `start_asset_version_id` are
+null only for v3, `start_date`/`end_date` are the first/last appearance days and `end_reason` is
+`last_reviewed_appearance_in_season`. Currentness also requires that no reviewed appearance for that
+player, club and season lies outside the window. Both boundary facts and that completeness scan use
+only facts whose player, match and represented-club identities are still current
+(`outcome_acquisition_appearance_fact_identity_current`: assignment continuity plus a resolution naming
+the same player, match or club), so a later identity reversal withdraws the window. The v3 rule
+fixes `purpose: hpn_season_pav_attribution_only` and
+`retirement: retired_by_covering_reviewed_entry_spell`.
+
+`deriveAflTradeAppearanceMembershipSpells` proposes one v3 spell per player and club for a season from
+the stored facts; non-appearances are ignored, never inferred. Each proposal still needs its rule-bound
+review decision and repository registration. The shared exact-acquisition guard rejects v3 on every
+metric, release, valuation dataset and player PAV observation consumer; only
+`outcome_hpn_pav_calculation_player` accepts it. The postseason authority and postseason observation
+contract reject it explicitly, and the v2 HPN input finalizer accepts it through
+`outcome_acquisition_is_appearance_membership` (the legacy v1 finalizer does not). Trade attribution, pick
+benchmarks and realized contribution therefore still require reviewed entry spells.
+
+A v3 spell may supersede only a v3 spell for the same season; that is how a window grows during a
+season (`deriveAflTradeAppearanceMembershipSpells` takes the current v3 spells, skips unchanged windows
+and proposes the next version for changed ones). Retirement needs no supersession: a v3 spell is not
+current while a current reviewed v1/v2 spell for the same player and club has possible membership that
+contains its whole window, and the same-club overlap guard admits a reviewed spell over a current v3
+window only under that same containment (never the reverse), so one multi-season entry spell retires
+every covered season window at once. A reviewed spell that only partly overlaps a current v3 window is
+rejected as an overlap; supersede or narrow the v3 window first. Inputs retained against a retired
+window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
+grading.
+
+Migration 0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
+chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only
+when that latest decision is approved and current, and names the capture's competition, season,
+capability and `derived_feature_creation`. Its rights artifact must also permit the consumed fields.
+When an HPN build fails with "Source-first factual source rights are no longer current", inspect the
+capture's Gate chain (`supersedes_decision_id` from the manifest's `gate0aReceipt` decision). A
+blocked, expired or out-of-scope latest decision is the cause; record a proper successor decision
+rather than editing an existing one. The ledger is append-only.
 
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,

@@ -44,6 +44,23 @@ path.
 The repository's SQLite migration history is provider-specific. It must not be replayed blindly on
 PostgreSQL; the cutover requires a reviewed baseline and transfer process.
 
+### Database identity
+
+The AFL trade outcomes database states which application and schema format it satisfies.
+`outcome_database_identity` holds a single CHECK-enforced row — `application_id`
+(`statly-afl-trade-outcomes`) and `schema_format` — mirroring the way SQLite's file header records an
+application id and a schema format number so a reader can refuse a file written for a different
+contract instead of misreading it. The migration that writes the row asserts it before committing,
+and `afl-outcomes-postgres.test.ts` binds the deployed row to `OUTCOME_DATABASE_IDENTITY` in code.
+
+Bump `schema_format` only when a reader built for the previous format would misread a database at the
+new one; it is a compatibility decision, not a refactor. The applied migration head is deliberately
+not duplicated in the row, because `_prisma_migrations` already reports it and a copy would rot.
+
+Startup does not yet assert compatibility. Enforcement is currently at deploy time (the migration
+fails closed) and in CI (the binding test); a runtime precondition that refuses a database whose
+identity disagrees with the running application is still outstanding.
+
 ## Firebase boundaries
 
 Firebase Authentication remains the identity provider. Firebase Admin credentials are server-only,
