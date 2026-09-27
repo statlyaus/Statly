@@ -145,6 +145,8 @@ interface DraftContextValue extends DraftState {
   forceRefresh: () => Promise<void>;
   setStatSeason: (season: number) => Promise<void>;
   canMakePick: boolean;
+  /** On the clock in a live draft; unlike canMakePick it stays true while a pick is submitting. */
+  isYourTurn: boolean;
   dismissPickFeedback: () => void;
   dismissStartFeedback: () => void;
 }
@@ -992,6 +994,28 @@ function mergePersistedPicks(existing: DraftPick[], incoming: DraftPick[]): Draf
   for (const pick of existing) picksById.set(String(pick.id), pick);
   for (const pick of incoming) picksById.set(String(pick.id), pick);
   return Array.from(picksById.values()).sort((a, b) => getPickOrder(a) - getPickOrder(b));
+}
+
+/** Maps a failed pick command to what the room tells the manager and the recovery it offers. */
+function describePickFailure(err: unknown): {
+  message: string;
+  recovery: NonNullable<DraftPickFeedback['recovery']>;
+} {
+  const status = (err as { status?: unknown } | null)?.status;
+  if (status === 409) {
+    return { message: 'That player was just drafted by someone else.', recovery: 'choose-another' };
+  }
+  if (status === 423) return { message: 'Not your turn to pick.', recovery: 'choose-another' };
+  // Without a 4xx rejection (a timeout, network loss or 5xx) the server may already have saved the
+  // pick, so resubmitting could fail confusingly; refresh to check instead.
+  if (typeof status !== 'number' || status >= 500) {
+    return {
+      message: 'We could not confirm whether your pick was saved. Refresh the room to check.',
+      recovery: 'refresh',
+    };
+  }
+  const message = err instanceof Error && err.message ? err.message : 'Failed to make pick';
+  return { message, recovery: 'retry' };
 }
 
 function getDraftedPlayerIds(picks: DraftPick[]): Set<string> {
@@ -2140,15 +2164,8 @@ export function DraftProvider({
         }
       } catch (err: any) {
         if (isMounted.current) {
-          failPick(
-            err?.status === 409
-              ? 'That player was just drafted by someone else.'
-              : err?.status === 423
-                ? 'Not your turn to pick.'
-                : (err?.message ?? 'Failed to make pick'),
-            err?.status === 409 || err?.status === 423 ? 'choose-another' : 'retry',
-            player.name
-          );
+          const { message, recovery } = describePickFailure(err);
+          failPick(message, recovery, player.name);
         }
       } finally {
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
@@ -2407,7 +2424,8 @@ export function DraftProvider({
   );
   const yourSlot = me?.draftOrder ?? (me as any)?.slot;
 
-  const canMakePick = useMemo(() => {
+  // On the clock in a live draft, whether or not a command is in flight.
+  const isYourTurn = useMemo(() => {
     if (!state.draft) return false;
     if (state.liveState?.isYourTurn) return true;
 
@@ -2424,8 +2442,10 @@ export function DraftProvider({
     const status = String((state.draft as any).status ?? '').toUpperCase();
     const live = status === 'LIVE' || status === 'IN_PROGRESS';
 
-    return !!(live && onClock && !state.isSaving);
-  }, [state.draft, state.liveState, state.participants.length, me?.id, yourSlot, state.isSaving]);
+    return !!(live && onClock);
+  }, [state.draft, state.liveState, state.participants.length, me?.id, yourSlot]);
+
+  const canMakePick = Boolean(state.liveState?.isYourTurn) || (isYourTurn && !state.isSaving);
 
   const dismissPickFeedback = useCallback(() => {
     dispatch({ type: 'SET_PICK_FEEDBACK', feedback: null });
@@ -2452,12 +2472,14 @@ export function DraftProvider({
       forceRefresh,
       setStatSeason,
       canMakePick,
+      isYourTurn,
       dismissPickFeedback,
       dismissStartFeedback,
     }),
     [
       addToWatchlist,
       canMakePick,
+      isYourTurn,
       dismissPickFeedback,
       dismissStartFeedback,
       draftId,
