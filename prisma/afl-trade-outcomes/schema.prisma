@@ -2255,6 +2255,7 @@ model OutcomeProviderClubResolution {
   @@unique([resolutionCaseId, revision], map: "outcome_provider_club_resolution_revision_key")
   @@index([clubIdentityId, outcome], map: "outcome_provider_club_resolution_identity_idx")
   @@index([clubId, outcome], map: "outcome_provider_club_resolution_club_idx")
+  @@index([matchCandidateId, side], map: "outcome_provider_club_resolution_candidate_side_idx")
   @@map("outcome_provider_club_resolution")
 }
 
