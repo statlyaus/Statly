@@ -52,9 +52,8 @@ function createMatchMediaResult(query: string, matches: boolean): MediaQueryList
 }
 
 beforeEach(() => {
-  vi.spyOn(window, 'matchMedia').mockImplementation((query) =>
-    createMatchMediaResult(query, false)
-  );
+  // jsdom does not implement matchMedia, and Vitest 4 cannot spy on a missing method.
+  window.matchMedia = vi.fn((query: string) => createMatchMediaResult(query, false));
 });
 
 afterEach(() => {
