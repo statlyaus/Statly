@@ -2940,6 +2940,17 @@ at database time under the existing Gate lock; it does not backdate authorizatio
 gap or claim that internal owner approval establishes an upstream licence. Generic capture, training
 and publication checks do not acquire this retained-use exception.
 
+Forward migration 0234 adds one more way a retained capture can stay usable: the latest decision in
+its Gate chain may govern it when that decision is a general Gate 0A, not a retained-capture renewal.
+The capture's original acquisition checks still run first and are unchanged. The latest decision must
+be approved, current at database time, content-addressed, and not superseded. It must be scoped to
+the capture's competition, season, fitzRoy capability and `derived_feature_creation`. Its own rights
+artifact must be for the same provider and fitzRoy acquisition, and must permit every consumed field
+for that season. It grants nothing beyond that rights artifact. A blocked, expired, withdrawn or
+out-of-scope latest decision still fails closed, and a later retained-scoped decision still has to
+satisfy the 0136 renewal rules. The change exists because a newer general permission for a source
+previously made every earlier capture of that source unusable, and 0136 could not renew on top of it.
+
 Forward migration 0137 validates source-first assessment field permissions independently of
 JavaScript and PostgreSQL sorting differences. It compares complete field records in the same
 database order, preserving duplicate counts and rejecting missing or changed permissions. The

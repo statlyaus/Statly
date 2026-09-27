@@ -3315,6 +3315,15 @@ rejected as an overlap; supersede or narrow the v3 window first. Inputs retained
 window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
 grading.
 
+Migration0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
+chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only
+when that latest decision is approved and current, and names the capture's competition, season,
+capability and `derived_feature_creation`. Its rights artifact must also permit the consumed fields.
+When an HPN build fails with "Source-first factual source rights are no longer current", inspect the
+capture's Gate chain (`supersedes_decision_id` from the manifest's `gate0aReceipt` decision). A
+blocked, expired or out-of-scope latest decision is the cause; record a proper successor decision
+rather than editing an existing one. The ledger is append-only.
+
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,
 retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.
