@@ -2,13 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  PlayIcon,
-  PauseIcon,
-  TrophyIcon,
-  ArrowPathIcon,
-  FireIcon,
-} from '@heroicons/react/24/outline';
+import { PlayIcon, PauseIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 // Types
 interface Player {
@@ -21,8 +15,6 @@ interface Player {
   gameStatus: 'not_started' | 'live' | 'finished';
   gameTime?: string;
   isPlaying: boolean;
-  captain?: boolean;
-  viceCaptain?: boolean;
   stats?: {
     disposals: number;
     kicks: number;
@@ -39,8 +31,6 @@ interface TeamLineup {
   totalScore: number;
   projectedTotal: number;
   players: Player[];
-  captainMultiplier: number;
-  viceCaptainMultiplier: number;
 }
 
 interface MatchupData {
@@ -71,8 +61,6 @@ const mockMatchupData: MatchupData = {
     teamName: 'The Bulldogs',
     totalScore: 1847,
     projectedTotal: 2156,
-    captainMultiplier: 2,
-    viceCaptainMultiplier: 1.5,
     players: [
       {
         id: '1',
@@ -84,7 +72,6 @@ const mockMatchupData: MatchupData = {
         gameStatus: 'live',
         gameTime: 'Q3 8:42',
         isPlaying: true,
-        captain: true,
         stats: {
           disposals: 23,
           kicks: 15,
@@ -104,7 +91,6 @@ const mockMatchupData: MatchupData = {
         projectedScore: 108,
         gameStatus: 'finished',
         isPlaying: false,
-        viceCaptain: true,
         stats: {
           disposals: 18,
           kicks: 12,
@@ -121,8 +107,6 @@ const mockMatchupData: MatchupData = {
     teamName: 'Tigers Elite',
     totalScore: 1923,
     projectedTotal: 2089,
-    captainMultiplier: 2,
-    viceCaptainMultiplier: 1.5,
     players: [],
   },
   gameProgress: {
@@ -155,17 +139,8 @@ export default function LiveScoringMatchup({
     return () => clearInterval(interval);
   }, [isLive, autoRefresh, onRefresh]);
 
-  // Calculate team scores with multipliers
-  const calculateTeamScore = (team: TeamLineup) => {
-    let total = 0;
-    team.players.forEach((player) => {
-      let score = player.liveScore || 0;
-      if (player.captain) score *= team.captainMultiplier;
-      else if (player.viceCaptain) score *= team.viceCaptainMultiplier;
-      total += score;
-    });
-    return total;
-  };
+  const calculateTeamScore = (team: TeamLineup) =>
+    team.players.reduce((total, player) => total + (player.liveScore || 0), 0);
 
   const userScore = calculateTeamScore(matchupData.userTeam);
   const opponentScore = calculateTeamScore(matchupData.opponentTeam);
@@ -367,12 +342,6 @@ export default function LiveScoringMatchup({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    {player.captain && (
-                      <TrophyIcon className="w-5 h-5 text-yellow-500" title="Captain" />
-                    )}
-                    {player.viceCaptain && (
-                      <FireIcon className="w-5 h-5 text-orange-500" title="Vice Captain" />
-                    )}
                     <div>
                       <div className="font-semibold text-gray-900">{player.name}</div>
                       <div className="flex items-center gap-2 mt-1">
@@ -396,13 +365,7 @@ export default function LiveScoringMatchup({
 
                 <div className="flex items-center gap-6">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">
-                      {player.liveScore}
-                      {player.captain && <span className="text-sm text-yellow-600 ml-1">×2</span>}
-                      {player.viceCaptain && (
-                        <span className="text-sm text-orange-600 ml-1">×1.5</span>
-                      )}
-                    </div>
+                    <div className="text-2xl font-bold text-gray-900">{player.liveScore}</div>
                     <div className="text-sm text-gray-500">Proj: {player.projectedScore}</div>
                   </div>
 

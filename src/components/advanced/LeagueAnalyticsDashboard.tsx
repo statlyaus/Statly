@@ -23,11 +23,6 @@ interface LeagueAnalytics {
     week: number;
     count: number;
   }[];
-  captaincyTrends: {
-    player: string;
-    percentage: number;
-    avgScore: number;
-  }[];
 }
 
 interface TeamComparison {
@@ -66,12 +61,6 @@ const mockAnalytics: LeagueAnalytics = {
     { week: 2, count: 18 },
     { week: 3, count: 32 },
     { week: 4, count: 28 },
-  ],
-  captaincyTrends: [
-    { player: 'Marcus Bontempelli', percentage: 33, avgScore: 118 },
-    { player: 'Lachie Neale', percentage: 25, avgScore: 115 },
-    { player: 'Clayton Oliver', percentage: 17, avgScore: 108 },
-    { player: 'Tim English', percentage: 25, avgScore: 102 },
   ],
 };
 
@@ -239,31 +228,6 @@ export default function LeagueAnalyticsDashboard({
     </motion.div>
   );
 
-  const renderCaptaincyChart = () => (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Captaincy Trends</h3>
-      <div className="space-y-4">
-        {mockAnalytics.captaincyTrends.map((trend, idx) => (
-          <div key={idx} className="flex items-center gap-4">
-            <div className="w-24 text-sm font-medium text-gray-900 truncate">{trend.player}</div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${trend.percentage}%` }}
-                  />
-                </div>
-                <div className="text-sm font-medium text-gray-900 w-8">{trend.percentage}%</div>
-              </div>
-            </div>
-            <div className="text-sm text-gray-600 w-16 text-right">{trend.avgScore} avg</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
@@ -392,9 +356,6 @@ export default function LeagueAnalyticsDashboard({
                 `${mockAnalytics.leastOwnedGoodPlayer.ownership}% ownership, ${mockAnalytics.leastOwnedGoodPlayer.averageScore} avg`
               )}
             </div>
-
-            {/* Captaincy Trends */}
-            {renderCaptaincyChart()}
           </motion.div>
         )}
 

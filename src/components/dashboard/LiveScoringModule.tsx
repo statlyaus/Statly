@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlayIcon, TrophyIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { PlayIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 export default function LiveScoringModule() {
@@ -17,7 +17,6 @@ export default function LiveScoringModule() {
       currentScore: 89,
       projectedScore: 115,
       gameTime: 'Q3 8:42',
-      isCaptain: true,
     },
     recentScores: [
       { player: 'Max Gawn', score: 65, status: 'finished' },
@@ -90,7 +89,6 @@ export default function LiveScoringModule() {
       {/* Key Player */}
       <div className="bg-blue-50 rounded-lg p-3">
         <div className="flex items-center gap-2 mb-2">
-          {liveData.nextPlayer.isCaptain && <TrophyIcon className="w-4 h-4 text-yellow-500" />}
           <span className="text-sm font-semibold text-blue-900">{liveData.nextPlayer.name}</span>
           <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
             {liveData.nextPlayer.team}
@@ -101,9 +99,6 @@ export default function LiveScoringModule() {
           <div>
             <div className="text-lg font-bold text-blue-900">
               {liveData.nextPlayer.currentScore}
-              {liveData.nextPlayer.isCaptain && (
-                <span className="text-sm text-yellow-600 ml-1">×2</span>
-              )}
             </div>
             <div className="text-xs text-blue-700">Proj: {liveData.nextPlayer.projectedScore}</div>
           </div>

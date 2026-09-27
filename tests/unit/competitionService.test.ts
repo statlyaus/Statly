@@ -41,7 +41,7 @@ const prismaMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/activity', () => activityMocks);
-vi.mock('@/lib/etlIntegration', () => etlMocks);
+vi.mock('@/server/etl/etlRoundData', () => etlMocks);
 vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
 

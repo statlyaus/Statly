@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  TrophyIcon,
   ChartBarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
@@ -34,8 +33,6 @@ interface Player {
   injuryStatus?: 'healthy' | 'questionable' | 'injured';
   priceChange: number;
   ownership: number;
-  captain?: boolean;
-  viceCaptain?: boolean;
   pickNumber?: number;
   draftRound?: number;
 }
@@ -98,7 +95,6 @@ const mockTeamPlayers: Player[] = [
     injuryStatus: 'healthy',
     priceChange: 12000,
     ownership: 67,
-    captain: true,
   },
   {
     id: '2',
@@ -125,7 +121,6 @@ const mockTeamPlayers: Player[] = [
     injuryStatus: 'questionable',
     priceChange: 5000,
     ownership: 23,
-    viceCaptain: true,
   },
 ];
 
@@ -887,10 +882,6 @@ export default function TeamAnalyticsDashboard({
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 gap-3">
-                <button className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                  <span className="font-medium text-blue-900">Set Captain & Vice</span>
-                  <TrophyIcon className="w-5 h-5 text-blue-600" />
-                </button>
                 <button className="flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
                   <span className="font-medium text-green-900">Make Trades</span>
                   <ArrowTrendingUpIcon className="w-5 h-5 text-green-600" />

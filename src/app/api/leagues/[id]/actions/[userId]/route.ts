@@ -158,8 +158,6 @@ export async function POST(
     // Process immediate actions
     if (actionType === 'DROP_PLAYER') {
       await processDropPlayerAction(action.id);
-    } else if (shouldProcessImmediately(actionType)) {
-      await processTeamAction(action.id);
     }
 
     logger.info('Created team action', {
@@ -256,44 +254,6 @@ async function validateTeamAction(
   targetMemberId?: string
 ): Promise<{ valid: boolean; error?: string }> {
   switch (actionType) {
-    case 'SET_CAPTAIN':
-    case 'SET_VICE_CAPTAIN': {
-      if (!details.playerId) {
-        return { valid: false, error: 'Player ID is required' };
-      }
-
-      // Check if captain system is enabled
-      const league = await prisma.league.findUnique({
-        where: { id: leagueId },
-        include: { settings: true },
-      });
-
-      // For now, assume captain system is enabled if settings exist
-      // TODO: Add enableCaptainSystem field to league settings
-      if (!league?.settings) {
-        return { valid: false, error: 'League settings not found' };
-      }
-
-      // Check if player is in user's roster using raw SQL
-      const rosterRows = (await prisma.$queryRaw`
-        SELECT * FROM LeagueRoster 
-        WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-        LIMIT 1
-      `) as Record<string, unknown>[];
-
-      const roster = rosterRows[0];
-      if (!roster) {
-        return { valid: false, error: 'User has no roster in this league' };
-      }
-
-      const playerIds = JSON.parse(String(roster.playerIds || '[]'));
-      if (!playerIds.includes(details.playerId)) {
-        return { valid: false, error: 'Player is not in your roster' };
-      }
-
-      return { valid: true };
-    }
-
     case 'TRADE_PROPOSAL': {
       if (!details.offeredPlayers || !details.requestedPlayers || !targetMemberId) {
         return {
@@ -339,19 +299,9 @@ async function validateTeamAction(
       return { valid: true };
     }
 
-    case 'OPTIMIZE_LINEUP': {
-      // Optimization requests are always valid
-      return { valid: true };
-    }
-
     default:
       return { valid: false, error: 'Unknown action type' };
   }
-}
-
-// Determine if action should be processed immediately
-function shouldProcessImmediately(actionType: string): boolean {
-  return ['SET_CAPTAIN', 'SET_VICE_CAPTAIN', 'OPTIMIZE_LINEUP'].includes(actionType);
 }
 
 async function processDropPlayerAction(actionId: string): Promise<void> {
@@ -428,112 +378,5 @@ function parsePlayerIds(raw: unknown): string[] {
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
-  }
-}
-
-// Process team action
-async function processTeamAction(actionId: string): Promise<void> {
-  try {
-    const actionRows = (await prisma.$queryRaw`
-      SELECT * FROM TeamAction WHERE id = ${actionId} LIMIT 1
-    `) as Record<string, unknown>[];
-
-    const action = actionRows[0];
-    if (!action || action.status !== 'PENDING') {
-      return;
-    }
-
-    const details = JSON.parse(String(action.details || '{}'));
-
-    switch (action.actionType) {
-      case 'SET_CAPTAIN':
-        await prisma.$executeRaw`
-          UPDATE LeagueRoster 
-          SET captainId = ${details.playerId}
-          WHERE leagueId = ${action.leagueId} AND memberId = ${action.memberId}
-        `;
-        break;
-
-      case 'SET_VICE_CAPTAIN':
-        await prisma.$executeRaw`
-          UPDATE LeagueRoster 
-          SET viceCaptainId = ${details.playerId}
-          WHERE leagueId = ${action.leagueId} AND memberId = ${action.memberId}
-        `;
-        break;
-
-      case 'OPTIMIZE_LINEUP':
-        // Implement lineup optimization logic
-        await optimizeLineup(String(action.leagueId), String(action.memberId));
-        break;
-
-      // Additional action processing...
-    }
-
-    // Mark action as processed
-    await prisma.$executeRaw`
-      UPDATE TeamAction 
-      SET status = 'PROCESSED', processedAt = datetime('now')
-      WHERE id = ${actionId}
-    `;
-
-    logger.info('Processed team action', {
-      actionId,
-      actionType: action.actionType,
-    });
-  } catch (error) {
-    logger.error('Failed to process team action', {
-      actionId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
-    // Mark action as failed
-    await prisma.$executeRaw`
-      UPDATE TeamAction 
-      SET status = 'REJECTED', processedAt = datetime('now')
-      WHERE id = ${actionId}
-    `;
-  }
-}
-
-// Optimize lineup logic
-async function optimizeLineup(leagueId: string, memberId: string): Promise<void> {
-  try {
-    // Get current roster
-    const rosterRows = (await prisma.$queryRaw`
-      SELECT * FROM LeagueRoster 
-      WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-      LIMIT 1
-    `) as Record<string, unknown>[];
-
-    const roster = rosterRows[0];
-    if (!roster) {
-      throw new Error('Roster not found');
-    }
-
-    const playerList = JSON.parse(String(roster.playerList || '[]'));
-
-    // Implement basic optimization logic
-    // This is a simplified example - real optimization would be more complex
-    const optimizedLineup = playerList.sort(
-      (a: { averagePoints?: number }, b: { averagePoints?: number }) => {
-        return (b.averagePoints || 0) - (a.averagePoints || 0);
-      }
-    );
-
-    await prisma.$executeRaw`
-      UPDATE LeagueRoster 
-      SET playerList = ${JSON.stringify(optimizedLineup)}
-      WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-    `;
-
-    logger.info('Optimized lineup', { leagueId, memberId });
-  } catch (error) {
-    logger.error('Failed to optimize lineup', {
-      leagueId,
-      memberId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
   }
 }
