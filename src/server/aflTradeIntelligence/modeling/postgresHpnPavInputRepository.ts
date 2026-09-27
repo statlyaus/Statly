@@ -96,8 +96,8 @@ interface AcquisitionSpellRow {
   version: number;
   player_id: string;
   club_id: string;
-  start_event_version_id: string;
-  start_asset_version_id: string;
+  start_event_version_id: string | null;
+  start_asset_version_id: string | null;
   start_date: Date | string;
   end_date: Date | string | null;
   end_reason: string | null;

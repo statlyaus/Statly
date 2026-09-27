@@ -1,14 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
+
+import { isCronRequestAuthorized } from '@/lib/cronAuth';
 // import { enqueuePruneLobbyActivity } from '@/queues/maintenanceQueue';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.nextUrl.searchParams.get('token');
-    const secret = process.env.CRON_SECRET;
-
-    if (secret && token !== secret) {
+    if (!isCronRequestAuthorized(req)) {
       return NextResponse.json(
         { ok: false, error: 'unauthorized' },
         { status: 401, headers: { 'Cache-Control': 'no-store' } }
