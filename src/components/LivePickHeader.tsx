@@ -57,6 +57,27 @@ interface LivePickHeaderProps {
   className?: string;
 }
 
+const TIME_UP = 'Time is up.';
+const CLOCK_MILESTONES = [
+  { at: 0, text: TIME_UP },
+  { at: 10, text: '10 seconds left.' },
+  { at: 30, text: '30 seconds left.' },
+] as const;
+
+/** The most urgent milestone crossed between two observed clock readings, if any. */
+function getCrossedClockMilestone(previous: number, current: number): string | null {
+  return (
+    CLOCK_MILESTONES.find((milestone) => previous > milestone.at && current <= milestone.at)
+      ?.text ?? null
+  );
+}
+
+function formatClock(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
 export default function LivePickHeader({
   draftData,
   timePerPick = 120,
@@ -195,6 +216,36 @@ export default function LivePickHeader({
       setIsFlashing(false);
     }
   }, [picksUntilYourTurn, isYourTurn, hasAlerted, timerState.phase]);
+
+  // Screen readers hear the clock when the turn starts and as it crosses 30, 10 and 0 seconds,
+  // never every tick. A milestone that passed before the turn was observed is not announced.
+  const [clockAnnouncement, setClockAnnouncement] = useState('');
+  const announcedRef = useRef<{ pick?: number; lastRemaining?: number }>({});
+  useEffect(() => {
+    if (announcedRef.current.pick !== draftData.currentPick) {
+      announcedRef.current = { pick: draftData.currentPick };
+      setClockAnnouncement('');
+    }
+    // Read the synced clock, not timeLeft, which starts at the full pick time before it syncs.
+    const remaining = timerState.remainingSeconds;
+    const clockRunning =
+      timerState.phase === 'LIVE' || (timerState.phase === 'FINALIZING' && remaining === 0);
+    if (!clockRunning || !isYourTurn) return;
+
+    const { lastRemaining } = announcedRef.current;
+    announcedRef.current = { ...announcedRef.current, lastRemaining: remaining };
+    if (lastRemaining === undefined) {
+      setClockAnnouncement(
+        remaining === 0
+          ? `Your turn to pick. ${TIME_UP}`
+          : `Your turn to pick. ${formatClock(remaining)} remaining.`
+      );
+      return;
+    }
+    const crossed = getCrossedClockMilestone(lastRemaining, remaining);
+    if (crossed) setClockAnnouncement(crossed);
+    // timeLeft re-runs this each tick; timerState is recomputed every render.
+  }, [draftData.currentPick, isYourTurn, timeLeft, timerState.phase]);
 
   const pickTrainState = useMemo(
     () => toDraftPickTrainStateFromHeaderData({ draftData, yourSlot }),
@@ -352,11 +403,8 @@ export default function LivePickHeader({
                 Round {draftData.round} / {draftData.direction}
               </span>
               {isYourTurn && (
-                <span
-                  className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]"
-                  role="alert"
-                  aria-label="It is your turn to pick"
-                >
+                <span className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]">
+                  {/* Visual only: the pick clock announcer speaks the turn once. */}
                   Your turn
                 </span>
               )}
@@ -381,10 +429,9 @@ export default function LivePickHeader({
                 className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-[color:var(--draft-broadcast-text)]"
                 role="timer"
                 aria-label={timerAriaLabel}
-                aria-live="polite"
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'animate-spin text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
                 <span
@@ -393,6 +440,15 @@ export default function LivePickHeader({
                   {timerDisplay}
                 </span>
               </div>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="sr-only"
+                data-testid="pick-clock-announcer"
+              >
+                {clockAnnouncement}
+              </p>
             </div>
 
             {!isYourTurn && picksUntilYourTurn > 0 && (

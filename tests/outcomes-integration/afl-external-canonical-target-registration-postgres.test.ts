@@ -32,6 +32,14 @@ const schema = `external_target_${process.pid}_${Date.now()}`;
 const admin = new Pool({ connectionString: url });
 const pool = new Pool({ connectionString: url, options: `-c search_path=${schema}` });
 const sql = createPgAflOutcomeSqlClient(pool);
+/** Database clock, so SQL ordering compares values taken from one clock rather than two. */
+const dbNow = async () =>
+  (
+    await pool.query<{ at: string }>(
+      `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
+    )
+  ).rows[0]!.at;
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schema}"`);
   const scoped = new URL(url);
@@ -54,10 +62,14 @@ afterAll(async () => {
 });
 it('registers an explicitly reviewed absent native person, then replays and reuses the canonical target', async () => {
   const fixture = await createRetainedExternalCaptureFixture(sql, false, 'non_production');
+  // Stamp the plan from the database clock the validator compares against. A host-stamped
+  // timestamp can sit tens of milliseconds ahead of the database clock on Docker Desktop, which
+  // makes the validator's "plannedAt <= clock_timestamp()" guard reject a plan just authored here.
+  const plannedAt = await dbNow();
   const plan = createAflTradeRetainedExternalCapturePlan({
     environment: 'non_production',
     competition: 'AFLM',
-    plannedAt: new Date().toISOString(),
+    plannedAt,
     scopeEvidence: fixture.scopeEvidence,
     targets: [fixture.target],
   });
@@ -85,12 +97,8 @@ it('registers an explicitly reviewed absent native person, then replays and reus
   const player = work.content.items.find(
     (i) => i.workItem.content.subject.content.entityKind === 'player'
   )!.workItem;
-  const at = (
-    await pool.query<{ at: string }>(
-      `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
-        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
-    )
-  ).rows[0]!.at;
+  // Read the clock again after the completion, so decidedAt still follows completed_at.
+  const at = await dbNow();
   async function govern(document: Record<string, unknown>, prefix: string) {
     const ref = createAflTradeCanonicalJsonArtifactRef(document, at);
     const referenceId = address(prefix, document);
