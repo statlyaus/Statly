@@ -110,14 +110,14 @@
   --result-win-foreground: #fff;
   --result-loss: #c81e1e;
   --result-loss-foreground: #fff;
-  --result-draw: #b45309;
+  --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
   --result-draw-foreground: #fff;
   --brand-bar: #0f2a44;
   --brand-bar-foreground: #fff;
   --overlay: oklch(0 0 0 / 50%);
   --border: #ced4da; /* A neutral border color */
   --input: #ced4da;
-  --ring: oklch(0.708 0 0);
+  --ring: var(--brand-bar); /* Focus uses the navy brand-bar (design principles) */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -150,7 +150,7 @@
   --league-accent-soft: #e7edf3;
   --league-success: var(--result-win);
   --league-success-soft: #f1f8f3;
-  --league-warning: var(--result-draw);
+  --league-warning: #b45309;
   --league-warning-soft: #fdf3e7;
   --league-danger: var(--result-loss);
   --league-danger-soft: #fbeaea;
@@ -216,7 +216,7 @@
   --trade-positive: var(--result-win);
   --trade-negative: var(--result-loss);
   --trade-negative-soft: #fbeaea;
-  --trade-warning: var(--result-draw);
+  --trade-warning: #b45309;
   --trade-warning-soft: #fdf3e7;
   --trade-card-shadow: none;
 }
@@ -276,14 +276,14 @@
   --result-win-foreground: #fff;
   --result-loss: #c81e1e;
   --result-loss-foreground: #fff;
-  --result-draw: #b45309;
+  --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
   --result-draw-foreground: #fff;
   --brand-bar: #0b1f33;
   --brand-bar-foreground: #fff;
   --overlay: oklch(0 0 0 / 65%);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: #8fb3ff;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -324,7 +324,7 @@
 @layer base {
   * {
     border-color: var(--color-border);
-    outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+    outline-color: var(--color-ring);
   }
   body {
     @apply bg-background text-foreground;
