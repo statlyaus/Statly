@@ -1125,6 +1125,8 @@ export default function PlayerGrid({
         }
         case 'Enter':
         case ' ': {
+          // Let a focused Confirm, Cancel, Queue or Watch button activate natively.
+          if (event.target !== event.currentTarget) break;
           event.preventDefault();
           handlePlayerArm(filteredPlayers[playerIndex]);
           break;

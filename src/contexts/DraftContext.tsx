@@ -145,6 +145,8 @@ interface DraftContextValue extends DraftState {
   forceRefresh: () => Promise<void>;
   setStatSeason: (season: number) => Promise<void>;
   canMakePick: boolean;
+  /** On the clock in a live draft; unlike canMakePick it stays true while a pick is submitting. */
+  isYourTurn: boolean;
   dismissPickFeedback: () => void;
   dismissStartFeedback: () => void;
 }
@@ -2140,13 +2142,23 @@ export function DraftProvider({
         }
       } catch (err: any) {
         if (isMounted.current) {
+          const status = typeof err?.status === 'number' ? err.status : undefined;
+          // Without a 4xx rejection (a timeout, network loss or 5xx) the server may already have
+          // saved the pick, so resubmitting could fail confusingly; refresh to check instead.
+          const outcomeUnknown = status === undefined || status >= 500;
           failPick(
-            err?.status === 409
+            status === 409
               ? 'That player was just drafted by someone else.'
-              : err?.status === 423
+              : status === 423
                 ? 'Not your turn to pick.'
-                : (err?.message ?? 'Failed to make pick'),
-            err?.status === 409 || err?.status === 423 ? 'choose-another' : 'retry',
+                : outcomeUnknown
+                  ? 'We could not confirm whether your pick was saved. Refresh the room to check.'
+                  : (err?.message ?? 'Failed to make pick'),
+            status === 409 || status === 423
+              ? 'choose-another'
+              : outcomeUnknown
+                ? 'refresh'
+                : 'retry',
             player.name
           );
         }
@@ -2407,7 +2419,8 @@ export function DraftProvider({
   );
   const yourSlot = me?.draftOrder ?? (me as any)?.slot;
 
-  const canMakePick = useMemo(() => {
+  // On the clock in a live draft, whether or not a command is in flight.
+  const isYourTurn = useMemo(() => {
     if (!state.draft) return false;
     if (state.liveState?.isYourTurn) return true;
 
@@ -2424,8 +2437,10 @@ export function DraftProvider({
     const status = String((state.draft as any).status ?? '').toUpperCase();
     const live = status === 'LIVE' || status === 'IN_PROGRESS';
 
-    return !!(live && onClock && !state.isSaving);
-  }, [state.draft, state.liveState, state.participants.length, me?.id, yourSlot, state.isSaving]);
+    return !!(live && onClock);
+  }, [state.draft, state.liveState, state.participants.length, me?.id, yourSlot]);
+
+  const canMakePick = Boolean(state.liveState?.isYourTurn) || (isYourTurn && !state.isSaving);
 
   const dismissPickFeedback = useCallback(() => {
     dispatch({ type: 'SET_PICK_FEEDBACK', feedback: null });
@@ -2452,12 +2467,14 @@ export function DraftProvider({
       forceRefresh,
       setStatSeason,
       canMakePick,
+      isYourTurn,
       dismissPickFeedback,
       dismissStartFeedback,
     }),
     [
       addToWatchlist,
       canMakePick,
+      isYourTurn,
       dismissPickFeedback,
       dismissStartFeedback,
       draftId,

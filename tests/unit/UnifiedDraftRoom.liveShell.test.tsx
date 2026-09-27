@@ -31,6 +31,7 @@ const draftContext = vi.hoisted<{
   availablePlayers: DraftRoomPlayerFixture[];
   isSaving: boolean;
   canMakePick: boolean;
+  isYourTurn: boolean;
   startFeedback: { message: string } | null;
   pickFeedback: {
     status: 'submitting' | 'failed';
@@ -43,6 +44,7 @@ const draftContext = vi.hoisted<{
   status: 'LIVE',
   isSaving: false,
   canMakePick: false,
+  isYourTurn: false,
   startFeedback: null,
   pickFeedback: null,
   availablePlayers: [
@@ -93,8 +95,8 @@ vi.mock('@/components/ui/ErrorBoundary', () => ({
 }));
 
 vi.mock('@/components/LivePickHeader', () => ({
-  default: () => (
-    <section role="banner" aria-label="Live draft status">
+  default: ({ isYourTurn }: { isYourTurn: boolean }) => (
+    <section role="banner" aria-label="Live draft status" data-your-turn={String(isYourTurn)}>
       Live pick header
     </section>
   ),
@@ -201,6 +203,7 @@ vi.mock('@/contexts/DraftContext', () => ({
   useDraft: () => ({
     availablePlayers: draftContext.availablePlayers,
     canMakePick: draftContext.canMakePick,
+    isYourTurn: draftContext.isYourTurn,
     pickFeedback: draftContext.pickFeedback,
     dismissPickFeedback: dismissPickFeedbackSpy,
     startFeedback: draftContext.startFeedback,
@@ -289,6 +292,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
     draftContext.status = 'LIVE';
     draftContext.isSaving = false;
     draftContext.canMakePick = false;
+    draftContext.isYourTurn = false;
     draftContext.pickFeedback = null;
     draftContext.startFeedback = null;
     startDraftSpy.mockReset();
@@ -654,5 +658,16 @@ describe('UnifiedDraftRoom live shell composition', () => {
 
     expect(screen.queryByRole('alert', { name: 'Draft start status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try starting again' })).not.toBeInTheDocument();
+  });
+
+  it("tells the pick header it is the manager's turn from the room's on-clock state", () => {
+    // liveState.isYourTurn is never set by the server, so the header must not rely on it.
+    draftContext.isYourTurn = true;
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('banner', { name: 'Live draft status' })).toHaveAttribute(
+      'data-your-turn',
+      'true'
+    );
   });
 });

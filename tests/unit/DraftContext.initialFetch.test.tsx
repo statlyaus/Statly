@@ -137,7 +137,9 @@ function DraftStateProbe() {
       <button type="button" onClick={() => draft.dismissStartFeedback()}>
         Dismiss start feedback
       </button>
+      <div data-testid="pick-recovery">{draft.pickFeedback?.recovery ?? 'none'}</div>
       <div data-testid="can-make-pick">{String(draft.canMakePick)}</div>
+      <div data-testid="is-your-turn">{String(draft.isYourTurn)}</div>
       <div data-testid="queue-mutation-status">{queueMutationStatus}</div>
       <button type="button" onClick={() => void updateMixedQueue()}>
         Update mixed queue
@@ -1560,6 +1562,7 @@ describe('DraftProvider initial hydration', () => {
         'failed:That player was just drafted by someone else.'
       );
     });
+    expect(screen.getByTestId('pick-recovery')).toHaveTextContent('choose-another');
     expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
     expect(screen.getByTestId('pick-count')).toHaveTextContent('0');
 
@@ -1795,6 +1798,72 @@ describe('DraftProvider initial hydration', () => {
       expect(screen.getByTestId('draft-error')).toHaveTextContent('Network error');
     });
     expect(screen.getByTestId('start-feedback')).toHaveTextContent('none');
+  });
+
+  it('offers a refresh, not a resubmit, when a pick fails without a known outcome', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
+        // A 5xx or timeout can arrive after the server has already saved the pick.
+        throw Object.assign(new Error('Gateway timeout'), { status: 504 });
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    // The header's turn flag comes from the room's own on-clock derivation, not a server field.
+    expect(screen.getByTestId('is-your-turn')).toHaveTextContent('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick player 1' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-feedback')).toHaveTextContent(
+        'failed:We could not confirm whether your pick was saved. Refresh the room to check.'
+      );
+    });
+    expect(screen.getByTestId('pick-recovery')).toHaveTextContent('refresh');
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
   });
 
   it('clears pick feedback once the server confirms the pick', async () => {
