@@ -640,6 +640,38 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             onStatusChange={() => draft.forceRefresh()}
           />
 
+          {draft.startFeedback ? (
+            <div
+              role="alert"
+              aria-label="Draft start status"
+              className="flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-4 py-3 text-sm text-[color:var(--draft-broadcast-text)] sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p>
+                <span className="font-semibold">The draft did not start.</span>{' '}
+                {draft.startFeedback.message}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void draft.startDraft()}
+                  disabled={draft.isSaving}
+                  aria-label="Try starting again"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)] disabled:cursor-wait disabled:opacity-60"
+                >
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  onClick={draft.dismissStartFeedback}
+                  aria-label="Dismiss draft start message"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)]"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {/* Draft Status Banner */}
           {activeDraft.status !== 'LIVE' && (
             <DraftStatusBanner

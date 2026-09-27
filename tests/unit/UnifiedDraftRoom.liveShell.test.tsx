@@ -23,12 +23,15 @@ const updateQueueSpy = vi.hoisted(() => vi.fn());
 const makePickSpy = vi.hoisted(() => vi.fn());
 const dismissPickFeedbackSpy = vi.hoisted(() => vi.fn());
 const forceRefreshSpy = vi.hoisted(() => vi.fn());
+const startDraftSpy = vi.hoisted(() => vi.fn());
+const dismissStartFeedbackSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
   availablePlayers: DraftRoomPlayerFixture[];
   isSaving: boolean;
   canMakePick: boolean;
+  startFeedback: { message: string } | null;
   pickFeedback: {
     status: 'submitting' | 'failed';
     playerId: string;
@@ -40,6 +43,7 @@ const draftContext = vi.hoisted<{
   status: 'LIVE',
   isSaving: false,
   canMakePick: false,
+  startFeedback: null,
   pickFeedback: null,
   availablePlayers: [
     {
@@ -199,6 +203,9 @@ vi.mock('@/contexts/DraftContext', () => ({
     canMakePick: draftContext.canMakePick,
     pickFeedback: draftContext.pickFeedback,
     dismissPickFeedback: dismissPickFeedbackSpy,
+    startFeedback: draftContext.startFeedback,
+    dismissStartFeedback: dismissStartFeedbackSpy,
+    startDraft: startDraftSpy,
     connection: { status: 'disconnected' },
     draft: {
       id: 'draft-1',
@@ -283,6 +290,9 @@ describe('UnifiedDraftRoom live shell composition', () => {
     draftContext.isSaving = false;
     draftContext.canMakePick = false;
     draftContext.pickFeedback = null;
+    draftContext.startFeedback = null;
+    startDraftSpy.mockReset();
+    dismissStartFeedbackSpy.mockReset();
     makePickSpy.mockReset();
     dismissPickFeedbackSpy.mockReset();
     forceRefreshSpy.mockReset();
@@ -618,5 +628,22 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.queryByRole('button', { name: 'Retry pick' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh room' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+  });
+
+  it('keeps the room open and offers Try again after the draft fails to start', () => {
+    draftContext.status = 'SCHEDULED';
+    draftContext.startFeedback = { message: 'Failed to start draft' };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('alert', { name: 'Draft start status' })).toHaveTextContent(
+      'The draft did not start. Failed to start draft'
+    );
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try starting again' }));
+    expect(startDraftSpy).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss draft start message' }));
+    expect(dismissStartFeedbackSpy).toHaveBeenCalled();
   });
 });

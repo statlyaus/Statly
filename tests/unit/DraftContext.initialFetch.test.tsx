@@ -130,6 +130,13 @@ function DraftStateProbe() {
       <button type="button" onClick={() => draft.dismissPickFeedback()}>
         Dismiss pick feedback
       </button>
+      <div data-testid="start-feedback">{draft.startFeedback?.message ?? 'none'}</div>
+      <button type="button" onClick={() => void draft.startDraft()}>
+        Start the draft
+      </button>
+      <button type="button" onClick={() => draft.dismissStartFeedback()}>
+        Dismiss start feedback
+      </button>
       <div data-testid="can-make-pick">{String(draft.canMakePick)}</div>
       <div data-testid="queue-mutation-status">{queueMutationStatus}</div>
       <button type="button" onClick={() => void updateMixedQueue()}>
@@ -1558,6 +1565,68 @@ describe('DraftProvider initial hydration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss pick feedback' }));
     expect(screen.getByTestId('pick-feedback')).toHaveTextContent('none');
+  });
+
+  it('keeps the room open and reports a failed draft start as scoped start feedback', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/start' && init?.method === 'POST') {
+        throw Object.assign(new Error('Failed to start draft'), { status: 500 });
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start the draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('start-feedback')).toHaveTextContent('Failed to start draft');
+    });
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss start feedback' }));
+    expect(screen.getByTestId('start-feedback')).toHaveTextContent('none');
   });
 
   it('clears pick feedback once the server confirms the pick', async () => {

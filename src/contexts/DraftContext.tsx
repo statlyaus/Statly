@@ -116,6 +116,8 @@ interface DraftState {
   error: string | null;
   /** The manager's own pick command, scoped so a rejected pick never replaces the room. */
   pickFeedback: DraftPickFeedback | null;
+  /** A failed start command, scoped so it never replaces the room. */
+  startFeedback: { message: string } | null;
 }
 
 export interface DraftPickFeedback {
@@ -144,6 +146,7 @@ interface DraftContextValue extends DraftState {
   setStatSeason: (season: number) => Promise<void>;
   canMakePick: boolean;
   dismissPickFeedback: () => void;
+  dismissStartFeedback: () => void;
 }
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
@@ -907,7 +910,8 @@ type Action =
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null }
-  | { type: 'SET_PICK_FEEDBACK'; feedback: DraftPickFeedback | null };
+  | { type: 'SET_PICK_FEEDBACK'; feedback: DraftPickFeedback | null }
+  | { type: 'SET_START_FEEDBACK'; feedback: { message: string } | null };
 
 type NormalizedDraftSnapshot = ReturnType<typeof normalizeSnapshot>;
 
@@ -1400,6 +1404,8 @@ function reducer(state: DraftState, action: Action): DraftState {
       return { ...state, error: action.error };
     case 'SET_PICK_FEEDBACK':
       return { ...state, pickFeedback: action.feedback };
+    case 'SET_START_FEEDBACK':
+      return { ...state, startFeedback: action.feedback };
     default:
       return state;
   }
@@ -1649,6 +1655,7 @@ export function DraftProvider({
       isSaving: false,
       error: null,
       pickFeedback: null,
+      startFeedback: null,
     };
   }, [initialSnapshot]);
 
@@ -2035,6 +2042,7 @@ export function DraftProvider({
   }, [fetchPersistedPickBackfill, state.draft]);
 
   const startDraft = useCallback(async () => {
+    dispatch({ type: 'SET_START_FEEDBACK', feedback: null });
     dispatch({ type: 'SET_SAVING', saving: true });
     try {
       await fetchApi(`drafts/${draftId}/start`, {
@@ -2045,8 +2053,8 @@ export function DraftProvider({
     } catch (err: any) {
       if (isMounted.current) {
         dispatch({
-          type: 'SET_ERROR',
-          error: err?.message ?? 'Failed to start draft',
+          type: 'SET_START_FEEDBACK',
+          feedback: { message: err?.message ?? 'Failed to start draft' },
         });
       }
     } finally {
@@ -2408,6 +2416,10 @@ export function DraftProvider({
     dispatch({ type: 'SET_PICK_FEEDBACK', feedback: null });
   }, []);
 
+  const dismissStartFeedback = useCallback(() => {
+    dispatch({ type: 'SET_START_FEEDBACK', feedback: null });
+  }, []);
+
   /* ------------------------------- Provide value ---------------------------- */
 
   const value: DraftContextValue = useMemo(
@@ -2426,11 +2438,13 @@ export function DraftProvider({
       setStatSeason,
       canMakePick,
       dismissPickFeedback,
+      dismissStartFeedback,
     }),
     [
       addToWatchlist,
       canMakePick,
       dismissPickFeedback,
+      dismissStartFeedback,
       draftId,
       forceRefresh,
       isInWatchlist,
