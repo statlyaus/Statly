@@ -17,42 +17,38 @@ const rules: TradeRulePresentationInput = {
 };
 
 describe('trade rule presentation', () => {
-  it('describes immediate completion and its authoritative rechecks', () => {
-    expect(getTradeReviewSummary(rules)).toBe('Completes on acceptance');
-    expect(getTradeAcceptanceConsequence(rules, 'AFL Legends')).toContain(
-      'completes immediately after Statly rechecks roster ownership, roster capacity, and league limits'
+  it('says the players swap straight away when there is no review', () => {
+    expect(getTradeReviewSummary(rules)).toBe('No review');
+    expect(getTradeAcceptanceConsequence(rules, 'AFL Legends')).toBe(
+      'If AFL Legends accepts, the players swap straight away.'
     );
   });
 
   it('describes commissioner review without promising an immediate roster change', () => {
     const adminRules = { ...rules, reviewMode: 'admin' as const };
-    expect(getTradeReviewSummary(adminRules)).toBe('Commissioner approval');
-    expect(getTradeAcceptanceConsequence(adminRules, 'AFL Legends')).toContain(
-      'moves to commissioner review'
-    );
-    expect(getTradeAcceptanceConsequence(adminRules, 'AFL Legends')).toContain(
-      'Rosters change only after approval'
+    expect(getTradeReviewSummary(adminRules)).toBe('Commissioner approves');
+    expect(getTradeAcceptanceConsequence(adminRules, 'AFL Legends')).toBe(
+      'If AFL Legends accepts, the commissioner approves it before the players swap.'
     );
   });
 
   it('describes the configured veto window and threshold', () => {
     const vetoRules = { ...rules, reviewMode: 'veto' as const };
-    expect(getTradeReviewSummary(vetoRules)).toBe('24h veto window · 3 votes');
-    expect(getTradeAcceptanceConsequence(vetoRules, 'AFL Legends')).toContain(
-      '24-hour veto review'
+    expect(getTradeReviewSummary(vetoRules)).toBe('24h veto, 3 votes');
+    expect(getTradeAcceptanceConsequence(vetoRules, 'AFL Legends')).toBe(
+      'If AFL Legends accepts, the league has 24 hours to veto. 3 votes blocks it.'
     );
-    expect(getTradeAcceptanceConsequence(vetoRules, 'AFL Legends')).toContain('3 votes threshold');
   });
 
   it('explains when a deadline can shorten the configured expiry', () => {
-    expect(getTradeDeadlineDescription(null)).toBe('No league deadline');
-    expect(getTradeOfferExpiryDescription(rules)).toBe('72 hours after sending');
+    expect(getTradeDeadlineDescription(null)).toBe('None');
+    expect(getTradeOfferExpiryDescription(rules)).toBe('In 72 hours');
     expect(
       getTradeOfferExpiryDescription({
         ...rules,
         deadline: '2026-08-01T12:00:00.000Z',
         offerExpiryHours: 1,
       })
-    ).toBe('1 hour after sending or at the league deadline, whichever comes first');
+    ).toBe('In 1 hour, or at the deadline if sooner');
   });
 });
