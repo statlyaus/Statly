@@ -7,7 +7,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  type Stats,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -41,8 +40,22 @@ let databaseDirectory: string | undefined;
 let databasePath: string;
 let schemaPath: string;
 let prisma: PrismaClient;
-let protectedDatabaseBefore: Stats | undefined;
-let protectedDatabaseStatusBefore: string | undefined;
+let protectedDatabaseBefore: ProtectedDatabaseSnapshot | undefined;
+
+type ProtectedDatabaseSnapshot =
+  { exists: false } | { exists: true; size: number; mtimeMs: number; ino: number };
+
+// prisma/dev.db is git-ignored and may be absent (for example in CI), so the snapshot records
+// existence as well as metadata: the migration must neither create nor modify it.
+function snapshotProtectedDatabase(): ProtectedDatabaseSnapshot {
+  try {
+    const stats = statSync(resolve(process.cwd(), 'prisma/dev.db'));
+    return { exists: true, size: stats.size, mtimeMs: stats.mtimeMs, ino: stats.ino };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { exists: false };
+    throw error;
+  }
+}
 
 function runPrisma(args: string[]) {
   const prismaCli = resolve(process.cwd(), 'node_modules/.bin/prisma');
@@ -211,13 +224,7 @@ async function seedTwoLeagueOwnerships() {
 
 describe.sequential('canonical player identity migration', () => {
   beforeAll(async () => {
-    const protectedDatabasePath = resolve(process.cwd(), 'prisma/dev.db');
-    protectedDatabaseBefore = statSync(protectedDatabasePath);
-    protectedDatabaseStatusBefore = execFileSync(
-      'git',
-      ['status', '--short', '--', 'prisma/dev.db'],
-      { cwd: process.cwd(), encoding: 'utf8' }
-    );
+    protectedDatabaseBefore = snapshotProtectedDatabase();
 
     databaseDirectory = mkdtempSync(databaseDirectoryPrefix);
     databasePath = resolve(databaseDirectory, 'player-identity.db');
@@ -281,23 +288,7 @@ describe.sequential('canonical player identity migration', () => {
 
     if (!protectedDatabaseBefore) return;
 
-    const protectedDatabaseAfter = statSync(resolve(process.cwd(), 'prisma/dev.db'));
-    const protectedDatabaseStatusAfter = execFileSync(
-      'git',
-      ['status', '--short', '--', 'prisma/dev.db'],
-      { cwd: process.cwd(), encoding: 'utf8' }
-    );
-    expect({
-      size: protectedDatabaseAfter.size,
-      mtimeMs: protectedDatabaseAfter.mtimeMs,
-      ino: protectedDatabaseAfter.ino,
-      status: protectedDatabaseStatusAfter,
-    }).toEqual({
-      size: protectedDatabaseBefore.size,
-      mtimeMs: protectedDatabaseBefore.mtimeMs,
-      ino: protectedDatabaseBefore.ino,
-      status: protectedDatabaseStatusBefore,
-    });
+    expect(snapshotProtectedDatabase()).toEqual(protectedDatabaseBefore);
   });
 
   it('backfills legacy IDs and preserves independent ownership in different leagues', async () => {
