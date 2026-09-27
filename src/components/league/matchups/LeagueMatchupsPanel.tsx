@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 
-import { MatchupScoreLine } from '@/components/scores/MatchupScore';
+import {
+  MatchupScoreLine,
+  ResultChip,
+  type CategoryResult,
+} from '@/components/scores/MatchupScore';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 
 interface LeagueMatchupsPanelProps {
@@ -266,6 +270,7 @@ function MatchupHeadToHeadCard({ matchup }: { matchup: MatchupModel }) {
 
 function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
   const categoryRows = matchup.categoryRows ?? [];
+  const hasStarted = matchup.status === 'LIVE' || matchup.status === 'FINAL';
 
   return (
     <div className="overflow-x-auto rounded-md border border-[color:var(--league-border)]">
@@ -278,7 +283,9 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             </th>
             {categoryRows.map((row) => (
               <th key={row.category} scope="col" className="px-3 py-2 text-center">
-                {row.shortLabel}
+                <abbr title={row.label} className="no-underline">
+                  {row.shortLabel}
+                </abbr>
               </th>
             ))}
             <th scope="col" className="w-20 px-3 py-2 text-center">
@@ -292,12 +299,14 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             side="home"
             categoryRows={categoryRows}
             score={matchup.homeCategoryWins ?? 0}
+            started={hasStarted}
           />
           <CategoryTotalsRow
             team={matchup.awayMember}
             side="away"
             categoryRows={categoryRows}
             score={matchup.awayCategoryWins ?? 0}
+            started={hasStarted}
           />
         </tbody>
       </table>
@@ -310,11 +319,13 @@ function CategoryTotalsRow({
   side,
   categoryRows,
   score,
+  started,
 }: {
   team?: MatchupTeamSummary | null;
   side: 'home' | 'away';
   categoryRows: MatchupCategoryRow[];
   score: number;
+  started: boolean;
 }) {
   return (
     <tr className="bg-[color:var(--league-surface)]">
@@ -324,6 +335,7 @@ function CategoryTotalsRow({
       {categoryRows.map((row) => {
         const isWinner = row.winner === side;
         const isDraw = row.winner === 'draw';
+        const result: CategoryResult = isWinner ? 'won' : isDraw ? 'drawn' : 'lost';
         return (
           <td
             key={row.category}
@@ -335,7 +347,16 @@ function CategoryTotalsRow({
                   : 'text-[color:var(--league-text-muted)]'
             }`}
           >
-            {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+            <span className="inline-flex items-center justify-center gap-1.5">
+              {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+              {started ? (
+                <ResultChip
+                  result={result}
+                  srLabel={`${row.label} ${result}`}
+                  className="size-5 shrink-0"
+                />
+              ) : null}
+            </span>
           </td>
         );
       })}
