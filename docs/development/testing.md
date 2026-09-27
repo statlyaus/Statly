@@ -323,10 +323,12 @@ npm run prisma:generate
 npx prisma migrate deploy
 ```
 
-Before and after a data-oriented command, verify that the protected database is unchanged:
+`prisma/dev.db` is ignored rather than tracked, so `git status` cannot show changes to it. Before and
+after a data-oriented command, compare its file metadata, which records size and modification time
+without reading the database, to verify that the protected database is unchanged:
 
 ```sh
-git status --short -- prisma/dev.db
+stat prisma/dev.db
 ```
 
 Delete the disposable database after verification only when the explicit path is known and it contains

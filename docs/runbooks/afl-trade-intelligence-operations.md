@@ -3279,6 +3279,51 @@ Migration0206 repairs the shared exact-acquisition guard: valuation dataset rows
 `spell_version_id`. It preserves v2 rejection on inserts and updates and changes no stored data.
 Apply this forward repair without editing the immutable0197 migration.
 
+Acquisition registration v3 (migration0233) is **appearance membership**, a labelled bridge for league-wide
+HPN season PAV attribution only. HPN season PAV aggregates every primary player-match row under exactly
+one current spell, so a season cannot be calculated until every appearing player has one; reviewed entry
+spells (v1/v2) require a promoted incoming asset that most league players do not yet have. A v3 spell
+binds one player, one represented club and one season to its first and last reviewed appearance facts
+(`outcome_provider_player_appearance_fact`, `availability='measured'`, `appeared=TRUE`, approved fact
+batch). It has no entry or departure event: `start_event_version_id` and `start_asset_version_id` are
+null only for v3, `start_date`/`end_date` are the first/last appearance days and `end_reason` is
+`last_reviewed_appearance_in_season`. Currentness also requires that no reviewed appearance for that
+player, club and season lies outside the window. Both boundary facts and that completeness scan use
+only facts whose player, match and represented-club identities are still current
+(`outcome_acquisition_appearance_fact_identity_current`: assignment continuity plus a resolution naming
+the same player, match or club), so a later identity reversal withdraws the window. The v3 rule
+fixes `purpose: hpn_season_pav_attribution_only` and
+`retirement: retired_by_covering_reviewed_entry_spell`.
+
+`deriveAflTradeAppearanceMembershipSpells` proposes one v3 spell per player and club for a season from
+the stored facts; non-appearances are ignored, never inferred. Each proposal still needs its rule-bound
+review decision and repository registration. The shared exact-acquisition guard rejects v3 on every
+metric, release, valuation dataset and player PAV observation consumer; only
+`outcome_hpn_pav_calculation_player` accepts it. The postseason authority and postseason observation
+contract reject it explicitly, and the v2 HPN input finalizer accepts it through
+`outcome_acquisition_is_appearance_membership` (the legacy v1 finalizer does not). Trade attribution, pick
+benchmarks and realized contribution therefore still require reviewed entry spells.
+
+A v3 spell may supersede only a v3 spell for the same season; that is how a window grows during a
+season (`deriveAflTradeAppearanceMembershipSpells` takes the current v3 spells, skips unchanged windows
+and proposes the next version for changed ones). Retirement needs no supersession: a v3 spell is not
+current while a current reviewed v1/v2 spell for the same player and club has possible membership that
+contains its whole window, and the same-club overlap guard admits a reviewed spell over a current v3
+window only under that same containment (never the reverse), so one multi-season entry spell retires
+every covered season window at once. A reviewed spell that only partly overlaps a current v3 window is
+rejected as an overlap; supersede or narrow the v3 window first. Inputs retained against a retired
+window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
+grading.
+
+Migration 0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
+chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only
+when that latest decision is approved and current, and names the capture's competition, season,
+capability and `derived_feature_creation`. Its rights artifact must also permit the consumed fields.
+When an HPN build fails with "Source-first factual source rights are no longer current", inspect the
+capture's Gate chain (`supersedes_decision_id` from the manifest's `gate0aReceipt` decision). A
+blocked, expired or out-of-scope latest decision is the cause; record a proper successor decision
+rather than editing an existing one. The ledger is append-only.
+
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,
 retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.

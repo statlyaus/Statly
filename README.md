@@ -120,8 +120,11 @@ or explicit recovery milestones. See [delivery and archival policy](docs/develop
 
 ## Deployment status
 
-The repository contains a Netlify build configuration (`npm run build:production`) and Vercel cron
-configuration, but GitHub Actions does not perform a production deployment. A successful `main` build
+Production is hosted on Netlify. The repository contains the Netlify build configuration
+(`npm run build:production`) and Netlify scheduled functions in `netlify/functions/` that call the
+cron routes (`/api/cron/trades` every 5 minutes, `/api/cron/daily` at 23:00 UTC) with
+`Authorization: Bearer $CRON_SECRET`; the routes reject every request when `CRON_SECRET` is unset
+outside development. GitHub Actions does not perform a production deployment. A successful `main` build
 therefore proves the application build, not a deployment. Any deployment supplied by an external
 GitHub integration must be verified independently from its commit status and a non-destructive smoke
 check; do not infer production health from the build job alone.
