@@ -686,7 +686,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           <LivePickHeader
             draftData={toLivePickHeaderData(activeDraft, participants, picks, draft.liveState)}
             timePerPick={timePerPick}
-            isYourTurn={Boolean(draft.liveState?.isYourTurn)}
+            isYourTurn={Boolean(draft.isYourTurn)}
             yourSlot={yourSlot}
           />
         </div>
