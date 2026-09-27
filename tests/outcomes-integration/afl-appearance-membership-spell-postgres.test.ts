@@ -162,6 +162,7 @@ beforeAll(async () => {
       ]
     );
     for (const [index, item] of appearances.entries()) {
+      await seedIdentities(client, item);
       const candidate = sha256(`candidate:${item.factId}`);
       await client.query(
         `INSERT INTO outcome_provider_player_appearance_fact
@@ -173,7 +174,7 @@ beforeAll(async () => {
            player_identity_id,match_identity_id,represented_club_identity_id,player_id,match_id,
            represented_club_id,competition,season_year,availability,appeared,reason_code,
            effective_at,recorded_at,candidate_sha256,candidate_digests_json,fact_sha256,fact_json)
-         VALUES ($1,$2,'run:synthetic',$3,$4,$4,$4,'d','d','d','d','d','d',$5,$6,$7,$8,$9,$10,
+         VALUES ($1,$2,'run:synthetic',$3,$4,$4,$4,'identity-decision:player:'||$8,'identity-decision:player:'||$8,'identity-decision:match:'||$9,'identity-decision:match:'||$9,'identity-decision:club:'||$10,'identity-decision:club:'||$10,$5,$6,$7,$8,$9,$10,
            'AFLM',$11,'measured',$12,NULL,$13,'2026-08-01T00:00:00.000Z',$14::text,
            jsonb_build_object('appearance',$14::text,'identity','i','match','m'),$15::text,'{}'::jsonb)`,
         [
@@ -449,6 +450,7 @@ async function seedLaterAppearances(input: {
       ]
     );
     for (const [index, item] of input.facts.entries()) {
+      await seedIdentities(client, item);
       const candidate = sha256(`candidate:${item.factId}`);
       await client.query(
         `INSERT INTO outcome_provider_player_appearance_fact
@@ -460,7 +462,7 @@ async function seedLaterAppearances(input: {
            player_identity_id,match_identity_id,represented_club_identity_id,player_id,match_id,
            represented_club_id,competition,season_year,availability,appeared,reason_code,
            effective_at,recorded_at,candidate_sha256,candidate_digests_json,fact_sha256,fact_json)
-         VALUES ($1,$2,'run:later',$3,$4,$4,$4,'d','d','d','d','d','d',$5,$6,$7,$8,$9,$10,
+         VALUES ($1,$2,'run:later',$3,$4,$4,$4,'identity-decision:player:'||$8,'identity-decision:player:'||$8,'identity-decision:match:'||$9,'identity-decision:match:'||$9,'identity-decision:club:'||$10,'identity-decision:club:'||$10,$5,$6,$7,$8,$9,$10,
            'AFLM',$11,'measured',TRUE,NULL,$12,date_trunc('milliseconds',clock_timestamp()),$13::text,
            jsonb_build_object('appearance',$13::text,'identity','i','match','m'),$14::text,'{}'::jsonb)`,
         [
@@ -667,4 +669,121 @@ it('supersedes appearance membership only with the same season', async () => {
   await expect(registerApproved(sameSeason, 'player-five-2021-approval')).resolves.toEqual(
     sameSeason
   );
+});
+
+type SeedClient = { query: (sql: string, values?: unknown[]) => Promise<unknown> };
+
+/**
+ * Seeds one current, reviewed identity assignment per player, match and represented club so the
+ * appearance facts satisfy the continuity contract. Their resolution owners are covered elsewhere.
+ */
+async function seedIdentities(
+  client: SeedClient,
+  item: { player: string; match: string; club: string }
+) {
+  for (const [kind, target, table] of [
+    ['player', item.player, 'outcome_provider_player_resolution'],
+    ['match', item.match, 'outcome_provider_match_resolution'],
+    ['club', item.club, 'outcome_provider_club_resolution'],
+  ] as const) {
+    const decisionId = `identity-decision:${kind}:${target}`;
+    const caseId = `provider-identity-assignment-case:${sha256(`${kind}:${target}`)}`;
+    const identityId = `${kind}-identity:${target}`;
+    await client.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+       VALUES ($1,'provider_resolution_case',$2,'approved','Synthetic current identity','{}'::jsonb,
+         'synthetic-reviewer','2026-07-01T00:00:00.000Z')
+       ON CONFLICT DO NOTHING`,
+      [decisionId, `case:${kind}:${target}`]
+    );
+    const common = {
+      resolution_id: decisionId,
+      resolution_case_id: `case:${kind}:${target}`,
+      revision: 1,
+      outcome: 'approved',
+      assignment_case_id: caseId,
+      assignment_entity_kind: kind,
+      assignment_identity_id: identityId,
+      assignment_revision: 1,
+      assignment_status: 'active',
+      decision_id: decisionId,
+      proposal_id: `proposal:${kind}:${target}`,
+      resolution_sha256: sha256(decisionId),
+      decided_at: '2026-07-01T00:00:00.000Z',
+      effective_at: '2026-07-01T00:00:00.000Z',
+      decision_json: {},
+    };
+    const row: Record<string, unknown> =
+      kind === 'player'
+        ? {
+            ...common,
+            identity_candidate_id: `identity-candidate:${target}`,
+            player_identity_id: identityId,
+            player_id: target,
+          }
+        : kind === 'match'
+          ? {
+              ...common,
+              match_candidate_id: `match-candidate:${target}`,
+              match_identity_id: identityId,
+              match_id: target,
+            }
+          : {
+              ...common,
+              occurrence_source: 'synthetic',
+              club_identity_id: identityId,
+              club_id: target,
+            };
+    const columns = Object.keys(row);
+    await client.query(
+      `INSERT INTO ${table} (${columns.join(',')})
+       SELECT ${columns.join(',')} FROM jsonb_populate_record(NULL::${table},$1::jsonb)
+       ON CONFLICT DO NOTHING`,
+      [JSON.stringify(row)]
+    );
+    await client.query(
+      `INSERT INTO outcome_provider_identity_assignment_head
+        (assignment_case_id,entity_kind,identity_id,revision,decision_id,status,updated_at)
+       VALUES ($1,$2,$3,1,$4,'active','2026-07-01T00:00:00.000Z')
+       ON CONFLICT DO NOTHING`,
+      [caseId, kind, identityId, decisionId]
+    );
+  }
+}
+
+it('withdraws a window whose boundary appearance loses its current player identity', async () => {
+  const spell = await pool.query<{ spell_version_id: string }>(
+    `SELECT spell.spell_version_id FROM outcome_acquisition_spell_version spell
+      WHERE spell.player_id='player:two' AND spell.club_id='club:b'
+        AND spell.registration_canonical_json::jsonb->>'seasonYear'='2021'
+        AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor
+          WHERE successor.supersedes_spell_version_id=spell.spell_version_id)`
+  );
+  expect(spell.rows).toHaveLength(1);
+  const spellVersionId = spell.rows[0]!.spell_version_id;
+  expect(await isCurrent(spellVersionId)).toBe(true);
+  // A later review supersedes the player-identity decision without a confirming reassignment.
+  // The provider-resolution review owner is covered elsewhere; seed the successor directly.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL session_replication_role='replica'`);
+    await client.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,evidence_json,
+         decided_by,decided_at)
+       VALUES ('identity-decision:player:player:two:withdrawn','provider_resolution_case',
+         'case:player:player:two','rejected','identity-decision:player:player:two',
+         'Synthetic identity withdrawal','{}'::jsonb,'synthetic-reviewer',
+         date_trunc('milliseconds',clock_timestamp()))`
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  expect(await isCurrent(spellVersionId)).toBe(false);
 });

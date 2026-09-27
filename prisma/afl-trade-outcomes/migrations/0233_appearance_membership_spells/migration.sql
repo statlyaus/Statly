@@ -71,6 +71,33 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
   )
 $$;
 
+-- A stored appearance fact is only as current as its player, match and represented-club
+-- identities: each stored assignment decision must still head its continuity chain and name the
+-- fact's denormalized entity. A superseded identity decision withdraws the fact from membership.
+CREATE FUNCTION outcome_acquisition_appearance_fact_identity_current(target_fact TEXT)
+RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
+  SELECT COALESCE((SELECT
+    ((fact.player_assignment_decision_id IS NOT NULL
+        AND outcome_provider_assignment_continuity_current(fact.player_assignment_decision_id)
+        AND EXISTS (SELECT 1 FROM outcome_provider_player_resolution resolution
+          WHERE resolution.decision_id=fact.player_assignment_decision_id
+            AND resolution.player_id=fact.player_id))
+      OR (fact.player_assignment_decision_id IS NULL
+        AND outcome_provider_candidate_only_player_resolution_current(fact.player_resolution_decision_id)
+        AND EXISTS (SELECT 1 FROM outcome_provider_player_resolution resolution
+          WHERE resolution.decision_id=fact.player_resolution_decision_id
+            AND resolution.player_id=fact.player_id)))
+    AND outcome_provider_assignment_continuity_current(fact.match_assignment_decision_id)
+    AND EXISTS (SELECT 1 FROM outcome_provider_match_resolution resolution
+      WHERE resolution.decision_id=fact.match_assignment_decision_id AND resolution.match_id=fact.match_id)
+    AND outcome_provider_assignment_continuity_current(fact.represented_club_assignment_decision_id)
+    AND EXISTS (SELECT 1 FROM outcome_provider_club_resolution resolution
+      WHERE resolution.decision_id=fact.represented_club_assignment_decision_id
+        AND resolution.club_id=fact.represented_club_id)
+   FROM outcome_provider_player_appearance_fact fact
+   WHERE fact.appearance_fact_id=target_fact),FALSE)
+$$;
+
 -- One reviewed, measured appearance of this player for this represented club in this season.
 CREATE FUNCTION outcome_acquisition_appearance_binding_current(
   binding JSONB, target_player TEXT, target_club TEXT, target_season INTEGER,
@@ -91,7 +118,8 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
         AND (fact.effective_at AT TIME ZONE 'UTC')::DATE=(binding->>'date')::DATE
         AND target_club IN (match.home_club_id,match.away_club_id)
         AND batch.environment::TEXT=target_environment AND batch.status='approved'
-        AND fact.recorded_at<=cutoff),FALSE)
+        AND fact.recorded_at<=cutoff
+        AND outcome_acquisition_appearance_fact_identity_current(fact.appearance_fact_id)),FALSE)
 $$;
 
 CREATE FUNCTION outcome_acquisition_appearance_spell_registration_current(target_id TEXT, cutoff TIMESTAMPTZ)
@@ -137,12 +165,13 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
         AND fact.availability='measured' AND fact.appeared=TRUE
         AND batch.environment::TEXT=c->>'environment' AND batch.status='approved'
         AND fact.recorded_at<=spell.recorded_at
-        AND NOT ((fact.effective_at AT TIME ZONE 'UTC')::DATE BETWEEN spell.start_date AND spell.end_date))
+        AND NOT ((fact.effective_at AT TIME ZONE 'UTC')::DATE BETWEEN spell.start_date AND spell.end_date)
+        AND outcome_acquisition_appearance_fact_identity_current(fact.appearance_fact_id))
     AND outcome_acquisition_registration_review_current(spell.registration_approval_decision_id,
       'acquisition_spell_registration',spell.spell_version_id,
       jsonb_build_object('spellVersionId',spell.spell_version_id,'content',c),spell.recorded_at,spell.registered_at,cutoff)
     AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor WHERE successor.supersedes_spell_version_id=spell.spell_version_id)
-    -- A reviewed entry spell covering this window retires it: appearance membership is a bridge only.
+    -- A reviewed entry spell whose membership contains this window retires it (a bridge only).
     AND NOT EXISTS (
       SELECT 1 FROM outcome_acquisition_spell_version reviewed
       WHERE reviewed.player_id=spell.player_id AND reviewed.club_id=spell.club_id
@@ -150,7 +179,7 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
         AND reviewed.registration_canonical_json::JSONB->>'schemaVersion' IN
           ('afl-trade-acquisition-registration/v1','afl-trade-acquisition-registration/v2')
         AND reviewed.recorded_at<=cutoff
-        AND outcome_acquisition_possible_membership(reviewed) && daterange(spell.start_date,spell.end_date,'[]')
+        AND outcome_acquisition_possible_membership(reviewed) @> daterange(spell.start_date,spell.end_date,'[]')
         AND outcome_acquisition_spell_registration_current(reviewed.spell_version_id,cutoff))
     AND ((spell.version=1 AND spell.supersedes_spell_version_id IS NULL AND spell.spell_id=spell.spell_version_id)
       OR EXISTS (SELECT 1 FROM outcome_acquisition_spell_version predecessor
@@ -240,15 +269,16 @@ BEGIN
  IF position(old_fragment IN definition)=0 THEN RAISE EXCEPTION 'Expected acquisition start-asset guard end'; END IF;
  EXECUTE replace(definition,old_fragment,new_fragment);
 
- -- Overlap: a reviewed entry spell may cover current appearance-membership windows for the same
- -- player and club, which it retires (their currentness requires no covering reviewed spell). A v3
- -- spell still cannot overlap any current spell.
+ -- Overlap: a reviewed entry spell whose membership contains a current appearance-membership window
+ -- for the same player and club may be admitted over it, and retires it. A partial overlap remains a
+ -- conflict, and a v3 spell still cannot overlap any current spell.
  definition:=pg_get_functiondef('validate_outcome_version_chain()'::regprocedure);
  old_fragment:=$old$              AND current_spell."spell_version_id" IS DISTINCT FROM NEW."supersedes_spell_version_id"$old$;
  IF position(old_fragment IN definition)=0 THEN RAISE EXCEPTION 'Expected acquisition overlap guard'; END IF;
  EXECUTE replace(definition,old_fragment,old_fragment||$new$
               AND NOT (COALESCE(NEW."registration_canonical_json"::JSONB->>'schemaVersion','')<>'afl-trade-acquisition-registration/v3'
-                AND COALESCE(current_spell."registration_canonical_json"::JSONB->>'schemaVersion','')='afl-trade-acquisition-registration/v3')$new$);
+                AND COALESCE(current_spell."registration_canonical_json"::JSONB->>'schemaVersion','')='afl-trade-acquisition-registration/v3'
+                AND outcome_acquisition_possible_membership(NEW) @> outcome_acquisition_possible_membership(current_spell))$new$);
 
  -- HPN input finalization (v2 guard): a v3 spell satisfies the start-asset join by being
  -- appearance membership; exact spell columns compare NULL-safely. The v1 guard is unchanged and
