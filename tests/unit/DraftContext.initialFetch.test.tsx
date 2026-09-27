@@ -122,6 +122,14 @@ function DraftStateProbe() {
         {draft.participants.flatMap((participant) => participant.queue ?? []).join(',')}
       </div>
       <div data-testid="draft-error">{draft.error ?? 'none'}</div>
+      <div data-testid="pick-feedback">
+        {draft.pickFeedback
+          ? `${draft.pickFeedback.status}:${draft.pickFeedback.message ?? ''}`
+          : 'none'}
+      </div>
+      <button type="button" onClick={() => draft.dismissPickFeedback()}>
+        Dismiss pick feedback
+      </button>
       <div data-testid="can-make-pick">{String(draft.canMakePick)}</div>
       <div data-testid="queue-mutation-status">{queueMutationStatus}</div>
       <button type="button" onClick={() => void updateMixedQueue()}>
@@ -1485,6 +1493,147 @@ describe('DraftProvider initial hydration', () => {
       expect(screen.getByTestId('player-count')).toHaveTextContent('0');
       expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
     });
+  });
+
+  it('keeps the room open and reports a rejected pick as scoped pick feedback', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
+        throw Object.assign(new Error('Conflict'), { status: 409 });
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick player 1' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-feedback')).toHaveTextContent(
+        'failed:That player was just drafted by someone else.'
+      );
+    });
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+    expect(screen.getByTestId('pick-count')).toHaveTextContent('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss pick feedback' }));
+    expect(screen.getByTestId('pick-feedback')).toHaveTextContent('none');
+  });
+
+  it('clears pick feedback once the server confirms the pick', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
+        return {
+          success: true,
+          data: {
+            currentPick: 2,
+            isComplete: false,
+            pick: {
+              id: 'pick-1',
+              overall: 1,
+              round: 1,
+              slot: 1,
+              player: { id: 'player-1', name: 'First Player', position: 'MID', club: 'Sydney' },
+              member: { id: 'member-1', userId: 'user-1', displayName: 'Tester' },
+              auto: false,
+              madeAt: '2026-06-07T00:00:00.000Z',
+            },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick player 1' }));
+    expect(screen.getByTestId('pick-feedback')).toHaveTextContent('submitting:');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+    });
+    expect(screen.getByTestId('pick-feedback')).toHaveTextContent('none');
   });
 
   it('backfills persisted picks when an open room misses the realtime delta', async () => {

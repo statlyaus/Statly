@@ -114,6 +114,20 @@ interface DraftState {
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
+  /** The manager's own pick command, scoped so a rejected pick never replaces the room. */
+  pickFeedback: DraftPickFeedback | null;
+}
+
+export interface DraftPickFeedback {
+  status: 'submitting' | 'failed';
+  playerId: string;
+  playerName?: string;
+  message?: string;
+  /**
+   * What the manager can do next: retry the same pick, refresh because the server may already have
+   * saved it, or choose another player because this one is gone or it is not their turn.
+   */
+  recovery?: 'retry' | 'refresh' | 'choose-another';
 }
 
 interface DraftContextValue extends DraftState {
@@ -129,6 +143,7 @@ interface DraftContextValue extends DraftState {
   forceRefresh: () => Promise<void>;
   setStatSeason: (season: number) => Promise<void>;
   canMakePick: boolean;
+  dismissPickFeedback: () => void;
 }
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
@@ -891,7 +906,8 @@ type Action =
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_LOADING'; loading: boolean }
-  | { type: 'SET_ERROR'; error: string | null };
+  | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'SET_PICK_FEEDBACK'; feedback: DraftPickFeedback | null };
 
 type NormalizedDraftSnapshot = ReturnType<typeof normalizeSnapshot>;
 
@@ -1382,6 +1398,8 @@ function reducer(state: DraftState, action: Action): DraftState {
       return { ...state, isLoading: action.loading };
     case 'SET_ERROR':
       return { ...state, error: action.error };
+    case 'SET_PICK_FEEDBACK':
+      return { ...state, pickFeedback: action.feedback };
     default:
       return state;
   }
@@ -1630,6 +1648,7 @@ export function DraftProvider({
       isLoading: !initialSnapshot,
       isSaving: false,
       error: null,
+      pickFeedback: null,
     };
   }, [initialSnapshot]);
 
@@ -2037,23 +2056,31 @@ export function DraftProvider({
 
   const makePick = useCallback(
     async (playerId: string) => {
+      const failPick = (
+        message: string,
+        recovery: NonNullable<DraftPickFeedback['recovery']>,
+        playerName?: string
+      ) =>
+        dispatch({
+          type: 'SET_PICK_FEEDBACK',
+          feedback: { status: 'failed', playerId, playerName, message, recovery },
+        });
+
       if (!playerId || typeof playerId !== 'string') {
-        dispatch({
-          type: 'SET_ERROR',
-          error: 'Invalid player ID provided',
-        });
+        failPick('Invalid player ID provided', 'choose-another');
         return;
       }
 
-      const playerExists = state.availablePlayers.some((p) => String(p.id) === playerId);
-      if (!playerExists) {
-        dispatch({
-          type: 'SET_ERROR',
-          error: 'Player is not available for selection',
-        });
+      const player = state.availablePlayers.find((p) => String(p.id) === playerId);
+      if (!player) {
+        failPick('That player is no longer available.', 'choose-another');
         return;
       }
 
+      dispatch({
+        type: 'SET_PICK_FEEDBACK',
+        feedback: { status: 'submitting', playerId, playerName: player.name },
+      });
       dispatch({ type: 'SET_SAVING', saving: true });
       invalidatePrivateStateHydration();
       try {
@@ -2080,23 +2107,25 @@ export function DraftProvider({
             ts: Date.now(),
           };
           dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
+          dispatch({ type: 'SET_PICK_FEEDBACK', feedback: null });
         } else if (isMounted.current) {
-          dispatch({
-            type: 'SET_ERROR',
-            error: 'Draft pick succeeded but returned an invalid payload. Refresh the room.',
-          });
+          failPick(
+            'The pick was sent but the room did not receive confirmation. Refresh the room.',
+            'refresh',
+            player.name
+          );
         }
       } catch (err: any) {
         if (isMounted.current) {
-          dispatch({
-            type: 'SET_ERROR',
-            error:
-              err?.status === 409
-                ? 'That player was just drafted by someone else.'
-                : err?.status === 423
-                  ? 'Not your turn to pick.'
-                  : (err?.message ?? 'Failed to make pick'),
-          });
+          failPick(
+            err?.status === 409
+              ? 'That player was just drafted by someone else.'
+              : err?.status === 423
+                ? 'Not your turn to pick.'
+                : (err?.message ?? 'Failed to make pick'),
+            err?.status === 409 || err?.status === 423 ? 'choose-another' : 'retry',
+            player.name
+          );
         }
       } finally {
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
@@ -2375,6 +2404,10 @@ export function DraftProvider({
     return !!(live && onClock && !state.isSaving);
   }, [state.draft, state.liveState, state.participants.length, me?.id, yourSlot, state.isSaving]);
 
+  const dismissPickFeedback = useCallback(() => {
+    dispatch({ type: 'SET_PICK_FEEDBACK', feedback: null });
+  }, []);
+
   /* ------------------------------- Provide value ---------------------------- */
 
   const value: DraftContextValue = useMemo(
@@ -2392,10 +2425,12 @@ export function DraftProvider({
       forceRefresh,
       setStatSeason,
       canMakePick,
+      dismissPickFeedback,
     }),
     [
       addToWatchlist,
       canMakePick,
+      dismissPickFeedback,
       draftId,
       forceRefresh,
       isInWatchlist,
