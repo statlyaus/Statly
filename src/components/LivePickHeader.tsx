@@ -211,7 +211,8 @@ export default function LivePickHeader({
       setIsFlashing(false);
       setHasAlerted(true);
       onAudioAlertRef.current?.('your-turn');
-    } else if (picksUntilYourTurn > 1) {
+    } else if (!isYourTurn && picksUntilYourTurn > 1) {
+      // Resetting while isYourTurn is true would re-trigger the branch above on every render.
       setHasAlerted(false);
       setIsFlashing(false);
     }
