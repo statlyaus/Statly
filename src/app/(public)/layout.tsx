@@ -41,12 +41,20 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
             />
           </Link>
           <PublicNavigation />
-          <Link
-            href="/login"
-            className="col-start-2 row-start-1 inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-white px-3 py-2 text-sm font-semibold text-brand-bar transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-bar sm:col-start-3 sm:ml-2"
-          >
-            Sign in
-          </Link>
+          <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-2 sm:col-start-3 sm:ml-2">
+            <Link
+              href="/login"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold text-brand-bar-foreground transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/register"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-white px-3 py-2 text-sm font-semibold text-brand-bar transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-bar"
+            >
+              Create account
+            </Link>
+          </div>
         </nav>
       </header>
       <main id="main-content" tabIndex={-1} className="w-full min-w-0 outline-none">

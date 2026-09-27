@@ -128,6 +128,14 @@ describe('public AFL draft trade routing', () => {
     });
     expect(outcomesLink).toHaveAttribute('href', '/draft/trades');
     expect(outcomesLink).toHaveAttribute('aria-current', 'page');
+    expect(within(primaryNavigation).getByRole('link', { name: 'Create account' })).toHaveAttribute(
+      'href',
+      '/register'
+    );
+    expect(within(primaryNavigation).getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/login'
+    );
 
     const footer = screen.getByRole('contentinfo');
     expect(within(footer).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
