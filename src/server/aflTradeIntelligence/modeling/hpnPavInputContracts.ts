@@ -271,8 +271,9 @@ const acquisitionSpellSchema = z
     version: z.number().int().positive(),
     playerId: publicIdSchema,
     clubId: publicIdSchema,
-    startEventVersionId: publicIdSchema,
-    startAssetVersionId: publicIdSchema,
+    // Null only for appearance-membership spells (HPN season attribution without an entry event).
+    startEventVersionId: publicIdSchema.nullable(),
+    startAssetVersionId: publicIdSchema.nullable(),
     startDate: dateSchema,
     endDate: dateSchema.nullable(),
     endReason: z.string().trim().min(1).max(200).nullable(),
@@ -290,6 +291,20 @@ const acquisitionSpellSchema = z
         code: 'custom',
         path: ['endDate'],
         message: 'An HPN PAV acquisition spell cannot end before it starts.',
+      });
+    }
+    const appearanceMembership =
+      spell.startEventVersionId === null && spell.startAssetVersionId === null;
+    if (
+      (spell.startEventVersionId === null) !== (spell.startAssetVersionId === null) ||
+      (appearanceMembership &&
+        (spell.endDate === null || spell.endReason !== 'last_reviewed_appearance_in_season'))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['startEventVersionId'],
+        message:
+          'An HPN PAV acquisition spell has a reviewed entry event or is closed appearance membership.',
       });
     }
   });

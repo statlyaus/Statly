@@ -74,6 +74,9 @@ async function run() {
     if (isProhibitedTrackedEnvironment(file)) {
       errors.push(`${file}: tracked non-example environment or credential file`);
     }
+    if (isProhibitedTrackedArtifact(file)) {
+      errors.push(`${file}: tracked local database or Firebase export`);
+    }
   }
 
   for (const relativeFile of markdownFiles) {
@@ -157,6 +160,20 @@ export function isProhibitedTrackedEnvironment(file) {
     );
 
   return hasCredentialExtension && hasCredentialLikeName;
+}
+
+export function isProhibitedTrackedArtifact(file) {
+  const normalizedFile = file.replaceAll('\\', '/');
+  const name = normalizedFile.split('/').at(-1) ?? '';
+
+  if (/\.(?:db|sqlite|sqlite3)(?:-(?:journal|wal|shm))?$/i.test(name)) return true;
+  if (/\.overall_export_metadata$/i.test(name) || name === 'firebase-export-metadata.json') {
+    return true;
+  }
+
+  return /(?:^|\/)(?:\.firebase-data|firebase-export-[^/]+|emulator-data|(?:auth|database|firestore|storage)_export)\//i.test(
+    normalizedFile
+  );
 }
 
 export function stripFencedCode(content, file, reportError = (_error) => {}) {
