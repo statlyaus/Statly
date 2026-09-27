@@ -64,6 +64,21 @@ const draftData = {
 };
 
 describe('LivePickHeader', () => {
+  it('does not loop when the turn flag and the pick train briefly disagree', () => {
+    // Slot 3 is two picks away, but a stale turn flag still says it is this manager's turn.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={3} />)
+      ).not.toThrow();
+      expect(
+        consoleError.mock.calls.some((call) => String(call[0]).includes('Maximum update depth'))
+      ).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('renders canonical live status with accessible timer and pick train', () => {
     render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />);
 

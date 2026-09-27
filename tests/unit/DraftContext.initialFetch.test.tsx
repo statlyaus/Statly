@@ -1504,6 +1504,93 @@ describe('DraftProvider initial hydration', () => {
     });
   });
 
+  it('hands the turn on once the pick advances, not when the next snapshot arrives', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
+        return {
+          success: true,
+          data: {
+            currentPick: 2,
+            isComplete: false,
+            pick: {
+              id: 'pick-1',
+              overall: 1,
+              round: 1,
+              slot: 1,
+              player: { id: 'player-1', name: 'First Player', position: 'MID', club: 'Sydney' },
+              member: { id: 'member-1', userId: 'user-1', displayName: 'Tester' },
+              auto: false,
+              madeAt: '2026-06-07T00:00:00.000Z',
+            },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 4,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+            },
+            {
+              id: 'member-2',
+              memberId: 'member-2',
+              userId: 'user-2',
+              displayName: 'Rival',
+              slot: 2,
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          // The snapshot names the manager on the clock for pick 1 only.
+          liveState: { currentPick: 1, onClockTeamId: 'member-1' },
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(screen.getByTestId('is-your-turn')).toHaveTextContent('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick player 1' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
+    });
+    // Pick 2 belongs to member-2, so the stale pick-1 on-clock member must not keep the turn.
+    expect(screen.getByTestId('is-your-turn')).toHaveTextContent('false');
+    expect(screen.getByTestId('can-make-pick')).toHaveTextContent('false');
+  });
+
   it('keeps the room open and reports a rejected pick as scoped pick feedback', async () => {
     fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
       if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
