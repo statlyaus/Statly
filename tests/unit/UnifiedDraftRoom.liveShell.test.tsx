@@ -20,14 +20,27 @@ const draftWatchlistSpy = vi.hoisted(() => vi.fn());
 const openLeagueSocialSpy = vi.hoisted(() => vi.fn());
 const setLeagueContextSpy = vi.hoisted(() => vi.fn());
 const updateQueueSpy = vi.hoisted(() => vi.fn());
+const makePickSpy = vi.hoisted(() => vi.fn());
+const dismissPickFeedbackSpy = vi.hoisted(() => vi.fn());
+const forceRefreshSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
   availablePlayers: DraftRoomPlayerFixture[];
   isSaving: boolean;
+  canMakePick: boolean;
+  pickFeedback: {
+    status: 'submitting' | 'failed';
+    playerId: string;
+    playerName?: string;
+    message?: string;
+    recovery?: 'retry' | 'refresh' | 'choose-another';
+  } | null;
 }>(() => ({
   status: 'LIVE',
   isSaving: false,
+  canMakePick: false,
+  pickFeedback: null,
   availablePlayers: [
     {
       id: 'player-1',
@@ -183,7 +196,9 @@ vi.mock('@/components/draft/PlayerGrid', () => ({
 vi.mock('@/contexts/DraftContext', () => ({
   useDraft: () => ({
     availablePlayers: draftContext.availablePlayers,
-    canMakePick: false,
+    canMakePick: draftContext.canMakePick,
+    pickFeedback: draftContext.pickFeedback,
+    dismissPickFeedback: dismissPickFeedbackSpy,
     connection: { status: 'disconnected' },
     draft: {
       id: 'draft-1',
@@ -203,11 +218,11 @@ vi.mock('@/contexts/DraftContext', () => ({
     },
     draftReadiness: { blockers: [] },
     error: null,
-    forceRefresh: vi.fn(),
+    forceRefresh: forceRefreshSpy,
     isLoading: false,
     isSaving: draftContext.isSaving,
     liveState: { isYourTurn: false },
-    makePick: vi.fn(),
+    makePick: makePickSpy,
     participants: [
       {
         id: 'member-1',
@@ -266,6 +281,11 @@ describe('UnifiedDraftRoom live shell composition', () => {
     updateQueueSpy.mockResolvedValue(undefined);
     draftContext.status = 'LIVE';
     draftContext.isSaving = false;
+    draftContext.canMakePick = false;
+    draftContext.pickFeedback = null;
+    makePickSpy.mockReset();
+    dismissPickFeedbackSpy.mockReset();
+    forceRefreshSpy.mockReset();
     draftContext.availablePlayers = [
       {
         id: 'player-1',
@@ -528,5 +548,75 @@ describe('UnifiedDraftRoom live shell composition', () => {
     fireEvent.keyDown(mobileFeedButton as HTMLElement, { key: 'Escape' });
 
     expect(screen.queryByRole('dialog', { name: 'Pick Feed' })).not.toBeInTheDocument();
+  });
+
+  it('announces a pick while the server confirms it', () => {
+    draftContext.pickFeedback = {
+      status: 'submitting',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('status', { name: 'Pick status' })).toHaveTextContent(
+      'Submitting your pick: Caleb Daniel'
+    );
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+  });
+
+  it('keeps the board open and offers Retry and Dismiss after a rejected pick', () => {
+    draftContext.canMakePick = true;
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+      message: 'Failed to make pick',
+      recovery: 'retry',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    const alert = screen.getByRole('alert', { name: 'Pick status' });
+    expect(alert).toHaveTextContent('Pick not made: Caleb Daniel. Failed to make pick');
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry pick' }));
+    expect(makePickSpy).toHaveBeenCalledWith('player-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(dismissPickFeedbackSpy).toHaveBeenCalled();
+  });
+
+  it('asks for a refresh instead of a retry when the pick may already be saved', () => {
+    draftContext.canMakePick = true;
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      message: 'The pick was sent but the room did not receive confirmation. Refresh the room.',
+      recovery: 'refresh',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('button', { name: 'Retry pick' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh room' }));
+    expect(forceRefreshSpy).toHaveBeenCalled();
+  });
+
+  it('offers only Dismiss when the player was taken or it is not the manager\'s turn', () => {
+    draftContext.canMakePick = true;
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+      message: 'That player was just drafted by someone else.',
+      recovery: 'choose-another',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('alert', { name: 'Pick status' })).toHaveTextContent(
+      'That player was just drafted by someone else.'
+    );
+    expect(screen.queryByRole('button', { name: 'Retry pick' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh room' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
   });
 });

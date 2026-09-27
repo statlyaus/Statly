@@ -11,7 +11,7 @@ import PickFeed from '@/components/PickFeed';
 import { useLeagueSocialWidget } from '@/components/league/social';
 import { useConfirmation } from '@/components/ui/Modal';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
-import { useDraft } from '@/contexts/DraftContext';
+import { useDraft, type DraftPickFeedback } from '@/contexts/DraftContext';
 import {
   toLivePickHeaderData,
   toFeedPicks,
@@ -195,6 +195,69 @@ function buildRosterSlots({
   });
 }
 
+/** Remaps the base tokens to the broadcast palette for banners that sit directly on the draft page. */
+const DRAFT_BROADCAST_TOKEN_SCOPE =
+  '[--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--foreground:var(--draft-broadcast-text)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]';
+
+function PickStatusBanner({
+  feedback,
+  canRetry,
+  onRetry,
+  onRefresh,
+  onDismiss,
+}: {
+  feedback: DraftPickFeedback;
+  canRetry: boolean;
+  onRetry: (playerId: string) => void;
+  onRefresh: () => void;
+  onDismiss: () => void;
+}): React.JSX.Element {
+  const playerLabel = feedback.playerName ?? 'selected player';
+  const buttonClass =
+    'inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  if (feedback.status === 'submitting') {
+    return (
+      <div
+        role="status"
+        aria-label="Pick status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="mt-4 rounded-lg border border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)] px-4 py-3 text-sm font-medium text-foreground"
+      >
+        Submitting your pick: {playerLabel}. Waiting for the server to confirm.
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="alert"
+      aria-label="Pick status"
+      className="mt-4 flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p>
+        <span className="font-semibold">Pick not made: {playerLabel}.</span> {feedback.message}
+      </p>
+      <div className="flex gap-2">
+        {feedback.recovery === 'retry' && canRetry ? (
+          <button type="button" onClick={() => onRetry(feedback.playerId)} className={buttonClass}>
+            Retry pick
+          </button>
+        ) : null}
+        {feedback.recovery === 'refresh' ? (
+          <button type="button" onClick={onRefresh} className={buttonClass}>
+            Refresh room
+          </button>
+        ) : null}
+        <button type="button" onClick={onDismiss} className={buttonClass}>
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
@@ -244,15 +307,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     return ['ALL', ...Array.from(positions).sort()];
   }, [playersList]);
 
-  // Handle player selection
+  // Handle player selection. makePick reports failures through draft.pickFeedback, not by throwing.
   const handlePlayerSelect = useCallback(
     async (player: DraftPlayer) => {
       if (!draft.canMakePick) return;
-      try {
-        await draft.makePick(player.id);
-      } catch (error) {
-        console.error('Failed to make pick:', error);
-      }
+      await draft.makePick(player.id);
     },
     [draft]
   );
@@ -260,11 +319,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const handlePlayerSelectById = useCallback(
     async (playerId: string) => {
       if (!draft.canMakePick) return;
-      try {
-        await draft.makePick(playerId);
-      } catch (error) {
-        console.error('Failed to make pick:', error);
-      }
+      await draft.makePick(playerId);
     },
     [draft]
   );
@@ -714,62 +769,77 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             </section>
           )}
 
-          {!isCompletedDraft && queueMutationFeedback ? (
-            <div
-              className={`mt-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
-                queueMutationFeedback.kind === 'error'
-                  ? 'border-destructive/40 bg-destructive/10 text-foreground'
-                  : 'border-border bg-muted/30 text-foreground'
-              }`}
-            >
-              <p
-                role={
-                  queueMutationFeedback.kind === 'error' && !isQueueMutationPending
-                    ? 'alert'
-                    : 'status'
-                }
-                aria-live={
-                  queueMutationFeedback.kind === 'success' || isQueueMutationPending
-                    ? 'polite'
-                    : undefined
-                }
-                aria-atomic="true"
-              >
-                {queueMutationFeedback.kind === 'error' && isQueueMutationPending
-                  ? 'Retrying queue update…'
-                  : queueMutationFeedback.message}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isQueueMutationPending) return;
-                  if (queueMutationFeedback.kind === 'error') {
-                    void handleRetryQueueUpdate();
-                  } else {
-                    setQueueMutationFeedback(null);
-                    setQueueAnnouncement('');
-                  }
+          <div className={DRAFT_BROADCAST_TOKEN_SCOPE}>
+            {!isCompletedDraft && draft.pickFeedback ? (
+              <PickStatusBanner
+                feedback={draft.pickFeedback}
+                canRetry={draft.canMakePick}
+                onRetry={(playerId) => void handlePlayerSelectById(playerId)}
+                onRefresh={() => {
+                  draft.dismissPickFeedback();
+                  void draft.forceRefresh();
                 }}
-                aria-disabled={isQueueMutationPending}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
+                onDismiss={draft.dismissPickFeedback}
+              />
+            ) : null}
+
+            {!isCompletedDraft && queueMutationFeedback ? (
+              <div
+                className={`mt-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+                  queueMutationFeedback.kind === 'error'
+                    ? 'border-destructive/40 bg-destructive/10 text-foreground'
+                    : 'border-border bg-muted/30 text-foreground'
+                }`}
               >
-                {queueMutationFeedback.kind === 'error' ? 'Retry queue update' : 'Dismiss'}
-              </button>
-            </div>
-          ) : !isCompletedDraft && isQueueMutationPending ? (
-            <div
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-foreground"
-            >
-              Saving queue…
-            </div>
-          ) : !isCompletedDraft && queueAnnouncement ? (
-            <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-              {queueAnnouncement}
-            </p>
-          ) : null}
+                <p
+                  role={
+                    queueMutationFeedback.kind === 'error' && !isQueueMutationPending
+                      ? 'alert'
+                      : 'status'
+                  }
+                  aria-live={
+                    queueMutationFeedback.kind === 'success' || isQueueMutationPending
+                      ? 'polite'
+                      : undefined
+                  }
+                  aria-atomic="true"
+                >
+                  {queueMutationFeedback.kind === 'error' && isQueueMutationPending
+                    ? 'Retrying queue update…'
+                    : queueMutationFeedback.message}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isQueueMutationPending) return;
+                    if (queueMutationFeedback.kind === 'error') {
+                      void handleRetryQueueUpdate();
+                    } else {
+                      setQueueMutationFeedback(null);
+                      setQueueAnnouncement('');
+                    }
+                  }}
+                  aria-disabled={isQueueMutationPending}
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
+                >
+                  {queueMutationFeedback.kind === 'error' ? 'Retry queue update' : 'Dismiss'}
+                </button>
+              </div>
+            ) : !isCompletedDraft && isQueueMutationPending ? (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-foreground"
+              >
+                Saving queue…
+              </div>
+            ) : !isCompletedDraft && queueAnnouncement ? (
+              <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+                {queueAnnouncement}
+              </p>
+            ) : null}
+          </div>
 
           <section
             aria-label={isCompletedDraft ? 'Completed draft background' : undefined}
