@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { isCronRequestAuthorized } from '@/lib/cronAuth';
 
-// Daily cron endpoint triggered by Vercel (see vercel.json)
+// Daily cron endpoint, called by the hosting scheduler
 // - Runs on Node.js runtime so firebase-admin and other Node libs work
 // - Protected by CRON_SECRET via isCronRequestAuthorized (fails closed outside development)
 export const runtime = 'nodejs';

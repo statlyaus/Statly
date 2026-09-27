@@ -2,9 +2,9 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import type { NextRequest } from 'next/server';
 
-// Shared authorization for cron endpoints (see vercel.json).
-// Requires CRON_SECRET outside local development and fails closed when it is unset. Vercel cron
-// sends `Authorization: Bearer <CRON_SECRET>`; `x-cron-secret` or `?token=` are also accepted.
+// Shared authorization for cron endpoints.
+// Requires CRON_SECRET outside local development and fails closed when it is unset. Schedulers send
+// `Authorization: Bearer <CRON_SECRET>`; `x-cron-secret` or `?token=` are also accepted.
 
 function presentedSecret(req: NextRequest): string | null {
   const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') ?? '');
