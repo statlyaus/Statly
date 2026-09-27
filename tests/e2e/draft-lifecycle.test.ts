@@ -47,6 +47,8 @@ test('completes a representative draft and recovers history and roster state', a
 
   const selectStart = Date.now();
   await firstSelectButton.click();
+  // Select only chooses the player; the pick needs the explicit confirm.
+  await page.getByRole('button', { name: /^Confirm pick: / }).click();
   await expect(page.locator('body')).toContainText('Pick 2 of 4');
   expect(Date.now() - selectStart).toBeLessThan(MAX_DRAFT_INTERACTION_MS);
 

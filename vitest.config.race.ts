@@ -11,7 +11,6 @@ export default defineConfig({
     globals: true,
     setupFiles: ['tests/setup/race.setup.ts'],
     maxWorkers: 1,
-    minWorkers: 1,
     testTimeout: 60000,
     hookTimeout: 60000,
     retry: 0,
