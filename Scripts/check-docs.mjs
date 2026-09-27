@@ -166,10 +166,12 @@ export function isProhibitedTrackedArtifact(file) {
   const normalizedFile = file.replaceAll('\\', '/');
   const name = normalizedFile.split('/').at(-1) ?? '';
 
-  if (/\.(?:db|db-journal|db-wal|db-shm|sqlite|sqlite3)$/i.test(name)) return true;
-  if (/\.overall_export_metadata$/i.test(name)) return true;
+  if (/\.(?:db|sqlite|sqlite3)(?:-(?:journal|wal|shm))?$/i.test(name)) return true;
+  if (/\.overall_export_metadata$/i.test(name) || name === 'firebase-export-metadata.json') {
+    return true;
+  }
 
-  return /(?:^|\/)(?:\.firebase-data|firebase-export-[^/]+|emulator-data|firestore_export)\//i.test(
+  return /(?:^|\/)(?:\.firebase-data|firebase-export-[^/]+|emulator-data|(?:auth|database|firestore|storage)_export)\//i.test(
     normalizedFile
   );
 }
