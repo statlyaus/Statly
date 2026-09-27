@@ -44,7 +44,7 @@ describe('dashboard production recovery route contract', () => {
     const publicLayout = readRepoFile('src/app/(public)/layout.tsx');
     const publicNavigation = readRepoFile('src/components/navigation/PublicNavigation.tsx');
     expect(publicLayout).toContain('PublicNavigation');
-    expect(publicNavigation).toContain('AFL Outcomes');
+    expect(publicNavigation).toContain('AFL Draft & Trade Outcomes');
     expect(publicNavigation).toContain("href: '/draft/trades'");
     expect(publicLayout).not.toContain('Draft & Trade Hub');
     expect(publicNavigation).not.toContain('Draft & Trade Hub');
@@ -84,20 +84,16 @@ describe('dashboard production recovery route contract', () => {
     expect(nextConfig).toContain("source: '/leagues'");
     expect(nextConfig).toContain("destination: '/dashboard'");
 
-    expect(dashboard).toContain("url('/Assets/statly-stadium-hero.png')");
-    expect(dashboard).toContain('const accountName =');
-    expect(dashboard).toContain('const heroTitle = accountName;');
-    expect(dashboard).toContain('{heroTitle}');
-    expect(dashboard).toContain('League command center');
-    expect(dashboard).not.toContain('All leagues overview');
-    expect(dashboard).not.toContain('Open League Hub');
-    expect(dashboard).not.toContain('heroLeagueName');
-    expect(dashboard).toContain('title="My Leagues"');
-    expect(dashboard).toContain('group-hover:bg-[color:var(--league-success)]');
-    expect(dashboard).toContain('hover:bg-[color:var(--league-success-soft)]/35');
+    expect(dashboard).toContain("'/api/dashboard/home'");
+    expect(dashboard).toContain('Your leagues');
+    expect(dashboard).toContain('Needs you now');
+    expect(dashboard).toContain('id="leagues"');
+    expect(dashboard).not.toContain('League command center');
+    expect(dashboard).not.toContain('statly-stadium-hero');
+    expect(dashboard).not.toContain('getLeagueOverview');
+    expect(dashboard).not.toContain('index === 1 ? 2 : 12');
+    expect(dashboard).not.toContain('Active Leagues');
     expect(dashboard).not.toContain('isFeatured');
-    expect(dashboard).toContain('View all leagues');
-    expect(dashboard).toContain('Active Leagues');
     expect(dashboard).not.toContain('Attention Now');
     expect(dashboard).not.toContain('League Coverage');
     expect(dashboard).not.toContain('Operations Queue');
