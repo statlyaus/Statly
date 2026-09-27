@@ -136,7 +136,8 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('League overview')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Snapshot League' })).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
-    expect(screen.getByText(/3\/4 teams/)).toBeInTheDocument();
+    expect(screen.getByText('Private · 3 of 4 teams')).toBeInTheDocument();
+    expect(screen.getByText('3 of 4 · 1 slot open')).toBeInTheDocument();
     expect(screen.getByText('Draft not started')).toBeInTheDocument();
     expect(screen.getAllByText('Trade offers').length).toBeGreaterThan(0);
     expect(
@@ -159,7 +160,9 @@ describe('LeagueTabs overview snapshot', () => {
       transformOrigin: '20% 75%',
     });
     expect(screen.getAllByText('Second Team').length).toBeGreaterThan(0);
-    expect(screen.getByText('ST')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'League teams' })).getByText('ST')
+    ).toBeInTheDocument();
     expect(screen.getByText('Third Team')).toBeInTheDocument();
     expect(screen.getByText('TT')).toBeInTheDocument();
     const currentTeamCard = within(screen.getByRole('list', { name: 'League teams' }))
@@ -168,9 +171,13 @@ describe('LeagueTabs overview snapshot', () => {
     expect(currentTeamCard).not.toBeNull();
     expect(within(currentTeamCard as HTMLElement).getByText('Your team')).toBeInTheDocument();
     expect(screen.queryByText('Offers needing review')).not.toBeInTheDocument();
-    expect(screen.getByText('4-team league').closest('section')).toHaveClass(
-      'bg-[color:var(--league-surface)]'
+    expect(screen.getByText('4-team league').closest('section')).toHaveClass('bg-card');
+    expect(authenticatedFetchMock).toHaveBeenCalledWith(
+      '/api/leagues/league-1/matchups',
+      {},
+      'user-2'
     );
+    expect(screen.queryByRole('heading', { name: 'Ladder' })).not.toBeInTheDocument();
 
     expect(screen.getByText('First Team ↔ Second Team')).toBeInTheDocument();
     expect(screen.getByText('Player A, Player B')).toBeInTheDocument();
@@ -201,7 +208,10 @@ describe('LeagueTabs overview snapshot', () => {
 
     expect(groupLabels).toEqual(['Play', 'League', 'Social', 'Settings']);
     expect(sectionSelect).toHaveValue('overview');
-    expect(within(sectionSelect).getByRole('option', { name: 'My Roster' })).toHaveValue('roster');
+    expect(within(sectionSelect).getByRole('option', { name: 'My Team' })).toHaveValue('lineup');
+    expect(
+      within(sectionSelect).queryByRole('option', { name: 'My Roster' })
+    ).not.toBeInTheDocument();
     for (const groupName of ['Play', 'League', 'Social', 'Settings']) {
       expect(
         within(leagueNavigation).getByRole('group', { name: `${groupName} sections` })
@@ -265,19 +275,137 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Snapshot League' })).toBeInTheDocument();
     expect(screen.getByText('Draft room open')).toBeInTheDocument();
     expect(screen.queryByText(/room_open/)).not.toBeInTheDocument();
-    expect(screen.getByText('Commissioner')).toBeInTheDocument();
+    expect(screen.getByText('Your team · Commissioner')).toBeInTheDocument();
     expect(screen.queryByText('Commissioner access')).not.toBeInTheDocument();
     expect(screen.queryByText('Member access')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Not set')).toHaveLength(1);
+    expect(screen.queryByText('Not set')).not.toBeInTheDocument();
     expect(screen.getByText('Waiver order pending')).toBeInTheDocument();
     expect(
       await screen.findByText('Your position will appear when the order is set.')
     ).toBeInTheDocument();
 
-    for (const name of ['Scoring categories', 'Teams', 'Trade offers', 'Waiver position']) {
+    for (const name of ['Teams', 'Trade offers', 'Waiver position', 'League details']) {
       expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
     }
+    expect(
+      screen.getByRole('heading', { level: 3, name: 'Scoring categories' })
+    ).toBeInTheDocument();
 
     expect(authenticatedFetchMock).toHaveBeenCalled();
+  });
+
+  it('leads with this round and the ladder once results exist', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ claims: [], playersIndex: {} }),
+      })
+    );
+    const matchupsPayload = {
+      success: true,
+      data: {
+        round: 4,
+        roundContext: { endsAt: '2026-09-30T02:44:00.000Z' },
+        matchups: [
+          {
+            status: 'LIVE',
+            startsAt: '2026-09-24T09:00:00.000Z',
+            homeMember: { id: 'member-2', teamName: 'Second Team', teamLogoUrl: null },
+            awayMember: { id: 'member-1', teamName: 'First Team', teamLogoUrl: null },
+            byeMember: null,
+            homeCategoryWins: 2,
+            awayCategoryWins: 1,
+            categoryRows: [
+              {
+                category: 'goals',
+                label: 'Goals',
+                shortLabel: 'G',
+                homeValue: 9,
+                awayValue: 8,
+                winner: 'home',
+              },
+              {
+                category: 'tackles',
+                label: 'Tackles',
+                shortLabel: 'T',
+                homeValue: 40,
+                awayValue: 48,
+                winner: 'away',
+              },
+              {
+                category: 'inside50s',
+                label: 'Inside 50s',
+                shortLabel: 'I50',
+                homeValue: 30,
+                awayValue: 22,
+                winner: 'home',
+              },
+            ],
+          },
+        ],
+        standings: [
+          {
+            memberId: 'member-1',
+            teamName: 'First Team',
+            teamLogoUrl: null,
+            wins: 2,
+            losses: 1,
+            draws: 0,
+            categoryWins: 15,
+            categoryLosses: 12,
+            categoryDraws: 0,
+          },
+          {
+            memberId: 'member-2',
+            teamName: 'Second Team',
+            teamLogoUrl: null,
+            wins: 1,
+            losses: 2,
+            draws: 0,
+            categoryWins: 12,
+            categoryLosses: 15,
+            categoryDraws: 0,
+          },
+          {
+            memberId: 'member-3',
+            teamName: 'Third Team',
+            teamLogoUrl: null,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            categoryWins: 0,
+            categoryLosses: 0,
+            categoryDraws: 0,
+          },
+        ],
+      },
+    };
+    authenticatedFetchMock.mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        url.includes('/matchups')
+          ? matchupsPayload
+          : { data: { unread: { chat: 0, board: 0, activity: 0 } } },
+    }));
+
+    render(<LeagueTabs league={league} members={members} currentUserId="user-2" />);
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Round 4' })).toBeInTheDocument();
+    expect(screen.getByText('Live')).toBeInTheDocument();
+    expect(screen.getByText('You lead by 1 category')).toBeInTheDocument();
+    expect(
+      screen.getByRole('table', { name: 'Round 4 box score, Second Team against First Team' })
+    ).toBeInTheDocument();
+
+    const ladder = screen.getByRole('table', { name: 'League ladder' });
+    const rows = within(ladder).getAllByRole('row');
+    expect(rows).toHaveLength(4);
+    expect(rows[2]).toHaveTextContent('Second Team');
+    expect(rows[2]).toHaveTextContent('(your team)');
+    expect(rows[2]).toHaveClass('bg-accent');
+    expect(rows[1]).toHaveTextContent('2–1–0');
+    expect(screen.queryByRole('list', { name: 'League teams' })).not.toBeInTheDocument();
+    expect(screen.queryByText('League overview')).toBeInTheDocument();
   });
 });
