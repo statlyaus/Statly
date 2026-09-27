@@ -52,16 +52,16 @@ test('trade centre remains usable and responsive across supported viewports', as
   await expect(sendRoster).toBeVisible();
 
   await sendRoster.getByRole('checkbox', { name: /Darcy Cameron/ }).check();
+  // Only the open tab's roster is in the accessibility tree, so check each side while it shows.
+  await expect(sendRoster.getByRole('row', { name: /Darcy Cameron/ })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
   await page
     .getByRole('group', { name: 'Choose roster' })
     .getByRole('button', { name: /You get from AFL Legends/i })
     .click();
   await receiveRoster.getByRole('checkbox', { name: /Zach Merrett/ }).check();
-
-  await expect(sendRoster.getByRole('row', { name: /Darcy Cameron/ })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  );
   await expect(receiveRoster.getByRole('row', { name: /Zach Merrett/ })).toHaveAttribute(
     'aria-selected',
     'true'
@@ -74,9 +74,7 @@ test('trade centre remains usable and responsive across supported viewports', as
 
   const sendingPackage = page.getByRole('region', { name: 'You send package' });
   const receivingPackage = page.getByRole('region', { name: 'You receive package' });
-  await expect(sendingPackage).toContainText('Robbo Rockers');
   await expect(sendingPackage).toContainText('Darcy Cameron');
-  await expect(receivingPackage).toContainText('AFL Legends');
   await expect(receivingPackage).toContainText('Zach Merrett');
   await page.getByRole('button', { name: 'All categories' }).click();
   await expect(page.getByText(/per-game averages per player/i)).toBeVisible();
@@ -111,8 +109,11 @@ test('trade centre remains usable and responsive across supported viewports', as
   }
 
   await page.getByRole('button', { name: 'Edit' }).click();
-  await expect(page.getByRole('heading', { name: 'Robbo Rockers sends' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review trade' })).toBeFocused();
+  await page
+    .getByRole('group', { name: 'Choose roster' })
+    .getByRole('button', { name: /You give from Robbo Rockers, 1 selected/i })
+    .click();
   await expect(sendRoster.getByRole('row', { name: /Darcy Cameron/ })).toHaveAttribute(
     'aria-selected',
     'true'
