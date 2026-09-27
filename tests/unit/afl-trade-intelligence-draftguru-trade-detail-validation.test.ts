@@ -71,7 +71,11 @@ describe('draftguruEventIdFromUrl', () => {
 
 describe('validateDraftguruTradeDetail', () => {
   it('parses a captured trade into parties, asset kinds and one directed transfer per movement', () => {
-    const html = tradePage('2025 GWS and Western Bulldogs Trade for Draft Picks', 'GWS', 'Bulldogs');
+    const html = tradePage(
+      '2025 GWS and Western Bulldogs Trade for Draft Picks',
+      'GWS',
+      'Bulldogs'
+    );
     const result = validateDraftguruTradeDetail({
       entry: entry('https://www.draftguru.com.au/trades/2025-gws-bulldogs', sha256(html)),
       html,
@@ -146,6 +150,14 @@ describe('summariseDraftguruTradeDetailValidation', () => {
     expect(summary.unexpressibleAssetKindCount).toBe(1);
   });
 
+  it('counts an asset kind missing from the trace map as unexpressible, not supported', () => {
+    const summary = summariseDraftguruTradeDetailValidation([
+      outcome({ eventId: '2020-a', assetKinds: ['player', 'cash', 'toString'] }),
+    ]);
+
+    expect(summary.unexpressibleAssetKindCount).toBe(2);
+  });
+
   it('separates a repeated movement from a repeated transfer id', () => {
     const summary = summariseDraftguruTradeDetailValidation([
       outcome({
@@ -195,10 +207,19 @@ describe('summariseDraftguruTradeDetailValidation', () => {
     ]);
 
     expect(summary.entries).toBe(3);
-    expect(summary.unparsableEntries).toBe(1);
+    expect(summary.skippedEntries).toBe(1);
     expect(summary.hashMismatches).toBe(1);
     expect(summary.parsedWithoutIssues).toBe(2);
     expect(summary.issues).toEqual({ unsupported_asset: 1 });
     expect(summary.partyDistribution).toBe('2:1 3:1 4:1');
+  });
+
+  it('keeps a trade with no recovered party visible in the party distribution', () => {
+    const summary = summariseDraftguruTradeDetailValidation([
+      outcome({ eventId: '2020-a', parties: ['A', 'B'] }),
+      outcome({ eventId: '2020-b', parties: [] }),
+    ]);
+
+    expect(summary.partyDistribution).toBe('0:1 2:1');
   });
 });

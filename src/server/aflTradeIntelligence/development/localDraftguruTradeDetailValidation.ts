@@ -61,7 +61,10 @@ type DirectedTransferClaim = Readonly<{
   asset: unknown;
 }>;
 
-type TransactionPartyClaim = Readonly<{ kind: 'transaction_party'; club: { recordedName: string } }>;
+type TransactionPartyClaim = Readonly<{
+  kind: 'transaction_party';
+  club: { recordedName: string };
+}>;
 
 function isDirectedTransfer(claim: unknown): claim is DirectedTransferClaim {
   const candidate = claim as Partial<DirectedTransferClaim> | null;
@@ -76,7 +79,9 @@ function isDirectedTransfer(claim: unknown): claim is DirectedTransferClaim {
 
 function isTransactionParty(claim: unknown): claim is TransactionPartyClaim {
   const candidate = claim as Partial<TransactionPartyClaim> | null;
-  return candidate?.kind === 'transaction_party' && typeof candidate.club?.recordedName === 'string';
+  return (
+    candidate?.kind === 'transaction_party' && typeof candidate.club?.recordedName === 'string'
+  );
 }
 
 /**
@@ -155,9 +160,18 @@ export const DRAFTGURU_TO_TRACE_ASSET_KINDS: Readonly<Record<string, string | nu
   special_pick: null,
 };
 
+/** A kind is expressible only when the map names a trace kind for it; an unlisted kind is not. */
+export function isTraceExpressibleAssetKind(kind: string): boolean {
+  return (
+    Object.hasOwn(DRAFTGURU_TO_TRACE_ASSET_KINDS, kind) &&
+    DRAFTGURU_TO_TRACE_ASSET_KINDS[kind] !== null
+  );
+}
+
 export interface DraftguruTradeDetailValidationSummary {
   readonly entries: number;
-  readonly unparsableEntries: number;
+  /** Entries with no outcome: not one trade-detail page, an out-of-range season, or an unread body. */
+  readonly skippedEntries: number;
   readonly hashMismatches: number;
   readonly parsedWithoutIssues: number;
   readonly issues: Readonly<Record<string, number>>;
@@ -171,72 +185,91 @@ export interface DraftguruTradeDetailValidationSummary {
   readonly tradesWithExplicitDate: readonly string[];
 }
 
+function countBy<T>(values: readonly T[], keyOf: (value: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const value of values) {
+    const key = keyOf(value);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Keeps a repeated id (a parse defect) apart from a repeated movement under distinct ids (a
+ * constructible duplicate), and returns the trade's movement signatures for cross-trade grouping.
+ */
+function withinEventDuplicates(outcome: DraftguruTradeDetailValidationOutcome) {
+  const ids = new Set<string>();
+  const signatures = new Set<string>();
+  const duplicateIds: string[] = [];
+  const duplicateMovements: string[] = [];
+  const allSignatures: string[] = [];
+  for (const transfer of outcome.transfers) {
+    if (ids.has(transfer.nativeTransferId)) {
+      duplicateIds.push(`${outcome.eventId}:${transfer.nativeTransferId}`);
+    }
+    ids.add(transfer.nativeTransferId);
+    const signature = `${transfer.fromClub}|${transfer.toClub}|${transfer.assetSignature}`;
+    if (signatures.has(signature)) duplicateMovements.push(`${outcome.eventId}:${signature}`);
+    signatures.add(signature);
+    allSignatures.push(signature);
+  }
+  return { duplicateIds, duplicateMovements, signatures: allSignatures };
+}
+
+/** Groups trades whose movement sets are identical regardless of order; only groups of two or more. */
+function crossEventDuplicateGroups(
+  signaturesByEvent: readonly { eventId: string; signatures: readonly string[] }[]
+): string[][] {
+  const eventsBySet = new Map<string, string[]>();
+  for (const { eventId, signatures } of signaturesByEvent) {
+    if (signatures.length === 0) continue;
+    const key = JSON.stringify([...signatures].sort());
+    eventsBySet.set(key, [...(eventsBySet.get(key) ?? []), eventId]);
+  }
+  return [...eventsBySet.values()]
+    .filter((eventIds) => eventIds.length > 1)
+    .map((eventIds) => [...eventIds].sort());
+}
+
+/** Includes trades with no recovered party as `0:n`, so a failed party parse cannot hide. */
+function partyDistribution(outcomes: readonly DraftguruTradeDetailValidationOutcome[]): string {
+  return Object.entries(countBy(outcomes, (outcome) => String(outcome.parties.length)))
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([partyCount, trades]) => `${partyCount}:${trades}`)
+    .join(' ');
+}
+
 /** Aggregates per-body outcomes. Pure, so the measurements can be asserted without the capture. */
 export function summariseDraftguruTradeDetailValidation(
   outcomes: readonly (DraftguruTradeDetailValidationOutcome | null)[]
 ): DraftguruTradeDetailValidationSummary {
-  const issues: Record<string, number> = {};
-  const assetKinds: Record<string, number> = {};
-  const partyCounts = new Map<number, number>();
-  const duplicateTransferIds: string[] = [];
-  const withinEventDuplicates: string[] = [];
-  const tradesWithExplicitDate: string[] = [];
-  const signatureSets = new Map<string, string[]>();
-  let transferCount = 0;
-  let parsedWithoutIssues = 0;
-  let unexpressible = 0;
-
-  for (const outcome of outcomes) {
-    if (outcome === null) continue;
-    for (const issue of outcome.issues) issues[issue.code] = (issues[issue.code] ?? 0) + 1;
-    if (outcome.issues.length === 0) parsedWithoutIssues += 1;
-    for (const kind of outcome.assetKinds) {
-      assetKinds[kind] = (assetKinds[kind] ?? 0) + 1;
-      if (DRAFTGURU_TO_TRACE_ASSET_KINDS[kind] === null) unexpressible += 1;
-    }
-    transferCount += outcome.transfers.length;
-    if (outcome.parties.length > 0) {
-      partyCounts.set(outcome.parties.length, (partyCounts.get(outcome.parties.length) ?? 0) + 1);
-    }
-    if (outcome.statesExplicitDate) tradesWithExplicitDate.push(outcome.eventId);
-
-    const seenIds = new Set<string>();
-    const signatures: string[] = [];
-    for (const transfer of outcome.transfers) {
-      if (seenIds.has(transfer.nativeTransferId)) {
-        duplicateTransferIds.push(`${outcome.eventId}:${transfer.nativeTransferId}`);
-      }
-      seenIds.add(transfer.nativeTransferId);
-      const signature = `${transfer.fromClub}|${transfer.toClub}|${transfer.assetSignature}`;
-      if (signatures.includes(signature)) withinEventDuplicates.push(`${outcome.eventId}:${signature}`);
-      signatures.push(signature);
-    }
-    if (signatures.length > 0) {
-      const key = [...signatures].sort().join(' || ');
-      signatureSets.set(key, [...(signatureSets.get(key) ?? []), outcome.eventId]);
-    }
-  }
-
-  const crossEventDuplicateGroups = [...signatureSets.values()]
-    .filter((eventIds) => eventIds.length > 1)
-    .map((eventIds) => [...eventIds].sort());
+  const present = outcomes.filter((outcome) => outcome !== null);
+  const assetKinds = present.flatMap((outcome) => outcome.assetKinds);
+  const duplicates = present.map((outcome) => ({
+    eventId: outcome.eventId,
+    ...withinEventDuplicates(outcome),
+  }));
 
   return {
-    entries: outcomes.filter((outcome) => outcome !== null).length,
-    unparsableEntries: outcomes.filter((outcome) => outcome === null).length,
-    hashMismatches: outcomes.filter((outcome) => outcome !== null && !outcome.bodyShaMatches).length,
-    parsedWithoutIssues,
-    issues,
-    assetKinds,
-    unexpressibleAssetKindCount: unexpressible,
-    transferCount,
-    partyDistribution: [...partyCounts]
-      .sort((left, right) => left[0] - right[0])
-      .map(([partyCount, trades]) => `${partyCount}:${trades}`)
-      .join(' '),
-    duplicateTransferIds,
-    withinEventDuplicates,
-    crossEventDuplicateGroups,
-    tradesWithExplicitDate,
+    entries: present.length,
+    skippedEntries: outcomes.length - present.length,
+    hashMismatches: present.filter((outcome) => !outcome.bodyShaMatches).length,
+    parsedWithoutIssues: present.filter((outcome) => outcome.issues.length === 0).length,
+    issues: countBy(
+      present.flatMap((outcome) => outcome.issues),
+      (issue) => issue.code
+    ),
+    assetKinds: countBy(assetKinds, (kind) => kind),
+    unexpressibleAssetKindCount: assetKinds.filter((kind) => !isTraceExpressibleAssetKind(kind))
+      .length,
+    transferCount: present.reduce((total, outcome) => total + outcome.transfers.length, 0),
+    partyDistribution: partyDistribution(present),
+    duplicateTransferIds: duplicates.flatMap(({ duplicateIds }) => duplicateIds),
+    withinEventDuplicates: duplicates.flatMap(({ duplicateMovements }) => duplicateMovements),
+    crossEventDuplicateGroups: crossEventDuplicateGroups(duplicates),
+    tradesWithExplicitDate: present
+      .filter((outcome) => outcome.statesExplicitDate)
+      .map((outcome) => outcome.eventId),
   };
 }
