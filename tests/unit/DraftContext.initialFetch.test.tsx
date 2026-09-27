@@ -1567,6 +1567,114 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('pick-feedback')).toHaveTextContent('none');
   });
 
+  it('clears pick feedback when the realtime pick lands and ignores a late failure for it', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    socketState.current = {
+      connected: true,
+      emit: createV1FallbackEmit(),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, handler);
+      }),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
+        // The realtime pick lands before the command response, which then fails late.
+        handlers.get('draft:delta')?.({
+          type: 'PICK_MADE',
+          ts: 300,
+          payload: {
+            pick: {
+              id: 'pick-1',
+              overall: 1,
+              round: 1,
+              slot: 1,
+              player: { id: 'player-1', name: 'First Player', position: 'MID', club: 'Sydney' },
+              member: { id: 'member-1', userId: 'user-1', displayName: 'Tester' },
+              auto: false,
+              madeAt: '2026-06-07T00:00:00.000Z',
+            },
+            currentPick: 2,
+          },
+        });
+        throw Object.assign(new Error('Conflict'), { status: 409 });
+      }
+      // One player stays available, as in a real draft; an empty pool re-hydrates repeatedly.
+      return {
+        success: true,
+        data: {
+          players: [
+            {
+              id: 'player-2',
+              name: 'Second Player',
+              position: 'DEF',
+              club: 'Geelong',
+              isAvailable: true,
+            },
+          ],
+          pagination: { hasMore: false },
+          queue: [],
+          watchlist: [],
+        },
+      };
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick player 1' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+    });
+    // Let the rejected command settle, then confirm it did not resurrect feedback. (Not act():
+    // player-pool re-hydration keeps scheduling work in this harness, so act never settles.)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchApi).toHaveBeenCalledWith('drafts/draft-1/picks', expect.anything());
+    expect(screen.getByTestId('pick-feedback')).toHaveTextContent('none');
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+  });
+
   it('keeps the room open and reports a failed draft start as scoped start feedback', async () => {
     fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
       if (endpoint === 'drafts/draft-1/start' && init?.method === 'POST') {

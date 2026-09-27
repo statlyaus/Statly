@@ -646,4 +646,13 @@ describe('UnifiedDraftRoom live shell composition', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss draft start message' }));
     expect(dismissStartFeedbackSpy).toHaveBeenCalled();
   });
+
+  it('drops a stale start-failure alert once the draft is live', () => {
+    draftContext.status = 'LIVE';
+    draftContext.startFeedback = { message: 'Failed to start draft' };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('alert', { name: 'Draft start status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try starting again' })).not.toBeInTheDocument();
+  });
 });

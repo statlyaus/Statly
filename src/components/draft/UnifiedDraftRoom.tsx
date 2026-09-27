@@ -640,7 +640,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             onStatusChange={() => draft.forceRefresh()}
           />
 
-          {draft.startFeedback ? (
+          {/* A realtime update can start the draft after a failed attempt; the failure is then stale. */}
+          {draft.startFeedback && activeDraft.status !== 'LIVE' && !isCompletedDraft ? (
             <div
               role="alert"
               aria-label="Draft start status"

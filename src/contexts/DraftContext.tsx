@@ -951,6 +951,10 @@ function mergeSnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
     : mergeParticipantQueues(snapshot.participants, state.participants);
   const picks = snapshot.includesPicks ? snapshot.picks : state.picks;
   const participants = reconcileParticipantQueues(snapshotParticipants, picks);
+  const pickFeedback =
+    state.pickFeedback && getDraftedPlayerIds(picks).has(String(state.pickFeedback.playerId))
+      ? null
+      : state.pickFeedback;
   const availablePlayers = excludeDraftedAvailablePlayers(
     snapshot.includesAvailablePlayers ? snapshot.availablePlayers : state.availablePlayers,
     picks
@@ -970,6 +974,7 @@ function mergeSnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
     statSeason: snapshot.statSeason ?? state.statSeason,
     statSeasons: snapshot.statSeasons.length > 0 ? snapshot.statSeasons : state.statSeasons,
     liveState: { ...state.liveState, ...snapshot.liveState },
+    pickFeedback,
     isLoading: false,
     error: null,
     connection: {
@@ -1173,7 +1178,10 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
             }
           : {}),
       };
-      return { ...next, draft, liveState, picks, availablePlayers, participants };
+      // The room now shows this pick, so feedback about submitting it is settled.
+      const pickFeedback =
+        next.pickFeedback && String(next.pickFeedback.playerId) === pid ? null : next.pickFeedback;
+      return { ...next, draft, liveState, picks, availablePlayers, participants, pickFeedback };
     }
     case 'PLAYER_REMOVED': {
       const { playerId } = delta.payload as { playerId: string };
@@ -1403,6 +1411,13 @@ function reducer(state: DraftState, action: Action): DraftState {
     case 'SET_ERROR':
       return { ...state, error: action.error };
     case 'SET_PICK_FEEDBACK':
+      // A late response for a player the room already shows as drafted must not resurrect feedback.
+      if (
+        action.feedback &&
+        getDraftedPlayerIds(state.picks).has(String(action.feedback.playerId))
+      ) {
+        return state.pickFeedback === null ? state : { ...state, pickFeedback: null };
+      }
       return { ...state, pickFeedback: action.feedback };
     case 'SET_START_FEEDBACK':
       return { ...state, startFeedback: action.feedback };

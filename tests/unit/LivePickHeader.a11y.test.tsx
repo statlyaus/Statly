@@ -95,6 +95,10 @@ describe('LivePickHeader', () => {
   it('announces the start of your turn once', () => {
     render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
 
+    // The visual badge must not be a second live region repeating the turn announcement.
+    expect(screen.getByText('Your turn')).not.toHaveAttribute('role', 'alert');
+    expect(screen.queryAllByRole('alert')).toHaveLength(0);
+
     expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent(
       /^Your turn to pick\. \d+m \d+s remaining\.$/
     );

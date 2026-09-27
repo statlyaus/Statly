@@ -403,11 +403,8 @@ export default function LivePickHeader({
                 Round {draftData.round} / {draftData.direction}
               </span>
               {isYourTurn && (
-                <span
-                  className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]"
-                  role="alert"
-                  aria-label="It is your turn to pick"
-                >
+                <span className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]">
+                  {/* Visual only: the pick clock announcer speaks the turn once. */}
                   Your turn
                 </span>
               )}
