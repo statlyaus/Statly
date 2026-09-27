@@ -81,7 +81,10 @@ test-results/
 *.swp
 *.tmp
 buildinfo
-.db
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
