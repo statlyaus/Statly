@@ -1,4 +1,8 @@
+import { NextRequest } from 'next/server';
+
 import { describe, expect, it, vi } from 'vitest';
+
+import { GET as pruneLobbyCron } from '@/app/api/cron/prune-lobby/route';
 
 import { triggerCronEndpoint } from './triggerCronEndpoint';
 
@@ -53,5 +57,25 @@ describe('triggerCronEndpoint', () => {
         fetchImpl: fetchReturning(401),
       })
     ).rejects.toThrow('/api/cron/trades responded with 401');
+  });
+
+  it('is accepted by a cron route when CRON_SECRET has surrounding whitespace', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CRON_SECRET', '  cron-secret\n');
+    const fetchImpl = (async (input: URL, init?: RequestInit) =>
+      pruneLobbyCron(new NextRequest(input, init as ConstructorParameters<typeof NextRequest>[1]))
+    ) as unknown as typeof fetch;
+
+    try {
+      const status = await triggerCronEndpoint('/api/cron/prune-lobby', {
+        baseUrl: 'https://statly.example',
+        secret: process.env.CRON_SECRET,
+        fetchImpl,
+      });
+
+      expect(status).toBe(200);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
