@@ -24,15 +24,20 @@ export const DRAFTGURU_TRADE_INDEX_FIELDS = [
   'trade_detail_link.sourceUrl',
 ] as const;
 
+// The 2011-2015 scope contains mini-draft (M1/M2) and compensation (CMPn) picks, which the parser
+// emits as special-pick assets with an entitlement type, selection ordinal and source label.
 export const DRAFTGURU_TRADE_DETAIL_FIELDS = [
   'directed_transfer.asset.draftType',
   'directed_transfer.asset.draftYear',
+  'directed_transfer.asset.entitlementType',
   'directed_transfer.asset.kind',
   'directed_transfer.asset.originalClub.recordedName',
   'directed_transfer.asset.player.nativeId',
   'directed_transfer.asset.player.recordedName',
   'directed_transfer.asset.recordedPickNumber',
   'directed_transfer.asset.roundNumber',
+  'directed_transfer.asset.selectionOrdinal',
+  'directed_transfer.asset.sourceLabel',
   'directed_transfer.fromClub.recordedName',
   'directed_transfer.nativeEventId',
   'directed_transfer.nativeTransferId',
@@ -47,6 +52,12 @@ export const DRAFTGURU_TRADE_DETAIL_FIELDS = [
 ] as const;
 
 export type DraftguruTradeCapability = 'draftguru-trade-index' | 'draftguru-trade-detail';
+
+/** Each capability's reviewed parser version; capture requests must name it exactly. */
+export const DRAFTGURU_TRADE_PARSER_VERSIONS = {
+  'draftguru-trade-index': 'draftguru-trade-index-parser/v1',
+  'draftguru-trade-detail': 'draftguru-trade-parser/v1',
+} as const satisfies Record<DraftguruTradeCapability, string>;
 
 export interface DraftguruTradeAuthorityProposalInput {
   readonly capabilityId: DraftguruTradeCapability;
@@ -111,7 +122,7 @@ export function createDraftguruTradeAuthorityProposal(
     acquisition: {
       kind: 'provider_web' as const,
       clientName: 'Statly governed Draftguru HTML client',
-      clientVersion: 'draftguru-trade-parser/v1',
+      clientVersion: DRAFTGURU_TRADE_PARSER_VERSIONS[input.capabilityId],
       capabilityId: input.capabilityId,
     },
     operations: {

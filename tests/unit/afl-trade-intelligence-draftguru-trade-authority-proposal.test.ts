@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseDraftguruTradeDetail } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
+import { requireAflTradeExternalEvidenceFieldAuthority } from '@/server/aflTradeIntelligence/source/externalDraftTradeFieldManifest';
+import type { AflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
+
 import {
   createDraftguruTradeAuthorityProposal,
   DRAFTGURU_TRADE_DETAIL_FIELDS,
@@ -15,7 +19,9 @@ const input = (
 ): DraftguruTradeAuthorityProposalInput => ({
   capabilityId: 'draftguru-trade-detail',
   // Only the seasons the cohort actually needs, per the measured relevance span.
-  seasons: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+  seasons: [
+    2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+  ],
   evidenceIds: {
     productOwnerAuthorization: `artifact:${digest('1')}`,
     boundedCapturePlan: `artifact:${digest('2')}`,
@@ -98,7 +104,9 @@ describe('createDraftguruTradeAuthorityProposal', () => {
     expect(seasons.at(0)).toBe('2011');
     expect(seasons.at(-1)).toBe('2025');
     expect(seasons).toHaveLength(15);
-    expect(proposal.content.scope.exclusions.join(' ')).toMatch(/Model training, predictive features/);
+    expect(proposal.content.scope.exclusions.join(' ')).toMatch(
+      /Model training, predictive features/
+    );
     expect(proposal.content.scope.exclusions.join(' ')).toMatch(/fantasy use/);
     expect(proposal.content.environment).toBe('non_production');
   });
@@ -132,4 +140,61 @@ describe('createDraftguruTradeAuthorityProposal', () => {
       /at least one season/
     );
   });
+
+  it.each([
+    [2012, 'M1'],
+    [2013, 'CMP1 (Gold Coast)'],
+  ])(
+    'authorizes every field the real parser emits for a %i special-pick trade page',
+    (year, label) => {
+      const empty = '<td colspan="5"></td>';
+      const side = `<td class="future-pick-name actual-asset">${label}</td><td colspan="4"></td>`;
+      const pick = '<td class="pick-name actual-asset">Pick 10</td><td colspan="4"></td>';
+      const html = `<h2 class="heading">Special pick trade</h2><table class="individual-trade"><tr class="club-header"><td>Club A</td></tr><tr class="movement">${side}${empty}</tr><tr class="movement">${pick}${empty}</tr><tr class="club-header"><td>Club B</td></tr><tr class="movement">${empty}${side}</tr><tr class="movement">${empty}${pick}</tr></table>`;
+      const at = '2026-09-24T00:00:00.000Z';
+      const parsed = parseDraftguruTradeDetail(html, {
+        capture: {
+          captureId: `source-capture:${digest('5')}`,
+          artifactId: `artifact:${digest('6')}`,
+          contentSha256: digest('6'),
+          mediaType: 'text/html',
+          sourceUrl: `https://www.draftguru.com.au/trades/${year}-special-pick`,
+          capturedAt: at,
+          effectiveAt: at,
+          parserVersion: 'draftguru-trade-parser/v1',
+          fieldManifestSha256: digest('7'),
+        },
+        draftYear: year,
+        effectiveAt: at,
+      });
+      expect(parsed.issues).toEqual([]);
+      expect(
+        parsed.evidence.some(
+          ({ content }) =>
+            content.claim.kind === 'directed_transfer' &&
+            content.claim.asset.kind === 'special_pick'
+        )
+      ).toBe(true);
+
+      const { sourceRights } = createDraftguruTradeAuthorityProposal(input());
+      const gate0aReceipt = {
+        content: {
+          request: {
+            fieldUses: sourceRights.content.fields.map(({ sourceField }) => ({
+              sourceField,
+              use: 'archive_fact',
+            })),
+          },
+        },
+      } as unknown as AflTradeGate0AReceipt;
+
+      expect(() =>
+        requireAflTradeExternalEvidenceFieldAuthority({
+          evidence: parsed.evidence,
+          sourceRights,
+          gate0aReceipt,
+        })
+      ).not.toThrow();
+    }
+  );
 });

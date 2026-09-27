@@ -31,38 +31,47 @@ const evidenceDocuments = {
 const evidence = Object.entries(evidenceDocuments).map(([role, path]) => {
   const absolute = join(sourcePackage, path);
   const bytes = readFileSync(absolute);
+  if (bytes.length === 0) throw new TypeError(`Evidence document ${path} is empty.`);
   const reference = createAflTradeByteArtifactRef(
     bytes,
     'text/markdown',
     statSync(absolute).mtime.toISOString()
   );
-  return { role, path, reference };
+  return { role, path, reference, recordedAt: statSync(absolute).mtime };
 });
+// Identical bytes collapse to one artifact id, so one document would silently stand for two roles.
+if (new Set(evidence.map(({ reference }) => reference.artifactId)).size !== evidence.length) {
+  throw new TypeError('Each evidence role requires a distinct document.');
+}
 
 const evidenceById = Object.fromEntries(
   evidence.map(({ role, reference }) => [role, reference.artifactId])
 ) as Record<keyof typeof evidenceDocuments, string>;
 
 // The cohort-relevant trade seasons measured from the archive, inside the owner's 2000-2025 decision.
-const seasons = [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+const seasons = [
+  2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+];
+const latestEvidenceAt = Math.max(...evidence.map(({ recordedAt }) => recordedAt.getTime()));
 const timing = {
   termsEffectiveAt: '2026-09-10T00:00:00.000Z',
   termsExpireAt: '2027-09-09T00:00:00.000Z',
-  rightsProposedAt: new Date().toISOString(),
-  proposalProposedAt: new Date().toISOString(),
+  // Anchored to the evidence, not the clock, so re-preparing unchanged evidence reproduces the same ids.
+  rightsProposedAt: new Date(latestEvidenceAt).toISOString(),
+  proposalProposedAt: new Date(latestEvidenceAt + 1000).toISOString(),
 };
 
-const prepared = (['draftguru-trade-index', 'draftguru-trade-detail'] as DraftguruTradeCapability[]).map(
-  (capabilityId) => ({
+const prepared = (
+  ['draftguru-trade-index', 'draftguru-trade-detail'] as DraftguruTradeCapability[]
+).map((capabilityId) => ({
+  capabilityId,
+  ...createDraftguruTradeAuthorityProposal({
     capabilityId,
-    ...createDraftguruTradeAuthorityProposal({
-      capabilityId,
-      seasons,
-      evidenceIds: evidenceById,
-      timing,
-    }),
-  })
-);
+    seasons,
+    evidenceIds: evidenceById,
+    timing,
+  }),
+}));
 
 const packet = {
   schemaVersion: 'statly-draftguru-trade-authority-proposal-packet/v1',
@@ -82,7 +91,10 @@ const packet = {
       'Original 2026-09-10 decision reference and its current ledger selection.',
       'Exact URL and field allowlists per season, beyond the reviewed field-boundary candidate set.',
       'The separately evidenced trade dates the field review requires; this source records none.',
+      'Whether this decision supersedes the broader issue-579 Draftguru decision, which otherwise stays effective.',
     ],
+    capture:
+      'Capture with createDraftguruTradeCaptureCommand, which requests only the permitted operations and archive field uses.',
   },
   evidence: evidence.map(({ role, path, reference }) => ({ role, path, reference })),
   proposals: prepared.map(({ capabilityId, sourceRights, proposal }) => ({
