@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/modeling/hpnPavCore';
 import {
   aggregateLocalHpnPavCoreInput,
+  describeLocalHpnPavPlayers,
+  localHpnPavPlayerId,
   type LocalHpnPavDecodedRow,
 } from '@/server/aflTradeIntelligence/development/localHpnPavDirectCalculation';
 
 const blank: LocalHpnPavDecodedRow = {
+  nativeEntityId: null,
   player: null,
   playingFor: null,
   matchDate: null,
@@ -47,6 +50,8 @@ function row(input: {
 }): LocalHpnPavDecodedRow {
   return {
     ...blank,
+    // Each synthetic player name is its own identity unless a test says otherwise.
+    nativeEntityId: input.player,
     player: input.player,
     playingFor: input.team,
     matchDate: input.date,
@@ -87,14 +92,126 @@ const playerRow = (input: {
 }) => row(input);
 
 const twoMatchSeason = [
-  playerRow({ player: 'Alpha Ace', team: 'Alpha', home: true, opponent: 'Beta', date: '2025-03-01', scoreFor: 80, scoreAgainst: 60, inside50s: 10, marks: 8, goals: 3, behinds: 1, tackles: 4, clearances: 6 }),
-  playerRow({ player: 'Alpha Two', team: 'Alpha', home: true, opponent: 'Beta', date: '2025-03-01', scoreFor: 80, scoreAgainst: 60, inside50s: 4, marks: 3, goals: 1, behinds: 0, tackles: 2, clearances: 2 }),
-  playerRow({ player: 'Beta Best', team: 'Beta', home: false, opponent: 'Alpha', date: '2025-03-01', scoreFor: 60, scoreAgainst: 80, inside50s: 6, marks: 5, goals: 2, behinds: 0, tackles: 3, clearances: 4 }),
-  playerRow({ player: 'Beta Two', team: 'Beta', home: false, opponent: 'Alpha', date: '2025-03-01', scoreFor: 60, scoreAgainst: 80, inside50s: 2, marks: 2, goals: 0, behinds: 1, tackles: 1, clearances: 1 }),
-  playerRow({ player: 'Beta Best', team: 'Beta', home: true, opponent: 'Alpha', date: '2025-03-08', scoreFor: 70, scoreAgainst: 90, inside50s: 5, marks: 4, goals: 2, behinds: 1, tackles: 2, clearances: 3 }),
-  playerRow({ player: 'Beta Two', team: 'Beta', home: true, opponent: 'Alpha', date: '2025-03-08', scoreFor: 70, scoreAgainst: 90, inside50s: 3, marks: 2, goals: 1, behinds: 0, tackles: 1, clearances: 1 }),
-  playerRow({ player: 'Alpha Ace', team: 'Alpha', home: false, opponent: 'Beta', date: '2025-03-08', scoreFor: 90, scoreAgainst: 70, inside50s: 12, marks: 9, goals: 4, behinds: 2, tackles: 5, clearances: 7 }),
-  playerRow({ player: 'Alpha Two', team: 'Alpha', home: false, opponent: 'Beta', date: '2025-03-08', scoreFor: 90, scoreAgainst: 70, inside50s: 5, marks: 4, goals: 1, behinds: 1, tackles: 3, clearances: 2 }),
+  playerRow({
+    player: 'Alpha Ace',
+    team: 'Alpha',
+    home: true,
+    opponent: 'Beta',
+    date: '2025-03-01',
+    scoreFor: 80,
+    scoreAgainst: 60,
+    inside50s: 10,
+    marks: 8,
+    goals: 3,
+    behinds: 1,
+    tackles: 4,
+    clearances: 6,
+  }),
+  playerRow({
+    player: 'Alpha Two',
+    team: 'Alpha',
+    home: true,
+    opponent: 'Beta',
+    date: '2025-03-01',
+    scoreFor: 80,
+    scoreAgainst: 60,
+    inside50s: 4,
+    marks: 3,
+    goals: 1,
+    behinds: 0,
+    tackles: 2,
+    clearances: 2,
+  }),
+  playerRow({
+    player: 'Beta Best',
+    team: 'Beta',
+    home: false,
+    opponent: 'Alpha',
+    date: '2025-03-01',
+    scoreFor: 60,
+    scoreAgainst: 80,
+    inside50s: 6,
+    marks: 5,
+    goals: 2,
+    behinds: 0,
+    tackles: 3,
+    clearances: 4,
+  }),
+  playerRow({
+    player: 'Beta Two',
+    team: 'Beta',
+    home: false,
+    opponent: 'Alpha',
+    date: '2025-03-01',
+    scoreFor: 60,
+    scoreAgainst: 80,
+    inside50s: 2,
+    marks: 2,
+    goals: 0,
+    behinds: 1,
+    tackles: 1,
+    clearances: 1,
+  }),
+  playerRow({
+    player: 'Beta Best',
+    team: 'Beta',
+    home: true,
+    opponent: 'Alpha',
+    date: '2025-03-08',
+    scoreFor: 70,
+    scoreAgainst: 90,
+    inside50s: 5,
+    marks: 4,
+    goals: 2,
+    behinds: 1,
+    tackles: 2,
+    clearances: 3,
+  }),
+  playerRow({
+    player: 'Beta Two',
+    team: 'Beta',
+    home: true,
+    opponent: 'Alpha',
+    date: '2025-03-08',
+    scoreFor: 70,
+    scoreAgainst: 90,
+    inside50s: 3,
+    marks: 2,
+    goals: 1,
+    behinds: 0,
+    tackles: 1,
+    clearances: 1,
+  }),
+  playerRow({
+    player: 'Alpha Ace',
+    team: 'Alpha',
+    home: false,
+    opponent: 'Beta',
+    date: '2025-03-08',
+    scoreFor: 90,
+    scoreAgainst: 70,
+    inside50s: 12,
+    marks: 9,
+    goals: 4,
+    behinds: 2,
+    tackles: 5,
+    clearances: 7,
+  }),
+  playerRow({
+    player: 'Alpha Two',
+    team: 'Alpha',
+    home: false,
+    opponent: 'Beta',
+    date: '2025-03-08',
+    scoreFor: 90,
+    scoreAgainst: 70,
+    inside50s: 5,
+    marks: 4,
+    goals: 1,
+    behinds: 1,
+    tackles: 3,
+    clearances: 2,
+  }),
 ];
 
 describe('aggregateLocalHpnPavCoreInput', () => {
@@ -150,17 +267,31 @@ describe('aggregateLocalHpnPavCoreInput', () => {
     const teams = aggregateLocalHpnPavCoreInput({ season: 2025, rows: twoMatchSeason });
     const result = calculateAflTradeHpnPavCore(teams);
 
-    const ace = result.players.find((player) => player.playerId === 'Alpha Ace')!;
-    const two = result.players.find((player) => player.playerId === 'Alpha Two')!;
+    const ace = result.players.find(
+      (player) => player.playerId === localHpnPavPlayerId('Alpha Ace')
+    )!;
+    const two = result.players.find(
+      (player) => player.playerId === localHpnPavPlayerId('Alpha Two')
+    )!;
     expect(ace.totalPav).toBeGreaterThan(two.totalPav);
   });
 
   it('drops rows for a side that is neither home nor away rather than corrupting totals', () => {
     const stray: LocalHpnPavDecodedRow = {
       ...row({
-        player: 'Stray', team: 'Nowhere', home: false, opponent: 'Alpha',
-        date: '2025-03-01', scoreFor: 1, scoreAgainst: 1, inside50s: 50, marks: 0,
-        goals: 0, behinds: 0, tackles: 0, clearances: 0,
+        player: 'Stray',
+        team: 'Nowhere',
+        home: false,
+        opponent: 'Alpha',
+        date: '2025-03-01',
+        scoreFor: 1,
+        scoreAgainst: 1,
+        inside50s: 50,
+        marks: 0,
+        goals: 0,
+        behinds: 0,
+        tackles: 0,
+        clearances: 0,
       }),
       // The row helper derives awayTeam from the player's own side; override so the side is
       // genuinely neither home nor away.
@@ -170,11 +301,46 @@ describe('aggregateLocalHpnPavCoreInput', () => {
 
     expect(teams).toHaveLength(2);
     expect(
-      teams.flatMap((team) => team.players).some((player) => player.playerId === 'Stray')
+      teams
+        .flatMap((team) => team.players)
+        .some((player) => player.playerId === localHpnPavPlayerId('Stray'))
     ).toBe(false);
   });
 
   it('returns no teams for an empty season', () => {
     expect(aggregateLocalHpnPavCoreInput({ season: 2025, rows: [] })).toEqual([]);
+  });
+
+  it('keeps two same-name teammates apart by their AFL Tables identity', () => {
+    const [first, second] = twoMatchSeason;
+    const teams = aggregateLocalHpnPavCoreInput({
+      season: 2025,
+      rows: [
+        ...twoMatchSeason.slice(2),
+        { ...first!, nativeEntityId: '100' },
+        { ...second!, player: first!.player, nativeEntityId: '200' },
+      ],
+    });
+    const alpha = teams.find((team) => team.teamId === 'Alpha')!;
+
+    expect(alpha.players.map((player) => player.playerId)).toEqual(
+      expect.arrayContaining([localHpnPavPlayerId('100'), localHpnPavPlayerId('200')])
+    );
+    const players = describeLocalHpnPavPlayers([
+      { ...first!, nativeEntityId: '100' },
+      { ...second!, player: first!.player, nativeEntityId: '200' },
+    ]);
+    expect([...players.values()].filter(({ names }) => names.has(first!.player!))).toHaveLength(2);
+  });
+
+  it('fails closed on a row without a player identity or with a non-numeric stat', () => {
+    const [first] = twoMatchSeason;
+
+    expect(() =>
+      aggregateLocalHpnPavCoreInput({ season: 2025, rows: [{ ...first!, nativeEntityId: null }] })
+    ).toThrow(/no player identity/);
+    expect(() =>
+      aggregateLocalHpnPavCoreInput({ season: 2025, rows: [{ ...first!, marks: 'n/a' }] })
+    ).toThrow(/Non-numeric/);
   });
 });

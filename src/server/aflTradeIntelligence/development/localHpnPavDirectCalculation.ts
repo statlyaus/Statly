@@ -11,6 +11,8 @@ import type { AflTradeHpnPavCoreTeam } from '../modeling/hpnPavCore';
 
 /** One flattened player-match row, as selected from `outcome_provider_decoded_row`. */
 export interface LocalHpnPavDecodedRow {
+  /** The row's AFL Tables player identity (`native_entity_id`); names alone are not unique. */
+  readonly nativeEntityId: string | null;
   readonly player: string | null;
   readonly playingFor: string | null;
   readonly matchDate: string | null;
@@ -33,14 +35,30 @@ export interface LocalHpnPavDecodedRow {
   readonly marksInside50: string | null;
 }
 
+/** A blank stat is a measured zero; anything else must be a finite number, as the governed path requires. */
 function count(value: string | null): number {
   if (value === null || value === undefined || value === '') return 0;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (!Number.isFinite(parsed)) throw new TypeError(`Non-numeric AFL Tables stat value: ${value}`);
+  return parsed;
+}
+
+/** The PAV core player id for one AFL Tables identity. */
+export function localHpnPavPlayerId(nativeEntityId: string): string {
+  return `afl-tables:${nativeEntityId}`;
+}
+
+function requiredIdentity(row: LocalHpnPavDecodedRow): string {
+  if (row.nativeEntityId === null || row.nativeEntityId === '') {
+    throw new TypeError(
+      `AFL Tables row for ${row.player ?? 'an unnamed player'} has no player identity.`
+    );
+  }
+  return row.nativeEntityId;
 }
 
 interface PlayerAccumulator {
-  readonly player: string;
+  readonly playerId: string;
   readonly team: string;
   totalPoints: number;
   hitOuts: number;
@@ -96,9 +114,10 @@ export function aggregateLocalHpnPavCoreInput(input: {
     else if (playingFor === away) bySide.away += inside50;
     matchInside50.set(matchKey, bySide);
 
-    const key = `${playingFor}|${row.player ?? ''}`;
+    const playerId = localHpnPavPlayerId(requiredIdentity(row));
+    const key = `${playingFor}|${playerId}`;
     const accumulator = players.get(key) ?? {
-      player: row.player ?? '',
+      playerId,
       team: playingFor,
       totalPoints: 0,
       hitOuts: 0,
@@ -150,8 +169,8 @@ export function aggregateLocalHpnPavCoreInput(input: {
     players: [...players.values()]
       .filter((player) => player.team === teamId)
       .map((player) => ({
-        spellVersionId: `spell:${input.season}:${teamId}:${player.player}`,
-        playerId: player.player,
+        spellVersionId: `spell:${input.season}:${teamId}:${player.playerId}`,
+        playerId: player.playerId,
         sourceRowIds: [] as string[],
         totalPoints: player.totalPoints,
         hitOuts: player.hitOuts,
@@ -167,4 +186,25 @@ export function aggregateLocalHpnPavCoreInput(input: {
         tackles: player.tackles,
       })),
   }));
+}
+
+/**
+ * Each identity's recorded names and teams in the season, so a caller matching by name can tell a
+ * unique match from an ambiguous one instead of silently picking one player.
+ */
+export function describeLocalHpnPavPlayers(
+  rows: readonly LocalHpnPavDecodedRow[]
+): ReadonlyMap<
+  string,
+  { readonly names: ReadonlySet<string>; readonly teams: ReadonlySet<string> }
+> {
+  const players = new Map<string, { names: Set<string>; teams: Set<string> }>();
+  for (const row of rows) {
+    const playerId = localHpnPavPlayerId(requiredIdentity(row));
+    const entry = players.get(playerId) ?? { names: new Set<string>(), teams: new Set<string>() };
+    if (row.player) entry.names.add(row.player);
+    if (row.playingFor) entry.teams.add(row.playingFor);
+    players.set(playerId, entry);
+  }
+  return players;
 }
