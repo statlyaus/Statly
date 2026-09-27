@@ -3315,7 +3315,7 @@ rejected as an overlap; supersede or narrow the v3 window first. Inputs retained
 window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
 grading.
 
-Migration0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
+Migration 0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
 chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only
 when that latest decision is approved and current, and names the capture's competition, season,
 capability and `derived_feature_creation`. Its rights artifact must also permit the consumed fields.
