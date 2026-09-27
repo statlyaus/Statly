@@ -57,14 +57,19 @@ interface LivePickHeaderProps {
   className?: string;
 }
 
+const TIME_UP = 'Time is up.';
 const CLOCK_MILESTONES = [
-  { atOrBelow: 0, text: 'Time is up.' },
-  { atOrBelow: 10, text: '10 seconds left.' },
-  { atOrBelow: 30, text: '30 seconds left.' },
+  { at: 0, text: TIME_UP },
+  { at: 10, text: '10 seconds left.' },
+  { at: 30, text: '30 seconds left.' },
 ] as const;
 
-function getClockMilestone(seconds: number): string | null {
-  return CLOCK_MILESTONES.find((milestone) => seconds <= milestone.atOrBelow)?.text ?? null;
+/** The most urgent milestone crossed between two observed clock readings, if any. */
+function getCrossedClockMilestone(previous: number, current: number): string | null {
+  return (
+    CLOCK_MILESTONES.find((milestone) => previous > milestone.at && current <= milestone.at)
+      ?.text ?? null
+  );
 }
 
 function formatClock(seconds: number): string {
@@ -212,36 +217,33 @@ export default function LivePickHeader({
     }
   }, [picksUntilYourTurn, isYourTurn, hasAlerted, timerState.phase]);
 
-  // Screen readers hear the clock at a few milestones, never every tick.
+  // Screen readers hear the clock when the turn starts and as it crosses 30, 10 and 0 seconds,
+  // never every tick. A milestone that passed before the turn was observed is not announced.
   const [clockAnnouncement, setClockAnnouncement] = useState('');
-  const announcedRef = useRef<{ pick?: number; turn?: boolean; milestone?: string }>({});
+  const announcedRef = useRef<{ pick?: number; lastRemaining?: number }>({});
   useEffect(() => {
-    const announced = announcedRef.current;
-    if (announced.pick !== draftData.currentPick) {
+    if (announcedRef.current.pick !== draftData.currentPick) {
       announcedRef.current = { pick: draftData.currentPick };
       setClockAnnouncement('');
     }
-    if (timerState.phase !== 'LIVE' || !isYourTurn) return;
-
     // Read the synced clock, not timeLeft, which starts at the full pick time before it syncs.
     const remaining = timerState.remainingSeconds;
-    const milestone = getClockMilestone(remaining);
-    const turnStarted = !announcedRef.current.turn;
-    const newMilestone = milestone && milestone !== announcedRef.current.milestone;
-    if (!turnStarted && !newMilestone) return;
+    const clockRunning =
+      timerState.phase === 'LIVE' || (timerState.phase === 'FINALIZING' && remaining === 0);
+    if (!clockRunning || !isYourTurn) return;
 
-    announcedRef.current = {
-      ...announcedRef.current,
-      turn: true,
-      milestone: milestone ?? undefined,
-    };
-    if (turnStarted) {
+    const { lastRemaining } = announcedRef.current;
+    announcedRef.current = { ...announcedRef.current, lastRemaining: remaining };
+    if (lastRemaining === undefined) {
       setClockAnnouncement(
-        `Your turn to pick. ${milestone ?? `${formatClock(remaining)} remaining.`}`
+        remaining === 0
+          ? `Your turn to pick. ${TIME_UP}`
+          : `Your turn to pick. ${formatClock(remaining)} remaining.`
       );
-    } else if (milestone) {
-      setClockAnnouncement(milestone);
+      return;
     }
+    const crossed = getCrossedClockMilestone(lastRemaining, remaining);
+    if (crossed) setClockAnnouncement(crossed);
     // timeLeft re-runs this each tick; timerState is recomputed every render.
   }, [draftData.currentPick, isYourTurn, timeLeft, timerState.phase]);
 

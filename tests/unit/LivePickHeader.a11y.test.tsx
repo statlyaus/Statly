@@ -1,5 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import LivePickHeader from '@/components/LivePickHeader';
 
@@ -100,7 +100,7 @@ describe('LivePickHeader', () => {
     );
   });
 
-  it('announces the clock only at its 30, 10 and zero second milestones', () => {
+  it('announces the real time left when the turn starts after a milestone has passed', () => {
     const nearlyOut = {
       ...draftData,
       pickDeadlineAt: new Date(Date.now() + 8_000).toISOString(),
@@ -108,9 +108,40 @@ describe('LivePickHeader', () => {
     render(<LivePickHeader draftData={nearlyOut} isYourTurn={true} yourSlot={1} />);
 
     expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent(
-      'Your turn to pick. 10 seconds left.'
+      'Your turn to pick. 8s remaining.'
     );
     const clockIcon = screen.getByRole('timer').querySelector('svg');
     expect(clockIcon).not.toHaveClass('animate-spin');
+  });
+
+  it('announces 10 seconds and time up only as the clock crosses them', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-27T12:00:00.000Z'));
+    try {
+      const running = {
+        ...draftData,
+        pickDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
+      };
+      render(<LivePickHeader draftData={running} isYourTurn={true} yourSlot={1} />);
+      const announcer = screen.getByTestId('pick-clock-announcer');
+      expect(announcer).toHaveTextContent('Your turn to pick. 12s remaining.');
+
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(announcer).toHaveTextContent('Your turn to pick. 12s remaining.');
+
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      expect(announcer).toHaveTextContent('10 seconds left.');
+
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(announcer).toHaveTextContent('Time is up.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

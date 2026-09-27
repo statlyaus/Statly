@@ -1629,6 +1629,66 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('start-feedback')).toHaveTextContent('none');
   });
 
+  it('does not report a started draft as failed when only the room refresh fails', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
+      if (endpoint === 'drafts/draft-1/start' && init?.method === 'POST') {
+        return { success: true, data: { draft: { id: 'draft-1', status: 'LIVE' } } };
+      }
+      throw Object.assign(new Error('Network error'), { status: 503 });
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start the draft' }));
+
+    // forceRefresh reports its own failures through the room-wide refresh error; the start
+    // command succeeded, so startDraft must not claim the draft did not start.
+    await waitFor(() => {
+      expect(screen.getByTestId('draft-error')).toHaveTextContent('Network error');
+    });
+    expect(screen.getByTestId('start-feedback')).toHaveTextContent('none');
+  });
+
   it('clears pick feedback once the server confirms the pick', async () => {
     fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
       if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {
