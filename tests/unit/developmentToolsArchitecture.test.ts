@@ -25,6 +25,21 @@ const guardedRoutes = [
   },
 ] as const;
 
+// Demo, diagnostic and mock-data pages that must not reach production users.
+const devOnlyPages = [
+  'test-draft',
+  'demo',
+  'infrastructure-test',
+  'player-analysis-demo',
+  'sentry-test',
+  'test-live-data',
+  'test-myteam',
+  'test-search',
+  'test-socket',
+  'timer-test',
+  'live-scoring',
+] as const;
+
 describe('development tools architecture', () => {
   it.each(guardedRoutes)(
     'guards $path before route work begins',
@@ -39,8 +54,8 @@ describe('development tools architecture', () => {
     }
   );
 
-  it('hides the test-draft UI behind the same server gate', () => {
-    const source = read('src/app/(app)/test-draft/layout.tsx');
+  it.each(devOnlyPages)('hides the %s UI behind the same server gate', (route) => {
+    const source = read(`src/app/(app)/${route}/layout.tsx`);
 
     expect(source).toContain('if (!isDevelopmentToolsEnabled())');
     expect(source).toContain('notFound()');
