@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   absoluteLocalPathPatterns,
+  isProhibitedTrackedArtifact,
   isProhibitedTrackedEnvironment,
   stripFencedCode,
   validateMarkdownLinks,
@@ -35,6 +36,29 @@ describe('documentation validation', () => {
     expect(isProhibitedTrackedEnvironment('.env.example')).toBe(false);
     expect(isProhibitedTrackedEnvironment('secrets/serviceAccountKey.example.json')).toBe(false);
     expect(isProhibitedTrackedEnvironment('src/lib/firebaseAdmin.ts')).toBe(false);
+  });
+
+  it('rejects tracked local databases and Firebase exports', () => {
+    for (const file of [
+      'prisma/dev.db',
+      'prisma/dev.db-journal',
+      'data/cache.sqlite',
+      'data/cache.sqlite-wal',
+      'data/cache.sqlite3-journal',
+      'exports/local/firebase-export-metadata.json',
+      'exports/local/auth_export/accounts.json',
+      'exports/local/storage_export/metadata/bucket.json',
+      'firebase-export-1700000000/firestore_export/all_namespaces/all_kinds/output-0',
+      '.firebase-data/auth_export/accounts.json',
+      'emulator-data/firebase-export-metadata.json',
+      'exports/2026-09-27.overall_export_metadata',
+    ]) {
+      expect(isProhibitedTrackedArtifact(file), file).toBe(true);
+    }
+
+    expect(isProhibitedTrackedArtifact('prisma/schema.prisma')).toBe(false);
+    expect(isProhibitedTrackedArtifact('src/server/db.ts')).toBe(false);
+    expect(isProhibitedTrackedArtifact('docs/runbooks/firebase-export.md')).toBe(false);
   });
 
   it('strips fenced examples using the opening marker and run length', () => {

@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install R packages
-RUN R -e "install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')"
+# Install R packages; fitzRoy is pinned to match the sealed trade-intelligence capture image
+ARG FITZROY_VERSION=1.7.0
+RUN R -e "install.packages(c('remotes', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/'); remotes::install_version('fitzRoy', version='${FITZROY_VERSION}', repos='https://cran.rstudio.com/', upgrade='never'); stopifnot(as.character(packageVersion('fitzRoy')) == '${FITZROY_VERSION}')"
 
 # Stage 2: Node.js Environment
 FROM node:22-alpine as node-stage
