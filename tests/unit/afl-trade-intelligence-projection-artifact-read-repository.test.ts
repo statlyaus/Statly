@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
@@ -17,6 +17,7 @@ import {
   isAflTradeProjectionArtifactMountError,
   isAflTradeProjectionArtifactReadError,
   type AflTradeProjectionArtifactMountErrorCode,
+  type AflTradeProjectionArtifactReleaseSource,
   type AflTradeProjectionArtifactReadErrorCode,
   type AflTradeProjectionArtifactReadRepository,
   type AflTradeProjectionFailedCandidateProvider,
@@ -85,7 +86,7 @@ describe('AFL trade projection artifact read repository', () => {
   let evaluatedAt: string;
   let clockCalls: number;
   let providerMode: 'none' | 'failed' | 'throw';
-  let releaseSource: { loadRelease: ReturnType<typeof vi.fn> };
+  let releaseSource: { loadRelease: Mock<AflTradeProjectionArtifactReleaseSource['loadRelease']> };
   let failedCandidateProvider: AflTradeProjectionFailedCandidateProvider;
   let repository: AflTradeProjectionArtifactReadRepository;
 
