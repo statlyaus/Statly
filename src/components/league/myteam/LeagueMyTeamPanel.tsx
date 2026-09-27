@@ -873,7 +873,7 @@ export function LeagueMyTeamPanel({
                                         Player no longer in squad
                                       </span>
                                     ) : (
-                                      <span className="text-sm font-semibold text-result-draw">
+                                      <span className="text-sm font-semibold text-[color:var(--league-warning)]">
                                         Empty
                                       </span>
                                     )}
@@ -1226,7 +1226,7 @@ function Tag({ tone, label, title }: { tone: 'warn' | 'bad'; label: string; titl
       className={`shrink-0 rounded-sm px-1 text-[0.6875rem] font-bold leading-4 ${
         tone === 'bad'
           ? 'bg-result-loss text-result-loss-foreground'
-          : 'bg-result-draw text-result-draw-foreground'
+          : 'bg-warning text-warning-foreground'
       }`}
     >
       {label}
@@ -1251,7 +1251,7 @@ function OpponentText({ player, locked }: { player: SquadPlayer; locked: boolean
 
 function OpponentCell({ player, locked }: { player: SquadPlayer; locked: boolean }) {
   if (player.bye) {
-    return <span className="text-xs font-bold text-result-draw">BYE</span>;
+    return <span className="text-xs font-bold text-[color:var(--league-warning)]">BYE</span>;
   }
   const opponent = player.opponent ? getTeamAbbreviation(player.opponent) : null;
   const when = formatGameTime(player.gameStartsAt);
@@ -1462,7 +1462,7 @@ function ReadinessRow({
           {saveText ? (
             <p
               role="status"
-              className={`text-xs ${dirty ? 'font-semibold text-result-draw' : 'text-muted-foreground'}`}
+              className={`text-xs ${dirty ? 'font-semibold text-[color:var(--league-warning)]' : 'text-muted-foreground'}`}
             >
               {saveText}
             </p>
@@ -1500,7 +1500,11 @@ function ReadinessRow({
 
 function StatusDot({ tone, label }: { tone: 'good' | 'warn' | 'neutral'; label: string }) {
   const dot =
-    tone === 'good' ? 'bg-result-win' : tone === 'warn' ? 'bg-result-draw' : 'bg-muted-foreground';
+    tone === 'good'
+      ? 'bg-result-win'
+      : tone === 'warn'
+        ? 'bg-[color:var(--league-warning)]'
+        : 'bg-muted-foreground';
   return (
     <span className="inline-flex items-center gap-2 font-display text-lg font-bold text-foreground">
       <span aria-hidden="true" className={`size-2.5 rounded-full ${dot}`} />
