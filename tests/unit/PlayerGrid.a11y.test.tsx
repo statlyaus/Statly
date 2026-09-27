@@ -154,7 +154,12 @@ describe('PlayerGrid accessibility', () => {
     fireEvent.click(screen.getByRole('button', { name: /add marcus bontempelli to queue/i }));
     expect(onAddToQueue).toHaveBeenCalledWith(players[0]);
 
-    fireEvent.click(screen.getByRole('button', { name: /confirm pick: marcus bontempelli/i }));
+    // Enter on the focused Confirm button must reach the button, not re-arm the row.
+    const confirmButton = screen.getByRole('button', { name: /confirm pick: marcus bontempelli/i });
+    expect(fireEvent.keyDown(confirmButton, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(confirmButton, { key: ' ' })).toBe(true);
+
+    fireEvent.click(confirmButton);
     expect(onPlayerSelect).toHaveBeenCalledWith(players[0]);
     expect(onPlayerSelect).toHaveBeenCalledTimes(1);
   });
