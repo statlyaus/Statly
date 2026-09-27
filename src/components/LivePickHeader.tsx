@@ -57,6 +57,22 @@ interface LivePickHeaderProps {
   className?: string;
 }
 
+const CLOCK_MILESTONES = [
+  { atOrBelow: 0, text: 'Time is up.' },
+  { atOrBelow: 10, text: '10 seconds left.' },
+  { atOrBelow: 30, text: '30 seconds left.' },
+] as const;
+
+function getClockMilestone(seconds: number): string | null {
+  return CLOCK_MILESTONES.find((milestone) => seconds <= milestone.atOrBelow)?.text ?? null;
+}
+
+function formatClock(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
 export default function LivePickHeader({
   draftData,
   timePerPick = 120,
@@ -195,6 +211,39 @@ export default function LivePickHeader({
       setIsFlashing(false);
     }
   }, [picksUntilYourTurn, isYourTurn, hasAlerted, timerState.phase]);
+
+  // Screen readers hear the clock at a few milestones, never every tick.
+  const [clockAnnouncement, setClockAnnouncement] = useState('');
+  const announcedRef = useRef<{ pick?: number; turn?: boolean; milestone?: string }>({});
+  useEffect(() => {
+    const announced = announcedRef.current;
+    if (announced.pick !== draftData.currentPick) {
+      announcedRef.current = { pick: draftData.currentPick };
+      setClockAnnouncement('');
+    }
+    if (timerState.phase !== 'LIVE' || !isYourTurn) return;
+
+    // Read the synced clock, not timeLeft, which starts at the full pick time before it syncs.
+    const remaining = timerState.remainingSeconds;
+    const milestone = getClockMilestone(remaining);
+    const turnStarted = !announcedRef.current.turn;
+    const newMilestone = milestone && milestone !== announcedRef.current.milestone;
+    if (!turnStarted && !newMilestone) return;
+
+    announcedRef.current = {
+      ...announcedRef.current,
+      turn: true,
+      milestone: milestone ?? undefined,
+    };
+    if (turnStarted) {
+      setClockAnnouncement(
+        `Your turn to pick. ${milestone ?? `${formatClock(remaining)} remaining.`}`
+      );
+    } else if (milestone) {
+      setClockAnnouncement(milestone);
+    }
+    // timeLeft re-runs this each tick; timerState is recomputed every render.
+  }, [draftData.currentPick, isYourTurn, timeLeft, timerState.phase]);
 
   const pickTrainState = useMemo(
     () => toDraftPickTrainStateFromHeaderData({ draftData, yourSlot }),
@@ -381,10 +430,9 @@ export default function LivePickHeader({
                 className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-[color:var(--draft-broadcast-text)]"
                 role="timer"
                 aria-label={timerAriaLabel}
-                aria-live="polite"
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'animate-spin text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
                 <span
@@ -393,6 +441,15 @@ export default function LivePickHeader({
                   {timerDisplay}
                 </span>
               </div>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="sr-only"
+                data-testid="pick-clock-announcer"
+              >
+                {clockAnnouncement}
+              </p>
             </div>
 
             {!isYourTurn && picksUntilYourTurn > 0 && (

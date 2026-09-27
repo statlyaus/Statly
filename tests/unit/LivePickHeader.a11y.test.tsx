@@ -83,4 +83,34 @@ describe('LivePickHeader', () => {
     expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Marcus Bontempelli')).toBeInTheDocument();
   });
+
+  it('does not announce every tick of the pick clock', () => {
+    render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />);
+
+    const timer = screen.getByRole('timer', { name: /time remaining/i });
+    expect(timer).not.toHaveAttribute('aria-live');
+    expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent('');
+  });
+
+  it('announces the start of your turn once', () => {
+    render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
+
+    expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent(
+      /^Your turn to pick\. \d+m \d+s remaining\.$/
+    );
+  });
+
+  it('announces the clock only at its 30, 10 and zero second milestones', () => {
+    const nearlyOut = {
+      ...draftData,
+      pickDeadlineAt: new Date(Date.now() + 8_000).toISOString(),
+    };
+    render(<LivePickHeader draftData={nearlyOut} isYourTurn={true} yourSlot={1} />);
+
+    expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent(
+      'Your turn to pick. 10 seconds left.'
+    );
+    const clockIcon = screen.getByRole('timer').querySelector('svg');
+    expect(clockIcon).not.toHaveClass('animate-spin');
+  });
 });
