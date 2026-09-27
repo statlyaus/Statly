@@ -3616,8 +3616,8 @@ model OutcomeAcquisitionSpellVersion {
   version                  Int
   playerId                 String                                 @map("player_id")
   clubId                   String                                 @map("club_id")
-  startEventVersionId      String                                 @map("start_event_version_id")
-  startAssetVersionId      String                                 @map("start_asset_version_id")
+  startEventVersionId      String?                                @map("start_event_version_id")
+  startAssetVersionId      String?                                @map("start_asset_version_id")
   startDate                DateTime?                              @map("start_date") @outcomes.Date
   endDate                  DateTime?                              @map("end_date") @outcomes.Date
   endReason                String?                                @map("end_reason")
@@ -3627,8 +3627,8 @@ model OutcomeAcquisitionSpellVersion {
   recordedAt               DateTime                               @map("recorded_at") @outcomes.Timestamptz(3)
   player                   OutcomePlayer                          @relation(fields: [playerId], references: [playerId], onDelete: Restrict)
   club                     OutcomeClub                            @relation(fields: [clubId], references: [clubId], onDelete: Restrict)
-  startEventVersion        OutcomeEventVersion                    @relation("OutcomeAcquisitionStartEvent", fields: [startEventVersionId], references: [eventVersionId], onDelete: Restrict)
-  startAssetVersion        OutcomeEventAsset                      @relation(fields: [startAssetVersionId], references: [assetVersionId], onDelete: Restrict)
+  startEventVersion        OutcomeEventVersion?                   @relation("OutcomeAcquisitionStartEvent", fields: [startEventVersionId], references: [eventVersionId], onDelete: Restrict)
+  startAssetVersion        OutcomeEventAsset?                     @relation(fields: [startAssetVersionId], references: [assetVersionId], onDelete: Restrict)
   rule                     OutcomeAcquisitionSpellRule            @relation(fields: [ruleId], references: [ruleId], onDelete: Restrict)
   supersedes               OutcomeAcquisitionSpellVersion?        @relation("OutcomeAcquisitionSpellVersionChain", fields: [supersedesSpellVersionId], references: [spellVersionId], onDelete: Restrict)
   supersededBy             OutcomeAcquisitionSpellVersion?        @relation("OutcomeAcquisitionSpellVersionChain")
