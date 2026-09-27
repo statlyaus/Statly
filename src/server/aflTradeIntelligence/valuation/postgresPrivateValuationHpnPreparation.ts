@@ -140,7 +140,12 @@ export interface AflTradePrivateValuationHpnPreparationDependencies {
   }) => AflTradePrivateValuationHpnSourceAuthority;
 }
 
-function defaultSourceAuthority(input: {
+/**
+ * The one routing rule from reviewed source lane to exact retained authority. The composition root
+ * reports a missing lane through this function instead of re-deriving the routing, so the reported
+ * gap and the runtime gap cannot drift apart.
+ */
+export function resolveAflTradePrivateValuationHpnSourceAuthority(input: {
   readonly seasonYear: 2025 | 2026;
   readonly sourceRole: Exclude<AflTradePrivateValuationCaptureSourceRole, 'factual_input'>;
 }): AflTradePrivateValuationHpnSourceAuthority {
@@ -374,7 +379,7 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     const lanes = sourceLanes(
       scope.scopeKey,
       seasonYear,
-      this.dependencies.resolveSourceAuthority ?? defaultSourceAuthority
+      this.dependencies.resolveSourceAuthority ?? resolveAflTradePrivateValuationHpnSourceAuthority
     );
     const bindings: AflTradePrivateValuationCaptureBinding[] = [];
     for (const lane of lanes) {
