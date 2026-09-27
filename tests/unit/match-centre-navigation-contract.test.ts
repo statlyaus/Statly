@@ -8,21 +8,20 @@ function readRepoFile(path: string): string {
 }
 
 describe('live scoring and AFL match route ownership', () => {
-  it('keeps Live Scoring primary and leaves AFL matches separate from league matchups', () => {
+  it('keeps mock-data Live Scoring out of the menu and AFL matches separate from league matchups', () => {
     const navigation = readRepoFile('src/components/navigation/MainNavigation.tsx');
     const dashboardQuickActions = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
     const matchesPage = readRepoFile('src/app/(app)/matches/page.tsx');
     const liveScoringPage = readRepoFile('src/app/(app)/live-scoring/page.tsx');
 
-    expect(navigation).toContain("name: 'Live Scoring'");
-    expect(navigation).toContain("href: '/live-scoring'");
+    // Live Scoring runs a points-and-captain model on mock data, so it stays dev-only
+    // (src/app/(app)/live-scoring/layout.tsx) until it is rebuilt on category matchups.
+    expect(navigation).not.toContain("name: 'Live Scoring'");
+    expect(navigation).not.toContain("'/live-scoring'");
     expect(navigation).not.toContain("name: 'Match Centre'");
     expect(navigation).toContain("name: 'AFL Matches'");
     expect(navigation).toContain("href: '/matches'");
     expect(navigation).toContain("if (href === '/matches') return p.startsWith('/matches')");
-    expect(navigation).toContain(
-      "if (href === '/live-scoring') return p.startsWith('/live-scoring')"
-    );
 
     expect(dashboardQuickActions).toContain("title: 'Live Scoring'");
     expect(dashboardQuickActions).toContain("href: '/live-scoring'");

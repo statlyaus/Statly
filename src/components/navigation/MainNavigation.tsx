@@ -141,7 +141,7 @@ const primaryNavigationItems: NavigationItem[] = [
 
 const toolsNavigationItem: NavigationItem = {
   name: 'Tools',
-  href: '/live-scoring',
+  href: '/matches',
   description: 'Secondary analysis and league utilities',
   icon: (
     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,21 +154,6 @@ const toolsNavigationItem: NavigationItem = {
     </svg>
   ),
   submenu: [
-    {
-      name: 'Live Scoring',
-      href: '/live-scoring',
-      description: 'Focused live matchup scoring',
-      icon: (
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.286 3.958c.3.921-.755 1.688-1.54 1.118l-3.367-2.446a1 1 0 00-1.175 0l-3.367 2.446c-.784.57-1.838-.197-1.539-1.118l1.286-3.958a1 1 0 00-.364-1.118L4.059 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.951-.69l1.289-3.958z"
-          />
-        </svg>
-      ),
-    },
     {
       name: 'AFL Matches',
       href: '/matches',
@@ -229,42 +214,6 @@ const toolsNavigationItem: NavigationItem = {
         </svg>
       ),
     },
-    {
-      name: 'Commissioner',
-      href: '/commissioner',
-      description: 'League manager and admin tools',
-      icon: (
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-          />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-        </svg>
-      ),
-    },
-    {
-      name: 'Help',
-      href: '/help',
-      description: 'Documentation and support',
-      icon: (
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      ),
-    },
   ],
 };
 
@@ -276,7 +225,6 @@ function isNavActive(pathname: string | null | undefined, href: string): boolean
   if (href === '/players') return p.startsWith('/players');
   if (href === '/drafts') return p.startsWith('/drafts');
   if (href === '/matches') return p.startsWith('/matches');
-  if (href === '/live-scoring') return p.startsWith('/live-scoring');
   if (href === '/waivers') return p.startsWith('/waivers');
   if (href === '/rankings') return p.startsWith('/rankings') || p.startsWith('/leaderboard');
   if (href === '/team-analytics')
@@ -300,7 +248,6 @@ function shouldShowLeagueSwitcher(pathname: string | null | undefined): boolean 
     p.startsWith('/drafts') ||
     p.startsWith('/players') ||
     p.startsWith('/matches') ||
-    p.startsWith('/live-scoring') ||
     p.startsWith('/waivers') ||
     p.startsWith('/team-analytics') ||
     p.startsWith('/rankings') ||
@@ -318,6 +265,8 @@ function NavDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuId = `nav-menu-${item.name.toLowerCase().replace(/\W+/g, '-')}`;
   const isActive =
     isNavActive(pathname, item.href) ||
     (item.submenu?.some((subItem) => isNavActive(pathname, subItem.href)) ?? false);
@@ -329,17 +278,38 @@ function NavDropdown({
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
     }
   }, [isOpen]);
 
   return (
-    <div ref={dropdownRef} className="relative">
+    <div
+      ref={dropdownRef}
+      className="relative"
+      onBlur={(event) => {
+        // Close when keyboard focus leaves the menu and its button.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsOpen(false);
+      }}
+    >
       <button
         type="button"
+        ref={buttonRef}
         onClick={() => setIsOpen((open) => !open)}
+        aria-expanded={isOpen}
+        aria-controls={menuId}
         className={`inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
           isActive
             ? 'bg-white text-brand-bar'
@@ -365,6 +335,8 @@ function NavDropdown({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
+            id={menuId}
+            aria-label={item.name}
             className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
           >
             <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
@@ -560,6 +532,34 @@ export default function MainNavigation(): ReactNode {
             ) : null}
 
             {user ? (
+              // Below 2xl search and the league switcher do not fit the bar, so they open in
+              // the navigation panel instead of disappearing between lg and 2xl.
+              <button
+                type="button"
+                onClick={() => setIsMobileOpen((open) => !open)}
+                className="hidden min-h-11 min-w-11 items-center justify-center rounded-md border border-white/30 p-2 text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:inline-flex 2xl:hidden"
+                aria-expanded={isMobileOpen}
+                aria-controls="mobile-main-navigation"
+                aria-label="Search players and switch league"
+              >
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"
+                  />
+                </svg>
+              </button>
+            ) : null}
+
+            {user ? (
               <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"
@@ -609,6 +609,14 @@ export default function MainNavigation(): ReactNode {
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
                         Dashboard
+                      </Link>
+                      <Link
+                        href="/commissioner"
+                        role="menuitem"
+                        className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        onClick={() => setIsAccountMenuOpen(false)}
+                      >
+                        Commissioner
                       </Link>
                       <Link
                         href="/help"
@@ -680,7 +688,7 @@ export default function MainNavigation(): ReactNode {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] lg:hidden"
+              className="border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] 2xl:hidden"
             >
               <div className="space-y-4 px-4 py-4">
                 {user ? (
@@ -772,13 +780,20 @@ export default function MainNavigation(): ReactNode {
                         </div>
                       </div>
                       <div className="mt-4 grid gap-2">
-                        <Link
-                          href="/dashboard"
-                          onClick={() => setIsMobileOpen(false)}
-                          className="rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
-                        >
-                          Dashboard
-                        </Link>
+                        {[
+                          { href: '/dashboard', label: 'Dashboard' },
+                          { href: '/commissioner', label: 'Commissioner' },
+                          { href: '/help', label: 'Help' },
+                        ].map((link) => (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={() => setIsMobileOpen(false)}
+                            className="rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                          >
+                            {link.label}
+                          </Link>
+                        ))}
                         <button
                           type="button"
                           onClick={() => {
