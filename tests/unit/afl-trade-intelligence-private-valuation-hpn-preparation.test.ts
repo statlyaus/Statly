@@ -28,6 +28,10 @@ import type {
   AflOutcomeSqlTransaction,
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 
+type AcceptInput = Parameters<
+  PostgresAflTradePrivateValuationCaptureBindingRepository['accept']
+>[0];
+
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const addressed = (prefix: string, value: string) => `${prefix}:${sha(value)}`;
 const claim = {
@@ -359,7 +363,7 @@ describe('private valuation HPN preparation', () => {
           PostgresAflTradePrivateValuationCaptureBindingRepository.prototype,
           kind === 'source_first' ? 'acceptSourceFirst' : 'accept'
         )
-        .mockImplementation(async ({ sourceRole, normalizationRunId }) => {
+        .mockImplementation(async ({ sourceRole, normalizationRunId }: AcceptInput) => {
           const exactRole = sourceRole as (typeof roles)[number];
           const sourcePlan = sourcePlanByRole[exactRole];
           const content = {
