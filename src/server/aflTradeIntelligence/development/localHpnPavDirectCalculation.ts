@@ -74,6 +74,101 @@ interface PlayerAccumulator {
   tackles: number;
 }
 
+interface MatchTotals {
+  readonly home: string;
+  readonly away: string;
+  readonly homeScore: number;
+  readonly awayScore: number;
+  homeInside50s: number;
+  awayInside50s: number;
+}
+
+interface TeamTotals {
+  pointsFor: number;
+  pointsAgainst: number;
+  inside50sFor: number;
+  inside50sAgainst: number;
+}
+
+function newAccumulator(playerId: string, team: string): PlayerAccumulator {
+  return {
+    playerId,
+    team,
+    totalPoints: 0,
+    hitOuts: 0,
+    goalAssists: 0,
+    inside50s: 0,
+    marks: 0,
+    marksInside50: 0,
+    freeKicksFor: 0,
+    freeKicksAgainst: 0,
+    rebound50s: 0,
+    onePercenters: 0,
+    clearances: 0,
+    tackles: 0,
+  };
+}
+
+function addPlayerRow(accumulator: PlayerAccumulator, row: LocalHpnPavDecodedRow): void {
+  accumulator.totalPoints += count(row.goals) * 6 + count(row.behinds);
+  accumulator.hitOuts += count(row.hitOuts);
+  accumulator.goalAssists += count(row.goalAssists);
+  accumulator.inside50s += count(row.inside50s);
+  accumulator.marks += count(row.marks);
+  accumulator.marksInside50 += count(row.marksInside50);
+  accumulator.freeKicksFor += count(row.freesFor);
+  accumulator.freeKicksAgainst += count(row.freesAgainst);
+  accumulator.rebound50s += count(row.rebounds);
+  accumulator.onePercenters += count(row.onePercenters);
+  accumulator.clearances += count(row.clearances);
+  accumulator.tackles += count(row.tackles);
+}
+
+/** Adds a row's inside 50s to its own side of the match; a side that is neither is not counted. */
+function addMatchRow(
+  matches: Map<string, MatchTotals>,
+  season: number,
+  row: LocalHpnPavDecodedRow
+): void {
+  const home = row.homeTeam ?? '';
+  const away = row.awayTeam ?? '';
+  const matchKey = `${season}|${row.matchDate ?? ''}|${home}|${away}`;
+  const match = matches.get(matchKey) ?? {
+    home,
+    away,
+    homeScore: count(row.homeScore),
+    awayScore: count(row.awayScore),
+    homeInside50s: 0,
+    awayInside50s: 0,
+  };
+  if (row.playingFor === home) match.homeInside50s += count(row.inside50s);
+  else if (row.playingFor === away) match.awayInside50s += count(row.inside50s);
+  matches.set(matchKey, match);
+}
+
+/** Season totals per team; each match credits both sides, so for and against always conserve. */
+function teamTotals(matches: ReadonlyMap<string, MatchTotals>): Map<string, TeamTotals> {
+  const teams = new Map<string, TeamTotals>();
+  const add = (team: string, scored: number, conceded: number, inside: number, against: number) => {
+    const totals = teams.get(team) ?? {
+      pointsFor: 0,
+      pointsAgainst: 0,
+      inside50sFor: 0,
+      inside50sAgainst: 0,
+    };
+    totals.pointsFor += scored;
+    totals.pointsAgainst += conceded;
+    totals.inside50sFor += inside;
+    totals.inside50sAgainst += against;
+    teams.set(team, totals);
+  };
+  for (const match of matches.values()) {
+    add(match.home, match.homeScore, match.awayScore, match.homeInside50s, match.awayInside50s);
+    add(match.away, match.awayScore, match.homeScore, match.awayInside50s, match.homeInside50s);
+  }
+  return teams;
+}
+
 /**
  * Aggregates one season of player-match rows into the per-team, per-player input the HPN PAV core
  * consumes. Team inside-50 totals come from the player rows themselves, so both sides of every match
@@ -83,107 +178,27 @@ export function aggregateLocalHpnPavCoreInput(input: {
   readonly season: number;
   readonly rows: readonly LocalHpnPavDecodedRow[];
 }): readonly AflTradeHpnPavCoreTeam[] {
-  const matches = new Map<
-    string,
-    { home: string; away: string; homeScore: number; awayScore: number }
-  >();
-  const matchInside50 = new Map<string, { home: number; away: number }>();
+  const matches = new Map<string, MatchTotals>();
   const players = new Map<string, PlayerAccumulator>();
-  const teamPointsFor = new Map<string, number>();
-  const teamPointsAgainst = new Map<string, number>();
-  const teamInside50For = new Map<string, number>();
-  const teamInside50Against = new Map<string, number>();
-
   for (const row of input.rows) {
+    addMatchRow(matches, input.season, row);
     const playingFor = row.playingFor ?? '';
-    const home = row.homeTeam ?? '';
-    const away = row.awayTeam ?? '';
-    const date = row.matchDate ?? '';
-    const matchKey = `${input.season}|${date}|${home}|${away}`;
-    if (!matches.has(matchKey)) {
-      matches.set(matchKey, {
-        home,
-        away,
-        homeScore: count(row.homeScore),
-        awayScore: count(row.awayScore),
-      });
-    }
-    const inside50 = count(row.inside50s);
-    const bySide = matchInside50.get(matchKey) ?? { home: 0, away: 0 };
-    if (playingFor === home) bySide.home += inside50;
-    else if (playingFor === away) bySide.away += inside50;
-    matchInside50.set(matchKey, bySide);
-
     const playerId = localHpnPavPlayerId(requiredIdentity(row));
     const key = `${playingFor}|${playerId}`;
-    const accumulator = players.get(key) ?? {
-      playerId,
-      team: playingFor,
-      totalPoints: 0,
-      hitOuts: 0,
-      goalAssists: 0,
-      inside50s: 0,
-      marks: 0,
-      marksInside50: 0,
-      freeKicksFor: 0,
-      freeKicksAgainst: 0,
-      rebound50s: 0,
-      onePercenters: 0,
-      clearances: 0,
-      tackles: 0,
-    };
-    accumulator.totalPoints += count(row.goals) * 6 + count(row.behinds);
-    accumulator.hitOuts += count(row.hitOuts);
-    accumulator.goalAssists += count(row.goalAssists);
-    accumulator.inside50s += inside50;
-    accumulator.marks += count(row.marks);
-    accumulator.marksInside50 += count(row.marksInside50);
-    accumulator.freeKicksFor += count(row.freesFor);
-    accumulator.freeKicksAgainst += count(row.freesAgainst);
-    accumulator.rebound50s += count(row.rebounds);
-    accumulator.onePercenters += count(row.onePercenters);
-    accumulator.clearances += count(row.clearances);
-    accumulator.tackles += count(row.tackles);
+    const accumulator = players.get(key) ?? newAccumulator(playerId, playingFor);
+    addPlayerRow(accumulator, row);
     players.set(key, accumulator);
   }
 
-  for (const [matchKey, match] of matches) {
-    const sides = matchInside50.get(matchKey) ?? { home: 0, away: 0 };
-    teamPointsFor.set(match.home, (teamPointsFor.get(match.home) ?? 0) + match.homeScore);
-    teamPointsFor.set(match.away, (teamPointsFor.get(match.away) ?? 0) + match.awayScore);
-    teamPointsAgainst.set(match.home, (teamPointsAgainst.get(match.home) ?? 0) + match.awayScore);
-    teamPointsAgainst.set(match.away, (teamPointsAgainst.get(match.away) ?? 0) + match.homeScore);
-    teamInside50For.set(match.home, (teamInside50For.get(match.home) ?? 0) + sides.home);
-    teamInside50For.set(match.away, (teamInside50For.get(match.away) ?? 0) + sides.away);
-    teamInside50Against.set(match.home, (teamInside50Against.get(match.home) ?? 0) + sides.away);
-    teamInside50Against.set(match.away, (teamInside50Against.get(match.away) ?? 0) + sides.home);
-  }
-
-  const teamIds = [...new Set([...teamPointsFor.keys()])];
-  return teamIds.map((teamId) => ({
+  return [...teamTotals(matches)].map(([teamId, totals]) => ({
     teamId,
-    pointsFor: teamPointsFor.get(teamId) ?? 0,
-    pointsAgainst: teamPointsAgainst.get(teamId) ?? 0,
-    inside50sFor: teamInside50For.get(teamId) ?? 0,
-    inside50sAgainst: teamInside50Against.get(teamId) ?? 0,
+    ...totals,
     players: [...players.values()]
       .filter((player) => player.team === teamId)
-      .map((player) => ({
+      .map(({ team: _team, ...player }) => ({
+        ...player,
         spellVersionId: `spell:${input.season}:${teamId}:${player.playerId}`,
-        playerId: player.playerId,
         sourceRowIds: [] as string[],
-        totalPoints: player.totalPoints,
-        hitOuts: player.hitOuts,
-        goalAssists: player.goalAssists,
-        inside50s: player.inside50s,
-        marks: player.marks,
-        marksInside50: player.marksInside50,
-        freeKicksFor: player.freeKicksFor,
-        freeKicksAgainst: player.freeKicksAgainst,
-        rebound50s: player.rebound50s,
-        onePercenters: player.onePercenters,
-        clearances: player.clearances,
-        tackles: player.tackles,
       })),
   }));
 }

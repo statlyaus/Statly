@@ -98,6 +98,85 @@ function resolvePlayer(
 
 const round = (value: number) => Number(value.toFixed(4));
 
+type ValuedLeg = LocalHpnPavTradeVerdict['legs'][number];
+type LegOutcome = { readonly leg: ValuedLeg; readonly reason: string | null };
+
+/** Realized value at the receiving club, or the reason it cannot be credited there. */
+function realizedValue(
+  realized: LocalHpnPavSeasonView,
+  playerId: string,
+  playerName: string,
+  toClub: string
+): { value: number } | { reason: string } {
+  const later = realized.players.get(playerId);
+  // No appearances in the realized season is a measured zero for the receiving club.
+  if (later === undefined) return { value: 0 };
+  const laterClubs = new Set([...later.teams].map(canonicalAflClub));
+  if (laterClubs.size !== 1 || !laterClubs.has(toClub)) {
+    return { reason: `${playerName} did not play the realized season only for ${toClub}` };
+  }
+  return { value: realized.pav.get(playerId) ?? 0 };
+}
+
+/** Values one leg, or records why the direct lane cannot value it. */
+function valueLeg(
+  leg: LocalHpnPavTradeLeg,
+  atTrade: LocalHpnPavSeasonView,
+  realized: LocalHpnPavSeasonView | null
+): LegOutcome {
+  const fromClub = canonicalAflClub(leg.fromClub);
+  const toClub = canonicalAflClub(leg.toClub);
+  const unvalued = {
+    assetKind: leg.assetKind,
+    player: leg.playerName,
+    fromClub: fromClub ?? leg.fromClub,
+    toClub: toClub ?? leg.toClub,
+    playerId: null,
+    atTradePav: null,
+    realizedPav: null,
+  };
+  if (fromClub === null || toClub === null) {
+    return {
+      leg: unvalued,
+      reason: `unknown club: ${fromClub === null ? leg.fromClub : leg.toClub}`,
+    };
+  }
+  if (leg.assetKind !== 'player' || !leg.playerName) {
+    return { leg: unvalued, reason: `${leg.assetKind} leg is not valued by the direct PAV lane` };
+  }
+  const resolved = resolvePlayer(atTrade, leg.playerName, fromClub);
+  if ('reason' in resolved) return { leg: unvalued, reason: resolved.reason };
+  const later =
+    realized === null ? null : realizedValue(realized, resolved.playerId, leg.playerName, toClub);
+  return {
+    leg: {
+      ...unvalued,
+      playerId: resolved.playerId,
+      atTradePav: atTrade.pav.get(resolved.playerId) ?? 0,
+      realizedPav: later !== null && 'value' in later ? later.value : null,
+    },
+    reason: later !== null && 'reason' in later ? later.reason : null,
+  };
+}
+
+/** Each club's net value: received legs add, surrendered legs subtract. */
+function clubNets(legs: readonly ValuedLeg[]) {
+  const clubs = new Map<string, { atTrade: number; realized: number }>();
+  for (const leg of legs) {
+    if (leg.atTradePav === null) continue;
+    for (const [club, sign] of [
+      [leg.fromClub, -1],
+      [leg.toClub, 1],
+    ] as const) {
+      const net = clubs.get(club) ?? { atTrade: 0, realized: 0 };
+      net.atTrade += sign * leg.atTradePav;
+      net.realized += sign * (leg.realizedPav ?? 0);
+      clubs.set(club, net);
+    }
+  }
+  return clubs;
+}
+
 export function gradeLocalHpnPavTrade(input: {
   readonly tradeId: string;
   readonly legs: readonly LocalHpnPavTradeLeg[];
@@ -105,55 +184,12 @@ export function gradeLocalHpnPavTrade(input: {
   readonly atTrade: LocalHpnPavSeasonView;
   readonly realized: LocalHpnPavSeasonView | null;
 }): LocalHpnPavTradeVerdict {
-  const reasons = input.parseIssues.map((issue) => `parse issue: ${issue}`);
-  const clubs = new Map<string, { atTrade: number; realized: number }>();
-  const legs = input.legs.map((leg) => {
-    const fromClub = canonicalAflClub(leg.fromClub);
-    const toClub = canonicalAflClub(leg.toClub);
-    const base = {
-      assetKind: leg.assetKind,
-      player: leg.playerName,
-      fromClub: fromClub ?? leg.fromClub,
-      toClub: toClub ?? leg.toClub,
-    };
-    const unvalued = { ...base, playerId: null, atTradePav: null, realizedPav: null };
-    if (fromClub === null || toClub === null) {
-      reasons.push(`unknown club: ${fromClub === null ? leg.fromClub : leg.toClub}`);
-      return unvalued;
-    }
-    if (leg.assetKind !== 'player' || !leg.playerName) {
-      reasons.push(`${leg.assetKind} leg is not valued by the direct PAV lane`);
-      return unvalued;
-    }
-    const resolved = resolvePlayer(input.atTrade, leg.playerName, fromClub);
-    if ('reason' in resolved) {
-      reasons.push(resolved.reason);
-      return unvalued;
-    }
-    const atTradePav = input.atTrade.pav.get(resolved.playerId) ?? 0;
-    let realizedPav: number | null = null;
-    if (input.realized !== null) {
-      const later = input.realized.players.get(resolved.playerId);
-      const laterClubs = new Set([...(later?.teams ?? [])].map(canonicalAflClub));
-      if (later !== undefined && (laterClubs.size !== 1 || !laterClubs.has(toClub))) {
-        reasons.push(`${leg.playerName} did not play the realized season only for ${toClub}`);
-      } else {
-        // No appearances in the realized season is a measured zero for the receiving club.
-        realizedPav = input.realized.pav.get(resolved.playerId) ?? 0;
-      }
-    }
-    for (const [club, sign] of [
-      [fromClub, -1],
-      [toClub, 1],
-    ] as const) {
-      const net = clubs.get(club) ?? { atTrade: 0, realized: 0 };
-      net.atTrade += sign * atTradePav;
-      net.realized += sign * (realizedPav ?? 0);
-      clubs.set(club, net);
-    }
-    return { ...base, playerId: resolved.playerId, atTradePav, realizedPav };
-  });
-
+  const outcomes = input.legs.map((leg) => valueLeg(leg, input.atTrade, input.realized));
+  const reasons = [
+    ...input.parseIssues.map((issue) => `parse issue: ${issue}`),
+    ...outcomes.flatMap(({ reason }) => (reason === null ? [] : [reason])),
+  ];
+  const legs = outcomes.map(({ leg }) => leg);
   const complete = reasons.length === 0;
   const graded = complete && input.realized !== null;
   return {
@@ -161,7 +197,7 @@ export function gradeLocalHpnPavTrade(input: {
     status: complete ? 'complete' : 'incomplete',
     reasons,
     legs,
-    clubs: [...clubs].map(([club, net]) => ({
+    clubs: [...clubNets(legs)].map(([club, net]) => ({
       club,
       atTradeNet: round(net.atTrade),
       realizedNet: graded ? round(net.realized) : null,
