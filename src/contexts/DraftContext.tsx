@@ -996,6 +996,28 @@ function mergePersistedPicks(existing: DraftPick[], incoming: DraftPick[]): Draf
   return Array.from(picksById.values()).sort((a, b) => getPickOrder(a) - getPickOrder(b));
 }
 
+/** Maps a failed pick command to what the room tells the manager and the recovery it offers. */
+function describePickFailure(err: unknown): {
+  message: string;
+  recovery: NonNullable<DraftPickFeedback['recovery']>;
+} {
+  const status = (err as { status?: unknown } | null)?.status;
+  if (status === 409) {
+    return { message: 'That player was just drafted by someone else.', recovery: 'choose-another' };
+  }
+  if (status === 423) return { message: 'Not your turn to pick.', recovery: 'choose-another' };
+  // Without a 4xx rejection (a timeout, network loss or 5xx) the server may already have saved the
+  // pick, so resubmitting could fail confusingly; refresh to check instead.
+  if (typeof status !== 'number' || status >= 500) {
+    return {
+      message: 'We could not confirm whether your pick was saved. Refresh the room to check.',
+      recovery: 'refresh',
+    };
+  }
+  const message = err instanceof Error && err.message ? err.message : 'Failed to make pick';
+  return { message, recovery: 'retry' };
+}
+
 function getDraftedPlayerIds(picks: DraftPick[]): Set<string> {
   return new Set(picks.map((pick) => String((pick as any).player?.id ?? (pick as any).playerId)));
 }
@@ -2142,25 +2164,8 @@ export function DraftProvider({
         }
       } catch (err: any) {
         if (isMounted.current) {
-          const status = typeof err?.status === 'number' ? err.status : undefined;
-          // Without a 4xx rejection (a timeout, network loss or 5xx) the server may already have
-          // saved the pick, so resubmitting could fail confusingly; refresh to check instead.
-          const outcomeUnknown = status === undefined || status >= 500;
-          failPick(
-            status === 409
-              ? 'That player was just drafted by someone else.'
-              : status === 423
-                ? 'Not your turn to pick.'
-                : outcomeUnknown
-                  ? 'We could not confirm whether your pick was saved. Refresh the room to check.'
-                  : (err?.message ?? 'Failed to make pick'),
-            status === 409 || status === 423
-              ? 'choose-another'
-              : outcomeUnknown
-                ? 'refresh'
-                : 'retry',
-            player.name
-          );
+          const { message, recovery } = describePickFailure(err);
+          failPick(message, recovery, player.name);
         }
       } finally {
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
