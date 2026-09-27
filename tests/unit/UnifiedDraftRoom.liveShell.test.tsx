@@ -601,7 +601,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(forceRefreshSpy).toHaveBeenCalled();
   });
 
-  it('offers only Dismiss when the player was taken or it is not the manager\'s turn', () => {
+  it("offers only Dismiss when the player was taken or it is not the manager's turn", () => {
     draftContext.canMakePick = true;
     draftContext.pickFeedback = {
       status: 'failed',
