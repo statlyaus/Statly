@@ -3,6 +3,8 @@
  * view is season Y and the realized view is season Y + 1 at the receiving club, matching the governed
  * method. Anything the lane cannot value exactly (picks, unresolved or ambiguous players, parse issues,
  * a player who played Y + 1 elsewhere) makes the trade incomplete: it is reported, never graded.
+ * A realized season that keys players differently from the at-trade season is a setup error, not a
+ * trade problem: grading throws rather than reporting every trade against it.
  */
 
 /** AFL Tables club spellings, with the Draftguru and common variants that denote the same club. */
@@ -183,7 +185,8 @@ const MIN_SHARED_IDENTITY_SHARE = 0.5;
 
 /**
  * A player absent from the realized season is credited a measured zero, which is only sound when both
- * seasons key players by the same identity. Refuse any pair of seasons that do not.
+ * seasons key players by the same identity. Refuse a pair sharing under half of the at-trade identities;
+ * a pair at or above that share is accepted, and its unshared players are treated as not playing.
  */
 function assertComparableSeasons(atTrade: LocalHpnPavSeasonView, realized: LocalHpnPavSeasonView) {
   const shared = [...atTrade.players.keys()].filter((id) => realized.players.has(id)).length;
