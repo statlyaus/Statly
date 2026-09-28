@@ -1194,6 +1194,11 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       const liveState = {
         ...next.liveState,
         ...(nextCurrentPick !== undefined ? { currentPick: nextCurrentPick } : {}),
+        // The snapshot's on-clock member belonged to the pick that was just made; once the pick
+        // advances, the turn is derived from the slot until the next snapshot names it again.
+        ...(nextCurrentPick !== undefined && nextCurrentPick !== next.liveState.currentPick
+          ? { onClockTeamId: undefined }
+          : {}),
         ...(clockResult.success
           ? {
               clock: clockResult.data,
