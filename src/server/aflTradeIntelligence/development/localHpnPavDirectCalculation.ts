@@ -9,7 +9,10 @@ import type { AflTradeHpnPavCoreTeam } from '../modeling/hpnPavCore';
  * for the governed persistence path.
  */
 
-/** One flattened player-match row, as selected from `outcome_provider_decoded_row`. */
+/**
+ * One flattened player-match row, selected from `outcome_provider_decoded_row` with the player identity
+ * joined from its `outcome_provider_identity_candidate`.
+ */
 export interface LocalHpnPavDecodedRow {
   /** The row's AFL Tables player identity (`native_entity_id`); names alone are not unique. */
   readonly nativeEntityId: string | null;
