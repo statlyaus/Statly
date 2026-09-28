@@ -64,16 +64,17 @@ const draftData = {
 };
 
 describe('LivePickHeader', () => {
-  it('does not loop when the turn flag and the pick train briefly disagree', () => {
-    // Slot 3 is two picks away, but a stale turn flag still says it is this manager's turn.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('settles when the on-clock flag and the pick sequence briefly disagree', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      expect(() =>
-        render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={3} />)
-      ).not.toThrow();
+      // On the clock per the context, while slot 3's next pick is still two picks away.
+      render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={3} />);
+
       expect(
-        consoleError.mock.calls.some((call) => String(call[0]).includes('Maximum update depth'))
-      ).toBe(false);
+        consoleError.mock.calls.filter(([message]) =>
+          String(message).includes('Maximum update depth exceeded')
+        )
+      ).toEqual([]);
     } finally {
       consoleError.mockRestore();
     }
