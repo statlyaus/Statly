@@ -899,7 +899,7 @@ type Action =
   | { type: 'REMOVE_WATCHLIST_ITEM'; playerId: string }
   | { type: 'SET_WATCHLIST_PENDING'; playerId: string; pending: boolean }
   | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
-  | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
+  | { type: 'APPLY_DELTAS'; deltas: DraftDelta[]; source?: 'persisted' }
   | {
       type: 'APPLY_V2_COMMIT';
       snapshot?: ReturnType<typeof normalizeSnapshot>;
@@ -1361,10 +1361,14 @@ function reducer(state: DraftState, action: Action): DraftState {
       return applyPersistedPicksState(state, action.picks);
     case 'APPLY_DELTAS': {
       let next = state;
-      const deltas =
-        state.connection.protocol === 2
-          ? action.deltas.filter((delta) => delta.type === 'QUEUE_UPDATED')
-          : action.deltas;
+      // Once v2 owns the room, shared v1 traffic is ignored. Picks read back from the database
+      // still apply while the v2 socket is down, or the room would freeze until a reload.
+      const acceptsAllDeltas =
+        state.connection.protocol !== 2 ||
+        (action.source === 'persisted' && state.connection.status !== 'connected');
+      const deltas = acceptsAllDeltas
+        ? action.deltas
+        : action.deltas.filter((delta) => delta.type === 'QUEUE_UPDATED');
       for (const d of deltas) next = applyDelta(next, d);
       return next;
     }
@@ -2048,6 +2052,7 @@ export function DraftProvider({
       dispatch({
         type: 'APPLY_DELTAS',
         deltas: reconciledDeltas,
+        source: 'persisted',
       });
 
       if (!draftStateDelta) {
