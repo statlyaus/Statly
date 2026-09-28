@@ -1,11 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import {
-  TrophyIcon,
-  FireIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-} from '@heroicons/react/24/outline';
+import { ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
 
 type Player = {
   id: string;
@@ -18,8 +13,6 @@ type Player = {
   form: number[];
   injuryStatus?: string;
   priceChange: number;
-  captain?: boolean;
-  viceCaptain?: boolean;
 };
 // Accept a more permissive player-like shape when necessary
 export type LoosePlayer = Partial<Player> & { id: string };
@@ -68,10 +61,6 @@ const PlayerRow: React.FC<Props> = ({
     >
       <div className="col-span-3">
         <div className="flex items-center gap-2">
-          {player.captain && <TrophyIcon className="w-4 h-4 text-yellow-500" title="Captain" />}
-          {player.viceCaptain && (
-            <FireIcon className="w-4 h-4 text-orange-500" title="Vice Captain" />
-          )}
           <div>
             <div className="font-medium text-gray-900">{player.name}</div>
             <div className="text-sm text-gray-500">{player.team}</div>

@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react';
 
+import {
+  MatchupScoreLine,
+  ResultChip,
+  type CategoryResult,
+} from '@/components/scores/MatchupScore';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 
 interface LeagueMatchupsPanelProps {
@@ -56,6 +61,7 @@ interface MatchupPlayerContribution {
   slot: string;
   slotIndex: number;
   total: number;
+  hasStats?: boolean;
   categories: Array<{
     category: string;
     shortLabel: string;
@@ -72,9 +78,7 @@ interface MatchupReadModel {
   permissions?: { canManage?: boolean };
 }
 
-const MATCH_CENTRE_PLAYER_COLUMN_WIDTH = 256;
-const MATCH_CENTRE_SLOT_COLUMN_WIDTH = 84;
-const MATCH_CENTRE_STAT_COLUMN_WIDTH = 70;
+const BOX_SCORE_SLOT_LABELS: Record<string, string> = { INTERCHANGE: 'INT' };
 
 function formatStatValue(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -92,17 +96,16 @@ function formatDateTime(value: string | null | undefined): string | null {
   }).format(date);
 }
 
-function scoreLine(matchup: MatchupModel): string {
-  return `${matchup.homeCategoryWins ?? 0}-${matchup.awayCategoryWins ?? 0}${
-    matchup.drawnCategories ? `-${matchup.drawnCategories}` : ''
-  }`;
-}
-
 export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsPanelProps) {
   const [data, setData] = useState<MatchupReadModel | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [message, setMessage] = useState<string | null>(null);
-  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  // Links such as Standings results open the Match Centre on a given round (?round=N).
+  const [selectedRound, setSelectedRound] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const requested = Number(new URLSearchParams(window.location.search).get('round'));
+    return Number.isInteger(requested) && requested > 0 ? requested : null;
+  });
 
   async function loadMatchups() {
     setStatus('loading');
@@ -139,12 +142,12 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
   }
 
   return (
-    <section className="space-y-4" aria-labelledby="league-matchups-heading">
+    <section className="min-w-0 space-y-4" aria-labelledby="league-matchups-heading">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2
             id="league-matchups-heading"
-            className="text-xl font-semibold text-[color:var(--league-text)]"
+            className="font-display text-2xl font-bold leading-tight text-[color:var(--league-text)]"
           >
             Matchups
           </h2>
@@ -163,7 +166,7 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
               >
                 {data.availableRounds.map((round) => (
                   <option key={round} value={round}>
-                    {round}
+                    Round {round}
                   </option>
                 ))}
               </select>
@@ -178,11 +181,11 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
         </div>
       )}
       {status === 'error' && !data ? null : data?.matchups.length ? (
-        <div className="grid gap-3">
+        <div className="grid min-w-0 gap-3">
           {data.matchups.map((matchup, index) => (
             <article
               key={matchup.id ?? `matchup-${index}`}
-              className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4"
+              className="min-w-0 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4"
             >
               {matchup.byeMember ? (
                 <div className="text-sm font-medium text-[color:var(--league-text)]">
@@ -192,7 +195,7 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
                 <div className="space-y-4">
                   <MatchupHeadToHeadCard matchup={matchup} />
                   <CategoryTotalsGrid matchup={matchup} />
-                  <MirroredPlayerMatchupTable matchup={matchup} />
+                  <TeamBoxScores matchup={matchup} />
                 </div>
               )}
             </article>
@@ -208,60 +211,66 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
   );
 }
 
-function MatchupHeadToHeadCard({ matchup }: { matchup: MatchupModel }) {
+function matchupStatusLabel(matchup: MatchupModel): string {
+  if (matchup.status === 'LIVE') return 'Live';
+  if (matchup.status === 'FINAL') return 'Final';
   const startsAt = formatDateTime(matchup.startsAt);
-
-  return (
-    <div className="grid gap-4 border-b border-[color:var(--league-border)] pb-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
-      <MatchupTeamSummaryBlock team={matchup.homeMember} align="left" />
-      <div className="text-center">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          <div className="text-3xl font-semibold tabular-nums text-[color:var(--league-text)]">
-            {matchup.homeCategoryWins ?? 0}
-          </div>
-          <div>
-            <div className="text-xs font-medium text-[color:var(--league-text-muted)]">Points</div>
-            <div className="mt-1 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--league-text-muted)]">
-              {matchup.status ?? 'SCHEDULED'}
-            </div>
-          </div>
-          <div className="text-3xl font-semibold tabular-nums text-[color:var(--league-text)]">
-            {matchup.awayCategoryWins ?? 0}
-          </div>
-        </div>
-        <div className="mt-2 text-sm text-[color:var(--league-text-muted)]">
-          {scoreLine(matchup)}
-          {startsAt ? ` | ${startsAt}` : ''}
-        </div>
-      </div>
-      <MatchupTeamSummaryBlock team={matchup.awayMember} align="right" />
-    </div>
-  );
+  return startsAt ? `Starts ${startsAt}` : 'Not started';
 }
 
-function MatchupTeamSummaryBlock({
-  team,
-  align,
-}: {
-  team?: MatchupTeamSummary | null;
-  align: 'left' | 'right';
-}) {
+function matchupResultLine(matchup: MatchupModel): string {
+  const home = matchup.homeCategoryWins ?? 0;
+  const away = matchup.awayCategoryWins ?? 0;
+  const homeName = matchup.homeMember?.teamName ?? 'Home';
+  const awayName = matchup.awayMember?.teamName ?? 'Away';
+  const drawn = matchup.drawnCategories ? `, ${matchup.drawnCategories} drawn` : '';
+  if (matchup.status === 'SCHEDULED' || !matchup.status) return 'Not started';
+  if (home === away) {
+    return matchup.status === 'FINAL'
+      ? `Drawn ${home}–${away}${drawn}`
+      : `Level ${home}–${away}${drawn}`;
+  }
+  const leader = home > away ? homeName : awayName;
+  const margin = Math.abs(home - away);
+  return matchup.status === 'FINAL'
+    ? `${leader} won ${Math.max(home, away)}–${Math.min(home, away)}${drawn}`
+    : `${leader} lead by ${margin} ${margin === 1 ? 'category' : 'categories'}${drawn}`;
+}
+
+/** Same score line as the league overview: teams either side, categories won, one result line. */
+function MatchupHeadToHeadCard({ matchup }: { matchup: MatchupModel }) {
   return (
-    <div className={align === 'right' ? 'text-left md:text-right' : 'text-left'}>
-      <div className="text-lg font-semibold text-[color:var(--league-primary)]">
-        {team?.teamName ?? (align === 'right' ? 'Away' : 'Home')}
-      </div>
-      <div className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-        {team?.categoryWins ?? 0}-{team?.categoryLosses ?? 0}
-        {team?.categoryDraws ? `-${team.categoryDraws}` : ''} |{' '}
-        {team?.matchupWin ? 'Leading' : team?.matchupDraw ? 'Drawn' : 'Chasing'}
-      </div>
+    <div className="border-b border-[color:var(--league-border)] pb-4">
+      <p className="mb-3 flex items-center gap-2 text-xs text-[color:var(--league-text-muted)]">
+        {matchup.status === 'LIVE' ? (
+          <span aria-hidden="true" className="size-2 rounded-full bg-result-loss" />
+        ) : null}
+        <span
+          className={matchup.status === 'LIVE' ? 'font-bold text-result-loss' : 'font-semibold'}
+        >
+          {matchupStatusLabel(matchup)}
+        </span>
+      </p>
+      <MatchupScoreLine
+        you={{
+          teamName: matchup.homeMember?.teamName ?? 'Home',
+          logoUrl: matchup.homeMember?.teamLogoUrl ?? null,
+        }}
+        opponent={{
+          teamName: matchup.awayMember?.teamName ?? 'Away',
+          logoUrl: matchup.awayMember?.teamLogoUrl ?? null,
+        }}
+        yourWins={matchup.homeCategoryWins ?? 0}
+        opponentWins={matchup.awayCategoryWins ?? 0}
+        resultLine={matchupResultLine(matchup)}
+      />
     </div>
   );
 }
 
 function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
   const categoryRows = matchup.categoryRows ?? [];
+  const hasStarted = matchup.status === 'LIVE' || matchup.status === 'FINAL';
 
   return (
     <div className="overflow-x-auto rounded-md border border-[color:var(--league-border)]">
@@ -274,7 +283,9 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             </th>
             {categoryRows.map((row) => (
               <th key={row.category} scope="col" className="px-3 py-2 text-center">
-                {row.shortLabel}
+                <abbr title={row.label} className="no-underline">
+                  {row.shortLabel}
+                </abbr>
               </th>
             ))}
             <th scope="col" className="w-20 px-3 py-2 text-center">
@@ -288,12 +299,14 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             side="home"
             categoryRows={categoryRows}
             score={matchup.homeCategoryWins ?? 0}
+            started={hasStarted}
           />
           <CategoryTotalsRow
             team={matchup.awayMember}
             side="away"
             categoryRows={categoryRows}
             score={matchup.awayCategoryWins ?? 0}
+            started={hasStarted}
           />
         </tbody>
       </table>
@@ -306,170 +319,198 @@ function CategoryTotalsRow({
   side,
   categoryRows,
   score,
+  started,
 }: {
   team?: MatchupTeamSummary | null;
   side: 'home' | 'away';
   categoryRows: MatchupCategoryRow[];
   score: number;
+  started: boolean;
 }) {
   return (
     <tr className="bg-[color:var(--league-surface)]">
-      <th
-        scope="row"
-        className="px-3 py-3 text-left font-medium text-[color:var(--league-primary)]"
-      >
+      <th scope="row" className="px-3 py-3 text-left font-semibold text-[color:var(--league-text)]">
         {team?.teamName ?? (side === 'home' ? 'Home' : 'Away')}
       </th>
       {categoryRows.map((row) => {
         const isWinner = row.winner === side;
         const isDraw = row.winner === 'draw';
+        const result: CategoryResult = isWinner ? 'won' : isDraw ? 'drawn' : 'lost';
         return (
           <td
             key={row.category}
-            className={`border-l border-[color:var(--league-border)] px-3 py-3 text-center font-semibold tabular-nums ${
+            className={`px-3 py-3 text-center tabular-nums ${
               isWinner
-                ? 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]'
+                ? 'font-bold text-[color:var(--league-text)]'
                 : isDraw
-                  ? 'bg-[color:var(--league-surface-muted)] text-[color:var(--league-text)]'
+                  ? 'font-semibold text-[color:var(--league-text)]'
                   : 'text-[color:var(--league-text-muted)]'
             }`}
           >
-            {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+            <span className="inline-flex items-center justify-center gap-1.5">
+              {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+              {started ? (
+                <ResultChip
+                  result={result}
+                  srLabel={`${row.label} ${result}`}
+                  className="size-5 shrink-0"
+                />
+              ) : null}
+            </span>
           </td>
         );
       })}
-      <td className="border-l border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-3 text-center text-lg font-semibold tabular-nums text-[color:var(--league-text)]">
+      <td className="border-l border-[color:var(--league-border)] px-3 py-3 text-center font-display text-xl font-bold tabular-nums text-[color:var(--league-text)]">
         {score}
       </td>
     </tr>
   );
 }
 
-function MirroredPlayerMatchupTable({ matchup }: { matchup: MatchupModel }) {
+function TeamBoxScores({ matchup }: { matchup: MatchupModel }) {
   const homePlayers = matchup.homeMember?.players ?? [];
   const awayPlayers = matchup.awayMember?.players ?? [];
-  const categoryHeaders = matchup.categoryRows ?? [];
-  const rows = Math.max(homePlayers.length, awayPlayers.length);
-  const tableMinWidth =
-    MATCH_CENTRE_PLAYER_COLUMN_WIDTH * 2 +
-    MATCH_CENTRE_SLOT_COLUMN_WIDTH +
-    MATCH_CENTRE_STAT_COLUMN_WIDTH * categoryHeaders.length * 2;
 
-  if (!rows) {
+  if (!homePlayers.length && !awayPlayers.length) {
     return (
       <div className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-5 text-sm text-[color:var(--league-text-muted)]">
         <div className="font-semibold text-[color:var(--league-text)]">Set your lineup</div>
         <p className="mt-1">
-          No active lineup players are set for this matchup yet. Open the My Lineup tab to place
-          roster players onto the field, then save to populate the Match Centre contribution table.
+          No players are set for this matchup yet. Open the My Team tab to pick your lineup.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
-      <div className="border-b border-[color:var(--league-border)] px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)]">
-        Today&apos;s Stats
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-display text-lg font-bold text-[color:var(--league-text)]">
+          Player stats · Round {matchup.round ?? ''}
+        </h3>
+        <p className="text-xs text-[color:var(--league-text-muted)]">
+          On-field and interchange players · – means no stats yet
+        </p>
       </div>
+      <TeamBoxScoreTable matchup={matchup} side="home" />
+      <TeamBoxScoreTable matchup={matchup} side="away" />
+    </div>
+  );
+}
+
+function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'home' | 'away' }) {
+  const team = side === 'home' ? matchup.homeMember : matchup.awayMember;
+  const players = team?.players ?? [];
+  const categoryHeaders = matchup.categoryRows ?? [];
+  const teamName = team?.teamName ?? (side === 'home' ? 'Home' : 'Away');
+
+  return (
+    <div className="overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
       <div className="overflow-x-auto">
         <table
-          className="w-full table-fixed border-collapse text-left text-sm"
-          style={{ minWidth: tableMinWidth }}
-          aria-label="Mirrored player contribution table"
+          className="w-full min-w-[720px] border-collapse text-left text-sm"
+          aria-label={`${teamName} box score`}
         >
-          <caption className="sr-only">
-            Active lineup player contributions for both matchup teams.
+          <caption className="border-b border-[color:var(--league-border)] px-4 py-2.5 text-left font-display text-base font-bold text-[color:var(--league-text)]">
+            {teamName}
           </caption>
-          <colgroup>
-            <col style={{ width: MATCH_CENTRE_PLAYER_COLUMN_WIDTH }} />
-            {categoryHeaders.map((row) => (
-              <col key={`home-${row.category}`} style={{ width: MATCH_CENTRE_STAT_COLUMN_WIDTH }} />
-            ))}
-            <col style={{ width: MATCH_CENTRE_SLOT_COLUMN_WIDTH }} />
-            <col style={{ width: MATCH_CENTRE_PLAYER_COLUMN_WIDTH }} />
-            {categoryHeaders.map((row) => (
-              <col key={`away-${row.category}`} style={{ width: MATCH_CENTRE_STAT_COLUMN_WIDTH }} />
-            ))}
-          </colgroup>
-          <thead className="sticky top-0 z-10 bg-[color:var(--league-surface-muted)] text-xs font-medium text-[color:var(--league-text-muted)]">
+          <thead className="bg-[color:var(--league-surface-muted)] text-xs font-medium text-[color:var(--league-text-muted)]">
             <tr>
-              <th scope="col" className="px-3 py-2 text-left">
+              <th scope="col" className="w-16 px-4 py-2 text-left">
+                Slot
+              </th>
+              <th scope="col" className="px-2 py-2 text-left">
                 Player
               </th>
               {categoryHeaders.map((row) => (
-                <th key={`home-head-${row.category}`} scope="col" className="px-2 py-2 text-center">
+                <th
+                  key={row.category}
+                  scope="col"
+                  title={row.label}
+                  className="w-14 px-2 py-2 text-right"
+                >
                   {row.shortLabel}
                 </th>
               ))}
-              <th scope="col" className="px-2 py-2 text-center">
-                Pos
-              </th>
-              <th scope="col" className="px-3 py-2 text-left">
-                Player
-              </th>
-              {categoryHeaders.map((row) => (
-                <th key={`away-head-${row.category}`} scope="col" className="px-2 py-2 text-center">
-                  {row.shortLabel}
-                </th>
-              ))}
+              <th scope="col" className="w-4" aria-hidden="true" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[color:var(--league-border)]">
-            {Array.from({ length: rows }, (_, index) => {
-              const homePlayer = homePlayers[index];
-              const awayPlayer = awayPlayers[index];
-              return (
-                <tr
-                  key={`${homePlayer?.playerId ?? 'home-empty'}-${awayPlayer?.playerId ?? 'away-empty'}-${index}`}
-                >
-                  <PlayerIdentityCell player={homePlayer} />
-                  {categoryHeaders.map((category) => (
-                    <PlayerCategoryCell
-                      key={`home-${category.category}`}
-                      player={homePlayer}
-                      category={category}
-                    />
-                  ))}
-                  <td className="bg-[color:var(--league-surface-muted)] px-2 py-3 text-center text-xs font-semibold text-[color:var(--league-text-muted)]">
-                    {homePlayer?.slot ?? awayPlayer?.slot ?? '-'}
+            {players.length ? (
+              players.map((player) => (
+                <tr key={`${player.slot}-${player.slotIndex}-${player.playerId}`}>
+                  <td className="px-4 py-2">
+                    <BoxScoreSlot slot={player.slot} />
                   </td>
-                  <PlayerIdentityCell player={awayPlayer} />
+                  <th scope="row" className="px-2 py-2 text-left font-normal">
+                    <span className="font-semibold text-[color:var(--league-text)]">
+                      {player.name}
+                    </span>
+                    <span className="ml-2 text-xs text-[color:var(--league-text-muted)]">
+                      {player.position}
+                    </span>
+                  </th>
                   {categoryHeaders.map((category) => (
                     <PlayerCategoryCell
-                      key={`away-${category.category}`}
-                      player={awayPlayer}
+                      key={category.category}
+                      player={player}
                       category={category}
                     />
                   ))}
+                  <td aria-hidden="true" />
                 </tr>
-              );
-            })}
+              ))
+            ) : (
+              <tr>
+                <td
+                  colSpan={categoryHeaders.length + 3}
+                  className="px-4 py-4 text-sm text-[color:var(--league-text-muted)]"
+                >
+                  No lineup set for this round.
+                </td>
+              </tr>
+            )}
           </tbody>
+          {players.length ? (
+            <tfoot className="border-t-2 border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-[color:var(--league-text)]">
+              <tr>
+                <th scope="row" colSpan={2} className="px-4 py-2 text-left text-xs font-semibold">
+                  Team total
+                </th>
+                {categoryHeaders.map((row) => {
+                  const won = row.winner === side;
+                  return (
+                    <td
+                      key={row.category}
+                      className={`px-2 py-2 text-right tabular-nums ${won ? 'font-bold' : 'font-medium text-[color:var(--league-text-muted)]'}`}
+                    >
+                      {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+                    </td>
+                  );
+                })}
+                <td aria-hidden="true" />
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     </div>
   );
 }
 
-function PlayerIdentityCell({ player }: { player?: MatchupPlayerContribution }) {
-  if (!player) {
-    return <td className="px-3 py-3 text-[color:var(--league-text-muted)]">-</td>;
-  }
-
+function BoxScoreSlot({ slot }: { slot: string }) {
+  const label = BOX_SCORE_SLOT_LABELS[slot] ?? slot;
+  const isInterchange = slot === 'INTERCHANGE';
   return (
-    <th scope="row" className="px-3 py-3 text-left font-normal">
-      <div className="font-semibold text-[color:var(--league-primary)]">{player.name}</div>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[color:var(--league-text-muted)]">
-        <span className="rounded-sm border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-1.5 py-0.5 font-semibold text-[color:var(--league-text)]">
-          {player.position}
-        </span>
-        <span>
-          {player.slot}
-          {player.slotIndex + 1}
-        </span>
-      </div>
-    </th>
+    <span
+      className={`inline-flex h-6 w-11 items-center justify-center rounded-sm text-[11px] font-bold ${
+        isInterchange
+          ? 'border border-[color:var(--league-border)] text-[color:var(--league-text)]'
+          : 'bg-[color:var(--league-primary)] text-white'
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -481,10 +522,13 @@ function PlayerCategoryCell({
   category: MatchupCategoryRow;
 }) {
   const value = player?.categories.find((row) => row.category === category.category)?.value;
+  const hasValue = value !== undefined && player?.hasStats !== false;
 
   return (
-    <td className="border-l border-[color:var(--league-border)] px-2 py-3 text-center font-medium tabular-nums text-[color:var(--league-text)]">
-      {value === undefined ? '-' : formatStatValue(value)}
+    <td
+      className={`px-2 py-2 text-right tabular-nums ${hasValue ? 'font-medium text-[color:var(--league-text)]' : 'text-[color:var(--league-text-muted)]'}`}
+    >
+      {hasValue ? formatStatValue(value) : '–'}
     </td>
   );
 }

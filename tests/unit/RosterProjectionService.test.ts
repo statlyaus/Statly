@@ -232,8 +232,6 @@ describe('RosterProjectionService', () => {
       leagueId: 'league-1',
       memberId: 'member-1',
       submittedPlayerIds: ['player-1', 'player-2'],
-      captainId: 'player-1',
-      viceCaptainId: 'player-2',
       benchOrder: ['player-2'],
     });
 
@@ -241,8 +239,6 @@ describe('RosterProjectionService', () => {
       expect.objectContaining({
         create: expect.objectContaining({
           playerIds: JSON.stringify(['player-2', 'player-1']),
-          captainId: 'player-1',
-          viceCaptainId: 'player-2',
           benchOrder: JSON.stringify(['player-2']),
         }),
         update: expect.objectContaining({

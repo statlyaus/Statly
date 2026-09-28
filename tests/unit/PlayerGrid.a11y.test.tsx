@@ -104,7 +104,7 @@ describe('PlayerGrid accessibility', () => {
       'G',
       'T',
       'I50',
-      'I',
+      'ITC',
       'CM',
       'R50',
       'CP',

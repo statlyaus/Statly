@@ -1,19 +1,15 @@
 import type { Metadata } from 'next';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
-import Image from 'next/image';
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
+
 import {
-  ArrowRight,
-  BarChart3,
-  CalendarClock,
-  GitPullRequestArrow,
-  LayoutDashboard,
-  ListChecks,
-  Radio,
-  ShieldCheck,
-  Trophy,
-} from 'lucide-react';
+  CategoryBoxScore,
+  MatchupScoreLine,
+  type BoxScoreCategory,
+} from '@/components/scores/MatchupScore';
+import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 export const metadata: Metadata = {
   title: 'Statly | AFL Draft & Trade Outcomes and Fantasy',
@@ -21,242 +17,125 @@ export const metadata: Metadata = {
     'Explore public AFL draft and trade records, follow checked outcome publication status, or manage your Statly fantasy league.',
 };
 
-const publicResearchSignals = [
-  'Historical trade records',
-  'Club histories',
-  'Methodology & status',
-];
+type PresetCategoryKey = (typeof REAL_DATA_NINE_CATEGORY_PRESET)[number];
 
-const decisionMoments = [
-  {
-    icon: Trophy,
-    title: 'Draft night',
-    description:
-      'Build the queue, read category value, track pick timing, and keep the next best player in view.',
-  },
-  {
-    icon: CalendarClock,
-    title: 'Selection week',
-    description:
-      'Bring injury updates, role movement, roster coverage, and lockout pressure into one decision surface.',
-  },
-  {
-    icon: GitPullRequestArrow,
-    title: 'Market movement',
-    description:
-      'Compare waiver claims, trade offers, live scoring swings, and manager behaviour before the window closes.',
-  },
-];
+/** Illustrative only: invented teams and numbers, captioned as an example on the page. */
+const exampleMatchup = {
+  home: 'Ball Magnets',
+  away: 'Hard Ball Gets',
+  values: {
+    goals: [14, 11],
+    tackles: [68, 74],
+    inside50s: [52, 49],
+    intercepts: [58, 63],
+    contestedMarks: [12, 9],
+    rebound50s: [38, 44],
+    contestedPossessions: [146, 139],
+    effectiveDisposals: [291, 302],
+    scoreInvolvements: [97, 88],
+  } satisfies Record<PresetCategoryKey, readonly [number, number]>,
+};
 
-const leagueModules = [
-  {
-    icon: Trophy,
-    title: 'Draft room',
-    description:
-      'Run snake drafts with queue, watchlist, live picks, timer context, and Statly Z sorting.',
-  },
-  {
-    icon: ListChecks,
-    title: 'Rosters',
-    description: 'See starters, bench risk, position coverage, and lineup pressure before lockout.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Waivers',
-    description: 'Review claims, priority, and available player signals before each waiver run.',
-  },
-  {
-    icon: GitPullRequestArrow,
-    title: 'Trades',
-    description:
-      'Compare incoming and outgoing value with context commissioners and managers can trust.',
-  },
-  {
-    icon: Radio,
-    title: 'Live scoring',
-    description:
-      'Follow matchup movement and player score swings without leaving your league workspace.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Player research',
-    description:
-      'Compare role, form, injury context, ownership, rankings, trends, and category value.',
-  },
-];
+const exampleCategories: BoxScoreCategory[] = REAL_DATA_NINE_CATEGORY_PRESET.map((key) => {
+  const [home, away] = exampleMatchup.values[key];
+  const category = FANTASY_CATEGORIES[key];
+  return {
+    key,
+    label: category.label,
+    shortLabel: category.shortLabel ?? category.label,
+    result: home > away ? 'won' : home < away ? 'lost' : 'drawn',
+    yourValue: home,
+    opponentValue: away,
+  };
+});
+const homeCategoriesWon = exampleCategories.filter((row) => row.result === 'won').length;
+const awayCategoriesWon = exampleCategories.filter((row) => row.result === 'lost').length;
 
-const categorySignals = [
-  'Goals',
-  'Tackles',
-  'Inside 50s',
-  'Intercepts',
-  'Contested marks',
-  'Rebound 50s',
-  'Contested possessions',
-  'Effective disposals',
-  'Score involvements',
-];
+const seasonMoments = [
+  { title: 'Draft night', modules: ['Draft room', 'Player research'] },
+  { title: 'Selection week', modules: ['Rosters', 'Live scoring'] },
+  { title: 'Market movement', modules: ['Waivers', 'Trades'] },
+] as const;
 
 const products = [
   {
-    icon: BarChart3,
     title: 'AFL Draft & Trade Outcomes',
-    description:
-      'Explore the historical AFL trade archive and club movement. Checked numerical outcome releases are not yet published.',
+    status: 'Numerical outcomes not published',
+    description: 'Historical trade records and club movement.',
     href: '/draft/trades',
-    action: 'Explore trade archive',
-    status: 'Historical archive available · numerical outcomes not published',
+    action: 'Explore AFL trade archive',
     secondaryHref: '/draft/outcomes',
-    secondaryAction: 'View outcome status',
+    secondaryAction: 'Outcome publication status',
   },
   {
-    icon: LayoutDashboard,
     title: 'Statly Fantasy',
-    description: 'Manage your league, team, trades, waivers, lineups, drafts, and live rounds.',
+    status: null,
+    description:
+      'Category head-to-head leagues: drafts, lineups, waivers, trades, and live rounds.',
     href: '/dashboard',
-    action: 'View Fantasy Workspace',
-    status: 'Separate league-management workspace',
+    action: 'Open Fantasy Workspace',
     secondaryHref: null,
     secondaryAction: null,
   },
 ] as const;
 
+const archiveOwnershipNote =
+  'The AFL archive is public research. Its players, picks, and trades are not owned by Statly users or fantasy teams.';
+
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
+function CardHeading({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <h2
+      id={id}
+      className="border-b border-border px-4 py-3 font-display text-lg font-bold text-foreground sm:px-5"
+    >
+      {children}
+    </h2>
+  );
+}
+
 export default function HomePage(): ReactElement {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <section className="relative isolate overflow-hidden border-b border-border bg-foreground text-primary-foreground">
-        <Image
-          src="/Assets/statly-stadium-hero.png?v=20260705b"
-          alt=""
-          fill
-          unoptimized
-          sizes="(max-width: 639px) 100vw, 0px"
-          className="absolute inset-0 -z-30 scale-110 object-cover object-top blur-md sm:hidden"
-        />
-        <Image
-          src="/Assets/statly-stadium-hero.png?v=20260705b"
-          alt=""
-          fill
-          priority
-          unoptimized
-          sizes="100vw"
-          className="absolute inset-0 -z-20 object-cover object-top max-sm:object-contain"
-        />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-foreground/80 via-foreground/12 to-transparent" />
-        <div
-          className="pointer-events-none absolute inset-x-0 top-[7vh] z-0 flex justify-center px-6 max-sm:top-[4vh]"
-          aria-hidden="true"
-        >
-          <Image
-            src="/brand/statly-hero-logo-overlay.png?v=20260705"
-            alt=""
-            width={3020}
-            height={882}
-            priority
-            unoptimized
-            sizes="(max-width: 639px) 86vw, 46rem"
-            className="h-auto w-[min(66vw,46rem)] max-sm:w-[min(86vw,24rem)]"
-          />
-        </div>
+    <div className="bg-muted text-foreground">
+      <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+        <header className="max-w-3xl">
+          <h1 className="text-balance font-display text-4xl font-bold leading-tight text-foreground sm:text-5xl">
+            Explore AFL Draft &amp; Trade Outcomes. Run your fantasy league.
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
+            {archiveOwnershipNote}
+          </p>
+        </header>
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center justify-end px-6 pb-8 pt-40 text-center sm:pb-16 sm:pt-16 lg:px-10 lg:pb-20 lg:pt-20">
-          <div className="flex flex-col items-center gap-4 sm:gap-7">
-            <div className="max-w-3xl space-y-3">
-              <h1 className="text-balance text-3xl font-black tracking-tight text-primary-foreground drop-shadow-sm sm:text-5xl">
-                Explore AFL draft trades. Run your fantasy league.
-              </h1>
-              <p className="mx-auto max-w-2xl text-sm leading-6 text-primary-foreground/85 drop-shadow-sm sm:text-base">
-                The public AFL archive is separate from Statly Fantasy. Browse historical trades and
-                club movement now; checked numerical outcome releases are not yet published.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-3">
-              <Link
-                href="/draft/trades"
-                className="inline-flex items-center gap-2 rounded-md bg-primary-foreground px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-primary-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
-              >
-                Explore AFL trade archive
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center rounded-md border border-primary-foreground/25 bg-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-foreground/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
-              >
-                Open Fantasy Workspace
-              </Link>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-primary-foreground/85">
-              <span className="rounded-full border border-primary-foreground/25 bg-foreground/25 px-3 py-1.5">
-                Historical archive available
-              </span>
-              <span className="rounded-full border border-primary-foreground/25 bg-foreground/25 px-3 py-1.5">
-                Numerical outcomes not published
-              </span>
-              <Link
-                href="/draft/outcomes"
-                className="inline-flex min-h-11 items-center rounded-md px-3 underline decoration-primary-foreground/50 underline-offset-4 transition hover:decoration-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
-              >
-                Outcome publication status
-              </Link>
-            </div>
-
-            <div
-              className="flex max-w-3xl flex-wrap justify-center gap-2 pt-1"
-              aria-label="AFL Draft and Trade Outcomes capabilities"
-            >
-              {publicResearchSignals.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-md border border-primary-foreground/18 bg-foreground/20 px-3 py-1.5 text-xs font-semibold text-primary-foreground/80 backdrop-blur"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="border-b border-border bg-background">
-        <div className="mx-auto max-w-6xl px-6 py-12 lg:px-10 lg:py-16">
-          <div className="max-w-3xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Statly Products
-            </p>
-            <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Public AFL research and fantasy, clearly separated.
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <section aria-labelledby="products-heading" className="flex flex-col gap-5">
+            <h2 id="products-heading" className="sr-only">
+              Statly products
             </h2>
-            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              AFL Draft &amp; Trade Outcomes is public AFL research: its players, picks, and trades
-              are not owned by Statly users or fantasy teams. Statly Fantasy remains the separate
-              league-management workspace.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-5 md:grid-cols-2">
-            {products.map(({ icon: Icon, ...product }) => (
+            {products.map((product) => (
               <article
                 key={product.title}
-                className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
+                className="overflow-hidden rounded-lg border border-border bg-card"
               >
-                <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-muted p-3 text-foreground">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-foreground">{product.title}</h3>
+                <div className="px-4 py-4 sm:px-5">
+                  <h3 className="font-display text-xl font-bold leading-tight text-foreground">
+                    {product.title}
+                  </h3>
+                  {product.status ? (
+                    <p className="mt-0.5 text-sm font-semibold text-muted-foreground">
+                      {product.status}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {product.description}
+                  </p>
                 </div>
-                <p className="mt-4 inline-flex rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                  {product.status}
-                </p>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                  {product.description}
-                </p>
-                <div className="mt-6 flex flex-wrap gap-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted px-4 py-3 sm:px-5">
                   <Link
                     href={product.href}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-muted px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar/90 ${focusRing}`}
                   >
                     {product.action}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -264,7 +143,7 @@ export default function HomePage(): ReactElement {
                   {product.secondaryHref && product.secondaryAction ? (
                     <Link
                       href={product.secondaryHref}
-                      className="inline-flex min-h-11 items-center rounded-md px-4 py-2 text-sm font-semibold text-foreground underline decoration-muted-foreground/50 underline-offset-4 transition hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className={`inline-flex min-h-11 items-center rounded-md text-sm font-semibold text-foreground underline decoration-muted-foreground/50 underline-offset-4 transition hover:decoration-foreground ${focusRing}`}
                     >
                       {product.secondaryAction}
                     </Link>
@@ -272,96 +151,69 @@ export default function HomePage(): ReactElement {
                 </div>
               </article>
             ))}
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section className="bg-background">
-        <div className="mx-auto max-w-6xl px-6 py-12 lg:px-10 lg:py-16">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Pressure Points
-            </p>
-            <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Built for the pressure points of an AFL fantasy season.
-            </h2>
-            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Draft night, selection week, and market movement all ask the same question: who has
-              the clearest read before everyone else reacts?
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-4 lg:grid-cols-3">
-            {decisionMoments.map(({ icon: Icon, title, description }) => (
-              <article
-                key={title}
-                className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-muted p-3 text-foreground">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">{description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="league-workspace" className="bg-muted/35">
-        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 lg:grid-cols-[0.8fr_1.2fr] lg:px-10">
-          <div className="space-y-5">
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                League Workspace
+          <section
+            aria-labelledby="matchup-heading"
+            className="overflow-hidden rounded-lg border border-border bg-card"
+          >
+            <CardHeading id="matchup-heading">Nine AFL stats decide every matchup</CardHeading>
+            <div className="px-4 py-4 sm:px-5">
+              <p className="text-sm text-muted-foreground">
+                Each round you face one opponent across nine stats from real match data.
               </p>
-              <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-                Dense where managers need depth, calm where decisions need clarity.
-              </h2>
-              <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-                The current product source of truth points to one coherent league flow: create a
-                league, configure scoring, enter the draft room, compare players, and carry that
-                same ownership model into rosters and waivers.
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-              <p className="text-sm font-semibold text-foreground">Real-data category preset</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {categorySignals.map((category) => (
-                  <span
-                    key={category}
-                    className="rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
-                  >
-                    {category}
-                  </span>
-                ))}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-semibold text-foreground">Example matchup</p>
+                <p className="text-xs text-muted-foreground">
+                  Invented teams, illustrative numbers
+                </p>
+              </div>
+              <div className="mt-3">
+                <MatchupScoreLine
+                  you={{ teamName: exampleMatchup.home, logoUrl: null }}
+                  opponent={{ teamName: exampleMatchup.away, logoUrl: null }}
+                  yourWins={homeCategoriesWon}
+                  opponentWins={awayCategoriesWon}
+                  resultLine={`${exampleMatchup.home} win ${homeCategoriesWon}–${awayCategoriesWon}`}
+                />
+              </div>
+              <div className="mt-4">
+                <CategoryBoxScore
+                  caption={`Example matchup box score, ${exampleMatchup.home} against ${exampleMatchup.away}`}
+                  categories={exampleCategories}
+                  yourLabel={<abbr title={exampleMatchup.home}>BM</abbr>}
+                  opponentLabel={<abbr title={exampleMatchup.away}>HB</abbr>}
+                />
               </div>
             </div>
-          </div>
+            <p className="border-t border-border bg-muted px-4 py-3 text-xs text-muted-foreground sm:px-5">
+              Default real-data preset. Commissioners configure scoring when they create a league.
+            </p>
+          </section>
+        </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {leagueModules.map(({ icon: Icon, title, description }) => (
-              <article
-                key={title}
-                className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="rounded-md bg-muted p-2 text-foreground">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">{title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-                  </div>
-                </div>
-              </article>
+        <section
+          id="league-workspace"
+          aria-labelledby="modules-heading"
+          className="overflow-hidden rounded-lg border border-border bg-card"
+        >
+          <CardHeading id="modules-heading">
+            Draft night to the waiver run, in one league
+          </CardHeading>
+          <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {seasonMoments.map((moment) => (
+              <div key={moment.title} className="px-4 py-4 sm:px-5">
+                <h3 className="font-semibold text-foreground">{moment.title}</h3>
+                <ul className="mt-1.5 space-y-1 text-sm text-muted-foreground">
+                  {moment.modules.map((module) => (
+                    <li key={module}>{module}</li>
+                  ))}
+                </ul>
+              </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

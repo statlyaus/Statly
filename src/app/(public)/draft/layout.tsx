@@ -5,12 +5,9 @@ import type { Metadata } from 'next';
 import { DraftHubNav } from '@/components/draft/DraftHubNav';
 import {
   draftHubHeaderDescriptionClass,
-  draftHubHeaderKickerClass,
   draftHubHeaderShellClass,
   draftHubHeaderTitleClass,
-  draftHubHeroTopAccentClass,
   draftHubPageShellClass,
-  draftHubSectionPillClass,
 } from '@/components/draft/draftHubChrome';
 
 export const metadata: Metadata = {
@@ -23,22 +20,13 @@ export default function DraftLayout({ children }: { children: ReactNode }) {
   return (
     <div className={draftHubPageShellClass}>
       <header className={`${draftHubHeaderShellClass} mb-6`}>
-        <div className={draftHubHeroTopAccentClass} />
-        <div className="flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className={draftHubHeaderKickerClass}>Statly Public Research Hub</p>
             <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Outcomes</h1>
             <p className={draftHubHeaderDescriptionClass}>
-              Explore AFL trades, draft selections, pick movement, and club history in a public
-              research workspace separate from Statly Fantasy. Factual records and numerical
-              valuations remain independently release-gated.
+              Explore AFL trades, draft selections, pick movement, and club history. Records and
+              valuations are each published only after their own review.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className={draftHubSectionPillClass}>Historical trade archive</span>
-              <span className={draftHubSectionPillClass}>Draft selection history</span>
-              <span className={draftHubSectionPillClass}>Club movement analysis</span>
-              <span className={draftHubSectionPillClass}>Outcome methodology</span>
-            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <Link

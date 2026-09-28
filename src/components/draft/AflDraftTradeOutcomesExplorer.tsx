@@ -77,17 +77,13 @@ function MetricCheck({ check, unit }: { check: AflDraftTradeOutcomeMetricCheck; 
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Recorded
-          </dt>
+          <dt className="text-xs font-medium text-muted-foreground">Recorded</dt>
           <dd className="mt-1 font-semibold tabular-nums text-foreground">
             {formatMetricValue(check.recordedValue, unit)}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Observed
-          </dt>
+          <dt className="text-xs font-medium text-muted-foreground">Observed</dt>
           <dd className="mt-1 font-semibold tabular-nums text-foreground">
             {formatMetricValue(check.observedValue, unit)}
           </dd>
@@ -158,7 +154,7 @@ export function AflDraftTradeOutcomesExplorer({ response, query, filterNotice = 
         <div className="border-b border-border bg-muted/40 px-5 py-5 sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <p className="text-xs font-semibold text-muted-foreground">
                 Recorded facts and independent checks
               </p>
               <h2
@@ -396,9 +392,7 @@ export function AflDraftTradeOutcomesExplorer({ response, query, filterNotice = 
 
       <section aria-labelledby="metric-definitions-heading">
         <div className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Metric contract
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Metric contract</p>
           <h2 id="metric-definitions-heading" className="mt-2 text-2xl font-bold text-foreground">
             What Statly checks
           </h2>

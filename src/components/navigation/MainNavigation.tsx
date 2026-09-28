@@ -340,10 +340,10 @@ function NavDropdown({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] ${
+        className={`inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
           isActive
-            ? 'bg-[color:var(--league-primary)] text-white'
-            : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+            ? 'bg-white text-brand-bar'
+            : 'text-brand-bar-foreground/80 hover:bg-white/10 hover:text-brand-bar-foreground'
         }`}
       >
         <span className="hidden text-current sm:block">{item.icon}</span>
@@ -498,8 +498,8 @@ export default function MainNavigation(): ReactNode {
       <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
 
       <header
-        className={`sticky top-0 z-50 border-b border-[color:var(--league-border)] bg-[color:var(--league-surface)]/95 backdrop-blur ${
-          scrolled ? 'shadow-[0_16px_40px_-32px_rgba(23,34,48,0.28)]' : ''
+        className={`sticky top-0 z-50 border-b border-brand-bar bg-brand-bar text-brand-bar-foreground ${
+          scrolled ? 'shadow-md' : ''
         }`}
         role="banner"
       >
@@ -507,10 +507,10 @@ export default function MainNavigation(): ReactNode {
           <div className="min-w-0">
             <Link href={brandHref} className="flex min-w-0 items-center">
               <Image
-                src="/brand/statly-wordmark-logo.png"
+                src="/brand/statly-hero-logo-overlay.png"
                 alt="Statly"
                 width={122}
-                height={40}
+                height={36}
                 priority
                 className="h-auto w-24 sm:w-28"
               />
@@ -518,7 +518,7 @@ export default function MainNavigation(): ReactNode {
           </div>
 
           <div className="hidden min-w-0 items-center justify-center lg:flex">
-            <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-1 [scrollbar-width:none]">
+            <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto [scrollbar-width:none]">
               {desktopNavigationItems.map((item) => {
                 const isActive = isNavActive(pathname, item.href);
                 return (
@@ -526,10 +526,10 @@ export default function MainNavigation(): ReactNode {
                     key={item.name}
                     href={item.href}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] ${
+                    className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                       isActive
-                        ? 'bg-[color:var(--league-primary)] text-white'
-                        : 'text-[color:var(--league-text-muted)] hover:bg-white hover:text-[color:var(--league-text)]'
+                        ? 'bg-white text-brand-bar'
+                        : 'text-brand-bar-foreground/80 hover:bg-white/10 hover:text-brand-bar-foreground'
                     }`}
                   >
                     <span className="hidden sm:block">{item.icon}</span>
@@ -565,17 +565,17 @@ export default function MainNavigation(): ReactNode {
                   type="button"
                   ref={accountButtonRef}
                   onClick={() => setIsAccountMenuOpen((open) => !open)}
-                  className="inline-flex items-center gap-3 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1.5 text-sm font-medium text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="inline-flex items-center gap-3 rounded-md border border-white/30 px-2.5 py-1.5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   aria-haspopup="menu"
                   aria-expanded={isAccountMenuOpen}
                   aria-controls="account-menu"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-xs font-semibold text-white">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-bold text-brand-bar">
                     {accountInitial}
                   </span>
                   <span className="hidden max-w-[160px] truncate 2xl:block">{accountLabel}</span>
                   <svg
-                    className="h-4 w-4 text-[color:var(--league-text-muted)]"
+                    className="h-4 w-4 text-brand-bar-foreground/70"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -638,7 +638,7 @@ export default function MainNavigation(): ReactNode {
             ) : (
               <Link
                 href="/login"
-                className="rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-brand-bar transition hover:bg-white/90"
               >
                 Sign in
               </Link>
@@ -648,7 +648,7 @@ export default function MainNavigation(): ReactNode {
           <button
             type="button"
             onClick={() => setIsMobileOpen((open) => !open)}
-            className="ml-auto inline-flex items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-2 text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)] lg:hidden"
+            className="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/30 p-2 text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
             aria-expanded={isMobileOpen}
             aria-controls="mobile-main-navigation"
             aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}

@@ -40,15 +40,10 @@ describe('league roster route read model', () => {
       categoriesJson: JSON.stringify(['goals', 'tackles', 'inside50s']),
       settings: {
         categoryDirectionsJson: JSON.stringify({ tackles: 'LOW_WINS' }),
-        enableCaptainSystem: true,
-        captainMultiplier: 2,
-        viceCaptainMultiplier: 1.5,
       },
     });
     prismaMocks.leagueRoster.findUnique.mockResolvedValue({
       id: 'roster-1',
-      captainId: 'alex_alpha',
-      viceCaptainId: null,
       benchOrder: JSON.stringify([]),
       updatedAt: new Date('2025-07-19T10:00:00.000Z'),
     });
@@ -127,7 +122,6 @@ describe('league roster route read model', () => {
     const response = await PUT(
       request('PUT', {
         playerIds: ['alex_alpha', 'invented_player'],
-        captainId: 'alex_alpha',
       }),
       { params }
     );

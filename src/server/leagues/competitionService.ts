@@ -3,7 +3,7 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 
 import { logLeagueActivity } from '@/lib/activity';
-import { getRoundMatches } from '@/lib/etlIntegration';
+import { getRoundMatches } from '@/server/etl/etlRoundData';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { normalizeFantasyCategoryKeys } from '@/types/fantasyCategories';
@@ -55,8 +55,7 @@ async function hydrateOfficialRoundTimings(
 }
 
 export type PublishCompetitionResult =
-  | { ok: true; fixtureVersion: number; roundCount: number }
-  | { ok: false; errors: string[] };
+  { ok: true; fixtureVersion: number; roundCount: number } | { ok: false; errors: string[] };
 
 class CompetitionPublicationConflictError extends Error {}
 

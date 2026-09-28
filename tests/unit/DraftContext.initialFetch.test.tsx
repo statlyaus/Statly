@@ -2173,6 +2173,83 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
   });
 
+  it('applies persisted pick backfill after a v2 socket drops', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const emit = createV2AcknowledgingEmit(2);
+    socketState.current = {
+      connected: true,
+      emit,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => handlers.set(event, handler)),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (endpoint.startsWith('drafts/draft-1/picks?')) {
+        return {
+          success: true,
+          data: {
+            picks: [
+              {
+                id: 'pick-1',
+                overall: 1,
+                round: 1,
+                slot: 1,
+                player: { id: 'player-1', name: 'First Player', position: 'MID', club: 'Sydney' },
+                member: { id: 'member-1', userId: 'user-1', displayName: 'Tester' },
+                auto: true,
+                // Auto-picked after the socket dropped.
+                madeAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+            ],
+          },
+        };
+      }
+      return {
+        success: true,
+        data: { players: [], pagination: { hasMore: false }, queue: [], watchlist: [] },
+      };
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Initial Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 1,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('draft-name')).toHaveTextContent('Realtime Draft');
+    });
+    expect(screen.getByTestId('pick-order')).toHaveTextContent('');
+
+    act(() => handlers.get('disconnect')?.());
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+      },
+      { timeout: 7000 }
+    );
+  }, 10_000);
+
   it('uses persisted pick draft metadata without forcing a full snapshot refresh', async () => {
     vi.useFakeTimers();
 

@@ -766,9 +766,6 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                             },
                             bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
                             penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                            viceCaptainMultiplier:
-                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
                             emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
                         })
@@ -796,9 +793,6 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                             },
                             bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
                             penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                            viceCaptainMultiplier:
-                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
                             emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
                         })
@@ -826,9 +820,6 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                             },
                             bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
                             penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                            viceCaptainMultiplier:
-                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
                             emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
                         })
@@ -856,9 +847,6 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                             },
                             bonusRules: scoringFormat.pointsSystem?.bonusRules ?? [],
                             penaltyRules: scoringFormat.pointsSystem?.penaltyRules ?? [],
-                            captainMultiplier: scoringFormat.pointsSystem?.captainMultiplier ?? 2,
-                            viceCaptainMultiplier:
-                              scoringFormat.pointsSystem?.viceCaptainMultiplier ?? 1.5,
                             emergencyScoring: scoringFormat.pointsSystem?.emergencyScoring ?? true,
                           },
                         })
@@ -905,10 +893,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                   setWaiverRules({
                     ...waiverRules,
                     processTime: e.target.value as
-                      | 'DAILY'
-                      | 'TWICE_WEEKLY'
-                      | 'WEEKLY'
-                      | 'CONTINUOUS',
+                      'DAILY' | 'TWICE_WEEKLY' | 'WEEKLY' | 'CONTINUOUS',
                   })
                 }
                 className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"

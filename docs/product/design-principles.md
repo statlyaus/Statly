@@ -49,6 +49,28 @@ explicit at the route/layout boundary. Do not make each page remember to reconst
   objective fairness.
 - Use loading, empty, error, unauthorized, and stale-data states deliberately.
 
+## Sports presentation
+
+Follow the conventions managers already read on AFL.com.au, ESPN and Yahoo rather than generic
+dashboard patterns.
+
+- Chrome: a solid `brand-bar` header with high-contrast navigation and a filled active item; content
+  sits in white cards on a light page, never on decorative gradients or photography.
+- Scores lead: a quiet round and status line (Live, Final, start time), team marks on either side,
+  large tabular numerals, one plain-language result line, and a box score with the real category
+  values. Restraint over decoration: no hanging tabs, glows or oversized badges.
+- Identity beside every team name: logo or initials, and the record where it is known.
+- Tables and ladders: fixed row heights, a position column, the user's row highlighted, the key
+  column emphasised, and short condensed section titles.
+- Results use the `result-win`, `result-loss` and `result-draw` tokens and always carry a letter or
+  symbol (W, L, D) so meaning never depends on colour.
+- Show real state only. Omit a module rather than fill it with estimates or placeholder numbers.
+- One palette. Area tokens such as `--league-*` and `--trade-*` alias the core tokens; no area
+  gets its own colour scheme, card shadow or accent. Primary actions and focus use the navy
+  `brand-bar`.
+- Section navigation is one row of underlined tabs with a thin divider between groups, never pills
+  or uppercase group labels. Each page opens with a plain heading, not a coloured hero block.
+
 ## Review evidence
 
 Product-level UI changes should include:

@@ -66,7 +66,9 @@ describe('Playwright browser matrix', () => {
     expect(lifecycleTest).toContain("toContainText('Pick 1 of 4')");
     expect(lifecycleTest).toContain('seedDraftLifecycleFixture');
     expect(lifecycleTest).toContain("getByText('Draft is complete')");
-    expect(lifecycleTest).toContain("getByRole('table', { name: 'Robbo Rockers roster table' })");
+    // Old roster links open My Team, which shows the drafted squad and the round lineup.
+    expect(lifecycleTest).toContain("getByRole('heading', { level: 2, name: 'My team' })");
+    expect(lifecycleTest).toContain("getByRole('region', { name: 'Lineup readiness' })");
     expect(existsSync(join(root, 'tests/e2e/draft-full-soak.test.ts'))).toBe(false);
     expect(existsSync(join(root, 'tests/e2e/helpers/fullDraftSoakFixture.ts'))).toBe(false);
   });

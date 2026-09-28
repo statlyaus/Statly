@@ -109,11 +109,10 @@ test('completes a representative draft and recovers history and roster state', a
   await expect(recoveryPage.locator('body')).toContainText(String(fixture.totalPicks));
   await expectNoAppErrorBoundary(recoveryPage);
 
+  // Old roster links now open My Team, which shows the drafted squad and the round lineup.
   await recoveryPage.goto(`/leagues/${fixture.leagueId}?tab=roster`);
-  await expect(recoveryPage.getByRole('heading', { name: 'Robbo Rockers' })).toBeVisible();
-  await expect(
-    recoveryPage.getByRole('table', { name: 'Robbo Rockers roster table' })
-  ).toBeVisible();
+  await expect(recoveryPage.getByRole('heading', { level: 2, name: 'My team' })).toBeVisible();
+  await expect(recoveryPage.getByRole('region', { name: 'Lineup readiness' })).toBeVisible();
   await expect(recoveryPage.getByText('No Team Selected')).toHaveCount(0);
   await expectNoAppErrorBoundary(recoveryPage);
 

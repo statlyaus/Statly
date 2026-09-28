@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/lib/etlIntegration';
+import { ensureDefaultLineups } from '@/server/leagues/defaultLineups';
+import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/server/etl/etlRoundData';
 import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
 import {
@@ -69,6 +70,8 @@ export interface LeagueMatchupPlayerContribution {
   slot: string;
   slotIndex: number;
   total: number;
+  /** False when the provider has no stat line for the player yet; values are then not real zeros. */
+  hasStats: boolean;
   categories: Array<{
     category: FantasyCategoryKey;
     shortLabel: string;
@@ -127,7 +130,7 @@ function toIsoString(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
-function parseStoredCategoryRows(categoriesJson: string | null | undefined): Array<{
+export function parseStoredCategoryRows(categoriesJson: string | null | undefined): Array<{
   category: FantasyCategoryKey;
   homeValue: number;
   awayValue: number;
@@ -252,6 +255,15 @@ function buildTeamSummary({
   };
 }
 
+const TEAM_SHEET_SLOT_ORDER: Record<string, number> = {
+  DEF: 0,
+  MID: 1,
+  RUC: 2,
+  FWD: 3,
+  UTIL: 4,
+  INTERCHANGE: 5,
+};
+
 function buildPlayerContributions({
   lineup,
   categories,
@@ -291,10 +303,15 @@ function buildPlayerContributions({
           slot: lineupPlayer.slot,
           slotIndex: lineupPlayer.slotIndex,
           total: sumCategoryTotals(totals, categories),
+          hasStats: totalsByPlayerId.has(lineupPlayer.playerId),
           categories: categoryValues,
         };
       })
-      .sort((a, b) => a.slot.localeCompare(b.slot) || a.slotIndex - b.slotIndex) ?? []
+      .sort(
+        (a, b) =>
+          (TEAM_SHEET_SLOT_ORDER[a.slot] ?? 99) - (TEAM_SHEET_SLOT_ORDER[b.slot] ?? 99) ||
+          a.slotIndex - b.slotIndex
+      ) ?? []
   );
 }
 
@@ -733,7 +750,7 @@ export async function recalculateLeagueRoundMatchups({
   if (!settings) return null;
 
   const fixtureVersion = settings.league.settings.competitionRulesVersion;
-  const [competitionRound, matchups, lineups, members] = await Promise.all([
+  const [competitionRound, matchups, initialLineups, members] = await Promise.all([
     fixtureVersion > 0
       ? prisma.leagueCompetitionRound.findUnique({
           where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
@@ -771,15 +788,38 @@ export async function recalculateLeagueRoundMatchups({
       },
     };
   }
+  // Managers only confirm changes: anyone without a saved lineup for this round gets their
+  // default (last round's team, gaps filled by position, or a team picked by position).
+  const participantMemberIds = matchups.flatMap((matchup) =>
+    matchup.homeMemberId && matchup.awayMemberId ? [matchup.homeMemberId, matchup.awayMemberId] : []
+  );
+  const carriedCount = await ensureDefaultLineups({
+    leagueId,
+    round,
+    memberIds: participantMemberIds,
+  });
+  const lineups =
+    carriedCount > 0
+      ? await prisma.leagueLineup.findMany({
+          where: { leagueId, round },
+          include: { players: { include: { player: true } } },
+        })
+      : initialLineups;
   const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
-  const hasAllParticipantLineups = matchups.every((matchup) => {
-    if (!matchup.homeMemberId || !matchup.awayMemberId) return true;
-    return (
+  // Each matchup is scored on its own: one team that has never set a lineup no longer
+  // holds up every other matchup in the round.
+  const scorableMatchups = matchups.filter(
+    (matchup) =>
+      matchup.homeMemberId &&
+      matchup.awayMemberId &&
       (lineupsByMemberId.get(matchup.homeMemberId)?.players.length ?? 0) > 0 &&
       (lineupsByMemberId.get(matchup.awayMemberId)?.players.length ?? 0) > 0
-    );
-  });
-  if (!hasAllParticipantLineups) {
+  );
+  const scorableMemberIds = new Set(
+    scorableMatchups.flatMap((matchup) => [matchup.homeMemberId, matchup.awayMemberId])
+  );
+  const scorableLineups = lineups.filter((lineup) => scorableMemberIds.has(lineup.memberId));
+  if (scorableMatchups.length === 0) {
     return {
       round,
       status: 'SCHEDULED' as const,
@@ -799,7 +839,7 @@ export async function recalculateLeagueRoundMatchups({
     await loadLivePlayerTotalsForRound(
       new Date().getFullYear(),
       aflRound,
-      lineups.flatMap((lineup) =>
+      scorableLineups.flatMap((lineup) =>
         lineup.players.map((assignment) => ({
           playerId: assignment.playerId,
           club: assignment.player.club,
@@ -820,7 +860,7 @@ export async function recalculateLeagueRoundMatchups({
   const resolvedLineups =
     roundStatus.allFinal && nonPlayingReasonByPlayerId.size > 0
       ? await Promise.all(
-          lineups.map(async (lineup) => ({
+          scorableLineups.map(async (lineup) => ({
             ...lineup,
             players: await resolveAndPersistLineupAutosubs({
               leagueId,
@@ -830,13 +870,13 @@ export async function recalculateLeagueRoundMatchups({
             }),
           }))
         )
-      : lineups;
+      : scorableLineups;
   const resolvedLineupsByMemberId = new Map(
     resolvedLineups.map((lineup) => [lineup.memberId, lineup])
   );
   const calculatedScores = [];
 
-  for (const matchup of matchups) {
+  for (const matchup of scorableMatchups) {
     if (!matchup.homeMemberId || !matchup.awayMemberId) {
       continue;
     }

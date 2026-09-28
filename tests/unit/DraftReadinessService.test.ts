@@ -34,9 +34,6 @@ function buildSettings(startAt: Date) {
     startAt,
     timeZone: 'Australia/Melbourne',
     locked: false,
-    enableCaptainSystem: false,
-    captainMultiplier: 2,
-    viceCaptainMultiplier: 1.5,
   };
 }
 
@@ -203,9 +200,7 @@ describe('getLeagueDraftOperationalReadiness', () => {
   it('keeps lobby read paths free of lifecycle writes', () => {
     const lobbySource = read('src/lib/draftLobby.ts');
     const lobbyRouteSource = read('src/app/api/drafts/[id]/lobby/route.ts');
-    const convergenceSource = read(
-      'src/server/draft/services/DraftSetupConvergenceService.ts'
-    );
+    const convergenceSource = read('src/server/draft/services/DraftSetupConvergenceService.ts');
 
     expect(lobbySource).not.toContain('auto-open');
     expect(lobbyRouteSource).not.toContain('ensureLobbyColumns');

@@ -5,11 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const publicLinks = [
   { href: '/', label: 'Home' },
-  {
-    href: '/draft/trades',
-    label: 'AFL Outcomes',
-    accessibleLabel: 'AFL Draft & Trade Outcomes',
-  },
+  { href: '/draft/trades', label: 'AFL Draft & Trade Outcomes' },
   { href: '/dashboard', label: 'Fantasy' },
 ] as const;
 
@@ -23,7 +19,7 @@ export function PublicNavigation() {
   const pathname = usePathname() ?? '';
 
   return (
-    <div className="col-span-2 row-start-2 grid min-w-0 grid-cols-3 gap-1 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:flex sm:items-center sm:justify-end">
+    <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 overflow-x-auto sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:justify-end">
       {publicLinks.map((link) => {
         const active = isPublicLinkActive(pathname, link.href);
 
@@ -31,12 +27,11 @@ export function PublicNavigation() {
           <Link
             key={link.href}
             href={link.href}
-            aria-label={'accessibleLabel' in link ? link.accessibleLabel : undefined}
             aria-current={active ? 'page' : undefined}
-            className={`inline-flex min-h-11 min-w-0 items-center justify-center rounded-md px-2 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-3 sm:text-sm ${
+            className={`inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:text-sm ${
               active
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                ? 'bg-white text-brand-bar'
+                : 'text-brand-bar-foreground/80 hover:bg-white/10 hover:text-brand-bar-foreground'
             }`}
           >
             {link.label}
