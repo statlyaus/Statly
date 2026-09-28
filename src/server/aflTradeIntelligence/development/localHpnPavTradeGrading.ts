@@ -3,6 +3,8 @@
  * view is season Y and the realized view is season Y + 1 at the receiving club, matching the governed
  * method. Anything the lane cannot value exactly (picks, unresolved or ambiguous players, parse issues,
  * a player who played Y + 1 elsewhere) makes the trade incomplete: it is reported, never graded.
+ * A realized season that keys players differently from the at-trade season is a setup error, not a
+ * trade problem: grading throws rather than reporting every trade against it.
  */
 
 /** AFL Tables club spellings, with the Draftguru and common variants that denote the same club. */
@@ -109,7 +111,7 @@ function realizedValue(
   toClub: string
 ): { value: number } | { reason: string } {
   const later = realized.players.get(playerId);
-  // No appearances in the realized season is a measured zero for the receiving club.
+  // No appearances in a comparable realized season (see assertComparableSeasons) is a measured zero.
   if (later === undefined) return { value: 0 };
   const laterClubs = new Set([...later.teams].map(canonicalAflClub));
   if (laterClubs.size !== 1 || !laterClubs.has(toClub)) {
@@ -177,6 +179,25 @@ function clubNets(legs: readonly ValuedLeg[]) {
   return clubs;
 }
 
+// Most players carry over between consecutive seasons, so a realized season holding under half of
+// the at-trade identities is keyed differently, not a season of mass retirements.
+const MIN_SHARED_IDENTITY_SHARE = 0.5;
+
+/**
+ * A player absent from the realized season is credited a measured zero, which is only sound when both
+ * seasons key players by the same identity. Refuse a pair sharing under half of the at-trade identities;
+ * a pair at or above that share is accepted, and its unshared players are treated as not playing.
+ */
+function assertComparableSeasons(atTrade: LocalHpnPavSeasonView, realized: LocalHpnPavSeasonView) {
+  const shared = [...atTrade.players.keys()].filter((id) => realized.players.has(id)).length;
+  if (shared < atTrade.players.size * MIN_SHARED_IDENTITY_SHARE) {
+    throw new TypeError(
+      `The realized season shares ${shared} of ${atTrade.players.size} at-trade player identities; ` +
+        'the two runs likely key players differently. Normalize both with the same field map.'
+    );
+  }
+}
+
 export function gradeLocalHpnPavTrade(input: {
   readonly tradeId: string;
   readonly legs: readonly LocalHpnPavTradeLeg[];
@@ -184,6 +205,7 @@ export function gradeLocalHpnPavTrade(input: {
   readonly atTrade: LocalHpnPavSeasonView;
   readonly realized: LocalHpnPavSeasonView | null;
 }): LocalHpnPavTradeVerdict {
+  if (input.realized !== null) assertComparableSeasons(input.atTrade, input.realized);
   const outcomes = input.legs.map((leg) => valueLeg(leg, input.atTrade, input.realized));
   const reasons = [
     ...input.parseIssues.map((issue) => `parse issue: ${issue}`),

@@ -159,6 +159,44 @@ describe('gradeLocalHpnPavTrade', () => {
     expect(verdict.reasons[0]).toMatch(/only for Essendon/);
   });
 
+  it('credits a measured zero to a traded player absent from a comparable realized season', () => {
+    const retired = view({
+      'afl-tables:2': { name: 'Joe Other', teams: ['Carlton'], pav: 5 },
+    });
+    const verdict = gradeLocalHpnPavTrade({
+      tradeId: '2025-x',
+      legs: [playerLeg('Sam Swap', 'Carlton', 'GWS')],
+      parseIssues: [],
+      atTrade: season2025,
+      realized: retired,
+    });
+
+    expect(verdict.status).toBe('complete');
+    expect(verdict.legs[0]!.realizedPav).toBe(0);
+  });
+
+  it('refuses a realized season whose player identities do not match the at-trade season', () => {
+    // The same players under another identity format, as when two runs used different field maps.
+    const otherFormat = view({
+      'afl-tables:players/S/Sam_Swap.html': {
+        name: 'Sam Swap',
+        teams: ['Greater Western Sydney'],
+        pav: 15,
+      },
+      'afl-tables:players/J/Joe_Other.html': { name: 'Joe Other', teams: ['Carlton'], pav: 5 },
+    });
+
+    expect(() =>
+      gradeLocalHpnPavTrade({
+        tradeId: '2025-swap',
+        legs: [playerLeg('Sam Swap', 'Carlton', 'GWS Giants')],
+        parseIssues: [],
+        atTrade: season2025,
+        realized: otherFormat,
+      })
+    ).toThrow(/shares 0 of 2 at-trade player identities/);
+  });
+
   it('carries parser issues into the verdict instead of grading around them', () => {
     const verdict = gradeLocalHpnPavTrade({
       tradeId: '2025-x',
