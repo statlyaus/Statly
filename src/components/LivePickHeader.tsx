@@ -211,7 +211,9 @@ export default function LivePickHeader({
       setIsFlashing(false);
       setHasAlerted(true);
       onAudioAlertRef.current?.('your-turn');
-    } else if (picksUntilYourTurn > 1) {
+    } else if (!isYourTurn && picksUntilYourTurn > 1) {
+      // The on-clock flag and the pick sequence can briefly disagree; resetting while still on the
+      // clock would re-alert and reset on every render.
       setHasAlerted(false);
       setIsFlashing(false);
     }

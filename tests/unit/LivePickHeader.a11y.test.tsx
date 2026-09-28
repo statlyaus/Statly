@@ -64,6 +64,22 @@ const draftData = {
 };
 
 describe('LivePickHeader', () => {
+  it('settles when the on-clock flag and the pick sequence briefly disagree', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      // On the clock per the context, while slot 3's next pick is still two picks away.
+      render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={3} />);
+
+      expect(
+        consoleError.mock.calls.filter(([message]) =>
+          String(message).includes('Maximum update depth exceeded')
+        )
+      ).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('renders canonical live status with accessible timer and pick train', () => {
     render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />);
 
