@@ -50,6 +50,16 @@ async function loadLeagueForCommand(tx: Prisma.TransactionClient, leagueId: stri
   });
 }
 
+/** Removal closes once the league's latest draft has left SCHEDULED, started, or taken a pick. */
+export function hasDraftStarted(
+  draft: { status: DraftStatus; startedAt: Date | null; _count: { picks: number } } | undefined
+): boolean {
+  if (!draft) return false;
+  return (
+    draft.status !== DraftStatus.SCHEDULED || draft.startedAt !== null || draft._count.picks > 0
+  );
+}
+
 /**
  * Removes a member while the league is still forming. Once a draft starts, rosters, fixtures and
  * standings depend on every team, so the member stays.
@@ -79,10 +89,7 @@ export async function removeLeagueMember(
     if (!target) return fail('member-not-found', 'That manager is not in this league.');
 
     const draft = league.drafts[0];
-    if (
-      draft &&
-      (draft.status !== DraftStatus.SCHEDULED || draft.startedAt || draft._count.picks > 0)
-    ) {
+    if (hasDraftStarted(draft)) {
       return fail('draft-started', 'Managers can only be removed before the draft starts.');
     }
 
