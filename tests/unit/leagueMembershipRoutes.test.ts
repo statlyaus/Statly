@@ -23,6 +23,11 @@ const membershipMocks = vi.hoisted(() => ({
   verifyLeagueMembership: vi.fn(),
 }));
 
+const memberCommandMocks = vi.hoisted(() => ({
+  removeLeagueMember: vi.fn(),
+  transferLeagueOwnership: vi.fn(),
+}));
+
 const prismaMocks = vi.hoisted(() => ({
   syncPrismaLeagueMember: vi.fn(),
   syncPrismaLeagueOwner: vi.fn(),
@@ -77,6 +82,10 @@ vi.mock('../../src/lib/prismaLeagueBridge', () => ({
   syncPrismaLeagueMember: prismaMocks.syncPrismaLeagueMember,
   syncPrismaLeagueOwner: prismaMocks.syncPrismaLeagueOwner,
 }));
+
+vi.mock('@/server/leagues/memberCommands', () => memberCommandMocks);
+
+vi.mock('../../src/server/leagues/memberCommands', () => memberCommandMocks);
 
 vi.mock('@/lib/requestTracing', () => ({
   withRequestTracing: () => ({
@@ -309,9 +318,8 @@ describe('league membership route Firestore architecture', () => {
       activeMember({ id: 'other-user', userId: 'other-user', teamName: 'Other Team' }),
     ]);
 
-    const { POST: mutateLeagueMember } = await import(
-      '../../src/app/api/leagues/[id]/members/route'
-    );
+    const { POST: mutateLeagueMember } =
+      await import('../../src/app/api/leagues/[id]/members/route');
     const response = await mutateLeagueMember(
       jsonRequest('/api/leagues/league-1/members', {
         action: 'updateMember',
@@ -345,7 +353,7 @@ describe('league membership route Firestore architecture', () => {
     );
   });
 
-  it('removes a member and updates the canonical league member count', async () => {
+  it('removes a member through the Prisma command, then projects the removal to Firestore', async () => {
     const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn(), update: vi.fn() };
     const leagueDocRef = {
       get: vi.fn().mockResolvedValue({
@@ -365,6 +373,10 @@ describe('league membership route Firestore architecture', () => {
     };
 
     authMocks.getUserIdFromRequest.mockResolvedValue('owner-user');
+    memberCommandMocks.removeLeagueMember.mockResolvedValue({
+      ok: true,
+      data: { removedUserId: 'target-user', memberCount: 2 },
+    });
     firestoreMocks.batch.mockReturnValue(batch);
     firestoreMocks.collection.mockImplementation((collectionName: string) => {
       if (collectionName === 'leagues') return leaguesCollection;
@@ -385,9 +397,8 @@ describe('league membership route Firestore architecture', () => {
       activeMember({ id: 'league-1_other-user', userId: 'other-user', teamName: 'Other Team' }),
     ]);
 
-    const { POST: mutateLeagueMember } = await import(
-      '../../src/app/api/leagues/[id]/members/route'
-    );
+    const { POST: mutateLeagueMember } =
+      await import('../../src/app/api/leagues/[id]/members/route');
     const response = await mutateLeagueMember(
       jsonRequest('/api/leagues/league-1/members', {
         action: 'removeMember',
@@ -410,14 +421,88 @@ describe('league membership route Firestore architecture', () => {
       { topLevelMemberId: 'league-1_target-user' }
     );
     expect(batch.update).toHaveBeenCalledWith(leagueDocRef, { memberCount: 2 });
-    expect(prismaMocks.syncPrismaLeagueMember).toHaveBeenCalledWith(
-      expect.objectContaining({
-        leagueId: 'league-1',
-        userId: 'target-user',
-        memberId: 'league-1_target-user',
-        isActive: false,
-      })
+    expect(memberCommandMocks.removeLeagueMember).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      actorUserId: 'owner-user',
+      targetUserId: 'target-user',
+    });
+    expect(memberCommandMocks.removeLeagueMember.mock.invocationCallOrder[0]).toBeLessThan(
+      batch.commit.mock.invocationCallOrder[0]
     );
+    expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
+  });
+
+  it('refuses removal after the draft starts without writing the Firestore projection', async () => {
+    authMocks.getUserIdFromRequest.mockResolvedValue('owner-user');
+    memberCommandMocks.removeLeagueMember.mockResolvedValue({
+      ok: false,
+      code: 'draft-started',
+      message: 'Managers can only be removed before the draft starts.',
+    });
+    firestoreMocks.collection.mockImplementation(() => {
+      throw new Error('Unexpected Firestore write after a refused command');
+    });
+
+    const { POST: mutateLeagueMember } =
+      await import('../../src/app/api/leagues/[id]/members/route');
+    const response = await mutateLeagueMember(
+      jsonRequest('/api/leagues/league-1/members', {
+        action: 'removeMember',
+        targetUserId: 'target-user',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body).toMatchObject({
+      success: false,
+      error: 'Managers can only be removed before the draft starts.',
+    });
+    expect(firestoreMocks.batch).not.toHaveBeenCalled();
+  });
+
+  it('transfers ownership through the Prisma command, then projects the new owner', async () => {
+    const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn(), update: vi.fn() };
+    const leagueDocRef = { get: vi.fn() };
+    authMocks.getUserIdFromRequest.mockResolvedValue('owner-user');
+    memberCommandMocks.transferLeagueOwnership.mockResolvedValue({
+      ok: true,
+      data: { ownerUserId: 'target-user' },
+    });
+    firestoreMocks.batch.mockReturnValue(batch);
+    firestoreMocks.collection.mockImplementation((collectionName: string) => {
+      if (collectionName === 'leagues') return { doc: vi.fn(() => leagueDocRef) };
+      throw new Error(`Unexpected top-level collection read: ${collectionName}`);
+    });
+    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+      activeMember({
+        id: 'league-1_owner-user',
+        userId: 'owner-user',
+        teamName: 'Owner',
+        role: 'owner',
+      }),
+      activeMember({ id: 'league-1_target-user', userId: 'target-user', teamName: 'Target' }),
+    ]);
+
+    const { POST: mutateLeagueMember } =
+      await import('../../src/app/api/leagues/[id]/members/route');
+    const response = await mutateLeagueMember(
+      jsonRequest('/api/leagues/league-1/members', {
+        action: 'transferOwnership',
+        targetUserId: 'target-user',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(memberCommandMocks.transferLeagueOwnership).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      actorUserId: 'owner-user',
+      targetUserId: 'target-user',
+    });
+    expect(batch.update).toHaveBeenCalledWith(leagueDocRef, { ownerId: 'target-user' });
+    expect(prismaMocks.syncPrismaLeagueOwner).not.toHaveBeenCalled();
   });
 
   it('rejects member list reads before Firestore league reads when the requester is not a member', async () => {

@@ -14,7 +14,7 @@ type ReadinessClient = Pick<PrismaClient, 'league' | 'player'> | Prisma.Transact
 type LeagueWithReadinessData = Prisma.LeagueGetPayload<{
   include: {
     settings: true;
-    members: { orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] };
+    members: { where: { isActive: true }; orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] };
     drafts: {
       orderBy: { createdAt: 'desc' };
       take: 1;
@@ -175,7 +175,7 @@ export async function getLeagueDraftOperationalReadiness(
     where: { id: input.leagueId },
     include: {
       settings: true,
-      members: { orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
+      members: { where: { isActive: true }, orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
       drafts: {
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -209,11 +209,11 @@ export async function getLeagueDraftOperationalReadiness(
   const isComplete = draft?.status === DraftStatus.COMPLETED;
   const roomIsOpen = Boolean(
     draft &&
-      (isRunning ||
-        shouldBeOpen ||
-        draft.lobbyStatus === 'OPEN' ||
-        draft.lobbyStatus === 'COUNTDOWN' ||
-        draft.lobbyStatus === 'LIVE')
+    (isRunning ||
+      shouldBeOpen ||
+      draft.lobbyStatus === 'OPEN' ||
+      draft.lobbyStatus === 'COUNTDOWN' ||
+      draft.lobbyStatus === 'LIVE')
   );
   const hasHardStartBlocker = blockers.some((blocker) =>
     [

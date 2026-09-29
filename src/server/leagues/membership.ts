@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 
+import { isActivePrismaMembership } from './activeMembership';
+
 export interface LeagueMembershipAccess {
   leagueId: string;
   userId: string;
@@ -84,16 +86,7 @@ export async function getLeagueMembershipAccess(
   };
 }
 
-export function isActivePrismaMembership(member: {
-  isActive: boolean;
-  status: string;
-}): boolean {
-  if (!member.isActive) {
-    return false;
-  }
-
-  return !['declined', 'inactive', 'removed'].includes(member.status.trim().toLowerCase());
-}
+export { isActivePrismaMembership };
 
 export async function canManageLeague(leagueId: string, userId: string): Promise<boolean> {
   return (await getLeagueMembershipAccess(leagueId, userId)).canManage;
