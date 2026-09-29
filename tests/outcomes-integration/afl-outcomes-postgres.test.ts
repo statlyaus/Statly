@@ -1307,6 +1307,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0234_current_successor_source_rights',
       '0235_club_resolution_candidate_index',
       '0236_hpn_acquisition_spell_set_currency',
+      '0237_canonical_pick_enrichment',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
