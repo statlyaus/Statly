@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  parseLocalDraftguruTradeCaptureArguments,
+  parseLocalExternalCaptureArguments,
   requireDurableArtifactRoot,
-} from '../../Scripts/capture-local-draftguru-trade-pages';
+} from '../../Scripts/capture-local-external-pages';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createDraftguruTradeAuthorityProposal,
@@ -15,8 +15,19 @@ import {
 } from '@/server/aflTradeIntelligence/development/localDraftguruTradeAuthorityProposal';
 import {
   createLocalDraftguruTradeCaptureTargets,
-  loadRecordedDraftguruTradeAuthority,
-} from '@/server/aflTradeIntelligence/development/localDraftguruTradeCaptureRunner';
+  loadRecordedLocalCaptureAuthority,
+} from '@/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import type { LocalNarrowCaptureAuthority } from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
+import {
+  createLocalOfficialAflDraftSessionTargets,
+  createOfficialAflDraftSessionCaptureCommand,
+} from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
+import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
+import { evaluateAflTradeGate0AAgainstDecision } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
+import {
+  approveNarrowAuthority,
+  officialAflDraftSessionAuthority,
+} from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 
 const digest = (character: string) => character.repeat(64);
@@ -75,9 +86,13 @@ function recorded(capabilityId: DraftguruTradeCapability) {
   return { sourceRights, proposal, decision };
 }
 
+type RecordedAuthority = LocalNarrowCaptureAuthority & {
+  decision: ReturnType<typeof aflTradeGateDecisionRecordSchema.parse>;
+};
+
 function ledgerOf(
-  record: ReturnType<typeof recorded>,
-  sourceRights: ReturnType<typeof recorded>['sourceRights'] = record.sourceRights
+  record: RecordedAuthority,
+  sourceRights: LocalNarrowCaptureAuthority['sourceRights'] = record.sourceRights
 ) {
   const ledger = { proposals: [record.proposal], decisions: [record.decision] };
   return {
@@ -91,9 +106,10 @@ describe('recorded Draftguru trade authority', () => {
     'loads the owner decision, proposal and rights for %s',
     async (capabilityId) => {
       const record = recorded(capabilityId);
-      const loaded = await loadRecordedDraftguruTradeAuthority(
+      const loaded = await loadRecordedLocalCaptureAuthority(
         ledgerOf(record),
         capabilityId,
+        2020,
         evaluatedAt
       );
       expect(loaded.decisionId).toBe(record.decision.decisionId);
@@ -108,9 +124,10 @@ describe('recorded Draftguru trade authority', () => {
 
   it('fails closed when the ledger has no decision for the requested capability', async () => {
     await expect(
-      loadRecordedDraftguruTradeAuthority(
+      loadRecordedLocalCaptureAuthority(
         ledgerOf(recorded('draftguru-trade-index')),
         'draftguru-trade-detail',
+        2020,
         evaluatedAt
       )
     ).rejects.toMatchObject({ code: 'AUTHORITY_MISMATCH' });
@@ -118,9 +135,10 @@ describe('recorded Draftguru trade authority', () => {
 
   it('fails closed before the decision is effective', async () => {
     await expect(
-      loadRecordedDraftguruTradeAuthority(
+      loadRecordedLocalCaptureAuthority(
         ledgerOf(recorded('draftguru-trade-detail')),
         'draftguru-trade-detail',
+        2020,
         '2026-09-23T00:00:00.000Z'
       )
     ).rejects.toMatchObject({ code: 'AUTHORITY_MISMATCH' });
@@ -139,12 +157,165 @@ describe('recorded Draftguru trade authority', () => {
       },
     };
     await expect(
-      loadRecordedDraftguruTradeAuthority(
+      loadRecordedLocalCaptureAuthority(
         ledgerOf(record, faster),
         'draftguru-trade-detail',
+        2020,
         evaluatedAt
       )
     ).rejects.toThrow(/pacing/);
+  });
+});
+
+const officialEvidenceIds = {
+  productOwnerAuthorization: `artifact:${digest('5')}`,
+  boundedCapturePlan: `artifact:${digest('6')}`,
+  publicAccessReview: `artifact:${digest('7')}`,
+  fieldBoundaryReview: `artifact:${digest('8')}`,
+};
+
+function recordedOfficial(season: number, clientVersion?: string): RecordedAuthority {
+  const authority = officialAflDraftSessionAuthority({
+    season,
+    ...(clientVersion === undefined ? {} : { clientVersion }),
+    evidenceIds: officialEvidenceIds,
+    timing: {
+      termsEffectiveAt: '2026-09-10T00:00:00.000Z',
+      termsExpireAt: '2027-09-09T00:00:00.000Z',
+      rightsProposedAt: '2026-09-24T00:00:00.000Z',
+      proposalProposedAt: '2026-09-24T00:00:01.000Z',
+    },
+  });
+  return {
+    ...authority,
+    decision: approveNarrowAuthority(authority, {
+      decidedAt: '2026-09-24T01:00:00.000Z',
+      revalidateAt: '2027-09-01T00:00:00.000Z',
+    }),
+  };
+}
+
+describe('recorded Official AFL completed-session authority', () => {
+  it('loads the per-season decision recorded under the issue579 parser-version key', async () => {
+    const record = recordedOfficial(2020);
+    expect(record.proposal.content.decisionKey).toBe(
+      'official-afl-completed-draft-session-issue579-private-2020-session-v18'
+    );
+    const loaded = await loadRecordedLocalCaptureAuthority(
+      ledgerOf(record),
+      'official-afl-completed-draft-session',
+      2020,
+      evaluatedAt
+    );
+    expect(loaded.decisionId).toBe(record.decision.decisionId);
+    expect(loaded.egressPolicyEvidenceId).toBe(`artifact:${digest('6')}`);
+  });
+
+  it('fails closed when only another season is recorded', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedOfficial(2020)),
+        'official-afl-completed-draft-session',
+        2021,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/official-afl-completed-draft-session-issue579-private-2021-session-v18/);
+  });
+
+  it('refuses a recorded decision for an earlier parser version', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedOfficial(2020, 'official-afl-completed-draft-session/v5')),
+        'official-afl-completed-draft-session',
+        2020,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/official-afl-completed-draft-session\/v18/);
+  });
+
+  it('refuses recorded rights with the Draftguru one-day cache instead of the reviewed hour', async () => {
+    const record = recordedOfficial(2020);
+    const longer = {
+      ...record.sourceRights,
+      content: {
+        ...record.sourceRights.content,
+        automatedAccess: {
+          ...record.sourceRights.content.automatedAccess,
+          cache: { permitted: true, maximumSeconds: 86_400 },
+        },
+      },
+    };
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(record, longer),
+        'official-afl-completed-draft-session',
+        2020,
+        evaluatedAt
+      )
+    ).rejects.toMatchObject({ code: 'AUTHORITY_MISMATCH' });
+  });
+
+  it('builds a capture command that the scope rules and the recorded decision admit', () => {
+    const record = recordedOfficial(2021);
+    for (const target of createLocalOfficialAflDraftSessionTargets([2021])) {
+      const command = createOfficialAflDraftSessionCaptureCommand(record, {
+        target,
+        capturedAt: evaluatedAt,
+        maximumBytes: 1024,
+      });
+      expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+      expect(command.request).toMatchObject({
+        provider: 'official_afl',
+        draftPathway: 'national',
+        parserVersion: 'official-afl-completed-draft-session/v18',
+      });
+      expect(
+        evaluateAflTradeGate0AAgainstDecision(
+          record.decision,
+          record.sourceRights,
+          command.gateRequest
+        )
+      ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+    }
+  });
+});
+
+describe('local Official AFL completed-session targets', () => {
+  it('enumerates every reviewed completed-session page for 2019, 2020 and 2021', () => {
+    expect(createLocalOfficialAflDraftSessionTargets([2021, 2019, 2020])).toEqual([
+      {
+        capabilityId: 'official-afl-completed-draft-session',
+        season: 2019,
+        sourceUrl:
+          'https://www.afl.com.au/news/149305/who-smashed-it-our-say-on-your-clubs-draft-performance',
+        effectiveAt: '2019-11-28T00:00:00.000Z',
+      },
+      {
+        capabilityId: 'official-afl-completed-draft-session',
+        season: 2020,
+        sourceUrl:
+          'https://www.afl.com.au/news/528411/every-pick-every-player-check-out-who-your-club-drafted',
+        effectiveAt: '2020-12-09T00:00:00.000Z',
+      },
+      {
+        capabilityId: 'official-afl-completed-draft-session',
+        season: 2021,
+        sourceUrl:
+          'https://www.afl.com.au/news/688959/the-horne-supremacy-north-melbourne-makes-jason-horne-francis-its-no1-pick-for-the-2021-nab-afl-draft',
+        effectiveAt: '2021-11-24T00:00:00.000Z',
+      },
+      {
+        capabilityId: 'official-afl-completed-draft-session',
+        season: 2021,
+        sourceUrl:
+          'https://www.afl.com.au/news/689491/matt-johnson-wa-product-lands-at-fremantle-after-nervous-wait',
+        effectiveAt: '2021-11-25T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it.each([[[]], [[2020, 2020]], [[2015]], [[2031]]])('rejects seasons %j', (seasons) => {
+    expect(() => createLocalOfficialAflDraftSessionTargets(seasons)).toThrow();
   });
 });
 
@@ -212,7 +383,7 @@ describe('local Draftguru capture command arguments', () => {
   };
   // The unit test's scratch root stands in for a durable directory by clearing the temporary list.
   const parse = (argv: string[], changes: Record<string, string> = {}) =>
-    parseLocalDraftguruTradeCaptureArguments(argv, { ...env, ...changes }, []);
+    parseLocalExternalCaptureArguments(argv, { ...env, ...changes }, []);
 
   it('parses a single named trade page', () => {
     const parsed = parse([
@@ -246,6 +417,22 @@ describe('local Draftguru capture command arguments', () => {
     expect(parsed.targets[0]).toMatchObject({ season: 2020, discoveryFromSeason: 2011 });
   });
 
+  it('parses completed-session seasons into their reviewed pages', () => {
+    const parsed = parse([
+      '--artifact-root',
+      durable,
+      '--capability',
+      'official-afl-completed-draft-session',
+      '--season',
+      '2019',
+      '--season',
+      '2020',
+      '--season',
+      '2021',
+    ]);
+    expect(parsed.targets.map(({ season }) => season)).toEqual([2019, 2020, 2021, 2021]);
+  });
+
   it('requires an artifact root', () => {
     expect(() => parse(['--capability', 'draftguru-trade-index', '--season', '2020'])).toThrow(
       /--artifact-root is required/
@@ -259,6 +446,18 @@ describe('local Draftguru capture command arguments', () => {
     [['--capability', 'draftguru-trade-index', '--url', 'https://www.draftguru.com.au/trades']],
     [['--capability', 'draftguru-trade-detail', '--season', '2020']],
     [['--capability', 'draftguru-trade-index', '--season', '20']],
+    [['--capability', 'official-afl-completed-draft-session']],
+    [['--capability', 'official-afl-completed-draft-session', '--url', 'https://www.afl.com.au/']],
+    [
+      [
+        '--capability',
+        'official-afl-completed-draft-session',
+        '--season',
+        '2020',
+        '--from-season',
+        '2019',
+      ],
+    ],
     [['--unknown', 'value']],
   ])('rejects %j', (argv) => {
     const withRoot = argv.includes('--artifact-root')

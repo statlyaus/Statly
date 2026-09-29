@@ -17,12 +17,18 @@ import {
 } from '@/server/aflTradeIntelligence/development/localDraftguruTradeAuthorityProposal';
 import {
   createLocalDraftguruTradeCaptureTargets,
-  runLocalDraftguruTradeCapture,
-} from '@/server/aflTradeIntelligence/development/localDraftguruTradeCaptureRunner';
+  runLocalExternalCapture,
+} from '@/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import { createLocalOfficialAflDraftSessionTargets } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { OFFICIAL_AFL_COMPLETED_SESSION_PAGES } from '../testUtils/officialAflCompletedSessionPages';
+import {
+  approveNarrowAuthority,
+  officialAflDraftSessionAuthority,
+} from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
@@ -30,7 +36,7 @@ const databaseUrl =
   (() => {
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
-const schemaName = `afl_local_draftguru_capture_${process.pid}_${Date.now()}`;
+const schemaName = `afl_local_external_capture_${process.pid}_${Date.now()}`;
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -177,9 +183,9 @@ beforeAll(async () => {
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
   await sql.query(
     `INSERT INTO outcome_competition_season (competition,season_year)
-     VALUES ('AFLM',2020) ON CONFLICT DO NOTHING`
+     VALUES ('AFLM',2019),('AFLM',2020),('AFLM',2021) ON CONFLICT DO NOTHING`
   );
-  artifactRoot = await mkdtemp(join(tmpdir(), 'statly-local-draftguru-capture-'));
+  artifactRoot = await mkdtemp(join(tmpdir(), 'statly-local-external-capture-'));
 }, 120_000);
 
 afterAll(async () => {
@@ -199,7 +205,7 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
   it('fetches nothing without the recorded owner decision', async () => {
     const provider = stubDraftguru();
     await expect(
-      runLocalDraftguruTradeCapture(
+      runLocalExternalCapture(
         { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl: provider.fetchImpl },
         detailTargets()
       )
@@ -224,7 +230,7 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
       fetchImpl: provider.fetchImpl,
     };
 
-    const [staged] = await runLocalDraftguruTradeCapture(options, detailTargets());
+    const [staged] = await runLocalExternalCapture(options, detailTargets());
     expect(staged).toMatchObject({
       sourceUrl: cameronUrl,
       season: 2020,
@@ -277,13 +283,13 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
 
     // Repeating the same page inside the reviewed 86,400-second cache is refused without a fetch,
     // even though the new run stamps a new capture instant.
-    await expect(runLocalDraftguruTradeCapture(options, detailTargets())).rejects.toMatchObject({
+    await expect(runLocalExternalCapture(options, detailTargets())).rejects.toMatchObject({
       code: 'REQUEST_COOLDOWN',
     });
     expect(provider.calls).toHaveLength(1);
 
     // A different target only waits out the five-second provider pacing.
-    const [index] = await runLocalDraftguruTradeCapture(
+    const [index] = await runLocalExternalCapture(
       options,
       createLocalDraftguruTradeCaptureTargets({
         capabilityId: 'draftguru-trade-index',
@@ -300,7 +306,7 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
   it('refuses seasons outside the recorded authority before any fetch', async () => {
     const provider = stubDraftguru();
     await expect(
-      runLocalDraftguruTradeCapture(
+      runLocalExternalCapture(
         { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl: provider.fetchImpl },
         createLocalDraftguruTradeCaptureTargets({
           capabilityId: 'draftguru-trade-detail',
@@ -310,4 +316,133 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
     ).rejects.toThrow(/2011 through 2025/);
     expect(provider.calls).toEqual([]);
   });
+});
+
+/** Stubbed afl.com.au: no live network. It serves each reviewed page's exact structure. */
+function stubOfficialAfl() {
+  const calls: { url: string; at: number; userAgent: string | null }[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, at: Date.now(), userAgent: new Headers(init?.headers).get('User-Agent') });
+    const page = OFFICIAL_AFL_COMPLETED_SESSION_PAGES[url];
+    if (page === undefined) return new Response(null, { status: 404 });
+    return new Response(page(), {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+  };
+  return { calls, fetchImpl };
+}
+
+async function recordOfficialDecision(
+  season: number,
+  evidenceIds: Parameters<typeof officialAflDraftSessionAuthority>[0]['evidenceIds']
+) {
+  const authority = officialAflDraftSessionAuthority({
+    season,
+    evidenceIds,
+    timing: {
+      termsEffectiveAt: instant(-120),
+      termsExpireAt: instant(60 * 24 * 30),
+      rightsProposedAt: instant(-100),
+      proposalProposedAt: instant(-99),
+    },
+  });
+  const decision = approveNarrowAuthority(authority, {
+    decidedAt: instant(-90),
+    revalidateAt: instant(60 * 24 * 20),
+  });
+  const ledger = createPostgresAflTradeGateDecisionLedgerRepository(sql);
+  await ledger.append({
+    expectedRevision: (await ledger.load()).revision,
+    ...authority,
+    decision,
+  });
+}
+
+describe('local Official AFL completed-session capture through the governed ingestion boundary', () => {
+  const sessionTargets = () => createLocalOfficialAflDraftSessionTargets([2019, 2020, 2021]);
+
+  it('fetches nothing until every requested season has its recorded decision', async () => {
+    const provider = stubOfficialAfl();
+    const options = {
+      sql,
+      artifactRootDirectory: artifactRoot,
+      userAgent,
+      fetchImpl: provider.fetchImpl,
+    };
+    await expect(runLocalExternalCapture(options, sessionTargets())).rejects.toMatchObject({
+      code: 'AUTHORITY_MISMATCH',
+    });
+    const evidenceIds = {
+      productOwnerAuthorization: await retainEvidenceDocument(
+        'session authorization',
+        instant(-130)
+      ),
+      boundedCapturePlan: await retainEvidenceDocument('session capture plan', instant(-130)),
+      publicAccessReview: await retainEvidenceDocument('session access review', instant(-130)),
+      fieldBoundaryReview: await retainEvidenceDocument('session field review', instant(-130)),
+    };
+    await recordOfficialDecision(2019, evidenceIds);
+    await recordOfficialDecision(2020, evidenceIds);
+    await expect(runLocalExternalCapture(options, sessionTargets())).rejects.toThrow(
+      /official-afl-completed-draft-session-issue579-private-2021-session-v18/
+    );
+    expect(provider.calls).toEqual([]);
+
+    await recordOfficialDecision(2021, evidenceIds);
+    const results = await runLocalExternalCapture(options, sessionTargets());
+    // The 2019 club review reports both nights; each other page reports one completed session.
+    expect(
+      results.map((result) => ({
+        season: result.season,
+        status: result.status,
+        evidenceCount: result.status === 'staged' ? result.evidenceCount : null,
+        issueCount: result.status === 'staged' ? result.issueCount : null,
+      }))
+    ).toEqual([
+      { season: 2019, status: 'staged', evidenceCount: 2, issueCount: 0 },
+      { season: 2020, status: 'staged', evidenceCount: 1, issueCount: 0 },
+      { season: 2021, status: 'staged', evidenceCount: 1, issueCount: 0 },
+      { season: 2021, status: 'staged', evidenceCount: 1, issueCount: 0 },
+    ]);
+    expect(provider.calls.map(({ url }) => url)).toEqual(
+      sessionTargets().map(({ sourceUrl }) => sourceUrl)
+    );
+    expect(provider.calls.every((call) => call.userAgent === userAgent)).toBe(true);
+    for (let index = 1; index < provider.calls.length; index += 1) {
+      expect(provider.calls[index]!.at - provider.calls[index - 1]!.at).toBeGreaterThanOrEqual(
+        5_000
+      );
+    }
+    expect(await readdir(join(artifactRoot, 'official-afl-session-raw'))).not.toHaveLength(0);
+
+    // Each capture receipt names the v18 parser and the season's own recorded decision.
+    const receipts = await sql.query<{ parser: string; decision_key: string }>(
+      `SELECT manifest_json->>'parserVersion' AS parser,
+              manifest_json#>>'{executionReceipt,content,gate0aReceipt,content,request,decisionKey}'
+                AS decision_key
+         FROM outcome_source_capture
+        WHERE provider='official_afl' AND environment='non_production'
+        ORDER BY anchor_season_year, captured_at`
+    );
+    expect(receipts.rows).toEqual([
+      {
+        parser: 'official-afl-completed-draft-session/v18',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2019-session-v18',
+      },
+      {
+        parser: 'official-afl-completed-draft-session/v18',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2020-session-v18',
+      },
+      {
+        parser: 'official-afl-completed-draft-session/v18',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v18',
+      },
+      {
+        parser: 'official-afl-completed-draft-session/v18',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v18',
+      },
+    ]);
+  }, 90_000);
 });

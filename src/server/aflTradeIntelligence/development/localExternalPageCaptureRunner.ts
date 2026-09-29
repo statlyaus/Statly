@@ -13,9 +13,20 @@ import {
   parseDraftguruTradeIndexEvidence,
 } from '../source/draftguruSourceAdapter';
 import { createAflTradeExternalCaptureAdmission } from '../source/externalDraftTradeCaptureAdmission';
-import type { IngestAflTradeExternalPageResult } from '../source/externalDraftTradeIngestion';
-import { ingestAuthorizedAflTradeExternalPage } from '../source/externalDraftTradeProviderIngestion';
+import type {
+  AflTradeExternalPageIngestionDependencies,
+  IngestAflTradeExternalPageResult,
+} from '../source/externalDraftTradeIngestion';
+import {
+  ingestAuthorizedAflTradeExternalPage,
+  type AflTradeExternalProviderIngestionCommand,
+} from '../source/externalDraftTradeProviderIngestion';
 import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
+import {
+  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  parseOfficialAflDraftSession,
+} from '../source/officialAflDraftSessionAdapter';
+import { captureOfficialAflPage } from '../source/officialAflPageCapture';
 import { PostgresAflTradeExternalCaptureRegistry } from '../source/postgresExternalCaptureRegistry';
 import { PostgresAflTradeExternalEvidenceRepository } from '../source/postgresExternalEvidenceRepository';
 import {
@@ -24,15 +35,31 @@ import {
 } from './localDraftguruTradeAuthorityProposal';
 import {
   createDraftguruTradeCaptureCommand,
-  createDraftguruTradeGateRequest,
   type DraftguruTradeAuthority,
 } from './localDraftguruTradeCaptureCommand';
 import { createLocalFileCaptureAdmissionStore } from './localFileCaptureAdmissionStore';
 import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
+import {
+  LocalExternalCaptureError,
+  type LocalNarrowCaptureAuthority,
+} from './localNarrowCaptureAuthority';
+import {
+  createOfficialAflDraftSessionCaptureCommand,
+  OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY,
+  officialAflDraftSessionDecisionKey,
+  type LocalOfficialAflDraftSessionTarget,
+} from './localOfficialAflDraftSessionCapture';
+
+export { LocalExternalCaptureError } from './localNarrowCaptureAuthority';
+
+type ParsePageInput = Parameters<
+  NonNullable<AflTradeExternalPageIngestionDependencies['parsePage']>
+>[0];
 
 /**
- * The exact pacing, cache and retention the owner's narrow decision records. The runner enforces
- * these itself and refuses a recorded authority that says anything else, rather than adapting.
+ * The exact pacing, cache and retention the owner's narrow decisions record for each provider. The
+ * runner enforces these itself and refuses a recorded authority that says anything else, rather than
+ * adapting.
  */
 export const LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY = {
   upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
@@ -41,46 +68,91 @@ export const LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY = {
   rawRetentionDays: 365,
 } as const;
 
-export const LOCAL_DRAFTGURU_TRADE_MAXIMUM_BYTES = 4 * 1024 * 1024;
+export const LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY = {
+  upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
+  cacheSeconds: 3_600,
+  maximumLeaseMs: 120_000,
+  rawRetentionDays: 365,
+} as const;
+
+export const LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES = 4 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
 const MAXIMUM_ADMISSION_ATTEMPTS = 5;
 const DRAFTGURU_TRADE_INDEX_URL = 'https://www.draftguru.com.au/trades';
 
-export class LocalDraftguruTradeCaptureError extends Error {
-  constructor(
-    readonly code:
-      'AUTHORITY_MISMATCH' | 'INVALID_TARGET' | 'ADMISSION_EXHAUSTED' | 'REQUEST_COOLDOWN',
-    message: string
-  ) {
-    super(message);
-    this.name = 'LocalDraftguruTradeCaptureError';
+export type LocalExternalCaptureCapability =
+  DraftguruTradeCapability | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY;
+
+type CapturePolicy =
+  typeof LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY | typeof LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY;
+
+/** What the runner requires of each capability's recorded authority, and where it keeps raw bytes. */
+const CAPABILITY_PROFILES: Record<
+  LocalExternalCaptureCapability,
+  {
+    provider: 'draftguru' | 'official_afl';
+    parserVersion: string;
+    policy: CapturePolicy;
+    rawRepositoryId: string;
+    decisionKey(season: number): string;
   }
+> = {
+  'draftguru-trade-index': {
+    provider: 'draftguru',
+    parserVersion: DRAFTGURU_TRADE_PARSER_VERSIONS['draftguru-trade-index'],
+    policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
+    rawRepositoryId: 'draftguru-trade-raw',
+    decisionKey: () => draftguruTradeDecisionKey('draftguru-trade-index'),
+  },
+  'draftguru-trade-detail': {
+    provider: 'draftguru',
+    parserVersion: DRAFTGURU_TRADE_PARSER_VERSIONS['draftguru-trade-detail'],
+    policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
+    rawRepositoryId: 'draftguru-trade-raw',
+    decisionKey: () => draftguruTradeDecisionKey('draftguru-trade-detail'),
+  },
+  [OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY]: {
+    provider: 'official_afl',
+    parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+    policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
+    rawRepositoryId: 'official-afl-session-raw',
+    decisionKey: officialAflDraftSessionDecisionKey,
+  },
+};
+
+export function isLocalExternalCaptureCapability(
+  value: string | undefined
+): value is LocalExternalCaptureCapability {
+  return value !== undefined && Object.hasOwn(CAPABILITY_PROFILES, value);
 }
 
 export function draftguruTradeDecisionKey(capabilityId: DraftguruTradeCapability): string {
   return `${capabilityId}-issue-579-private-non_production`;
 }
 
-export interface RecordedDraftguruTradeAuthority {
-  authority: DraftguruTradeAuthority;
+export interface RecordedLocalCaptureAuthority {
+  authority: LocalNarrowCaptureAuthority;
   decisionId: string;
   egressPolicyEvidenceId: string;
 }
 
 function mismatch(message: string): never {
-  throw new LocalDraftguruTradeCaptureError('AUTHORITY_MISMATCH', message);
+  throw new LocalExternalCaptureError('AUTHORITY_MISMATCH', message);
 }
 
 /**
- * Loads the owner's recorded narrow decision, its proposal and its source rights from the Gate ledger
- * and checks that they describe exactly the capability and pacing this runner enforces.
+ * Loads the owner's recorded narrow decision for one capability and season, its proposal and its
+ * source rights from the Gate ledger, and checks that they describe exactly the provider, parser
+ * and pacing this runner enforces.
  */
-export async function loadRecordedDraftguruTradeAuthority(
+export async function loadRecordedLocalCaptureAuthority(
   ledger: Pick<AflTradeGateDecisionLedgerRepository, 'load' | 'resolveAuthorization'>,
-  capabilityId: DraftguruTradeCapability,
+  capabilityId: LocalExternalCaptureCapability,
+  season: number,
   evaluatedAt: string
-): Promise<RecordedDraftguruTradeAuthority> {
-  const decisionKey = draftguruTradeDecisionKey(capabilityId);
+): Promise<RecordedLocalCaptureAuthority> {
+  const profile = CAPABILITY_PROFILES[capabilityId];
+  const decisionKey = profile.decisionKey(season);
   const stored = await ledger.load();
   const resolution = resolveAflTradeGateEligibility(stored.ledger, {
     gate: 'gate_0a_permission_to_evaluate',
@@ -112,14 +184,14 @@ export async function loadRecordedDraftguruTradeAuthority(
   }
   const { sourceRights } = await ledger.resolveAuthorization(rightsIds[0]!);
   const rights = sourceRights.content;
-  const policy = LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY;
+  const policy = profile.policy;
   const rate = rights.automatedAccess.rateLimit;
   if (
     sourceRights.rightsArtifactId !== rightsIds[0] ||
-    rights.provider !== 'draftguru' ||
+    rights.provider !== profile.provider ||
     rights.acquisition.kind !== 'provider_web' ||
     rights.acquisition.capabilityId !== capabilityId ||
-    rights.acquisition.clientVersion !== DRAFTGURU_TRADE_PARSER_VERSIONS[capabilityId] ||
+    rights.acquisition.clientVersion !== profile.parserVersion ||
     rights.scope.seasonRanges.length !== 1 ||
     rate === null ||
     rate.requests !== policy.upstreamRate.requests ||
@@ -129,7 +201,7 @@ export async function loadRecordedDraftguruTradeAuthority(
     rights.retention.rawEvidence.maximumDays !== policy.rawRetentionDays
   ) {
     mismatch(
-      `The recorded ${capabilityId} source rights differ from the parser, pacing, cache or retention this runner enforces.`
+      `The recorded ${decisionKey} source rights differ from the provider, parser ${profile.parserVersion}, pacing, cache or retention this runner enforces.`
     );
   }
   const egress = rights.conditions.find(
@@ -152,6 +224,9 @@ export interface LocalDraftguruTradeCaptureTarget {
   sourceUrl: string;
 }
 
+export type LocalExternalCaptureTarget =
+  LocalDraftguruTradeCaptureTarget | LocalOfficialAflDraftSessionTarget;
+
 /** Index: the whole `/trades` page bounded to seasons. Detail: one page per exact trade URL. */
 export function createLocalDraftguruTradeCaptureTargets(
   input:
@@ -169,7 +244,7 @@ export function createLocalDraftguruTradeCaptureTargets(
     ];
   }
   if (input.urls.length === 0 || new Set(input.urls).size !== input.urls.length) {
-    throw new LocalDraftguruTradeCaptureError(
+    throw new LocalExternalCaptureError(
       'INVALID_TARGET',
       'Trade-detail capture requires one or more distinct trade URLs.'
     );
@@ -183,7 +258,7 @@ export function createLocalDraftguruTradeCaptureTargets(
     }
     const match = /^\/trades\/(\d{4})-[^/]+$/.exec(pathname);
     if (!match) {
-      throw new LocalDraftguruTradeCaptureError(
+      throw new LocalExternalCaptureError(
         'INVALID_TARGET',
         `Not a Draftguru trade-detail URL: ${sourceUrl}`
       );
@@ -192,10 +267,10 @@ export function createLocalDraftguruTradeCaptureTargets(
   });
 }
 
-export type LocalDraftguruTradeCaptureResult = LocalDraftguruTradeCaptureTarget &
+export type LocalExternalCaptureResult = LocalExternalCaptureTarget &
   IngestAflTradeExternalPageResult;
 
-export interface LocalDraftguruTradeCaptureOptions {
+export interface LocalExternalCaptureOptions {
   sql: AflOutcomeSqlClient;
   artifactRootDirectory: string;
   userAgent: string;
@@ -212,20 +287,68 @@ function identifiedFetch(fetchImpl: typeof fetch, userAgent: string): typeof fet
   };
 }
 
+function createCommand(
+  recorded: RecordedLocalCaptureAuthority,
+  target: LocalExternalCaptureTarget,
+  capturedAt: string
+): AflTradeExternalProviderIngestionCommand {
+  if (target.capabilityId === OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY) {
+    return createOfficialAflDraftSessionCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+    });
+  }
+  return createDraftguruTradeCaptureCommand(recorded.authority as DraftguruTradeAuthority, {
+    season: target.season,
+    ...(target.discoveryFromSeason === undefined
+      ? {}
+      : { discoveryFromSeason: target.discoveryFromSeason }),
+    sourceUrl: target.sourceUrl,
+    capturedAt,
+    // Draftguru records no transaction instant, so each claim is effective as observed.
+    effectiveAt: capturedAt,
+    maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+  });
+}
+
+function parsePage(
+  target: LocalExternalCaptureTarget,
+  command: AflTradeExternalProviderIngestionCommand,
+  { html, capture }: ParsePageInput
+) {
+  switch (target.capabilityId) {
+    case 'draftguru-trade-index':
+      return parseDraftguruTradeIndexEvidence(html, {
+        capture,
+        fromYear: target.discoveryFromSeason ?? target.season,
+        throughYear: target.season,
+      });
+    case 'draftguru-trade-detail':
+      return parseDraftguruTradeDetail(html, {
+        capture,
+        draftYear: target.season,
+        effectiveAt: command.request.effectiveAt,
+      });
+    case OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY:
+      return parseOfficialAflDraftSession(html, { capture, anchorSeasonYear: target.season });
+  }
+}
+
 /**
- * Captures Draftguru trade pages on the owner's machine through the governed ingestion boundary:
+ * Captures reviewed provider pages on the owner's machine through the governed ingestion boundary:
  * recorded Gate 0A authority, local file-backed provider pacing, local non-production raw custody,
  * and PostgreSQL capture/execution receipts. Targets run sequentially and stop at the first failure.
  */
-export async function runLocalDraftguruTradeCapture(
-  options: LocalDraftguruTradeCaptureOptions,
-  targets: readonly LocalDraftguruTradeCaptureTarget[],
-  onResult?: (result: LocalDraftguruTradeCaptureResult) => void
-): Promise<LocalDraftguruTradeCaptureResult[]> {
+export async function runLocalExternalCapture(
+  options: LocalExternalCaptureOptions,
+  targets: readonly LocalExternalCaptureTarget[],
+  onResult?: (result: LocalExternalCaptureResult) => void
+): Promise<LocalExternalCaptureResult[]> {
   if (!isAbsolute(options.artifactRootDirectory)) {
-    throw new LocalDraftguruTradeCaptureError(
+    throw new LocalExternalCaptureError(
       'INVALID_TARGET',
-      'Local Draftguru capture requires one absolute artifact root.'
+      'Local capture requires one absolute artifact root.'
     );
   }
   if (
@@ -233,29 +356,37 @@ export async function runLocalDraftguruTradeCapture(
     options.userAgent.length > 500 ||
     !/contact\s*:/i.test(options.userAgent)
   ) {
-    throw new LocalDraftguruTradeCaptureError(
+    throw new LocalExternalCaptureError(
       'INVALID_TARGET',
-      'Local Draftguru capture requires an identifying user agent with a contact.'
+      'Local capture requires an identifying user agent with a contact.'
     );
   }
   const capabilities = new Set(targets.map(({ capabilityId }) => capabilityId));
   if (targets.length === 0 || capabilities.size !== 1) {
-    throw new LocalDraftguruTradeCaptureError(
+    throw new LocalExternalCaptureError(
       'INVALID_TARGET',
       'One run captures one or more targets of exactly one capability.'
     );
   }
   const capabilityId = targets[0]!.capabilityId;
+  const profile = CAPABILITY_PROFILES[capabilityId];
   const now = options.now ?? (() => new Date().toISOString());
   const sleep = options.sleep ?? ((ms) => new Promise<void>((done) => setTimeout(done, ms)));
   const root = resolve(options.artifactRootDirectory);
   const ledger = createPostgresAflTradeGateDecisionLedgerRepository(options.sql);
-  const recorded = await loadRecordedDraftguruTradeAuthority(ledger, capabilityId, now());
+  // Every target's decision must be recorded before any page is fetched.
+  const recordedBySeason = new Map<number, RecordedLocalCaptureAuthority>();
+  for (const season of new Set(targets.map((target) => target.season))) {
+    recordedBySeason.set(
+      season,
+      await loadRecordedLocalCaptureAuthority(ledger, capabilityId, season, now())
+    );
+  }
   const rawArtifacts = createLocalAflTradeNonProductionArtifactRepository({
     rootDirectory: root,
-    repositoryId: 'draftguru-trade-raw',
+    repositoryId: profile.rawRepositoryId,
     artifactClass: 'raw_source',
-    maximumObjectBytes: LOCAL_DRAFTGURU_TRADE_MAXIMUM_BYTES,
+    maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
   });
   const admission = createAflTradeExternalCaptureAdmission({
     redis: createLocalFileCaptureAdmissionStore({ directory: join(root, 'capture-admission') }),
@@ -264,21 +395,20 @@ export async function runLocalDraftguruTradeCapture(
   const fetchImpl = identifiedFetch(options.fetchImpl ?? fetch, options.userAgent);
   const captureRegistry = new PostgresAflTradeExternalCaptureRegistry(options.sql);
   const staging = new PostgresAflTradeExternalEvidenceRepository(options.sql);
-  const executionPolicy = {
-    ...LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
-    egressPolicyEvidenceId: recorded.egressPolicyEvidenceId,
-  };
 
-  async function captureOne(target: LocalDraftguruTradeCaptureTarget) {
+  async function captureOne(target: LocalExternalCaptureTarget) {
+    const recorded = recordedBySeason.get(target.season)!;
+    const executionPolicy = {
+      ...profile.policy,
+      egressPolicyEvidenceId: recorded.egressPolicyEvidenceId,
+    };
     for (let attempt = 1; attempt <= MAXIMUM_ADMISSION_ATTEMPTS; attempt += 1) {
       const at = now();
-      const gateRequest = createDraftguruTradeGateRequest(recorded.authority, target.season, {
-        evaluatedAt: at,
-      });
+      const command = createCommand(recorded, target, at);
       const { ledger: currentLedger, sourceRights } = await ledger.resolveAuthorization(
-        gateRequest.rightsArtifactId
+        command.gateRequest.rightsArtifactId
       );
-      const evaluation = evaluateAflTradeGate0A(currentLedger, sourceRights, gateRequest);
+      const evaluation = evaluateAflTradeGate0A(currentLedger, sourceRights, command.gateRequest);
       if (
         evaluation.status !== 'mechanically_eligible' ||
         evaluation.decisionId !== recorded.decisionId
@@ -287,21 +417,12 @@ export async function runLocalDraftguruTradeCapture(
           `Gate 0A no longer admits ${target.sourceUrl}: ${evaluation.blockers.map(({ code }) => code).join(', ') || 'decision changed'}`
         );
       }
-      const command = createDraftguruTradeCaptureCommand(recorded.authority, {
-        season: target.season,
-        ...(target.discoveryFromSeason === undefined
-          ? {}
-          : { discoveryFromSeason: target.discoveryFromSeason }),
-        sourceUrl: target.sourceUrl,
-        capturedAt: at,
-        // Draftguru records no transaction instant, so each claim is effective as observed.
-        effectiveAt: at,
-        maximumBytes: LOCAL_DRAFTGURU_TRADE_MAXIMUM_BYTES,
-      });
       const outcome = await ingestAuthorizedAflTradeExternalPage(command, {
         admission,
         policyFor: (provider) => {
-          if (provider !== 'draftguru') mismatch('The local runner captures Draftguru only.');
+          if (provider !== profile.provider) {
+            mismatch(`The ${capabilityId} capture is limited to ${profile.provider}.`);
+          }
           return executionPolicy;
         },
         resolveAuthorization: (rightsArtifactId) => ledger.resolveAuthorization(rightsArtifactId),
@@ -311,25 +432,14 @@ export async function runLocalDraftguruTradeCapture(
           captureRegistry,
           staging,
           capturePage: ({ url, validators, maximumBytes }) =>
-            captureDraftguruSource({
+            (profile.provider === 'draftguru' ? captureDraftguruSource : captureOfficialAflPage)({
               url,
               validators,
               maximumBytes,
               timeoutMs: TIMEOUT_MS,
               fetchImpl,
             }),
-          parsePage: ({ html, capture }) =>
-            target.capabilityId === 'draftguru-trade-index'
-              ? parseDraftguruTradeIndexEvidence(html, {
-                  capture,
-                  fromYear: target.discoveryFromSeason ?? target.season,
-                  throughYear: target.season,
-                })
-              : parseDraftguruTradeDetail(html, {
-                  capture,
-                  draftYear: target.season,
-                  effectiveAt: command.request.effectiveAt,
-                }),
+          parsePage: (input) => parsePage(target, command, input),
         },
       });
       if (outcome.status === 'completed') return outcome.result;
@@ -337,20 +447,20 @@ export async function runLocalDraftguruTradeCapture(
       // A lease or provider cooldown never outlasts one lease; a longer deferral is the reviewed
       // per-request cache period, which the runner reports instead of waiting out or refetching.
       if (waitMs > executionPolicy.maximumLeaseMs + 10_000) {
-        throw new LocalDraftguruTradeCaptureError(
+        throw new LocalExternalCaptureError(
           'REQUEST_COOLDOWN',
           `${target.sourceUrl} was captured within the reviewed ${executionPolicy.cacheSeconds}-second cache period; retry after ${outcome.retryAt}.`
         );
       }
       await sleep(waitMs);
     }
-    throw new LocalDraftguruTradeCaptureError(
+    throw new LocalExternalCaptureError(
       'ADMISSION_EXHAUSTED',
       `Provider admission did not admit ${target.sourceUrl}; another capture may hold the lease.`
     );
   }
 
-  const results: LocalDraftguruTradeCaptureResult[] = [];
+  const results: LocalExternalCaptureResult[] = [];
   for (const target of targets) {
     const result = { ...target, ...(await captureOne(target)) };
     results.push(result);

@@ -8,6 +8,8 @@ import type { AflTradeExternalPageIssue } from './externalDraftTradeIngestion';
 
 export const OFFICIAL_AFL_2019_CLUB_REVIEW_URL =
   'https://www.afl.com.au/news/149305/who-smashed-it-our-say-on-your-clubs-draft-performance';
+/** The reviewed article summarises the 2019 draft after its second and final night. */
+export const OFFICIAL_AFL_2019_CLUB_REVIEW_COMPLETED_ON = '2019-11-28';
 
 // The numbers belong to the receiving club heading, not the feeder club in parentheses.
 const reviewedClubs = [
@@ -133,7 +135,7 @@ export function parseOfficialAflDraft2019Sessions(
   return {
     evidence: [
       { ordinal: 1, date: '2019-11-27', first: 1, count: 21 },
-      { ordinal: 2, date: '2019-11-28', first: 22, count: 44 },
+      { ordinal: 2, date: OFFICIAL_AFL_2019_CLUB_REVIEW_COMPLETED_ON, first: 22, count: 44 },
     ].map((session) =>
       createAflTradeExternalEvidenceEnvelope({
         schemaVersion: 'afl-trade-external-evidence/v1',
