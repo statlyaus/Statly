@@ -3436,6 +3436,30 @@ capture's Gate chain (`supersedes_decision_id` from the manifest's `gate0aReceip
 blocked, expired or out-of-scope latest decision is the cause; record a proper successor decision
 rather than editing an existing one. The ledger is append-only.
 
+Migration 0236 makes acquisition-spell currency cheap enough for a genuine season HPN input. Before
+it, the season build and the v2 input finalizer asked `outcome_hpn_acquisition_spell_is_current` once
+per player-stat row (finalization asked twice). Each call re-derived its spell's whole registration
+currency, which is the same for every row of that spell. A v3 check also scanned too widely. Its
+window-completeness and retirement anti-joins ran `outcome_acquisition_appearance_fact_identity_current`
+on every measured appearance fact, and `outcome_acquisition_spell_registration_current` on every
+reviewed v1/v2 spell. Only then were the results matched to the spell's player and club. At about one
+second a call, a 2025 build of about 20,000 rows exceeded a 60-minute statement timeout. After 0236:
+
+- Those two predicates sit behind `CASE` guards on the conditions already next to them. They now run
+  only for the spell's own out-of-window facts and same-player, same-club covering spells.
+- `outcome_hpn_acquisition_spell_source_current` is copied byte-for-byte from the per-row function. The
+  one change is that it takes the spell's registration currency as an argument.
+- The build evaluates `outcome_acquisition_spell_registration_current` once per candidate spell in a
+  materialized CTE. The finalizer does the same once, into `registered_spells`, before its row loop.
+  Each row still checks its own source, capture, field map and `observedThrough` date.
+
+Currency rules and fail-closed results are unchanged. The per-row function remains for other
+callers. Each edit asserts its fragment and a reverse identity against the deployed definition, and
+`afl-hpn-acquisition-spell-currency-postgres.test.ts` compares the result with the original 0233
+definition. Per-row resolution checks in the finalizer
+(`outcome_hpn_pav_*_resolution_current`) still walk each decision's identity-assignment chain per
+row. If a genuine finalization is still slow, measure those first.
+
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,
 retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.

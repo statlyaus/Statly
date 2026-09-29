@@ -612,23 +612,42 @@ async function bindAcquisitionSpells(
         effectiveDate: effectiveAt.slice(0, 10),
       };
     });
+  // A spell's registration currency is identical for every row it binds, so it is evaluated once
+  // per candidate spell; each row still passes its own source and field-map currency.
   const result = await transaction.query<AcquisitionSpellRow>(
-    `SELECT requested."providerDecodedRowId" AS provider_decoded_row_id,
+    `WITH requested AS MATERIALIZED (
+       SELECT * FROM jsonb_to_recordset($1::jsonb) AS requested(
+         "providerDecodedRowId" text,"normalizationRunId" text,"fieldMapId" text,
+         "playerId" text,"clubId" text,"effectiveDate" date)
+     ), registered AS MATERIALIZED (
+       SELECT candidate.spell_version_id,
+              outcome_acquisition_spell_registration_current(candidate.spell_version_id,
+                clock_timestamp()) AS current
+         FROM (SELECT DISTINCT spell.spell_version_id
+                 FROM requested
+                 JOIN outcome_acquisition_spell_version spell
+                   ON spell.player_id=requested."playerId" AND spell.club_id=requested."clubId"
+                  AND spell.start_date<=requested."effectiveDate"
+                  AND (spell.end_date IS NULL OR spell.end_date>=requested."effectiveDate")
+                WHERE spell.status='approved' AND spell.recorded_at<=$2::timestamptz
+                  AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor
+                    WHERE successor.supersedes_spell_version_id=spell.spell_version_id)) candidate
+     )
+     SELECT requested."providerDecodedRowId" AS provider_decoded_row_id,
             spell.spell_version_id,spell.spell_id,spell.version,spell.player_id,spell.club_id,
             spell.start_event_version_id,spell.start_asset_version_id,spell.start_date,
             spell.end_date,spell.end_reason,spell.rule_id,spell.status::text AS status,
             spell.supersedes_spell_version_id,spell.recorded_at
-       FROM jsonb_to_recordset($1::jsonb) AS requested(
-         "providerDecodedRowId" text,"normalizationRunId" text,"fieldMapId" text,
-         "playerId" text,"clubId" text,"effectiveDate" date)
+       FROM requested
        JOIN outcome_acquisition_spell_version spell
          ON spell.player_id=requested."playerId" AND spell.club_id=requested."clubId"
         AND spell.start_date<=requested."effectiveDate"
         AND (spell.end_date IS NULL OR spell.end_date>=requested."effectiveDate")
+       JOIN registered ON registered.spell_version_id=spell.spell_version_id
       WHERE spell.status='approved' AND spell.recorded_at<=$2::timestamptz
-        AND outcome_hpn_acquisition_spell_is_current(spell.spell_version_id,
+        AND outcome_hpn_acquisition_spell_source_current(spell.spell_version_id,
           requested."providerDecodedRowId",requested."normalizationRunId",requested."fieldMapId",
-          requested."effectiveDate",clock_timestamp())
+          requested."effectiveDate",registered.current)
         AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor
           WHERE successor.supersedes_spell_version_id=spell.spell_version_id)
       ORDER BY requested."providerDecodedRowId",spell.spell_version_id
@@ -888,15 +907,13 @@ async function persistInputSet(
     [canonicalizeAflTradeJson(factualAppearanceMembers)]
   );
   if (content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5') {
-    const statisticalMembers = content.statisticalSelections.membership.map(
-      (member, ordinal) => ({
-        inputSetId: inputSet.inputSetId,
-        ordinal,
-        ...member,
-        selectionSha256: sha256AflTradeCanonicalJson(member),
-        selectionCanonicalJson: canonicalizeAflTradeJson(member),
-      })
-    );
+    const statisticalMembers = content.statisticalSelections.membership.map((member, ordinal) => ({
+      inputSetId: inputSet.inputSetId,
+      ordinal,
+      ...member,
+      selectionSha256: sha256AflTradeCanonicalJson(member),
+      selectionCanonicalJson: canonicalizeAflTradeJson(member),
+    }));
     await transaction.query(
       `INSERT INTO outcome_hpn_pav_input_statistical_selection
         (input_set_id,ordinal,scope_key,candidate_id,decision_id,support_review_id,revision,
