@@ -1306,6 +1306,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0233_appearance_membership_spells',
       '0234_current_successor_source_rights',
       '0235_club_resolution_candidate_index',
+      '0236_hpn_acquisition_spell_set_currency',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1442,10 +1443,13 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
         'require_outcome_hpn_pav_statistical_selections'
       );
     }
-    expect(
-      hpnV5Functions.rows.find((row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()')
-        ?.definition
-    ).toContain('outcome_hpn_acquisition_spell_is_current');
+    const hpnV2Finalizer = hpnV5Functions.rows.find(
+      (row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()'
+    )?.definition;
+    // 0236 evaluates each candidate spell's registration currency once per finalization.
+    expect(hpnV2Finalizer).toContain('outcome_hpn_acquisition_spell_source_current');
+    expect(hpnV2Finalizer).toContain('registered_spells');
+    expect(hpnV2Finalizer).not.toContain('outcome_hpn_acquisition_spell_is_current');
     const hpnSelectionGuard = await query<{ definition: string }>(
       `SELECT pg_get_functiondef(
         'require_outcome_hpn_pav_statistical_selections(text,boolean)'::regprocedure) AS definition`
