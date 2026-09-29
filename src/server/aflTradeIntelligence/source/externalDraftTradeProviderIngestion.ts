@@ -118,7 +118,10 @@ export function validateAflTradeExternalCaptureScope(
       request.draftPathway !== null ||
       request.discoveryFromSeasonYear != null ||
       url.hostname !== 'www.draftguru.com.au' ||
-      !new RegExp(`^/trades/${request.anchorSeasonYear}-[a-z0-9_-]+$`).test(url.pathname) ||
+      // Draftguru slugs keep a player's apostrophe (O'Meara), literally or as %27.
+      !new RegExp(`^/trades/${request.anchorSeasonYear}-(?:[a-z0-9_'-]|%27)+$`).test(
+        url.pathname
+      ) ||
       url.search ||
       url.hash
     )
