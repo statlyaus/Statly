@@ -48,7 +48,8 @@ const DRAFTGURU_TRADE_INDEX_URL = 'https://www.draftguru.com.au/trades';
 
 export class LocalDraftguruTradeCaptureError extends Error {
   constructor(
-    readonly code: 'AUTHORITY_MISMATCH' | 'INVALID_TARGET' | 'ADMISSION_EXHAUSTED',
+    readonly code:
+      'AUTHORITY_MISMATCH' | 'INVALID_TARGET' | 'ADMISSION_EXHAUSTED' | 'REQUEST_COOLDOWN',
     message: string
   ) {
     super(message);
@@ -333,7 +334,14 @@ export async function runLocalDraftguruTradeCapture(
       });
       if (outcome.status === 'completed') return outcome.result;
       const waitMs = Math.max(0, Date.parse(outcome.retryAt) - Date.parse(now())) + 50;
-      if (waitMs > executionPolicy.maximumLeaseMs + 10_000) break;
+      // A lease or provider cooldown never outlasts one lease; a longer deferral is the reviewed
+      // per-request cache period, which the runner reports instead of waiting out or refetching.
+      if (waitMs > executionPolicy.maximumLeaseMs + 10_000) {
+        throw new LocalDraftguruTradeCaptureError(
+          'REQUEST_COOLDOWN',
+          `${target.sourceUrl} was captured within the reviewed ${executionPolicy.cacheSeconds}-second cache period; retry after ${outcome.retryAt}.`
+        );
+      }
       await sleep(waitMs);
     }
     throw new LocalDraftguruTradeCaptureError(

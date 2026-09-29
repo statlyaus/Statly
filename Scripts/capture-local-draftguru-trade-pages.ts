@@ -74,72 +74,90 @@ export function requireDurableArtifactRoot(
   return canonical;
 }
 
-export function parseLocalDraftguruTradeCaptureArguments(
-  argv: readonly string[],
-  env: Readonly<Record<string, string | undefined>>,
-  temporaryDirectories?: readonly string[]
-): LocalDraftguruTradeCaptureArguments {
+const OPTION_NAMES = ['--artifact-root', '--capability', '--season', '--from-season', '--url'];
+
+type OptionValues = ReadonlyMap<string, readonly string[]>;
+
+function readOptions(argv: readonly string[]): OptionValues {
   const values = new Map<string, string[]>();
   for (let index = 0; index < argv.length; index += 2) {
-    const name = argv[index];
+    const name = argv[index] ?? '';
     const value = argv[index + 1];
-    if (
-      !['--artifact-root', '--capability', '--season', '--from-season', '--url'].includes(
-        name ?? ''
-      ) ||
-      value === undefined ||
-      value.startsWith('--')
-    ) {
-      usage(`Unexpected argument ${name ?? ''}.`);
+    if (!OPTION_NAMES.includes(name) || value === undefined || value.startsWith('--')) {
+      usage(`Unexpected argument ${name}.`);
     }
-    values.set(name!, [...(values.get(name!) ?? []), value]);
+    values.set(name, [...(values.get(name) ?? []), value]);
   }
-  const single = (name: string) => {
-    const entries = values.get(name) ?? [];
-    if (entries.length > 1) usage(`${name} may be given once.`);
-    return entries[0];
-  };
-  const databaseUrl = env.AFL_OUTCOMES_DATABASE_URL?.trim() ?? '';
+  return values;
+}
+
+function single(values: OptionValues, name: string): string | undefined {
+  const entries = values.get(name) ?? [];
+  if (entries.length > 1) usage(`${name} may be given once.`);
+  return entries[0];
+}
+
+function requireLoopbackDatabaseUrl(value: string | undefined): string {
+  const databaseUrl = value?.trim() ?? '';
   let host = '';
   try {
     const parsed = new URL(databaseUrl);
-    host =
-      parsed.protocol === 'postgresql:' || parsed.protocol === 'postgres:' ? parsed.hostname : '';
+    if (parsed.protocol === 'postgresql:' || parsed.protocol === 'postgres:')
+      host = parsed.hostname;
   } catch {
     host = '';
   }
   if (!LOOPBACK_HOSTS.has(host)) {
     usage('AFL_OUTCOMES_DATABASE_URL must name a loopback PostgreSQL outcomes database.');
   }
-  const userAgent = env.AFL_TRADE_EXTERNAL_USER_AGENT?.trim() ?? '';
+  return databaseUrl;
+}
+
+function requireIdentifyingUserAgent(value: string | undefined): string {
+  const userAgent = value?.trim() ?? '';
   if (userAgent.length < 20 || !/contact\s*:/i.test(userAgent)) {
     usage('AFL_TRADE_EXTERNAL_USER_AGENT must identify Statly and include "contact:".');
   }
-  const root = single('--artifact-root');
+  return userAgent;
+}
+
+function indexTargets(values: OptionValues): LocalDraftguruTradeCaptureTarget[] {
+  if (values.has('--url')) usage('The trade index takes --season, not --url.');
+  const fromValue = single(values, '--from-season');
+  return createLocalDraftguruTradeCaptureTargets({
+    capabilityId: 'draftguru-trade-index',
+    season: season(single(values, '--season'), '--season'),
+    ...(fromValue === undefined ? {} : { fromSeason: season(fromValue, '--from-season') }),
+  });
+}
+
+function detailTargets(values: OptionValues): LocalDraftguruTradeCaptureTarget[] {
+  if (values.has('--season') || values.has('--from-season')) {
+    usage('Trade-detail seasons come from each --url.');
+  }
+  return createLocalDraftguruTradeCaptureTargets({
+    capabilityId: 'draftguru-trade-detail',
+    urls: values.get('--url') ?? [],
+  });
+}
+
+export function parseLocalDraftguruTradeCaptureArguments(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+  temporaryDirectories?: readonly string[]
+): LocalDraftguruTradeCaptureArguments {
+  const values = readOptions(argv);
+  const databaseUrl = requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL);
+  const userAgent = requireIdentifyingUserAgent(env.AFL_TRADE_EXTERNAL_USER_AGENT);
+  const root = single(values, '--artifact-root');
   if (root === undefined) usage('--artifact-root is required.');
   const artifactRootDirectory = requireDurableArtifactRoot(root, temporaryDirectories);
-  const capability = single('--capability');
-  let targets: LocalDraftguruTradeCaptureTarget[];
-  if (capability === 'draftguru-trade-index') {
-    if (values.has('--url')) usage('The trade index takes --season, not --url.');
-    const through = season(single('--season'), '--season');
-    const fromValue = single('--from-season');
-    targets = createLocalDraftguruTradeCaptureTargets({
-      capabilityId: capability,
-      season: through,
-      ...(fromValue === undefined ? {} : { fromSeason: season(fromValue, '--from-season') }),
-    });
-  } else if (capability === 'draftguru-trade-detail') {
-    if (values.has('--season') || values.has('--from-season')) {
-      usage('Trade-detail seasons come from each --url.');
-    }
-    targets = createLocalDraftguruTradeCaptureTargets({
-      capabilityId: capability,
-      urls: values.get('--url') ?? [],
-    });
-  } else {
+  const capability = single(values, '--capability');
+  if (capability !== 'draftguru-trade-index' && capability !== 'draftguru-trade-detail') {
     usage('--capability must be draftguru-trade-index or draftguru-trade-detail.');
   }
+  const targets =
+    capability === 'draftguru-trade-index' ? indexTargets(values) : detailTargets(values);
   return { databaseUrl, userAgent, artifactRootDirectory, targets };
 }
 

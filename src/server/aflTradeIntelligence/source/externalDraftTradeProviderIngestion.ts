@@ -434,10 +434,14 @@ export async function ingestAuthorizedAflTradeExternalPage(
   await authorize(command, dependencies, dependencies.clock.now());
   const executionPolicy = dependencies.policyFor(provider);
   const requestSha256 = sha256AflTradeCanonicalJson(command.request);
+  // The reviewed cache limit governs how often one source is fetched. The trusted clock stamps a new
+  // capturedAt on every execution and effectiveAt only dates the claims, so neither may give a repeat
+  // fetch a fresh request-cooldown key. The receipt still binds the complete request digest.
+  const { capturedAt: _capturedAt, effectiveAt: _effectiveAt, ...fetchIdentity } = command.request;
   const admitted = await dependencies.admission.acquire({
     provider,
     capabilityId: command.request.capabilityId,
-    requestSha256,
+    requestSha256: sha256AflTradeCanonicalJson(fetchIdentity),
     policy: executionPolicy,
     nowMs: Date.parse(dependencies.clock.now()),
   });

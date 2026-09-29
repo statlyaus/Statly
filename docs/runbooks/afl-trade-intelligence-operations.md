@@ -624,7 +624,9 @@ custody and admission adapters differ:
   storage; and
 - provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
   admission semantics: one lease at a time, then a five-second provider cooldown and a one-day
-  cooldown for the exact request. Separate runs on the same machine share this pacing.
+  cooldown for the same source fetch. Separate runs on the same machine share this pacing. As in the
+  deployed path, the request cooldown is keyed by the request without its capture and effective
+  instants, so a new run cannot refetch the same page inside the reviewed cache period.
 
 Prerequisites:
 
@@ -676,6 +678,8 @@ the first failure and does not attempt later targets. Failure diagnosis:
 - `The Draftguru trade authority is limited to seasons …` or `INVALID_SCOPE` — the URL, season or
   capability is outside the approved scope; nothing was fetched.
 - `ADMISSION_EXHAUSTED` — another local run holds the provider lease. Wait for it to finish.
+- `REQUEST_COOLDOWN` — the same page was fetched within the reviewed 86,400-second cache period.
+  Nothing was fetched; use the earlier capture or retry after the printed time.
 - `Local capture admission is locked by another run` — a lock file survived an interrupted run.
   Confirm no capture process is running, then delete only the named `.lock` file.
 - `Draftguru capture returned unexpected status …`, an unsupported content type or an oversized

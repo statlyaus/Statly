@@ -207,7 +207,7 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
     expect(provider.calls).toEqual([]);
   });
 
-  it('captures the 2020 Cameron trade page and a paced 304 replay, then the bounded index', async () => {
+  it('captures the 2020 Cameron trade page, holds its repeat for the cache period, and paces the index', async () => {
     const evidenceIds = {
       productOwnerAuthorization: await retainEvidenceDocument('authorization', instant(-130)),
       boundedCapturePlan: await retainEvidenceDocument('capture plan', instant(-130)),
@@ -275,13 +275,14 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
     );
     expect(captures.rows[0]!.count).toBe(1);
 
-    // A second run waits out the local five-second provider pacing, then persists a 304 observation.
-    const [unchanged] = await runLocalDraftguruTradeCapture(options, detailTargets());
-    expect(unchanged).toMatchObject({ status: 'not_modified' });
-    expect(provider.calls).toHaveLength(2);
-    expect(provider.calls[1]!.ifNoneMatch).toBe(`"${cameronUrl.length}"`);
-    expect(provider.calls[1]!.at - provider.calls[0]!.at).toBeGreaterThanOrEqual(5_000);
+    // Repeating the same page inside the reviewed 86,400-second cache is refused without a fetch,
+    // even though the new run stamps a new capture instant.
+    await expect(runLocalDraftguruTradeCapture(options, detailTargets())).rejects.toMatchObject({
+      code: 'REQUEST_COOLDOWN',
+    });
+    expect(provider.calls).toHaveLength(1);
 
+    // A different target only waits out the five-second provider pacing.
     const [index] = await runLocalDraftguruTradeCapture(
       options,
       createLocalDraftguruTradeCaptureTargets({
@@ -290,7 +291,10 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
       })
     );
     expect(index).toMatchObject({ status: 'staged', evidenceCount: 2, issueCount: 0 });
-    expect(provider.calls[2]!.at - provider.calls[1]!.at).toBeGreaterThanOrEqual(5_000);
+    expect(provider.calls).toHaveLength(2);
+    const pacedMs = provider.calls[1]!.at - provider.calls[0]!.at;
+    expect(pacedMs).toBeGreaterThanOrEqual(5_000);
+    expect(pacedMs).toBeLessThan(30_000);
   }, 60_000);
 
   it('refuses seasons outside the recorded authority before any fetch', async () => {
