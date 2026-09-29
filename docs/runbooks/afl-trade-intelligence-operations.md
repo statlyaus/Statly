@@ -609,6 +609,84 @@ supersede production Gate authority, and production execution cannot reuse non-p
     calculate a grade, use the workbook, or publish unreviewed facts. Canonical promotion remains a
     reviewed private-corpus operation; factual and valuation activation remain separate milestones.
 
+### Capturing Draftguru trade pages locally
+
+The owner's machine can capture `draftguru-trade-index` and `draftguru-trade-detail` pages under the
+recorded issue-579 narrow decisions without S3, KMS or Redis. The command uses the same governed
+boundary as `outcomes:sources:ingest-external` (`ingestAuthorizedAflTradeExternalPage`): Gate 0A
+authority is resolved before and after each fetch, the capture/execution receipt is re-authenticated
+by PostgreSQL, and every parsed claim and issue is staged with `publicationEligible: false`. Only the
+custody and admission adapters differ:
+
+- raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
+  same adapter the local official-AFL and AFLCA captures use) under
+  `<artifact-root>/draftguru-trade-raw`; this custody cannot satisfy production or public-release
+  storage; and
+- provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
+  admission semantics: one lease at a time, then a five-second provider cooldown and a one-day
+  cooldown for the same source fetch. Separate runs on the same machine share this pacing. As in the
+  deployed path, the request cooldown is keyed by the request without its capture and effective
+  instants, so a new run cannot refetch the same page inside the reviewed cache period.
+
+Prerequisites:
+
+1. The owner's decisions `draftguru-trade-index-issue-579-private-non_production` and
+   `draftguru-trade-detail-issue-579-private-non_production` are recorded and effective in the target
+   loopback outcomes database. The command never records, widens or supersedes authority.
+2. The recorded source rights name parser `draftguru-trade-index-parser/v1` or
+   `draftguru-trade-parser/v1`, seasons inside one range, 1 request per 5 seconds with burst 1, an
+   86,400-second cache, 365-day raw retention and exactly one `provider-egress-control` evidence
+   record (the bounded capture plan). That evidence ID is used as the enforced egress-policy
+   evidence. Any other recorded pacing, cache or retention fails closed; the runner does not adapt.
+3. `AFL_OUTCOMES_DATABASE_URL` names the loopback PostgreSQL outcomes database, and
+   `AFL_TRADE_EXTERNAL_USER_AGENT` identifies Statly and includes `contact:`.
+   The database already contains the `AFLM` row in `outcome_competition_season` for every captured
+   anchor season; the runner does not create reference rows, and a missing season fails at staging.
+4. `--artifact-root` is an existing, absolute, private, durable directory kept outside Git and
+   backed up with the database. The system temporary directories are refused. Keep using the same
+   root for the same database: the retained bytes and the database custody rows describe each other.
+
+Capture one named trade page, for example the 2020 Jeremy Cameron trade (the season comes from the
+URL and must fall inside the authority's range):
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-draftguru-trades -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability draftguru-trade-detail \
+  --url https://www.draftguru.com.au/trades/2020-jeremy-cameron
+```
+
+Repeat `--url` to capture several trade pages sequentially in one run. Capture a season's links from
+the `/trades` index with `--capability draftguru-trade-index --season 2020`, adding
+`--from-season <year>` to bound a wider range. Use the exact detail URLs the staged index emitted;
+slugs may contain an apostrophe literally or as `%27`.
+
+Each completed page prints one JSON line with `status` (`staged` or `not_modified`), the capture,
+artifact and batch IDs, `evidenceCount`, `issueCount` and `idempotentReplay`. A nonzero `issueCount`
+means parser issues were staged with the batch; review them before using the batch. The run stops at
+the first failure and does not attempt later targets. Failure diagnosis:
+
+- `AUTHORITY_MISMATCH: No effective … decision` — the decision is missing, pending, not yet effective,
+  withdrawn or for another environment. Check the Gate ledger; do not edit it to make capture pass.
+- `AUTHORITY_MISMATCH` naming the parser, pacing, cache, retention or `provider-egress-control`
+  evidence — the recorded rights are not the narrow authority this runner enforces. A changed
+  authority needs a new owner decision, not a runner change.
+- `Gate 0A no longer admits …` or `SOURCE_NOT_AUTHORIZED` — the authority changed or expired between
+  loading and capture, or its terms or revalidation time passed.
+- `The Draftguru trade authority is limited to seasons …` or `INVALID_SCOPE` — the URL, season or
+  capability is outside the approved scope; nothing was fetched.
+- `ADMISSION_EXHAUSTED` — another local run holds the provider lease. Wait for it to finish.
+- `REQUEST_COOLDOWN` — the same page was fetched within the reviewed 86,400-second cache period.
+  Nothing was fetched; use the earlier capture or retry after the printed time.
+- `Local capture admission is locked by another run` — a lock file survived an interrupted run.
+  Confirm no capture process is running, then delete only the named `.lock` file.
+- `Draftguru capture returned unexpected status …`, an unsupported content type or an oversized
+  response — the provider response was refused; no bytes or receipt were retained for it.
+- `CUSTODY_MISMATCH` or `READBACK_MISMATCH` — the artifact root does not hold the bytes the database
+  custody row describes. Stop and restore the matching root; never overwrite retained bytes.
+
 ### Reconciling provider claims
 
 1. Reconcile field by field, not by global provider priority or majority vote. Transaction identity,

@@ -70,6 +70,7 @@
     "outcomes:sources:record-approved-external": "tsx Scripts/record-approved-external-draft-trade-sources.ts",
     "outcomes:sources:ingest-fitzroy": "tsx Scripts/ingest-fitzroy-provider-season.ts",
     "outcomes:sources:ingest-external": "tsx Scripts/ingest-external-draft-trade-page.ts",
+    "outcomes:sources:capture-local-draftguru-trades": "tsx Scripts/capture-local-draftguru-trade-pages.ts",
     "outcomes:sources:discover-external-history": "tsx Scripts/discover-external-draft-trade-history.ts",
     "outcomes:sources:run-external-history": "tsx Scripts/run-external-draft-trade-history.ts",
     "outcomes:sources:complete-external-history": "tsx Scripts/complete-external-draft-trade-history.ts",
