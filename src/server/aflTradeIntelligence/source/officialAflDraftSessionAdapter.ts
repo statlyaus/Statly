@@ -52,6 +52,7 @@ import {
   parseOfficialAflDraft2018SessionFacts,
 } from './officialAflDraft2018SessionFacts';
 import {
+  OFFICIAL_AFL_2019_CLUB_REVIEW_COMPLETED_ON,
   OFFICIAL_AFL_2019_CLUB_REVIEW_URL,
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
@@ -232,6 +233,28 @@ export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: nu
   if (reviewedSessionUrlChecks.get(seasonYear)?.(url)) return true;
   if (url === OFFICIAL_AFL_2019_CLUB_REVIEW_URL) return seasonYear === 2019;
   return reviewedReports.some((report) => report.year === seasonYear && report.url === url);
+}
+
+/**
+ * The exact reviewed completed-session pages for one season that are enumerable here, in session
+ * order, with the date of the last session each page reports. Seasons reviewed only through
+ * dedicated per-season source scopes (2010-2018) return no pages.
+ */
+export function reviewedOfficialAflDraftSessionPages(
+  seasonYear: number
+): readonly { url: string; completedOn: string }[] {
+  if (seasonYear === 2019) {
+    return [
+      {
+        url: OFFICIAL_AFL_2019_CLUB_REVIEW_URL,
+        completedOn: OFFICIAL_AFL_2019_CLUB_REVIEW_COMPLETED_ON,
+      },
+    ];
+  }
+  return reviewedReports
+    .filter((report) => report.year === seasonYear)
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .map((report) => ({ url: report.url, completedOn: report.date }));
 }
 
 export function parseOfficialAflDraftSession(

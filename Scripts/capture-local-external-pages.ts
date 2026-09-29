@@ -7,38 +7,43 @@ import { Pool } from 'pg';
 
 import {
   createLocalDraftguruTradeCaptureTargets,
-  runLocalDraftguruTradeCapture,
-  type LocalDraftguruTradeCaptureOptions,
-  type LocalDraftguruTradeCaptureResult,
-  type LocalDraftguruTradeCaptureTarget,
-} from '../src/server/aflTradeIntelligence/development/localDraftguruTradeCaptureRunner';
+  isLocalExternalCaptureCapability,
+  runLocalExternalCapture,
+  type LocalExternalCaptureOptions,
+  type LocalExternalCaptureResult,
+  type LocalExternalCaptureTarget,
+} from '../src/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import { createLocalOfficialAflDraftSessionTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 
 /**
- * Captures Draftguru trade pages on the owner's machine under the recorded issue-579 narrow Gate 0A
+ * Captures reviewed provider pages on the owner's machine under the recorded issue-579 narrow Gate 0A
  * decisions, with local raw custody and local provider pacing. See the operations runbook section
- * "Capturing Draftguru trade pages locally".
+ * "Capturing reviewed provider pages locally".
  *
  * Usage:
- *   npm run outcomes:sources:capture-local-draftguru-trades -- \
+ *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability draftguru-trade-detail \
  *     --url https://www.draftguru.com.au/trades/2020-jeremy-cameron [--url ...]
- *   npm run outcomes:sources:capture-local-draftguru-trades -- \
+ *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability draftguru-trade-index \
  *     --season 2020 [--from-season 2011]
+ *   npm run outcomes:sources:capture-local-external -- \
+ *     --artifact-root <durable-absolute-dir> --capability official-afl-completed-draft-session \
+ *     --season 2019 [--season 2020 ...]
  */
 
-export interface LocalDraftguruTradeCaptureArguments {
+export interface LocalExternalCaptureArguments {
   databaseUrl: string;
   userAgent: string;
   artifactRootDirectory: string;
-  targets: LocalDraftguruTradeCaptureTarget[];
+  targets: LocalExternalCaptureTarget[];
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
 function usage(message: string): never {
-  throw new TypeError(`${message} See the runbook for the local Draftguru capture command.`);
+  throw new TypeError(`${message} See the runbook for the local provider capture command.`);
 }
 
 function season(value: string | undefined, name: string): number {
@@ -121,7 +126,7 @@ function requireIdentifyingUserAgent(value: string | undefined): string {
   return userAgent;
 }
 
-function indexTargets(values: OptionValues): LocalDraftguruTradeCaptureTarget[] {
+function indexTargets(values: OptionValues): LocalExternalCaptureTarget[] {
   if (values.has('--url')) usage('The trade index takes --season, not --url.');
   const fromValue = single(values, '--from-season');
   return createLocalDraftguruTradeCaptureTargets({
@@ -131,7 +136,7 @@ function indexTargets(values: OptionValues): LocalDraftguruTradeCaptureTarget[] 
   });
 }
 
-function detailTargets(values: OptionValues): LocalDraftguruTradeCaptureTarget[] {
+function detailTargets(values: OptionValues): LocalExternalCaptureTarget[] {
   if (values.has('--season') || values.has('--from-season')) {
     usage('Trade-detail seasons come from each --url.');
   }
@@ -141,11 +146,21 @@ function detailTargets(values: OptionValues): LocalDraftguruTradeCaptureTarget[]
   });
 }
 
-export function parseLocalDraftguruTradeCaptureArguments(
+function officialSessionTargets(values: OptionValues): LocalExternalCaptureTarget[] {
+  if (values.has('--url') || values.has('--from-season')) {
+    usage('Completed-session pages come from each --season.');
+  }
+  if (!values.has('--season')) usage('Completed-session capture requires --season.');
+  return createLocalOfficialAflDraftSessionTargets(
+    (values.get('--season') ?? []).map((value) => season(value, '--season'))
+  );
+}
+
+export function parseLocalExternalCaptureArguments(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>>,
   temporaryDirectories?: readonly string[]
-): LocalDraftguruTradeCaptureArguments {
+): LocalExternalCaptureArguments {
   const values = readOptions(argv);
   const databaseUrl = requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL);
   const userAgent = requireIdentifyingUserAgent(env.AFL_TRADE_EXTERNAL_USER_AGENT);
@@ -153,15 +168,21 @@ export function parseLocalDraftguruTradeCaptureArguments(
   if (root === undefined) usage('--artifact-root is required.');
   const artifactRootDirectory = requireDurableArtifactRoot(root, temporaryDirectories);
   const capability = single(values, '--capability');
-  if (capability !== 'draftguru-trade-index' && capability !== 'draftguru-trade-detail') {
-    usage('--capability must be draftguru-trade-index or draftguru-trade-detail.');
+  if (!isLocalExternalCaptureCapability(capability)) {
+    usage(
+      '--capability must be draftguru-trade-index, draftguru-trade-detail or official-afl-completed-draft-session.'
+    );
   }
   const targets =
-    capability === 'draftguru-trade-index' ? indexTargets(values) : detailTargets(values);
+    capability === 'draftguru-trade-index'
+      ? indexTargets(values)
+      : capability === 'draftguru-trade-detail'
+        ? detailTargets(values)
+        : officialSessionTargets(values);
   return { databaseUrl, userAgent, artifactRootDirectory, targets };
 }
 
-function summary(result: LocalDraftguruTradeCaptureResult) {
+function summary(result: LocalExternalCaptureResult) {
   return result.status === 'not_modified'
     ? { sourceUrl: result.sourceUrl, status: result.status, attemptId: result.attemptId }
     : {
@@ -176,17 +197,17 @@ function summary(result: LocalDraftguruTradeCaptureResult) {
       };
 }
 
-export async function runLocalDraftguruTradeCaptureCommand(input: {
+export async function runLocalExternalCaptureCommand(input: {
   argv: readonly string[];
   env: Readonly<Record<string, string | undefined>>;
   writeOutput?: (line: string) => void;
-  fetchImpl?: LocalDraftguruTradeCaptureOptions['fetchImpl'];
+  fetchImpl?: LocalExternalCaptureOptions['fetchImpl'];
 }) {
-  const parsed = parseLocalDraftguruTradeCaptureArguments(input.argv, input.env);
+  const parsed = parseLocalExternalCaptureArguments(input.argv, input.env);
   const write = input.writeOutput ?? ((line: string) => process.stdout.write(`${line}\n`));
   const pool = new Pool({ connectionString: parsed.databaseUrl, max: 2 });
   try {
-    return await runLocalDraftguruTradeCapture(
+    return await runLocalExternalCapture(
       {
         sql: createPgAflOutcomeSqlClient(pool),
         artifactRootDirectory: parsed.artifactRootDirectory,
@@ -203,11 +224,11 @@ export async function runLocalDraftguruTradeCaptureCommand(input: {
 
 const invokedPath = process.argv[1];
 if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).href) {
-  runLocalDraftguruTradeCaptureCommand({ argv: process.argv.slice(2), env: process.env }).catch(
+  runLocalExternalCaptureCommand({ argv: process.argv.slice(2), env: process.env }).catch(
     (error: unknown) => {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown error';
       process.stderr.write(
-        `Local Draftguru trade capture stopped; later targets were not attempted. ${message}\n`
+        `Local provider capture stopped; later targets were not attempted. ${message}\n`
       );
       process.exitCode = 1;
     }

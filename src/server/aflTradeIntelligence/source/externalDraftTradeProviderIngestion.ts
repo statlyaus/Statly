@@ -300,6 +300,41 @@ export function validateAflTradeExternalCaptureScope(
   invalid();
 }
 
+const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
+  'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
+  'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
+  'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,
+  'official-afl-issuing-award': OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
+};
+
+function isEarlierParserVersion(recorded: string, current: string): boolean {
+  const pattern = /^(.+)\/v([1-9]\d{0,5})$/;
+  const [before, now] = [recorded.match(pattern), current.match(pattern)];
+  return (
+    before !== null && now !== null && before[1] === now[1] && Number(before[2]) < Number(now[2])
+  );
+}
+
+/**
+ * A retained capture keeps the parser identity recorded in its execution receipt; PostgreSQL
+ * re-authenticates that receipt against current Gate and source-rights authority. Its capability,
+ * provider, URL, season and pathway must still match current scope rules. Only an earlier version of
+ * the same pinned parser family stands in for the current one. New captures stay exactly pinned.
+ */
+export function validateAflTradeRetainedCaptureScope(
+  request: IngestAflTradeExternalPageRequest
+): void {
+  const current = Object.hasOwn(PINNED_PARSER_VERSIONS, request.capabilityId)
+    ? PINNED_PARSER_VERSIONS[request.capabilityId]
+    : undefined;
+  validateAflTradeExternalCaptureScope(
+    current !== undefined && isEarlierParserVersion(request.parserVersion, current)
+      ? { ...request, parserVersion: current }
+      : request
+  );
+}
+
 function requireExactScope(
   request: IngestAflTradeExternalPageRequest,
   gateRequest: AflTradeGate0ARequest,

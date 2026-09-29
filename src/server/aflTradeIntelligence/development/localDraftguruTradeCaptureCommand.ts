@@ -3,10 +3,10 @@ import type { AflTradeExternalProviderIngestionCommand } from '../source/externa
 import type { AflTradeGate0ARequest } from '../source/gate0aEvaluation';
 import {
   DRAFTGURU_TRADE_PARSER_VERSIONS,
-  DRAFTGURU_TRADE_PERMITTED_OPERATIONS,
   type createDraftguruTradeAuthorityProposal,
   type DraftguruTradeCapability,
 } from './localDraftguruTradeAuthorityProposal';
+import { createLocalNarrowCaptureGateRequest } from './localNarrowCaptureAuthority';
 
 export type DraftguruTradeAuthority = ReturnType<typeof createDraftguruTradeAuthorityProposal>;
 
@@ -19,43 +19,13 @@ function capabilityOf(authority: DraftguruTradeAuthority): DraftguruTradeCapabil
   return capabilityId;
 }
 
-/**
- * Requests exactly what the narrow trade authority permits: the four internal operations and archive
- * use of each reviewed field. The broader local helper also requests training and derived-feature
- * uses, which this authority blocks, so its requests can never pass the narrow decision.
- */
+/** The narrow Gate request for one Draftguru trade season; see the shared narrow builder. */
 export function createDraftguruTradeGateRequest(
   authority: DraftguruTradeAuthority,
   season: number,
   input: Readonly<{ evaluatedAt: string }>
 ): AflTradeGate0ARequest {
-  const range = authority.sourceRights.content.scope.seasonRanges[0]!;
-  if (!Number.isSafeInteger(season) || season < range.from || season > range.to) {
-    throw new TypeError(
-      `The Draftguru trade authority is limited to seasons ${range.from} through ${range.to}.`
-    );
-  }
-  return {
-    decisionKey: authority.proposal.content.decisionKey,
-    environment: 'non_production',
-    rightsArtifactId: authority.sourceRights.rightsArtifactId,
-    evaluatedAt: input.evaluatedAt,
-    competition: 'AFLM',
-    season,
-    accessMechanism: 'automated_web',
-    capabilityId: null,
-    geography: 'global',
-    commercialContext: 'internal-evaluation',
-    audience: 'internal',
-    operations: [...DRAFTGURU_TRADE_PERMITTED_OPERATIONS],
-    fieldUses: authority.sourceRights.content.fields.map(({ sourceField }) => ({
-      sourceField,
-      use: 'archive_fact' as const,
-    })),
-    rawRetentionDays: 365,
-    metadataRetentionDays: null,
-    cacheSeconds: 86_400,
-  };
+  return createLocalNarrowCaptureGateRequest(authority, season, input);
 }
 
 /** A capture command whose request matches the rights record's exact provider scope. */
