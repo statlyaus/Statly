@@ -1751,6 +1751,8 @@ valuation dataset, player PAV observation and postseason consumers reject it. It
 completeness facts count only while their player, match and club identity decisions stay current. It is
 a bridge: a current reviewed entry spell whose possible membership contains its whole window retires it
 automatically, player by player, and it must not be used where acquisition timing matters.
+Season HPN input building and finalization evaluate each candidate spell's registration currency once
+per input set rather than once per row (migration 0236), with the same currency rules.
 The operations runbook records its storage and guard details.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
