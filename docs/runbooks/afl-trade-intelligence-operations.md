@@ -1467,7 +1467,7 @@ independent genuinely admitted draft-trade release before the shipped HPN, genui
 pick, qualification/model-evidence, valuation-bundle/trade-construction, and private prepared-v3
 adapters can be composed by the worker.
 
-Migration `0240_hpn_historical_season_map_scope` lets a private governed season PAV input for
+Migration `0241_hpn_historical_season_map_scope` lets a private governed season PAV input for
 AFLM 2011–2024 admit its source-first projected field maps under the season-only scope key
 `afl-men:hpn-pav-season-<YYYY>`. Only the projected-map verifier used by the HPN season input build
 accepts these keys, and only for the exact season each names. The trade-valuation scope policy and
