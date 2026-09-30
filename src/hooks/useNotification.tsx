@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { cn } from '@/lib/utils';
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -87,7 +89,7 @@ export function NotificationToast({
           initial={{ opacity: 0, y: -50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -50, scale: 0.9 }}
-          className={`fixed ${positionClasses[position]} z-50 ${className}`}
+          className={cn('fixed z-50', positionClasses[position], className)}
         >
           <div
             className={`max-w-sm rounded-md border bg-background px-4 py-3 text-foreground shadow-lg ${
