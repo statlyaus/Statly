@@ -203,8 +203,8 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
         </div>
       ) : (
         <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]">
-          No weekly matchups are available yet. Check the league has at least two teams and fixture
-          generation is enabled in League Settings.
+          No weekly matchups are available yet. They appear once the league has at least two teams
+          and the commissioner has set up the fixture.
         </div>
       )}
     </section>

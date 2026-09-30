@@ -33,7 +33,7 @@ export default async function LeaguePage({
         members={[]}
         leagueId={id}
         initialUserId={userId}
-        errorMsg={toLeaguePageError(id, result.status)}
+        errorMsg={toLeaguePageError(result.status)}
       />
     );
   }
@@ -101,9 +101,9 @@ async function loadTradeDigest(leagueId: string, userId: string | null) {
   }
 }
 
-function toLeaguePageError(leagueId: string, status: number): string {
+function toLeaguePageError(status: number): string {
   if (status === 401) return 'Sign in to view this league.';
   if (status === 403) return 'You do not have access to this league.';
-  if (status === 404) return `League not found (${leagueId}).`;
-  return `Failed to load league (${leagueId}) status=${status}`;
+  if (status === 404) return 'This league does not exist or has been deleted.';
+  return "We couldn't load this league. Try again in a moment.";
 }
