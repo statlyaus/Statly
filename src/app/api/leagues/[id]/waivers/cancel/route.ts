@@ -6,7 +6,7 @@ import { withMetrics } from '@/lib/metrics';
 import { logLeagueActivity } from '@/lib/activity';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
-import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,14 +37,14 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'Claim not found' }, { status: 404 });
       }
 
-      // AuthZ: owner of the claim or league admin/commissioner/owner
-      const membership = await getLeagueMembership(leagueId, callerId);
-      if (!membership.isMember) {
+      // AuthZ: the claim's owner, or the league owner or a co-commissioner
+      const access = await getLeagueMembershipAccess(leagueId, callerId);
+      if (!access.isMember) {
         // User is not a member of this league
         return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
       }
 
-      if (claim.userId !== callerId && !isLeagueManagerRole(membership.data?.role)) {
+      if (claim.userId !== callerId && !access.canManage) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
