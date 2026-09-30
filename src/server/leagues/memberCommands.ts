@@ -1,8 +1,11 @@
 import { DraftStatus, LeagueRole, type Prisma, type PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { buildExternalUserEmail } from '@/lib/prismaLeagueBridge';
+import { generateDeterministicMemberId } from '@/utils/firestore';
 
 import { isActivePrismaMembership } from './activeMembership';
+import { isLeagueAtCapacity } from './leagueCapacity';
 
 /**
  * Prisma owns league membership. These commands authorize against the persisted league owner and
@@ -16,8 +19,11 @@ export type MemberCommandFailureCode =
   | 'owner-cannot-be-removed'
   | 'draft-started';
 
-export type MemberCommandResult<T> =
-  { ok: true; data: T } | { ok: false; code: MemberCommandFailureCode; message: string };
+export type JoinLeagueFailureCode =
+  'league-not-found' | 'draft-started' | 'league-full' | 'already-member' | 'team-name-taken';
+
+export type MemberCommandResult<T, Code extends string = MemberCommandFailureCode> =
+  { ok: true; data: T } | { ok: false; code: Code; message: string };
 
 export interface MemberCommandInput {
   leagueId: string;
@@ -27,7 +33,10 @@ export interface MemberCommandInput {
 
 type CommandClient = Pick<PrismaClient, '$transaction'>;
 
-function fail<T>(code: MemberCommandFailureCode, message: string): MemberCommandResult<T> {
+function fail<T, Code extends string = MemberCommandFailureCode>(
+  code: Code,
+  message: string
+): MemberCommandResult<T, Code> {
   return { ok: false, code, message };
 }
 
@@ -171,5 +180,179 @@ export async function transferLeagueOwnership(
     await tx.leagueMember.update({ where: { id: target.id }, data: { role: LeagueRole.OWNER } });
 
     return { ok: true, data: { ownerUserId: input.targetUserId } };
+  });
+}
+
+/** Leagues created before settings were required fall back to the default league size. */
+const DEFAULT_MAX_TEAMS = 12;
+
+export interface JoinLeagueInput {
+  leagueId: string;
+  userId: string;
+  teamName?: string;
+}
+
+export interface JoinedLeagueMember {
+  id: string;
+  leagueId: string;
+  userId: string;
+  role: 'member';
+  teamName: string;
+  joinedAt: string;
+  isActive: true;
+}
+
+export interface JoinLeagueData {
+  member: JoinedLeagueMember;
+  memberCount: number;
+  draftSlot: number;
+  league: { id: string; name: string; inviteCode: string; draftDate: string | null };
+}
+
+/** Resolves an invite code to the Prisma league that owns it, or `null` for a legacy league. */
+export async function findPrismaLeagueIdByInviteCode(
+  inviteCode: string,
+  client: Pick<PrismaClient, 'league'> = defaultPrisma
+): Promise<string | null> {
+  const league = await client.league.findUnique({ where: { inviteCode }, select: { id: true } });
+  return league?.id ?? null;
+}
+
+/**
+ * Adds a manager to a league that is still forming. The league row is locked before membership is
+ * read, so concurrent joins queue behind each other and cannot both take the last slot.
+ */
+export async function joinLeague(
+  input: JoinLeagueInput,
+  client: CommandClient = defaultPrisma
+): Promise<MemberCommandResult<JoinLeagueData, JoinLeagueFailureCode>> {
+  return client.$transaction(async (tx) => {
+    // SQLite already serializes Prisma transactions; on PostgreSQL this no-op write takes the league
+    // row lock before membership is read, so a concurrent join waits and then sees this one.
+    const locked =
+      await tx.$executeRaw`UPDATE "League" SET "ownerId" = "ownerId" WHERE "id" = ${input.leagueId}`;
+    if (locked === 0) return fail('league-not-found', 'League not found.');
+
+    const league = await tx.league.findUnique({
+      where: { id: input.leagueId },
+      select: {
+        id: true,
+        name: true,
+        inviteCode: true,
+        settings: { select: { maxTeams: true, timeZone: true, startAt: true } },
+        members: {
+          orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
+          select: { id: true, userId: true, teamName: true, isActive: true, status: true },
+        },
+        drafts: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+            lobbyStatus: true,
+            _count: { select: { picks: true } },
+          },
+        },
+      },
+    });
+    if (!league) return fail('league-not-found', 'League not found.');
+
+    const draft = league.drafts[0];
+    if (hasDraftStarted(draft)) {
+      return fail('draft-started', 'League is no longer accepting new members');
+    }
+
+    const activeMembers = league.members.filter(isActivePrismaMembership);
+    if (activeMembers.some((member) => member.userId === input.userId)) {
+      return fail('already-member', 'Already a member of this league');
+    }
+    if (
+      isLeagueAtCapacity({
+        activeMemberCount: activeMembers.length,
+        maxTeams: league.settings?.maxTeams ?? DEFAULT_MAX_TEAMS,
+      })
+    ) {
+      return fail('league-full', 'League is full');
+    }
+
+    const draftSlot = activeMembers.length + 1;
+    const teamName = input.teamName?.trim() || `${league.name} Team ${draftSlot}`;
+    const normalizedTeamName = teamName.toLowerCase();
+    if (
+      activeMembers.some((member) => member.teamName.trim().toLowerCase() === normalizedTeamName)
+    ) {
+      return fail('team-name-taken', 'Team name already taken');
+    }
+
+    await tx.user.upsert({
+      where: { id: input.userId },
+      update: {},
+      create: {
+        id: input.userId,
+        email: buildExternalUserEmail(input.userId),
+        passwordHash: 'firebase-auth',
+        displayName: teamName,
+        timeZone: league.settings?.timeZone ?? 'Australia/Melbourne',
+      },
+    });
+
+    const joinedAt = new Date();
+    const membership = {
+      role: LeagueRole.MANAGER,
+      teamName,
+      draftSlot,
+      joinedAt,
+      isActive: true,
+      status: 'ACTIVE',
+      leftAt: null,
+    };
+    // A manager who was removed rejoins on their retained history row.
+    const previous = league.members.find((member) => member.userId === input.userId);
+    const member = previous
+      ? await tx.leagueMember.update({ where: { id: previous.id }, data: membership })
+      : await tx.leagueMember.create({
+          data: {
+            id: generateDeterministicMemberId(league.id, input.userId),
+            leagueId: league.id,
+            userId: input.userId,
+            ...membership,
+          },
+        });
+
+    if (draft) {
+      await tx.draftOrder.deleteMany({ where: { draftId: draft.id } });
+      await tx.draftOrder.createMany({
+        data: [...activeMembers, member].map((row, index) => ({
+          draftId: draft.id,
+          memberId: row.id,
+          slot: index + 1,
+        })),
+      });
+    }
+
+    return {
+      ok: true,
+      data: {
+        member: {
+          id: member.id,
+          leagueId: league.id,
+          userId: input.userId,
+          role: 'member',
+          teamName,
+          joinedAt: joinedAt.toISOString(),
+          isActive: true,
+        },
+        memberCount: draftSlot,
+        draftSlot,
+        league: {
+          id: league.id,
+          name: league.name,
+          inviteCode: league.inviteCode,
+          draftDate: league.settings?.startAt?.toISOString() ?? null,
+        },
+      },
+    };
   });
 }
