@@ -107,4 +107,16 @@ describe('Button accessibility', () => {
 
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('bg-result-loss');
   });
+
+  it('lets a caller override recipe classes instead of stacking conflicting ones', () => {
+    render(
+      <Button onClick={vi.fn()} className="min-h-0 px-0">
+        Compact
+      </Button>
+    );
+
+    const button = screen.getByRole('button', { name: 'Compact' });
+    expect(button).toHaveClass('min-h-0', 'px-0');
+    expect(button).not.toHaveClass('min-h-11', 'px-4');
+  });
 });

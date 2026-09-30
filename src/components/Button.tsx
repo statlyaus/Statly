@@ -1,9 +1,9 @@
 'use client';
 
-import clsx from 'clsx';
 import type { ButtonHTMLAttributes, AnchorHTMLAttributes, ReactNode, MouseEvent } from 'react';
 import Link from 'next/link';
 import { buttonStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 interface CommonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -34,7 +34,7 @@ function isLink(props: ButtonProps): props is ButtonAsLink {
 }
 
 function getButtonClasses(props: ButtonProps): string {
-  return clsx(
+  return cn(
     buttonStyles({
       variant: VARIANT_STYLE[props.variant ?? 'primary'],
       size: props.size ?? 'md',
@@ -121,7 +121,7 @@ function LinkButton({
   return (
     <Link
       href={props.href}
-      className={clsx(classes, isDisabled && 'cursor-not-allowed opacity-50')}
+      className={cn(classes, isDisabled && 'cursor-not-allowed opacity-50')}
       aria-disabled={isDisabled}
       onClick={handleClick}
       tabIndex={isDisabled ? -1 : props.tabIndex}

@@ -234,7 +234,7 @@ function PickStatusBanner({
     <div
       role="alert"
       aria-label="Pick status"
-      className="mt-4 flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
+      className="mt-4 flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-alert-soft)] px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
     >
       <p>
         <span className="font-semibold">Pick not made: {playerLabel}.</span> {feedback.message}
@@ -442,7 +442,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       COMPLETED:
         'bg-[color:var(--draft-broadcast-green)] text-white ring-1 ring-[color:var(--draft-broadcast-green)]',
       CANCELLED:
-        'bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)] ring-1 ring-[color:var(--draft-broadcast-red)]',
+        'bg-[color:var(--draft-broadcast-alert-soft)] text-[color:var(--draft-broadcast-alert)] ring-1 ring-[color:var(--draft-broadcast-alert)]',
     }[draftStatus] ??
     'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]';
 
@@ -645,7 +645,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             <div
               role="alert"
               aria-label="Draft start status"
-              className="flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-4 py-3 text-sm text-[color:var(--draft-broadcast-text)] sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-alert-soft)] px-4 py-3 text-sm text-[color:var(--draft-broadcast-text)] sm:flex-row sm:items-center sm:justify-between"
             >
               <p>
                 <span className="font-semibold">The draft did not start.</span>{' '}

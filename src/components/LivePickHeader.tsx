@@ -391,10 +391,10 @@ export default function LivePickHeader({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <div
-          className={`rounded-lg border border-t-4 border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] ${
+          className={`rounded-lg border border-t-4 border-[color:var(--draft-broadcast-border)] p-4 text-[color:var(--draft-broadcast-text)] ${
             isYourTurn
               ? 'border-t-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)]'
-              : 'border-t-[color:var(--draft-broadcast-red)]'
+              : 'border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)]'
           }`}
           role="region"
           aria-label="Draft clock"
@@ -436,7 +436,7 @@ export default function LivePickHeader({
                 aria-label={timerAriaLabel}
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-alert)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
                 <span

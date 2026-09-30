@@ -59,7 +59,7 @@ export default function DraftStatusBanner({
       label: 'Live',
       title: 'Draft is in progress',
       description: 'The clock is active and picks, queues, and auto-picks are live.',
-      tone: 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-text)]',
+      tone: 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-solid-text)]',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -75,7 +75,7 @@ export default function DraftStatusBanner({
       label: 'Completed',
       title: 'Draft is complete',
       description: 'All picks have been finalized and the room is now read-only.',
-      tone: 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-text)]',
+      tone: 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-solid-text)]',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -141,7 +141,7 @@ export default function DraftStatusBanner({
             type="button"
             onClick={handleStartDraft}
             disabled={isActuallyLoading}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-solid-text)] shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isActuallyLoading ? 'Starting draft...' : 'Start draft now'}
           </button>

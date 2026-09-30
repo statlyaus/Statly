@@ -129,9 +129,12 @@ describe('LivePickHeader', () => {
 
     rerender(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
 
-    expect(screen.getByRole('region', { name: 'Draft clock' })).toHaveClass(
-      'border-t-[color:var(--draft-broadcast-yellow)]'
+    const onClock = screen.getByRole('region', { name: 'Draft clock' });
+    expect(onClock).toHaveClass(
+      'border-t-[color:var(--draft-broadcast-yellow)]',
+      'bg-[color:var(--draft-broadcast-yellow-soft)]'
     );
+    expect(onClock).not.toHaveClass('bg-[color:var(--draft-broadcast-panel)]');
     expect(screen.getByText('Your turn')).toHaveClass(
       'bg-[color:var(--draft-broadcast-yellow)]',
       'text-[color:var(--draft-broadcast-yellow-text)]'

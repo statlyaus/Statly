@@ -181,6 +181,13 @@
   --draft-broadcast-border-soft: #e3e8ee;
   --draft-broadcast-text: #2b2c2d;
   --draft-broadcast-muted: #6c6e6f;
+  /* Text on the solid navy action and green success fills. */
+  --draft-broadcast-solid-text: #fff;
+  /* Failures and lost connections read as alerts, not as the navy action colour. */
+  --draft-broadcast-alert: #c81e1e;
+  --draft-broadcast-alert-soft: rgba(200, 30, 30, 0.08);
+  /* Dark amber that stays readable on the light panels (the yellow fill is for chips only). */
+  --draft-broadcast-caution: #8a5a00;
   /* "red" is the room's primary action colour: the navy brand-bar, not a result or alert. */
   --draft-broadcast-red: var(--statly-navy);
   --draft-broadcast-red-soft: rgba(15, 42, 68, 0.08);
