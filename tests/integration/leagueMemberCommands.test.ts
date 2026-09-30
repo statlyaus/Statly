@@ -8,9 +8,14 @@ import {
 } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { canManageLeague, getLeagueMembership } from '@/lib/leagueMembership';
 import { prisma } from '@/lib/prisma';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
-import { removeLeagueMember, transferLeagueOwnership } from '@/server/leagues/memberCommands';
+import {
+  hasDraftStarted,
+  removeLeagueMember,
+  transferLeagueOwnership,
+} from '@/server/leagues/memberCommands';
 
 const FIXTURE = {
   leagueId: 'integration-member-commands-league',
@@ -171,6 +176,45 @@ describe('league member commands', () => {
 
     const order = await draftOrder();
     expect(order.map((row) => row.memberId)).toEqual([memberIds[0], memberIds[2], memberIds[3]]);
+  });
+
+  it('revokes league access and management from a removed manager', async () => {
+    expect((await getLeagueMembership(FIXTURE.leagueId, bravoUserId)).isMember).toBe(true);
+
+    await removeLeagueMember({
+      leagueId: FIXTURE.leagueId,
+      actorUserId: ownerUserId,
+      targetUserId: bravoUserId,
+    });
+
+    expect(await getLeagueMembership(FIXTURE.leagueId, bravoUserId)).toMatchObject({
+      isMember: false,
+    });
+    expect(await canManageLeague(FIXTURE.leagueId, bravoUserId)).toBe(false);
+    expect((await getLeagueMembership(FIXTURE.leagueId, ownerUserId)).isMember).toBe(true);
+  });
+
+  it('refuses removal once the draft room is live, even before the first pick', async () => {
+    await prisma.draft.update({ where: { id: FIXTURE.draftId }, data: { lobbyStatus: 'LIVE' } });
+
+    const result = await removeLeagueMember({
+      leagueId: FIXTURE.leagueId,
+      actorUserId: ownerUserId,
+      targetUserId: bravoUserId,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: 'draft-started' });
+  });
+
+  it('keeps removal open while the lobby is only counting down to the start', () => {
+    expect(
+      hasDraftStarted({
+        status: DraftStatus.SCHEDULED,
+        startedAt: null,
+        lobbyStatus: 'COUNTDOWN',
+        _count: { picks: 0 },
+      })
+    ).toBe(false);
   });
 
   it('lets a manager leave before the draft', async () => {

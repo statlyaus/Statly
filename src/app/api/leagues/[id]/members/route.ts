@@ -298,7 +298,7 @@ async function handleTransferOwnership(
         batch,
         input.leagueId,
         input.actorUserId,
-        { role: 'admin' },
+        { role: 'member' },
         { topLevelMemberId: getTopLevelMemberId(input.leagueId, ownerMember) }
       );
     }
