@@ -248,7 +248,70 @@ export function queueLeagueMembershipPatch(
   batch.set(embeddedRef, patch, { merge: true });
 }
 
+/**
+ * Active members of a league. Prisma owns membership, so a league with a Prisma row is read from
+ * Prisma (removed and declined rows excluded); only legacy leagues fall back to Firestore.
+ */
 export async function listActiveLeagueMembers(
+  leagueId: string
+): Promise<LeagueMembershipListItem[]> {
+  const prismaLeague = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      ownerId: true,
+      members: {
+        orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          teamName: true,
+          teamLogoUrl: true,
+          teamLogoPositionX: true,
+          teamLogoPositionY: true,
+          teamLogoZoom: true,
+          joinedAt: true,
+          leftAt: true,
+          isActive: true,
+          status: true,
+          isCoCommissioner: true,
+        },
+      },
+    },
+  });
+
+  if (!prismaLeague) {
+    return listActiveFirestoreLeagueMembers(leagueId);
+  }
+
+  return prismaLeague.members.filter(isActivePrismaMembership).map((member) => ({
+    id: member.id,
+    leagueId,
+    userId: member.userId,
+    // The API's role vocabulary: the owner, a co-commissioner ('admin'), or an ordinary member.
+    role:
+      member.userId === prismaLeague.ownerId
+        ? 'owner'
+        : member.isCoCommissioner
+          ? 'admin'
+          : 'member',
+    teamName: member.teamName,
+    ...(member.teamLogoUrl ? { teamLogoUrl: member.teamLogoUrl } : {}),
+    ...(member.teamLogoPositionX != null ? { teamLogoPositionX: member.teamLogoPositionX } : {}),
+    ...(member.teamLogoPositionY != null ? { teamLogoPositionY: member.teamLogoPositionY } : {}),
+    ...(member.teamLogoZoom != null ? { teamLogoZoom: member.teamLogoZoom } : {}),
+    joinedAt: member.joinedAt,
+    ...(member.leftAt ? { leftAt: member.leftAt } : {}),
+    isActive: true,
+    source: 'prisma' as const,
+  }));
+}
+
+/**
+ * Active members as recorded in the Firestore compatibility projection. Only projection writers
+ * should use this, to locate the Firestore documents they update after a Prisma command.
+ */
+export async function listActiveFirestoreLeagueMembers(
   leagueId: string
 ): Promise<LeagueMembershipListItem[]> {
   const embeddedSnap = await adminDb
