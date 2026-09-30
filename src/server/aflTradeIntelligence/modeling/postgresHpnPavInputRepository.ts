@@ -745,6 +745,8 @@ function requireFactualUniverseCoverage(
   }
 }
 
+const HPN_INPUT_ROW_BATCH_SIZE = 1_000;
+
 async function persistInputSet(
   transaction: AflOutcomeSqlTransaction,
   inputSet: AflTradeHpnPavSeasonInputSet,
@@ -761,8 +763,7 @@ async function persistInputSet(
        result_row_count,primary_player_row_count,corroborating_player_row_count,
        input_set_canonical_json,input_set_json,excluded_source_row_count)
      VALUES ($1,$2,$3,$4,$5::"OutcomeEnvironment",$6,$7,$8,$9,$10,$11,'building',
-             $12,$13,$14,$15,$16,$17,$18,$19::jsonb,
-             COALESCE(jsonb_array_length($19::jsonb#>'{content,excludedSourceRows}'),0))`,
+             $12,$13,$14,$15,$16,$17,$18,$20::jsonb,$19)`,
     [
       inputSet.inputSetId,
       content.factualUniverse.factualRunId,
@@ -782,6 +783,8 @@ async function persistInputSet(
       content.counts.primaryPlayerRows,
       content.counts.corroboratingPlayerRows,
       canonicalizeAflTradeJson(content),
+      // The count the stored content carries, without parsing the season JSON a second time.
+      excluded.length,
       canonicalizeAflTradeJson(inputSet),
     ]
   );
@@ -810,32 +813,38 @@ async function persistInputSet(
          "legacyFieldMapId" text, "projectedFieldMapId" text, "inputKind" text, role text)`,
     [canonicalizeAflTradeJson(runRows)]
   );
-  const rowRows = content.rows.map((row, ordinal) => ({
-    inputSetId: inputSet.inputSetId,
-    ordinal,
-    normalizationRunId: row.source.normalizationRunId,
-    providerDecodedRowId: row.source.providerDecodedRowId,
-    rowKind: row.kind,
-    role: row.kind === 'player_match_stats' ? row.role : null,
-    sourceRowSha256: row.source.sourceRowSha256,
-    typedPayloadSha256: row.source.typedPayloadSha256,
-    rowSha256: sha256AflTradeCanonicalJson(row),
-    rowCanonicalJson: canonicalizeAflTradeJson(row),
-    row,
-  }));
-  await transaction.query(
-    `INSERT INTO outcome_hpn_pav_input_row
-      (input_set_id,ordinal,normalization_run_id,provider_decoded_row_id,row_kind,role,
-       source_row_sha256,typed_payload_sha256,row_sha256,row_canonical_json,row_json)
-     SELECT "inputSetId",ordinal,"normalizationRunId","providerDecodedRowId","rowKind",role,
-            "sourceRowSha256","typedPayloadSha256","rowSha256","rowCanonicalJson",row
-       FROM jsonb_to_recordset($1::jsonb) AS value(
-         "inputSetId" text, ordinal integer, "normalizationRunId" text,
-         "providerDecodedRowId" text, "rowKind" text, role text,
-         "sourceRowSha256" text, "typedPayloadSha256" text, "rowSha256" text,
-         "rowCanonicalJson" text, row jsonb)`,
-    [canonicalizeAflTradeJson(rowRows)]
-  );
+  // A genuine season has about 20,000 rows. One statement per batch keeps each parsed parameter
+  // small; the rows, their ordinals and the transaction are unchanged.
+  for (let start = 0; start < content.rows.length; start += HPN_INPUT_ROW_BATCH_SIZE) {
+    const rowRows = content.rows
+      .slice(start, start + HPN_INPUT_ROW_BATCH_SIZE)
+      .map((row, offset) => ({
+        inputSetId: inputSet.inputSetId,
+        ordinal: start + offset,
+        normalizationRunId: row.source.normalizationRunId,
+        providerDecodedRowId: row.source.providerDecodedRowId,
+        rowKind: row.kind,
+        role: row.kind === 'player_match_stats' ? row.role : null,
+        sourceRowSha256: row.source.sourceRowSha256,
+        typedPayloadSha256: row.source.typedPayloadSha256,
+        rowSha256: sha256AflTradeCanonicalJson(row),
+        rowCanonicalJson: canonicalizeAflTradeJson(row),
+        row,
+      }));
+    await transaction.query(
+      `INSERT INTO outcome_hpn_pav_input_row
+        (input_set_id,ordinal,normalization_run_id,provider_decoded_row_id,row_kind,role,
+         source_row_sha256,typed_payload_sha256,row_sha256,row_canonical_json,row_json)
+       SELECT "inputSetId",ordinal,"normalizationRunId","providerDecodedRowId","rowKind",role,
+              "sourceRowSha256","typedPayloadSha256","rowSha256","rowCanonicalJson",row
+         FROM jsonb_to_recordset($1::jsonb) AS value(
+           "inputSetId" text, ordinal integer, "normalizationRunId" text,
+           "providerDecodedRowId" text, "rowKind" text, role text,
+           "sourceRowSha256" text, "typedPayloadSha256" text, "rowSha256" text,
+           "rowCanonicalJson" text, row jsonb)`,
+      [canonicalizeAflTradeJson(rowRows)]
+    );
+  }
   if (excluded.length > 0)
     await transaction.query(
       `INSERT INTO outcome_hpn_pav_input_excluded_source_row

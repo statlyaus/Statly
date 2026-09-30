@@ -1167,6 +1167,7 @@ model OutcomeProviderResolutionProposal {
 
   @@unique([resolutionCaseId, proposalSha256], map: "outcome_provider_resolution_proposal_case_key")
   @@index([normalizationRunId, subjectType], map: "outcome_provider_resolution_proposal_run_idx")
+  @@index([matchCandidateId], map: "outcome_provider_resolution_proposal_match_candidate_idx")
   @@map("outcome_provider_resolution_proposal")
 }
 
@@ -2639,6 +2640,7 @@ model OutcomeProviderPlayerAppearanceFact {
   @@unique([factBatchId, providerDecodedRowId], map: "outcome_provider_appearance_fact_batch_row_key")
   @@index([playerIdentityId, matchIdentityId, availability], map: "outcome_provider_appearance_identity_match_idx")
   @@index([playerId, seasonYear, matchId], map: "outcome_provider_appearance_player_season_idx")
+  @@index([matchId, representedClubId], map: "outcome_provider_appearance_match_club_idx")
   @@map("outcome_provider_player_appearance_fact")
 }
 
