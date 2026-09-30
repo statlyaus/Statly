@@ -1275,7 +1275,13 @@ current player-identity decisions and independently retained `afl_trade_canonica
 authority; it is atomic, idempotent and cannot write release or publication pointers. One traded pick
 entitlement and its eventual selection retain the same stable `pick_id`: `exercised_as` is a
 realization relation, while `OutcomePickLineageEdge` remains reserved for genuine entitlement
-transformations such as splitting, combining or substitution. Recurring production still requires
+transformations such as splitting, combining or substitution. The canonical pick row itself stays
+append-only; when a later reviewed-lineage promotion knows facts that an earlier promotion stored as
+empty (round, nominal pick number, original club), migration 0237 records them as a gap-free,
+append-only `outcome_draft_pick_enrichment` version bound to that promotion, its approval and the
+current reviewed pick-lineage registration. Enrichment fills empty facts only; a differing known
+value is still an immutable conflict. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
+current facts, and release-bound readers pass the release cutoff. Recurring production still requires
 deployment scheduling, execution and monitoring of the reviewed discovery plan, missed-period monitoring, reviewed
 promotion of the historical candidate set, and a completed non-production backfill and reconciliation
 rehearsal described below.

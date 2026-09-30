@@ -3098,6 +3098,22 @@ uniqueness remains intact. Promotion writes and factual/archive readback preserv
 predecessors; old records without predecessors retain their prior serialized shape. This storage
 support does not resolve candidate issues, supply draft sessions or admit the genuine reviewed set.
 
+Migration 0237 enriches canonical picks that an earlier promotion stored with empty facts. The
+2019–2021 national-draft session promotions stored every selected pick with no round, nominal pick
+number or original club, and `outcome_draft_pick` is append-only, so a later reviewed-lineage promotion
+of the same stable `pick_id` used to fail with `IMMUTABLE_CONFLICT`. Promotion now compares its pick
+definition with the currently resolved facts: equal facts need no write; facts that are empty in the
+stored pick are filled by a new `outcome_draft_pick_enrichment` version (cumulative facts, the
+promotion, its approval decision, the reviewed pick-lineage registration and the contributing transfer
+and custody IDs). Enrichment requires that registration (the candidate's reviewed scope/correction, or
+one registered against the promoted candidate itself) with its current approval; without it the
+conflict stands. A known value never changes, and a definition that omits a known value is still a
+conflict. Versions are gap-free and append-only, and promotion replay adds no version. Readers use
+`outcome_draft_pick_facts(pick_ids, as_of)`: promotion resolves current facts, while the public archive,
+pick-PAV selection and pick-PAV finalization pass the release's `effective_through`, so an enrichment
+recorded after a release never changes that release's reconstruction. Apply 0237 through the normal
+migration owner; it grants the pick-PAV coordinator read access to the enrichment table.
+
 Migration0166 adds typed non-player pick realizations: `passed`, `not_exercised`, and
 `incorporated_into_later_package`. These require `terminal_outcome` and no draft-selection row;
 `exercised_as` retains its selection reference. The candidate, canonical writer and archive preserve
