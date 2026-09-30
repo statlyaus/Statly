@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { buildAppearanceMembershipHpnInputFixture } from '../testUtils/appearanceMembershipHpnInputFixture';
@@ -66,17 +66,16 @@ const FINALIZE = `UPDATE outcome_hpn_pav_input_set SET status='finalized', final
 
 /**
  * Applies one tampering to the building input set, then finalizes it with the deployed and with
- * the pre-0238 definition, each inside its own savepoint of one rolled-back transaction.
+ * the pre-0238 definition, each inside its own savepoint of the caller's transaction.
  */
 async function finalizationOutcomes(
+  session: PoolClient,
   inputSetId: string,
   tamper: string | null,
   finalize = FINALIZE
 ): Promise<{ deployed: string | null; original: string | null }> {
-  const session = await pool.connect();
+  await session.query('SAVEPOINT tampered');
   try {
-    await session.query('BEGIN');
-    await stubHpnRowAuthorities(session);
     if (tamper) {
       // The tampered records are append-only; their guards are bypassed only for the tampering.
       await session.query(`SET LOCAL session_replication_role='replica'`);
@@ -97,8 +96,7 @@ async function finalizationOutcomes(
     };
     return { deployed: await outcome(null), original: await outcome(pre0238Finalization) };
   } finally {
-    await session.query('ROLLBACK').catch(() => undefined);
-    session.release();
+    await session.query('ROLLBACK TO SAVEPOINT tampered');
   }
 }
 
@@ -110,114 +108,139 @@ const lastPlayerSpell = `(SELECT row_json#>>'{acquisitionSpell,spellVersionId}'
   ORDER BY ordinal DESC LIMIT 1)`;
 
 it('keeps every finalization outcome identical to the pre-0238 finalization', async () => {
-  const inputSetId = await inflateHpnInputSetToSeasonScale(pool, sourceInputSetId, {
-    label: 'finalization-identity',
-    matches: 2,
-  });
-  const cases: Array<{
-    name: string;
-    tamper: string | null;
-    finalize?: string;
-    expected: RegExp | null;
-  }> = [
-    { name: 'valid input', tamper: null, expected: null },
-    {
-      name: 'finalization changes another column',
-      tamper: null,
-      finalize: FINALIZE.replace(
-        'finalized_at=created_at',
-        `finalized_at=created_at,input_set_canonical_json=input_set_canonical_json||' '`
-      ),
-      expected: /only one exact finalization transition/,
-    },
-    {
-      name: 'appearance envelope names its fact as a number',
-      tamper: tamperContent('{content,factualUniverse,playerAppearanceFacts,-1,factIds}', '[1]'),
-      expected: /appearance facts do not equal/,
-    },
-    {
-      name: 'appearance envelope names another club',
-      tamper: tamperContent(
-        '{content,factualUniverse,playerAppearanceFacts,-1,clubId}',
-        '"afl-club:x"'
-      ),
-      expected: /appearance facts do not equal/,
-    },
-    {
-      name: 'match envelope names another instant',
-      tamper: tamperContent(
-        '{content,factualUniverse,completedMatchFacts,-1,effectiveAt}',
-        '"2026-01-01T00:00:00.000Z"'
-      ),
-      expected: /completed-match facts do not equal/,
-    },
-    {
-      name: 'source run envelope differs',
-      tamper: tamperContent('{content,sourceRuns,0,stagingSha256}', '"0"'),
-      expected: /source run is incomplete/,
-    },
-    {
-      name: 'source run envelope names another run',
-      tamper: tamperContent(
-        '{content,sourceRuns,0,normalizationRunId}',
-        '"provider-normalization-run:x"'
-      ),
-      expected: /source run is incomplete/,
-    },
-    {
-      name: 'field map envelope differs',
-      tamper: tamperContent('{content,fieldMaps,0,content,limitation}', '"changed"'),
-      expected: /source run is incomplete/,
-    },
-    {
-      name: 'result row differs in content',
-      tamper: tamperContent('{content,rows,-1,homePoints}', '999'),
-      expected: /rows do not exactly conserve/,
-    },
-    {
-      name: 'player row differs in content',
-      tamper: tamperContent('{content,rows,-2,stats,marks}', '999'),
-      expected: /rows do not exactly conserve/,
-    },
-    {
-      name: 'content row carries an extra key and still contains its row',
-      tamper: tamperContent('{content,rows,-2,extra}', 'true'),
-      expected: null,
-    },
-    {
-      name: 'completed match envelope names another club',
-      tamper: tamperContent('{content,completedMatches,-1,homeClubId}', '"afl-club:x"'),
-      expected: /completed-match membership mismatch/,
-    },
-    {
-      name: 'player spell recorded after the knowledge cutoff',
-      tamper: `UPDATE outcome_acquisition_spell_version
+  // Everything here is rolled back, so the season test's runs and universe stay exact.
+  const session = await pool.connect();
+  await session.query('BEGIN');
+  try {
+    await stubHpnRowAuthorities(session);
+    const inputSetId = await inflateHpnInputSetToSeasonScale(session, sourceInputSetId, {
+      label: 'finalization-identity',
+      matches: 2,
+    });
+    const cases: Array<{
+      name: string;
+      tamper: string | null;
+      finalize?: string;
+      expected: RegExp | null;
+    }> = [
+      { name: 'valid input', tamper: null, expected: null },
+      {
+        name: 'finalization changes another column',
+        tamper: null,
+        finalize: FINALIZE.replace(
+          'finalized_at=created_at',
+          `finalized_at=created_at,input_set_canonical_json=input_set_canonical_json||' '`
+        ),
+        expected: /only one exact finalization transition/,
+      },
+      {
+        name: 'appearance envelope names its fact as a number',
+        tamper: tamperContent('{content,factualUniverse,playerAppearanceFacts,-1,factIds}', '[1]'),
+        expected: /appearance facts do not equal/,
+      },
+      {
+        name: 'appearance envelope names another club',
+        tamper: tamperContent(
+          '{content,factualUniverse,playerAppearanceFacts,-1,clubId}',
+          '"afl-club:x"'
+        ),
+        expected: /appearance facts do not equal/,
+      },
+      {
+        name: 'match envelope names another instant',
+        tamper: tamperContent(
+          '{content,factualUniverse,completedMatchFacts,-1,effectiveAt}',
+          '"2026-01-01T00:00:00.000Z"'
+        ),
+        expected: /completed-match facts do not equal/,
+      },
+      {
+        name: 'source run envelope differs',
+        tamper: tamperContent('{content,sourceRuns,0,stagingSha256}', '"0"'),
+        expected: /source run is incomplete/,
+      },
+      {
+        name: 'source run envelope names another run',
+        tamper: tamperContent(
+          '{content,sourceRuns,0,normalizationRunId}',
+          '"provider-normalization-run:x"'
+        ),
+        expected: /source run is incomplete/,
+      },
+      {
+        name: 'field map envelope differs',
+        tamper: tamperContent('{content,fieldMaps,0,content,limitation}', '"changed"'),
+        expected: /source run is incomplete/,
+      },
+      {
+        name: 'result row differs in content',
+        tamper: tamperContent('{content,rows,-1,homePoints}', '999'),
+        expected: /rows do not exactly conserve/,
+      },
+      {
+        name: 'player row differs in content',
+        tamper: tamperContent('{content,rows,-2,stats,marks}', '999'),
+        expected: /rows do not exactly conserve/,
+      },
+      {
+        name: 'content row carries an extra key and still contains its row',
+        tamper: tamperContent('{content,rows,-2,extra}', 'true'),
+        expected: null,
+      },
+      {
+        name: 'completed match envelope names another club',
+        tamper: tamperContent('{content,completedMatches,-1,homeClubId}', '"afl-club:x"'),
+        expected: /completed-match membership mismatch/,
+      },
+      {
+        name: 'player spell recorded after the knowledge cutoff',
+        tamper: `UPDATE outcome_acquisition_spell_version
         SET recorded_at=recorded_at+INTERVAL '10 years' WHERE spell_version_id=${lastPlayerSpell}`,
-      expected: /acquisition spell is not exact and current/,
-    },
-    {
-      name: 'appearance membership loses a fact',
-      tamper: `DELETE FROM outcome_hpn_pav_input_factual_appearance_member
+        expected: /acquisition spell is not exact and current/,
+      },
+      {
+        name: 'appearance membership loses a fact',
+        tamper: `DELETE FROM outcome_hpn_pav_input_factual_appearance_member
         WHERE input_set_id=$1 AND ordinal=(SELECT max(ordinal)
           FROM outcome_hpn_pav_input_factual_appearance_member WHERE input_set_id=$1)`,
-      expected: /counts do not match durable membership/,
-    },
-  ];
-  for (const { name, tamper, finalize, expected } of cases) {
-    const { deployed, original } = await finalizationOutcomes(inputSetId, tamper, finalize);
-    expect({ name, deployed }).toEqual({ name, deployed: original });
-    expect({ name, deployed }).toEqual({
-      name,
-      deployed: expected ? expect.stringMatching(expected) : null,
-    });
+        expected: /counts do not match durable membership/,
+      },
+    ];
+    for (const { name, tamper, finalize, expected } of cases) {
+      const { deployed, original } = await finalizationOutcomes(
+        session,
+        inputSetId,
+        tamper,
+        finalize
+      );
+      expect({ name, deployed }).toEqual({ name, deployed: original });
+      expect({ name, deployed }).toEqual({
+        name,
+        deployed: expected ? expect.stringMatching(expected) : null,
+      });
+    }
+  } finally {
+    await session.query('ROLLBACK');
+    session.release();
   }
 }, 600_000);
 
 it('finalizes a genuine-scale season in bounded memory and time where the pre-0238 finalization did not', async () => {
-  const inputSetId = await inflateHpnInputSetToSeasonScale(pool, sourceInputSetId, {
-    label: 'finalization-season',
-    matches: SEASON_MATCHES,
-  });
+  const session = await pool.connect();
+  let inputSetId: string;
+  try {
+    await session.query('BEGIN');
+    inputSetId = await inflateHpnInputSetToSeasonScale(session, sourceInputSetId, {
+      label: 'finalization-season',
+      matches: SEASON_MATCHES,
+    });
+    await session.query('COMMIT');
+  } catch (error) {
+    await session.query('ROLLBACK');
+    throw error;
+  } finally {
+    session.release();
+  }
   const size = await pool.query<{ rows: number; content_bytes: number }>(
     `SELECT (SELECT count(*)::INTEGER FROM outcome_hpn_pav_input_row WHERE input_set_id=$1) AS rows,
             octet_length(input_set_canonical_json) AS content_bytes

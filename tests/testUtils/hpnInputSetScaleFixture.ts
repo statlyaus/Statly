@@ -17,7 +17,7 @@ import { Pool, type PoolClient } from 'pg';
  * from two providers, about 20,000 player-stat rows.
  */
 export async function inflateHpnInputSetToSeasonScale(
-  pool: Pool,
+  client: PoolClient,
   sourceInputSetId: string,
   {
     label,
@@ -25,29 +25,23 @@ export async function inflateHpnInputSetToSeasonScale(
     playersPerSide = 23,
   }: { label: string; matches?: number; playersPerSide?: number }
 ): Promise<string> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(`SET LOCAL session_replication_role='replica'`);
-    await client.query(
-      `CREATE TEMP TABLE scale_parameter ON COMMIT DROP AS
-         SELECT $1::TEXT AS source_input_set_id,$2::TEXT AS label,$3::INTEGER AS matches,
-                $4::INTEGER AS players_per_side`,
-      [sourceInputSetId, label, matches, playersPerSide]
-    );
-    // Each statement is separate so no single statement holds more than one season-sized value.
-    for (const statement of INFLATE_STATEMENTS) await client.query(statement);
-    const result = await client.query<{ input_set_id: string }>(
-      'SELECT input_set_id FROM scale_input_set'
-    );
-    await client.query('COMMIT');
-    return result.rows[0]!.input_set_id;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  // Runs inside the caller's transaction: a caller that rolls back leaves no synthetic decoded
+  // rows or facts in the shared source runs and factual universe.
+  await client.query(`SET LOCAL session_replication_role='replica'`);
+  await client.query(
+    `CREATE TEMP TABLE scale_parameter ON COMMIT DROP AS
+       SELECT $1::TEXT AS source_input_set_id,$2::TEXT AS label,$3::INTEGER AS matches,
+              $4::INTEGER AS players_per_side`,
+    [sourceInputSetId, label, matches, playersPerSide]
+  );
+  // Each statement is separate so no single statement holds more than one season-sized value.
+  for (const statement of INFLATE_STATEMENTS) await client.query(statement);
+  const result = await client.query<{ input_set_id: string }>(
+    'SELECT input_set_id FROM scale_input_set'
+  );
+  for (const table of SCALE_TEMP_TABLES) await client.query(`DROP TABLE ${table}`);
+  await client.query(`SET LOCAL session_replication_role='origin'`);
+  return result.rows[0]!.input_set_id;
 }
 
 /**
@@ -188,6 +182,21 @@ export async function measureHpnInputFinalization(
     await monitoring.end();
   }
 }
+
+const SCALE_TEMP_TABLES = [
+  'scale_parameter',
+  'scale_source',
+  'scale_template',
+  'scale_match',
+  'scale_player',
+  'scale_row',
+  'scale_match_fact',
+  'scale_appearance_fact',
+  'scale_all_row',
+  'scale_completed_match',
+  'scale_content',
+  'scale_input_set',
+];
 
 const INFLATE_STATEMENTS = [
   `CREATE TEMP TABLE scale_source ON COMMIT DROP AS
