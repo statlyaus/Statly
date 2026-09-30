@@ -399,6 +399,7 @@ const AuthForm = ({
               <input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="Enter your email address"
                 className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                   showEmailError
@@ -453,6 +454,7 @@ const AuthForm = ({
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete={isSignup ? 'new-password' : 'current-password'}
                 placeholder="Enter your password"
                 className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                   showPasswordError
@@ -554,6 +556,7 @@ const AuthForm = ({
                 <input
                   id="confirmPassword"
                   type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   placeholder="Confirm your password"
                   className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                     confirmPassword && password !== confirmPassword
@@ -591,6 +594,7 @@ const AuthForm = ({
           {/* Error Message */}
           {error && (
             <motion.div
+              role="alert"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center gap-3"
