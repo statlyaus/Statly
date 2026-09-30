@@ -213,6 +213,32 @@ function fakeClient(options?: { replay?: boolean }) {
     if (sql.includes('SELECT event_id FROM outcome_event')) {
       return { rows: [{ event_id: parameters[0] }], rowCount: 1 };
     }
+    if (sql.includes('FROM outcome_draft_pick_facts')) {
+      // Resolve the stored pick exactly as it was inserted in this promotion, with no enrichment.
+      const inserted = queries.find(
+        (entry) =>
+          entry.sql.includes('INSERT INTO outcome_draft_pick') &&
+          entry.parameters[0] === parameters[0]
+      )?.parameters;
+      return inserted
+        ? {
+            rows: [
+              {
+                pick_id: inserted[0],
+                draft_season_year: inserted[1],
+                draft_kind: inserted[2],
+                nominal_round: inserted[3],
+                nominal_pick: inserted[4],
+                original_club_id: inserted[5],
+                status: 'approved',
+                enrichment_id: null,
+                enrichment_version: null,
+              },
+            ],
+            rowCount: 1,
+          }
+        : { rows: [], rowCount: 0 };
+    }
     if (sql.includes('SELECT pick_id FROM outcome_draft_pick')) {
       return { rows: [{ pick_id: parameters[0] }], rowCount: 1 };
     }
