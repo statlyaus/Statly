@@ -284,7 +284,24 @@ describe('AuthForm', () => {
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Login failed')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('Login failed');
     });
+  });
+
+  it('lets password managers fill sign-in credentials', () => {
+    render(<AuthForm initialMode="login" />);
+
+    expect(screen.getByLabelText('Email Address')).toHaveAttribute('autocomplete', 'email');
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'current-password');
+  });
+
+  it('lets password managers suggest a new password on sign-up', () => {
+    render(<AuthForm initialMode="signup" />);
+
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'new-password');
+    expect(screen.getByLabelText('Confirm Password')).toHaveAttribute(
+      'autocomplete',
+      'new-password'
+    );
   });
 });

@@ -35,6 +35,8 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: 'marks', label: 'Marks' },
 ];
 
+const PAGE_SIZE = 24;
+
 const CORE_STATS: Array<{ key: SortKey; label: string }> = [
   { key: 'aflFantasy', label: 'AF' },
   { key: 'supercoach', label: 'SC' },
@@ -73,6 +75,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
   const [teamFilter, setTeamFilter] = useState('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const teams = useMemo(() => {
     const unique = new Set(
@@ -113,7 +116,8 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
       });
   }, [players, teamFilter, query, sortDir, sortKey]);
 
-  const featuredPlayers = visiblePlayers.slice(0, 12);
+  const shownPlayers = visiblePlayers.slice(0, visibleCount);
+  const nextPageCount = Math.min(PAGE_SIZE, visiblePlayers.length - shownPlayers.length);
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
@@ -144,7 +148,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
               </div>
               <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
-                  Showing
+                  Matches
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">
                   {visiblePlayers.length}
@@ -169,7 +173,10 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--league-text-muted)]" />
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setVisibleCount(PAGE_SIZE);
+                }}
                 placeholder="Search player or club"
                 className="h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] pl-10 pr-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
               />
@@ -179,7 +186,10 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
               <span className="sr-only">Filter by club</span>
               <select
                 value={teamFilter}
-                onChange={(event) => setTeamFilter(event.target.value)}
+                onChange={(event) => {
+                  setTeamFilter(event.target.value);
+                  setVisibleCount(PAGE_SIZE);
+                }}
                 className="h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
               >
                 {teams.map((option) => (
@@ -194,7 +204,10 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
               <span className="sr-only">Sort players</span>
               <select
                 value={sortKey}
-                onChange={(event) => setSortKey(event.target.value as SortKey)}
+                onChange={(event) => {
+                  setSortKey(event.target.value as SortKey);
+                  setVisibleCount(PAGE_SIZE);
+                }}
                 className="h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
               >
                 {SORT_OPTIONS.map((option) => (
@@ -221,9 +234,19 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
           </div>
         </section>
 
-        {featuredPlayers.length > 0 ? (
+        {shownPlayers.length > 0 ? (
+          <p
+            className="text-sm font-medium text-[color:var(--league-text-muted)]"
+            aria-live="polite"
+          >
+            Showing {shownPlayers.length} of {visiblePlayers.length}{' '}
+            {visiblePlayers.length === 1 ? 'player' : 'players'}
+          </p>
+        ) : null}
+
+        {shownPlayers.length > 0 ? (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {featuredPlayers.map((player) => (
+            {shownPlayers.map((player) => (
               <article
                 key={player.id}
                 className="group rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.4)] transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)]/35 hover:shadow-[0_24px_60px_-42px_rgba(23,34,48,0.45)]"
@@ -312,6 +335,16 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
             </p>
           </section>
         )}
+
+        {nextPageCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+            className="mx-auto inline-flex h-11 items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+          >
+            Show {nextPageCount} more {nextPageCount === 1 ? 'player' : 'players'}
+          </button>
+        ) : null}
       </div>
     </main>
   );
