@@ -18,7 +18,7 @@ export default async function PlayersPageServer(): Promise<JSX.Element> {
   } catch (err) {
     logger.error('Failed to fetch players', err);
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12">
+      <div className="mx-auto max-w-3xl px-6 py-12">
         <div
           role="alert"
           aria-live="polite"
@@ -47,13 +47,13 @@ export default async function PlayersPageServer(): Promise<JSX.Element> {
             </Link>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (players.length === 0) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12">
+      <div className="mx-auto max-w-3xl px-6 py-12">
         <section
           aria-live="polite"
           className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
@@ -81,7 +81,7 @@ export default async function PlayersPageServer(): Promise<JSX.Element> {
             </Link>
           </div>
         </section>
-      </main>
+      </div>
     );
   }
 
