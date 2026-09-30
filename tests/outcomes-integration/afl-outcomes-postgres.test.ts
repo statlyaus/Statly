@@ -1310,6 +1310,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0237_canonical_pick_enrichment',
       '0239_provider_identity_root_proposal_indexes',
       '0240_hpn_input_finalization_bounded_memory',
+      '0241_hpn_historical_season_map_scope',
+      '0242_assignment_continuity_once_per_case',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1453,6 +1455,10 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
     expect(hpnV2Finalizer).toContain('outcome_hpn_acquisition_spell_source_current');
     expect(hpnV2Finalizer).toContain('registered_spells');
     expect(hpnV2Finalizer).not.toContain('outcome_hpn_acquisition_spell_is_current');
+    // 0242 evaluates every row's assignment continuity once per assignment case.
+    expect(hpnV2Finalizer).toContain('outcome_provider_assignment_continuity_current_set');
+    expect(hpnV2Finalizer).toContain('current_assignments');
+    expect(hpnV2Finalizer).not.toMatch(/outcome_hpn_pav_(player|match|club)_resolution_current"\(/);
     const hpnSelectionGuard = await query<{ definition: string }>(
       `SELECT pg_get_functiondef(
         'require_outcome_hpn_pav_statistical_selections(text,boolean)'::regprocedure) AS definition`
