@@ -27,7 +27,14 @@ describe('loadCommissionerLeagues', () => {
         name: 'Open League',
         inviteCode: 'OPEN1',
         settings: { maxTeams: 8 },
-        drafts: [{ status: DraftStatus.SCHEDULED, startedAt: null, _count: { picks: 0 } }],
+        drafts: [
+          {
+            status: DraftStatus.SCHEDULED,
+            startedAt: null,
+            lobbyStatus: 'COUNTDOWN',
+            _count: { picks: 0 },
+          },
+        ],
         members: [
           member({ userId: 'owner', teamName: 'Owner FC', role: LeagueRole.OWNER, draftSlot: 1 }),
           member({ userId: 'gone', teamName: 'Gone FC', isActive: false, status: 'removed' }),
@@ -39,7 +46,14 @@ describe('loadCommissionerLeagues', () => {
         name: 'Drafted League',
         inviteCode: 'DRAFT1',
         settings: { maxTeams: 4 },
-        drafts: [{ status: DraftStatus.LIVE, startedAt: joinedAt, _count: { picks: 3 } }],
+        drafts: [
+          {
+            status: DraftStatus.LIVE,
+            startedAt: joinedAt,
+            lobbyStatus: 'LIVE',
+            _count: { picks: 3 },
+          },
+        ],
         members: [member({ userId: 'owner', role: LeagueRole.OWNER })],
       },
     ]);

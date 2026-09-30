@@ -32,7 +32,12 @@ const commissionerLeagueSelect = {
   drafts: {
     orderBy: { createdAt: 'desc' },
     take: 1,
-    select: { status: true, startedAt: true, _count: { select: { picks: true } } },
+    select: {
+      status: true,
+      startedAt: true,
+      lobbyStatus: true,
+      _count: { select: { picks: true } },
+    },
   },
   members: {
     orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],

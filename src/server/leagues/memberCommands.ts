@@ -56,16 +56,6 @@ async function loadLeagueForCommand(tx: Prisma.TransactionClient, leagueId: stri
   });
 }
 
-/** Removal closes once the league's latest draft has left SCHEDULED, started, or taken a pick. */
-export function hasDraftStarted(
-  draft: { status: DraftStatus; startedAt: Date | null; _count: { picks: number } } | undefined
-): boolean {
-  if (!draft) return false;
-  return (
-    draft.status !== DraftStatus.SCHEDULED || draft.startedAt !== null || draft._count.picks > 0
-  );
-}
-
 /**
  * Removal closes once the league's latest draft has left SCHEDULED, started, taken a pick, or opened
  * a live room. A COUNTDOWN lobby is still forming (draft setup opens every lobby that way).

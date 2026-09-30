@@ -117,18 +117,27 @@ export default function CommissionerWorkspace({
         </div>
       </header>
 
-      {feedback ? (
-        <p
-          role={feedback.kind}
-          className={`rounded-md border p-3 text-sm font-medium ${
-            feedback.kind === 'alert'
-              ? 'border-result-loss/30 bg-result-loss/5 text-result-loss'
-              : 'border-result-win/30 bg-result-win/5 text-result-win'
-          }`}
-        >
-          {feedback.message}
-        </p>
-      ) : null}
+      {/* Both live regions stay mounted so screen readers announce each outcome when it arrives. */}
+      <p
+        role="status"
+        className={
+          feedback?.kind === 'status'
+            ? 'rounded-md border border-result-win/30 bg-result-win/5 p-3 text-sm font-medium text-result-win'
+            : 'sr-only'
+        }
+      >
+        {feedback?.kind === 'status' ? feedback.message : ''}
+      </p>
+      <p
+        role="alert"
+        className={
+          feedback?.kind === 'alert'
+            ? 'rounded-md border border-result-loss/30 bg-result-loss/5 p-3 text-sm font-medium text-result-loss'
+            : 'sr-only'
+        }
+      >
+        {feedback?.kind === 'alert' ? feedback.message : ''}
+      </p>
 
       <section
         aria-labelledby="commissioner-members-heading"

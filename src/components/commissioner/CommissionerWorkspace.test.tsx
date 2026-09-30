@@ -103,6 +103,13 @@ describe('CommissionerWorkspace', () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
+  it('keeps its live regions mounted before any outcome so announcements are not missed', () => {
+    render(<CommissionerWorkspace leagues={[league()]} selectedLeagueId="league-1" />);
+
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('alert')).toBeEmptyDOMElement();
+  });
+
   it('switches league through the URL when the owner has several leagues', () => {
     render(
       <CommissionerWorkspace
