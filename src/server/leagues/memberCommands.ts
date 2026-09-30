@@ -44,10 +44,39 @@ async function loadLeagueForCommand(tx: Prisma.TransactionClient, leagueId: stri
       drafts: {
         orderBy: { createdAt: 'desc' },
         take: 1,
-        select: { id: true, status: true, startedAt: true, _count: { select: { picks: true } } },
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          lobbyStatus: true,
+          _count: { select: { picks: true } },
+        },
       },
     },
   });
+}
+
+/**
+ * Removal closes once the league's latest draft has left SCHEDULED, started, taken a pick, or opened
+ * a live room. A COUNTDOWN lobby is still forming (draft setup opens every lobby that way).
+ */
+export function hasDraftStarted(
+  draft:
+    | {
+        status: DraftStatus;
+        startedAt: Date | null;
+        lobbyStatus: string | null;
+        _count: { picks: number };
+      }
+    | undefined
+): boolean {
+  if (!draft) return false;
+  return (
+    draft.status !== DraftStatus.SCHEDULED ||
+    draft.startedAt !== null ||
+    draft.lobbyStatus === 'LIVE' ||
+    draft._count.picks > 0
+  );
 }
 
 /**
@@ -79,10 +108,7 @@ export async function removeLeagueMember(
     if (!target) return fail('member-not-found', 'That manager is not in this league.');
 
     const draft = league.drafts[0];
-    if (
-      draft &&
-      (draft.status !== DraftStatus.SCHEDULED || draft.startedAt || draft._count.picks > 0)
-    ) {
+    if (hasDraftStarted(draft)) {
       return fail('draft-started', 'Managers can only be removed before the draft starts.');
     }
 

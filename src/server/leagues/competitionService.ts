@@ -102,7 +102,7 @@ async function rebuildLeagueStandings(
   }
 ) {
   const [members, finalizedScores] = await Promise.all([
-    tx.leagueMember.findMany({ where: { leagueId }, select: { id: true } }),
+    tx.leagueMember.findMany({ where: { leagueId, isActive: true }, select: { id: true } }),
     tx.leagueMatchupScore.findMany({
       where: {
         leagueId,
@@ -140,7 +140,7 @@ export async function publishCompetition({
     where: { id: leagueId },
     include: {
       settings: true,
-      members: { orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
+      members: { where: { isActive: true }, orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
     },
   });
   if (!league?.settings) return { ok: false, errors: ['League settings were not found.'] };
@@ -354,7 +354,7 @@ export async function saveCompetitionFixture({
       (memberId): memberId is string => Boolean(memberId)
     );
     const memberCount = await tx.leagueMember.count({
-      where: { leagueId, id: { in: participantIds } },
+      where: { leagueId, isActive: true, id: { in: participantIds } },
     });
     if (memberCount !== participantIds.length) {
       return { ok: false as const, error: 'Every fixture team must belong to this league.' };

@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
           where: { id: leagueId },
           include: {
             settings: true,
-            members: { include: { user: true } },
+            members: { where: { isActive: true }, include: { user: true } },
           },
         });
 

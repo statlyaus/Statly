@@ -502,6 +502,14 @@ describe('league membership route Firestore architecture', () => {
       targetUserId: 'target-user',
     });
     expect(batch.update).toHaveBeenCalledWith(leagueDocRef, { ownerId: 'target-user' });
+    // Prisma makes the previous owner an ordinary MANAGER; the projection must not grant admin.
+    expect(membershipMocks.queueLeagueMembershipPatch).toHaveBeenCalledWith(
+      batch,
+      'league-1',
+      'owner-user',
+      { role: 'member' },
+      { topLevelMemberId: 'league-1_owner-user' }
+    );
     expect(prismaMocks.syncPrismaLeagueOwner).not.toHaveBeenCalled();
   });
 
