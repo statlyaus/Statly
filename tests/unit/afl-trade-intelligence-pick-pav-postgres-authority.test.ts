@@ -240,6 +240,11 @@ async function createDatabase(tamperStoredGames = false) {
       status "OutcomeRecordStatus",recorded_at timestamptz(3));
     CREATE TABLE outcome_draft_pick (
       pick_id text PRIMARY KEY,nominal_pick integer,nominal_round integer);
+    -- Minimal stand-in for migration 0237's resolver: no enrichments exist in this fixture.
+    CREATE FUNCTION outcome_draft_pick_facts(pick_ids text[],as_of timestamptz)
+    RETURNS TABLE (pick_id text,nominal_pick integer,nominal_round integer) LANGUAGE sql STABLE AS $$
+      SELECT pick.pick_id,pick.nominal_pick,pick.nominal_round FROM outcome_draft_pick pick
+       WHERE pick.pick_id=ANY(pick_ids) $$;
     CREATE TABLE outcome_draft_selection (
       selection_id text PRIMARY KEY,event_version_id text,selection_number integer,pick_id text,
       player_id text,club_id text,status "OutcomeRecordStatus");

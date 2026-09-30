@@ -194,7 +194,8 @@ export async function loadAflTradePickPavSelections(
      JOIN outcome_draft_selection selection ON selection.selection_id=member.selection_id
      JOIN outcome_event_version version ON version.event_version_id=selection.event_version_id
      JOIN outcome_event event ON event.event_id=version.event_id
-     LEFT JOIN outcome_draft_pick pick ON pick.pick_id=selection.pick_id
+     LEFT JOIN LATERAL outcome_draft_pick_facts(ARRAY[selection.pick_id],release.effective_through) pick
+       ON pick.pick_id=selection.pick_id
      LEFT JOIN LATERAL (
        SELECT reviewed.access_json
        FROM outcome_pick_pav_selection_access reviewed
