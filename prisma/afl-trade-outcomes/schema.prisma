@@ -1167,6 +1167,7 @@ model OutcomeProviderResolutionProposal {
 
   @@unique([resolutionCaseId, proposalSha256], map: "outcome_provider_resolution_proposal_case_key")
   @@index([normalizationRunId, subjectType], map: "outcome_provider_resolution_proposal_run_idx")
+  @@index([matchCandidateId], map: "outcome_provider_resolution_proposal_match_candidate_idx")
   @@map("outcome_provider_resolution_proposal")
 }
 
