@@ -95,7 +95,7 @@
   --card-foreground: #2b2c2d;
   --popover: #fff;
   --popover-foreground: #2b2c2d;
-  --primary: var(--statly-blue); /* From --color-interaction-resting */
+  --primary: var(--statly-navy); /* Primary actions use the navy brand-bar (design principles) */
   --primary-foreground: #fff;
   --secondary: #dee8fa; /* From --color-combo-blue10-blue100 */
   --secondary-foreground: #1a49a0; /* From --color-combo-blue20-blue80 */
@@ -156,38 +156,46 @@
   --league-danger-soft: #fbeaea;
 
   /* Draft broadcast palette */
-  --draft-broadcast-page: #090d14;
-  --draft-broadcast-canvas: #0c121b;
-  --draft-broadcast-panel: #121a27;
-  --draft-broadcast-panel-strong: #182231;
-  --draft-broadcast-muted-surface: #202c3d;
-  --draft-broadcast-table: #111a26;
-  --draft-broadcast-table-row: #162231;
-  --draft-broadcast-table-row-hover: #1d2b3d;
-  --draft-broadcast-field: rgba(255, 255, 255, 0.09);
-  --draft-broadcast-field-strong: rgba(255, 255, 255, 0.16);
+  /*
+   * The draft room follows the core light palette (design principles: one palette, white cards on
+   * a light page, navy primary actions, no glows). Values are literals rather than var(--card) etc.
+   * because draft panels re-scope --card/--muted/--foreground to these tokens; aliasing back would
+   * form a custom-property cycle.
+   */
+  --draft-broadcast-page: #f8f9fa;
+  --draft-broadcast-canvas: #f8f9fa;
+  --draft-broadcast-panel: #fff;
+  --draft-broadcast-panel-strong: #f8f9fa;
+  --draft-broadcast-muted-surface: #eef1f4;
+  --draft-broadcast-table: #fff;
+  --draft-broadcast-table-row: #fff;
+  --draft-broadcast-table-row-hover: #f1f4f7;
+  --draft-broadcast-field: #f1f4f7;
+  --draft-broadcast-field-strong: #e3e8ee;
   --draft-broadcast-roster-filled: var(--draft-broadcast-field-strong);
-  --draft-broadcast-watchlist-hit: rgb(222 232 250 / 20%);
-  --draft-broadcast-watchlist-border: rgb(222 232 250 / 72%);
+  --draft-broadcast-watchlist-hit: #eef3fc;
+  --draft-broadcast-watchlist-border: #a9c0ea;
   --draft-broadcast-watchlist-chip: #dee8fa;
   --draft-broadcast-watchlist-chip-text: #1a49a0;
-  --draft-broadcast-border: #2c3a4d;
-  --draft-broadcast-border-soft: rgba(148, 163, 184, 0.18);
-  --draft-broadcast-text: #f4f7fb;
-  --draft-broadcast-muted: #a7b3c5;
-  --draft-broadcast-red: #d91f2d;
-  --draft-broadcast-red-soft: rgba(217, 31, 45, 0.18);
-  --draft-broadcast-red-glow: rgba(217, 31, 45, 0.42);
-  --draft-broadcast-green: #13763a;
-  --draft-broadcast-green-soft: rgba(19, 118, 58, 0.22);
+  --draft-broadcast-border: #ced4da;
+  --draft-broadcast-border-soft: #e3e8ee;
+  --draft-broadcast-text: #2b2c2d;
+  --draft-broadcast-muted: #6c6e6f;
+  /* "red" is the room's primary action colour: the navy brand-bar, not a result or alert. */
+  --draft-broadcast-red: var(--statly-navy);
+  --draft-broadcast-red-soft: rgba(15, 42, 68, 0.08);
+  --draft-broadcast-red-glow: transparent;
+  --draft-broadcast-green: #15803d;
+  --draft-broadcast-green-soft: rgba(21, 128, 61, 0.1);
+  /* Yellow marks the one state a manager must not miss: their pick is on the clock. */
   --draft-broadcast-yellow: #ffd21a;
   --draft-broadcast-yellow-soft: rgba(255, 210, 26, 0.22);
-  --draft-broadcast-yellow-glow: rgba(255, 210, 26, 0.28);
+  --draft-broadcast-yellow-glow: transparent;
   --draft-broadcast-yellow-text: #261b02;
   --draft-broadcast-contrast-text: #111827;
   --draft-broadcast-contrast-muted: #475569;
-  --draft-broadcast-overlay: rgba(5, 9, 15, 0.82);
-  --draft-broadcast-shadow-deep: rgba(1, 6, 15, 0.92);
+  --draft-broadcast-overlay: rgba(15, 42, 68, 0.45);
+  --draft-broadcast-shadow-deep: rgba(15, 42, 68, 0.12);
 }
 
 /* Trade Centre tokens. Aliases of the core tokens so the Trade Centre matches every other

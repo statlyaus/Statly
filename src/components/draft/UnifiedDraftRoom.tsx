@@ -436,7 +436,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]',
       COUNTDOWN:
         'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
-      LIVE: 'bg-[color:var(--draft-broadcast-red)] text-white ring-1 ring-[color:var(--draft-broadcast-red)]',
+      LIVE: 'bg-result-loss text-result-loss-foreground ring-1 ring-result-loss',
       PAUSED:
         'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
       COMPLETED:
@@ -696,12 +696,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {isCompletedDraft ? (
             <section
               aria-label="Draft complete next steps"
-              className="rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:p-6"
+              className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:p-6"
             >
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(36rem,48rem)] xl:items-end">
                 <div className="min-w-0">
                   <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                    className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
                   >
                     Completed
                   </span>
@@ -721,7 +721,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={leagueHubHref}
                     aria-label="Go back to league hub"
-                    className="rounded-2xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       Go back to league hub
@@ -733,7 +733,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={historyHref}
                     aria-label="Review completed draft"
-                    className="rounded-2xl border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-4 text-left text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-4 text-left text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold">Review completed draft</span>
                     <span className="mt-2 block text-xs leading-5 text-white/80">
@@ -743,7 +743,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={rosterHref}
                     aria-label="Review my roster"
-                    className="rounded-2xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       Review my roster
@@ -756,12 +756,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
             </section>
           ) : (
-            <section className="rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:px-5">
+            <section className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
                     >
                       {draftStatus}
                     </span>
@@ -779,7 +779,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     <button
                       type="button"
                       onClick={() => openLeagueSocial({ view: 'chat' })}
-                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <MessagesSquare className="size-4" aria-hidden="true" />
                       League chat
@@ -787,13 +787,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   ) : null}
                   <Link
                     href="/drafts"
-                    className="inline-flex items-center rounded-full bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Back to drafts
                   </Link>
                   <Link
                     href={historyHref}
-                    className="inline-flex items-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {historyLinkLabel}
                   </Link>
@@ -938,7 +938,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         <button
           ref={openFeedBtnRef}
           onClick={() => setIsPickFeedOpen(true)}
-          className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -89,4 +89,22 @@ describe('Button accessibility', () => {
 
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('uses the navy brand-bar for primary actions without decorative scaling', () => {
+    render(<Button onClick={vi.fn()}>Save</Button>);
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveClass('bg-brand-bar', 'text-brand-bar-foreground', 'min-h-11');
+    expect(button.className).not.toMatch(/scale-|bg-blue-/);
+  });
+
+  it('marks destructive actions with the loss token', () => {
+    render(
+      <Button variant="danger" onClick={vi.fn()}>
+        Delete
+      </Button>
+    );
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('bg-result-loss');
+  });
 });
