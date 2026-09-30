@@ -1467,6 +1467,13 @@ independent genuinely admitted draft-trade release before the shipped HPN, genui
 pick, qualification/model-evidence, valuation-bundle/trade-construction, and private prepared-v3
 adapters can be composed by the worker.
 
+Migration `0241_hpn_historical_season_map_scope` lets a private governed season PAV input for
+AFLM 2011–2024 admit its source-first projected field maps under the season-only scope key
+`afl-men:hpn-pav-season-<YYYY>`. Only the projected-map verifier used by the HPN season input build
+accepts these keys, and only for the exact season each names. The trade-valuation scope policy and
+every valuation consumer are unchanged, so a historical-season map can never be admitted into a
+trade valuation.
+
 The admitted-player factual output uses v2 with multiple admitted captures and a dataset/admission
 parent. HPN preparation, model-pair input selection, and current-model-evidence ancestry accept that
 output only with an explicit request-bound HPN factual binding. The binding retains the exact #571
@@ -3515,6 +3522,46 @@ The remaining finalization cost is linear. Each statement still decompresses the
 reference, and the widest reads it four times, so peak memory is several times the content size.
 If a genuine finalization is slow, check `pg_stat_activity` and the backend's `VmHWM` in
 `/proc/<pid>/status` before raising limits.
+
+Migration 0242 evaluates provider identity-assignment continuity once per assignment case rather
+than once per row. The season build's decoded-row load asked
+`outcome_provider_assignment_continuity_current` for each row's player, match, home-club and
+away-club resolution, and the finalizer asked again for each row check. Each call re-reads its chain
+from the origin revision to the head. It try-locks every review subject on that span, row-locks the
+head, and walks the span link by link. Every club occurrence shares its club's chain of about 1,700
+revisions, so the cost grew with the square of the chain length. A 2025 build ran for more than an
+hour of CPU time; club lookups cost about 11 ms per row each. After 0242:
+
+- `outcome_provider_assignment_continuity_current_set(text[])` takes every origin decision at once.
+  For each assignment case it try-locks the review subjects of the union of the origins' spans, in the
+  same sorted order and never waiting. It locks the head `FOR SHARE NOWAIT` once and walks the span
+  once from the head down. An origin is current only when its own span passes every per-origin rule
+  and holds no subject that could not be locked. Two kinds of origin fall back to the per-origin
+  function: a decision found in more than one resolution table, and an origin without an assignment
+  revision.
+- The build's decoded-row load builds the candidate decisions in a materialized CTE, calls the set
+  function once, and looks each row up through a hashed subplan.
+- The finalizer computes `current_assignments` once before its row loop. Its per-row checks call
+  `outcome_hpn_pav_{player,match,club}_resolution_current_with_assignment`, which are copied
+  byte-for-byte from the per-row functions. The only change is that continuity is an argument. The
+  migration asserts each fragment and a reverse identity, and refuses to run twice.
+
+The continuity rules and fail-closed results are unchanged, including a held review subject or head
+lock. The per-origin function remains for writers, fact guards and other readers. Each
+`(assignment_case_id, assignment_revision)` chain index already existed from migration 0128.
+`afl-assignment-continuity-set-postgres.test.ts` checks the set function against the per-origin
+function in 22 chain states. These include current, superseded, confirmed, withdrawn, retargeted,
+gapped, duplicated and moved-head chains, and a subject or head held by another session. With 2,000
+rows over twenty 600-revision club chains, the per-row cost fell from about 6 ms to about 0.1 ms.
+
+The advisory-lock count does not change. Both forms hold exactly the review subjects on the spans
+they read until the transaction ends: 11,900 in that measurement. A season build or finalization
+therefore needs a lock-table slot for every distinct review subject from each chain's earliest
+referenced revision to its head. The genuine 2025 build held about 90,000. The shared lock table
+holds about `max_locks_per_transaction × (max_connections + max_prepared_transactions)` entries.
+At `max_locks_per_transaction=1024` it overflowed with "out of shared memory". CI and the disposable
+harness use 2048. Size the setting to the season before a genuine build, then restart PostgreSQL.
+Reducing the lock count would need a different writer protocol, such as one lock per assignment case.
 
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,
