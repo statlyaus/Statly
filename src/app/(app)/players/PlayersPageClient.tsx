@@ -9,7 +9,8 @@ import {
   REAL_DATA_NINE_CATEGORY_PRESET,
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
-import type { Player } from '@/types/players';
+import { readPerGameValue } from '@/server/players/readModels/leaguePlayerStatReadModel';
+import type { Player, PlayerSeasonStatSource } from '@/types/players';
 
 interface PlayersPageClientProps {
   players: Player[];
@@ -31,12 +32,23 @@ function gamesPlayed(player: Player): number {
   return typeof games === 'number' && games > 0 ? games : 0;
 }
 
-/** Season totals divided by games played; null when the player has no games or no value. */
+/** The season source the stats came from; older records without one are season totals. */
+function seasonSource(player: Player): PlayerSeasonStatSource {
+  const recorded = player.statsSeason
+    ? player.statsBySeason?.[String(player.statsSeason)]
+    : undefined;
+  if (recorded) return recorded;
+  const stats = player.stats ?? {};
+  return {
+    games: gamesPlayed(player),
+    dataThrough: null,
+    stats,
+    basisByStat: Object.fromEntries(Object.keys(stats).map((key) => [key, 'TOTAL' as const])),
+  };
+}
+
 function perGame(player: Player, key: FantasyCategoryKey): number | null {
-  const games = gamesPlayed(player);
-  const total = Number(player.stats?.[key]);
-  if (!games || !Number.isFinite(total)) return null;
-  return total / games;
+  return readPerGameValue(seasonSource(player), key);
 }
 
 function sortValue(player: Player, key: SortKey): string | number | null {
@@ -118,10 +130,11 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
     <button
       type="button"
       onClick={() => sortBy(key)}
-      aria-label={`Sort by ${label}`}
       className="inline-flex min-h-11 items-center gap-1 font-semibold hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      {content}
+      {/* The full name labels the column; aria-sort on the header carries the order. */}
+      <span aria-hidden="true">{content}</span>
+      <span className="sr-only">{label}</span>
       {key === sortKey ? <span aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span> : null}
     </button>
   );
@@ -173,12 +186,17 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
         </label>
       </div>
 
+      {/* Stays mounted so a search that empties the list is announced too. */}
+      <p className="text-sm font-medium text-muted-foreground" aria-live="polite">
+        {shownPlayers.length > 0
+          ? `Showing ${shownPlayers.length} of ${visiblePlayers.length} ${
+              visiblePlayers.length === 1 ? 'player' : 'players'
+            }`
+          : 'Showing 0 players'}
+      </p>
+
       {shownPlayers.length > 0 ? (
         <>
-          <p className="text-sm font-medium text-muted-foreground" aria-live="polite">
-            Showing {shownPlayers.length} of {visiblePlayers.length}{' '}
-            {visiblePlayers.length === 1 ? 'player' : 'players'}
-          </p>
           <div className="relative overflow-x-auto rounded-lg border border-border bg-background">
             <table className="w-full min-w-[760px] border-collapse text-sm tabular-nums">
               <caption className="sr-only">
@@ -191,10 +209,10 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
                     aria-sort={ariaSort('name')}
                     className="sticky left-0 z-10 bg-muted px-3 text-left"
                   >
-                    {sortButton('name', 'name', 'Player')}
+                    {sortButton('name', 'Player', 'Player')}
                   </th>
                   <th scope="col" aria-sort={ariaSort('games')} className="px-2 text-right">
-                    {sortButton('games', 'games played', <abbr title="Games played">GP</abbr>)}
+                    {sortButton('games', 'Games played', <abbr title="Games played">GP</abbr>)}
                   </th>
                   {CATEGORY_COLUMNS.map((column) => (
                     <th

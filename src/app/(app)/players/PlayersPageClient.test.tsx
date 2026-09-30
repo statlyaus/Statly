@@ -21,7 +21,7 @@ function makePlayers(count: number): Player[] {
   return Array.from({ length: count }, (_, index) => makePlayer(index + 1));
 }
 
-const goalsHeader = () => screen.getByRole('button', { name: 'Sort by Goals' }).closest('th');
+const goalsHeader = () => screen.getByRole('button', { name: 'Goals' }).closest('th');
 
 const bodyRows = () => within(screen.getByRole('table')).getAllByRole('row').slice(1);
 
@@ -31,7 +31,7 @@ describe('PlayersPageClient', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Players' })).toBeInTheDocument();
     const header = within(screen.getByRole('table')).getAllByRole('columnheader');
-    expect(header.map((cell) => cell.textContent?.replace(/[▲▼]/g, ''))).toEqual([
+    expect(header.map((cell) => cell.querySelector('[aria-hidden="true"]')?.textContent)).toEqual([
       'Player',
       'GP',
       'G',
@@ -59,15 +59,43 @@ describe('PlayersPageClient', () => {
     ).toEqual(['2', '1.5', '5', '–', '–', '–', '–', '–', '–', '–']);
   });
 
+  it('reads per-game values as recorded and only divides season totals', () => {
+    render(
+      <PlayersPageClient
+        players={[
+          makePlayer(7, {
+            games: 4,
+            statsSeason: 2025,
+            stats: {},
+            statsBySeason: {
+              '2025': {
+                games: 4,
+                dataThrough: null,
+                stats: { goals: 8, tackles: 5.5 },
+                basisByStat: { goals: 'TOTAL', tackles: 'PER_GAME' },
+              },
+            },
+          }),
+        ]}
+      />
+    );
+
+    const [row] = bodyRows();
+    const cells = within(row)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent);
+    expect(cells.slice(0, 3)).toEqual(['4', '2', '5.5']);
+  });
+
   it('sorts by a category from its column header, best first', () => {
     render(<PlayersPageClient players={makePlayers(3)} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort by Goals' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Goals' }));
 
     expect(goalsHeader()).toHaveAttribute('aria-sort', 'descending');
     expect(bodyRows()[0]).toHaveTextContent('Player 03');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort by Goals' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Goals' }));
 
     expect(goalsHeader()).toHaveAttribute('aria-sort', 'ascending');
     expect(bodyRows()[0]).toHaveTextContent('Player 01');
@@ -104,6 +132,7 @@ describe('PlayersPageClient', () => {
     fireEvent.change(screen.getByLabelText('Search players'), { target: { value: 'nobody' } });
 
     expect(screen.getByText('No players match those filters')).toBeInTheDocument();
+    expect(screen.getByText('Showing 0 players')).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 });
