@@ -783,7 +783,7 @@ const MatchLogTable = ({
             </button>
           }
         >
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 pt-4">
               <div className="rounded-lg bg-muted p-3">
                 <div className="text-xs font-medium text-muted-foreground">Statly Value</div>
                 <div className="text-2xl font-semibold tabular-nums text-foreground">
