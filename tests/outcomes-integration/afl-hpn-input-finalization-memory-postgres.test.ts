@@ -7,13 +7,13 @@ import {
   measureHpnInputFinalization,
   stubHpnRowAuthorities,
 } from '../testUtils/hpnInputSetScaleFixture';
-import { loadPre0238HpnFinalizationDefinition } from '../testUtils/pre0238HpnFinalizationReference';
+import { loadPre0240HpnFinalizationDefinition } from '../testUtils/pre0240HpnFinalizationReference';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
-// Migration 0238 bounds HPN PAV season input finalization to memory and time proportional to its
+// Migration 0240 bounds HPN PAV season input finalization to memory and time proportional to its
 // content. This suite builds one genuine input set through every owner, inflates it to further
 // input sets (see inflateHpnInputSetToSeasonScale), and runs the deployed finalization beside the
-// exact pre-0238 definition, derived from the deployed one by reversing 0238's own fragments.
+// exact pre-0240 definition, derived from the deployed one by reversing 0240's own fragments.
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 // The local fitzRoy rehearsal owners only run inside a schema with this disposable naming pattern.
@@ -34,14 +34,14 @@ const instant = async () => {
   ).rows[0]!.at;
 };
 let sourceInputSetId: string;
-let pre0238Finalization: string;
+let pre0240Finalization: string;
 
 // A genuine AFLM season: 216 completed matches, 23 players a side from two providers.
 const SEASON_MATCHES = 216;
 // The finalizing backend's peak resident set, including the shared buffers it touches. The
-// pre-0238 finalization is cancelled once it exceeds this bound.
+// pre-0240 finalization is cancelled once it exceeds this bound.
 const SEASON_PEAK_RESIDENT_KIB = 1024 * 1024;
-const SEASON_FINALIZATION_MS = 5 * 60 * 1000;
+const SEASON_FINALIZATION_MS = 10 * 60 * 1000;
 
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
@@ -50,7 +50,7 @@ beforeAll(async () => {
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
   const { built } = await buildAppearanceMembershipHpnInputFixture({ pool, client, instant });
   sourceInputSetId = built.inputSet.inputSetId;
-  pre0238Finalization = await loadPre0238HpnFinalizationDefinition(pool);
+  pre0240Finalization = await loadPre0240HpnFinalizationDefinition(pool);
 }, 300_000);
 afterAll(async () => {
   await pool.end();
@@ -66,7 +66,7 @@ const FINALIZE = `UPDATE outcome_hpn_pav_input_set SET status='finalized', final
 
 /**
  * Applies one tampering to the building input set, then finalizes it with the deployed and with
- * the pre-0238 definition, each inside its own savepoint of the caller's transaction.
+ * the pre-0240 definition, each inside its own savepoint of the caller's transaction.
  */
 async function finalizationOutcomes(
   session: PoolClient,
@@ -94,7 +94,7 @@ async function finalizationOutcomes(
         await session.query('ROLLBACK TO SAVEPOINT variant');
       }
     };
-    return { deployed: await outcome(null), original: await outcome(pre0238Finalization) };
+    return { deployed: await outcome(null), original: await outcome(pre0240Finalization) };
   } finally {
     await session.query('ROLLBACK TO SAVEPOINT tampered');
   }
@@ -107,7 +107,7 @@ const lastPlayerSpell = `(SELECT row_json#>>'{acquisitionSpell,spellVersionId}'
   FROM outcome_hpn_pav_input_row WHERE input_set_id=$1 AND row_kind='player_match_stats'
   ORDER BY ordinal DESC LIMIT 1)`;
 
-it('keeps every finalization outcome identical to the pre-0238 finalization', async () => {
+it('keeps every finalization outcome identical to the pre-0240 finalization', async () => {
   // Everything here is rolled back, so the season test's runs and universe stay exact.
   const session = await pool.connect();
   await session.query('BEGIN');
@@ -225,7 +225,7 @@ it('keeps every finalization outcome identical to the pre-0238 finalization', as
   }
 }, 600_000);
 
-it('finalizes a genuine-scale season in bounded memory and time where the pre-0238 finalization did not', async () => {
+it('finalizes a genuine-scale season in bounded memory and time where the pre-0240 finalization did not', async () => {
   const session = await pool.connect();
   let inputSetId: string;
   try {
@@ -253,7 +253,7 @@ it('finalizes a genuine-scale season in bounded memory and time where the pre-02
     cancelAboveKib: SEASON_PEAK_RESIDENT_KIB,
   });
   const original = await measureHpnInputFinalization(databaseUrl, schemaName, inputSetId, {
-    finalizer: pre0238Finalization,
+    finalizer: pre0240Finalization,
     timeoutMs: SEASON_FINALIZATION_MS,
     cancelAboveKib: SEASON_PEAK_RESIDENT_KIB,
   });

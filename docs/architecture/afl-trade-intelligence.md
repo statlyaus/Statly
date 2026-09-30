@@ -1759,7 +1759,7 @@ a bridge: a current reviewed entry spell whose possible membership contains its 
 automatically, player by player, and it must not be used where acquisition timing matters.
 Season HPN input building and finalization evaluate each candidate spell's registration currency once
 per input set rather than once per row (migration 0236), with the same currency rules.
-Finalization reads its content JSON once per statement rather than once per row (migration 0238),
+Finalization reads its content JSON once per statement rather than once per row (migration 0240),
 so its memory and time are linear in the season's size, with the same checks and exceptions.
 The operations runbook records its storage and guard details.
 

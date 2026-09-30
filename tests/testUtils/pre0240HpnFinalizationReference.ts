@@ -11,7 +11,7 @@ const MIGRATION = join(
   'prisma',
   'afl-trade-outcomes',
   'migrations',
-  '0238_hpn_input_finalization_bounded_memory',
+  '0240_hpn_input_finalization_bounded_memory',
   'migration.sql'
 );
 
@@ -21,11 +21,11 @@ const quoted = (block: string, tag: string) =>
   );
 
 /**
- * Returns the exact pre-0238 HPN input finalization trigger function (as a CREATE OR REPLACE
- * statement), derived from the deployed definition by reversing 0238's own asserted fragment
+ * Returns the exact pre-0240 HPN input finalization trigger function (as a CREATE OR REPLACE
+ * statement), derived from the deployed definition by reversing 0240's own asserted fragment
  * replacements, so a test can run the original finalization on the same data.
  */
-export async function loadPre0238HpnFinalizationDefinition(
+export async function loadPre0240HpnFinalizationDefinition(
   client: ReferenceClient
 ): Promise<string> {
   const source = readFileSync(MIGRATION, 'utf8');
@@ -33,7 +33,7 @@ export async function loadPre0238HpnFinalizationDefinition(
   const fragments = quoted(block, 'old');
   const corrections = quoted(block, 'new');
   if (fragments.length === 0 || fragments.length !== corrections.length) {
-    throw new Error('Expected paired 0238 HPN finalization fragments.');
+    throw new Error('Expected paired 0240 HPN finalization fragments.');
   }
   let definition = (
     await client.query(
@@ -42,12 +42,12 @@ export async function loadPre0238HpnFinalizationDefinition(
   ).rows[0]!.definition;
   for (let index = corrections.length - 1; index >= 0; index -= 1) {
     if (definition.split(corrections[index]!).length !== 2) {
-      throw new Error('Expected each 0238 HPN finalization correction exactly once.');
+      throw new Error('Expected each 0240 HPN finalization correction exactly once.');
     }
     definition = definition.replace(corrections[index]!, () => fragments[index]!);
   }
-  if (definition.includes('0238:')) {
-    throw new Error('The derived pre-0238 HPN finalization still contains 0238 bytes.');
+  if (definition.includes('0240:')) {
+    throw new Error('The derived pre-0240 HPN finalization still contains 0240 bytes.');
   }
   return definition;
 }

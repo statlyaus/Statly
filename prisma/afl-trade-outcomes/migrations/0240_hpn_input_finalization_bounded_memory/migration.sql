@@ -116,12 +116,12 @@ $old$];
   corrections CONSTANT TEXT[] := ARRAY[
 $new$
   lock_subject TEXT; row_record RECORD; registered_spells TEXT[];
-  -- 0238: the knowledge boundaries, derived once after the contract check.
+  -- 0240: the knowledge boundaries, derived once after the contract check.
   knowledge_boundary TIMESTAMPTZ; capture_boundary TIMESTAMPTZ;
 BEGIN
 $new$,
 $new$
-    -- 0238: every other column compared as records, without whole-row JSONB trees.
+    -- 0240: every other column compared as records, without whole-row JSONB trees.
     OR jsonb_populate_record(NEW,jsonb_build_object('status',OLD."status",
          'finalized_at',OLD."finalized_at")) IS DISTINCT FROM OLD THEN
 $new$,
@@ -139,7 +139,7 @@ $new$
        AND factual_run."finalized_at"<=knowledge_boundary
 $new$,
 $new$
-      -- 0238: one scan of the envelopes, joined on each string fact ID (`factIds ? fact`).
+      -- 0240: one scan of the envelopes, joined on each string fact ID (`factIds ? fact`).
       LEFT JOIN (
         SELECT envelope_value.value,fact_id.value#>>'{}' AS fact_id
           FROM jsonb_array_elements(
@@ -149,7 +149,7 @@ $new$
       ) envelope ON envelope.fact_id=member."fact_id"
 $new$,
 $new$
-      -- 0238: one scan of the envelopes, joined on each string fact ID (`factIds ? fact`).
+      -- 0240: one scan of the envelopes, joined on each string fact ID (`factIds ? fact`).
       LEFT JOIN (
         SELECT envelope_value.value,fact_id.value#>>'{}' AS fact_id
           FROM jsonb_array_elements(
@@ -159,7 +159,7 @@ $new$
       ) envelope ON envelope.fact_id=member."fact_id"
 $new$,
 $new$
-    -- 0238: one scan of the source envelopes, joined on each run.
+    -- 0240: one scan of the source envelopes, joined on each run.
     LEFT JOIN (
       SELECT value,value->>'normalizationRunId' AS normalization_run_id
         FROM jsonb_array_elements(NEW."input_set_json"#>'{content,sourceRuns}') value
@@ -175,7 +175,7 @@ $new$
       OR row_member."row_canonical_json"::JSONB IS DISTINCT FROM row_member."row_json"
     )
   ) OR EXISTS (
-    -- 0238: content.rows is read once. A row is proven contained by the element carrying its
+    -- 0240: content.rows is read once. A row is proven contained by the element carrying its
     -- decoded-row key; only an unproven row is tested against the whole array.
     WITH content_rows AS MATERIALIZED (
       SELECT NEW."input_set_json"#>'{content,rows}' AS value
@@ -209,15 +209,15 @@ $new$];
 BEGIN
   SELECT pg_get_functiondef('finalize_outcome_hpn_pav_input_set_v2()'::regprocedure)
     INTO original_definition;
-  IF original_definition IS NULL OR position('0238:' IN original_definition)>0
+  IF original_definition IS NULL OR position('0240:' IN original_definition)>0
     OR position('registered_spells' IN original_definition)=0 THEN
-    RAISE EXCEPTION 'Expected the 0236 HPN input finalization before 0238';
+    RAISE EXCEPTION 'Expected the 0236 HPN input finalization before 0240';
   END IF;
   corrected_definition:=original_definition;
   FOR fragment IN 1..array_length(fragments,1) LOOP
     IF (length(original_definition)-length(replace(original_definition,fragments[fragment],'')))
         /length(fragments[fragment])<>1 THEN
-      RAISE EXCEPTION 'Expected exactly one HPN finalization fragment before 0238: %',
+      RAISE EXCEPTION 'Expected exactly one HPN finalization fragment before 0240: %',
         left(fragments[fragment],80);
     END IF;
     corrected_definition:=replace(corrected_definition,fragments[fragment],corrections[fragment]);
@@ -226,7 +226,7 @@ BEGIN
   FOR fragment IN REVERSE array_length(corrections,1)..1 LOOP
     IF (length(corrected_definition)-length(replace(corrected_definition,corrections[fragment],'')))
         /length(corrections[fragment])<>1 THEN
-      RAISE EXCEPTION 'Expected exactly one HPN finalization correction in 0238: %',
+      RAISE EXCEPTION 'Expected exactly one HPN finalization correction in 0240: %',
         left(corrections[fragment],80);
     END IF;
     reversed_definition:=replace(reversed_definition,corrections[fragment],fragments[fragment]);
@@ -245,7 +245,7 @@ DECLARE
   declare_fragment CONSTANT TEXT := $old$DECLARE parent outcome_hpn_pav_input_set%ROWTYPE; member RECORD; expected_fields JSONB; disposition JSONB; decision RECORD;
 $old$;
   declare_corrected CONSTANT TEXT := $new$DECLARE parent outcome_hpn_pav_input_set%ROWTYPE; member RECORD; expected_fields JSONB; disposition JSONB; decision RECORD;
-  -- 0238: the excluded-row envelopes and cutoff, read once instead of once per member.
+  -- 0240: the excluded-row envelopes and cutoff, read once instead of once per member.
   excluded_envelopes JSONB; excluded_cutoff TIMESTAMPTZ;
 $new$;
   loop_fragment CONSTANT TEXT := $old$
@@ -263,11 +263,11 @@ $new$;
 BEGIN
   SELECT pg_get_functiondef('require_outcome_hpn_pav_excluded_source_rows(text)'::regprocedure)
     INTO original_definition;
-  IF original_definition IS NULL OR position('0238:' IN original_definition)>0
+  IF original_definition IS NULL OR position('0240:' IN original_definition)>0
     OR (length(original_definition)-length(replace(original_definition,declare_fragment,'')))/length(declare_fragment)<>1
     OR (length(original_definition)-length(replace(original_definition,loop_fragment,'')))/length(loop_fragment)<>1
     OR (length(original_definition)-length(replace(original_definition,cutoff_fragment,'')))/length(cutoff_fragment)<>1 THEN
-    RAISE EXCEPTION 'Expected exact HPN excluded-row custody before 0238';
+    RAISE EXCEPTION 'Expected exact HPN excluded-row custody before 0240';
   END IF;
   corrected_definition:=replace(replace(replace(original_definition,declare_fragment,declare_corrected),
     loop_fragment,loop_corrected),cutoff_fragment,cutoff_corrected);
@@ -289,7 +289,7 @@ BEGIN
 $old$;
   declare_corrected CONSTANT TEXT := $new$
   expected_scopes TEXT[]; actual_scopes TEXT[];
-  -- 0238: the selection envelopes, read once instead of twice per member.
+  -- 0240: the selection envelopes, read once instead of twice per member.
   membership_envelopes JSONB; decision_envelopes JSONB;
 BEGIN
 $new$;
@@ -312,10 +312,10 @@ $new$;
 BEGIN
   SELECT pg_get_functiondef('require_outcome_hpn_pav_statistical_selections(text,boolean)'::regprocedure)
     INTO original_definition;
-  IF original_definition IS NULL OR position('0238:' IN original_definition)>0
+  IF original_definition IS NULL OR position('0240:' IN original_definition)>0
     OR (length(original_definition)-length(replace(original_definition,declare_fragment,'')))/length(declare_fragment)<>1
     OR (length(original_definition)-length(replace(original_definition,loop_fragment,'')))/length(loop_fragment)<>1 THEN
-    RAISE EXCEPTION 'Expected exact HPN statistical-selection custody before 0238';
+    RAISE EXCEPTION 'Expected exact HPN statistical-selection custody before 0240';
   END IF;
   corrected_definition:=replace(replace(original_definition,declare_fragment,declare_corrected),
     loop_fragment,loop_corrected);
@@ -333,7 +333,7 @@ END $migration$;
 CREATE FUNCTION outcome_hpn_pav_json_path_text(document JSONB,path TEXT[]) RETURNS TEXT
 LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $function$
 BEGIN
-  -- 0238: one detoast of the document, released when the function returns.
+  -- 0240: one detoast of the document, released when the function returns.
   RETURN document#>>path;
 END
 $function$;
@@ -354,7 +354,7 @@ BEGIN
       OR (SELECT count(*) FROM regexp_matches(original_definition,fragment,'g'))<>3
       OR position('input_set_json' IN regexp_replace(original_definition,fragment,'','g'))>0
       OR position('outcome_hpn_pav_json_path_text' IN original_definition)>0 THEN
-      RAISE EXCEPTION 'Expected the exact HPN finalization trigger % before 0238',trigger_name;
+      RAISE EXCEPTION 'Expected the exact HPN finalization trigger % before 0240',trigger_name;
     END IF;
     corrected_definition:=regexp_replace(original_definition,fragment,correction,'g');
     IF regexp_replace(corrected_definition,
