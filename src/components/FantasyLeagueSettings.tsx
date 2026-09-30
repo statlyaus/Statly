@@ -197,9 +197,7 @@ export default function FantasyLeagueSettings({
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t">
-        <Button onClick={handleSave} className="bg-blue-600 text-white hover:bg-blue-700">
-          Save Settings
-        </Button>
+        <Button onClick={handleSave}>Save Settings</Button>
         <Button onClick={onCancel} variant="secondary">
           Cancel
         </Button>

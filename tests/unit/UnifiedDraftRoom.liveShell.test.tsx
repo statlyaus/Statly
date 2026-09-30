@@ -318,6 +318,10 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     expect(screen.getByText('Test AFL Champions League - LIVE')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute('href', '/drafts');
+    // Leaving the room is a quiet secondary action, never the loudest control on the page.
+    expect(screen.getByRole('link', { name: 'Back to drafts' }).className).not.toMatch(
+      /draft-broadcast-red|rounded-full|shadow-\[0_0/
+    );
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/drafts/history?leagueId=league-1'

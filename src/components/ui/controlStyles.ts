@@ -15,8 +15,10 @@ export const buttonStyles = cva(
         primary: 'bg-brand-bar text-brand-bar-foreground hover:bg-brand-bar/90',
         outline: 'border border-border bg-background text-foreground hover:bg-muted',
         ghost: 'text-foreground hover:bg-muted',
+        danger: 'bg-result-loss text-result-loss-foreground hover:bg-result-loss/90',
       },
       size: {
+        lg: 'min-h-12 px-6 text-base',
         md: 'min-h-11 px-4 text-sm',
         sm: 'min-h-9 px-3 text-sm',
         xs: 'min-h-7 px-2 text-xs',
