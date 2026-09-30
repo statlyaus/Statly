@@ -326,6 +326,48 @@ BEGIN
   EXECUTE corrected_definition;
 END $migration$;
 
+-- The finalization triggers' WHEN conditions read three content fields each. All six detoasted
+-- copies of the document stayed allocated for the whole row update, beneath both triggers and the
+-- finalization itself. The same paths are now read by a non-inlined function whose copy is released
+-- on return; `#>>` and the function agree on every input, including NULL.
+CREATE FUNCTION outcome_hpn_pav_json_path_text(document JSONB,path TEXT[]) RETURNS TEXT
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $function$
+BEGIN
+  -- 0238: one detoast of the document, released when the function returns.
+  RETURN document#>>path;
+END
+$function$;
+
+DO $migration$
+DECLARE
+  trigger_name TEXT;
+  original_definition TEXT;
+  corrected_definition TEXT;
+  fragment CONSTANT TEXT := '\(old\.input_set_json #>> (''\{content,[A-Za-z]+\}''::text\[\])\)';
+  correction CONSTANT TEXT := 'outcome_hpn_pav_json_path_text(old.input_set_json, \1)';
+BEGIN
+  FOREACH trigger_name IN ARRAY ARRAY['outcome_hpn_pav_input_set_finalize_guard_v1',
+      'outcome_hpn_pav_input_set_finalize_guard_v2'] LOOP
+    SELECT pg_get_triggerdef(oid) INTO original_definition FROM pg_trigger
+     WHERE tgrelid='outcome_hpn_pav_input_set'::regclass AND tgname=trigger_name;
+    IF original_definition IS NULL
+      OR (SELECT count(*) FROM regexp_matches(original_definition,fragment,'g'))<>3
+      OR position('input_set_json' IN regexp_replace(original_definition,fragment,'','g'))>0
+      OR position('outcome_hpn_pav_json_path_text' IN original_definition)>0 THEN
+      RAISE EXCEPTION 'Expected the exact HPN finalization trigger % before 0238',trigger_name;
+    END IF;
+    corrected_definition:=regexp_replace(original_definition,fragment,correction,'g');
+    IF regexp_replace(corrected_definition,
+        'outcome_hpn_pav_json_path_text\(old\.input_set_json, (''\{content,[A-Za-z]+\}''::text\[\])\)',
+        '(old.input_set_json #>> \1)','g') IS DISTINCT FROM original_definition THEN
+      RAISE EXCEPTION 'Bounded HPN finalization trigger % altered unrelated bytes',trigger_name;
+    END IF;
+    -- The trigger keeps its name, so the BEFORE UPDATE firing order is unchanged.
+    EXECUTE format('DROP TRIGGER %I ON outcome_hpn_pav_input_set',trigger_name);
+    EXECUTE corrected_definition;
+  END LOOP;
+END $migration$;
+
 -- The corroboration check's per-club subqueries select the input's rows for one match and club,
 -- and the appearance facts for one match and represented club.
 CREATE INDEX "outcome_hpn_pav_input_row_match_club_idx" ON "outcome_hpn_pav_input_row"

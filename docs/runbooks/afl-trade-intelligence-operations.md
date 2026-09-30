@@ -3490,8 +3490,12 @@ backend grew to about 2.5 GB resident in a 3 GB VM and swapped for ten hours. Th
 - every candidate spell re-derived the knowledge boundary from the whole document;
 - corroboration scanned the whole input once per match, club and subquery;
 - the excluded-row and statistical-selection helpers re-read the whole document per member.
+- the two finalization triggers' `WHEN` conditions read three content fields each, and all six
+  decompressed copies stayed allocated beneath the triggers and the finalization.
 
-After 0238 the transition compares records, with the two finalization columns taken from `OLD`. The
+After 0238 the trigger conditions read those fields through `outcome_hpn_pav_json_path_text`, which
+releases its copy on return. The transition compares records, with the two finalization columns
+taken from `OLD`. The
 knowledge boundaries are derived once. Each envelope array is read once per statement. A row is
 first proven contained by the element with its own decoded-row key; only an unproven row is tested
 against the whole array. Two indexes serve corroboration:
