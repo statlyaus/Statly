@@ -273,7 +273,7 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
   const hasStarted = matchup.status === 'LIVE' || matchup.status === 'FINAL';
 
   return (
-    <div className="overflow-x-auto rounded-md border border-[color:var(--league-border)]">
+    <div className="relative overflow-x-auto rounded-md border border-[color:var(--league-border)]">
       <table className="min-w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">Match-up totals by scoring category.</caption>
         <thead className="bg-[color:var(--league-surface-muted)] text-xs font-medium text-[color:var(--league-text-muted)]">
@@ -406,7 +406,7 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
 
   return (
     <div className="overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table
           className="w-full min-w-[720px] border-collapse text-left text-sm"
           aria-label={`${teamName} box score`}
