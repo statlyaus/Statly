@@ -3476,6 +3476,46 @@ definition. Per-row resolution checks in the finalizer
 (`outcome_hpn_pav_*_resolution_current`) still walk each decision's identity-assignment chain per
 row. If a genuine finalization is still slow, measure those first.
 
+Migration 0240 bounds HPN input finalization to memory and time proportional to its content. A 2025
+season input (about 20,000 player-stat rows and 216 results) carries a content JSON of tens of
+megabytes, stored compressed in TOAST, and every reference to `NEW.input_set_json` in a statement
+decompresses all of it again. Finalization made such references per row. Per-row references in a join
+filter are also kept until the join emits a row. After 0236 the build reached finalization, but one
+backend grew to about 2.5 GB resident in a 3 GB VM and swapped for ten hours. The causes were:
+
+- the exact-transition check ran `to_jsonb(NEW)` and `to_jsonb(OLD)`, which build in-memory trees of
+  the whole row at about fifty times its serialized size;
+- every conserved row was tested with `content.rows @> [row]`, a scan of every row;
+- every factual match and appearance member rescanned the factual-universe envelopes;
+- every candidate spell re-derived the knowledge boundary from the whole document;
+- corroboration scanned the whole input once per match, club and subquery;
+- the excluded-row and statistical-selection helpers re-read the whole document per member.
+- the two finalization triggers' `WHEN` conditions read three content fields each, and all six
+  decompressed copies stayed allocated beneath the triggers and the finalization.
+
+After 0240 the trigger conditions read those fields through `outcome_hpn_pav_json_path_text`, which
+releases its copy on return. The transition compares records, with the two finalization columns
+taken from `OLD`. The
+knowledge boundaries are derived once. Each envelope array is read once per statement. A row is
+first proven contained by the element with its own decoded-row key; only an unproven row is tested
+against the whole array. Two indexes serve corroboration:
+`outcome_hpn_pav_input_row_match_club_idx` (an expression index, absent from `schema.prisma`) and
+`outcome_provider_appearance_match_club_idx`. The repository inserts rows in batches of 1,000 and
+parses the season JSON once. Every check, exception and content hash is unchanged.
+`afl-hpn-input-finalization-memory-postgres.test.ts` compares the outcome of the deployed and exact
+pre-0240 finalizers for a valid input and each tampering. It also finalizes a 20,000-row season
+within a 1 GiB peak resident set and ten minutes, which the pre-0240 finalizer exceeds.
+
+In CI, on a 20,093-row input with 73.6 MB of canonical content, the 0240 finalization peaked at
+580 MB resident and took about 4.4 minutes. The pre-0240 finalization passed 1 GiB within about one
+second and was cancelled at 1.65 GB. Most of the remaining time is the per-row loop, which still
+checks each row's identity and spell currency.
+
+The remaining finalization cost is linear. Each statement still decompresses the document once per
+reference, and the widest reads it four times, so peak memory is several times the content size.
+If a genuine finalization is slow, check `pg_stat_activity` and the backend's `VmHWM` in
+`/proc/<pid>/status` before raising limits.
+
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,
 retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.
