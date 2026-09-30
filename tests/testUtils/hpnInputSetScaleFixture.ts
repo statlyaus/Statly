@@ -55,6 +55,10 @@ const STUBBED_ROW_AUTHORITIES: Record<string, string> = {
   outcome_hpn_pav_player_resolution_current: 'SELECT TRUE',
   outcome_hpn_pav_match_resolution_current: 'SELECT TRUE',
   outcome_hpn_pav_club_resolution_current: 'SELECT TRUE',
+  // 0242: the finalizer's per-row checks take their assignment continuity as an argument.
+  outcome_hpn_pav_player_resolution_current_with_assignment: 'SELECT TRUE',
+  outcome_hpn_pav_match_resolution_current_with_assignment: 'SELECT TRUE',
+  outcome_hpn_pav_club_resolution_current_with_assignment: 'SELECT TRUE',
   outcome_acquisition_spell_registration_current: 'SELECT TRUE',
   outcome_hpn_acquisition_spell_source_current: 'SELECT $6',
 };
@@ -72,6 +76,14 @@ export async function stubHpnRowAuthorities(client: PoolClient): Promise<void> {
       `CREATE OR REPLACE FUNCTION ${name}(${parameters}) RETURNS BOOLEAN LANGUAGE sql STABLE
          AS '${STUBBED_ROW_AUTHORITIES[name]}'`
     );
+  // 0242 evaluates the rows' assignment continuity once, before the row loop: every requested
+  // decision is current, so the finalizer still builds and consults its full continuity set.
+  await client.query(
+    `CREATE OR REPLACE FUNCTION outcome_provider_assignment_continuity_current_set(
+       origin_decision_ids TEXT[]) RETURNS TABLE(continuity_decision_id TEXT, continuity_current BOOLEAN)
+       LANGUAGE sql AS 'SELECT DISTINCT requested_id,TRUE FROM unnest(origin_decision_ids) requested_id
+         WHERE requested_id IS NOT NULL'`
+  );
 }
 
 export interface HpnFinalizationMeasurement {

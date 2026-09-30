@@ -1761,6 +1761,8 @@ Season HPN input building and finalization evaluate each candidate spell's regis
 per input set rather than once per row (migration 0236), with the same currency rules.
 Finalization reads its content JSON once per statement rather than once per row (migration 0240),
 so its memory and time are linear in the season's size, with the same checks and exceptions.
+Both evaluate identity-assignment continuity once per assignment case rather than once per row
+(migration 0242), with the same rules and the same review-subject locks.
 The operations runbook records its storage and guard details.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
