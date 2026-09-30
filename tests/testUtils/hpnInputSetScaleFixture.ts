@@ -194,6 +194,11 @@ const INFLATE_STATEMENTS = [
      SELECT source_set.*,member.match_id AS source_match_id,member.home_club_id AS source_home_club_id,
             encode(sha256(convert_to('season-scale:'||source_set.input_set_id||':'||parameter.label,
               'UTF8')),'hex') AS scale_sha256,
+            -- Each inflated set has its own copy of the factual run, whose universe it must equal.
+            'factual-reconciliation-run:'||encode(sha256(convert_to('season-scale-run:'||
+              source_set.factual_run_id||':'||parameter.label,'UTF8')),'hex') AS scale_factual_run_id,
+            encode(sha256(convert_to('season-scale-universe:'||source_set.factual_input_set_sha256||':'||
+              parameter.label,'UTF8')),'hex') AS scale_factual_input_set_sha256,
             -- Each inflated set is its own logical input scope.
             source_set.effective_through-(1+abs(hashtext(parameter.label))%1000)*INTERVAL '1 millisecond'
               AS scale_effective_through
@@ -369,6 +374,22 @@ const INFLATE_STATEMENTS = [
           fact.candidate_digests_json,fact.fact_sha256,fact.fact_json
      FROM scale_appearance_fact scale
      JOIN outcome_provider_player_appearance_fact fact ON fact.appearance_fact_id=scale.source_fact_id`,
+  `INSERT INTO outcome_factual_reconciliation_run
+   SELECT (jsonb_populate_record(run,jsonb_build_object(
+            'factual_run_id',scale_source.scale_factual_run_id,
+            'input_set_sha256',scale_source.scale_factual_input_set_sha256))).*
+     FROM scale_source
+     JOIN outcome_factual_reconciliation_run run ON run.factual_run_id=scale_source.factual_run_id`,
+  `INSERT INTO outcome_factual_reconciliation_match_input
+   SELECT scale_source.scale_factual_run_id,input.match_fact_id,input.ordinal,
+          input.membership_sha256,input.membership_json
+     FROM scale_source JOIN outcome_factual_reconciliation_match_input input
+       ON input.factual_run_id=scale_source.factual_run_id`,
+  `INSERT INTO outcome_factual_reconciliation_appearance_input
+   SELECT scale_source.scale_factual_run_id,input.appearance_fact_id,input.ordinal,
+          input.membership_sha256,input.membership_json
+     FROM scale_source JOIN outcome_factual_reconciliation_appearance_input input
+       ON input.factual_run_id=scale_source.factual_run_id`,
   `INSERT INTO outcome_factual_reconciliation_match_input
    SELECT input.factual_run_id,scale.synthetic_fact_id,
           (SELECT max(ordinal) FROM outcome_factual_reconciliation_match_input
@@ -377,7 +398,7 @@ const INFLATE_STATEMENTS = [
           input.membership_sha256,input.membership_json
      FROM scale_match_fact scale CROSS JOIN scale_source
      JOIN outcome_factual_reconciliation_match_input input
-       ON input.factual_run_id=scale_source.factual_run_id
+       ON input.factual_run_id=scale_source.scale_factual_run_id
       AND input.match_fact_id=scale.source_fact_id`,
   `INSERT INTO outcome_factual_reconciliation_appearance_input
    SELECT input.factual_run_id,scale.synthetic_fact_id,
@@ -387,7 +408,7 @@ const INFLATE_STATEMENTS = [
           input.membership_sha256,input.membership_json
      FROM scale_appearance_fact scale CROSS JOIN scale_source
      JOIN outcome_factual_reconciliation_appearance_input input
-       ON input.factual_run_id=scale_source.factual_run_id
+       ON input.factual_run_id=scale_source.scale_factual_run_id
       AND input.appearance_fact_id=scale.source_fact_id`,
   `CREATE TEMP TABLE scale_all_row ON COMMIT DROP AS
      SELECT source_row.ordinal,source_row.normalization_run_id,source_row.provider_decoded_row_id,
@@ -444,6 +465,8 @@ const INFLATE_STATEMENTS = [
          UNION ALL
          SELECT 'factualUniverse',((scale_source.input_set_json#>'{content,factualUniverse}')
            ||jsonb_build_object(
+             'factualRunId',scale_source.scale_factual_run_id,
+             'inputSetSha256',scale_source.scale_factual_input_set_sha256,
              'completedMatchFacts',(scale_source.input_set_json#>'{content,factualUniverse,completedMatchFacts}')
                ||COALESCE((SELECT jsonb_agg(jsonb_build_object('matchId',synthetic_match_id,
                    'effectiveAt',to_char(synthetic_effective_at AT TIME ZONE 'UTC',
@@ -469,7 +492,8 @@ const INFLATE_STATEMENTS = [
       source_run_count,source_row_count,completed_match_count,result_row_count,
       primary_player_row_count,corroborating_player_row_count,input_set_canonical_json,
       input_set_json,excluded_source_row_count)
-   SELECT scale_input_set.input_set_id,source.factual_run_id,source.factual_input_set_sha256,
+   SELECT scale_input_set.input_set_id,source.scale_factual_run_id,
+          source.scale_factual_input_set_sha256,
           source.factual_finalized_at,source.environment,source.competition,source.season_year,
           source.method_id,source.scale_effective_through,source.created_at,
           source.scale_sha256,'building',source.source_run_count,
