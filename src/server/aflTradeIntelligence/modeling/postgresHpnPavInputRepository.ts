@@ -1,4 +1,9 @@
-import { resolutionSql, clubResolutionSql } from './hpnCurrentResolutionSql';
+import {
+  assignmentContinuityCteSql,
+  clubResolutionSql,
+  hoistedAssignmentContinuity,
+  resolutionSql,
+} from './hpnCurrentResolutionSql';
 import {
   digestFromId,
   currentPlayerResolution,
@@ -346,8 +351,20 @@ async function loadDecodedRows(
   transaction: AflOutcomeSqlTransaction,
   runIds: readonly string[]
 ): Promise<readonly DecodedRow[]> {
+  // Assignment continuity is evaluated once per assignment case for every candidate decision of
+  // the requested rows, then looked up per row. Asking it per row repeated the same chain walk and
+  // review-subject locks for every row whose resolution shares an assignment case.
   const result = await transaction.query<DecodedRow>(
-    `SELECT decoded.provider_decoded_row_id, decoded.normalization_run_id,
+    `WITH ${assignmentContinuityCteSql(
+      `SELECT identity_candidate.identity_candidate_id, match_candidate.match_candidate_id
+         FROM outcome_provider_decoded_row decoded
+         LEFT JOIN outcome_provider_identity_candidate identity_candidate
+           ON identity_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
+         LEFT JOIN outcome_provider_match_candidate match_candidate
+           ON match_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
+        WHERE decoded.normalization_run_id = ANY($1::text[])`
+    )}
+     SELECT decoded.provider_decoded_row_id, decoded.normalization_run_id,
             decoded.source_row_sha256, decoded.typed_payload, decoded.row_status,
             player_resolution.value AS player_resolution,
             match_resolution.value AS match_resolution,
@@ -363,12 +380,12 @@ async function loadDecodedRows(
          ON identity_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
        LEFT JOIN outcome_provider_match_candidate match_candidate
          ON match_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
-       LEFT JOIN LATERAL (${resolutionSql('player', 'identity_candidate')}) player_resolution ON TRUE
-       LEFT JOIN LATERAL (${resolutionSql('match', 'match_candidate')}) match_resolution ON TRUE
+       LEFT JOIN LATERAL (${resolutionSql('player', 'identity_candidate', hoistedAssignmentContinuity)}) player_resolution ON TRUE
+       LEFT JOIN LATERAL (${resolutionSql('match', 'match_candidate', hoistedAssignmentContinuity)}) match_resolution ON TRUE
        LEFT JOIN outcome_match canonical_match
          ON canonical_match.match_id=match_resolution.value->>'canonicalId'
-       LEFT JOIN LATERAL (${clubResolutionSql('home')}) home_club ON TRUE
-       LEFT JOIN LATERAL (${clubResolutionSql('away')}) away_club ON TRUE
+       LEFT JOIN LATERAL (${clubResolutionSql('home', hoistedAssignmentContinuity)}) home_club ON TRUE
+       LEFT JOIN LATERAL (${clubResolutionSql('away', hoistedAssignmentContinuity)}) away_club ON TRUE
       WHERE decoded.normalization_run_id = ANY($1::text[])
       ORDER BY decoded.provider_decoded_row_id`,
     [runIds]

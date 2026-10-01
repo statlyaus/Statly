@@ -13,6 +13,14 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/statlyGradePolicy';
 import { AFL_TRADE_METHODOLOGY_HREF } from '@/types/aflTradeIntelligence';
 import type { AflTradeValueSummary } from '@/types/aflTradeIntelligence';
+import {
+  badgeStyles,
+  buttonStyles,
+  fieldLabelStyles,
+  fieldStyles,
+  textLinkStyles,
+} from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 export interface DraftClubTradeStatlyValues {
   atTrade: AflTradeValueSummary;
@@ -92,9 +100,9 @@ export function DraftClubTradeHistory({
   return (
     <section className="space-y-6">
       <div className={draftHubHeroShellClass}>
-        <div className="mb-5 flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mb-5 flex flex-col gap-5 border-b border-brand-bar/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-xs font-semibold text-info">Club trade history</p>
+            <p className="text-xs font-semibold text-brand-bar">Club trade history</p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <DraftTeamLogo team={clubName} size={36} withCircle />
               <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
@@ -111,7 +119,7 @@ export function DraftClubTradeHistory({
             >
               <Link
                 href="/draft/trades"
-                className="link font-medium text-info no-underline hover:underline"
+                className={cn(textLinkStyles, 'font-medium text-brand-bar')}
               >
                 All trades
               </Link>
@@ -120,14 +128,17 @@ export function DraftClubTradeHistory({
               </span>
               <Link
                 href="/draft/clubs"
-                className="link font-medium text-info no-underline hover:underline"
+                className={cn(textLinkStyles, 'font-medium text-brand-bar')}
               >
                 Club directory
               </Link>
             </nav>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <a href={exportHref} className="btn btn-primary btn-sm shadow-sm">
+            <a
+              href={exportHref}
+              className={cn(buttonStyles({ variant: 'primary', size: 'sm' }), 'shadow-sm')}
+            >
               Export latest year
             </a>
             <span className={`${draftHubSkyPillClass} tabular-nums`}>{refs.length} trades</span>
@@ -163,12 +174,12 @@ export function DraftClubTradeHistory({
         </div>
 
         <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-4">
-          <label className="form-control w-full max-w-2xl" htmlFor={searchId}>
-            <span className="label-text text-sm font-medium">Search</span>
+          <label className={cn(fieldLabelStyles, 'w-full max-w-2xl')} htmlFor={searchId}>
+            <span className="text-sm font-medium">Search</span>
             <input
               id={searchId}
               type="search"
-              className="input input-bordered input-sm w-full"
+              className={cn(fieldStyles({ size: 'sm' }), 'w-full')}
               placeholder="Title, year, pick text, trade id…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -185,10 +196,14 @@ export function DraftClubTradeHistory({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="badge badge-outline">{filtered.length} results</span>
-          <span className="badge badge-primary badge-outline">{clubName}</span>
+          <span className={badgeStyles({ tone: 'neutral', size: 'sm' })}>
+            {filtered.length} results
+          </span>
+          <span className={badgeStyles({ tone: 'brand', size: 'sm' })}>{clubName}</span>
           {query.trim() ? (
-            <span className="badge badge-neutral badge-outline">Query: {query.trim()}</span>
+            <span className={badgeStyles({ tone: 'neutral', size: 'sm' })}>
+              Query: {query.trim()}
+            </span>
           ) : null}
         </div>
       </div>
@@ -222,12 +237,12 @@ export function DraftClubTradeHistory({
               <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground tabular-nums">
                 {ref.year}
               </span>
-              <span className="badge badge-ghost badge-sm">#{ref.seqInYear}</span>
+              <span className={badgeStyles({ tone: 'muted', size: 'sm' })}>#{ref.seqInYear}</span>
             </div>
             <h3 className="mt-2 text-lg font-semibold leading-tight text-foreground">
               <Link
                 href={`/draft/trades/${ref.tradeId}`}
-                className="link link-hover"
+                className={textLinkStyles}
                 aria-label={clubLinkLabel(ref)}
               >
                 {ref.title}
@@ -281,7 +296,7 @@ export function DraftClubTradeHistory({
           <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
             <table
               aria-describedby="statly-trade-grade-note"
-              className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"
+              className="table w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"
             >
               <thead>
                 <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:text-muted-foreground">
@@ -313,7 +328,7 @@ export function DraftClubTradeHistory({
                     <td className="max-w-[min(28rem,40vw)]">
                       <Link
                         href={`/draft/trades/${ref.tradeId}`}
-                        className="link font-medium text-foreground no-underline hover:underline"
+                        className={cn(textLinkStyles, 'font-medium')}
                         aria-label={clubLinkLabel(ref)}
                       >
                         {ref.title}

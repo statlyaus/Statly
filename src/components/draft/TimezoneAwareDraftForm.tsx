@@ -242,11 +242,7 @@ export default function TimezoneAwareDraftForm({
       </FormField>
 
       <div className="flex gap-3 pt-4">
-        <Button
-          type="submit"
-          disabled={isLoading}
-          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Creating Draft...' : 'Create Draft'}
         </Button>
       </div>
