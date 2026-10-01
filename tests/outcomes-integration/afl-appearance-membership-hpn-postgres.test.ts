@@ -294,8 +294,10 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
 
   // A reviewed spell occupies its membership while its entry event is current, so a successor
   // appearance-membership window for the same player and club cannot overlap it.
-  const { schemaVersion: _schema, observedThrough: _observed, ...homeContent } =
-    homeWindow.content;
+  const homeV3 = homeWindow.content;
+  if (homeV3.schemaVersion !== 'afl-trade-acquisition-registration/v3')
+    throw new Error('Expected an appearance-membership window.');
+  const { schemaVersion: _schema, observedThrough: _observed, ...homeContent } = homeV3;
   const successorWindow = async () =>
     createAflTradeAppearanceMembershipSpell({
       ...homeContent,
