@@ -3446,7 +3446,9 @@ current while a current reviewed v1/v2 spell for the same player and club has po
 contains its whole window, and the same-club overlap guard admits a reviewed spell over a current v3
 window only under that same containment (never the reverse), so one multi-season entry spell retires
 every covered season window at once. A reviewed spell that only partly overlaps a current v3 window is
-rejected as an overlap; supersede or narrow the v3 window first. Inputs retained against a retired
+rejected as an overlap; supersede or narrow the v3 window first. A reviewed spell whose entry event
+version has a successor can never be current again, so the overlap guard ignores it (migration0244) and
+a v3 window may cover that player and club until a reviewed successor spell is registered. Inputs retained against a retired
 window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
 grading.
 

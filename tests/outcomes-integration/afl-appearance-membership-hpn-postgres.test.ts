@@ -7,6 +7,7 @@ import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outco
 import {
   createAflTradeAcquisitionSpellRegistration,
   createAflTradeAcquisitionSpellRegistrationRule,
+  createAflTradeAppearanceMembershipSpell,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
@@ -119,7 +120,7 @@ const instant = async () => {
 // membership and HPN owners execute without replacing database guards. No player has a promoted
 // entry event: season PAV is attributed through appearance-membership (v3) spells only.
 it('builds, calculates and reloads season HPN PAV attributed through appearance-membership spells', async () => {
-  const { approve, built, calculations, proposals, repository, request, scope } =
+  const { approve, built, calculations, proposals, repository, request, scope, spells } =
     await buildAppearanceMembershipHpnInputFixture({ pool, client, instant });
   expect(built.idempotentReplay).toBe(false);
   const players = built.inputSet.content.rows.filter((row) => row.kind === 'player_match_stats');
@@ -290,4 +291,55 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
   expect(pairsFor(withdrawn, reviewedSpell.spellVersionId)).toEqual(
     pairsFor(retired, reviewedSpell.spellVersionId)
   );
+
+  // A reviewed spell occupies its membership while its entry event is current, so a successor
+  // appearance-membership window for the same player and club cannot overlap it.
+  const { schemaVersion: _schema, observedThrough: _observed, ...homeContent } =
+    homeWindow.content;
+  const successorWindow = async () =>
+    createAflTradeAppearanceMembershipSpell({
+      ...homeContent,
+      version: 2,
+      supersedesSpellVersionId: homeWindow.spellVersionId,
+      createdAt: await instant(),
+    });
+  const blocked = await successorWindow();
+  await expect(
+    spells.registerReviewedSpell(
+      blocked,
+      await approve('acquisition_spell_registration', blocked.spellVersionId, blocked),
+      scope
+    )
+  ).rejects.toThrow('cannot overlap');
+  // A superseded entry event makes the reviewed spell permanently non-current; it then releases
+  // its membership to the appearance-membership bridge.
+  const supersession = await pool.connect();
+  try {
+    await supersession.query('BEGIN');
+    await supersession.query(`SET LOCAL session_replication_role='replica'`);
+    await supersession.query(
+      `INSERT INTO outcome_event_version
+        (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,official_name,
+         status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
+       SELECT event_version_id||':successor',event_id,version+1,kind,acquisition_mechanism,
+              event_date,official_name,status,source_import_row_id,event_version_id,
+              date_trunc('milliseconds',clock_timestamp()),date_precision
+         FROM outcome_event_version WHERE event_version_id=$1`,
+      [promoted.entry.eventVersionId]
+    );
+    await supersession.query('COMMIT');
+  } catch (error) {
+    await supersession.query('ROLLBACK');
+    throw error;
+  } finally {
+    supersession.release();
+  }
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(false);
+  const released = await successorWindow();
+  await spells.registerReviewedSpell(
+    released,
+    await approve('acquisition_spell_registration', released.spellVersionId, released),
+    scope
+  );
+  expect(await currentness(released.spellVersionId)).toBe(true);
 });

@@ -255,5 +255,5 @@ export async function buildAppearanceMembershipHpnInputFixture({
     knowledgeCutoffAt: await instant(),
   };
   const built = await repository.buildAndPersistSeasonInputSet(request, scope);
-  return { approve, built, calculations, proposals, repository, request, scope };
+  return { approve, built, calculations, proposals, repository, request, scope, spells };
 }
