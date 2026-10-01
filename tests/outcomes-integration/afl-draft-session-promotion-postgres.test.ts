@@ -348,3 +348,106 @@ it.each(['direct', 'combined', 'mixed'] as const)(
   },
   120_000
 );
+
+it('refuses a reviewed promotion whose draft session drops recorded selections', async () => {
+  const scopedName = `${schema}_subset_supersession`;
+  await admin.query(`CREATE SCHEMA "${scopedName}"`);
+  const scopedUrl = new URL(url!);
+  scopedUrl.searchParams.set('schema', scopedName);
+  const isolated = new Pool({ connectionString: url, options: `-c search_path=${scopedName}` });
+  try {
+    runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedUrl.toString() });
+    const promoted = await createSyntheticAcquisitionPlayerPromotion(isolated, {
+      draftSessions: true,
+    });
+    const sql = createPgAflOutcomeSqlClient(isolated);
+    const at = async () =>
+      (
+        await isolated.query<{ at: Date }>(
+          "SELECT date_trunc('milliseconds',clock_timestamp()) AS at"
+        )
+      ).rows[0]!.at.toISOString();
+    // The current session version records a selection that the next reviewed candidate omits,
+    // as when a trade-scoped subset is promoted over a complete retained draft.
+    const recorded = promoted.draftAssets[0]!;
+    await isolated.query(
+      `INSERT INTO outcome_draft_selection
+        (selection_id,event_version_id,selection_number,pick_id,player_id,player_identity_id,
+         external_identity_decision_id,club_id,source_import_row_id,status)
+       SELECT 'draft-selection:recorded-outside-candidate',event_version_id,selection_number+50,
+              NULL,player_id,player_identity_id,external_identity_decision_id,club_id,
+              source_import_row_id,status
+         FROM outcome_draft_selection WHERE event_version_id=$1 LIMIT 1`,
+      [recorded.event_version_id]
+    );
+    const subsetCandidate = createAflTradeExternalReconciliationCandidate({
+      ...promoted.candidate.content,
+      reconciledAt: await at(),
+    });
+    await new PostgresAflTradeExternalReconciliationRepository(sql).persistCandidate({
+      candidate: subsetCandidate,
+      identityResolutions: promoted.identityResolutions,
+    });
+    const subsetProposal = createAflTradeExternalCanonicalPromotionProposal({
+      ...promoted.proposal.content,
+      candidateId: subsetCandidate.candidateId,
+      candidateSha256: subsetCandidate.candidateId.split(':')[1]!,
+      proposedAt: await at(),
+    });
+    const authority = (
+      await isolated.query<{ authority_evidence_id: string; decided_by: string }>(
+        `SELECT authority_evidence_id,decided_by FROM outcome_external_canonical_promotion_review_decision
+       JOIN outcome_review_decision USING(decision_id) WHERE decision_id=$1`,
+        [promoted.approvalDecisionId]
+      )
+    ).rows[0]!;
+    const decision = createAflTradeExternalCanonicalPromotionReviewDecision({
+      candidateId: subsetCandidate.candidateId,
+      proposalId: subsetProposal.proposalId,
+      proposalSha256: subsetProposal.proposalId.split(':')[1]!,
+      proposal: subsetProposal,
+      revision: 1,
+      supersedesDecisionId: null,
+      decision: 'approved',
+      rationale: 'Synthetic reviewed candidate omitting a recorded selection',
+      authorityEvidenceId: authority.authority_evidence_id,
+      decidedBy: authority.decided_by,
+      decidedAt: await at(),
+    });
+    await new PostgresAflTradeExternalCanonicalPromotionReviewRepository(sql).persistDecision({
+      candidate: subsetCandidate,
+      proposal: subsetProposal,
+      decision,
+    });
+    const versionCount = async () =>
+      (await isolated.query('SELECT count(*)::int AS count FROM outcome_event_version')).rows[0]!
+        .count;
+    const before = await versionCount();
+    await expect(
+      new PostgresAflTradeExternalCanonicalPromotionRepository(sql).promote({
+        candidateId: subsetCandidate.candidateId,
+        approvalDecisionId: decision.decisionId,
+      })
+    ).rejects.toMatchObject({ code: 'IMMUTABLE_CONFLICT' });
+    expect(await versionCount()).toBe(before);
+    expect(
+      (
+        await isolated.query(
+          'SELECT count(*)::int AS count FROM outcome_external_canonical_promotion WHERE candidate_id=$1',
+          [subsetCandidate.candidateId]
+        )
+      ).rows[0]!.count
+    ).toBe(0);
+    expect(
+      (
+        await isolated.query(
+          'SELECT count(*)::int AS count FROM outcome_event_version WHERE supersedes_version_id=$1',
+          [recorded.event_version_id]
+        )
+      ).rows[0]!.count
+    ).toBe(0);
+  } finally {
+    await isolated.end();
+    await admin.query(`DROP SCHEMA "${scopedName}" CASCADE`);
+  }
+}, 120_000);
