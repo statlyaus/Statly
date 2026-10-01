@@ -64,7 +64,7 @@ describe('leagueMembership architecture helpers', () => {
   it('authorizes Prisma league owners as managers', async () => {
     prismaMocks.leagueFindUnique.mockResolvedValue({
       ownerId: 'owner-user',
-      members: [{ role: 'member' }],
+      members: [{ role: 'member', isActive: true, status: 'ACTIVE' }],
     });
 
     await expect(canManageLeague('league-1', 'owner-user')).resolves.toBe(true);
@@ -75,7 +75,7 @@ describe('leagueMembership architecture helpers', () => {
         ownerId: true,
         members: {
           where: { userId: 'owner-user' },
-          select: { role: true },
+          select: { role: true, isActive: true, status: true },
           take: 1,
         },
       },
@@ -86,11 +86,44 @@ describe('leagueMembership architecture helpers', () => {
   it('authorizes Prisma manager roles without Firestore fallback', async () => {
     prismaMocks.leagueFindUnique.mockResolvedValue({
       ownerId: 'owner-user',
-      members: [{ role: 'MANAGER' }],
+      members: [{ role: 'MANAGER', isActive: true, status: 'ACTIVE' }],
     });
 
     await expect(canManageLeague('league-1', 'manager-user')).resolves.toBe(true);
 
+    expect(adminMocks.doc).not.toHaveBeenCalled();
+  });
+
+  it('refuses management to a removed member', async () => {
+    prismaMocks.leagueFindUnique.mockResolvedValue({
+      ownerId: 'owner-user',
+      members: [{ role: 'MANAGER', isActive: false, status: 'removed' }],
+    });
+
+    await expect(canManageLeague('league-1', 'removed-user')).resolves.toBe(false);
+    expect(adminMocks.doc).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a removed member as belonging to the league', async () => {
+    prismaMocks.leagueFindUnique.mockResolvedValue({
+      ownerId: 'owner-user',
+      members: [
+        {
+          id: 'member-2',
+          userId: 'removed-user',
+          role: 'MANAGER',
+          teamName: 'Gone FC',
+          joinedAt: new Date('2026-06-01T00:00:00.000Z'),
+          isActive: false,
+          status: 'removed',
+        },
+      ],
+    });
+
+    await expect(getLeagueMembership('league-1', 'removed-user')).resolves.toEqual({
+      isMember: false,
+      source: 'none',
+    });
     expect(adminMocks.doc).not.toHaveBeenCalled();
   });
 
@@ -108,6 +141,8 @@ describe('leagueMembership architecture helpers', () => {
           teamLogoPositionY: 70,
           teamLogoZoom: 1.6,
           joinedAt: new Date('2026-06-01T00:00:00.000Z'),
+          isActive: true,
+          status: 'ACTIVE',
         },
       ],
     });
