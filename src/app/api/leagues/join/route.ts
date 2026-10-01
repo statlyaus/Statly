@@ -7,6 +7,11 @@ import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
 import { listActiveLeagueMembers, queueLeagueMembershipSet } from '@/lib/leagueMembership';
 import { syncPrismaLeagueMember } from '@/lib/prismaLeagueBridge';
 import { isLeagueAtCapacity } from '@/server/leagues/leagueCapacity';
+import {
+  findPrismaLeagueIdByInviteCode,
+  joinLeague,
+  type JoinLeagueData,
+} from '@/server/leagues/memberCommands';
 
 type MembershipTransaction = Parameters<typeof queueLeagueMembershipSet>[0];
 
@@ -14,6 +19,62 @@ export const runtime = 'nodejs';
 
 function normalizeInviteCode(code: string): string {
   return code.replace(/[^a-z0-9]/gi, '').toUpperCase();
+}
+
+/**
+ * Prisma owns membership, so a Prisma league is joined through the Prisma command and Firestore is
+ * written afterwards as a compatibility projection. Returns `null` when the league has no Prisma row.
+ */
+async function joinPrismaLeague(
+  leagueId: string,
+  userId: string,
+  teamName: string | undefined
+): Promise<NextResponse | null> {
+  const result = await joinLeague({ leagueId, userId, teamName });
+  if (!result.ok) {
+    if (result.code === 'league-not-found') return null;
+    return NextResponse.json(
+      { success: false, error: result.message, code: result.code },
+      { status: 400 }
+    );
+  }
+
+  await projectJoinToFirestoreBestEffort(result.data);
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: {
+        member: result.data.member,
+        league: {
+          id: result.data.league.id,
+          name: result.data.league.name,
+          code: result.data.league.inviteCode,
+          draftDate: result.data.league.draftDate,
+        },
+      },
+    },
+    { status: 201 }
+  );
+}
+
+/** A failed projection is logged for repair; the committed Prisma join still succeeded. */
+async function projectJoinToFirestoreBestEffort(data: JoinLeagueData) {
+  try {
+    const batch = adminDb.batch();
+    queueLeagueMembershipSet(batch, data.member, { topLevelMemberId: data.member.id });
+    batch.update(adminDb.collection('leagues').doc(data.league.id), {
+      memberCount: data.memberCount,
+      updatedAt: new Date().toISOString(),
+    });
+    await batch.commit();
+  } catch (projectionError) {
+    console.warn('Failed to project league join to Firestore', {
+      leagueId: data.league.id,
+      userId: data.member.userId,
+      error: projectionError instanceof Error ? projectionError.message : String(projectionError),
+    });
+  }
 }
 
 // POST /api/leagues/join - Join league by code
@@ -41,7 +102,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find league by code
+    const requestedTeamName = typeof teamName === 'string' ? teamName : undefined;
+    const prismaLeagueId = await findPrismaLeagueIdByInviteCode(normalizedCode);
+    const prismaJoin =
+      prismaLeagueId && (await joinPrismaLeague(prismaLeagueId, userId, requestedTeamName));
+    if (prismaJoin) {
+      return prismaJoin;
+    }
+
+    // Legacy lookup: the Firestore code can differ from the Prisma one after an invite-code clash.
     console.log('🔍 Looking for league with code:', normalizedCode);
 
     const leagueSnapshot = await adminDb
@@ -67,6 +136,12 @@ export async function POST(req: NextRequest) {
     }
 
     const leagueDoc = leagueSnapshot.docs[0];
+    const prismaLeagueJoin = await joinPrismaLeague(leagueDoc.id, userId, requestedTeamName);
+    if (prismaLeagueJoin) {
+      return prismaLeagueJoin;
+    }
+
+    // No Prisma row: a legacy league whose membership still lives only in Firestore.
     const league: League = {
       id: leagueDoc.id,
       ...leagueDoc.data(),
