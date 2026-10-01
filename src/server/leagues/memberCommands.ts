@@ -151,6 +151,93 @@ export async function removeLeagueMember(
   });
 }
 
+export type UpdateMemberFailureCode =
+  'league-not-found' | 'forbidden' | 'member-not-found' | 'team-name-taken';
+
+export interface UpdateLeagueMemberInput extends MemberCommandInput {
+  teamName?: string;
+  /** 'admin' makes the member a co-commissioner and 'member' removes that; only the owner may. */
+  role?: string;
+}
+
+export interface UpdatedLeagueMember {
+  userId: string;
+  teamName: string;
+  role: 'owner' | 'admin' | 'member';
+}
+
+/**
+ * Renames a team (the owner or the member themselves) and toggles co-commissioner (the owner only).
+ * Ownership itself only changes through transferLeagueOwnership.
+ */
+export async function updateLeagueMember(
+  input: UpdateLeagueMemberInput,
+  client: CommandClient = defaultPrisma
+): Promise<MemberCommandResult<UpdatedLeagueMember, UpdateMemberFailureCode>> {
+  return client.$transaction(async (tx) => {
+    const league = await tx.league.findUnique({
+      where: { id: input.leagueId },
+      select: {
+        id: true,
+        ownerId: true,
+        members: {
+          select: {
+            id: true,
+            userId: true,
+            teamName: true,
+            isActive: true,
+            status: true,
+            isCoCommissioner: true,
+          },
+        },
+      },
+    });
+    if (!league) return fail('league-not-found', 'League not found.');
+
+    const isOwner = league.ownerId === input.actorUserId;
+    if (!isOwner && input.actorUserId !== input.targetUserId) {
+      return fail('forbidden', 'Only the league owner can change another team.');
+    }
+
+    const activeMembers = league.members.filter(isActivePrismaMembership);
+    const target = activeMembers.find((member) => member.userId === input.targetUserId);
+    if (!target) return fail('member-not-found', 'That manager is not in this league.');
+
+    const data: { teamName?: string; isCoCommissioner?: boolean } = {};
+    const teamName = input.teamName?.trim();
+    if (teamName) {
+      const taken = activeMembers.some(
+        (member) =>
+          member.id !== target.id && member.teamName.trim().toLowerCase() === teamName.toLowerCase()
+      );
+      if (taken) return fail('team-name-taken', 'Team name already taken');
+      data.teamName = teamName;
+    }
+
+    const targetIsOwner = target.userId === league.ownerId;
+    if (isOwner && !targetIsOwner && (input.role === 'admin' || input.role === 'member')) {
+      data.isCoCommissioner = input.role === 'admin';
+    }
+
+    const updated = Object.keys(data).length
+      ? await tx.leagueMember.update({
+          where: { id: target.id },
+          data,
+          select: { userId: true, teamName: true, isCoCommissioner: true },
+        })
+      : target;
+
+    return {
+      ok: true,
+      data: {
+        userId: updated.userId,
+        teamName: updated.teamName,
+        role: targetIsOwner ? 'owner' : updated.isCoCommissioner ? 'admin' : 'member',
+      },
+    };
+  });
+}
+
 /** Hands the league to another active member; the previous owner stays on as a manager. */
 export async function transferLeagueOwnership(
   input: MemberCommandInput,
