@@ -118,6 +118,18 @@ describe('publishCompetition', () => {
     );
   });
 
+  it('publishes fixtures only for active members, never removed ones', async () => {
+    await publishCompetition({ leagueId: 'league-1', actorMemberId: 'member-owner', rules });
+
+    expect(prismaMocks.league.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          members: expect.objectContaining({ where: { isActive: true } }),
+        }),
+      })
+    );
+  });
+
   it('does not delete derived data when another publisher wins the version claim', async () => {
     txMocks.leagueSettings.updateMany.mockResolvedValue({ count: 0 });
 

@@ -1,5 +1,6 @@
 import { adminDb } from './firebaseAdmin';
 import { prisma } from './prisma';
+import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { generateDeterministicMemberId } from '../utils/firestore';
 
 export type MembershipSource = 'prisma' | 'embedded' | 'legacy' | 'none';
@@ -109,14 +110,18 @@ export async function canManageLeague(leagueId: string, userId: string): Promise
       ownerId: true,
       members: {
         where: { userId },
-        select: { role: true },
+        select: { role: true, isActive: true, status: true },
         take: 1,
       },
     },
   });
 
   if (prismaLeague) {
-    return prismaLeague.ownerId === userId || isLeagueManagerRole(prismaLeague.members[0]?.role);
+    const member = prismaLeague.members[0];
+    return (
+      prismaLeague.ownerId === userId ||
+      (member !== undefined && isActivePrismaMembership(member) && isLeagueManagerRole(member.role))
+    );
   }
 
   const membership = await getLeagueMembership(leagueId, userId);
@@ -302,6 +307,8 @@ export async function getLeagueMembership(
           teamLogoPositionY: true,
           teamLogoZoom: true,
           joinedAt: true,
+          isActive: true,
+          status: true,
         },
         take: 1,
       },
@@ -309,7 +316,8 @@ export async function getLeagueMembership(
   });
 
   if (prismaLeague) {
-    const member = prismaLeague.members[0];
+    // A removed or declined member keeps its row for history but no longer belongs to the league.
+    const member = prismaLeague.members.find(isActivePrismaMembership);
     if (!member && prismaLeague.ownerId !== userId) {
       return { isMember: false, source: 'none' };
     }
@@ -439,8 +447,10 @@ function toLeagueMembershipListItem(
     role: String(data.role ?? 'member'),
     teamName: String(data.teamName ?? ''),
     teamLogoUrl: typeof data.teamLogoUrl === 'string' ? data.teamLogoUrl : undefined,
-    teamLogoPositionX: typeof data.teamLogoPositionX === 'number' ? data.teamLogoPositionX : undefined,
-    teamLogoPositionY: typeof data.teamLogoPositionY === 'number' ? data.teamLogoPositionY : undefined,
+    teamLogoPositionX:
+      typeof data.teamLogoPositionX === 'number' ? data.teamLogoPositionX : undefined,
+    teamLogoPositionY:
+      typeof data.teamLogoPositionY === 'number' ? data.teamLogoPositionY : undefined,
     teamLogoZoom: typeof data.teamLogoZoom === 'number' ? data.teamLogoZoom : undefined,
     joinedAt: data.joinedAt,
     leftAt: data.leftAt,

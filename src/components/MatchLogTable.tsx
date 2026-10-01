@@ -18,6 +18,8 @@ import {
 } from '@heroicons/react/24/outline';
 import type { MatchLog } from '@/types/matchLogs';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
+import { badgeStyles, buttonStyles, fieldLabelStyles } from '@/components/ui/controlStyles';
+import Modal from '@/components/ui/Modal';
 
 type SortDirection = 'asc' | 'desc';
 type SortField = keyof MatchLog;
@@ -290,13 +292,13 @@ const MatchLogTable = ({
   const getResultBadge = (result: string | undefined) => {
     switch (result) {
       case 'W':
-        return <span className="badge badge-success badge-sm">W</span>;
+        return <span className={badgeStyles({ tone: 'win', size: 'sm' })}>W</span>;
       case 'L':
-        return <span className="badge badge-error badge-sm">L</span>;
+        return <span className={badgeStyles({ tone: 'loss', size: 'sm' })}>L</span>;
       case 'D':
-        return <span className="badge badge-warning badge-sm">D</span>;
+        return <span className={badgeStyles({ tone: 'draw', size: 'sm' })}>D</span>;
       default:
-        return <span className="badge badge-ghost badge-sm">-</span>;
+        return <span className={badgeStyles({ tone: 'muted', size: 'sm' })}>-</span>;
     }
   };
 
@@ -515,7 +517,7 @@ const MatchLogTable = ({
                 className="mb-4 border-t border-border pt-4"
               >
                 <div className="grid grid-cols-[minmax(180px,1fr)_140px_auto] items-end gap-3">
-                  <div className="form-control">
+                  <div className={fieldLabelStyles}>
                     <label
                       htmlFor="min-points-input"
                       className="mb-1 block text-xs font-semibold text-muted-foreground"
@@ -543,7 +545,7 @@ const MatchLogTable = ({
                     </div>
                   </div>
 
-                  <div className="form-control">
+                  <div className={fieldLabelStyles}>
                     <label
                       htmlFor="result-select"
                       className="mb-1 block text-xs font-semibold text-muted-foreground"
@@ -766,70 +768,71 @@ const MatchLogTable = ({
 
       {/* Match Detail Modal */}
       {selectedMatch && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg">
-                {selectedMatch.season ? `${selectedMatch.season} ` : ''}Round {formatRound(selectedMatch.round)} vs {selectedMatch.opponent}
-              </h3>
-              <button
-                onClick={() => setSelectedMatch(null)}
-                className="btn btn-sm btn-circle btn-ghost"
-              >
-                <XMarkIcon className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-              <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Statly Value</div>
-                <div className="stat-value text-primary">
+        <Modal
+          isOpen
+          onClose={() => setSelectedMatch(null)}
+          size="xl"
+          title={`${selectedMatch.season ? `${selectedMatch.season} ` : ''}Round ${formatRound(selectedMatch.round)} vs ${selectedMatch.opponent}`}
+          footer={
+            <button
+              type="button"
+              onClick={() => setSelectedMatch(null)}
+              className={buttonStyles({ variant: 'outline', size: 'md' })}
+            >
+              Close
+            </button>
+          }
+        >
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 pt-4">
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xs font-medium text-muted-foreground">Statly Value</div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">
                   {typeof selectedMatch.totalValue === 'number'
                     ? selectedMatch.totalValue.toFixed(2)
                     : '-'}
                 </div>
               </div>
-              <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Goals</div>
-                <div className="stat-value">{selectedMatch.goals ?? '-'}</div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xs font-medium text-muted-foreground">Goals</div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.goals ?? '-'}</div>
               </div>
-              <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Disposals</div>
-                <div className="stat-value">{selectedMatch.disposals ?? '-'}</div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xs font-medium text-muted-foreground">Disposals</div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.disposals ?? '-'}</div>
               </div>
-              <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Marks</div>
-                <div className="stat-value">{selectedMatch.marks ?? '-'}</div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xs font-medium text-muted-foreground">Marks</div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.marks ?? '-'}</div>
               </div>
-              <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Tackles</div>
-                <div className="stat-value">{selectedMatch.tackles ?? '-'}</div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xs font-medium text-muted-foreground">Tackles</div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.tackles ?? '-'}</div>
               </div>
-              <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Result</div>
-                <div className="stat-value">{getResultBadge(selectedMatch.result)}</div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xs font-medium text-muted-foreground">Result</div>
+                <div className="text-2xl font-semibold tabular-nums text-foreground">{getResultBadge(selectedMatch.result)}</div>
               </div>
             </div>
 
             {(selectedMatch.venue || selectedMatch.matchDate) && (
-              <div className="bg-base-200 rounded-lg p-4 mb-4">
+              <div className="bg-muted rounded-lg p-4 mb-4">
                 <h4 className="font-semibold mb-2">Match Details</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                   {selectedMatch.venue && (
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-base-content/60" />
+                      <CalendarIcon className="w-4 h-4 text-muted-foreground" />
                       <span>Venue: {selectedMatch.venue}</span>
                     </div>
                   )}
                   {!selectedMatch.venue && (
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-base-content/60" />
+                      <CalendarIcon className="w-4 h-4 text-muted-foreground" />
                       <span>Venue unavailable</span>
                     </div>
                   )}
                   {selectedMatch.matchDate && (
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-base-content/60" />
+                      <CalendarIcon className="w-4 h-4 text-muted-foreground" />
                       <span>Date: {selectedMatch.matchDate}</span>
                     </div>
                   )}
@@ -837,13 +840,7 @@ const MatchLogTable = ({
               </div>
             )}
 
-            <div className="modal-action">
-              <button onClick={() => setSelectedMatch(null)} className="btn">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
