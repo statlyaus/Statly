@@ -59,13 +59,13 @@ export async function GET(
     }
 
     const prismaMemberships = await prisma.leagueMember.findMany({
-      where: { userId },
+      where: { userId, isActive: true },
       include: {
         league: {
           include: {
             settings: true,
             drafts: { orderBy: { createdAt: 'desc' }, take: 1 },
-            _count: { select: { members: true } },
+            _count: { select: { members: { where: { isActive: true } } } },
           },
         },
       },

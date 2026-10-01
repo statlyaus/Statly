@@ -16,6 +16,7 @@ import {
   hasDraftStarted,
   removeLeagueMember,
   transferLeagueOwnership,
+  updateLeagueMember,
 } from '@/server/leagues/memberCommands';
 
 const FIXTURE = {
@@ -317,6 +318,87 @@ describe('league member commands', () => {
         leagueId: FIXTURE.leagueId,
         actorUserId: ownerUserId,
         targetUserId: bravoUserId,
+      })
+    ).toMatchObject({ ok: false, code: 'member-not-found' });
+  });
+
+  it('lets a manager rename their own team and rejects a name another team uses', async () => {
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: alphaUserId,
+        targetUserId: alphaUserId,
+        teamName: '  Alpha Aces  ',
+      })
+    ).toMatchObject({ ok: true, data: { teamName: 'Alpha Aces', role: 'member' } });
+
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: bravoUserId,
+        targetUserId: bravoUserId,
+        teamName: 'alpha aces',
+      })
+    ).toMatchObject({ ok: false, code: 'team-name-taken' });
+  });
+
+  it('lets only the owner make a manager co-commissioner, and not change the owner', async () => {
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: alphaUserId,
+        targetUserId: bravoUserId,
+        role: 'admin',
+      })
+    ).toMatchObject({ ok: false, code: 'forbidden' });
+
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: ownerUserId,
+        targetUserId: bravoUserId,
+        role: 'admin',
+      })
+    ).toMatchObject({ ok: true, data: { role: 'admin' } });
+    const bravo = await prisma.leagueMember.findUniqueOrThrow({ where: { id: memberIds[2] } });
+    expect(bravo.isCoCommissioner).toBe(true);
+
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: alphaUserId,
+        targetUserId: alphaUserId,
+        role: 'admin',
+      })
+    ).toMatchObject({ ok: true, data: { role: 'member' } });
+    expect(
+      (await prisma.leagueMember.findUniqueOrThrow({ where: { id: memberIds[1] } }))
+        .isCoCommissioner
+    ).toBe(false);
+
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: ownerUserId,
+        targetUserId: ownerUserId,
+        role: 'member',
+      })
+    ).toMatchObject({ ok: true, data: { role: 'owner' } });
+  });
+
+  it('refuses to update a removed member', async () => {
+    await removeLeagueMember({
+      leagueId: FIXTURE.leagueId,
+      actorUserId: ownerUserId,
+      targetUserId: charlieUserId,
+    });
+
+    expect(
+      await updateLeagueMember({
+        leagueId: FIXTURE.leagueId,
+        actorUserId: ownerUserId,
+        targetUserId: charlieUserId,
+        teamName: 'Back Again',
       })
     ).toMatchObject({ ok: false, code: 'member-not-found' });
   });

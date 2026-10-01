@@ -8,6 +8,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 import {
   getLeagueMemberDocId,
+  listActiveFirestoreLeagueMembers,
   listActiveLeagueMembers,
   queueLeagueMembershipPatch,
   type LeagueMembershipListItem,
@@ -18,8 +19,11 @@ import { syncPrismaLeagueMember } from '@/lib/prismaLeagueBridge';
 import {
   removeLeagueMember,
   transferLeagueOwnership,
+  updateLeagueMember,
   type MemberCommandFailureCode,
   type MemberCommandInput,
+  type UpdateLeagueMemberInput,
+  type UpdateMemberFailureCode,
 } from '@/server/leagues/memberCommands';
 
 // GET /api/leagues/[id]/members - Get league members
@@ -124,14 +128,20 @@ export async function POST(
       return handleTransferOwnership(commandInput, tracer);
     }
 
-    // Get league data
+    const prismaUpdate = await handlePrismaUpdateMember(
+      { ...commandInput, teamName: updates?.teamName, role: updates?.role },
+      tracer
+    );
+    if (prismaUpdate) return prismaUpdate;
+
+    // Legacy league with no Prisma row: membership still lives only in Firestore.
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
     if (!leagueDoc.exists) {
       return commonErrors.notFound('League not found');
     }
 
     const league = { id: leagueDoc.id, ...leagueDoc.data() } as League;
-    const activeMembers = await listActiveLeagueMembers(leagueId);
+    const activeMembers = await listActiveFirestoreLeagueMembers(leagueId);
 
     return handleUpdateMember(
       leagueId,
@@ -147,6 +157,50 @@ export async function POST(
     return commonErrors.internalServerError('Failed to process member action');
   }
 }
+
+/**
+ * Updates a Prisma league's member through the Prisma command, then writes the Firestore
+ * projection. Returns null for a legacy league with no Prisma row.
+ */
+async function handlePrismaUpdateMember(
+  input: UpdateLeagueMemberInput,
+  tracer: ReturnType<typeof withRequestTracing>
+) {
+  const result = await updateLeagueMember(input);
+  if (!result.ok) {
+    if (result.code === 'league-not-found') return null;
+    return NextResponse.json(
+      { success: false, error: result.message, code: result.code },
+      { status: UPDATE_MEMBER_STATUS[result.code] }
+    );
+  }
+
+  await projectToFirestoreBestEffort('member-updated', input, async () => {
+    const member = findActiveMember(
+      await listActiveFirestoreLeagueMembers(input.leagueId),
+      input.targetUserId
+    );
+    if (!member) return;
+    const batch = adminDb.batch();
+    queueLeagueMembershipPatch(
+      batch,
+      input.leagueId,
+      input.targetUserId,
+      { teamName: result.data.teamName, role: result.data.role },
+      { topLevelMemberId: getTopLevelMemberId(input.leagueId, member) }
+    );
+    await batch.commit();
+  });
+
+  tracer.complete(200, { action: 'member-updated' });
+  return NextResponse.json({ success: true, data: result.data });
+}
+
+const UPDATE_MEMBER_STATUS: Record<Exclude<UpdateMemberFailureCode, 'league-not-found'>, number> = {
+  forbidden: 403,
+  'member-not-found': 404,
+  'team-name-taken': 400,
+};
 
 async function handleUpdateMember(
   leagueId: string,
@@ -242,7 +296,7 @@ async function handleRemoveMember(
 
   await projectToFirestoreBestEffort('member-removed', input, async () => {
     const member = findActiveMember(
-      await listActiveLeagueMembers(input.leagueId),
+      await listActiveFirestoreLeagueMembers(input.leagueId),
       input.targetUserId
     );
     const batch = adminDb.batch();
@@ -277,7 +331,7 @@ async function handleTransferOwnership(
   if (!result.ok) return memberCommandFailure(result);
 
   await projectToFirestoreBestEffort('ownership-transferred', input, async () => {
-    const activeMembers = await listActiveLeagueMembers(input.leagueId);
+    const activeMembers = await listActiveFirestoreLeagueMembers(input.leagueId);
     const targetMember = findActiveMember(activeMembers, input.targetUserId);
     const ownerMember = findActiveMember(activeMembers, input.actorUserId);
     const batch = adminDb.batch();

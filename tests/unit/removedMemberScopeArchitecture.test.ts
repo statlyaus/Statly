@@ -27,4 +27,23 @@ describe('removed members stay out of new competition, ladder, and draft state',
       'members: { where: { isActive: true }, include: { user: true } }'
     );
   });
+
+  it('counts only active members for league settings and the user league list', () => {
+    const activeCount = '_count: { select: { members: { where: { isActive: true } } } }';
+
+    expect(read('src/app/api/leagues/[id]/settings/route.ts')).toContain(activeCount);
+    expect(read('src/app/api/leagues/user/[userId]/route.ts')).toContain(activeCount);
+  });
+
+  it('does not list leagues a user was removed from in their league list', () => {
+    expect(read('src/app/api/leagues/user/[userId]/route.ts')).toContain(
+      'where: { userId, isActive: true }'
+    );
+  });
+
+  it('reads members from Prisma and writes Firestore only as a projection', () => {
+    const membersRoute = read('src/app/api/leagues/[id]/members/route.ts');
+
+    expect(membersRoute).toContain('updateLeagueMember(input)');
+  });
 });

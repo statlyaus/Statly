@@ -18,6 +18,7 @@ const firestoreMocks = vi.hoisted(() => ({
 const membershipMocks = vi.hoisted(() => ({
   getLeagueMemberDocId: vi.fn(),
   listActiveLeagueMembers: vi.fn(),
+  listActiveFirestoreLeagueMembers: vi.fn(),
   queueLeagueMembershipPatch: vi.fn(),
   queueLeagueMembershipSet: vi.fn(),
   verifyLeagueMembership: vi.fn(),
@@ -27,6 +28,7 @@ const memberCommandMocks = vi.hoisted(() => ({
   findPrismaLeagueIdByInviteCode: vi.fn(),
   joinLeague: vi.fn(),
   removeLeagueMember: vi.fn(),
+  updateLeagueMember: vi.fn(),
   transferLeagueOwnership: vi.fn(),
 }));
 
@@ -62,6 +64,7 @@ vi.mock('../../src/lib/firebaseAdmin', () => ({
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMemberDocId: membershipMocks.getLeagueMemberDocId,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
+  listActiveFirestoreLeagueMembers: membershipMocks.listActiveFirestoreLeagueMembers,
   queueLeagueMembershipPatch: membershipMocks.queueLeagueMembershipPatch,
   queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
   verifyLeagueMembership: membershipMocks.verifyLeagueMembership,
@@ -70,6 +73,7 @@ vi.mock('@/lib/leagueMembership', () => ({
 vi.mock('../../src/lib/leagueMembership', () => ({
   getLeagueMemberDocId: membershipMocks.getLeagueMemberDocId,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
+  listActiveFirestoreLeagueMembers: membershipMocks.listActiveFirestoreLeagueMembers,
   queueLeagueMembershipPatch: membershipMocks.queueLeagueMembershipPatch,
   queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
   verifyLeagueMembership: membershipMocks.verifyLeagueMembership,
@@ -297,7 +301,53 @@ describe('league membership route Firestore architecture', () => {
     expect(directLimit).not.toHaveBeenCalled();
   });
 
-  it('updates a member from canonical active members without reading the top-level mirror', async () => {
+  it('updates a Prisma league member through the command, then projects it to Firestore', async () => {
+    const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn(), update: vi.fn() };
+    authMocks.getUserIdFromRequest.mockResolvedValue('owner-user');
+    memberCommandMocks.updateLeagueMember.mockResolvedValue({
+      ok: true,
+      data: { userId: 'target-user', teamName: 'Renamed Team', role: 'member' },
+    });
+    firestoreMocks.batch.mockReturnValue(batch);
+    membershipMocks.listActiveFirestoreLeagueMembers.mockResolvedValue([
+      activeMember({ id: 'league-1_target-user', userId: 'target-user', teamName: 'Old Team' }),
+    ]);
+
+    const { POST: mutateLeagueMember } =
+      await import('../../src/app/api/leagues/[id]/members/route');
+    const response = await mutateLeagueMember(
+      jsonRequest('/api/leagues/league-1/members', {
+        action: 'updateMember',
+        targetUserId: 'target-user',
+        updates: { teamName: 'Renamed Team' },
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(memberCommandMocks.updateLeagueMember).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      actorUserId: 'owner-user',
+      targetUserId: 'target-user',
+      teamName: 'Renamed Team',
+      role: undefined,
+    });
+    expect(membershipMocks.queueLeagueMembershipPatch).toHaveBeenCalledWith(
+      batch,
+      'league-1',
+      'target-user',
+      { teamName: 'Renamed Team', role: 'member' },
+      { topLevelMemberId: 'league-1_target-user' }
+    );
+    expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
+  });
+
+  it('updates a legacy Firestore-only league member without reading the top-level mirror', async () => {
+    memberCommandMocks.updateLeagueMember.mockResolvedValue({
+      ok: false,
+      code: 'league-not-found',
+      message: 'League not found.',
+    });
     const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn(), update: vi.fn() };
     const leagueDocRef = {
       get: vi.fn().mockResolvedValue({
@@ -322,7 +372,7 @@ describe('league membership route Firestore architecture', () => {
       if (collectionName === 'leagues') return leaguesCollection;
       throw new Error(`Unexpected top-level collection read: ${collectionName}`);
     });
-    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+    membershipMocks.listActiveFirestoreLeagueMembers.mockResolvedValue([
       activeMember({ id: 'target-user', userId: 'target-user', teamName: 'Old Team' }),
       activeMember({ id: 'other-user', userId: 'other-user', teamName: 'Other Team' }),
     ]);
@@ -391,7 +441,7 @@ describe('league membership route Firestore architecture', () => {
       if (collectionName === 'leagues') return leaguesCollection;
       throw new Error(`Unexpected top-level collection read: ${collectionName}`);
     });
-    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+    membershipMocks.listActiveFirestoreLeagueMembers.mockResolvedValue([
       activeMember({
         id: 'league-1_owner-user',
         userId: 'owner-user',
@@ -484,7 +534,7 @@ describe('league membership route Firestore architecture', () => {
       if (collectionName === 'leagues') return { doc: vi.fn(() => leagueDocRef) };
       throw new Error(`Unexpected top-level collection read: ${collectionName}`);
     });
-    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+    membershipMocks.listActiveFirestoreLeagueMembers.mockResolvedValue([
       activeMember({
         id: 'league-1_owner-user',
         userId: 'owner-user',
