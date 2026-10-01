@@ -18,6 +18,11 @@ const MIGRATION_0242 = join(
   '0242_assignment_continuity_once_per_case',
   'migration.sql'
 );
+const MIGRATION_0243 = join(
+  MIGRATIONS,
+  '0243_hpn_finalization_plan_independent_joins',
+  'migration.sql'
+);
 
 const quoted = (block: string, tag: string) =>
   [...block.matchAll(new RegExp(`\\$${tag}\\$([\\s\\S]*?)\\$${tag}\\$`, 'g'))].map(
@@ -26,10 +31,29 @@ const quoted = (block: string, tag: string) =>
 
 const replaceExactlyOnce = (definition: string, from: string, to: string, count = 1) => {
   if (definition.split(from).length !== count + 1) {
-    throw new Error('Expected each 0242 HPN finalization correction exactly as often as applied.');
+    throw new Error(
+      'Expected each 0242 or 0243 HPN finalization correction exactly as often as applied.'
+    );
   }
   return definition.split(from).join(to);
 };
+
+/**
+ * Reverses 0243's asserted finalizer edits (plan-independent row and envelope checks), so the 0242
+ * and 0240 corrections can be reversed from the definition they produced.
+ */
+function revert0243(definition: string): string {
+  const source = readFileSync(MIGRATION_0243, 'utf8');
+  const fragments = quoted(source, 'old');
+  const corrections = quoted(source, 'new');
+  if (fragments.length === 0 || fragments.length !== corrections.length) {
+    throw new Error('Expected paired 0243 HPN finalization fragments.');
+  }
+  let reverted = definition;
+  for (let index = corrections.length - 1; index >= 0; index -= 1)
+    reverted = replaceExactlyOnce(reverted, corrections[index]!, fragments[index]!);
+  return reverted;
+}
 
 /**
  * Reverses 0242's asserted finalizer edits (continuity evaluated once per assignment case), so the
@@ -68,7 +92,7 @@ function revert0242(definition: string): string {
 
 /**
  * Returns the exact pre-0240 HPN input finalization trigger function (as a CREATE OR REPLACE
- * statement), derived from the deployed definition by reversing 0242's and then 0240's own asserted
+ * statement), derived from the deployed definition by reversing 0243's, 0242's and then 0240's own asserted
  * fragment replacements, so a test can run the original finalization on the same data.
  */
 export async function loadPre0240HpnFinalizationDefinition(
@@ -86,7 +110,7 @@ export async function loadPre0240HpnFinalizationDefinition(
       `SELECT pg_get_functiondef('finalize_outcome_hpn_pav_input_set_v2()'::regprocedure) AS definition`
     )
   ).rows[0]!.definition;
-  definition = revert0242(definition);
+  definition = revert0242(revert0243(definition));
   for (let index = corrections.length - 1; index >= 0; index -= 1) {
     if (definition.split(corrections[index]!).length !== 2) {
       throw new Error('Expected each 0240 HPN finalization correction exactly once.');

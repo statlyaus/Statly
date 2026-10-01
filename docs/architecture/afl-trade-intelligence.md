@@ -1763,6 +1763,8 @@ Finalization reads its content JSON once per statement rather than once per row 
 so its memory and time are linear in the season's size, with the same checks and exceptions.
 Both evaluate identity-assignment continuity once per assignment case rather than once per row
 (migration 0242), with the same rules and the same review-subject locks.
+Its row-conservation and appearance-envelope checks cost time linear in the season whichever join
+plan PostgreSQL chooses (migration 0243), with the same checks and exceptions.
 The operations runbook records its storage and guard details.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
