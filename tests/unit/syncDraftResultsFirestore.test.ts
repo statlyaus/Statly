@@ -49,20 +49,12 @@ vi.mock('../../src/lib/serverAuth', () => ({
   getAuthenticatedUserId: vi.fn(async () => 'manager-1'),
 }));
 
-vi.mock('@/lib/leagueMembership', () => ({
-  getLeagueMembership: vi.fn(async () => ({
-    isMember: true,
-    data: { role: 'owner' },
-  })),
-  isLeagueManagerRole: vi.fn(() => true),
+vi.mock('@/server/leagues/membership', () => ({
+  getLeagueMembershipAccess: vi.fn(async () => ({ isMember: true, canManage: true })),
 }));
 
-vi.mock('../../src/lib/leagueMembership', () => ({
-  getLeagueMembership: vi.fn(async () => ({
-    isMember: true,
-    data: { role: 'owner' },
-  })),
-  isLeagueManagerRole: vi.fn(() => true),
+vi.mock('../../src/server/leagues/membership', () => ({
+  getLeagueMembershipAccess: vi.fn(async () => ({ isMember: true, canManage: true })),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -169,12 +161,13 @@ describe('sync draft results Firestore fallback architecture', () => {
 
     expect(source).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(source).toContain(
-      "import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership'"
+      "import { getLeagueMembershipAccess } from '@/server/leagues/membership'"
     );
     expect(source).toContain('authorizeDraftResultsSync(request, leagueId)');
     expect(source).toContain('const userId = await getAuthenticatedUserId(request);');
-    expect(source).toContain('const membership = await getLeagueMembership(leagueId, userId);');
-    expect(source).toContain('!isLeagueManagerRole(membership.data?.role)');
+    expect(source).toContain('const access = await getLeagueMembershipAccess(leagueId, userId);');
+    expect(source).toContain('if (!access.canManage)');
+    expect(source).not.toContain('isLeagueManagerRole');
     expect(source.indexOf('authorizeDraftResultsSync(request, leagueId)')).toBeLessThan(
       source.indexOf('prisma.league.findUnique')
     );
