@@ -120,6 +120,28 @@ describe('LivePickHeader', () => {
     );
   });
 
+  it('gives the on-the-clock state its own dominant treatment', () => {
+    const { rerender } = render(
+      <LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />
+    );
+    const clock = screen.getByRole('region', { name: 'Draft clock' });
+    expect(clock).not.toHaveClass('border-t-[color:var(--draft-broadcast-yellow)]');
+
+    rerender(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
+
+    const onClock = screen.getByRole('region', { name: 'Draft clock' });
+    expect(onClock).toHaveClass(
+      'border-t-[color:var(--draft-broadcast-yellow)]',
+      'bg-[color:var(--draft-broadcast-yellow-soft)]'
+    );
+    expect(onClock).not.toHaveClass('bg-[color:var(--draft-broadcast-panel)]');
+    expect(screen.getByText('Your turn')).toHaveClass(
+      'bg-[color:var(--draft-broadcast-yellow)]',
+      'text-[color:var(--draft-broadcast-yellow-text)]'
+    );
+    expect(screen.getByText('Your turn').className).not.toMatch(/shadow-\[0_0/);
+  });
+
   it('announces the real time left when the turn starts after a milestone has passed', () => {
     const nearlyOut = {
       ...draftData,

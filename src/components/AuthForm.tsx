@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
+import { buttonStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -297,68 +299,58 @@ const AuthForm = ({
 
   if (user) {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className={`card bg-base-100 shadow-xl border border-base-300 ${className}`}
+      <section
+        aria-labelledby="auth-signed-in-heading"
+        className={`rounded-lg border border-border bg-background p-5 ${className}`}
       >
-        <div className="card-body">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="avatar">
-              <div className="w-16 h-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="Profile" />
-                ) : (
-                  <div className="bg-primary text-primary-content flex items-center justify-center">
-                    <UserIcon className="w-8 h-8" />
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-base-content">Welcome back!</h3>
-              <p className="text-base-content/70">{user.displayName || user.email}</p>
-              <div className="flex items-center gap-2 mt-1">
-                <CheckCircleIcon className="w-4 h-4 text-success" />
-                <span className="text-sm text-success">Authenticated</span>
-              </div>
-            </div>
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-bar text-brand-bar-foreground">
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <UserIcon aria-hidden="true" className="h-7 w-7" />
+            )}
           </div>
-
-          <div className="stats stats-vertical lg:stats-horizontal shadow bg-base-200">
-            <div className="stat">
-              <div className="stat-figure text-primary">
-                <ShieldCheckIcon className="w-8 h-8" />
-              </div>
-              <div className="stat-title">Status</div>
-              <div className="stat-value text-primary text-lg">Active</div>
-              <div className="stat-desc">Securely authenticated</div>
-            </div>
-            <div className="stat">
-              <div className="stat-figure text-secondary">
-                <EnvelopeIcon className="w-8 h-8" />
-              </div>
-              <div className="stat-title">Email</div>
-              <div className="stat-value text-secondary text-lg">
-                {user.emailVerified ? 'Verified' : 'Pending'}
-              </div>
-              <div className="stat-desc">
-                {user.emailVerified ? 'Email confirmed' : 'Verification needed'}
-              </div>
-            </div>
+          <div className="min-w-0 flex-1">
+            <h3 id="auth-signed-in-heading" className="text-xl font-semibold text-foreground">
+              Welcome back!
+            </h3>
+            <p className="truncate text-muted-foreground">{user.displayName || user.email}</p>
+            <p className="mt-1 flex items-center gap-2 text-sm text-result-win">
+              <CheckCircleIcon aria-hidden="true" className="h-4 w-4" />
+              Authenticated
+            </p>
           </div>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleLogout}
-            className="btn btn-outline btn-error gap-2 mt-4"
-          >
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            Sign Out
-          </motion.button>
         </div>
-      </motion.div>
+
+        <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center gap-3 rounded-md bg-muted p-3">
+            <ShieldCheckIcon aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Status</dt>
+              <dd className="font-semibold text-foreground">Active</dd>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-md bg-muted p-3">
+            <EnvelopeIcon aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Email</dt>
+              <dd className="font-semibold text-foreground">
+                {user.emailVerified ? 'Email verified' : 'Verification needed'}
+              </dd>
+            </div>
+          </div>
+        </dl>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className={cn(buttonStyles({ variant: 'outline' }), 'mt-5 text-result-loss')}
+        >
+          <ArrowRightOnRectangleIcon aria-hidden="true" className="h-5 w-5" />
+          Sign Out
+        </button>
+      </section>
     );
   }
 
@@ -378,10 +370,7 @@ const AuthForm = ({
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           {/* Email Field */}
           <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
-            >
+            <label htmlFor="email" className="block text-sm font-semibold text-foreground">
               Email Address
             </label>
             <div className="relative group">
@@ -389,10 +378,10 @@ const AuthForm = ({
                 <EnvelopeIcon
                   className={`w-5 h-5 transition-colors ${
                     showEmailError
-                      ? 'text-red-400'
+                      ? 'text-result-loss'
                       : email && validation.email.isValid
-                        ? 'text-green-500'
-                        : 'text-slate-400 group-focus-within:text-blue-500'
+                        ? 'text-result-win'
+                        : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
               </div>
@@ -401,12 +390,12 @@ const AuthForm = ({
                 type="email"
                 autoComplete="email"
                 placeholder="Enter your email address"
-                className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showEmailError
-                    ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
+                    ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
                     : email && validation.email.isValid
-                      ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
-                      : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                      ? 'border-result-win/50 bg-result-win/5 text-result-win'
+                      : 'border-input bg-background text-foreground hover:border-foreground/40'
                 }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -416,15 +405,12 @@ const AuthForm = ({
               />
               {email && validation.email.isValid && (
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                  <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                  <CheckCircleIcon className="w-5 h-5 text-result-win" />
                 </div>
               )}
             </div>
             {showEmailError && (
-              <p
-                id="email-error"
-                className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1"
-              >
+              <p id="email-error" className="text-sm text-result-loss flex items-center gap-1">
                 <ExclamationTriangleIcon className="w-4 h-4" />
                 {validation.email.message}
               </p>
@@ -433,10 +419,7 @@ const AuthForm = ({
 
           {/* Password Field */}
           <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
-            >
+            <label htmlFor="password" className="block text-sm font-semibold text-foreground">
               Password
             </label>
             <div className="relative group">
@@ -444,10 +427,10 @@ const AuthForm = ({
                 <LockClosedIcon
                   className={`w-5 h-5 transition-colors ${
                     showPasswordError
-                      ? 'text-red-400'
+                      ? 'text-result-loss'
                       : password && validation.password.isValid
-                        ? 'text-green-500'
-                        : 'text-slate-400 group-focus-within:text-blue-500'
+                        ? 'text-result-win'
+                        : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
               </div>
@@ -456,12 +439,12 @@ const AuthForm = ({
                 type={showPassword ? 'text' : 'password'}
                 autoComplete={isSignup ? 'new-password' : 'current-password'}
                 placeholder="Enter your password"
-                className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showPasswordError
-                    ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
+                    ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
                     : password && validation.password.isValid
-                      ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
-                      : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                      ? 'border-result-win/50 bg-result-win/5 text-result-win'
+                      : 'border-input bg-background text-foreground hover:border-foreground/40'
                 }`}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -472,7 +455,7 @@ const AuthForm = ({
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? (
@@ -487,33 +470,33 @@ const AuthForm = ({
             {isSignup && password && (
               <div className="mt-3">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  <span className="text-xs font-medium text-muted-foreground">
                     Password strength
                   </span>
                   <span
                     className={`text-xs font-semibold ${
                       getPasswordStrength(password) < 25
-                        ? 'text-red-600 dark:text-red-400'
+                        ? 'text-result-loss'
                         : getPasswordStrength(password) < 50
-                          ? 'text-yellow-600 dark:text-yellow-400'
+                          ? 'text-foreground'
                           : getPasswordStrength(password) < 75
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-green-600 dark:text-green-400'
+                            ? 'text-brand-bar'
+                            : 'text-result-win'
                     }`}
                   >
                     {getPasswordStrengthLabel(getPasswordStrength(password)).label}
                   </span>
                 </div>
-                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
                       getPasswordStrength(password) < 25
-                        ? 'bg-red-500'
+                        ? 'bg-result-loss'
                         : getPasswordStrength(password) < 50
-                          ? 'bg-yellow-500'
+                          ? 'bg-warning'
                           : getPasswordStrength(password) < 75
-                            ? 'bg-blue-500'
-                            : 'bg-green-500'
+                            ? 'bg-brand-bar'
+                            : 'bg-result-win'
                     }`}
                     style={{ width: `${getPasswordStrength(password)}%` }}
                   />
@@ -524,7 +507,7 @@ const AuthForm = ({
             {showPasswordError && (
               <p
                 id="password-error"
-                className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1 mt-2"
+                className="text-sm text-result-loss flex items-center gap-1 mt-2"
               >
                 <ExclamationTriangleIcon className="w-4 h-4" />
                 {validation.password.message}
@@ -537,7 +520,7 @@ const AuthForm = ({
             <div className="space-y-2">
               <label
                 htmlFor="confirmPassword"
-                className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
+                className="block text-sm font-semibold text-foreground"
               >
                 Confirm Password
               </label>
@@ -546,10 +529,10 @@ const AuthForm = ({
                   <LockClosedIcon
                     className={`w-5 h-5 transition-colors ${
                       confirmPassword && password !== confirmPassword
-                        ? 'text-red-400'
+                        ? 'text-result-loss'
                         : confirmPassword && password === confirmPassword
-                          ? 'text-green-500'
-                          : 'text-slate-400 group-focus-within:text-blue-500'
+                          ? 'text-result-win'
+                          : 'text-muted-foreground group-focus-within:text-foreground'
                     }`}
                   />
                 </div>
@@ -558,12 +541,12 @@ const AuthForm = ({
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   placeholder="Confirm your password"
-                  className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                  className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                     confirmPassword && password !== confirmPassword
-                      ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
+                      ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
                       : confirmPassword && password === confirmPassword
-                        ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
-                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                        ? 'border-result-win/50 bg-result-win/5 text-result-win'
+                        : 'border-input bg-background text-foreground hover:border-foreground/40'
                   }`}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -572,7 +555,7 @@ const AuthForm = ({
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
                   aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                 >
                   {showConfirmPassword ? (
@@ -583,7 +566,7 @@ const AuthForm = ({
                 </button>
               </div>
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <p className="text-sm text-result-loss flex items-center gap-1">
                   <ExclamationTriangleIcon className="w-4 h-4" />
                   Passwords do not match
                 </p>
@@ -597,20 +580,18 @@ const AuthForm = ({
               role="alert"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center gap-3"
+              className="bg-result-loss/5 border border-result-loss/50 rounded-md p-4 flex items-center gap-3"
             >
-              <ExclamationTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0" />
-              <span className="text-sm text-red-700 dark:text-red-300 font-medium">{error}</span>
+              <ExclamationTriangleIcon className="w-5 h-5 text-result-loss flex-shrink-0" />
+              <span className="text-sm text-result-loss font-medium">{error}</span>
             </motion.div>
           )}
 
           {/* Submit Button */}
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
+          <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-70"
+            className={cn(buttonStyles({ variant: 'primary', size: 'lg' }), 'w-full')}
           >
             {isSubmitting ? (
               <>
@@ -627,15 +608,15 @@ const AuthForm = ({
                 <span>{isSignup ? 'Create Account' : 'Sign In'}</span>
               </>
             )}
-          </motion.button>
+          </button>
 
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-300 dark:border-slate-600"></div>
+              <div className="w-full border-t border-input"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
+              <span className="px-4 bg-background text-muted-foreground font-medium">
                 Or continue with
               </span>
             </div>
@@ -644,17 +625,15 @@ const AuthForm = ({
           {/* Social Sign In Buttons */}
           <div className="grid grid-cols-1 gap-3">
             {/* Google Sign In */}
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+            <button
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isGoogleLoading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className={cn(buttonStyles({ variant: 'outline', size: 'lg' }), 'w-full font-medium')}
             >
               {isGoogleLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
+                  <ArrowPathIcon className="w-5 h-5 animate-spin text-muted-foreground" />
                   <span>Signing in with Google...</span>
                 </>
               ) : (
@@ -680,20 +659,18 @@ const AuthForm = ({
                   <span>Continue with Google</span>
                 </>
               )}
-            </motion.button>
+            </button>
 
             {/* Facebook Sign In */}
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+            <button
               type="button"
               onClick={handleFacebookSignIn}
               disabled={isGithubLoading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className={cn(buttonStyles({ variant: 'outline', size: 'lg' }), 'w-full font-medium')}
             >
               {isGithubLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
+                  <ArrowPathIcon className="w-5 h-5 animate-spin text-muted-foreground" />
                   <span>Signing in with Facebook...</span>
                 </>
               ) : (
@@ -704,20 +681,18 @@ const AuthForm = ({
                   <span>Continue with Facebook</span>
                 </>
               )}
-            </motion.button>
+            </button>
 
             {/* Apple Sign In */}
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+            <button
               type="button"
               onClick={handleAppleSignIn}
               disabled={isAppleLoading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className={cn(buttonStyles({ variant: 'outline', size: 'lg' }), 'w-full font-medium')}
             >
               {isAppleLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-slate-500" />
+                  <ArrowPathIcon className="w-5 h-5 animate-spin text-muted-foreground" />
                   <span>Signing in with Apple...</span>
                 </>
               ) : (
@@ -728,18 +703,18 @@ const AuthForm = ({
                   <span>Continue with Apple</span>
                 </>
               )}
-            </motion.button>
+            </button>
           </div>
 
           {/* Mode Switch */}
           {showModeSwitch && (
             <div className="text-center pt-4">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-muted-foreground">
                 {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
                 <button
                   type="button"
                   onClick={handleModeSwitch}
-                  className="font-semibold text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors underline-offset-4 hover:underline"
+                  className="font-semibold text-brand-bar hover:text-brand-bar transition-colors underline-offset-4 hover:underline"
                 >
                   {isSignup ? 'Sign in' : 'Sign up'}
                 </button>

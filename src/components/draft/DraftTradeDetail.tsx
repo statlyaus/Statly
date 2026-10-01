@@ -11,6 +11,8 @@ import type {
   AflTradeValueDetailResponse,
   AflTradeValueSummary,
 } from '@/types/aflTradeIntelligence';
+import { badgeStyles, buttonStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 export type DraftTradeHeaderView = {
   tradeId: string;
@@ -64,17 +66,11 @@ function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
   return 'Other';
 }
 
-function assetTypeBadgeClass(assetType: DraftTradeAssetView['assetType']): string {
-  if (assetType === 'player') {
-    return 'badge-success badge-outline';
-  }
-  if (assetType === 'future_pick') {
-    return 'badge-warning badge-outline';
-  }
-  if (assetType === 'pick') {
-    return 'badge-info badge-outline';
-  }
-  return 'badge-ghost';
+/** Asset types are categories, not results, so they share the neutral tone. */
+function assetTypeBadgeTone(assetType: DraftTradeAssetView['assetType']): 'neutral' | 'muted' {
+  return assetType === 'player' || assetType === 'pick' || assetType === 'future_pick'
+    ? 'neutral'
+    : 'muted';
 }
 
 /**
@@ -114,7 +110,10 @@ function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) 
   return (
     <span className="inline-flex flex-col items-end gap-1">
       <span
-        className="badge badge-primary badge-outline min-w-10 justify-center font-semibold"
+        className={cn(
+          badgeStyles({ tone: 'brand', size: 'sm' }),
+          'min-w-10 justify-center font-semibold'
+        )}
         aria-label={`Grade ${grade.grade}`}
       >
         {grade.grade}
@@ -256,13 +255,9 @@ export function DraftTradeDetail({
   ).length;
   const isInline = mode === 'inline';
   const summaryTiles = [
-    { label: 'Players', value: playerAssetCount, className: 'bg-success/8 ring-1 ring-success/15' },
-    { label: 'Picks', value: pickAssetCount, className: 'bg-info/8 ring-1 ring-info/15' },
-    {
-      label: 'Future',
-      value: futurePickAssetCount,
-      className: 'bg-warning/8 ring-1 ring-warning/15',
-    },
+    { label: 'Players', value: playerAssetCount, className: 'bg-muted ring-1 ring-border' },
+    { label: 'Picks', value: pickAssetCount, className: 'bg-muted ring-1 ring-border' },
+    { label: 'Future', value: futurePickAssetCount, className: 'bg-muted ring-1 ring-border' },
   ];
 
   const sectionHeaderPad = isInline ? 'px-4 py-3' : 'px-5 py-3.5';
@@ -310,10 +305,20 @@ export function DraftTradeDetail({
                   >
                     {detail.trade.title}
                   </h2>
-                  <span className="badge badge-outline badge-sm shrink-0 sm:badge-md">
+                  <span
+                    className={cn(
+                      badgeStyles({ tone: 'neutral', size: 'sm' }),
+                      'shrink-0 sm:px-2.5 sm:py-0.5 sm:text-sm'
+                    )}
+                  >
                     #{detail.trade.seqInYear}
                   </span>
-                  <span className="badge badge-primary badge-outline badge-sm shrink-0 sm:badge-md">
+                  <span
+                    className={cn(
+                      badgeStyles({ tone: 'brand', size: 'sm' }),
+                      'shrink-0 sm:px-2.5 sm:py-0.5 sm:text-sm'
+                    )}
+                  >
                     {detail.trade.year}
                   </span>
                 </div>
@@ -340,14 +345,14 @@ export function DraftTradeDetail({
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 <a
                   href={`/api/draft-trades/${detail.trade.tradeId}/export`}
-                  className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
+                  className={buttonStyles({ variant: 'outline', size: isInline ? 'xs' : 'sm' })}
                 >
                   Export CSV
                 </a>
                 {showOpenFullPageLink && (
                   <Link
                     href={`/draft/trades/${detail.trade.tradeId}`}
-                    className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
+                    className={buttonStyles({ variant: 'outline', size: isInline ? 'xs' : 'sm' })}
                   >
                     Open full page
                   </Link>
@@ -575,7 +580,10 @@ export function DraftTradeDetail({
                                       {asset.assetText}
                                     </span>
                                     <span
-                                      className={`badge badge-sm ${assetTypeBadgeClass(asset.assetType)}`}
+                                      className={badgeStyles({
+                                        tone: assetTypeBadgeTone(asset.assetType),
+                                        size: 'sm',
+                                      })}
                                     >
                                       {assetTypeLabel(asset.assetType)}
                                     </span>
