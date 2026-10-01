@@ -159,7 +159,6 @@ interface ErrorFallbackProps {
 }
 
 function DefaultErrorFallback({
-  error,
   resetError,
   errorId,
   level = 'component',
@@ -174,29 +173,34 @@ function DefaultErrorFallback({
       className={`${isPageLevel ? 'min-h-screen' : 'min-h-[200px]'} flex items-center justify-center p-4`}
     >
       <div className="text-center max-w-md">
-        <div className="mx-auto w-16 h-16 text-red-500 mb-4">
-          <ExclamationTriangleIcon />
+        <div className="mx-auto mb-4 h-12 w-12 text-result-loss">
+          <ExclamationTriangleIcon aria-hidden="true" />
         </div>
 
-        <h2 className={`${isPageLevel ? 'text-2xl' : 'text-lg'} font-semibold text-gray-900 mb-2`}>
+        <h2
+          className={`${isPageLevel ? 'text-2xl' : 'text-lg'} mb-2 font-semibold text-foreground`}
+        >
           {isPageLevel ? 'Page Error' : 'Something went wrong'}
         </h2>
 
-        <p className="text-gray-600 mb-4">
-          {error?.message || 'An unexpected error occurred. Please try again.'}
+        {/* Raw error text can expose internals (service names, IDs); it is logged, not shown. */}
+        <p className="mb-4 text-muted-foreground">
+          {isPageLevel
+            ? 'This page could not load. Try again, or reload the page.'
+            : 'This part of the page could not load. Try again in a moment.'}
         </p>
 
-        {process.env.NODE_ENV === 'development' && errorId && (
-          <p className="text-xs text-gray-400 mb-4 font-mono">Error ID: {errorId}</p>
+        {errorId && (
+          <p className="mb-4 font-mono text-xs text-muted-foreground">Reference: {errorId}</p>
         )}
 
         <div className="space-y-2">
           {canRetry && (
             <button
               onClick={resetError}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <ArrowPathIcon className="w-4 h-4 mr-2" />
+              <ArrowPathIcon aria-hidden="true" className="mr-2 h-4 w-4" />
               Try again {retryCount > 0 && `(${maxRetries - retryCount} attempts left)`}
             </button>
           )}
@@ -204,14 +208,14 @@ function DefaultErrorFallback({
           {isPageLevel && (
             <button
               onClick={() => window.location.reload()}
-              className="block w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              className="block min-h-11 w-full rounded-md border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Reload page
             </button>
           )}
 
           {!canRetry && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Maximum retry attempts reached. Please reload the page.
             </p>
           )}

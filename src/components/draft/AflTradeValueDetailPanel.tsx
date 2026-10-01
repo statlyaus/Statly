@@ -9,6 +9,8 @@ import type {
   AflTradeValueDetailResponse,
   AflTradeValueResult,
 } from '@/types/aflTradeIntelligence';
+import { badgeStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 type AflTradeValueDetailPanelProps = {
   analysis: AflTradeValueDetailResponse;
@@ -242,7 +244,10 @@ export function AflTradeValueDetailPanel({ analysis }: AflTradeValueDetailPanelP
                             {statlyGrade?.grade ? (
                               <span className="inline-flex flex-col items-end gap-0.5">
                                 <span
-                                  className="badge badge-primary badge-outline min-w-10 justify-center font-semibold"
+                                  className={cn(
+                                    badgeStyles({ tone: 'brand', size: 'sm' }),
+                                    'min-w-10 justify-center font-semibold'
+                                  )}
                                   aria-label={`${club.clubName} Statly grade ${statlyGrade.grade}`}
                                 >
                                   {statlyGrade.grade}

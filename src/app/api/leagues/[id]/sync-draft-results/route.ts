@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 
 interface SyncDraftResultsRequest {
   draftId: string;
@@ -35,8 +35,8 @@ async function authorizeDraftResultsSync(request: NextRequest, leagueId: string)
     return errorResponse('Unauthorized', 401);
   }
 
-  const membership = await getLeagueMembership(leagueId, userId);
-  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+  const access = await getLeagueMembershipAccess(leagueId, userId);
+  if (!access.canManage) {
     return errorResponse('Forbidden', 403);
   }
 

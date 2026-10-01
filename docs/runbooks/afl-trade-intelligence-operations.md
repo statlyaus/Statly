@@ -3523,6 +3523,23 @@ reference, and the widest reads it four times, so peak memory is several times t
 If a genuine finalization is slow, check `pg_stat_activity` and the backend's `VmHWM` in
 `/proc/<pid>/status` before raising limits.
 
+Migration 0243 makes two 0240 checks independent of the join plan. PostgreSQL estimates every
+`jsonb_array_elements` at 100 rows, so a season was planned as if it were small, and the plan
+depended on whether autovacuum had analysed the just-written input:
+
+- row conservation tested every row against the whole `content.rows` before the anti-join that
+  should have proven it, or rescanned every content row once per durable row. On one 20,093-row
+  season the statement took from 80 seconds to more than 16 minutes;
+- the appearance-envelope check rescanned every envelope fact ID once per member, about 100
+  million comparisons, with or without current statistics.
+
+In CI the 0240 finalization therefore took from about 200 seconds to more than the ten-minute bound
+on identical input. After 0243 a row is first proven by the element at its own ordinal, the position
+the builder wrote it from, and only an unproven row is tested against the whole array. Members and
+envelopes meet in one window partition per fact ID. On a local PostgreSQL 16 the season finalization
+fell from about 155 to about 50 seconds, and to about 46 seconds with hash and merge joins
+disabled. The checks, exceptions and outcomes are unchanged.
+
 Migration 0242 evaluates provider identity-assignment continuity once per assignment case rather
 than once per row. The season build's decoded-row load asked
 `outcome_provider_assignment_continuity_current` for each row's player, match, home-club and

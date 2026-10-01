@@ -1698,6 +1698,22 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               'Promotion cannot backdate a draft-event correction.'
             );
           }
+          if (predecessor) {
+            // A new version replaces the whole session, so it must keep every recorded selection
+            // slot. Reviewed corrections may change who holds a slot, but never drop one.
+            const proposed = new Set(selections.map(({ selectionNumber }) => selectionNumber));
+            const recorded = await transaction.query<{ selection_number: number }>(
+              `SELECT selection_number FROM outcome_draft_selection WHERE event_version_id=$1`,
+              [predecessor.eventVersionId]
+            );
+            const dropped = recorded.rows.filter((row) => !proposed.has(row.selection_number));
+            if (dropped.length > 0) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'IMMUTABLE_CONFLICT',
+                `Draft event ${eventId} correction would drop ${dropped.length} recorded selection(s).`
+              );
+            }
+          }
           const version = (predecessor?.version ?? 0) + 1;
           const eventVersionId = createAflTradeContentAddress('event-version', {
             promotionId: request.promotionId,

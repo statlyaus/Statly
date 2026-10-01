@@ -1,29 +1,28 @@
-'use client';
+import type { Metadata } from 'next';
 
-import React from 'react';
-import { useAuth } from '@/AuthContext';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import LiveScoringMatchup from '@/components/matchup/LiveScoringMatchup';
+import { LeagueMatchupsPanel } from '@/components/league/matchups/LeagueMatchupsPanel';
+import { LeagueToolPage } from '@/components/league/tools/LeagueToolPage';
 
-export default function LiveScoringPage() {
-  const { user, loading } = useAuth();
+export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Live Scoring | Statly' };
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!user) {
-    return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-            <p className="text-gray-600">Please sign in to view live scoring.</p>
-          </div>
-        </div>
-    );
-  }
+export default async function LiveScoringPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ league?: string }>;
+}) {
+  const { league: requestedLeagueId } = (await searchParams) ?? {};
 
   return (
-      <LiveScoringMatchup isLive={true} />
+    <LeagueToolPage
+      path="/live-scoring"
+      title="Live Scoring"
+      description="This round's category head-to-head matchups"
+      requestedLeagueId={requestedLeagueId}
+    >
+      {({ league, userId }) => (
+        <LeagueMatchupsPanel key={league.id} leagueId={league.id} currentUserId={userId} />
+      )}
+    </LeagueToolPage>
   );
 }

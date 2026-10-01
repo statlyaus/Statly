@@ -42,12 +42,12 @@ const STATUS_CONFIG = {
   },
   reconnecting: {
     accent:
-      'border-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow)]',
+      'border-[color:var(--draft-broadcast-caution)] text-[color:var(--draft-broadcast-caution)]',
     icon: SPINNER,
     message: 'Reconnecting to the live draft. Picks made meanwhile will catch up.',
   },
   disconnected: {
-    accent: 'border-[color:var(--draft-broadcast-red)] text-[color:var(--draft-broadcast-red)]',
+    accent: 'border-[color:var(--draft-broadcast-alert)] text-[color:var(--draft-broadcast-alert)]',
     icon: WARNING_ICON,
     message: 'Connection lost. The board may be out of date.',
   },

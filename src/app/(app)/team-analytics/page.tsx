@@ -1,78 +1,40 @@
-'use client';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
-import React from 'react';
-import Link from 'next/link';
-import { useAuth } from '@/AuthContext';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import TeamAnalyticsDashboard from '@/components/team/TeamAnalyticsDashboard';
+import { LeagueToolPage } from '@/components/league/tools/LeagueToolPage';
+import { TeamCategoryProfileTable } from '@/components/league/tools/TeamCategoryProfileTable';
+import { loadTeamCategoryProfile } from '@/server/leagues/teamCategoryProfile';
 
-export default function TeamAnalyticsPage() {
-  const { user, loading } = useAuth();
+export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Team Analytics | Statly' };
 
-  // Handle real user switching - check URL parameter for user preference
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const userParam = urlParams.get('user');
+async function TeamCategoryProfileSection({
+  leagueId,
+  userId,
+}: {
+  leagueId: string;
+  userId: string;
+}) {
+  const profile = await loadTeamCategoryProfile({ leagueId, viewerUserId: userId });
+  if (!profile) notFound();
+  return <TeamCategoryProfileTable leagueId={leagueId} profile={profile} />;
+}
 
-      if (userParam === 'addison' || userParam === 'addisonarmadale@gmail.com') {
-        localStorage.setItem('preferredUser', 'addison');
-      } else if (userParam === 'test') {
-        localStorage.setItem('preferredUser', 'test');
-      }
-    }
-  }, []);
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  // Allow test mode for development - check for test user or enable guest access
-  const isTestMode = !user || process.env.NODE_ENV === 'development';
-
-  if (!user && process.env.NODE_ENV === 'production') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-            <p className="text-gray-600">Please sign in to view your team analytics.</p>
-            <div className="mt-4">
-              <Link
-                href="/login?callbackUrl=/team-analytics"
-                className="inline-flex rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                Sign In
-              </Link>
-            </div>
-          </div>
-      </div>
-    );
-  }
+export default async function TeamAnalyticsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ league?: string }>;
+}) {
+  const { league: requestedLeagueId } = (await searchParams) ?? {};
 
   return (
-    <>
-      {isTestMode && !user && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 mx-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-yellow-700">
-                <strong>Development Mode:</strong> Viewing team analytics with test data. Sign in to
-                see your real teams.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-      <TeamAnalyticsDashboard />
-    </>
+    <LeagueToolPage
+      path="/team-analytics"
+      title="Team Analytics"
+      description="Where your team wins and loses categories"
+      requestedLeagueId={requestedLeagueId}
+    >
+      {({ league, userId }) => <TeamCategoryProfileSection leagueId={league.id} userId={userId} />}
+    </LeagueToolPage>
   );
 }

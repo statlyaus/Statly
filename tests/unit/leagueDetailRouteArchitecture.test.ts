@@ -80,6 +80,17 @@ describe('league detail route architecture', () => {
     );
   });
 
+  it('tells members why a league failed to load without exposing request internals', () => {
+    const pageSource = readFileSync(
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/page.tsx'),
+      'utf8'
+    );
+
+    expect(pageSource).not.toContain('status=${status}');
+    expect(pageSource).not.toContain('League not found (${leagueId})');
+    expect(pageSource).toContain("We couldn't load this league. Try again in a moment.");
+  });
+
   it('keeps the tabbed league overview free of legacy placeholder sections', () => {
     const tabsSource = readFileSync(
       join(process.cwd(), 'src/components/league/LeagueTabs.tsx'),
