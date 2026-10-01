@@ -103,41 +103,6 @@ export function isLeagueManagerRole(role: unknown): boolean {
   );
 }
 
-export async function canManageLeague(leagueId: string, userId: string): Promise<boolean> {
-  const prismaLeague = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: {
-      ownerId: true,
-      members: {
-        where: { userId },
-        select: { role: true, isActive: true, status: true },
-        take: 1,
-      },
-    },
-  });
-
-  if (prismaLeague) {
-    const member = prismaLeague.members[0];
-    return (
-      prismaLeague.ownerId === userId ||
-      (member !== undefined && isActivePrismaMembership(member) && isLeagueManagerRole(member.role))
-    );
-  }
-
-  const membership = await getLeagueMembership(leagueId, userId);
-  if (membership.isMember && isLeagueManagerRole(membership.data?.role)) {
-    return true;
-  }
-
-  const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
-  if (!leagueDoc.exists) {
-    return false;
-  }
-
-  const leagueData = leagueDoc.data();
-  return leagueData?.ownerId === userId;
-}
-
 export function toCanonicalLeagueMembershipData(
   membership: LeagueMembershipWrite
 ): FirebaseFirestore.DocumentData {

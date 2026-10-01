@@ -28,7 +28,6 @@ vi.mock('../../src/lib/prisma', () => ({
 }));
 
 import {
-  canManageLeague,
   getLeagueMembership,
   isActiveMembershipData,
   isLeagueManagerRole,
@@ -59,49 +58,6 @@ describe('leagueMembership architecture helpers', () => {
     expect(isLeagueManagerRole('Admin')).toBe(true);
     expect(isLeagueManagerRole('member')).toBe(false);
     expect(isLeagueManagerRole(undefined)).toBe(false);
-  });
-
-  it('authorizes Prisma league owners as managers', async () => {
-    prismaMocks.leagueFindUnique.mockResolvedValue({
-      ownerId: 'owner-user',
-      members: [{ role: 'member', isActive: true, status: 'ACTIVE' }],
-    });
-
-    await expect(canManageLeague('league-1', 'owner-user')).resolves.toBe(true);
-
-    expect(prismaMocks.leagueFindUnique).toHaveBeenCalledWith({
-      where: { id: 'league-1' },
-      select: {
-        ownerId: true,
-        members: {
-          where: { userId: 'owner-user' },
-          select: { role: true, isActive: true, status: true },
-          take: 1,
-        },
-      },
-    });
-    expect(adminMocks.doc).not.toHaveBeenCalled();
-  });
-
-  it('authorizes Prisma manager roles without Firestore fallback', async () => {
-    prismaMocks.leagueFindUnique.mockResolvedValue({
-      ownerId: 'owner-user',
-      members: [{ role: 'MANAGER', isActive: true, status: 'ACTIVE' }],
-    });
-
-    await expect(canManageLeague('league-1', 'manager-user')).resolves.toBe(true);
-
-    expect(adminMocks.doc).not.toHaveBeenCalled();
-  });
-
-  it('refuses management to a removed member', async () => {
-    prismaMocks.leagueFindUnique.mockResolvedValue({
-      ownerId: 'owner-user',
-      members: [{ role: 'MANAGER', isActive: false, status: 'removed' }],
-    });
-
-    await expect(canManageLeague('league-1', 'removed-user')).resolves.toBe(false);
-    expect(adminMocks.doc).not.toHaveBeenCalled();
   });
 
   it('does not treat a removed member as belonging to the league', async () => {
@@ -169,50 +125,6 @@ describe('leagueMembership architecture helpers', () => {
     });
     expect(adminMocks.doc).not.toHaveBeenCalled();
     expect(adminMocks.collection).not.toHaveBeenCalled();
-  });
-
-  it('rejects non-manager Prisma members without trusting stale Firestore roles', async () => {
-    prismaMocks.leagueFindUnique.mockResolvedValue({
-      ownerId: 'owner-user',
-      members: [{ role: 'MEMBER' }],
-    });
-
-    await expect(canManageLeague('league-1', 'member-user')).resolves.toBe(false);
-
-    expect(adminMocks.doc).not.toHaveBeenCalled();
-  });
-
-  it('falls back to legacy Firestore owner when no Prisma league exists', async () => {
-    adminMocks.doc.mockReturnValue({
-      get: vi.fn().mockResolvedValue({
-        exists: false,
-        data: () => undefined,
-      }),
-    });
-    const legacyGet = vi.fn().mockResolvedValue({
-      empty: true,
-      docs: [],
-    });
-    const query = {
-      where: vi.fn(() => query),
-      limit: vi.fn(() => ({ get: legacyGet })),
-    };
-    const leagueDoc = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        data: () => ({ ownerId: 'owner-user' }),
-      }),
-    };
-    const leaguesCollection = { doc: vi.fn(() => leagueDoc) };
-
-    adminMocks.collection.mockImplementation((collectionName: string) =>
-      collectionName === 'leagueMembers' ? query : leaguesCollection
-    );
-
-    await expect(canManageLeague('league-1', 'owner-user')).resolves.toBe(true);
-
-    expect(adminMocks.collection).toHaveBeenCalledWith('leagues');
-    expect(leaguesCollection.doc).toHaveBeenCalledWith('league-1');
   });
 
   it('normalizes canonical member documents with embedded defaults', () => {

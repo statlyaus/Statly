@@ -8,9 +8,10 @@ import {
 } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { canManageLeague, getLeagueMembership } from '@/lib/leagueMembership';
+import { getLeagueMembership } from '@/lib/leagueMembership';
 import { prisma } from '@/lib/prisma';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
   hasDraftStarted,
   removeLeagueMember,
@@ -190,7 +191,7 @@ describe('league member commands', () => {
     expect(await getLeagueMembership(FIXTURE.leagueId, bravoUserId)).toMatchObject({
       isMember: false,
     });
-    expect(await canManageLeague(FIXTURE.leagueId, bravoUserId)).toBe(false);
+    expect((await getLeagueMembershipAccess(FIXTURE.leagueId, bravoUserId)).canManage).toBe(false);
     expect((await getLeagueMembership(FIXTURE.leagueId, ownerUserId)).isMember).toBe(true);
   });
 

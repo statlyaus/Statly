@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
 
@@ -13,8 +13,8 @@ export async function POST(
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id, round } = await params;
-  const membership = await getLeagueMembership(id, userId);
-  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+  const access = await getLeagueMembershipAccess(id, userId);
+  if (!access.canManage) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
