@@ -36,6 +36,9 @@ describe('league matchups UI architecture', () => {
     expect(matchupsPanel).toContain('Player stats · Round');
     expect(matchupsPanel).toContain('Match-up totals by scoring category');
     expect(matchupsPanel).toContain('table-fixed');
+    // Screen-reader-only cell labels are absolutely positioned; a positioned scroll wrapper keeps
+    // them from widening the page on phones.
+    expect(matchupsPanel.match(/relative overflow-x-auto/g)).toHaveLength(2);
     expect(matchupsPanel).toContain('Team total');
     expect(matchupsPanel).toContain('box score');
     expect(matchupsPanel).not.toContain('Statly Z');
