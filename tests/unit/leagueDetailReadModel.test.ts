@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  listActiveLeagueMembers: vi.fn(),
   leagueFindUnique: vi.fn(),
   waiverPriorityFindMany: vi.fn(),
   getLeagueDraftOperationalReadiness: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMembership: vi.fn(),
   isLeagueManagerRole: vi.fn(),
-  listActiveLeagueMembers: vi.fn(),
+  listActiveLeagueMembers: mocks.listActiveLeagueMembers,
 }));
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -94,4 +95,78 @@ describe('league detail Prisma member projection', () => {
       maxTeams: 2,
     });
   });
+
+  it('follows Prisma membership when the Firestore projection still lists a removed team', async () => {
+    mocks.listActiveLeagueMembers.mockResolvedValue([
+      {
+        id: 'active-member',
+        leagueId: 'test-league-id',
+        userId: 'owner-user',
+        role: 'owner',
+        teamName: 'Active Team',
+        isActive: true,
+        source: 'embedded',
+      },
+      {
+        id: 'removed-member',
+        leagueId: 'test-league-id',
+        userId: 'former-user',
+        role: 'member',
+        teamName: 'Former Team',
+        isActive: true,
+        source: 'embedded',
+      },
+    ]);
+    mocks.leagueFindUnique.mockResolvedValue({
+      id: 'test-league-id',
+      name: 'Test League',
+      inviteCode: 'TEST123',
+      ownerId: 'owner-user',
+      categoriesJson: null,
+      createdAt: new Date('2026-07-21T00:00:00.000Z'),
+      settings: { maxTeams: 2 },
+      drafts: [],
+      members: [
+        buildPrismaMember({
+          id: 'active-member',
+          userId: 'owner-user',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
+        buildPrismaMember({
+          id: 'removed-member',
+          userId: 'former-user',
+          isActive: false,
+          status: 'REMOVED',
+        }),
+      ],
+    } as never);
+
+    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.members.map((member) => member.userId)).toEqual(['owner-user']);
+    expect(result.league).toMatchObject({ currentTeams: 1 });
+    expect(mocks.listActiveLeagueMembers).not.toHaveBeenCalled();
+  });
 });
+
+function buildPrismaMember(input: {
+  id: string;
+  userId: string;
+  isActive: boolean;
+  status: string;
+}) {
+  return {
+    ...input,
+    leagueId: 'test-league-id',
+    teamName: `${input.id} team`,
+    teamLogoUrl: null,
+    teamLogoPositionX: null,
+    teamLogoPositionY: null,
+    teamLogoZoom: null,
+    joinedAt: new Date('2026-07-01T00:00:00.000Z'),
+  };
+}

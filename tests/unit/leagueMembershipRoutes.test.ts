@@ -24,6 +24,8 @@ const membershipMocks = vi.hoisted(() => ({
 }));
 
 const memberCommandMocks = vi.hoisted(() => ({
+  findPrismaLeagueIdByInviteCode: vi.fn(),
+  joinLeague: vi.fn(),
   removeLeagueMember: vi.fn(),
   transferLeagueOwnership: vi.fn(),
 }));
@@ -147,6 +149,13 @@ describe('league membership route Firestore architecture', () => {
     );
     prismaMocks.syncPrismaLeagueMember.mockResolvedValue({ synced: true });
     prismaMocks.syncPrismaLeagueOwner.mockResolvedValue({ synced: true });
+    // These leagues are Firestore-only legacy leagues with no Prisma row.
+    memberCommandMocks.findPrismaLeagueIdByInviteCode.mockResolvedValue(null);
+    memberCommandMocks.joinLeague.mockResolvedValue({
+      ok: false,
+      code: 'league-not-found',
+      message: 'League not found.',
+    });
   });
 
   it('keeps join and member mutation business logic off the top-level leagueMembers mirror', () => {

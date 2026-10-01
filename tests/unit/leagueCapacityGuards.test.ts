@@ -45,6 +45,11 @@ const prismaBridgeMocks = vi.hoisted(() => ({
   syncPrismaLeagueMember: vi.fn(),
 }));
 
+const memberCommandMocks = vi.hoisted(() => ({
+  findPrismaLeagueIdByInviteCode: vi.fn(),
+  joinLeague: vi.fn(),
+}));
+
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
   getUserIdFromRequest: authMocks.getUserIdFromRequest,
@@ -119,6 +124,10 @@ vi.mock('../../src/lib/prismaLeagueBridge', () => ({
   syncPrismaLeagueMember: prismaBridgeMocks.syncPrismaLeagueMember,
 }));
 
+vi.mock('@/server/leagues/memberCommands', () => memberCommandMocks);
+
+vi.mock('../../src/server/leagues/memberCommands', () => memberCommandMocks);
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -183,6 +192,13 @@ describe('league capacity guards', () => {
       })
     );
     prismaBridgeMocks.syncPrismaLeagueMember.mockResolvedValue({ synced: true });
+    // The join case is a Firestore-only legacy league with no Prisma row.
+    memberCommandMocks.findPrismaLeagueIdByInviteCode.mockResolvedValue(null);
+    memberCommandMocks.joinLeague.mockResolvedValue({
+      ok: false,
+      code: 'league-not-found',
+      message: 'League not found.',
+    });
   });
 
   it('rejects reducing Prisma league maxTeams below the active member count', async () => {
