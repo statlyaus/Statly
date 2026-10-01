@@ -11,6 +11,8 @@ import {
   draftHubSlatePillSmClass,
 } from '@/components/draft/draftHubChrome';
 import type { DraftClubListItem } from '@/lib/draftTrades/contracts';
+import { buttonStyles, textLinkStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 type ViewMode = 'cards' | 'table';
 
@@ -93,9 +95,9 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
   return (
     <section className="space-y-6" aria-labelledby="club-directory-heading">
       <header className={draftHubHeroShellClass}>
-        <div className="flex flex-col gap-5 border-b border-info/20 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-5 border-b border-brand-bar/20 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 max-w-3xl">
-            <p className="text-xs font-semibold text-info">Club lens</p>
+            <p className="text-xs font-semibold text-brand-bar">Club lens</p>
             <h2
               id="club-directory-heading"
               className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl"
@@ -115,7 +117,10 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
           >
             <button
               type="button"
-              className={`btn btn-sm ${view === 'cards' ? 'btn-primary shadow-sm' : 'btn-outline bg-background'}`}
+              className={buttonStyles({
+                variant: view === 'cards' ? 'primary' : 'outline',
+                size: 'sm',
+              })}
               aria-pressed={view === 'cards'}
               aria-controls={cardsPanelId}
               onClick={() => setView('cards')}
@@ -124,7 +129,10 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
             </button>
             <button
               type="button"
-              className={`btn btn-sm ${view === 'table' ? 'btn-primary shadow-sm' : 'btn-outline bg-background'}`}
+              className={buttonStyles({
+                variant: view === 'table' ? 'primary' : 'outline',
+                size: 'sm',
+              })}
               aria-pressed={view === 'table'}
               aria-controls={tablePanelId}
               onClick={() => setView('table')}
@@ -193,7 +201,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
           role="region"
           aria-label="Club directory as a table"
         >
-          <table className="table table-sm w-full table-fixed border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3">
+          <table className="table w-full table-fixed border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3">
             <caption className="sr-only">
               AFL clubs with draft trade counts and year coverage. {sortSummaryLine(tableSort)} Use
               Trades and Assets column headers to change sort.
@@ -280,7 +288,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                       <DraftTeamLogo team={club.clubName} size={16} withCircle />
                       <Link
                         href={`/draft/clubs/${club.clubSlug}`}
-                        className="link link-hover font-medium"
+                        className={cn(textLinkStyles, 'font-medium')}
                         aria-label={clubLinkLabel(club)}
                       >
                         {club.clubName}

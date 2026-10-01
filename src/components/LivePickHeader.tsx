@@ -284,10 +284,9 @@ export default function LivePickHeader({
   const timerTone =
     timerState.tone === 'urgent'
       ? {
-          badge:
-            'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]',
-          bar: 'bg-[color:var(--draft-broadcast-red)]',
-          rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
+          badge: 'border-result-loss bg-result-loss text-result-loss-foreground',
+          bar: 'bg-result-loss',
+          rail: 'bg-result-loss/15',
           label: timerState.label,
         }
       : timerState.tone === 'warning'
@@ -316,7 +315,7 @@ export default function LivePickHeader({
               }
             : {
                 badge:
-                  'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-white',
+                  'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
                 bar: 'bg-[color:var(--draft-broadcast-red)]',
                 rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
                 label: timerState.label,
@@ -392,20 +391,24 @@ export default function LivePickHeader({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <div
-          className="rounded-2xl border border-t-4 border-[color:var(--draft-broadcast-border)] border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)]"
+          className={`rounded-lg border border-t-4 border-[color:var(--draft-broadcast-border)] p-4 text-[color:var(--draft-broadcast-text)] ${
+            isYourTurn
+              ? 'border-t-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)]'
+              : 'border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)]'
+          }`}
           role="region"
           aria-label="Draft clock"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-2.5 py-1 text-xs font-semibold text-white">
+              <span className="inline-flex items-center rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--draft-broadcast-text)]">
                 {statusCopy.title}
               </span>
               <span className="rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2.5 py-1 text-xs font-medium text-[color:var(--draft-broadcast-muted)]">
                 Round {draftData.round} / {draftData.direction}
               </span>
               {isYourTurn && (
-                <span className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]">
+                <span className="rounded-md border border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] px-3 py-1 text-sm font-bold text-[color:var(--draft-broadcast-yellow-text)]">
                   {/* Visual only: the pick clock announcer speaks the turn once. */}
                   Your turn
                 </span>
@@ -433,7 +436,7 @@ export default function LivePickHeader({
                 aria-label={timerAriaLabel}
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-alert)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
                 <span

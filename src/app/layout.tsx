@@ -6,6 +6,7 @@ import '@/index.css';
 
 import FirebaseAnalyticsInitializer from '@/components/FirebaseAnalyticsInitializer';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
+import MotionPreferenceProvider from '@/providers/MotionPreferenceProvider';
 
 const barlow = Barlow({
   subsets: ['latin'],
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
     <html lang="en" data-theme="light" className={`${barlow.variable} ${barlowCondensed.variable}`}>
       <body className="font-sans" suppressHydrationWarning>
         <FirebaseAnalyticsInitializer />
-        <PageErrorBoundary name="RootLayout">{children}</PageErrorBoundary>
+        <PageErrorBoundary name="RootLayout">
+          <MotionPreferenceProvider>{children}</MotionPreferenceProvider>
+        </PageErrorBoundary>
       </body>
     </html>
   );

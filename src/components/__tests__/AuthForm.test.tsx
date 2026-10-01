@@ -133,6 +133,27 @@ describe('AuthForm', () => {
     expect(screen.getByText('Authenticated')).toBeInTheDocument();
   });
 
+  it('shows the signed-in account without DaisyUI components', () => {
+    (useAuth as any).mockReturnValue({
+      ...mockAuthContext,
+      user: { uid: 'u1', email: 'manager@example.com', displayName: 'Manager', emailVerified: true },
+    });
+
+    const { container } = render(<AuthForm />);
+
+    expect(screen.getByRole('heading', { name: 'Welcome back!' })).toBeInTheDocument();
+    expect(screen.getByText('Email verified')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign Out' })).toBeInTheDocument();
+    expect(container.innerHTML).not.toMatch(/card-body|stat-|btn|base-content|base-100/);
+  });
+
+  it('uses the navy primary action and Statly tokens instead of the blue gradient', () => {
+    const { container } = render(<AuthForm initialMode="login" />);
+
+    expect(screen.getByRole('button', { name: 'Sign In' })).toHaveClass('bg-brand-bar');
+    expect(container.innerHTML).not.toMatch(/bg-gradient|from-blue-|(bg|text|border)-slate-|dark:/);
+  });
+
   it('handles form submission with valid credentials', async () => {
     const user = userEvent.setup();
     const mockLogin = vi.fn().mockResolvedValue(undefined);
@@ -263,7 +284,24 @@ describe('AuthForm', () => {
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Login failed')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('Login failed');
     });
+  });
+
+  it('lets password managers fill sign-in credentials', () => {
+    render(<AuthForm initialMode="login" />);
+
+    expect(screen.getByLabelText('Email Address')).toHaveAttribute('autocomplete', 'email');
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'current-password');
+  });
+
+  it('lets password managers suggest a new password on sign-up', () => {
+    render(<AuthForm initialMode="signup" />);
+
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'new-password');
+    expect(screen.getByLabelText('Confirm Password')).toHaveAttribute(
+      'autocomplete',
+      'new-password'
+    );
   });
 });
