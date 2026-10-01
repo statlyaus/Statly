@@ -3111,7 +3111,11 @@ to twelve decimal places, matching the shared numerical core. Migration 0119 ali
 PostgreSQL total check with that order without relaxing component precision. Source-value comparison
 must also be scoped to the exact calculation before joining expected and stored teams: migration
 0120 prevents previously finalized seasons from appearing as unmatched teams in a later calculation.
-Missing, extra or mismatched teams within that calculation remain invalid.
+Missing, extra or mismatched teams within that calculation remain invalid. Migration 0245 compares
+each stored league, team and player value with its exact NUMERIC derivation within 1e-9 instead of
+after rounding both to twelve decimals: double-precision values on a genuine season (AFLM 2024)
+differed from the exact derivation by up to 1.35e-12, which straddled the twelfth decimal and blocked
+finalization, while any real difference remains far above the bound.
 
 Historical coverage follows from the existing strict label-purge rule. For an `H`-season target,
 adjacent partition origin years must be at least `H + 1` years apart when mature outcomes are recorded
