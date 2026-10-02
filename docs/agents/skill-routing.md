@@ -25,6 +25,10 @@ Use these supported routes:
 - Documentation drift: `docs-sweep-loop`.
 - Draft-room reliability: `draft-reliability-loop`.
 - Primary-source investigation: `research`.
+- Minimal-diff pressure on a specific task: `ponytail`, opt-in only. Do not run it as an always-on
+  mode. Where it conflicts with `statly-engineering-workflow` (planning gates, `tdd`
+  red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its
+  exceptions for validation, security, and accessibility always apply.
 
 The mandatory `statly-engineering-workflow` remains the routing authority for repository changes and
 may narrow these routes further.
