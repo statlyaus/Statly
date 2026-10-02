@@ -24,6 +24,8 @@ const requiredUpstreamSkills = [
   'to-tickets',
 ].sort();
 
+const approvedThirdPartySkills = { ponytail: 'DietrichGebert/ponytail' };
+
 const explicitInvocationSkills = [
   'ask-matt',
   'grill-with-docs',
@@ -147,15 +149,17 @@ async function checkLockfile() {
   const lockfile = JSON.parse(await readRepoFile('skills-lock.json'));
   assert(lockfile.version === 1, 'skills-lock.json must use version 1');
 
+  const approvedNames = [...requiredUpstreamSkills, ...Object.keys(approvedThirdPartySkills)].sort();
   const lockedNames = Object.keys(lockfile.skills ?? {}).sort();
   assert(
-    JSON.stringify(lockedNames) === JSON.stringify(requiredUpstreamSkills),
-    `skills-lock.json must contain only the approved upstream skills: ${requiredUpstreamSkills.join(', ')}`
+    JSON.stringify(lockedNames) === JSON.stringify(approvedNames),
+    `skills-lock.json must contain only the approved skills: ${approvedNames.join(', ')}`
   );
 
-  for (const name of requiredUpstreamSkills) {
+  for (const name of approvedNames) {
     const locked = lockfile.skills[name];
-    assert(locked.source === 'mattpocock/skills', `${name} must be locked to mattpocock/skills`);
+    const expectedSource = approvedThirdPartySkills[name] ?? 'mattpocock/skills';
+    assert(locked.source === expectedSource, `${name} must be locked to ${expectedSource}`);
     assert(locked.sourceType === 'github', `${name} must use the GitHub source type`);
     assert(locked.skillPath?.endsWith(`/${name}/SKILL.md`), `${name} has an unexpected skill path`);
     assert(
@@ -226,6 +230,7 @@ async function checkStatlyGuidance() {
     'codebase-design',
     'domain-modeling',
     '`implement`',
+    '`ponytail`',
     'tdd',
     'to-spec',
     'to-tickets',
