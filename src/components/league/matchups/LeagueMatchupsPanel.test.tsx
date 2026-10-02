@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authenticatedFetchMock = vi.hoisted(() => vi.fn());
@@ -88,5 +88,63 @@ describe('LeagueMatchupsPanel category totals', () => {
 
     const table = await totalsTable();
     expect(table.queryByText(/ (won|lost|drawn)$/)).not.toBeInTheDocument();
+  });
+});
+
+function respondEmpty(canManage: boolean) {
+  return () =>
+    Promise.resolve({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { round: 1, availableRounds: [], matchups: [], permissions: { canManage } },
+      }),
+    });
+}
+
+describe('LeagueMatchupsPanel before any fixtures exist', () => {
+  beforeEach(() => {
+    authenticatedFetchMock.mockReset();
+  });
+
+  it('shows the nine-category preview and lets a commissioner open league settings', async () => {
+    authenticatedFetchMock.mockImplementation(respondEmpty(true));
+    const onOpenSettings = vi.fn();
+    render(
+      <LeagueMatchupsPanel
+        leagueId="league-1"
+        currentUserId="user-1"
+        categories={['goals', 'tackles', 'inside50s']}
+        onOpenSettings={onOpenSettings}
+      />
+    );
+
+    expect(
+      await screen.findByRole('table', { name: /preview of your weekly matchup, no fixtures yet/i })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /open league settings/i }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer league settings to someone who cannot manage the league', async () => {
+    authenticatedFetchMock.mockImplementation(respondEmpty(false));
+    render(
+      <LeagueMatchupsPanel
+        leagueId="league-1"
+        currentUserId="user-1"
+        categories={['goals']}
+        onOpenSettings={vi.fn()}
+      />
+    );
+
+    await screen.findByRole('table', { name: /preview of your weekly matchup/i });
+    expect(screen.queryByRole('button', { name: /open league settings/i })).not.toBeInTheDocument();
+  });
+
+  it('announces loading as a status while matchups are fetched', () => {
+    authenticatedFetchMock.mockImplementation(() => new Promise(() => {}));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/loading matchups/i);
   });
 });

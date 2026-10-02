@@ -679,6 +679,8 @@ export default function LeagueTabs({
                   waiverClaims={overviewWaiverClaims}
                   waiversStatus={overviewWaiversStatus}
                   onNavigate={handleTabChange}
+                  isCommissioner={isAdmin}
+                  draftBlockers={draftReadiness?.blockers ?? []}
                 />
               )}
 
@@ -862,7 +864,12 @@ export default function LeagueTabs({
               )}
 
               {activeTab === 'matchups' && (
-                <LeagueMatchupsPanel leagueId={league.id} currentUserId={currentUserId} />
+                <LeagueMatchupsPanel
+                  leagueId={league.id}
+                  currentUserId={currentUserId}
+                  categories={league.categories}
+                  onOpenSettings={() => handleTabChange('league-settings')}
+                />
               )}
 
               {activeTab === 'lineup' && (
