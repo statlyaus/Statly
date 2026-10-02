@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
 import {
   MatchupScoreLine,
   ResultChip,
@@ -12,6 +13,10 @@ import { authenticatedFetch } from '@/lib/authenticatedFetch';
 interface LeagueMatchupsPanelProps {
   leagueId: string;
   currentUserId?: string;
+  /** The league's scoring category keys, used to preview a matchup before fixtures exist. */
+  categories?: readonly string[];
+  /** Lets someone who can manage the league jump to where fixtures are set up. */
+  onOpenSettings?: () => void;
 }
 
 interface MatchupModel {
@@ -96,7 +101,12 @@ function formatDateTime(value: string | null | undefined): string | null {
   }).format(date);
 }
 
-export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsPanelProps) {
+export function LeagueMatchupsPanel({
+  leagueId,
+  currentUserId,
+  categories = [],
+  onOpenSettings,
+}: LeagueMatchupsPanelProps) {
   const [data, setData] = useState<MatchupReadModel | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [message, setMessage] = useState<string | null>(null);
@@ -135,8 +145,12 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
 
   if (status === 'loading') {
     return (
-      <div className="rounded-lg border border-[color:var(--league-border)] p-4">
-        Loading matchups
+      <div
+        role="status"
+        aria-busy="true"
+        className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]"
+      >
+        Loading matchups…
       </div>
     );
   }
@@ -202,9 +216,21 @@ export function LeagueMatchupsPanel({ leagueId, currentUserId }: LeagueMatchupsP
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]">
-          No weekly matchups are available yet. They appear once the league has at least two teams
-          and the commissioner has set up the fixture.
+        <div className="space-y-4 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]">
+          <p>
+            No weekly matchups are available yet. They appear once the league has at least two teams
+            and the commissioner has set up the fixture.
+          </p>
+          <CategoryPreviewScore categories={categories} />
+          {data?.permissions?.canManage && onOpenSettings ? (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="min-h-11 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] hover:bg-[color:var(--league-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+            >
+              Open league settings
+            </button>
+          ) : null}
         </div>
       )}
     </section>

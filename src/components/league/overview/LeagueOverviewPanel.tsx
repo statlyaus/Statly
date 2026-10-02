@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { StandingsLadderCompact } from '@/components/league/standings/StandingsLadderCompact';
 import type { StandingsData } from '@/components/league/standings/standingsFormat';
+import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
 import {
   CategoryBoxScore,
   MatchupScoreLine,
@@ -17,7 +18,8 @@ import type { League, LeagueMember } from '@/types/leagues';
 
 import { getTeamInitials, getTeamLogoImageStyle } from '../leagueTabPanelUtils';
 
-export type OverviewTarget = 'matchups' | 'lineup' | 'standings' | 'teams' | 'trades' | 'waivers';
+export type OverviewTarget =
+  'matchups' | 'lineup' | 'standings' | 'teams' | 'trades' | 'waivers' | 'draft';
 
 export interface OverviewWaiverClaimSummary {
   id: string;
@@ -39,6 +41,10 @@ interface LeagueOverviewPanelProps {
   waiverClaims: OverviewWaiverClaimSummary[];
   waiversStatus: 'idle' | 'loading' | 'ready' | 'error';
   onNavigate: (target: OverviewTarget) => void;
+  /** Commissioners get a first-run checklist while the league is not ready to start. */
+  isCommissioner?: boolean;
+  /** Real reasons the draft cannot start, from the draft readiness payload. */
+  draftBlockers?: readonly { id?: string; code?: string; message: string }[];
 }
 
 /* Shapes read from GET /api/leagues/[id]/matchups (LeagueMatchupReadModel). Parsed defensively. */
@@ -104,6 +110,8 @@ export function LeagueOverviewPanel({
   waiverClaims,
   waiversStatus,
   onNavigate,
+  isCommissioner = false,
+  draftBlockers = [],
 }: LeagueOverviewPanelProps): React.JSX.Element {
   const [state, setState] = useState<SnapshotState>({ status: 'loading' });
 
@@ -170,6 +178,16 @@ export function LeagueOverviewPanel({
       </h2>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-5">
+          {isCommissioner && (openTeamSlots > 0 || draftBlockers.length > 0) ? (
+            <SetupChecklist
+              league={league}
+              memberCount={activeMembers.length}
+              draftBlockers={draftBlockers}
+              noFixturesYet={Boolean(snapshot && !snapshot.matchup && !hasResults)}
+              onNavigate={onNavigate}
+            />
+          ) : null}
+
           {snapshot && (snapshot.matchup || hasResults) ? (
             <ThisRoundCard
               snapshot={snapshot}
@@ -177,6 +195,15 @@ export function LeagueOverviewPanel({
               timeZone={league.timeZone}
               onNavigate={onNavigate}
             />
+          ) : state.status !== 'loading' && league.categories.length > 0 ? (
+            <OverviewCard id="overview-preview-heading" title="Your weekly matchup">
+              <div className="px-4 py-4">
+                <CategoryPreviewScore categories={league.categories} />
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Each round your team is scored against an opponent across these categories.
+                </p>
+              </div>
+            </OverviewCard>
           ) : null}
 
           {snapshot && hasResults ? (
@@ -370,6 +397,95 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="text-right font-semibold text-foreground">{children}</dd>
     </div>
+  );
+}
+
+function SetupChecklist({
+  league,
+  memberCount,
+  draftBlockers,
+  noFixturesYet,
+  onNavigate,
+}: {
+  league: League;
+  memberCount: number;
+  draftBlockers: readonly { id?: string; code?: string; message: string }[];
+  noFixturesYet: boolean;
+  onNavigate: (target: OverviewTarget) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(league.code);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  const buttonClass =
+    'min-h-11 shrink-0 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar';
+
+  return (
+    <section
+      aria-labelledby="overview-setup-heading"
+      className="overflow-hidden rounded-lg border border-border bg-card"
+    >
+      <header className="border-b border-border px-4 py-3">
+        <h2
+          id="overview-setup-heading"
+          className="font-display text-lg font-bold leading-tight text-foreground"
+        >
+          Get your league ready
+        </h2>
+      </header>
+      <ul className="divide-y divide-border text-sm">
+        <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p className="font-semibold text-foreground">Invite managers</p>
+            <p className="text-muted-foreground">
+              {memberCount} of {league.maxTeams} teams · join code{' '}
+              <code className="font-semibold text-foreground">{league.code}</code>
+            </p>
+          </div>
+          <button type="button" onClick={() => void copyCode()} className={buttonClass}>
+            {copied ? 'Copied' : 'Copy code'}
+          </button>
+        </li>
+        {draftBlockers.length > 0 ? (
+          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <p className="font-semibold text-foreground">Draft</p>
+              <ul className="text-muted-foreground">
+                {draftBlockers.map((blocker) => (
+                  <li key={blocker.id ?? `${blocker.code ?? 'blocker'}:${blocker.message}`}>
+                    {blocker.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button type="button" onClick={() => onNavigate('draft')} className={buttonClass}>
+              Open draft
+            </button>
+          </li>
+        ) : null}
+        {noFixturesYet ? (
+          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <p className="font-semibold text-foreground">Fixtures</p>
+              <p className="text-muted-foreground">No fixtures yet.</p>
+            </div>
+            <button type="button" onClick={() => onNavigate('matchups')} className={buttonClass}>
+              Open match centre
+            </button>
+          </li>
+        ) : null}
+      </ul>
+      <p role="status" className="sr-only">
+        {copied ? 'Join code copied' : ''}
+      </p>
+    </section>
   );
 }
 
