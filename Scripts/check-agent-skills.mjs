@@ -149,7 +149,10 @@ async function checkLockfile() {
   const lockfile = JSON.parse(await readRepoFile('skills-lock.json'));
   assert(lockfile.version === 1, 'skills-lock.json must use version 1');
 
-  const approvedNames = [...requiredUpstreamSkills, ...Object.keys(approvedThirdPartySkills)].sort();
+  const approvedNames = [
+    ...requiredUpstreamSkills,
+    ...Object.keys(approvedThirdPartySkills),
+  ].sort();
   const lockedNames = Object.keys(lockfile.skills ?? {}).sort();
   assert(
     JSON.stringify(lockedNames) === JSON.stringify(approvedNames),
