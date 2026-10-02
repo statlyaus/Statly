@@ -15,8 +15,9 @@ Use these supported routes:
 
 - New or materially unresolved product work: `grill-with-docs` or `grilling`, then
   `domain-modeling`; use `prototype` only for a question requiring a runnable answer.
-- Large implementation: `to-spec`, then `to-tickets`, then `implement` with `tdd`.
-- Focused implementation: `implement` with `tdd`.
+- Large implementation: `to-spec`, then `to-tickets`, then `ponytail` with `tdd`.
+- Focused implementation: `ponytail` with `tdd`. `ponytail` replaces `implement` as the default
+  route; `implement` stays installed and locked but is not recommended.
 - Difficult defects: `diagnosing-bugs`, then `tdd` for the correction.
 - Architecture and module design: `codebase-design` with `domain-modeling` where terminology or
   ownership is involved.
@@ -25,10 +26,10 @@ Use these supported routes:
 - Documentation drift: `docs-sweep-loop`.
 - Draft-room reliability: `draft-reliability-loop`.
 - Primary-source investigation: `research`.
-- Minimal-diff pressure on a specific task: `ponytail`, opt-in only. Do not run it as an always-on
-  mode. Where it conflicts with `statly-engineering-workflow` (planning gates, `tdd`
-  red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its
-  exceptions for validation, security, and accessibility always apply.
+
+Where `ponytail` conflicts with `statly-engineering-workflow` (planning gates, `tdd`
+red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its
+exceptions for validation, security, and accessibility always apply.
 
 The mandatory `statly-engineering-workflow` remains the routing authority for repository changes and
 may narrow these routes further.
