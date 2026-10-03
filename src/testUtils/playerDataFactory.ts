@@ -35,7 +35,6 @@ const DEFAULT_PLAYER_DATA: PlayerCardData = {
   priceChange: 25000,
   isStarred: true,
   metadata: {
-    captain: false,
     rookie: false,
   },
 };
@@ -124,7 +123,7 @@ export const PLAYER_VARIATIONS = {
       averageScore: 65.8,
       totalPoints: 987,
       ownership: 12.4,
-      metadata: { rookie: true, captain: false },
+      metadata: { rookie: true },
     }),
 
   premium: (): PlayerCardData =>

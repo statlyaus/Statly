@@ -57,6 +57,27 @@ interface LivePickHeaderProps {
   className?: string;
 }
 
+const TIME_UP = 'Time is up.';
+const CLOCK_MILESTONES = [
+  { at: 0, text: TIME_UP },
+  { at: 10, text: '10 seconds left.' },
+  { at: 30, text: '30 seconds left.' },
+] as const;
+
+/** The most urgent milestone crossed between two observed clock readings, if any. */
+function getCrossedClockMilestone(previous: number, current: number): string | null {
+  return (
+    CLOCK_MILESTONES.find((milestone) => previous > milestone.at && current <= milestone.at)
+      ?.text ?? null
+  );
+}
+
+function formatClock(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
 export default function LivePickHeader({
   draftData,
   timePerPick = 120,
@@ -190,11 +211,43 @@ export default function LivePickHeader({
       setIsFlashing(false);
       setHasAlerted(true);
       onAudioAlertRef.current?.('your-turn');
-    } else if (picksUntilYourTurn > 1) {
+    } else if (!isYourTurn && picksUntilYourTurn > 1) {
+      // The on-clock flag and the pick sequence can briefly disagree; resetting while still on the
+      // clock would re-alert and reset on every render.
       setHasAlerted(false);
       setIsFlashing(false);
     }
   }, [picksUntilYourTurn, isYourTurn, hasAlerted, timerState.phase]);
+
+  // Screen readers hear the clock when the turn starts and as it crosses 30, 10 and 0 seconds,
+  // never every tick. A milestone that passed before the turn was observed is not announced.
+  const [clockAnnouncement, setClockAnnouncement] = useState('');
+  const announcedRef = useRef<{ pick?: number; lastRemaining?: number }>({});
+  useEffect(() => {
+    if (announcedRef.current.pick !== draftData.currentPick) {
+      announcedRef.current = { pick: draftData.currentPick };
+      setClockAnnouncement('');
+    }
+    // Read the synced clock, not timeLeft, which starts at the full pick time before it syncs.
+    const remaining = timerState.remainingSeconds;
+    const clockRunning =
+      timerState.phase === 'LIVE' || (timerState.phase === 'FINALIZING' && remaining === 0);
+    if (!clockRunning || !isYourTurn) return;
+
+    const { lastRemaining } = announcedRef.current;
+    announcedRef.current = { ...announcedRef.current, lastRemaining: remaining };
+    if (lastRemaining === undefined) {
+      setClockAnnouncement(
+        remaining === 0
+          ? `Your turn to pick. ${TIME_UP}`
+          : `Your turn to pick. ${formatClock(remaining)} remaining.`
+      );
+      return;
+    }
+    const crossed = getCrossedClockMilestone(lastRemaining, remaining);
+    if (crossed) setClockAnnouncement(crossed);
+    // timeLeft re-runs this each tick; timerState is recomputed every render.
+  }, [draftData.currentPick, isYourTurn, timeLeft, timerState.phase]);
 
   const pickTrainState = useMemo(
     () => toDraftPickTrainStateFromHeaderData({ draftData, yourSlot }),
@@ -231,10 +284,9 @@ export default function LivePickHeader({
   const timerTone =
     timerState.tone === 'urgent'
       ? {
-          badge:
-            'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]',
-          bar: 'bg-[color:var(--draft-broadcast-red)]',
-          rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
+          badge: 'border-result-loss bg-result-loss text-result-loss-foreground',
+          bar: 'bg-result-loss',
+          rail: 'bg-result-loss/15',
           label: timerState.label,
         }
       : timerState.tone === 'warning'
@@ -263,7 +315,7 @@ export default function LivePickHeader({
               }
             : {
                 badge:
-                  'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-white',
+                  'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
                 bar: 'bg-[color:var(--draft-broadcast-red)]',
                 rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
                 label: timerState.label,
@@ -339,24 +391,25 @@ export default function LivePickHeader({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <div
-          className="rounded-2xl border border-t-4 border-[color:var(--draft-broadcast-border)] border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)]"
+          className={`rounded-lg border border-t-4 border-[color:var(--draft-broadcast-border)] p-4 text-[color:var(--draft-broadcast-text)] ${
+            isYourTurn
+              ? 'border-t-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)]'
+              : 'border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)]'
+          }`}
           role="region"
           aria-label="Draft clock"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-2.5 py-1 text-xs font-semibold text-white">
+              <span className="inline-flex items-center rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--draft-broadcast-text)]">
                 {statusCopy.title}
               </span>
               <span className="rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2.5 py-1 text-xs font-medium text-[color:var(--draft-broadcast-muted)]">
                 Round {draftData.round} / {draftData.direction}
               </span>
               {isYourTurn && (
-                <span
-                  className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]"
-                  role="alert"
-                  aria-label="It is your turn to pick"
-                >
+                <span className="rounded-md border border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] px-3 py-1 text-sm font-bold text-[color:var(--draft-broadcast-yellow-text)]">
+                  {/* Visual only: the pick clock announcer speaks the turn once. */}
                   Your turn
                 </span>
               )}
@@ -381,10 +434,9 @@ export default function LivePickHeader({
                 className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-[color:var(--draft-broadcast-text)]"
                 role="timer"
                 aria-label={timerAriaLabel}
-                aria-live="polite"
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'animate-spin text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-alert)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
                 <span
@@ -393,6 +445,15 @@ export default function LivePickHeader({
                   {timerDisplay}
                 </span>
               </div>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="sr-only"
+                data-testid="pick-clock-announcer"
+              >
+                {clockAnnouncement}
+              </p>
             </div>
 
             {!isYourTurn && picksUntilYourTurn > 0 && (

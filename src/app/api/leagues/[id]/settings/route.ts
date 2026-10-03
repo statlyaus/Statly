@@ -438,7 +438,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       where: { id },
       include: {
         settings: true,
-        _count: { select: { members: true } },
+        _count: { select: { members: { where: { isActive: true } } } },
       },
     });
 

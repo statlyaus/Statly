@@ -4,7 +4,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { cancelDraftStart, scheduleDraftStart } from '@/server/queue/draftQueue';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
@@ -39,8 +39,8 @@ async function authorizeDraftSettingsRead(request: NextRequest, leagueId: string
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const membership = await getLeagueMembership(leagueId, userId);
-  if (!membership.isMember) {
+  const access = await getLeagueMembershipAccess(leagueId, userId);
+  if (!access.isMember) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -53,8 +53,8 @@ async function authorizeDraftSettingsWrite(request: NextRequest, leagueId: strin
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const membership = await getLeagueMembership(leagueId, userId);
-  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+  const access = await getLeagueMembershipAccess(leagueId, userId);
+  if (!access.canManage) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

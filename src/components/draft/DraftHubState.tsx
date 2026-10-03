@@ -76,16 +76,12 @@ export function DraftHubState({
     >
       <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
         <span
-          className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${variantLabelClass[variant]}`}
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${variantLabelClass[variant]}`}
         >
           {variantLabel[variant]}
         </span>
-        <h2 className="mt-4 text-2xl font-semibold tracking-tight text-card-foreground">
-          {title}
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
-          {description}
-        </p>
+        <h2 className="mt-4 text-2xl font-semibold tracking-tight text-card-foreground">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">{description}</p>
         {actionHref && actionLabel ? (
           <Link
             href={actionHref}

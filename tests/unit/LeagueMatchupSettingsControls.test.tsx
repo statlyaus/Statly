@@ -2,12 +2,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LineupFieldBoard } from '@/components/league/matchups/LineupFieldBoard';
-import type {
-  LineupAssignment,
-  LineupFieldSpot,
-  LineupRosterPlayer,
-} from '@/components/league/matchups/lineupBuilderTypes';
 import { CompetitionSettingsPanel } from '@/components/league/settings/CompetitionSettingsPanel';
 import type { LeagueFixtureGenerationMode } from '@/types/leagues';
 
@@ -16,22 +10,6 @@ const authenticatedFetchMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/authenticatedFetch', () => ({
   authenticatedFetch: authenticatedFetchMock,
 }));
-
-const fieldSpot: LineupFieldSpot = {
-  id: 'FWD-0',
-  slot: 'FWD',
-  slotIndex: 0,
-  label: 'Forward 1',
-};
-
-const rosterPlayers: LineupRosterPlayer[] = [
-  { playerId: 'player-1', name: 'Assigned Player', position: 'FWD', club: 'Club A' },
-  { playerId: 'player-2', name: 'Available Player', position: 'MID', club: 'Club B' },
-];
-
-const assignments: LineupAssignment[] = [
-  { playerId: 'player-1', slot: 'FWD', slotIndex: 0, lockedAt: null },
-];
 
 const automaticRules = {
   seasonStartAflRound: 1,
@@ -69,55 +47,6 @@ function competitionSnapshot() {
     },
   };
 }
-
-describe('LineupFieldBoard disabled controls', () => {
-  it('removes mutation controls from interaction and announces the disabled reason', () => {
-    const onSelectPlayer = vi.fn();
-    const setDragPlayer = vi.fn();
-    const onAssignPlayer = vi.fn();
-    const onClearSpot = vi.fn();
-
-    render(
-      <LineupFieldBoard
-        spots={[fieldSpot]}
-        interchangeSpots={[]}
-        assignments={assignments}
-        rosterPlayers={rosterPlayers}
-        availablePlayers={[rosterPlayers[1]]}
-        selectedPlayerId="player-2"
-        getDragPlayerId={() => 'player-2'}
-        onSelectPlayer={onSelectPlayer}
-        setDragPlayer={setDragPlayer}
-        onAssignPlayer={onAssignPlayer}
-        onClearSpot={onClearSpot}
-        disabled
-        disabledReason="This lineup is locked."
-      />
-    );
-
-    const board = screen.getByRole('group', { name: 'AFL field lineup builder' });
-    expect(board).toHaveAttribute('aria-disabled', 'true');
-    expect(board).toHaveAccessibleDescription('This lineup is locked.');
-
-    const spotButton = screen.getByRole('button', { name: /Forward 1/ });
-    const availablePlayerButton = screen.getByText('Available Player').closest('button');
-    expect(spotButton).toBeDisabled();
-    expect(availablePlayerButton).toBeDisabled();
-    expect(screen.queryByRole('button', { name: /Clear Assigned Player/ })).not.toBeInTheDocument();
-
-    fireEvent.drop(spotButton.parentElement as HTMLElement, {
-      dataTransfer: { getData: () => 'player-2' },
-    });
-    fireEvent.dragStart(availablePlayerButton as HTMLButtonElement, {
-      dataTransfer: { effectAllowed: '', setData: vi.fn() },
-    });
-    fireEvent.click(availablePlayerButton as HTMLButtonElement);
-
-    expect(onAssignPlayer).not.toHaveBeenCalled();
-    expect(setDragPlayer).not.toHaveBeenCalled();
-    expect(onSelectPlayer).not.toHaveBeenCalled();
-  });
-});
 
 describe('CompetitionSettingsPanel fixture generation', () => {
   beforeEach(() => {

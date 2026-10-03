@@ -91,7 +91,6 @@ const mockRecommendations: TradeRecommendation[] = [
     reasoning: [
       'Bontempelli has superior scoring consistency',
       'Easier upcoming fixture difficulty',
-      'Higher captaincy upside',
     ],
     confidence: 85,
   },

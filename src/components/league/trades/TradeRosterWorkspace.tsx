@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowRight } from 'lucide-react';
 import { useId } from 'react';
 
 import type { TradeTeamDto } from '@/server/leagues/trades/tradeContracts';
@@ -7,19 +8,25 @@ import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
 import { TradeRosterTable } from './TradeRosterTable';
 
+type RosterSide = 'sending' | 'receiving';
+
 export interface TradeRosterWorkspaceProps {
   viewerTeam: TradeTeamDto;
   partnerTeam: TradeTeamDto;
   playerStats: LeaguePlayerStatDatasetDto;
   sendingPlayerIds: string[];
   receivingPlayerIds: string[];
-  activeRoster: 'sending' | 'receiving';
+  activeRoster: RosterSide;
   disabled: boolean;
   onToggleSendingPlayer: (playerId: string) => void;
   onToggleReceivingPlayer: (playerId: string) => void;
-  onActiveRosterChange: (roster: 'sending' | 'receiving') => void;
+  onActiveRosterChange: (roster: RosterSide) => void;
 }
 
+/**
+ * Both rosters in one card, one at a time so each table gets the full width for its stats. The
+ * underlined tabs name the two sides of the deal, "You give" (your roster) and "You get" (theirs).
+ */
 export function TradeRosterWorkspace({
   viewerTeam,
   partnerTeam,
@@ -35,71 +42,82 @@ export function TradeRosterWorkspace({
   const id = useId();
   const sendingPanelId = `${id}-sending-roster`;
   const receivingPanelId = `${id}-receiving-roster`;
+  const onSending = activeRoster === 'sending';
+  const otherSideEmpty = onSending
+    ? sendingPlayerIds.length > 0 && receivingPlayerIds.length === 0
+    : receivingPlayerIds.length > 0 && sendingPlayerIds.length === 0;
+  const nextStep =
+    otherSideEmpty && !disabled ? (
+      <button
+        type="button"
+        onClick={() => onActiveRosterChange(onSending ? 'receiving' : 'sending')}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-sm font-semibold text-[color:var(--trade-action)] hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+      >
+        {onSending ? `Next: pick from ${partnerTeam.teamName}` : 'Next: pick who you give'}
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </button>
+    ) : (
+      <span />
+    );
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]">
       <div
         role="group"
         aria-label="Choose roster"
-        className="grid grid-cols-2 gap-1 rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface-subtle)] p-1 lg:hidden"
+        className="flex overflow-x-auto border-b border-[color:var(--trade-border)] px-2"
       >
-        <RosterSwitchButton
-          label="Send"
+        <RosterSideButton
+          direction="You give"
           teamName={viewerTeam.teamName}
           selectedCount={sendingPlayerIds.length}
           controls={sendingPanelId}
-          pressed={activeRoster === 'sending'}
+          pressed={onSending}
           onClick={() => onActiveRosterChange('sending')}
         />
-        <RosterSwitchButton
-          label="Receive"
+        <RosterSideButton
+          direction="You get"
           teamName={partnerTeam.teamName}
           selectedCount={receivingPlayerIds.length}
           controls={receivingPanelId}
-          pressed={activeRoster === 'receiving'}
+          pressed={!onSending}
           onClick={() => onActiveRosterChange('receiving')}
         />
       </div>
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-        <div
-          id={sendingPanelId}
-          className={`min-w-0 ${activeRoster === 'sending' ? 'block' : 'hidden lg:block'}`}
-        >
-          <TradeRosterTable
-            team={viewerTeam}
-            playerStats={playerStats}
-            selectedIds={sendingPlayerIds}
-            disabled={disabled}
-            onTogglePlayer={onToggleSendingPlayer}
-          />
-        </div>
-        <div
-          id={receivingPanelId}
-          className={`min-w-0 ${activeRoster === 'receiving' ? 'block' : 'hidden lg:block'}`}
-        >
-          <TradeRosterTable
-            team={partnerTeam}
-            playerStats={playerStats}
-            selectedIds={receivingPlayerIds}
-            disabled={disabled}
-            onTogglePlayer={onToggleReceivingPlayer}
-          />
-        </div>
+      <div id={sendingPanelId} className={`min-w-0 ${onSending ? 'block' : 'hidden'}`}>
+        <TradeRosterTable
+          team={viewerTeam}
+          playerStats={playerStats}
+          selectedIds={sendingPlayerIds}
+          disabled={disabled}
+          onTogglePlayer={onToggleSendingPlayer}
+          toolbarEnd={onSending ? nextStep : <span />}
+        />
+      </div>
+      <div id={receivingPanelId} className={`min-w-0 ${onSending ? 'hidden' : 'block'}`}>
+        <TradeRosterTable
+          team={partnerTeam}
+          playerStats={playerStats}
+          selectedIds={receivingPlayerIds}
+          disabled={disabled}
+          onTogglePlayer={onToggleReceivingPlayer}
+          toolbarEnd={onSending ? <span /> : nextStep}
+        />
       </div>
     </div>
   );
 }
 
-function RosterSwitchButton({
-  label,
+function RosterSideButton({
+  direction,
   teamName,
   selectedCount,
   controls,
   pressed,
   onClick,
 }: {
-  label: 'Send' | 'Receive';
+  direction: 'You give' | 'You get';
   teamName: string;
   selectedCount: number;
   controls: string;
@@ -109,18 +127,30 @@ function RosterSwitchButton({
   return (
     <button
       type="button"
-      aria-label={`${label} ${teamName}, ${selectedCount} selected`}
+      aria-label={`${direction} from ${teamName}, ${selectedCount} selected`}
       aria-pressed={pressed}
       aria-controls={controls}
       onClick={onClick}
-      className={`inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] ${
+      className={`-mb-px inline-flex h-12 min-w-0 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)] ${
         pressed
-          ? 'bg-[color:var(--trade-selection)] text-white shadow-sm'
-          : 'bg-[color:var(--trade-surface)] text-[color:var(--trade-text-muted)] hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)]'
+          ? 'border-[color:var(--trade-brand)] text-[color:var(--trade-text)]'
+          : 'border-transparent text-[color:var(--trade-text-muted)] hover:border-[color:var(--trade-border-strong)] hover:text-[color:var(--trade-text)]'
       }`}
     >
-      <span>{label}</span>
-      <span className="truncate text-xs tabular-nums">{selectedCount} selected</span>
+      <span className="font-semibold">{direction}</span>
+      <span aria-hidden="true" className="hidden text-[color:var(--trade-text-muted)] sm:inline">
+        ·
+      </span>
+      <span className="hidden max-w-[12rem] truncate sm:inline">{teamName}</span>
+      <span
+        className={`min-w-5 rounded-sm px-1.5 text-center text-xs font-bold leading-5 tabular-nums ${
+          selectedCount > 0
+            ? 'bg-[color:var(--trade-brand)] text-white'
+            : 'text-[color:var(--trade-text-muted)]'
+        }`}
+      >
+        {selectedCount}
+      </span>
     </button>
   );
 }

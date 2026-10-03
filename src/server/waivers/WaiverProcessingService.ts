@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import { FieldValue } from 'firebase-admin/firestore';
-
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -118,7 +116,7 @@ type PrismaLike = Pick<
 
 type PrismaWaiverStoreDb = Pick<
   typeof prisma,
-  '$executeRaw' | '$queryRaw' | '$transaction' | 'league' | 'leagueMember' | 'teamAction'
+  '$transaction' | 'league' | 'leagueMember' | 'teamAction' | 'waiverPriority' | 'pick'
 >;
 
 type FirestoreLike = Pick<typeof adminDb, 'collection' | 'doc'>;
@@ -161,53 +159,6 @@ function normalizeDate(value: unknown): Date {
     return (value as { toDate(): Date }).toDate();
   }
   return new Date();
-}
-
-function toFirestoreWaiverClaim(
-  document: FirebaseFirestore.QueryDocumentSnapshot,
-  leagueId: string
-): WaiverClaim {
-  const data = document.data();
-
-  return {
-    id: document.id,
-    leagueId: typeof data.leagueId === 'string' ? data.leagueId : leagueId,
-    userId: typeof data.userId === 'string' ? data.userId : '',
-    teamId: typeof data.teamId === 'string' ? data.teamId : '',
-    playerId: typeof data.playerId === 'string' ? data.playerId : '',
-    priority: typeof data.priority === 'number' ? data.priority : 1,
-    status: typeof data.status === 'string' ? data.status : 'PENDING',
-    createdAt: normalizeDate(data.createdAt),
-    ...(typeof data.dropPlayerId === 'string' ? { dropPlayerId: data.dropPlayerId } : {}),
-    ...(typeof data.bidAmount === 'number' ? { bidAmount: data.bidAmount } : {}),
-  };
-}
-
-async function loadWaiverPriorityByUserId(leagueId: string): Promise<Map<string, number>> {
-  const prioritySnap = await adminDb.collection(`leagues/${leagueId}/waiverPriorities`).get();
-  const priorityByUserId = new Map<string, number>();
-
-  for (const document of prioritySnap.docs) {
-    const data = document.data();
-    const userId = typeof data.userId === 'string' ? data.userId : document.id;
-
-    if (typeof data.priority === 'number') {
-      priorityByUserId.set(userId, data.priority);
-    }
-  }
-
-  return priorityByUserId;
-}
-
-function applyWaiverPriorities(
-  claims: WaiverClaim[],
-  priorityByUserId: Map<string, number>
-): WaiverClaim[] {
-  return claims.map((claim) => {
-    const waiverPriority = priorityByUserId.get(claim.userId);
-
-    return typeof waiverPriority === 'number' ? { ...claim, waiverPriority } : claim;
-  });
 }
 
 function parseActionDetails(raw: unknown): Record<string, unknown> {
@@ -610,13 +561,16 @@ interface WaiverPriorityEntry extends PriorityEntry {
   memberId: string;
 }
 
-interface DraftWaiverPrioritySeedRow {
-  memberId: string;
-  finalPick: number | bigint;
-}
-
 type PrismaWaiverStoreTransaction = Omit<PrismaWaiverStoreDb, '$transaction'>;
 
+/**
+ * Canonical waiver claim store.
+ *
+ * Prisma `TeamAction` rows and the `WaiverPriority` model own waiver claims and priority state.
+ * Firestore is written only as a compatibility projection (`writePriorityProjection`,
+ * `writeSubmittedClaimProjection`) and is never read back as the authority for a decision. The
+ * former Firestore-authoritative store was removed so no read path can fall back to it.
+ */
 export class PrismaWaiverClaimStore implements ClaimStore {
   constructor(
     private readonly db: PrismaWaiverStoreDb = prisma,
@@ -890,11 +844,10 @@ export class PrismaWaiverClaimStore implements ClaimStore {
           return { ok: false, reason: 'Insufficient FAAB' };
         }
 
-        await tx.$executeRaw`
-          UPDATE WaiverPriority
-          SET remainingFAAB = ${remainingFAAB - claim.bidAmount!}, updatedAt = ${new Date()}
-          WHERE leagueId = ${claim.leagueId} AND memberId = ${claim.teamId}
-        `;
+        await tx.waiverPriority.updateMany({
+          where: { leagueId: claim.leagueId, memberId: claim.teamId },
+          data: { remainingFAAB: remainingFAAB - claim.bidAmount! },
+        });
 
         return { ok: true };
       });
@@ -916,11 +869,18 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   async refundFaab(claim: WaiverClaim): Promise<void> {
     if (typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
 
-    await this.db.$executeRaw`
-      UPDATE WaiverPriority
-      SET remainingFAAB = COALESCE(remainingFAAB, 0) + ${claim.bidAmount}, updatedAt = ${new Date()}
-      WHERE leagueId = ${claim.leagueId} AND memberId = ${claim.teamId}
-    `;
+    const member = { leagueId: claim.leagueId, memberId: claim.teamId };
+    await this.db.$transaction([
+      this.db.waiverPriority.updateMany({
+        where: { ...member, remainingFAAB: { not: null } },
+        data: { remainingFAAB: { increment: claim.bidAmount } },
+      }),
+      // A missing balance counts as zero.
+      this.db.waiverPriority.updateMany({
+        where: { ...member, remainingFAAB: null },
+        data: { remainingFAAB: claim.bidAmount },
+      }),
+    ]);
     await this.mirrorPriorityProjection(claim.leagueId, claim.teamId);
   }
 
@@ -945,11 +905,10 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       const original = entries.find((entry) => entry.userId === update.userId);
       if (!memberId || !original || original.priority === update.priority) continue;
 
-      await this.db.$executeRaw`
-        UPDATE WaiverPriority
-        SET priority = ${update.priority}, updatedAt = ${new Date()}
-        WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-      `;
+      await this.db.waiverPriority.updateMany({
+        where: { leagueId, memberId },
+        data: { priority: update.priority },
+      });
     }
     await this.mirrorLeaguePriorityProjection(leagueId);
   }
@@ -1033,12 +992,17 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     for (const member of orderedMembers) {
       if (existingMemberIds.has(member.id)) continue;
 
-      await tx.$executeRaw`
-        INSERT INTO WaiverPriority (id, leagueId, memberId, priority, remainingFAAB, pendingBidTotal, createdAt, updatedAt)
-        VALUES (${randomUUID()}, ${leagueId}, ${member.id}, ${nextPriority}, ${
-          waiverSettings.system === 'FAAB' ? (waiverSettings.faabBudget ?? 100) : null
-        }, 0, ${new Date()}, ${new Date()})
-      `;
+      await tx.waiverPriority.create({
+        data: {
+          id: randomUUID(),
+          leagueId,
+          memberId: member.id,
+          priority: nextPriority,
+          remainingFAAB:
+            waiverSettings.system === 'FAAB' ? (waiverSettings.faabBudget ?? 100) : null,
+          pendingBidTotal: 0,
+        },
+      });
       nextPriority += 1;
     }
   }
@@ -1066,67 +1030,54 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       throw new WaiverClaimStoreError('INSUFFICIENT_FAAB', 'Insufficient FAAB remaining');
     }
 
-    await tx.$executeRaw`
-      UPDATE WaiverPriority
-      SET pendingBidTotal = pendingBidTotal + ${input.bidAmount}, updatedAt = ${new Date()}
-      WHERE leagueId = ${input.leagueId} AND memberId = ${input.memberId}
-    `;
+    await tx.waiverPriority.updateMany({
+      where: { leagueId: input.leagueId, memberId: input.memberId },
+      data: { pendingBidTotal: { increment: input.bidAmount } },
+    });
   }
 
   private async releasePendingBid(
-    tx: Pick<PrismaWaiverStoreDb, '$executeRaw'>,
+    tx: Pick<PrismaWaiverStoreDb, 'waiverPriority'>,
     claim: WaiverClaim
   ): Promise<void> {
     if (typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
 
-    await tx.$executeRaw`
-      UPDATE WaiverPriority
-      SET pendingBidTotal = CASE
-        WHEN pendingBidTotal - ${claim.bidAmount} < 0 THEN 0
-        ELSE pendingBidTotal - ${claim.bidAmount}
-      END,
-      updatedAt = ${new Date()}
-      WHERE leagueId = ${claim.leagueId} AND memberId = ${claim.teamId}
-    `;
+    const member = { leagueId: claim.leagueId, memberId: claim.teamId };
+    // Floored at zero: decrement only what is reserved, otherwise clear the reservation.
+    const released = await tx.waiverPriority.updateMany({
+      where: { ...member, pendingBidTotal: { gte: claim.bidAmount } },
+      data: { pendingBidTotal: { decrement: claim.bidAmount } },
+    });
+    if (released.count === 0) {
+      await tx.waiverPriority.updateMany({ where: member, data: { pendingBidTotal: 0 } });
+    }
   }
 
   private async loadDraftPriorityMemberIds(
-    db: Pick<PrismaWaiverStoreDb, '$queryRaw'>,
+    db: Pick<PrismaWaiverStoreDb, 'pick'>,
     leagueId: string
   ): Promise<string[]> {
-    const rows = (await db.$queryRaw`
-      SELECT p.memberId, MAX(p.overall) AS finalPick
-      FROM "Pick" p
-      INNER JOIN "Draft" d ON d.id = p.draftId
-      WHERE d.leagueId = ${leagueId}
-      GROUP BY p.memberId
-      ORDER BY finalPick DESC
-    `) as DraftWaiverPrioritySeedRow[];
+    const rows = await db.pick.groupBy({
+      by: ['memberId'],
+      where: { draft: { leagueId } },
+      _max: { overall: true },
+    });
 
     return rows
-      .filter((row) => typeof row.memberId === 'string' && Number.isFinite(Number(row.finalPick)))
+      .sort((left, right) => (right._max.overall ?? 0) - (left._max.overall ?? 0))
       .map((row) => row.memberId);
   }
 
   private async loadPriorityRows(
-    db: Pick<PrismaWaiverStoreDb, '$queryRaw'>,
+    db: Pick<PrismaWaiverStoreDb, 'waiverPriority'>,
     leagueId: string,
     memberId?: string
   ): Promise<WaiverPriorityRow[]> {
-    if (memberId) {
-      return (await db.$queryRaw`
-        SELECT memberId, priority, remainingFAAB, pendingBidTotal
-        FROM WaiverPriority
-        WHERE leagueId = ${leagueId} AND memberId = ${memberId}
-      `) as WaiverPriorityRow[];
-    }
-
-    return (await db.$queryRaw`
-      SELECT memberId, priority, remainingFAAB, pendingBidTotal
-      FROM WaiverPriority
-      WHERE leagueId = ${leagueId}
-      ORDER BY priority ASC
-    `) as WaiverPriorityRow[];
+    return db.waiverPriority.findMany({
+      where: { leagueId, ...(memberId ? { memberId } : {}) },
+      orderBy: { priority: 'asc' },
+      select: { memberId: true, priority: true, remainingFAAB: true, pendingBidTotal: true },
+    });
   }
 
   private async mirrorPriorityProjection(leagueId: string, memberId: string): Promise<void> {
@@ -1231,210 +1182,6 @@ export class PrismaWaiverClaimStore implements ClaimStore {
         claimId,
         error: error instanceof Error ? error.message : String(error),
       });
-    }
-  }
-}
-
-export class FirestoreWaiverClaimStore implements ClaimStore {
-  async loadWaiverSettings(leagueId: string): Promise<WaiverSettings> {
-    const settingsSnap = await adminDb.doc(`leagues/${leagueId}/config/settings`).get();
-    const rawSettings = settingsSnap.data()?.waiverSettings;
-    return rawSettings && typeof rawSettings === 'object' ? (rawSettings as WaiverSettings) : {};
-  }
-
-  async loadPendingClaims(leagueId: string): Promise<WaiverClaim[]> {
-    const pendingCol = adminDb
-      .collection(`leagues/${leagueId}/waivers`)
-      .where('status', '==', 'PENDING');
-    const pending: WaiverClaim[] = [];
-    let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-    const pageSize = 500;
-
-    for (let i = 0; i < 10; i += 1) {
-      let query: FirebaseFirestore.Query = pendingCol.orderBy('__name__').limit(pageSize);
-      if (cursor) query = query.startAfter(cursor);
-
-      const snap = await query.get();
-      if (snap.empty) break;
-
-      for (const document of snap.docs) {
-        pending.push(toFirestoreWaiverClaim(document, leagueId));
-      }
-
-      if (snap.size < pageSize) break;
-      cursor = snap.docs[snap.docs.length - 1] ?? null;
-    }
-
-    return applyWaiverPriorities(pending, await loadWaiverPriorityByUserId(leagueId));
-  }
-
-  async markSuccessful(input: {
-    leagueId: string;
-    claimId: string;
-    claim: WaiverClaim;
-  }): Promise<void> {
-    await adminDb.doc(`leagues/${input.leagueId}/waivers/${input.claimId}`).update({
-      status: 'SUCCESSFUL',
-      processedAt: new Date(),
-    });
-  }
-
-  async markFailed(input: {
-    leagueId: string;
-    claimId: string;
-    claim: WaiverClaim;
-    reason: string;
-  }): Promise<void> {
-    await adminDb.doc(`leagues/${input.leagueId}/waivers/${input.claimId}`).update({
-      status: 'FAILED',
-      processedAt: new Date(),
-      reason: input.reason,
-    });
-  }
-
-  async recordActivity(input: {
-    leagueId: string;
-    claim: WaiverClaim;
-    type: 'waiver-submitted' | 'waiver-successful' | 'waiver-failed';
-    reason?: string;
-  }): Promise<void> {
-    await adminDb
-      .collection(`leagues/${input.leagueId}/activity`)
-      .doc()
-      .set({
-        type: input.type,
-        leagueId: input.leagueId,
-        userId: input.claim.userId,
-        teamId: input.claim.teamId,
-        playerId: input.claim.playerId,
-        claimId: input.claim.id,
-        timestamp: new Date(),
-        ...(input.claim.dropPlayerId ? { dropPlayerId: input.claim.dropPlayerId } : {}),
-        ...(typeof input.claim.bidAmount === 'number' ? { bidAmount: input.claim.bidAmount } : {}),
-        ...(input.reason ? { reason: input.reason } : {}),
-      });
-  }
-
-  async decrementPendingBidTotal(claim: WaiverClaim, isFAAB: boolean): Promise<void> {
-    if (!isFAAB || typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
-
-    const bid = claim.bidAmount;
-    const bidCents = Math.round(bid * 100);
-    const priorityRef = adminDb.doc(`leagues/${claim.leagueId}/waiverPriorities/${claim.userId}`);
-    const prioritySnap = await priorityRef.get();
-    const update = {
-      pendingBidTotal: FieldValue.increment(-bid),
-      pendingBidTotalCents: FieldValue.increment(-bidCents),
-      updatedAt: new Date(),
-    };
-
-    if (prioritySnap.exists) {
-      await priorityRef.update(update);
-      return;
-    }
-
-    await priorityRef.set(
-      {
-        leagueId: claim.leagueId,
-        userId: claim.userId,
-        ...update,
-      },
-      { merge: true }
-    );
-  }
-
-  async debitFaab(
-    claim: WaiverClaim,
-    waiverSettings: WaiverSettings
-  ): Promise<{ ok: boolean; reason?: string }> {
-    if (waiverSettings.system !== 'FAAB' || typeof claim.bidAmount !== 'number') {
-      return { ok: true };
-    }
-
-    const priorityRef = adminDb.doc(`leagues/${claim.leagueId}/waiverPriorities/${claim.userId}`);
-
-    try {
-      return await adminDb.runTransaction(async (tx) => {
-        const prioritySnap = await tx.get(priorityRef);
-        const remainingFAAB = prioritySnap.exists
-          ? (prioritySnap.data()?.remainingFAAB as number | undefined)
-          : waiverSettings.faabBudget;
-
-        if (typeof remainingFAAB !== 'number') {
-          return { ok: false, reason: 'FAAB balance unavailable' };
-        }
-
-        if (claim.bidAmount! > remainingFAAB) {
-          return { ok: false, reason: 'Insufficient FAAB' };
-        }
-
-        const nextRemainingFAAB = remainingFAAB - claim.bidAmount!;
-        if (prioritySnap.exists) {
-          tx.update(priorityRef, { remainingFAAB: nextRemainingFAAB, updatedAt: new Date() });
-        } else {
-          tx.set(priorityRef, {
-            leagueId: claim.leagueId,
-            userId: claim.userId,
-            remainingFAAB: nextRemainingFAAB,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-        }
-
-        return { ok: true };
-      });
-    } catch (error) {
-      logger.warn('Failed to debit FAAB during waiver processing', {
-        leagueId: claim.leagueId,
-        userId: claim.userId,
-        claimId: claim.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return { ok: false, reason: 'FAAB balance unavailable' };
-    }
-  }
-
-  async refundFaab(claim: WaiverClaim): Promise<void> {
-    if (typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
-
-    await adminDb.doc(`leagues/${claim.leagueId}/waiverPriorities/${claim.userId}`).update({
-      remainingFAAB: FieldValue.increment(claim.bidAmount),
-      updatedAt: new Date(),
-    });
-  }
-
-  async advancePriority(leagueId: string, userId: string): Promise<void> {
-    const snap = await adminDb
-      .collection(`leagues/${leagueId}/waiverPriorities`)
-      .orderBy('priority', 'asc')
-      .get();
-
-    const entries = snap.docs
-      .map((document) => {
-        const data = document.data();
-        return {
-          userId: typeof data.userId === 'string' ? data.userId : document.id,
-          priority: typeof data.priority === 'number' ? data.priority : Number.NaN,
-          document,
-        };
-      })
-      .filter((entry) => Number.isFinite(entry.priority));
-
-    const updates = buildAdvancedWaiverPriorityUpdates(entries, userId);
-    const updateByUserId = new Map(updates.map((entry) => [entry.userId, entry.priority]));
-    const batch = adminDb.batch();
-    let writeCount = 0;
-
-    for (const entry of entries) {
-      const nextPriority = updateByUserId.get(entry.userId);
-      if (typeof nextPriority !== 'number' || nextPriority === entry.priority) continue;
-
-      batch.update(entry.document.ref, { priority: nextPriority, updatedAt: new Date() });
-      writeCount += 1;
-    }
-
-    if (writeCount > 0) {
-      await batch.commit();
     }
   }
 }

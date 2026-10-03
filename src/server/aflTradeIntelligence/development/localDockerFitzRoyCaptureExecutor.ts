@@ -227,8 +227,11 @@ export function createLocalAflTradeDockerFitzRoyCaptureExecutor(
         await writeFile(invocationPath, canonicalizeAflTradeJson(invocation), {
           encoding: 'utf8',
           flag: 'wx',
-          mode: 0o400,
+          mode: 0o444,
         });
+        // The image runs as its own non-root UID; on a Linux Docker host a bind-mounted file keeps
+        // the host owner, so the read-only input must be readable by others (and writable by none).
+        await chmod(invocationPath, 0o444);
         // The parent remains private; only the mounted output directory is writable by the image UID.
         await chmod(outputDirectory, 0o777);
         const containerName = `statly-fitzroy-capture-${randomUUID()}`;

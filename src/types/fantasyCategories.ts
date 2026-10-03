@@ -172,8 +172,8 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
   clangers: {
     id: 'clangers',
     label: 'Clangers',
-    shortLabel: 'CL',
-    abbrev: 'CL',
+    shortLabel: 'CG',
+    abbrev: 'CG',
     format: 'number',
     color: 'red',
     description: 'Skill errors that directly benefit the opposition',
@@ -262,8 +262,8 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
   intercepts: {
     id: 'intercepts',
     label: 'Intercepts',
-    shortLabel: 'I',
-    abbrev: 'I',
+    shortLabel: 'ITC',
+    abbrev: 'ITC',
     format: 'number',
     color: 'green',
     description: 'Possessions gained from opposition',

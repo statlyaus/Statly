@@ -4,6 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { GripVertical, ListPlus, Pencil, Trash2, X } from 'lucide-react';
 import type { DraftPlayer } from '@/types/draft';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 
 interface DraftQueueProps {
@@ -29,6 +30,7 @@ export default function DraftQueue({
   confirm,
 }: DraftQueueProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const { confirm: confirmInPage, dialog: confirmDialog } = useConfirmDialog();
   const [isMutationPending, setIsMutationPending] = useState(false);
   const controlsDisabled = isLoading || isMutationPending;
 
@@ -77,21 +79,26 @@ export default function DraftQueue({
   const handleClearQueue = useCallback(() => {
     if (typeof confirm === 'function') {
       confirm({
-        title: 'Clear Queue',
-        message: 'Are you sure you want to clear your entire queue? This cannot be undone.',
+        title: 'Clear your queue?',
+        message: 'Every player comes off your queue.',
         variant: 'warning',
-        confirmText: 'Clear',
+        confirmText: 'Clear queue',
         cancelText: 'Cancel',
         onConfirm: async () => {
           await commitQueue([]);
         },
       });
-    } else if (
-      window.confirm('Are you sure you want to clear your entire queue? This cannot be undone.')
-    ) {
-      void commitQueue([]);
+      return;
     }
-  }, [commitQueue, confirm]);
+    void confirmInPage({
+      title: 'Clear your queue?',
+      description: 'Every player comes off your queue.',
+      confirmLabel: 'Clear queue',
+      tone: 'danger',
+    }).then((confirmed) => {
+      if (confirmed) void commitQueue([]);
+    });
+  }, [commitQueue, confirm, confirmInPage]);
 
   const handleAddToQueue = useCallback(
     (player: DraftPlayer) => {
@@ -108,6 +115,7 @@ export default function DraftQueue({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {confirmDialog}
       <section
         className="rounded-md border border-border bg-background p-3"
         aria-label="Draft queue"

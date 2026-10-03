@@ -264,6 +264,7 @@ function requireMapValue<T>(map: ReadonlyMap<string, T>, id: string, kind: strin
 
 async function buildRecords(
   transaction: AflOutcomeSqlTransaction,
+  releaseId: string,
   snapshots: readonly SnapshotRow[]
 ): Promise<AflTradePromotionBackedPublicArchiveRecordInput[]> {
   const decoded = snapshots.map((row) => ({
@@ -302,9 +303,11 @@ async function buildRecords(
     [[...playerIds]]
   );
   const picks = await transaction.query<PickRow>(
+    // Resolve reviewed pick enrichments recorded by the release cutoff, never later ones.
     `SELECT pick_id,draft_season_year,draft_kind::text,nominal_round,nominal_pick,original_club_id
-       FROM outcome_draft_pick WHERE pick_id=ANY($1::text[])`,
-    [[...pickIds]]
+       FROM outcome_draft_pick_facts($1::text[],
+         (SELECT effective_through FROM outcome_release_manifest WHERE release_id=$2))`,
+    [[...pickIds], releaseId]
   );
   const clubById = new Map(clubs.rows.map((row) => [row.club_id, row]));
   const playerById = new Map(players.rows.map((row) => [row.player_id, row]));
@@ -614,7 +617,7 @@ export async function loadAflTradePromotionBackedArchiveFromRelease(
   return createAflTradePromotionBackedPublicArchive({
     candidate,
     createdAt,
-    records: await buildRecords(transaction, snapshots),
+    records: await buildRecords(transaction, releaseId, snapshots),
   });
 }
 
@@ -670,7 +673,7 @@ export class PostgresAflTradePromotionBackedPublicArchiveRepository {
       }
       try {
         const snapshots = await loadSnapshots(transaction, parsed.data.releaseId);
-        const records = await buildRecords(transaction, snapshots);
+        const records = await buildRecords(transaction, parsed.data.releaseId, snapshots);
         const archive = createAflTradePromotionBackedPublicArchive({
           candidate,
           createdAt: parsed.data.createdAt,

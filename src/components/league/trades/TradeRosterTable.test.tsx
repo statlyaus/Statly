@@ -299,6 +299,6 @@ describe('TradeRosterTable', () => {
         onTogglePlayer={vi.fn()}
       />
     );
-    expect(screen.getByText('No rostered players are available.')).toBeInTheDocument();
+    expect(screen.getByText('No players on this roster.')).toBeInTheDocument();
   });
 });

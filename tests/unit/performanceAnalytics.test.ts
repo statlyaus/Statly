@@ -7,7 +7,10 @@ const redisSetMock = vi.hoisted(() => vi.fn());
 const redisEvalMock = vi.hoisted(() => vi.fn());
 
 vi.mock('bullmq', () => ({
-  Queue: vi.fn().mockImplementation(() => ({ add: queueAddMock })),
+  // Vitest 4 only constructs mocks whose implementation uses `function` or `class`.
+  Queue: vi.fn(function () {
+    return { add: queueAddMock };
+  }),
 }));
 vi.mock('@/server/realtime/scalableConnection', () => ({
   getPublisherClient: () => ({

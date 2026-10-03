@@ -1303,6 +1303,19 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0230_cameron_2020_retained_private_source_use',
       '0231_outcome_database_identity',
       '0232_reviewed_registration_lock_order',
+      '0233_appearance_membership_spells',
+      '0234_current_successor_source_rights',
+      '0235_club_resolution_candidate_index',
+      '0236_hpn_acquisition_spell_set_currency',
+      '0237_canonical_pick_enrichment',
+      '0239_provider_identity_root_proposal_indexes',
+      '0240_hpn_input_finalization_bounded_memory',
+      '0241_hpn_historical_season_map_scope',
+      '0242_assignment_continuity_once_per_case',
+      '0243_hpn_finalization_plan_independent_joins',
+      '0244_superseded_entry_spells_release_overlap',
+      '0245_hpn_pav_check_tolerance',
+      '0246_artifact_store_registry',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1439,10 +1452,17 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
         'require_outcome_hpn_pav_statistical_selections'
       );
     }
-    expect(
-      hpnV5Functions.rows.find((row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()')
-        ?.definition
-    ).toContain('outcome_hpn_acquisition_spell_is_current');
+    const hpnV2Finalizer = hpnV5Functions.rows.find(
+      (row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()'
+    )?.definition;
+    // 0236 evaluates each candidate spell's registration currency once per finalization.
+    expect(hpnV2Finalizer).toContain('outcome_hpn_acquisition_spell_source_current');
+    expect(hpnV2Finalizer).toContain('registered_spells');
+    expect(hpnV2Finalizer).not.toContain('outcome_hpn_acquisition_spell_is_current');
+    // 0242 evaluates every row's assignment continuity once per assignment case.
+    expect(hpnV2Finalizer).toContain('outcome_provider_assignment_continuity_current_set');
+    expect(hpnV2Finalizer).toContain('current_assignments');
+    expect(hpnV2Finalizer).not.toMatch(/outcome_hpn_pav_(player|match|club)_resolution_current"\(/);
     const hpnSelectionGuard = await query<{ definition: string }>(
       `SELECT pg_get_functiondef(
         'require_outcome_hpn_pav_statistical_selections(text,boolean)'::regprocedure) AS definition`

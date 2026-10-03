@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
-import { getRoundMatchesResult } from '@/lib/etlIntegration';
+import { getRoundMatchesResult } from '@/server/etl/etlRoundData';
+import { positionSuitsSlot } from '@/lib/leagues/lineupAutoFill';
 import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
@@ -76,7 +77,7 @@ export function resolveRequestedLineupRound({
   requestedRound: string;
   publishedCurrentRound: number | null;
 }): number | null {
-  if (requestedRound === 'current') {
+  if (requestedRound === 'current' || requestedRound === 'next') {
     const resolvedRound = publishedCurrentRound ?? 1;
     return Number.isSafeInteger(resolvedRound) && resolvedRound > 0 ? resolvedRound : null;
   }
@@ -266,16 +267,7 @@ export async function loadMemberLineupRoundContext({
         : null;
   const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
   const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
-  const lockState =
-    competitionRound.status === 'NO_MATCHUP'
-      ? 'NO_MATCHUP'
-      : competitionRound.status === 'LOCKED' || competitionRound.status === 'FINAL'
-        ? 'LOCKED'
-        : lockAt && lockAt <= now
-          ? 'LOCKED'
-          : !competitionRound.startsAt && !competitionRound.fallbackLockAt
-            ? 'PUBLISHED_PENDING'
-            : 'OPEN';
+  const lockState = deriveLineupLockState(competitionRound, lockAt, now);
 
   return {
     source: 'PUBLISHED',
@@ -289,6 +281,79 @@ export async function loadMemberLineupRoundContext({
     lockState,
     opponent,
   };
+}
+
+function deriveLineupLockState(
+  competitionRound: {
+    status: MemberLineupRoundContext['roundStatus'];
+    startsAt: Date | null;
+    fallbackLockAt: Date | null;
+  },
+  lockAt: Date | null,
+  now: Date
+): MemberLineupRoundContext['lockState'] {
+  if (competitionRound.status === 'NO_MATCHUP') return 'NO_MATCHUP';
+  if (competitionRound.status === 'LOCKED' || competitionRound.status === 'FINAL') return 'LOCKED';
+  if (lockAt && lockAt <= now) return 'LOCKED';
+  if (!competitionRound.startsAt && !competitionRound.fallbackLockAt) return 'PUBLISHED_PENDING';
+  return 'OPEN';
+}
+
+export interface LineupRoundSummary {
+  round: number;
+  aflRound: number | null;
+  phase: 'REGULAR' | 'FINALS';
+  status: MemberLineupRoundContext['roundStatus'];
+  startsAt: Date | null;
+  endsAt: Date | null;
+  lockAt: Date | null;
+  lockState: MemberLineupRoundContext['lockState'];
+}
+
+/** Every published round with the lock state a manager would see on the lineup page. */
+export async function loadLineupRoundSummaries(
+  leagueId: string,
+  now = new Date()
+): Promise<LineupRoundSummary[]> {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    include: { settings: true },
+  });
+  if (!league?.settings || league.settings.competitionRulesVersion < 1) return [];
+
+  const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
+  const rounds = await prisma.leagueCompetitionRound.findMany({
+    where: { leagueId, fixtureVersion: league.settings.competitionRulesVersion },
+    orderBy: { round: 'asc' },
+  });
+  return rounds.map((competitionRound) => {
+    const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
+    return {
+      round: competitionRound.round,
+      aflRound: competitionRound.aflRound,
+      phase: competitionRound.phase,
+      status: competitionRound.status,
+      startsAt: competitionRound.startsAt,
+      endsAt: competitionRound.endsAt,
+      lockAt,
+      lockState: deriveLineupLockState(competitionRound, lockAt, now),
+    };
+  });
+}
+
+/**
+ * The first round a manager can still change: the round in progress when players lock
+ * individually, otherwise the next round that has not locked. Falls back to the current round.
+ */
+export async function resolveNextEditableRoundNumber(
+  leagueId: string,
+  now = new Date()
+): Promise<number | null> {
+  const summaries = await loadLineupRoundSummaries(leagueId, now);
+  const editable = summaries.find(
+    (summary) => summary.lockState === 'OPEN' || summary.lockState === 'PUBLISHED_PENDING'
+  );
+  return editable?.round ?? resolveCurrentCompetitionRoundNumber(leagueId, now);
 }
 
 export async function resolveCurrentCompetitionRoundNumber(
@@ -368,6 +433,68 @@ export async function loadRoundPlayerGameStarts({
   };
 }
 
+export interface RoundPlayerFixture {
+  startsAt: Date | null;
+  /** Canonical club name of the AFL opponent, or null on a bye. */
+  opponent: string | null;
+  isHome: boolean | null;
+  bye: boolean;
+  status: 'scheduled' | 'in_progress' | 'final' | null;
+}
+
+/**
+ * Each player's AFL fixture for the round: opponent, home or away, start time, and whether their
+ * club has a confirmed bye. Players whose club is not in the fixture list are left out rather than
+ * guessed. Display-only: lock enforcement still uses `loadRoundPlayerGameStarts`.
+ */
+export async function loadRoundPlayerFixtures({
+  aflRound,
+  players,
+  season = new Date().getFullYear(),
+}: {
+  aflRound: number | null;
+  players: readonly Pick<RosterLineupPlayer, 'playerId' | 'club'>[];
+  season?: number;
+}): Promise<{ ok: true; fixturesByPlayerId: Map<string, RoundPlayerFixture> } | { ok: false }> {
+  const fixturesByPlayerId = new Map<string, RoundPlayerFixture>();
+  if (!aflRound || players.length === 0) return { ok: true, fixturesByPlayerId };
+
+  const result = await getRoundMatchesResult(season, aflRound);
+  if (!result.ok) return { ok: false };
+
+  const byClub = new Map<string, RoundPlayerFixture>();
+  const byeClubs = new Set<string>();
+  for (const match of result.matches) {
+    const parsedStart = new Date(match.start_time_utc);
+    const startsAt = Number.isFinite(parsedStart.getTime()) ? parsedStart : null;
+    const status = match.status ?? null;
+    const home = getTeamName(match.home_team);
+    const away = getTeamName(match.away_team);
+    byClub.set(home.toUpperCase(), { startsAt, opponent: away, isHome: true, bye: false, status });
+    byClub.set(away.toUpperCase(), { startsAt, opponent: home, isHome: false, bye: false, status });
+    for (const club of match.confirmed_bye_teams ?? []) {
+      if (typeof club === 'string' && club.trim()) byeClubs.add(getTeamName(club).toUpperCase());
+    }
+  }
+
+  for (const player of players) {
+    if (!player.club) continue;
+    const key = getTeamName(player.club).toUpperCase();
+    const fixture = byClub.get(key);
+    if (fixture) fixturesByPlayerId.set(player.playerId, fixture);
+    else if (byeClubs.has(key)) {
+      fixturesByPlayerId.set(player.playerId, {
+        startsAt: null,
+        opponent: null,
+        isHome: null,
+        bye: true,
+        status: null,
+      });
+    }
+  }
+  return { ok: true, fixturesByPlayerId };
+}
+
 export function validateLineupSubmission(
   input: ValidateLineupSubmissionInput
 ): LineupValidationResult {
@@ -411,14 +538,25 @@ export function validateLineupSubmission(
     const lockedPlayer = lockedPlayersById.get(player.playerId);
     const isUnchangedLockedAssignment = Boolean(
       lockedPlayer &&
-        lockedPlayer.slot === player.slot &&
-        lockedPlayer.slotIndex === player.slotIndex
+      lockedPlayer.slot === player.slot &&
+      lockedPlayer.slotIndex === player.slotIndex
     );
     if (lockedPlayer && !isUnchangedLockedAssignment) {
       errors.push(`Player ${player.playerId} is locked.`);
     }
     if (isLineupPlayerLocked(rosterPlayer.gameStartsAt, now) && !lockedPlayer) {
       errors.push(`Player ${player.playerId} is locked.`);
+    }
+    // DEF, MID, RUC and FWD take only players listed in that position; UTIL and interchange
+    // take anyone. A locked player already in place is left alone.
+    if (
+      !isUnchangedLockedAssignment &&
+      player.slot !== 'BENCH' &&
+      !positionSuitsSlot(rosterPlayer.position, player.slot)
+    ) {
+      errors.push(
+        `Player ${player.playerId} is listed as ${rosterPlayer.position || 'no position'} and can't play ${player.slot}.`
+      );
     }
 
     if (player.slot === 'INTERCHANGE') {
@@ -717,13 +855,19 @@ export async function saveMemberLineup({
           gameStartsByPlayerId: new Map<string, Date>(),
           timingStatus: 'AVAILABLE',
         };
-  if (!timingResult.ok) {
+  const roundNotStarted = Boolean(
+    initialCompetitionRound?.startsAt && initialCompetitionRound.startsAt > new Date()
+  );
+  if (!timingResult.ok && !roundNotStarted) {
     return {
       ok: false,
       code: 'TIMING_UNAVAILABLE',
       errors: [timingResult.error],
     };
   }
+  const gameStartsByPlayerId = timingResult.ok
+    ? timingResult.gameStartsByPlayerId
+    : new Map<string, Date>();
 
   const initialRosterFingerprint = initialRosterPlayers
     .map((row) => `${row.playerId}:${row.player.club}`)
@@ -812,7 +956,7 @@ export async function saveMemberLineup({
     const existingPlayersWithLocks = await Promise.all(
       normalizedExistingPlayers.map(async (player) => {
         if (player.lockedAt) return player;
-        const gameStartsAt = timingResult.gameStartsByPlayerId.get(player.playerId);
+        const gameStartsAt = gameStartsByPlayerId.get(player.playerId);
         if (!isLineupPlayerLocked(gameStartsAt, saveNow) || !gameStartsAt) return player;
         await tx.leagueLineupPlayer.updateMany({
           where: { id: player.id, lockedAt: null },
@@ -835,7 +979,7 @@ export async function saveMemberLineup({
         playerId: row.playerId,
         position: row.player.position,
         club: row.player.club,
-        gameStartsAt: timingResult.gameStartsByPlayerId.get(row.playerId) ?? null,
+        gameStartsAt: gameStartsByPlayerId.get(row.playerId) ?? null,
       })),
       existingLockedPlayers,
       submittedPlayers,

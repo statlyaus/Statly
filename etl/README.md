@@ -127,8 +127,8 @@ it builds, verifies R packages, deploys a no-traffic revision, and requires a se
 traffic switch. It is not called by the repository's GitHub Actions and must not be treated as an
 automatic deployment.
 
-Do not use `Dockerfile.backup`, `Dockerfile.new`, or one-off upload/debug scripts as production source
-of truth. Removal of those non-document artifacts should happen in a separately reviewed ETL cleanup.
+`Dockerfile` is the only ETL image definition; the stale `Dockerfile.backup` and `Dockerfile.new` copies
+have been removed. Do not use one-off upload/debug scripts as production source of truth.
 
 ## Verification
 

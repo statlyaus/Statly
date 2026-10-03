@@ -28,9 +28,6 @@ function buildSettings(startAt: Date) {
     startAt,
     timeZone: 'Australia/Melbourne',
     locked: false,
-    enableCaptainSystem: false,
-    captainMultiplier: 2,
-    viceCaptainMultiplier: 1.5,
   };
 }
 

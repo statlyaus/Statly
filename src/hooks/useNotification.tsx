@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { cn } from '@/lib/utils';
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -87,24 +89,30 @@ export function NotificationToast({
           initial={{ opacity: 0, y: -50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -50, scale: 0.9 }}
-          className={`fixed ${positionClasses[position]} z-50 ${className}`}
+          className={cn('fixed z-50', positionClasses[position], className)}
         >
           <div
-            className={`alert ${
+            className={`max-w-sm rounded-md border bg-background px-4 py-3 text-foreground shadow-lg ${
               notification.type === 'success'
-                ? 'alert-success'
+                ? 'border-result-win/40 [&_svg]:text-result-win'
                 : notification.type === 'error'
-                  ? 'alert-error'
-                  : 'alert-info'
-            } shadow-lg max-w-sm`}
+                  ? 'border-result-loss/40 [&_svg]:text-result-loss'
+                  : 'border-border [&_svg]:text-muted-foreground'
+            }`}
             role={notification.type === 'error' ? 'alert' : 'status'}
             aria-live={notification.type === 'error' ? 'assertive' : 'polite'}
             aria-atomic="true"
           >
             <div className="flex items-center gap-2">
-              {notification.type === 'success' && <CheckCircleIcon className="w-5 h-5" />}
-              {notification.type === 'error' && <ExclamationTriangleIcon className="w-5 h-5" />}
-              {notification.type === 'info' && <InformationCircleIcon className="w-5 h-5" />}
+              {notification.type === 'success' && (
+                <CheckCircleIcon aria-hidden="true" className="w-5 h-5" />
+              )}
+              {notification.type === 'error' && (
+                <ExclamationTriangleIcon aria-hidden="true" className="w-5 h-5" />
+              )}
+              {notification.type === 'info' && (
+                <InformationCircleIcon aria-hidden="true" className="w-5 h-5" />
+              )}
               <span className="text-sm font-medium">{notification.message}</span>
             </div>
           </div>

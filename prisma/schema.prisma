@@ -207,11 +207,6 @@ model LeagueSettings {
   tradeReviewHours        Int                         @default(24)
   tradeVetoThreshold      Int                         @default(3)
 
-  // Captain/Vice-Captain system (admin configurable)
-  enableCaptainSystem   Boolean @default(false)
-  captainMultiplier     Float   @default(2.0)
-  viceCaptainMultiplier Float   @default(1.5)
-
   league League?
 }
 
@@ -517,15 +512,13 @@ model QueueItem {
 
 // League Roster Management
 model LeagueRoster {
-  id            String   @id @default(cuid())
-  leagueId      String
-  memberId      String
-  playerIds     String // JSON array of player IDs
-  captainId     String? // Player ID of captain
-  viceCaptainId String? // Player ID of vice-captain
-  benchOrder    String? // JSON array for bench ordering
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id         String   @id @default(cuid())
+  leagueId   String
+  memberId   String
+  playerIds  String // JSON array of player IDs
+  benchOrder String? // JSON array for bench ordering
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([leagueId, memberId])
   @@index([leagueId])
@@ -1269,9 +1262,6 @@ enum TeamActionType {
   TRADE_PROPOSAL
   WAIVER_CLAIM
   DROP_PLAYER
-  SET_CAPTAIN
-  SET_VICE_CAPTAIN
-  OPTIMIZE_LINEUP
 }
 
 enum ActionStatus {
