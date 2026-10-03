@@ -20,8 +20,8 @@ describe('waiver pending bid aggregate architecture', () => {
     expect(schemaSource).toContain('model WaiverPriority');
     expect(prismaStoreSource).toContain('private async reservePendingBid');
     expect(prismaStoreSource).toContain('private async releasePendingBid');
-    expect(prismaStoreSource).toContain('UPDATE WaiverPriority');
-    expect(prismaStoreSource).toContain('SET pendingBidTotal = CASE');
+    expect(prismaStoreSource).toContain('pendingBidTotal: { increment');
+    expect(prismaStoreSource).toContain('pendingBidTotal: { decrement');
     expect(cancelSource).toContain('cancelPendingClaim');
     expect(cancelSource).not.toContain('FieldValue.increment(-bid)');
     expect(prismaStoreSource).not.toContain('pendingBidTotalCents');
