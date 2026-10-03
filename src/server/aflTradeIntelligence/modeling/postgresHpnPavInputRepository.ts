@@ -1,4 +1,9 @@
-import { resolutionSql, clubResolutionSql } from './hpnCurrentResolutionSql';
+import {
+  assignmentContinuityCteSql,
+  clubResolutionSql,
+  hoistedAssignmentContinuity,
+  resolutionSql,
+} from './hpnCurrentResolutionSql';
 import {
   digestFromId,
   currentPlayerResolution,
@@ -346,8 +351,20 @@ async function loadDecodedRows(
   transaction: AflOutcomeSqlTransaction,
   runIds: readonly string[]
 ): Promise<readonly DecodedRow[]> {
+  // Assignment continuity is evaluated once per assignment case for every candidate decision of
+  // the requested rows, then looked up per row. Asking it per row repeated the same chain walk and
+  // review-subject locks for every row whose resolution shares an assignment case.
   const result = await transaction.query<DecodedRow>(
-    `SELECT decoded.provider_decoded_row_id, decoded.normalization_run_id,
+    `WITH ${assignmentContinuityCteSql(
+      `SELECT identity_candidate.identity_candidate_id, match_candidate.match_candidate_id
+         FROM outcome_provider_decoded_row decoded
+         LEFT JOIN outcome_provider_identity_candidate identity_candidate
+           ON identity_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
+         LEFT JOIN outcome_provider_match_candidate match_candidate
+           ON match_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
+        WHERE decoded.normalization_run_id = ANY($1::text[])`
+    )}
+     SELECT decoded.provider_decoded_row_id, decoded.normalization_run_id,
             decoded.source_row_sha256, decoded.typed_payload, decoded.row_status,
             player_resolution.value AS player_resolution,
             match_resolution.value AS match_resolution,
@@ -363,12 +380,12 @@ async function loadDecodedRows(
          ON identity_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
        LEFT JOIN outcome_provider_match_candidate match_candidate
          ON match_candidate.provider_decoded_row_id=decoded.provider_decoded_row_id
-       LEFT JOIN LATERAL (${resolutionSql('player', 'identity_candidate')}) player_resolution ON TRUE
-       LEFT JOIN LATERAL (${resolutionSql('match', 'match_candidate')}) match_resolution ON TRUE
+       LEFT JOIN LATERAL (${resolutionSql('player', 'identity_candidate', hoistedAssignmentContinuity)}) player_resolution ON TRUE
+       LEFT JOIN LATERAL (${resolutionSql('match', 'match_candidate', hoistedAssignmentContinuity)}) match_resolution ON TRUE
        LEFT JOIN outcome_match canonical_match
          ON canonical_match.match_id=match_resolution.value->>'canonicalId'
-       LEFT JOIN LATERAL (${clubResolutionSql('home')}) home_club ON TRUE
-       LEFT JOIN LATERAL (${clubResolutionSql('away')}) away_club ON TRUE
+       LEFT JOIN LATERAL (${clubResolutionSql('home', hoistedAssignmentContinuity)}) home_club ON TRUE
+       LEFT JOIN LATERAL (${clubResolutionSql('away', hoistedAssignmentContinuity)}) away_club ON TRUE
       WHERE decoded.normalization_run_id = ANY($1::text[])
       ORDER BY decoded.provider_decoded_row_id`,
     [runIds]
@@ -612,23 +629,42 @@ async function bindAcquisitionSpells(
         effectiveDate: effectiveAt.slice(0, 10),
       };
     });
+  // A spell's registration currency is identical for every row it binds, so it is evaluated once
+  // per candidate spell; each row still passes its own source and field-map currency.
   const result = await transaction.query<AcquisitionSpellRow>(
-    `SELECT requested."providerDecodedRowId" AS provider_decoded_row_id,
+    `WITH requested AS MATERIALIZED (
+       SELECT * FROM jsonb_to_recordset($1::jsonb) AS requested(
+         "providerDecodedRowId" text,"normalizationRunId" text,"fieldMapId" text,
+         "playerId" text,"clubId" text,"effectiveDate" date)
+     ), registered AS MATERIALIZED (
+       SELECT candidate.spell_version_id,
+              outcome_acquisition_spell_registration_current(candidate.spell_version_id,
+                clock_timestamp()) AS current
+         FROM (SELECT DISTINCT spell.spell_version_id
+                 FROM requested
+                 JOIN outcome_acquisition_spell_version spell
+                   ON spell.player_id=requested."playerId" AND spell.club_id=requested."clubId"
+                  AND spell.start_date<=requested."effectiveDate"
+                  AND (spell.end_date IS NULL OR spell.end_date>=requested."effectiveDate")
+                WHERE spell.status='approved' AND spell.recorded_at<=$2::timestamptz
+                  AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor
+                    WHERE successor.supersedes_spell_version_id=spell.spell_version_id)) candidate
+     )
+     SELECT requested."providerDecodedRowId" AS provider_decoded_row_id,
             spell.spell_version_id,spell.spell_id,spell.version,spell.player_id,spell.club_id,
             spell.start_event_version_id,spell.start_asset_version_id,spell.start_date,
             spell.end_date,spell.end_reason,spell.rule_id,spell.status::text AS status,
             spell.supersedes_spell_version_id,spell.recorded_at
-       FROM jsonb_to_recordset($1::jsonb) AS requested(
-         "providerDecodedRowId" text,"normalizationRunId" text,"fieldMapId" text,
-         "playerId" text,"clubId" text,"effectiveDate" date)
+       FROM requested
        JOIN outcome_acquisition_spell_version spell
          ON spell.player_id=requested."playerId" AND spell.club_id=requested."clubId"
         AND spell.start_date<=requested."effectiveDate"
         AND (spell.end_date IS NULL OR spell.end_date>=requested."effectiveDate")
+       JOIN registered ON registered.spell_version_id=spell.spell_version_id
       WHERE spell.status='approved' AND spell.recorded_at<=$2::timestamptz
-        AND outcome_hpn_acquisition_spell_is_current(spell.spell_version_id,
+        AND outcome_hpn_acquisition_spell_source_current(spell.spell_version_id,
           requested."providerDecodedRowId",requested."normalizationRunId",requested."fieldMapId",
-          requested."effectiveDate",clock_timestamp())
+          requested."effectiveDate",registered.current)
         AND NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version successor
           WHERE successor.supersedes_spell_version_id=spell.spell_version_id)
       ORDER BY requested."providerDecodedRowId",spell.spell_version_id
@@ -726,6 +762,8 @@ function requireFactualUniverseCoverage(
   }
 }
 
+const HPN_INPUT_ROW_BATCH_SIZE = 1_000;
+
 async function persistInputSet(
   transaction: AflOutcomeSqlTransaction,
   inputSet: AflTradeHpnPavSeasonInputSet,
@@ -742,8 +780,7 @@ async function persistInputSet(
        result_row_count,primary_player_row_count,corroborating_player_row_count,
        input_set_canonical_json,input_set_json,excluded_source_row_count)
      VALUES ($1,$2,$3,$4,$5::"OutcomeEnvironment",$6,$7,$8,$9,$10,$11,'building',
-             $12,$13,$14,$15,$16,$17,$18,$19::jsonb,
-             COALESCE(jsonb_array_length($19::jsonb#>'{content,excludedSourceRows}'),0))`,
+             $12,$13,$14,$15,$16,$17,$18,$20::jsonb,$19)`,
     [
       inputSet.inputSetId,
       content.factualUniverse.factualRunId,
@@ -763,6 +800,8 @@ async function persistInputSet(
       content.counts.primaryPlayerRows,
       content.counts.corroboratingPlayerRows,
       canonicalizeAflTradeJson(content),
+      // The count the stored content carries, without parsing the season JSON a second time.
+      excluded.length,
       canonicalizeAflTradeJson(inputSet),
     ]
   );
@@ -791,32 +830,38 @@ async function persistInputSet(
          "legacyFieldMapId" text, "projectedFieldMapId" text, "inputKind" text, role text)`,
     [canonicalizeAflTradeJson(runRows)]
   );
-  const rowRows = content.rows.map((row, ordinal) => ({
-    inputSetId: inputSet.inputSetId,
-    ordinal,
-    normalizationRunId: row.source.normalizationRunId,
-    providerDecodedRowId: row.source.providerDecodedRowId,
-    rowKind: row.kind,
-    role: row.kind === 'player_match_stats' ? row.role : null,
-    sourceRowSha256: row.source.sourceRowSha256,
-    typedPayloadSha256: row.source.typedPayloadSha256,
-    rowSha256: sha256AflTradeCanonicalJson(row),
-    rowCanonicalJson: canonicalizeAflTradeJson(row),
-    row,
-  }));
-  await transaction.query(
-    `INSERT INTO outcome_hpn_pav_input_row
-      (input_set_id,ordinal,normalization_run_id,provider_decoded_row_id,row_kind,role,
-       source_row_sha256,typed_payload_sha256,row_sha256,row_canonical_json,row_json)
-     SELECT "inputSetId",ordinal,"normalizationRunId","providerDecodedRowId","rowKind",role,
-            "sourceRowSha256","typedPayloadSha256","rowSha256","rowCanonicalJson",row
-       FROM jsonb_to_recordset($1::jsonb) AS value(
-         "inputSetId" text, ordinal integer, "normalizationRunId" text,
-         "providerDecodedRowId" text, "rowKind" text, role text,
-         "sourceRowSha256" text, "typedPayloadSha256" text, "rowSha256" text,
-         "rowCanonicalJson" text, row jsonb)`,
-    [canonicalizeAflTradeJson(rowRows)]
-  );
+  // A genuine season has about 20,000 rows. One statement per batch keeps each parsed parameter
+  // small; the rows, their ordinals and the transaction are unchanged.
+  for (let start = 0; start < content.rows.length; start += HPN_INPUT_ROW_BATCH_SIZE) {
+    const rowRows = content.rows
+      .slice(start, start + HPN_INPUT_ROW_BATCH_SIZE)
+      .map((row, offset) => ({
+        inputSetId: inputSet.inputSetId,
+        ordinal: start + offset,
+        normalizationRunId: row.source.normalizationRunId,
+        providerDecodedRowId: row.source.providerDecodedRowId,
+        rowKind: row.kind,
+        role: row.kind === 'player_match_stats' ? row.role : null,
+        sourceRowSha256: row.source.sourceRowSha256,
+        typedPayloadSha256: row.source.typedPayloadSha256,
+        rowSha256: sha256AflTradeCanonicalJson(row),
+        rowCanonicalJson: canonicalizeAflTradeJson(row),
+        row,
+      }));
+    await transaction.query(
+      `INSERT INTO outcome_hpn_pav_input_row
+        (input_set_id,ordinal,normalization_run_id,provider_decoded_row_id,row_kind,role,
+         source_row_sha256,typed_payload_sha256,row_sha256,row_canonical_json,row_json)
+       SELECT "inputSetId",ordinal,"normalizationRunId","providerDecodedRowId","rowKind",role,
+              "sourceRowSha256","typedPayloadSha256","rowSha256","rowCanonicalJson",row
+         FROM jsonb_to_recordset($1::jsonb) AS value(
+           "inputSetId" text, ordinal integer, "normalizationRunId" text,
+           "providerDecodedRowId" text, "rowKind" text, role text,
+           "sourceRowSha256" text, "typedPayloadSha256" text, "rowSha256" text,
+           "rowCanonicalJson" text, row jsonb)`,
+      [canonicalizeAflTradeJson(rowRows)]
+    );
+  }
   if (excluded.length > 0)
     await transaction.query(
       `INSERT INTO outcome_hpn_pav_input_excluded_source_row
@@ -888,15 +933,13 @@ async function persistInputSet(
     [canonicalizeAflTradeJson(factualAppearanceMembers)]
   );
   if (content.schemaVersion === 'afl-trade-hpn-pav-input-set/v5') {
-    const statisticalMembers = content.statisticalSelections.membership.map(
-      (member, ordinal) => ({
-        inputSetId: inputSet.inputSetId,
-        ordinal,
-        ...member,
-        selectionSha256: sha256AflTradeCanonicalJson(member),
-        selectionCanonicalJson: canonicalizeAflTradeJson(member),
-      })
-    );
+    const statisticalMembers = content.statisticalSelections.membership.map((member, ordinal) => ({
+      inputSetId: inputSet.inputSetId,
+      ordinal,
+      ...member,
+      selectionSha256: sha256AflTradeCanonicalJson(member),
+      selectionCanonicalJson: canonicalizeAflTradeJson(member),
+    }));
     await transaction.query(
       `INSERT INTO outcome_hpn_pav_input_statistical_selection
         (input_set_id,ordinal,scope_key,candidate_id,decision_id,support_review_id,revision,

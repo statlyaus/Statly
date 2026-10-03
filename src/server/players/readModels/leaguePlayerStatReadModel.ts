@@ -83,7 +83,8 @@ export function readPlayerSeasonStatAverage(
   return null;
 }
 
-function readPerGameValue(
+/** A category's per-game value, dividing season totals by games and reading per-game stats as-is. */
+export function readPerGameValue(
   source: PlayerSeasonStatSource,
   category: FantasyCategoryKey
 ): number | null {

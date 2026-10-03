@@ -87,23 +87,23 @@ describe('TradeRosterWorkspace', () => {
     expect(screen.getByRole('heading', { name: 'Robbo Rockers sends' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'AFL Legends sends' })).toBeInTheDocument();
     expect(screen.queryByText(/You (?:send|receive)/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Choose roster' })).toHaveClass('lg:hidden');
+    expect(screen.getByRole('group', { name: 'Choose roster' })).not.toHaveClass('lg:hidden');
 
     const sendButton = screen.getByRole('button', {
-      name: 'Send Robbo Rockers, 1 selected',
+      name: 'You give from Robbo Rockers, 1 selected',
     });
     const receiveButton = screen.getByRole('button', {
-      name: 'Receive AFL Legends, 2 selected',
+      name: 'You get from AFL Legends, 2 selected',
     });
 
     expect(sendButton).toHaveAttribute('type', 'button');
     expect(sendButton).toHaveAttribute('aria-pressed', 'true');
-    expect(sendButton).toHaveClass('h-11', 'bg-[color:var(--trade-selection)]');
-    expect(sendButton.className).not.toContain('var(--trade-selection,var(');
+    expect(sendButton).toHaveClass('h-12', 'border-[color:var(--trade-brand)]');
     expect(receiveButton).toHaveAttribute('type', 'button');
     expect(receiveButton).toHaveAttribute('aria-pressed', 'false');
-    expect(receiveButton).toHaveClass('h-11');
-    expect(sendButton.parentElement).toHaveClass('lg:hidden');
+    expect(receiveButton).toHaveClass('h-12', 'border-transparent');
+    expect(sendButton).toHaveTextContent(/You give.*Robbo Rockers.*1/);
+    expect(receiveButton).toHaveTextContent(/You get.*AFL Legends.*2/);
 
     const sendingPanelId = sendButton.getAttribute('aria-controls');
     const receivingPanelId = receiveButton.getAttribute('aria-controls');
@@ -115,10 +115,11 @@ describe('TradeRosterWorkspace', () => {
     const receivingPanel = document.getElementById(receivingPanelId!);
     expect(sendingPanel).toHaveClass('min-w-0', 'block');
     expect(sendingPanel).not.toHaveClass('hidden');
-    expect(receivingPanel).toHaveClass('min-w-0', 'hidden', 'lg:block');
+    expect(receivingPanel).toHaveClass('min-w-0', 'hidden');
+    expect(receivingPanel).not.toHaveClass('lg:block');
     expect(sendingPanel).not.toHaveAttribute('aria-hidden');
     expect(receivingPanel).not.toHaveAttribute('aria-hidden');
-    expect(sendingPanel?.parentElement).toHaveClass('min-w-0', 'lg:grid-cols-2');
+    expect(sendingPanel?.parentElement).toHaveClass('min-w-0');
   });
 
   it('switches the controlled active roster without changing controlled selections', async () => {
@@ -143,25 +144,24 @@ describe('TradeRosterWorkspace', () => {
     render(<Harness />);
 
     const receiveButton = screen.getByRole('button', {
-      name: 'Receive AFL Legends, 2 selected',
+      name: 'You get from AFL Legends, 2 selected',
     });
     await user.click(receiveButton);
 
     expect(onActiveRosterChange).toHaveBeenCalledTimes(1);
     expect(onActiveRosterChange).toHaveBeenCalledWith('receiving');
-    expect(screen.getByRole('button', { name: 'Send Robbo Rockers, 1 selected' })).toHaveAttribute(
-      'aria-pressed',
-      'false'
-    );
+    expect(
+      screen.getByRole('button', { name: 'You give from Robbo Rockers, 1 selected' })
+    ).toHaveAttribute('aria-pressed', 'false');
     expect(receiveButton).toHaveAttribute('aria-pressed', 'true');
 
     const sendingPanel = document.getElementById(
       screen
-        .getByRole('button', { name: 'Send Robbo Rockers, 1 selected' })
+        .getByRole('button', { name: 'You give from Robbo Rockers, 1 selected' })
         .getAttribute('aria-controls')!
     );
     const receivingPanel = document.getElementById(receiveButton.getAttribute('aria-controls')!);
-    expect(sendingPanel).toHaveClass('hidden', 'lg:block');
+    expect(sendingPanel).toHaveClass('hidden');
     expect(receivingPanel).toHaveClass('block');
     expect(receivingPanel).not.toHaveClass('hidden');
 
@@ -170,6 +170,21 @@ describe('TradeRosterWorkspace', () => {
     expect(screen.getByRole('checkbox', { name: /Casey Legend/ })).toBeChecked();
     expect(defaultProps.onToggleSendingPlayer).not.toHaveBeenCalled();
     expect(defaultProps.onToggleReceivingPlayer).not.toHaveBeenCalled();
+  });
+
+  it('points to the other side once one side has players and the other has none', async () => {
+    const user = userEvent.setup();
+    const onActiveRosterChange = vi.fn();
+    render(
+      <TradeRosterWorkspace
+        {...defaultProps}
+        receivingPlayerIds={[]}
+        onActiveRosterChange={onActiveRosterChange}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Next: pick from AFL Legends' }));
+    expect(onActiveRosterChange).toHaveBeenCalledWith('receiving');
   });
 
   it('routes each roster toggle to the correct controlled callback', async () => {

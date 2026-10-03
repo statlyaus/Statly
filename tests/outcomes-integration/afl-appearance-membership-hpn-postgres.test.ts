@@ -1,36 +1,22 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { aflTradeFactualReconciliationRunSchema } from '@/server/aflTradeIntelligence/outcomes/factualReconciliationContracts';
-import { reconcileAflTradeFactualFacts } from '@/server/aflTradeIntelligence/outcomes/factualReconciliationService';
-import { PostgresAflTradeFactualReconciliationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresFactualReconciliationRepository';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import {
-  prepareLocalAflTradeFitzRoyFactualReleaseCandidate,
-  prepareLocalAflTradeFitzRoyMatchEvidence,
-} from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsal';
-import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
-import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
-import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
-import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   createAflTradeAcquisitionSpellRegistration,
   createAflTradeAcquisitionSpellRegistrationRule,
-  createAflTradeAppearanceMembershipSpellRule,
+  createAflTradeAppearanceMembershipSpell,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
-import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
-import { deriveAflTradeAppearanceMembershipSpells } from '@/server/aflTradeIntelligence/outcomes/appearanceMembershipSpellDerivation';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
-import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
-import { registerSourceFirstHpnPlayerMapFixture } from '../testUtils/sourceFirstHpnPlayerMapFixture';
-import { registerSourceFirstHpnResultsMapFixture } from '../testUtils/sourceFirstHpnResultsMapFixture';
+import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
+import { buildAppearanceMembershipHpnInputFixture } from '../testUtils/appearanceMembershipHpnInputFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import {
+  installPre0236AppearanceCurrencyReference,
+  PRE_0236_APPEARANCE_CURRENCY,
+} from '../testUtils/pre0236AcquisitionCurrencyReference';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -50,6 +36,7 @@ beforeAll(async () => {
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
+  await installPre0236AppearanceCurrencyReference(pool);
 });
 afterAll(async () => {
   await rm(artifactRoot, { recursive: true, force: true });
@@ -60,6 +47,66 @@ afterAll(async () => {
     await admin.end();
   }
 });
+// Every candidate (row, spell) pair of an input set, evaluated three ways on one snapshot: the per-row
+// function, the 0236 set-based form the build and finalization use (registration currency once per
+// spell), and, for appearance-membership spells, the original 0233 registration currency.
+const compareSpellCurrency = async (inputSetId: string) => {
+  const result = await pool.query<{
+    spell_version_id: string;
+    per_row: boolean;
+    set_based: boolean;
+    deployed_registration: boolean;
+    original_registration: boolean | null;
+  }>(
+    `WITH requested AS MATERIALIZED (
+       SELECT row.provider_decoded_row_id,row.normalization_run_id,run.projected_field_map_id,
+              match.effective_at::DATE AS effective_date,
+              row.row_json#>>'{player,canonicalId}' AS player_id,
+              row.row_json#>>'{club,canonicalId}' AS club_id
+         FROM outcome_hpn_pav_input_row row
+         JOIN outcome_hpn_pav_input_run run
+           ON run.input_set_id=row.input_set_id AND run.normalization_run_id=row.normalization_run_id
+         JOIN outcome_hpn_pav_input_match match
+           ON match.input_set_id=row.input_set_id
+          AND match.match_id=row.row_json#>>'{match,canonicalId}'
+        WHERE row.input_set_id=$1 AND row.row_kind='player_match_stats'
+     ), registered AS MATERIALIZED (
+       SELECT candidate.spell_version_id,
+              outcome_acquisition_spell_registration_current(candidate.spell_version_id,
+                clock_timestamp()) AS current
+         FROM (SELECT DISTINCT spell.spell_version_id FROM requested
+                 JOIN outcome_acquisition_spell_version spell
+                   ON spell.player_id=requested.player_id AND spell.club_id=requested.club_id
+              ) candidate
+     )
+     SELECT spell.spell_version_id,
+            outcome_hpn_acquisition_spell_is_current(spell.spell_version_id,
+              requested.provider_decoded_row_id,requested.normalization_run_id,
+              requested.projected_field_map_id,requested.effective_date,clock_timestamp()) AS per_row,
+            outcome_hpn_acquisition_spell_source_current(spell.spell_version_id,
+              requested.provider_decoded_row_id,requested.normalization_run_id,
+              requested.projected_field_map_id,requested.effective_date,registered.current)
+              AS set_based,
+            registered.current AS deployed_registration,
+            CASE WHEN spell.registration_canonical_json::JSONB->>'schemaVersion'
+                   ='afl-trade-acquisition-registration/v3'
+              THEN ${PRE_0236_APPEARANCE_CURRENCY}(spell.spell_version_id,clock_timestamp())
+            END AS original_registration
+       FROM requested
+       JOIN outcome_acquisition_spell_version spell
+         ON spell.player_id=requested.player_id AND spell.club_id=requested.club_id
+       JOIN registered ON registered.spell_version_id=spell.spell_version_id
+      ORDER BY requested.provider_decoded_row_id,spell.spell_version_id`,
+    [inputSetId]
+  );
+  for (const pair of result.rows) {
+    expect(pair.set_based).toBe(pair.per_row);
+    if (pair.original_registration !== null) {
+      expect(pair.deployed_registration).toBe(pair.original_registration);
+    }
+  }
+  return result.rows;
+};
 const instant = async () => {
   await new Promise((resolve) => setTimeout(resolve, 3));
   return (
@@ -73,224 +120,15 @@ const instant = async () => {
 // membership and HPN owners execute without replacing database guards. No player has a promoted
 // entry event: season PAV is attributed through appearance-membership (v3) spells only.
 it('builds, calculates and reloads season HPN PAV attributed through appearance-membership spells', async () => {
-  const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
-  const sources = [];
-  const primaryRuns: string[] = [];
-  for (const provider of ['footywire', 'afl_tables'] as const) {
-    for (const hpnPlayerSide of ['home', 'away'] as const) {
-      const options = { provider, profile: 'hpn_player_stats' as const, hpnPlayerSide };
-      const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
-      const source = fixture.command.capture;
-      if (hpnPlayerSide === 'home')
-        await ledger.appendBatch({
-          expectedRevision: (await ledger.load()).revision,
-          records: [
-            {
-              sourceRights: source.sourceRights,
-              proposal: source.ledger.proposals[0]!,
-              decision: source.ledger.decisions[0]!,
-            },
-          ],
-        });
-      const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
-      const factual = await prepareLocalAflTradeFitzRoyFactualReleaseCandidate(client, {
-        provider,
-        hpnPlayerStats: true,
-        hpnPlayerSide,
-      });
-      if (provider === 'footywire') primaryRuns.push(factual.receipt.factualRunId);
-      const map = await registerSourceFirstHpnPlayerMapFixture(
-        client,
-        staged,
-        provider,
-        hpnPlayerSide
-      );
-      sources.push({
-        normalizationRunId: staged.staging.normalization.normalizationRunId,
-        fieldMapId: map.fieldMapId,
-        inputKind: 'player_match_stats',
-        role: provider === 'footywire' ? 'primary' : 'corroborating',
-      });
-    }
-  }
-  const resultSource = createLocalAflTradeFitzRoyFactualRehearsalFixture({
-    provider: 'afl_tables',
-    profile: 'match_only',
-  }).command.capture;
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: resultSource.sourceRights,
-        proposal: resultSource.ledger.proposals[0]!,
-        decision: resultSource.ledger.decisions[0]!,
-      },
-    ],
-  });
-  const results = await prepareLocalAflTradeFitzRoyMatchEvidence(client);
-  const resultMap = await registerSourceFirstHpnResultsMapFixture(client, results);
-  sources.push({
-    normalizationRunId: results.ingestion.staging.normalization.normalizationRunId,
-    fieldMapId: resultMap.fieldMapId,
-    inputKind: 'completed_match_result',
-    role: null,
-  });
-  const storedRuns = await pool.query(
-    'SELECT COALESCE(receipt_canonical_json::jsonb,receipt_json) AS receipt_json FROM outcome_factual_reconciliation_run WHERE factual_run_id=ANY($1::text[])',
-    [primaryRuns]
-  );
-  const runs = storedRuns.rows.map(({ receipt_json }) =>
-    aflTradeFactualReconciliationRunSchema.parse(receipt_json)
-  );
-  expect(runs).toHaveLength(2);
-  const heads = await pool.query<{ subject_key: string; revision: number }>(
-    'SELECT subject_key,revision FROM outcome_reconciled_factual_metric_head'
-  );
-  const combined = reconcileAflTradeFactualFacts({
-    policy: runs[0]!.content.policy,
-    sourceMemberships: runs.flatMap((run) => run.content.sourceMemberships),
-    currentHeadRevisions: heads.rows.map((row) => ({
-      subjectKey: row.subject_key,
-      revision: row.revision,
-    })),
-    startedAt: await instant(),
-    completedAt: await instant(),
-  });
-  await new PostgresAflTradeFactualReconciliationRepository(client).persistRun(combined, {
-    environment: 'non_production',
-  });
-  const factualRunId = combined.factualRunId;
-  const approve = async (type: string, subject: string, content: unknown) => {
-    const id = `synthetic-appearance-review:${subject}`;
-    await pool.query(
-      `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
-      VALUES($1,$2,$3,'approved','Synthetic appearance-membership HPN regression',$4::jsonb,'synthetic-reviewer',$5)`,
-      [id, type, subject, canonicalizeAflTradeJson(content), await instant()]
-    );
-    return id;
-  };
-  const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
-  const ruleEvidenceBytes = new TextEncoder().encode(
-    canonicalizeAflTradeJson({ ownerApprovedAppearanceMembership: 'season PAV attribution only' })
-  );
-  const ruleEvidence = createAflTradeCanonicalJsonArtifactRef(
-    { ownerApprovedAppearanceMembership: 'season PAV attribution only' },
-    await instant()
-  );
-  await pool.query(
-    `INSERT INTO outcome_artifact_custody
-      (artifact_id,content_sha256,storage_uri,media_type,byte_length,created_at,verified_at,environment,artifact_class,custody_json)
-     VALUES($1,$2,$3,$4,$5,$6,$6,'non_production','derived_private','{}'::jsonb)`,
-    [
-      ruleEvidence.artifactId,
-      ruleEvidence.contentSha256,
-      ruleEvidence.storageUri,
-      ruleEvidence.mediaType,
-      ruleEvidence.byteLength,
-      ruleEvidence.createdAt,
-    ]
-  );
-  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(client, {
-    read: async () => ruleEvidenceBytes,
-  });
-  const rule = createAflTradeAppearanceMembershipSpellRule({
-    ...scope,
-    ruleVersion: 'synthetic-appearance-membership-hpn-v1',
-    evidence: [ruleEvidence],
-    createdAt: await instant(),
-  });
-  await spells.registerReviewedRule(
-    rule,
-    await approve('acquisition_spell_rule', rule.ruleId, rule),
-    scope
-  );
-  const facts = await pool.query<{
-    appearance_fact_id: string;
-    player_id: string;
-    represented_club_id: string;
-    match_id: string;
-    season_year: number;
-    effective_at: Date;
-    availability: 'measured' | 'missing' | 'not_applicable' | 'quarantined';
-    appeared: boolean | null;
-  }>(
-    `SELECT fact.appearance_fact_id,fact.player_id,fact.represented_club_id,fact.match_id,
-            fact.season_year,fact.effective_at,fact.availability::text AS availability,fact.appeared
-       FROM outcome_provider_player_appearance_fact fact
-       JOIN outcome_provider_fact_batch batch ON batch.fact_batch_id=fact.fact_batch_id
-      WHERE fact.competition='AFLM' AND fact.season_year=2026 AND batch.status='approved'
-        AND batch.environment='non_production'`
-  );
-  const proposals = deriveAflTradeAppearanceMembershipSpells({
-    ...scope,
-    seasonYear: 2026,
-    ruleId: rule.ruleId,
-    createdAt: await instant(),
-    facts: facts.rows.map((fact) => ({
-      appearanceFactId: fact.appearance_fact_id,
-      playerId: fact.player_id,
-      clubId: fact.represented_club_id,
-      matchId: fact.match_id,
-      competition: 'AFLM' as const,
-      seasonYear: fact.season_year,
-      effectiveAt: fact.effective_at.toISOString(),
-      availability: fact.availability,
-      appeared: fact.appeared,
-    })),
-  });
-  expect(proposals.map(({ content }) => [content.playerId, content.clubId])).toEqual([
-    ['afl-player:local-rehearsal', 'afl-club:local-rehearsal'],
-    ['afl-player:local-rehearsal-away', 'afl-club:local-rehearsal-away'],
-  ]);
-  for (const proposal of proposals) {
-    await spells.registerReviewedSpell(
-      proposal,
-      await approve('acquisition_spell_registration', proposal.spellVersionId, proposal),
-      scope
-    );
-  }
-  const repository = new PostgresAflTradeHpnPavInputRepository(client);
-  const methodBytes = new TextEncoder().encode(
-    '<html>Explicit synthetic HPN method fixture</html>'
-  );
-  const methodArtifact = createAflTradeByteArtifactRef(methodBytes, 'text/html', await instant());
-  await pool.query(
-    `INSERT INTO outcome_artifact_custody
-      (artifact_id,content_sha256,storage_uri,media_type,byte_length,created_at,verified_at,environment,artifact_class,custody_json)
-     VALUES($1,$2,$3,$4,$5,$6,$7,'non_production','raw_source','{}'::jsonb)`,
-    [
-      methodArtifact.artifactId,
-      methodArtifact.contentSha256,
-      methodArtifact.storageUri,
-      methodArtifact.mediaType,
-      methodArtifact.byteLength,
-      methodArtifact.createdAt,
-      await instant(),
-    ]
-  );
-  const method = createAflTradeHpnPavMethod({
-    sourceArtifact: methodArtifact,
-    sourceBytes: methodBytes,
-    capturedAt: methodArtifact.createdAt,
-  });
-  const methodAuthority = { loadExact: async () => ({ method, sourceBytes: methodBytes }) };
-  const calculations = new PostgresAflTradeHpnPavCalculationRepository(client, methodAuthority);
-  await calculations.registerMethod(method, scope);
-  const request = {
-    ...scope,
-    seasonYear: 2026,
-    methodId: method.methodId,
-    factualRunId,
-    effectiveThrough: '2026-03-20T23:59:59.999Z',
-    sources,
-    knowledgePolicy: 'retrospective_as_recorded_by_input_creation',
-    knowledgeCutoffAt: await instant(),
-  };
-  const built = await repository.buildAndPersistSeasonInputSet(request, scope);
+  const { approve, built, calculations, proposals, repository, request, scope, spells } =
+    await buildAppearanceMembershipHpnInputFixture({ pool, client, instant });
   expect(built.idempotentReplay).toBe(false);
   const players = built.inputSet.content.rows.filter((row) => row.kind === 'player_match_stats');
   expect(players).toHaveLength(4);
   const spellFor = new Map(proposals.map((proposal) => [proposal.content.playerId, proposal]));
+  const bound = await compareSpellCurrency(built.inputSet.inputSetId);
+  expect(bound).toHaveLength(players.length);
+  expect(bound.every((pair) => pair.per_row && pair.set_based)).toBe(true);
   for (const row of players) {
     const expected = spellFor.get(row.player.canonicalId)!;
     expect(row.acquisitionSpell).toMatchObject({
@@ -410,4 +248,100 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
   // The retained input bound to the retired window now fails current-authority reads; the logical
   // input scope is immutable, so a successor calculation belongs to a new scope, not this test.
   await expect(repository.loadCurrentFinalizedSeasonInputSet(read, scope)).rejects.toThrow();
+  const retired = await compareSpellCurrency(built.inputSet.inputSetId);
+  const pairsFor = (rows: typeof retired, spellVersionId: string) =>
+    rows.filter((pair) => pair.spell_version_id === spellVersionId);
+  expect(pairsFor(retired, homeWindow.spellVersionId).every((pair) => !pair.per_row)).toBe(true);
+  expect(pairsFor(retired, awayWindow.spellVersionId).every((pair) => pair.per_row)).toBe(true);
+
+  // A withdrawn player-identity decision withdraws the away window's boundary appearance. The
+  // provider-resolution review owner is covered elsewhere; seed the successor review directly.
+  const awayFact = await pool.query<{ decision_id: string; subject_id: string }>(
+    `SELECT review.decision_id,review.subject_id
+       FROM outcome_provider_player_appearance_fact fact
+       JOIN outcome_review_decision review
+         ON review.decision_id=fact.player_assignment_decision_id
+      WHERE fact.player_id='afl-player:local-rehearsal-away' LIMIT 1`
+  );
+  const withdrawal = await pool.connect();
+  try {
+    await withdrawal.query('BEGIN');
+    await withdrawal.query(`SET LOCAL session_replication_role='replica'`);
+    await withdrawal.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,supersedes_decision_id,rationale,
+         evidence_json,decided_by,decided_at)
+       VALUES ($1,'provider_resolution_case',$2,'rejected',$3,'Synthetic identity withdrawal',
+         '{}'::jsonb,'synthetic-reviewer',date_trunc('milliseconds',clock_timestamp()))`,
+      [
+        `${awayFact.rows[0]!.decision_id}:withdrawn`,
+        awayFact.rows[0]!.subject_id,
+        awayFact.rows[0]!.decision_id,
+      ]
+    );
+    await withdrawal.query('COMMIT');
+  } catch (error) {
+    await withdrawal.query('ROLLBACK');
+    throw error;
+  } finally {
+    withdrawal.release();
+  }
+  const withdrawn = await compareSpellCurrency(built.inputSet.inputSetId);
+  expect(pairsFor(withdrawn, awayWindow.spellVersionId).every((pair) => !pair.per_row)).toBe(true);
+  expect(pairsFor(withdrawn, reviewedSpell.spellVersionId)).toEqual(
+    pairsFor(retired, reviewedSpell.spellVersionId)
+  );
+
+  // A reviewed spell occupies its membership while its entry event is current, so a successor
+  // appearance-membership window for the same player and club cannot overlap it.
+  const homeV3 = homeWindow.content;
+  if (homeV3.schemaVersion !== 'afl-trade-acquisition-registration/v3')
+    throw new Error('Expected an appearance-membership window.');
+  const { schemaVersion: _schema, observedThrough: _observed, ...homeContent } = homeV3;
+  const successorWindow = async () =>
+    createAflTradeAppearanceMembershipSpell({
+      ...homeContent,
+      version: 2,
+      supersedesSpellVersionId: homeWindow.spellVersionId,
+      createdAt: await instant(),
+    });
+  const blocked = await successorWindow();
+  await expect(
+    spells.registerReviewedSpell(
+      blocked,
+      await approve('acquisition_spell_registration', blocked.spellVersionId, blocked),
+      scope
+    )
+  ).rejects.toThrow('cannot overlap');
+  // A superseded entry event makes the reviewed spell permanently non-current; it then releases
+  // its membership to the appearance-membership bridge.
+  const supersession = await pool.connect();
+  try {
+    await supersession.query('BEGIN');
+    await supersession.query(`SET LOCAL session_replication_role='replica'`);
+    await supersession.query(
+      `INSERT INTO outcome_event_version
+        (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,official_name,
+         status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
+       SELECT event_version_id||':successor',event_id,version+1,kind,acquisition_mechanism,
+              event_date,official_name,status,source_import_row_id,event_version_id,
+              date_trunc('milliseconds',clock_timestamp()),date_precision
+         FROM outcome_event_version WHERE event_version_id=$1`,
+      [promoted.entry.eventVersionId]
+    );
+    await supersession.query('COMMIT');
+  } catch (error) {
+    await supersession.query('ROLLBACK');
+    throw error;
+  } finally {
+    supersession.release();
+  }
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(false);
+  const released = await successorWindow();
+  await spells.registerReviewedSpell(
+    released,
+    await approve('acquisition_spell_registration', released.spellVersionId, released),
+    scope
+  );
+  expect(await currentness(released.spellVersionId)).toBe(true);
 });

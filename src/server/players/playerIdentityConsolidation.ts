@@ -192,20 +192,11 @@ async function rewriteLegacyRosterDocuments(tx: Prisma.TransactionClient, aliase
   for (const row of rows) {
     try {
       const playerIds = rewriteJsonIdArray(row.playerIds, aliases)!;
-      const captainId = row.captainId ? (aliases.get(row.captainId) ?? row.captainId) : null;
-      const viceCaptainId = row.viceCaptainId
-        ? (aliases.get(row.viceCaptainId) ?? row.viceCaptainId)
-        : null;
       const benchOrder = rewriteJsonIdArray(row.benchOrder, aliases);
-      if (
-        playerIds !== row.playerIds ||
-        captainId !== row.captainId ||
-        viceCaptainId !== row.viceCaptainId ||
-        benchOrder !== row.benchOrder
-      ) {
+      if (playerIds !== row.playerIds || benchOrder !== row.benchOrder) {
         await tx.leagueRoster.update({
           where: { id: row.id },
-          data: { playerIds, captainId, viceCaptainId, benchOrder },
+          data: { playerIds, benchOrder },
         });
       }
     } catch (error) {

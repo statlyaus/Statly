@@ -36,7 +36,7 @@ describe('TradeSelectionTray', () => {
     const status = screen.getByRole('status');
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(within(status).getByText('0 players selected')).toBeInTheDocument();
-    expect(within(status).getByText('Select from both teams')).toBeInTheDocument();
+    expect(within(status).getByText('Pick from both teams')).toBeInTheDocument();
     expect(screen.getAllByRole('status')).toHaveLength(1);
 
     const clearButton = screen.getByRole('button', { name: 'Clear selected players' });
@@ -54,7 +54,7 @@ describe('TradeSelectionTray', () => {
     const { onClear, onReview } = renderTray({ selectedCount: 2, selectionComplete: true });
 
     expect(screen.getByText('2 players selected')).toBeInTheDocument();
-    expect(screen.getByText('Ready to review')).toBeInTheDocument();
+    expect(screen.getByText('Ready')).toBeInTheDocument();
 
     const clearButton = screen.getByRole('button', { name: 'Clear selected players' });
     const reviewButton = screen.getByRole('button', { name: 'Review trade' });
@@ -98,13 +98,13 @@ describe('TradeSelectionTray', () => {
     );
 
     expect(screen.getAllByRole('status')).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Select from both teams');
+    expect(screen.getByRole('status')).toHaveTextContent('Pick from both teams');
 
     rerender(<TradeSelectionTray {...props} selectedCount={2} selectionComplete />);
 
     expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(screen.getByRole('status')).toHaveTextContent('2 players selected');
-    expect(screen.getByRole('status')).toHaveTextContent('Ready to review');
+    expect(screen.getByRole('status')).toHaveTextContent('Ready');
   });
 
   it('disables both actions while the complete selection is busy', () => {

@@ -6,10 +6,9 @@ const source = readFileSync(join(process.cwd(), 'src/components/league/LeagueTab
 
 describe('LeagueTabs deferred panel architecture', () => {
   it('keeps overview immediate and loads feature-owned panels through dynamic boundaries', () => {
-    expect(source).toContain("import('./MyTeamRosterManager')");
     expect(source).toContain("import('./LeagueSettingsPanels')");
     expect(source).toContain("import('./matchups/LeagueMatchupsPanel')");
-    expect(source).toContain("import('./matchups/LeagueLineupPanel')");
+    expect(source).toContain("import('./myteam/LeagueMyTeamPanel')");
     expect(source).toContain("import('./matchups/LeagueStandingsPanel')");
     expect(source).toContain("import('./trades/LeagueTradeCentrePanel')");
     expect(source).toContain("import('@/components/waivers/LeagueWaiversContainer')");
@@ -19,7 +18,8 @@ describe('LeagueTabs deferred panel architecture', () => {
     expect(source).not.toMatch(/import\s+LeagueWaiversContainer\s+from/);
     expect(source).not.toContain('ssr: false');
     expect(source).toMatch(/dynamic\(\s*\(\) => import\('\.\/DraftManager'\)/);
-    expect(source).toMatch(/dynamic\(\s*\(\) =>\s*import\('\.\/MyTeamRosterManager'\)\.then/);
+    expect(source).toMatch(/dynamic\(\s*\(\) =>\s*import\('\.\/myteam\/LeagueMyTeamPanel'\)\.then/);
+    expect(source).not.toContain('MyTeamRosterManager');
   });
 
   it('preloads deferred panels from explicit keyboard, pointer, and select intent', () => {

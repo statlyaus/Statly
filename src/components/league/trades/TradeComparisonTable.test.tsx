@@ -70,32 +70,30 @@ describe('TradeComparisonTable', () => {
   ])('shows an honest incomplete state without an impact summary', (selection) => {
     render(<TradeComparisonTable {...defaultProps} {...selection} />);
 
-    expect(screen.getByText('Select players from both teams to compare')).toBeInTheDocument();
+    expect(screen.getByText('Pick from both teams to compare.')).toBeInTheDocument();
     expect(screen.queryByText(/Category impact:/)).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('summarizes categories from the incoming and outgoing package perspective', () => {
+  it('summarizes categories from the sending team’s side', () => {
     render(<TradeComparisonTable {...defaultProps} />);
 
     expect(
-      screen.getByText('Categories: 1 favour incoming · 1 favour outgoing · 1 even · 1 unavailable')
+      screen.getByText('For Robbo Rockers: 1 up · 1 down · 1 level · 1 no data')
     ).toBeInTheDocument();
   });
 
   it('uses team columns and one normalized difference column with signed accessible outcomes', () => {
     render(<TradeComparisonTable {...defaultProps} />);
 
-    expect(screen.getByRole('heading', { level: 4, name: 'Package comparison' })).toHaveClass(
+    expect(screen.getByRole('heading', { level: 4, name: 'Category comparison' })).toHaveClass(
       'text-base'
     );
     const table = screen.getByRole('table', { name: /category comparison/i });
     expect(within(table).getByRole('columnheader', { name: 'Category' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Robbo Rockers' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'AFL Legends' })).toBeInTheDocument();
-    expect(within(table).getAllByRole('columnheader', { name: 'Package difference' })).toHaveLength(
-      1
-    );
+    expect(within(table).getAllByRole('columnheader', { name: 'Gap' })).toHaveLength(1);
     expect(
       within(table).queryByRole('columnheader', { name: 'Difference' })
     ).not.toBeInTheDocument();
@@ -104,28 +102,18 @@ describe('TradeComparisonTable', () => {
     expect(
       within(within(table).getByRole('row', { name: /Goals/ })).getByText('+2.0')
     ).toBeInTheDocument();
-    const gained = within(within(table).getByRole('row', { name: /Goals/ })).getByText(
-      'Favours incoming'
-    );
-    expect(gained.parentElement).toHaveClass(
-      'bg-[color:var(--trade-positive)]/8',
-      'text-[color:var(--trade-positive)]'
-    );
+    const gained = within(within(table).getByRole('row', { name: /Goals/ })).getByText('Up');
+    expect(gained.previousElementSibling).toHaveClass('text-[color:var(--trade-positive)]');
     expect(
       within(within(table).getByRole('row', { name: /Clangers/ })).getByText('−2.0')
     ).toBeInTheDocument();
-    const lost = within(within(table).getByRole('row', { name: /Clangers/ })).getByText(
-      'Favours outgoing'
-    );
-    expect(lost.parentElement).toHaveClass(
-      'bg-[color:var(--trade-negative-soft)]',
-      'text-[color:var(--trade-negative)]'
-    );
+    const lost = within(within(table).getByRole('row', { name: /Clangers/ })).getByText('Down');
+    expect(lost.previousElementSibling).toHaveClass('text-[color:var(--trade-negative)]');
     expect(
-      within(within(table).getByRole('row', { name: /Marks/ })).getByText('Even')
+      within(within(table).getByRole('row', { name: /Marks/ })).getByText('Level')
     ).toBeInTheDocument();
     expect(
-      within(within(table).getByRole('row', { name: /Kicks/ })).getByText('Unavailable')
+      within(within(table).getByRole('row', { name: /Kicks/ })).getByText('No data')
     ).toBeInTheDocument();
   });
 
@@ -134,12 +122,7 @@ describe('TradeComparisonTable', () => {
 
     expect(
       screen.getByText(
-        'Comparison basis: 2026 season, per-game average per selected player. Send sample: 1 player · 12 GP each. Receive sample: 1 player · 12 GP each.'
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Positive differences favour the incoming package; negative differences favour the outgoing package/i
+        'Per-game averages per player, 2026 season. Robbo Rockers: 1 player · 12 GP each. AFL Legends: 1 player · 12 GP each. For low-is-better categories a drop counts as up.'
       )
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Goals, higher is better')).toBeInTheDocument();
@@ -165,7 +148,7 @@ describe('TradeComparisonTable', () => {
     const gainedRow = screen.getByRole('row', { name: /Goals/ });
     expect(within(gainedRow).getByText('+0.004')).toBeInTheDocument();
     expect(within(gainedRow).queryByText('+0.0')).not.toBeInTheDocument();
-    expect(within(gainedRow).getByText('Favours incoming')).toBeInTheDocument();
+    expect(within(gainedRow).getByText('Up')).toBeInTheDocument();
 
     rerender(
       <TradeComparisonTable
@@ -182,7 +165,7 @@ describe('TradeComparisonTable', () => {
     const evenRow = screen.getByRole('row', { name: /Goals/ });
     expect(within(evenRow).getByText('0.0')).toBeInTheDocument();
     expect(within(evenRow).queryByText(/[+−]0\.0/)).not.toBeInTheDocument();
-    expect(within(evenRow).getByText('Even')).toBeInTheDocument();
+    expect(within(evenRow).getByText('Level')).toBeInTheDocument();
   });
 
   it('uses unique accessible heading relationships across multiple instances', () => {
@@ -193,8 +176,8 @@ describe('TradeComparisonTable', () => {
       </>
     );
 
-    const headings = screen.getAllByRole('heading', { level: 4, name: 'Package comparison' });
-    const regions = screen.getAllByRole('region', { name: 'Package comparison' });
+    const headings = screen.getAllByRole('heading', { level: 4, name: 'Category comparison' });
+    const regions = screen.getAllByRole('region', { name: 'Category comparison' });
     const headingIds = headings.map(({ id }) => id);
     expect(new Set(headingIds).size).toBe(2);
     expect(regions.map((region) => region.getAttribute('aria-labelledby'))).toEqual(headingIds);
@@ -208,6 +191,6 @@ describe('TradeComparisonTable', () => {
 
     const goalsRow = screen.getByRole('row', { name: /Goals/ });
     expect(within(goalsRow).getByText('10.0')).toHaveClass('text-sm');
-    expect(within(goalsRow).getByText('Favours incoming').parentElement).toHaveClass('text-sm');
+    expect(within(goalsRow).getByText('Up').parentElement).toHaveClass('text-sm');
   });
 });

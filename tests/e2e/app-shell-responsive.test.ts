@@ -28,7 +28,6 @@ test.describe('shared app shell at 390px', () => {
   }) => {
     const protectedRoutes = [
       '/drafts',
-      '/scheduling',
       '/help',
       '/team-analytics',
       `/players/${E2E_PLAYER_ID}`,

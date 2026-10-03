@@ -80,6 +80,17 @@ describe('league detail route architecture', () => {
     );
   });
 
+  it('tells members why a league failed to load without exposing request internals', () => {
+    const pageSource = readFileSync(
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/page.tsx'),
+      'utf8'
+    );
+
+    expect(pageSource).not.toContain('status=${status}');
+    expect(pageSource).not.toContain('League not found (${leagueId})');
+    expect(pageSource).toContain("We couldn't load this league. Try again in a moment.");
+  });
+
   it('keeps the tabbed league overview free of legacy placeholder sections', () => {
     const tabsSource = readFileSync(
       join(process.cwd(), 'src/components/league/LeagueTabs.tsx'),
@@ -96,7 +107,13 @@ describe('league detail route architecture', () => {
     expect(tabsSource).not.toContain('823.1');
     expect(tabsSource).not.toContain('badge: 2');
     expect(existsSync(join(process.cwd(), 'src/components/league/LeagueOverview.tsx'))).toBe(false);
-    expect(tabsSource).toContain('League overview');
-    expect(tabsSource).toContain('Scoring categories');
+    // The overview itself lives in LeagueOverviewPanel.
+    expect(tabsSource).toContain('<LeagueOverviewPanel');
+    const overviewSource = readFileSync(
+      join(process.cwd(), 'src/components/league/overview/LeagueOverviewPanel.tsx'),
+      'utf8'
+    );
+    expect(overviewSource).toContain('League details');
+    expect(overviewSource).toContain('Scoring categories');
   });
 });

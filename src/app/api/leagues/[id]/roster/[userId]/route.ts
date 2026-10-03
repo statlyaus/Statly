@@ -38,8 +38,6 @@ function getSelectedLeagueCategories(rawCategories: unknown): FantasyCategoryKey
 
 const PutSchema = z.object({
   playerIds: z.array(z.string()).default([]),
-  captainId: z.string().optional().nullable(),
-  viceCaptainId: z.string().optional().nullable(),
   benchOrder: z.array(z.string()).optional().nullable(),
 });
 
@@ -108,8 +106,6 @@ export async function GET(
         stats: leagueStats?.values ?? {},
         leagueStats,
         gamesPlayed: leagueStats?.gamesPlayed ?? 0,
-        isCaptain: roster?.captainId === player.id,
-        isViceCaptain: roster?.viceCaptainId === player.id,
       };
     });
 
@@ -121,8 +117,6 @@ export async function GET(
         teamName: member.teamName,
         playerIds: orderedPlayers.map((player) => player.id),
         players: playersWithStats,
-        captainId: roster?.captainId ?? null,
-        viceCaptainId: roster?.viceCaptainId ?? null,
         benchOrder: roster?.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],
         updatedAt: roster?.updatedAt ?? null,
       },
@@ -130,9 +124,6 @@ export async function GET(
       leagueSettings: {
         selectedCategories,
         categoryDirections,
-        enableCaptainSystem: Boolean(league.settings?.enableCaptainSystem ?? true),
-        captainMultiplier: Number(league.settings?.captainMultiplier ?? 2.0),
-        viceCaptainMultiplier: Number(league.settings?.viceCaptainMultiplier ?? 1.5),
       },
     };
 
@@ -177,8 +168,6 @@ export async function PUT(
       leagueId,
       memberId: member.id,
       submittedPlayerIds: body.playerIds,
-      captainId: body.captainId,
-      viceCaptainId: body.viceCaptainId,
       benchOrder: body.benchOrder,
     });
 
@@ -189,8 +178,6 @@ export async function PUT(
         id: roster.id,
         leagueId: roster.leagueId,
         memberId: roster.memberId,
-        captainId: roster.captainId ?? null,
-        viceCaptainId: roster.viceCaptainId ?? null,
         benchOrder: roster.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],
         updatedAt: roster.updatedAt,
       },

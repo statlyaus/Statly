@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -38,8 +38,13 @@ function localExecutorFixture(dockerBinary?: string) {
     .mockReturnValueOnce(baseTime + 60_000)
     .mockReturnValueOnce(baseTime + 60_000)
     .mockReturnValueOnce(baseTime + 61_000);
+  const inputModes: Record<string, number> = {};
   const runDocker = vi.fn(async (command: LocalAflTradeDockerCommand) => {
     expect(command.workingDirectory).toBe(await realpath(command.workingDirectory));
+    for (const arg of command.args) {
+      const mount = /^--mount=type=bind,src=(.+),dst=(\/statly\/input\/[^,]+),readonly$/.exec(arg);
+      if (mount) inputModes[mount[2]!] = (await stat(mount[1]!)).mode & 0o777;
+    }
     await writeFile(command.sourceOutputPath, new TextEncoder().encode('RDS!'));
     await writeFile(
       command.diagnosticsOutputPath,
@@ -69,7 +74,7 @@ function localExecutorFixture(dockerBinary?: string) {
     sleep,
     ...(dockerBinary === undefined ? { nowMs, runDocker } : { dockerBinary }),
   });
-  return { executor, publicKey, runDocker, sleep };
+  return { executor, publicKey, runDocker, sleep, inputModes };
 }
 
 describe('local non-production Docker fitzRoy capture', () => {
@@ -197,6 +202,8 @@ fs.writeFileSync(output + '/diagnostics.json', '{"rowCount":1}');
     );
     await expect(verifier.verify(receipt)).resolves.toBe(true);
 
+    // The image runs as its own UID, so the bind-mounted invocation must be readable, never writable.
+    expect(fixture.inputModes).toEqual({ '/statly/input/invocation.json': 0o444 });
     const command = fixture.runDocker.mock.calls[0]?.[0];
     expect(command?.binary).toBe('docker');
     expect(command?.args).toEqual(

@@ -86,7 +86,7 @@ describe('team actions route architecture', () => {
     const { POST } = await import('../../src/app/api/leagues/[id]/actions/[userId]/route');
     const response = await POST(
       jsonRequest('/api/leagues/league-1/actions/other-user', {
-        actionType: 'OPTIMIZE_LINEUP',
+        actionType: 'DROP_PLAYER',
         details: {},
       }),
       { params: Promise.resolve({ id: 'league-1', userId: 'other-user' }) }
@@ -103,7 +103,7 @@ describe('team actions route architecture', () => {
     const { POST } = await import('../../src/app/api/leagues/[id]/actions/[userId]/route');
     const response = await POST(
       jsonRequest('/api/leagues/league-1/actions/user-1', {
-        actionType: 'OPTIMIZE_LINEUP',
+        actionType: 'DROP_PLAYER',
         details: 'unexpected-details',
       }),
       { params: Promise.resolve({ id: 'league-1', userId: 'user-1' }) }

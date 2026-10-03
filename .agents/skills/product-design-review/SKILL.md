@@ -14,6 +14,7 @@ not authorize unrelated redesign or runtime changes.
 - `docs/product/design-principles.md`
 - the affected route/layout, shared primitives, and domain documentation
 - the supplied design, screenshot, or product goal when one exists
+- `.agents/skills/unslop-design/SKILL.md` for public or marketing surfaces, to avoid stock SaaS defaults
 
 ## Review lenses
 

@@ -268,11 +268,9 @@ describe.sequential('league trade service transactions', () => {
     await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.firstMember);
     await expect(legacyRoster(ids.firstMember)).resolves.toMatchObject({
       playerIds: [ids.secondPlayer],
-      captainId: null,
     });
     await expect(legacyRoster(ids.secondMember)).resolves.toMatchObject({
       playerIds: [ids.firstPlayer],
-      captainId: null,
     });
 
     await expect(
@@ -814,14 +812,12 @@ async function seedLeague(): Promise<void> {
         leagueId: ids.league,
         memberId: ids.firstMember,
         playerIds: JSON.stringify([ids.firstPlayer]),
-        captainId: ids.firstPlayer,
       },
       {
         id: 'trade-test-legacy-roster-second',
         leagueId: ids.league,
         memberId: ids.secondMember,
         playerIds: JSON.stringify([ids.secondPlayer]),
-        captainId: ids.secondPlayer,
       },
     ],
   });
@@ -862,11 +858,11 @@ async function resetTradeState(): Promise<void> {
   });
   await prisma.leagueRoster.update({
     where: { leagueId_memberId: { leagueId: ids.league, memberId: ids.firstMember } },
-    data: { playerIds: JSON.stringify([ids.firstPlayer]), captainId: ids.firstPlayer },
+    data: { playerIds: JSON.stringify([ids.firstPlayer]) },
   });
   await prisma.leagueRoster.update({
     where: { leagueId_memberId: { leagueId: ids.league, memberId: ids.secondMember } },
-    data: { playerIds: JSON.stringify([ids.secondPlayer]), captainId: ids.secondPlayer },
+    data: { playerIds: JSON.stringify([ids.secondPlayer]) },
   });
   await setReviewMode('NONE');
 }
@@ -914,7 +910,7 @@ async function ownerOf(playerId: string): Promise<string | undefined> {
 async function legacyRoster(memberId: string) {
   const roster = await prisma.leagueRoster.findUniqueOrThrow({
     where: { leagueId_memberId: { leagueId: ids.league, memberId } },
-    select: { playerIds: true, captainId: true },
+    select: { playerIds: true },
   });
   return { ...roster, playerIds: JSON.parse(roster.playerIds) as string[] };
 }

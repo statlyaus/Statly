@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@plugin '@tailwindcss/typography';
 
 /* Tailwind v4 is configured in CSS. tailwind.config.mjs is not loaded unless a @config directive
    points at it, so plugins must be registered here. Typography backs the `prose` classes used by the
@@ -9,6 +10,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-barlow-condensed), var(--font-barlow), ui-sans-serif, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -28,6 +31,14 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-result-win: var(--result-win);
+  --color-result-win-foreground: var(--result-win-foreground);
+  --color-result-loss: var(--result-loss);
+  --color-result-loss-foreground: var(--result-loss-foreground);
+  --color-result-draw: var(--result-draw);
+  --color-result-draw-foreground: var(--result-draw-foreground);
+  --color-brand-bar: var(--brand-bar);
+  --color-brand-bar-foreground: var(--brand-bar-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-overlay: var(--overlay);
@@ -80,7 +91,7 @@
 }
 
 :root {
-  --statly-navy: #18324a;
+  --statly-navy: #0f2a44; /* Same navy as --brand-bar */
   --statly-blue: #3772df;
   --radius: 4px; /* From --border-radius-default */
   --background: #fff; /* From --base-background-content */
@@ -89,7 +100,7 @@
   --card-foreground: #2b2c2d;
   --popover: #fff;
   --popover-foreground: #2b2c2d;
-  --primary: var(--statly-blue); /* From --color-interaction-resting */
+  --primary: var(--statly-navy); /* Primary actions use the navy brand-bar (design principles) */
   --primary-foreground: #fff;
   --secondary: #dee8fa; /* From --color-combo-blue10-blue100 */
   --secondary-foreground: #1a49a0; /* From --color-combo-blue20-blue80 */
@@ -100,10 +111,18 @@
   --destructive: oklch(0.577 0.245 27.325);
   --warning: oklch(0.78 0.16 78);
   --warning-foreground: oklch(0.24 0.06 78);
+  --result-win: #15803d;
+  --result-win-foreground: #fff;
+  --result-loss: #c81e1e;
+  --result-loss-foreground: #fff;
+  --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
+  --result-draw-foreground: #fff;
+  --brand-bar: #0f2a44;
+  --brand-bar-foreground: #fff;
   --overlay: oklch(0 0 0 / 50%);
   --border: #ced4da; /* A neutral border color */
   --input: #ced4da;
-  --ring: oklch(0.708 0 0);
+  --ring: var(--brand-bar); /* Focus uses the navy brand-bar (design principles) */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -120,90 +139,106 @@
   --app-toolbar-height: 4rem;
   --app-shell-max-width: 2100px;
 
-  /* League workspace palette */
-  --league-page: #f3eee6;
-  --league-surface: #fffdfa;
-  --league-surface-muted: #f5f0e8;
-  --league-border: #d9d0c3;
-  --league-text: #171611;
-  --league-text-muted: #5f584f;
-  --league-primary: var(--statly-navy);
-  --league-primary-foreground: #fff;
-  --league-primary-hover: #23445f;
-  --league-primary-soft: #e6edf3;
-  --league-accent: #7f6035;
-  --league-accent-soft: #efe4d2;
-  --league-success: #2f6b58;
-  --league-success-soft: #e7f2ed;
-  --league-warning: #9d7234;
-  --league-warning-soft: #f6ecdc;
-  --league-danger: #a84f44;
-  --league-danger-soft: #f7e7e3;
+  /* League workspace palette. Aliases of the core tokens: one palette app-wide, no
+     per-area colour schemes (see docs/product/design-principles.md). */
+  --league-page: var(--muted);
+  --league-surface: var(--card);
+  --league-surface-muted: var(--muted);
+  --league-border: var(--border);
+  --league-text: var(--foreground);
+  --league-text-muted: var(--muted-foreground);
+  --league-primary: var(--brand-bar);
+  --league-primary-foreground: var(--brand-bar-foreground);
+  --league-primary-hover: #1a3a5a;
+  --league-primary-soft: #e7edf3;
+  --league-accent: var(--brand-bar);
+  --league-accent-soft: #e7edf3;
+  --league-success: var(--result-win);
+  --league-success-soft: #f1f8f3;
+  --league-warning: #b45309;
+  --league-warning-soft: #fdf3e7;
+  --league-danger: var(--result-loss);
+  --league-danger-soft: #fbeaea;
 
   /* Draft broadcast palette */
-  --draft-broadcast-page: #090d14;
-  --draft-broadcast-canvas: #0c121b;
-  --draft-broadcast-panel: #121a27;
-  --draft-broadcast-panel-strong: #182231;
-  --draft-broadcast-muted-surface: #202c3d;
-  --draft-broadcast-table: #111a26;
-  --draft-broadcast-table-row: #162231;
-  --draft-broadcast-table-row-hover: #1d2b3d;
-  --draft-broadcast-field: rgba(255, 255, 255, 0.09);
-  --draft-broadcast-field-strong: rgba(255, 255, 255, 0.16);
+  /*
+   * The draft room follows the core light palette (design principles: one palette, white cards on
+   * a light page, navy primary actions, no glows). Values are literals rather than var(--card) etc.
+   * because draft panels re-scope --card/--muted/--foreground to these tokens; aliasing back would
+   * form a custom-property cycle.
+   */
+  --draft-broadcast-page: #f8f9fa;
+  --draft-broadcast-canvas: #f8f9fa;
+  --draft-broadcast-panel: #fff;
+  --draft-broadcast-panel-strong: #f8f9fa;
+  --draft-broadcast-muted-surface: #eef1f4;
+  --draft-broadcast-table: #fff;
+  --draft-broadcast-table-row: #fff;
+  --draft-broadcast-table-row-hover: #f1f4f7;
+  --draft-broadcast-field: #f1f4f7;
+  --draft-broadcast-field-strong: #e3e8ee;
   --draft-broadcast-roster-filled: var(--draft-broadcast-field-strong);
-  --draft-broadcast-watchlist-hit: rgb(222 232 250 / 20%);
-  --draft-broadcast-watchlist-border: rgb(222 232 250 / 72%);
+  --draft-broadcast-watchlist-hit: #eef3fc;
+  --draft-broadcast-watchlist-border: #a9c0ea;
   --draft-broadcast-watchlist-chip: #dee8fa;
   --draft-broadcast-watchlist-chip-text: #1a49a0;
-  --draft-broadcast-border: #2c3a4d;
-  --draft-broadcast-border-soft: rgba(148, 163, 184, 0.18);
-  --draft-broadcast-text: #f4f7fb;
-  --draft-broadcast-muted: #a7b3c5;
-  --draft-broadcast-red: #d91f2d;
-  --draft-broadcast-red-soft: rgba(217, 31, 45, 0.18);
-  --draft-broadcast-red-glow: rgba(217, 31, 45, 0.42);
-  --draft-broadcast-green: #13763a;
-  --draft-broadcast-green-soft: rgba(19, 118, 58, 0.22);
+  --draft-broadcast-border: #ced4da;
+  --draft-broadcast-border-soft: #e3e8ee;
+  --draft-broadcast-text: #2b2c2d;
+  --draft-broadcast-muted: #6c6e6f;
+  /* Text on the solid navy action and green success fills. */
+  --draft-broadcast-solid-text: #fff;
+  /* Failures and lost connections read as alerts, not as the navy action colour. */
+  --draft-broadcast-alert: #c81e1e;
+  --draft-broadcast-alert-soft: rgba(200, 30, 30, 0.08);
+  /* Dark amber that stays readable on the light panels (the yellow fill is for chips only). */
+  --draft-broadcast-caution: #8a5a00;
+  /* "red" is the room's primary action colour: the navy brand-bar, not a result or alert. */
+  --draft-broadcast-red: var(--statly-navy);
+  --draft-broadcast-red-soft: rgba(15, 42, 68, 0.08);
+  --draft-broadcast-red-glow: transparent;
+  --draft-broadcast-green: #15803d;
+  --draft-broadcast-green-soft: rgba(21, 128, 61, 0.1);
+  /* Yellow marks the one state a manager must not miss: their pick is on the clock. */
   --draft-broadcast-yellow: #ffd21a;
   --draft-broadcast-yellow-soft: rgba(255, 210, 26, 0.22);
-  --draft-broadcast-yellow-glow: rgba(255, 210, 26, 0.28);
+  --draft-broadcast-yellow-glow: transparent;
   --draft-broadcast-yellow-text: #261b02;
   --draft-broadcast-contrast-text: #111827;
   --draft-broadcast-contrast-muted: #475569;
-  --draft-broadcast-overlay: rgba(5, 9, 15, 0.82);
-  --draft-broadcast-shadow-deep: rgba(1, 6, 15, 0.92);
+  --draft-broadcast-overlay: rgba(15, 42, 68, 0.45);
+  --draft-broadcast-shadow-deep: rgba(15, 42, 68, 0.12);
 }
 
-/* Trade Centre palette. Scoped so the analytical workspace can stay crisp and
-   brand-led without changing the warmer presentation of other league tabs. */
+/* Trade Centre tokens. Aliases of the core tokens so the Trade Centre matches every other
+   surface: navy for primary actions and focus, result colours for gains and losses. */
 .league-trade-centre {
-  --trade-canvas: #f4f6f8;
-  --trade-surface: #ffffff;
-  --trade-surface-subtle: #f8fafc;
-  --trade-surface-dark: #102a43;
-  --trade-text: #17212b;
-  --trade-text-muted: #5b6573;
-  --trade-border: #d7dee7;
-  --trade-border-strong: #b8c4d1;
-  --trade-brand: #102a43;
-  --trade-brand-hover: #0b1f33;
-  --trade-action: #2563eb;
-  --trade-action-hover: #1d4ed8;
-  --trade-action-soft: #eff6ff;
-  --trade-focus: #2563eb;
-  --trade-selection: #2563eb;
-  --trade-selection-soft: #eff6ff;
-  --trade-send: #b45309;
-  --trade-send-soft: #fff7ed;
-  --trade-receive: #0f766e;
-  --trade-receive-soft: #f0fdfa;
-  --trade-positive: #15803d;
-  --trade-negative: #b42318;
-  --trade-negative-soft: #fef3f2;
+  --trade-canvas: transparent;
+  --trade-surface: var(--card);
+  --trade-surface-subtle: var(--muted);
+  --trade-surface-dark: var(--brand-bar);
+  --trade-text: var(--foreground);
+  --trade-text-muted: var(--muted-foreground);
+  --trade-border: var(--border);
+  --trade-border-strong: #aab4bf;
+  --trade-brand: var(--brand-bar);
+  --trade-brand-hover: #1a3a5a;
+  --trade-action: var(--brand-bar);
+  --trade-action-hover: #1a3a5a;
+  --trade-action-soft: #eef2f6;
+  --trade-focus: var(--brand-bar);
+  --trade-selection: var(--brand-bar);
+  --trade-selection-soft: #eef2f6;
+  --trade-send: var(--foreground);
+  --trade-send-soft: var(--muted);
+  --trade-receive: var(--foreground);
+  --trade-receive-soft: var(--muted);
+  --trade-positive: var(--result-win);
+  --trade-negative: var(--result-loss);
+  --trade-negative-soft: #fbeaea;
   --trade-warning: #b45309;
-  --trade-warning-soft: #fff7ed;
-  --trade-card-shadow: 0 8px 24px rgb(15 42 61 / 6%);
+  --trade-warning-soft: #fdf3e7;
+  --trade-card-shadow: none;
 }
 
 .league-social {
@@ -257,10 +292,18 @@
   --destructive: oklch(0.704 0.191 22.216);
   --warning: oklch(0.7 0.15 78);
   --warning-foreground: oklch(0.18 0.04 78);
+  --result-win: #15803d;
+  --result-win-foreground: #fff;
+  --result-loss: #c81e1e;
+  --result-loss-foreground: #fff;
+  --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
+  --result-draw-foreground: #fff;
+  --brand-bar: #0b1f33;
+  --brand-bar-foreground: #fff;
   --overlay: oklch(0 0 0 / 65%);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: #8fb3ff;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -301,7 +344,7 @@
 @layer base {
   * {
     border-color: var(--color-border);
-    outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+    outline-color: var(--color-ring);
   }
   body {
     @apply bg-background text-foreground;

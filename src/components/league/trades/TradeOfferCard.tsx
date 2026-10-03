@@ -1,8 +1,9 @@
 'use client';
 
-import { ChevronDown, ChevronRight, Clock3 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useId } from 'react';
 
+import { TeamMark } from '@/components/scores/MatchupScore';
 import type {
   LeagueTradeDto,
   TradeActionName,
@@ -12,9 +13,12 @@ import type {
 } from '@/server/leagues/trades/tradeContracts';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
+import { TradeOfferActions } from './TradeOfferActions';
 import { TradeOfferDetails } from './TradeOfferDetails';
 import { TradeOfferStatus } from './TradeOfferStatus';
+import { VERDICT_TONE_CLASS } from './TradeVerdictStrip';
 import { formatTradeDateTime } from './tradeDateFormatting';
+import { buildTradeVerdict, type TradeVerdict } from './tradeVerdict';
 
 interface TradeOfferCardProps {
   leagueId: string;
@@ -63,14 +67,23 @@ export function TradeOfferCard({
     (player) => player.toMemberId === perspectiveMemberId
   );
   const displayTitle = buildPackageTitle(sendingPlayers, receivingPlayers);
+  const youLabel = viewerParty ? 'you' : perspectiveParty.teamName;
+  const verdict = fromPerspective(
+    buildTradeVerdict(
+      sendingPlayers.map((player) => player.id),
+      receivingPlayers.map((player) => player.id),
+      playerStats
+    ),
+    youLabel
+  );
+  const perspectiveSquad =
+    teams.find((team) => team.memberId === perspectiveMemberId)?.players ?? null;
 
   return (
     <article className="bg-[color:var(--trade-surface)] text-[color:var(--trade-text)]">
       <header
-        className={`grid min-w-0 gap-3 px-3 py-3 transition-colors sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center sm:px-4 ${
-          isExpanded
-            ? 'bg-[color:var(--trade-action-soft)]/45'
-            : 'hover:bg-[color:var(--trade-surface-subtle)]'
+        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-3 px-3 py-3 transition-colors sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center ${
+          isExpanded ? '' : 'hover:bg-[color:var(--trade-surface-subtle)]'
         }`}
       >
         <button
@@ -79,7 +92,7 @@ export function TradeOfferCard({
           aria-controls={detailsId}
           aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${displayTitle}`}
           onClick={onExpandedChange}
-          className="inline-flex size-11 items-center justify-center self-start rounded-md text-[color:var(--trade-text-muted)] transition-colors hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] sm:self-auto"
+          className="inline-flex size-11 items-center justify-center self-start rounded-md text-[color:var(--trade-text-muted)] transition-colors hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] lg:self-auto"
         >
           {isExpanded ? (
             <ChevronDown aria-hidden="true" className="size-5" />
@@ -88,35 +101,50 @@ export function TradeOfferCard({
           )}
         </button>
 
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--trade-text-muted)]">
-            Offer {offer.sequence} · {opponentParty.teamName}
-          </p>
-          <h3 className="mt-1 truncate text-sm font-bold text-[color:var(--trade-text)] sm:text-base">
-            {displayTitle}
-          </h3>
-          <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs">
-            <span className="truncate font-semibold text-[color:var(--trade-send)]">
-              {sendingHeading} {formatPackageSummary(sendingPlayers)}
-            </span>
-            <span className="truncate font-semibold text-[color:var(--trade-receive)]">
-              {receivingHeading} {formatPackageSummary(receivingPlayers)}
-            </span>
+        <div className="flex min-w-0 items-start gap-3">
+          <TeamMark teamName={opponentParty.teamName} logoUrl={null} />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-[color:var(--trade-text-muted)]">
+              {`${opponentParty.teamName} · Offer ${offer.sequence}`}
+            </p>
+            <h3 className="truncate font-display text-lg font-bold leading-tight text-[color:var(--trade-text)]">
+              {displayTitle}
+            </h3>
+            <p className="truncate text-xs text-[color:var(--trade-text-muted)]">
+              {sendingHeading}{' '}
+              <span className="font-semibold text-[color:var(--trade-text)]">
+                {formatPackageSummary(sendingPlayers)}
+              </span>{' '}
+              · {receivingHeading}{' '}
+              <span className="font-semibold text-[color:var(--trade-text)]">
+                {formatPackageSummary(receivingPlayers)}
+              </span>
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <span
+                className={`rounded-full border border-current px-2 py-0.5 font-bold ${VERDICT_TONE_CLASS[verdict.tone]}`}
+              >
+                {verdict.short}
+              </span>
+              <TradeOfferStatus status={trade.status} />
+              <span className="text-[color:var(--trade-text-muted)]">
+                Expires{' '}
+                <span className="font-semibold text-[color:var(--trade-text)]">
+                  {formatTradeDateTime(offer.expiresAt)}
+                </span>
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="pl-14 sm:pl-0">
-          <TradeOfferStatus status={trade.status} />
-        </div>
-
-        <div className="flex items-center gap-2 pl-14 text-xs text-[color:var(--trade-text-muted)] sm:min-w-44 sm:justify-end sm:pl-0">
-          <Clock3 aria-hidden="true" className="size-3.5 shrink-0" />
-          <span>
-            Expires{' '}
-            <span className="font-semibold text-[color:var(--trade-text)]">
-              {formatTradeDateTime(offer.expiresAt)}
-            </span>
-          </span>
+        <div className="col-start-2 lg:col-start-auto">
+          <TradeOfferActions
+            trade={trade}
+            title={displayTitle}
+            isPending={isPending}
+            onAction={onAction}
+            onCounter={onCounter}
+          />
         </div>
       </header>
 
@@ -133,14 +161,24 @@ export function TradeOfferCard({
           opponentTeamName={opponentParty.teamName}
           displayTitle={displayTitle}
           playerStats={playerStats}
+          verdict={verdict}
+          youLabel={youLabel}
+          perspectiveSquad={perspectiveSquad}
           rules={rules}
-          isPending={isPending}
-          onAction={onAction}
-          onCounter={onCounter}
         />
       )}
     </article>
   );
+}
+
+/** Verdict wording is written for "you"; a commissioner reads it for the proposing team. */
+function fromPerspective(verdict: TradeVerdict, youLabel: string): TradeVerdict {
+  if (youLabel === 'you') return verdict;
+  return {
+    ...verdict,
+    headline: verdict.headline.replace('for you', `for ${youLabel}`),
+    short: verdict.short.replace(/\byou\b/, youLabel),
+  };
 }
 
 function buildPackageTitle(

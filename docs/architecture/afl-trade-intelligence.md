@@ -636,6 +636,17 @@ both limits are checked before publication and on reads. Direct low-level caller
 limit retain the 192 MiB envelope ceiling. This prevents an accepted write from becoming unreadable
 solely because encoding made it larger, without changing artifact identity or filesystem safeguards.
 
+Custody rows prove which bytes an artifact is, not where they are kept. Migration 0246 adds the
+`outcome_artifact_store` registry and the append-only `outcome_artifact_custody_location` table. A
+store row names its environment, assurance, root locator and, once recorded, its mirror locator; a
+local filesystem store may exist only in `non_production`, at most once there, at an absolute root,
+and store rows are never deleted. A location row binds one custody row to one store and object key.
+The key must end in the artifact's own `sha256/<aa>/<bb>/<sha256>` path, and the store's
+environment must equal the custody row's. Location is a separate table, not a custody column,
+because custody rows are immutable. A custody row with no location row has no known copy of its
+bytes. For the local filesystem store, the object key is the repository directory relative to the
+store root joined to the envelope's own key, so the key alone resolves the envelope file.
+
 ### Maturity-review acceptance criteria
 
 The broader Statly data-platform maturity review identified contract drift, name-derived player IDs,
@@ -1275,7 +1286,13 @@ current player-identity decisions and independently retained `afl_trade_canonica
 authority; it is atomic, idempotent and cannot write release or publication pointers. One traded pick
 entitlement and its eventual selection retain the same stable `pick_id`: `exercised_as` is a
 realization relation, while `OutcomePickLineageEdge` remains reserved for genuine entitlement
-transformations such as splitting, combining or substitution. Recurring production still requires
+transformations such as splitting, combining or substitution. The canonical pick row itself stays
+append-only; when a later reviewed-lineage promotion knows facts that an earlier promotion stored as
+empty (round, nominal pick number, original club), migration 0237 records them as a gap-free,
+append-only `outcome_draft_pick_enrichment` version bound to that promotion, its approval and the
+current reviewed pick-lineage registration. Enrichment fills empty facts only; a differing known
+value is still an immutable conflict. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
+current facts, and release-bound readers pass the release cutoff. Recurring production still requires
 deployment scheduling, execution and monitoring of the reviewed discovery plan, missed-period monitoring, reviewed
 promotion of the historical candidate set, and a completed non-production backfill and reconciliation
 rehearsal described below.
@@ -1751,6 +1768,14 @@ valuation dataset, player PAV observation and postseason consumers reject it. It
 completeness facts count only while their player, match and club identity decisions stay current. It is
 a bridge: a current reviewed entry spell whose possible membership contains its whole window retires it
 automatically, player by player, and it must not be used where acquisition timing matters.
+Season HPN input building and finalization evaluate each candidate spell's registration currency once
+per input set rather than once per row (migration 0236), with the same currency rules.
+Finalization reads its content JSON once per statement rather than once per row (migration 0240),
+so its memory and time are linear in the season's size, with the same checks and exceptions.
+Both evaluate identity-assignment continuity once per assignment case rather than once per row
+(migration 0242), with the same rules and the same review-subject locks.
+Its row-conservation and appearance-envelope checks cost time linear in the season whichever join
+plan PostgreSQL chooses (migration 0243), with the same checks and exceptions.
 The operations runbook records its storage and guard details.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
@@ -3097,7 +3122,11 @@ to twelve decimal places, matching the shared numerical core. Migration 0119 ali
 PostgreSQL total check with that order without relaxing component precision. Source-value comparison
 must also be scoped to the exact calculation before joining expected and stored teams: migration
 0120 prevents previously finalized seasons from appearing as unmatched teams in a later calculation.
-Missing, extra or mismatched teams within that calculation remain invalid.
+Missing, extra or mismatched teams within that calculation remain invalid. Migration 0245 compares
+each stored league, team and player value with its exact NUMERIC derivation within 1e-9 instead of
+after rounding both to twelve decimals: double-precision values on a genuine season (AFLM 2024)
+differed from the exact derivation by up to 1.35e-12, which straddled the twelfth decimal and blocked
+finalization, while any real difference remains far above the bound.
 
 Historical coverage follows from the existing strict label-purge rule. For an `H`-season target,
 adjacent partition origin years must be at least `H + 1` years apart when mature outcomes are recorded

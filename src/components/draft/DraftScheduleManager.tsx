@@ -181,17 +181,8 @@ export default function DraftScheduleManager({
         <h3 className="text-lg font-medium text-gray-900">Draft Schedule</h3>
         {status === 'scheduled' && !isEditing && (
           <div className="flex gap-2">
-            <Button
-              onClick={() => setIsEditing(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
-              Edit Schedule
-            </Button>
-            <Button
-              onClick={handleCancelSchedule}
-              disabled={isLoading}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50"
-            >
+            <Button onClick={() => setIsEditing(true)}>Edit Schedule</Button>
+            <Button onClick={handleCancelSchedule} disabled={isLoading} variant="danger">
               Start Now
             </Button>
           </div>
@@ -314,18 +305,10 @@ export default function DraftScheduleManager({
           </FormField>
 
           <div className="flex gap-3 pt-2">
-            <Button
-              onClick={handleUpdateSchedule}
-              disabled={isLoading || !formData.scheduledTime}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
+            <Button onClick={handleUpdateSchedule} disabled={isLoading || !formData.scheduledTime}>
               {isLoading ? 'Updating...' : 'Update Schedule'}
             </Button>
-            <Button
-              onClick={handleCancel}
-              disabled={isLoading}
-              className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 disabled:opacity-50"
-            >
+            <Button onClick={handleCancel} disabled={isLoading} variant="secondary">
               Cancel
             </Button>
           </div>

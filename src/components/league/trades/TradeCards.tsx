@@ -1,7 +1,5 @@
 'use client';
 
-import { Handshake } from 'lucide-react';
-
 import type {
   LeagueTradeDto,
   TradeActionName,
@@ -40,20 +38,17 @@ export function TradeCards({
 
   if (trades.length === 0) {
     return (
-      <div className="rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] px-5 py-10 text-center shadow-[var(--trade-card-shadow)]">
-        <span className="mx-auto flex size-11 items-center justify-center rounded-lg bg-[color:var(--trade-action-soft)] text-[color:var(--trade-action)]">
-          <Handshake aria-hidden="true" className="size-5" />
-        </span>
-        <p className="mt-4 text-sm font-bold text-[color:var(--trade-text)]">Nothing here yet</p>
+      <div className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] px-5 py-8 text-center">
+        <p className="text-sm font-bold text-[color:var(--trade-text)]">No offers</p>
         <p className="mx-auto mt-1 max-w-md text-sm text-[color:var(--trade-text-muted)]">
-          Trade offers will appear here as managers take action.
+          Offers you send or receive show here.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="divide-y divide-[color:var(--trade-border)] overflow-hidden rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] shadow-[var(--trade-card-shadow)]">
+    <div className="divide-y divide-[color:var(--trade-border)] overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]">
       {trades.map((trade) => (
         <TradeOfferCard
           key={trade.id}

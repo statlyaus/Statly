@@ -81,7 +81,7 @@ describe('league player stat read model', () => {
       'G',
       'T',
       'I50',
-      'I',
+      'ITC',
       'CM',
       'R50',
       'CP',

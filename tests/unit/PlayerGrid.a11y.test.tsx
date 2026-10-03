@@ -104,7 +104,7 @@ describe('PlayerGrid accessibility', () => {
       'G',
       'T',
       'I50',
-      'I',
+      'ITC',
       'CM',
       'R50',
       'CP',
@@ -148,11 +148,59 @@ describe('PlayerGrid accessibility', () => {
     expect(logo).toHaveAttribute('alt', '');
 
     fireEvent.keyDown(playerRow, { key: 'Enter' });
-    expect(onPlayerSelect).toHaveBeenCalledWith(players[0]);
+    expect(onPlayerSelect).not.toHaveBeenCalled();
+    expect(playerRow).toHaveAttribute('data-selected', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: /add marcus bontempelli to queue/i }));
     expect(onAddToQueue).toHaveBeenCalledWith(players[0]);
+
+    // Enter on the focused Confirm button must reach the button, not re-arm the row.
+    const confirmButton = screen.getByRole('button', { name: /confirm pick: marcus bontempelli/i });
+    expect(fireEvent.keyDown(confirmButton, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(confirmButton, { key: ' ' })).toBe(true);
+
+    fireEvent.click(confirmButton);
+    expect(onPlayerSelect).toHaveBeenCalledWith(players[0]);
     expect(onPlayerSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('never drafts on a row click; the pick needs an explicit confirm', () => {
+    const onPlayerSelect = vi.fn();
+    render(<PlayerGrid {...defaultProps} onPlayerSelect={onPlayerSelect} />);
+
+    const table = screen.getByRole('table', { name: /available draft players/i });
+    const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
+
+    fireEvent.click(playerRow);
+    expect(onPlayerSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /confirm pick: marcus bontempelli/i })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel pick: marcus bontempelli/i }));
+    expect(
+      screen.queryByRole('button', { name: /confirm pick: marcus bontempelli/i })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /select marcus bontempelli/i }));
+    fireEvent.keyDown(playerRow, { key: 'Escape' });
+    expect(
+      screen.queryByRole('button', { name: /confirm pick: marcus bontempelli/i })
+    ).not.toBeInTheDocument();
+    expect(onPlayerSelect).not.toHaveBeenCalled();
+  });
+
+  it('only highlights a player while the manager is not on the clock', () => {
+    const onPlayerSelect = vi.fn();
+    render(<PlayerGrid {...defaultProps} canMakePick={false} onPlayerSelect={onPlayerSelect} />);
+
+    const table = screen.getByRole('table', { name: /available draft players/i });
+    const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
+    fireEvent.click(playerRow);
+
+    expect(playerRow).toHaveAttribute('data-selected', 'true');
+    expect(
+      screen.queryByRole('button', { name: /confirm pick: marcus bontempelli/i })
+    ).not.toBeInTheDocument();
+    expect(onPlayerSelect).not.toHaveBeenCalled();
   });
 
   it('submits one selection while a pick is already processing', async () => {
@@ -169,6 +217,9 @@ describe('PlayerGrid accessibility', () => {
     const selectButton = screen.getByRole('button', { name: /select marcus bontempelli/i });
 
     fireEvent.click(selectButton);
+    expect(onPlayerSelect).not.toHaveBeenCalled();
+    expect(selectButton).toHaveAccessibleName(/confirm pick: marcus bontempelli/i);
+
     fireEvent.click(selectButton);
     fireEvent.click(selectButton);
 

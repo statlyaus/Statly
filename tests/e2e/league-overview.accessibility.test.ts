@@ -25,7 +25,8 @@ for (const viewport of [
       page.getByRole('heading', { level: 1, name: 'Test AFL Champions League' })
     ).toBeVisible();
     await expect(page.getByText('Draft completed', { exact: true })).toBeVisible();
-    await expect(page.getByText('Commissioner', { exact: true })).toBeVisible();
+    // The league header names your team and role on one line.
+    await expect(page.getByText('Your team · Commissioner', { exact: true })).toBeVisible();
 
     const teams = page.getByRole('list', { name: 'League teams' });
     const currentTeam = teams.getByRole('listitem').filter({ hasText: 'Robbo Rockers' });

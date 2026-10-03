@@ -74,9 +74,9 @@ export default function LeaguePageClient({
 
   if (loading) {
     return (
-        <div className="flex justify-center items-center h-64">
-          <LoadingSpinner />
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner />
+      </div>
     );
   }
 
@@ -110,65 +110,64 @@ export default function LeaguePageClient({
 
   if (error) {
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <Alert
-            type="error"
-            variant="light"
-            title="Failed to load league"
-            actions={
-              <button
-                onClick={() => void retryFetch()}
-                disabled={loading}
-                className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Retrying…' : 'Retry'}
-              </button>
-            }
-          >
-            {error}
-          </Alert>
-        </div>
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        <Alert
+          type="error"
+          variant="light"
+          title="Failed to load league"
+          actions={
+            <button
+              onClick={() => void retryFetch()}
+              disabled={loading}
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Retrying…' : 'Retry'}
+            </button>
+          }
+        >
+          {error}
+        </Alert>
+      </div>
     );
   }
 
   if (!curLeague) {
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <Alert
-            type="warning"
-            variant="light"
-            title="League not found"
-            actions={
-              <button
-                onClick={() => void retryFetch()}
-                disabled={loading}
-                className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Retrying…' : 'Retry'}
-              </button>
-            }
-          >
-            We couldn&apos;t find this league. It may have been removed or you might not have
-            access.
-          </Alert>
-        </div>
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        <Alert
+          type="warning"
+          variant="light"
+          title="League not found"
+          actions={
+            <button
+              onClick={() => void retryFetch()}
+              disabled={loading}
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Retrying…' : 'Retry'}
+            </button>
+          }
+        >
+          We couldn&apos;t find this league. It may have been removed or you might not have access.
+        </Alert>
+      </div>
     );
   }
 
   return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[var(--app-shell-max-width)]">
-          <LeagueTabs
-            league={curLeague}
-            members={curMembers}
-            currentUserId={currentUserId}
-            onMembersChange={handleMembersChange}
-            initialTradeCentre={initialTradeCentre}
-            initialTradeCentreError={initialTradeCentreError}
-            initialTradeDigest={initialTradeDigest}
-            initialTab={initialTab}
-          />
-        </div>
-      </main>
+    <main className="min-h-screen bg-muted px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[var(--app-shell-max-width)]">
+        <LeagueTabs
+          league={curLeague}
+          members={curMembers}
+          currentUserId={currentUserId}
+          onMembersChange={handleMembersChange}
+          initialTradeCentre={initialTradeCentre}
+          initialTradeCentreError={initialTradeCentreError}
+          initialTradeDigest={initialTradeDigest}
+          initialTab={initialTab}
+        />
+      </div>
+    </main>
   );
 }

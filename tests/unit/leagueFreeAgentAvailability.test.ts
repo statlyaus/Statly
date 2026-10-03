@@ -36,6 +36,14 @@ const prismaMocks = vi.hoisted(() => ({
   playerExternalIdentity: {
     findUnique: vi.fn(),
   },
+  waiverPriority: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  pick: {
+    groupBy: vi.fn(),
+  },
   teamAction: {
     create: vi.fn(),
     update: vi.fn(),
@@ -302,6 +310,10 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.teamAction.findMany.mockResolvedValue([]);
     prismaMocks.$queryRaw.mockResolvedValue([]);
     prismaMocks.$executeRaw.mockResolvedValue(1);
+    prismaMocks.waiverPriority.findMany.mockResolvedValue([]);
+    prismaMocks.waiverPriority.create.mockResolvedValue({});
+    prismaMocks.waiverPriority.updateMany.mockResolvedValue({ count: 1 });
+    prismaMocks.pick.groupBy.mockResolvedValue([]);
     prismaMocks.$transaction.mockImplementation((work: (client: typeof prismaMocks) => unknown) =>
       work(prismaMocks)
     );
