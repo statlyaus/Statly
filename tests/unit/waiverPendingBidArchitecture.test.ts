@@ -14,8 +14,7 @@ describe('waiver pending bid aggregate architecture', () => {
     );
     const schemaSource = readFileSync(join(process.cwd(), 'prisma/schema.prisma'), 'utf8');
     const prismaStoreSource = processSource.slice(
-      processSource.indexOf('export class PrismaWaiverClaimStore'),
-      processSource.indexOf('class FirestoreWaiverClaimStore')
+      processSource.indexOf('export class PrismaWaiverClaimStore')
     );
 
     expect(schemaSource).toContain('model WaiverPriority');

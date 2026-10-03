@@ -636,6 +636,17 @@ both limits are checked before publication and on reads. Direct low-level caller
 limit retain the 192 MiB envelope ceiling. This prevents an accepted write from becoming unreadable
 solely because encoding made it larger, without changing artifact identity or filesystem safeguards.
 
+Custody rows prove which bytes an artifact is, not where they are kept. Migration 0246 adds the
+`outcome_artifact_store` registry and the append-only `outcome_artifact_custody_location` table. A
+store row names its environment, assurance, root locator and, once recorded, its mirror locator; a
+local filesystem store may exist only in `non_production`, at most once there, at an absolute root,
+and store rows are never deleted. A location row binds one custody row to one store and object key.
+The key must end in the artifact's own `sha256/<aa>/<bb>/<sha256>` path, and the store's
+environment must equal the custody row's. Location is a separate table, not a custody column,
+because custody rows are immutable. A custody row with no location row has no known copy of its
+bytes. For the local filesystem store, the object key is the repository directory relative to the
+store root joined to the envelope's own key, so the key alone resolves the envelope file.
+
 ### Maturity-review acceptance criteria
 
 The broader Statly data-platform maturity review identified contract drift, name-derived player IDs,
