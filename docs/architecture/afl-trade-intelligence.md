@@ -412,6 +412,17 @@ spell; a later return creates a separate episode. Entry uses the incoming asset'
 an outgoing event closes the inclusive interval on the previous day. Appearance dates never supply
 missing acquisition dates.
 
+Outside `test_fixture`, reviewed rule and spell registration writes its evidence first. The
+repository takes a binding to the registered artifact store, stores each evidence artifact with
+`putIfAbsent` and reads it back in full before it opens the registration transaction. That
+transaction records each artifact's location, refuses evidence without a matching custody row, and
+refuses any cited artifact, including the rule's evidence cited by a spell, that still has no
+location, with the named `AflTradeArtifactUnlocatedError`. A failed write or read-back therefore
+leaves no location and no registration. A season (v3) spell cites no evidence bytes and is exempt.
+`test_fixture` has no store, because a local store may only exist in `non_production`, so fixtures
+keep the read-and-compare path. Reviewers register through `npm run
+outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.
+
 External canonical-target registration v2 uses the existing provider-resolution repository and
 reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
 from a current retained capture completion, an exact governed target snapshot, supporting custody
@@ -635,6 +646,19 @@ store. Its encoded-envelope limit includes base64 expansion and a bounded metada
 both limits are checked before publication and on reads. Direct low-level callers that omit a raw
 limit retain the 192 MiB envelope ceiling. This prevents an accepted write from becoming unreadable
 solely because encoding made it larger, without changing artifact identity or filesystem safeguards.
+
+Custody rows prove which bytes an artifact is, not where they are kept. Migration 0246 adds the
+`outcome_artifact_store` registry and the append-only `outcome_artifact_custody_location` table. A
+store row names its environment, assurance, root locator and, once recorded, its mirror locator; a
+local filesystem store may exist only in `non_production`, at most once there, at an absolute root,
+and store rows are never deleted. A location row binds one custody row to one store and object key.
+The key must end in the artifact's own `sha256/<aa>/<bb>/<sha256>` path, and the store's
+environment must equal the custody row's. Location is a separate table, not a custody column,
+because custody rows are immutable. A custody row with no location row has no known copy of its
+bytes. For the local filesystem store, the object key is the repository directory relative to the
+store root joined to the envelope's own key, so the key alone resolves the envelope file.
+`bindLocalAflTradeArtifactStore` builds a repository from a store id rather than a directory: it
+reads the store's root from its registration, so bytes written through it can always be located.
 
 ### Maturity-review acceptance criteria
 

@@ -18,6 +18,7 @@ import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outco
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
+import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createAflTradeAcquisitionSpellRegistration,
@@ -286,9 +287,11 @@ it('authenticates an exact source-first result map and refuses another source oc
     return id;
   };
   const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
-  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(client, {
-    read: async () => promoted.sourceBytes,
-  });
+  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
+    client,
+    { read: async () => promoted.sourceBytes },
+    await bindTestEvidenceStore(pool)
+  );
   const rule = createAflTradeAcquisitionSpellRegistrationRule({
     ...scope,
     ruleVersion: 'synthetic-source-first-hpn-v1',
