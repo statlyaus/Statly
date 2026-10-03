@@ -109,13 +109,13 @@ async function main() {
   const databaseUrl = args.production
     ? validateProductionPlayerIdentityDatabase({
         databaseUrl: process.env.DATABASE_URL ?? '',
-        expectedPath: process.env.STATLY_PLAYER_IDENTITY_PRODUCTION_DB ?? '',
+        expectedUrl: process.env.STATLY_PLAYER_IDENTITY_PRODUCTION_DB ?? '',
         backupPath: process.env.STATLY_PLAYER_IDENTITY_BACKUP,
         requireBackup: args.apply,
       })
     : validateDisposablePlayerIdentityDatabase({
         databaseUrl: process.env.DATABASE_URL ?? '',
-        expectedPath: process.env.STATLY_VERIFY_DB ?? '',
+        expectedUrl: process.env.STATLY_VERIFY_DB ?? '',
       });
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
