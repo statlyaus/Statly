@@ -196,31 +196,24 @@ export const draftTransactionPatterns = {
     nextPickNumber?: number;
     newVersion?: number;
   }> => {
-    // Read current draft state using a raw query to avoid depending on Prisma client types
-    const draftRows = await tx.$queryRaw<
-      Array<{ id: string; currentPick: number; totalPicks: number; schedulingVersion: number }>
-    >`
-      SELECT id, currentPick, totalPicks, schedulingVersion
-      FROM Draft
-      WHERE leagueId = ${leagueId} AND status = 'LIVE'
-      LIMIT 1
-    `;
-
-    const draft = draftRows && draftRows.length > 0 ? draftRows[0] : null;
+    const draft = await tx.draft.findFirst({
+      where: { leagueId, status: 'LIVE' },
+      select: { id: true, currentPick: true, totalPicks: true, schedulingVersion: true },
+    });
     if (!draft) return { claimed: false };
     if (draft.currentPick >= draft.totalPicks) return { claimed: false };
 
-    const currentVersion = draft.schedulingVersion as number;
+    const currentVersion = draft.schedulingVersion;
     const nextVersion = currentVersion + 1;
     const nextPickNumber = draft.currentPick + 1;
 
-    // Conditional atomic update using raw SQL: only succeed if schedulingVersion still equals currentVersion and currentPick unchanged
-    const updateSql = Prisma.sql`UPDATE "Draft" SET "schedulingVersion" = ${nextVersion} WHERE "id" = ${draft.id} AND "currentPick" = ${draft.currentPick} AND "schedulingVersion" = ${currentVersion}`;
-    // Execute the parameterized SQL and get affected row count. Use generic to ensure proper typing without `any`.
-    const updateResult = await tx.$executeRaw<number>(updateSql);
-    const affected: number = updateResult;
+    // Compare-and-set: succeeds only if no one else claimed since the read.
+    const { count } = await tx.draft.updateMany({
+      where: { id: draft.id, currentPick: draft.currentPick, schedulingVersion: currentVersion },
+      data: { schedulingVersion: nextVersion },
+    });
 
-    if (affected === 1) {
+    if (count === 1) {
       return { claimed: true, draftId: draft.id, nextPickNumber, newVersion: nextVersion };
     }
 

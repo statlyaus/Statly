@@ -281,6 +281,58 @@ take bulk deletes, and it will need explicit `autovacuum_vacuum_threshold` and
 then the append-mostly defaults are adequate: the registry, gate, review, receipt and custody tables
 are small or append-only and are unaffected by pruning.
 
+### Locating retained evidence bytes
+
+Each non-production database has one registered local artifact store. A custody row is located when
+`outcome_artifact_custody_location` names the store and object key that hold its bytes. Run the
+location command against the loopback outcomes database and the store root that holds the
+repositories:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:locate-local -- \
+  --store-id <store-id> --artifact-root <durable-absolute-dir> \
+  --report <absolute-report.json>
+```
+
+The default is a dry run, which writes nothing to the database. It reads every envelope under the
+root back in full and prints what it would locate. Add `--apply` to register the store, at most once
+and at a permanent root, and to record locations. A rerun only adds locations that are still
+missing. The report file is created once and never overwritten. It is reserved before any database
+change, so an existing or unwritable report path stops the run with nothing registered or located,
+and a run that fails before finishing removes it. It lists:
+
+- located and already-located counts;
+- envelope-named files that are ordinary JSON, and envelopes that fail exact read-back;
+- files with no custody row, and duplicate copies;
+- conflicts, where the envelope's media type, length or environment differs from its custody row;
+- every unlocated custody row, grouped by class and by the custody the row recorded.
+
+Unlocated rows are never changed or deleted. Their bytes are missing from the registered store, and
+the grouping shows where each row said they were kept.
+
+### Registering reviewed acquisition spells
+
+Register a reviewed rule or spell only through this command. It writes the evidence into the
+registered store first, so the record can never cite bytes that were not retained:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:spells:register-reviewed -- --input <absolute-registration.json>
+```
+
+The input file (`statly-reviewed-spell-registration-input/v1`) names the store id, a repository id
+inside it, the evidence class (`raw_source` or `capture_metadata`), the `non_production` execution
+scope, an absolute path for every evidence artifact, and the rule, the spell, or both, each with its
+existing approval decision id. The approvals are recorded beforehand through the normal review
+owner; the command does not approve anything.
+
+The command stores each evidence file and reads it back before any database write. In one
+transaction it then records each location and the registration. It refuses evidence that has no
+custody row, and refuses with `AflTradeArtifactUnlocatedError` a spell whose rule cites evidence that
+was never located. A failure leaves no location and no registration, so the same input can be
+re-run once the cause is fixed.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a

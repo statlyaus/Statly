@@ -71,6 +71,8 @@
     "outcomes:sources:ingest-fitzroy": "tsx Scripts/ingest-fitzroy-provider-season.ts",
     "outcomes:sources:ingest-external": "tsx Scripts/ingest-external-draft-trade-page.ts",
     "outcomes:sources:capture-local-external": "tsx Scripts/capture-local-external-pages.ts",
+    "outcomes:artifacts:locate-local": "tsx Scripts/locate-local-artifact-custody.ts",
+    "outcomes:spells:register-reviewed": "tsx Scripts/register-reviewed-acquisition-spell.ts",
     "outcomes:sources:discover-external-history": "tsx Scripts/discover-external-draft-trade-history.ts",
     "outcomes:sources:run-external-history": "tsx Scripts/run-external-draft-trade-history.ts",
     "outcomes:sources:complete-external-history": "tsx Scripts/complete-external-draft-trade-history.ts",

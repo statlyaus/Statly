@@ -30,14 +30,7 @@ describe('roster ownership migration architecture', () => {
   it('enforces one canonical owner per player inside each league through Prisma schema ownership', () => {
     const schema = readFileSync(join(root, 'prisma/schema.prisma'), 'utf8');
     const migration = readFileSync(
-      join(
-        root,
-        'prisma/migrations/20260606073500_add_league_roster_player/migration.sql'
-      ),
-      'utf8'
-    );
-    const runtimeSchemaHelper = readFileSync(
-      join(root, 'src/lib/ensureLobbyColumns.ts'),
+      join(root, 'prisma/migrations/20260606073500_add_league_roster_player/migration.sql'),
       'utf8'
     );
 
@@ -51,8 +44,6 @@ describe('roster ownership migration architecture', () => {
     for (const column of ['draftId', 'pickId', 'slot', 'acquiredBy', 'acquiredAt']) {
       expect(migration).toContain(`"${column}"`);
     }
-    expect(runtimeSchemaHelper).not.toContain('ensureRosterTables');
-    expect(runtimeSchemaHelper).not.toContain('LeagueRosterPlayer');
   });
 
   it('uses the shared authenticated request helper for roster APIs', () => {

@@ -1,3 +1,4 @@
+import type { TeamActionType } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
@@ -38,19 +39,17 @@ export async function GET(
       return errorResponse('User is not a member of this league', 404);
     }
 
-    // Get user's actions using raw SQL as fallback
-    const actions = (await prisma.$queryRaw`
-      SELECT * FROM TeamAction 
-      WHERE leagueId = ${leagueId} AND memberId = ${member.id}
-      ORDER BY createdAt DESC
-      LIMIT 50
-    `) as Record<string, unknown>[];
+    const actions = await prisma.teamAction.findMany({
+      where: { leagueId, memberId: member.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
 
-    const formattedActions = actions.map((action: Record<string, unknown>) => ({
+    const formattedActions = actions.map((action) => ({
       id: action.id,
       actionType: action.actionType,
       status: action.status,
-      details: JSON.parse(String(action.details || '{}')),
+      details: JSON.parse(action.details || '{}'),
       targetMemberId: action.targetMemberId,
       processingAt: action.processingAt,
       processedAt: action.processedAt,
@@ -136,12 +135,19 @@ export async function POST(
       processingAt = new Date();
     }
 
-    // Create the action using raw SQL
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await prisma.$executeRaw`
-      INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, createdAt, updatedAt)
-      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(canonicalDetails)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
-    `;
+    // validateTeamAction above accepts only TeamActionType values.
+    await prisma.teamAction.create({
+      data: {
+        id: actionId,
+        leagueId,
+        memberId: member.id,
+        actionType: actionType as TeamActionType,
+        details: JSON.stringify(canonicalDetails),
+        targetMemberId,
+        processingAt,
+      },
+    });
 
     const action = {
       id: actionId,
@@ -306,23 +312,18 @@ async function validateTeamAction(
 
 async function processDropPlayerAction(actionId: string): Promise<void> {
   try {
-    const actionRows = (await prisma.$queryRaw`
-      SELECT * FROM TeamAction WHERE id = ${actionId} LIMIT 1
-    `) as Record<string, unknown>[];
-
-    const action = actionRows[0];
+    const action = await prisma.teamAction.findUnique({ where: { id: actionId } });
     if (!action || action.status !== 'PENDING' || action.actionType !== 'DROP_PLAYER') {
       return;
     }
 
-    const details = JSON.parse(String(action.details || '{}'));
+    const details = JSON.parse(action.details || '{}');
     const playerId = typeof details.playerId === 'string' ? details.playerId : null;
     if (!playerId) {
       throw new Error('Drop action missing playerId');
     }
 
-    const leagueId = String(action.leagueId);
-    const memberId = String(action.memberId);
+    const { leagueId, memberId } = action;
 
     await prisma.$transaction(async (tx) => {
       const roster = await tx.leagueRoster.findUnique({
@@ -364,11 +365,10 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     });
 
-    await prisma.$executeRaw`
-      UPDATE TeamAction
-      SET status = 'REJECTED', processedAt = datetime('now')
-      WHERE id = ${actionId}
-    `;
+    await prisma.teamAction.update({
+      where: { id: actionId },
+      data: { status: 'REJECTED', processedAt: new Date() },
+    });
   }
 }
 
