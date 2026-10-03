@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { open, rm } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -124,9 +124,19 @@ export async function runLocateLocalArtifactCustodyCommand(input: {
   argv: readonly string[];
   env: Readonly<Record<string, string | undefined>>;
   writeOutput?: (line: string) => void;
+  temporaryDirectories?: readonly string[];
 }): Promise<LocalArtifactLocationBackfillReport> {
-  const parsed = parseLocateLocalArtifactCustodyArguments(input.argv, input.env);
+  const parsed = parseLocateLocalArtifactCustodyArguments(
+    input.argv,
+    input.env,
+    input.temporaryDirectories
+  );
   const write = input.writeOutput ?? ((line: string) => process.stdout.write(`${line}\n`));
+  // Reserve the report before any database change, so an existing or unwritable path stops the run
+  // with nothing registered or located.
+  const reportHandle =
+    parsed.reportPath === null ? null : await open(parsed.reportPath, 'wx', 0o600);
+  let reportWritten = false;
   const pool = new Pool({ connectionString: parsed.databaseUrl, max: 2 });
   try {
     const client = createPgAflOutcomeSqlClient(pool);
@@ -143,16 +153,17 @@ export async function runLocateLocalArtifactCustodyCommand(input: {
       rootDirectory: parsed.artifactRootDirectory,
       apply: parsed.apply,
     });
-    if (parsed.reportPath !== null) {
-      await writeFile(parsed.reportPath, `${JSON.stringify(report, null, 1)}\n`, {
-        encoding: 'utf8',
-        flag: 'wx',
-        mode: 0o600,
-      });
+    if (reportHandle !== null) {
+      await reportHandle.writeFile(`${JSON.stringify(report, null, 1)}\n`, 'utf8');
+      reportWritten = true;
     }
     write(JSON.stringify(summarizeLocalArtifactLocationReport(report), null, 1));
     return report;
   } finally {
+    await reportHandle?.close();
+    if (parsed.reportPath !== null && !reportWritten) {
+      await rm(parsed.reportPath, { force: true });
+    }
     await pool.end();
   }
 }

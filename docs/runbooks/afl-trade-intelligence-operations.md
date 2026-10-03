@@ -298,7 +298,9 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 The default is a dry run, which writes nothing to the database. It reads every envelope under the
 root back in full and prints what it would locate. Add `--apply` to register the store, at most once
 and at a permanent root, and to record locations. A rerun only adds locations that are still
-missing. The report file is created once and never overwritten. It lists:
+missing. The report file is created once and never overwritten. It is reserved before any database
+change, so an existing or unwritable report path stops the run with nothing registered or located,
+and a run that fails before finishing removes it. It lists:
 
 - located and already-located counts;
 - envelope-named files that are ordinary JSON, and envelopes that fail exact read-back;
