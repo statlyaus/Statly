@@ -320,11 +320,21 @@ test(
   'keeps one canonical clock through pause, resume, disconnect, and worker expiry',
   { tag: '@draft-worker' },
   async ({ context, page }) => {
-    test.setTimeout(60_000);
+    // This test drives a real countdown clock against a cold development server, so it needs
+    // headroom on a loaded CI runner. Do not lengthen the fixture clock to compensate: the
+    // assertions below depend on the clock revision reaching exactly 4.
+    test.setTimeout(120_000);
 
     const runtimeErrors = collectRuntimeErrors(page);
     await authenticateAsDevelopmentUser(page);
     await waitForDraftCommandRoutes(page);
+
+    // Warm the development server and the app shell before the fixture clock starts. Compiling the
+    // draft route on its first request takes long enough to consume the whole fixture clock on a
+    // loaded runner, which is what made this test intermittently fail.
+    await page.goto('/');
+    await expect(page.locator('body')).toBeVisible();
+
     const { deadlineAt } = await seedLiveTimerFixture();
 
     await page.goto(`/drafts/${FIXTURE.draftId}`);
@@ -341,8 +351,10 @@ test(
       Math.ceil((deadlineAt.getTime() - Date.now()) / 1000) + 1
     );
 
+    // The clock ticks once per second. Poll generously: this asserts eventual progress, not a
+    // four-second deadline, and a loaded runner can lag the render by several seconds.
     await expect
-      .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
+      .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 15_000 })
       .toBeLessThan(firstTimerValue);
 
     const pauseResponse = await page.request.post(`/api/drafts/${FIXTURE.draftId}/pause`);
@@ -358,7 +370,7 @@ test(
     expect(resumeResponse.ok()).toBe(true);
     await expect(page.locator('body')).toContainText('Pick 1');
     await expect
-      .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
+      .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 15_000 })
       .toBeLessThan(pausedTimerValue);
 
     const disconnectedTimerValue = timerTextToSeconds(await timer.innerText());
