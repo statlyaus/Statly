@@ -281,6 +281,34 @@ take bulk deletes, and it will need explicit `autovacuum_vacuum_threshold` and
 then the append-mostly defaults are adequate: the registry, gate, review, receipt and custody tables
 are small or append-only and are unaffected by pruning.
 
+### Locating retained evidence bytes
+
+Each non-production database has one registered local artifact store. A custody row is located when
+`outcome_artifact_custody_location` names the store and object key that hold its bytes. Run the
+location command against the loopback outcomes database and the store root that holds the
+repositories:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:locate-local -- \
+  --store-id <store-id> --artifact-root <durable-absolute-dir> \
+  --report <absolute-report.json>
+```
+
+The default is a dry run, which writes nothing to the database. It reads every envelope under the
+root back in full and prints what it would locate. Add `--apply` to register the store, at most once
+and at a permanent root, and to record locations. A rerun only adds locations that are still
+missing. The report file is created once and never overwritten. It lists:
+
+- located and already-located counts;
+- envelope-named files that are ordinary JSON, and envelopes that fail exact read-back;
+- files with no custody row, and duplicate copies;
+- conflicts, where the envelope's media type, length or environment differs from its custody row;
+- every unlocated custody row, grouped by class and by the custody the row recorded.
+
+Unlocated rows are never changed or deleted. Their bytes are missing from the registered store, and
+the grouping shows where each row said they were kept.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
