@@ -12,6 +12,7 @@ import {
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
 import { buildAppearanceMembershipHpnInputFixture } from '../testUtils/appearanceMembershipHpnInputFixture';
+import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 import {
   installPre0236AppearanceCurrencyReference,
@@ -197,13 +198,17 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
       toClubName: 'Carlton',
     },
   });
-  const reviewedSpells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(client, {
-    read: async (reference) => {
-      const artifact = promoted.retainedArtifacts.get(reference.artifactId);
-      if (!artifact) throw new Error('Missing exact retained fixture artifact.');
-      return artifact.bytes;
+  const reviewedSpells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
+    client,
+    {
+      read: async (reference) => {
+        const artifact = promoted.retainedArtifacts.get(reference.artifactId);
+        if (!artifact) throw new Error('Missing exact retained fixture artifact.');
+        return artifact.bytes;
+      },
     },
-  });
+    await bindTestEvidenceStore(pool)
+  );
   const entryRule = createAflTradeAcquisitionSpellRegistrationRule({
     ...scope,
     ruleVersion: 'synthetic-reviewed-entry-v1',
