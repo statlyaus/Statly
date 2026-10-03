@@ -1,4 +1,4 @@
-import { realpath, writeFile } from 'node:fs/promises';
+import { realpath, stat, writeFile } from 'node:fs/promises';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -74,6 +74,36 @@ describe('local offline Docker fitzRoy decoder', () => {
       ])
     );
     expect(command?.workingDirectory).toContain('/.statly-local/fitzroy-decode-');
+  });
+
+  it('mounts read-only inputs the non-root container user can read', async () => {
+    const modes: Record<string, number> = {};
+    const runDocker = vi.fn(async (command: LocalAflTradeDockerDecodeCommand) => {
+      for (const arg of command.args) {
+        const mount = /^--mount=type=bind,src=(.+),dst=(\/statly\/input\/[^,]+),readonly$/.exec(
+          arg
+        );
+        if (mount) modes[mount[2]!] = (await stat(mount[1]!)).mode & 0o777;
+      }
+      await writeFile(command.decodedOutputPath, '{}', 'utf8');
+      return { stdout: '', stderr: '' };
+    });
+    const executor = createLocalAflTradeDockerFitzRoyDecodeExecutor({
+      imageReference: imageDigest,
+      runDocker,
+    });
+
+    await executor.decode({
+      sourceRdsBytes: Uint8Array.from([82, 68, 83]),
+      context,
+      timeoutMs: 30_000,
+    });
+
+    // The image runs as its own UID, so bind-mounted inputs must be readable but never writable.
+    expect(modes).toEqual({
+      '/statly/input/source.rds': 0o444,
+      '/statly/input/context.json': 0o444,
+    });
   });
 
   it('rejects mutable image references and mismatched per-capture image identities', async () => {

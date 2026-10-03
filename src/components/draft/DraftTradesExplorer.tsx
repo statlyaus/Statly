@@ -12,7 +12,6 @@ import {
   draftHubHeroShellClass,
   draftHubSectionPillClass,
   draftHubSubtlePanelClass,
-  draftHubHeroTopAccentClass,
   draftHubSkyPillClass,
 } from '@/components/draft/draftHubChrome';
 import type {
@@ -21,6 +20,15 @@ import type {
   AflTradeValueSummary,
 } from '@/types/aflTradeIntelligence';
 import { DraftTradeDetail } from './DraftTradeDetail';
+import {
+  badgeStyles,
+  buttonStyles,
+  fieldLabelStyles,
+  fieldStyles,
+  kbdStyles,
+  textLinkStyles,
+} from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 type DraftTradeHeader = {
   tradeId: string;
@@ -134,18 +142,14 @@ function tradeTypeBadges(trade: DraftTradeHeader): string[] {
   return badges;
 }
 
-function tradeTypeBadgeClass(label: string): string {
-  if (label === 'Players') return 'badge-success badge-outline';
-  if (label === 'Picks') return 'badge-info badge-outline';
-  if (label === 'Future') return 'badge-warning badge-outline';
-  return 'badge-ghost';
+function tradeTypeBadgeTone(label: string): 'neutral' | 'muted' {
+  // Trade types are categories, not results, so they share the neutral tone; the label carries
+  // the meaning.
+  return label === 'Players' || label === 'Picks' || label === 'Future' ? 'neutral' : 'muted';
 }
 
-function filterBadgeClass(kind: 'meta' | 'club' | 'type' | 'query'): string {
-  if (kind === 'club') return 'badge-primary badge-outline';
-  if (kind === 'type') return 'badge-accent badge-outline';
-  if (kind === 'query') return 'badge-neutral badge-outline';
-  return 'badge-outline';
+function filterBadgeTone(kind: 'meta' | 'club' | 'type' | 'query'): 'brand' | 'neutral' {
+  return kind === 'club' ? 'brand' : 'neutral';
 }
 
 function fallbackClubSlug(clubName: string): string {
@@ -596,16 +600,13 @@ export function DraftTradesExplorer({
 
   function renderReceiveSummary(summary: ClubReceiveSummary[] | undefined, keyPrefix: string) {
     if (summary === undefined) {
-      return <p className="text-xs text-base-content/60">Open details to load receive split</p>;
+      return <p className="text-xs text-muted-foreground">Open details to load receive split</p>;
     }
     if (summary.length === 0) {
-      return <p className="text-xs text-base-content/60">No received assets recorded</p>;
+      return <p className="text-xs text-muted-foreground">No received assets recorded</p>;
     }
     return summary.map((entry) => (
-      <p
-        key={`${keyPrefix}-${entry.clubName}`}
-        className="text-xs leading-snug text-base-content/85"
-      >
+      <p key={`${keyPrefix}-${entry.clubName}`} className="text-xs leading-snug text-foreground/85">
         <span className="font-semibold">{entry.clubName}</span>
         <span>{` receives ${formatReceiveSummary(entry)}`}</span>
       </p>
@@ -641,12 +642,9 @@ export function DraftTradesExplorer({
   return (
     <section className="space-y-6">
       <div className={draftHubHeroShellClass}>
-        <div className={draftHubHeroTopAccentClass} />
         <div className="mb-5 flex flex-col gap-5 border-b border-border pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-              Trade explorer
-            </p>
+            <p className="text-xs font-semibold text-primary/80">Trade explorer</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
               Research the AFL trade market with list and detail in sync
             </h2>
@@ -665,22 +663,25 @@ export function DraftTradesExplorer({
               role="note"
             >
               <span>Keyboard:</span>
-              <kbd className="kbd kbd-xs">j</kbd>
+              <kbd className={kbdStyles}>j</kbd>
               <span className="text-muted-foreground/70" aria-hidden="true">
                 /
               </span>
-              <kbd className="kbd kbd-xs">k</kbd>
+              <kbd className={kbdStyles}>k</kbd>
               <span>move through the index.</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <a
               href={`/api/draft-trades/export?${exportParams.toString()}`}
-              className="btn btn-primary btn-sm shadow-sm"
+              className={cn(buttonStyles({ variant: 'primary', size: 'sm' }), 'shadow-sm')}
             >
               Export CSV
             </a>
-            <Link href="/draft/clubs" className="btn btn-outline btn-sm bg-background/85">
+            <Link
+              href="/draft/clubs"
+              className={cn(buttonStyles({ variant: 'outline', size: 'sm' }), 'bg-background/85')}
+            >
               Club directory
             </Link>
             <span className={draftHubSkyPillClass}>{`Season ${year}`}</span>
@@ -711,9 +712,7 @@ export function DraftTradesExplorer({
 
         <div className="grid gap-3 md:grid-cols-4">
           <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Trades in view
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Trades in view</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredTrades.length}
             </p>
@@ -722,9 +721,7 @@ export function DraftTradesExplorer({
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Clubs represented
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Clubs represented</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredClubCount}
             </p>
@@ -733,9 +730,7 @@ export function DraftTradesExplorer({
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Club sides
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Club sides</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredSummary.parties}
             </p>
@@ -744,9 +739,7 @@ export function DraftTradesExplorer({
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Assets moved
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Assets moved</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredSummary.assets}
             </p>
@@ -759,9 +752,7 @@ export function DraftTradesExplorer({
         <div className={`${draftHubSubtlePanelClass} mt-4 p-4`}>
           <div className="mb-4 flex flex-col gap-2 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Refine results
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground">Refine results</p>
               <h3 className="mt-1 text-lg font-semibold text-foreground">Narrow the market fast</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Use season, club, type, and search together to reduce the trade index to the exact
@@ -776,12 +767,12 @@ export function DraftTradesExplorer({
           </div>
 
           <div className="grid gap-3 md:grid-cols-6 md:items-end">
-            <label className="form-control">
-              <span className="label-text text-sm font-medium">Year</span>
+            <label className={fieldLabelStyles}>
+              <span className="text-sm font-medium">Year</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="btn btn-outline btn-sm"
+                  className={buttonStyles({ variant: 'outline', size: 'sm' })}
                   onClick={() => olderYear && setYear(olderYear)}
                   disabled={!olderYear}
                   aria-label="Go to older year"
@@ -789,7 +780,7 @@ export function DraftTradesExplorer({
                   ◀
                 </button>
                 <select
-                  className="select select-bordered select-sm w-full"
+                  className={cn(fieldStyles({ size: 'sm' }), 'w-full')}
                   value={String(year)}
                   onChange={(event) => setYear(Number.parseInt(event.target.value, 10))}
                   aria-label="Select trade year"
@@ -802,7 +793,7 @@ export function DraftTradesExplorer({
                 </select>
                 <button
                   type="button"
-                  className="btn btn-outline btn-sm"
+                  className={buttonStyles({ variant: 'outline', size: 'sm' })}
                   onClick={() => newerYear && setYear(newerYear)}
                   disabled={!newerYear}
                   aria-label="Go to newer year"
@@ -812,15 +803,15 @@ export function DraftTradesExplorer({
               </div>
             </label>
 
-            <div className="form-control">
-              <span className="label-text text-sm font-medium" id="draft-trades-club-filter-label">
+            <div className={fieldLabelStyles}>
+              <span className="text-sm font-medium" id="draft-trades-club-filter-label">
                 Club
               </span>
               <Listbox value={selectedClub} onChange={setClub}>
                 <div className="relative">
                   <ListboxButton
                     aria-labelledby="draft-trades-club-filter-label"
-                    className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-base-300 bg-base-100 px-2.5 text-left text-sm shadow-sm transition hover:border-base-content/25 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 data-[open]:border-primary/60 data-[open]:ring-2 data-[open]:ring-primary/20"
+                    className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 text-left text-sm shadow-sm transition hover:border-foreground/25 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 data-[open]:border-primary/60 data-[open]:ring-2 data-[open]:ring-primary/20"
                   >
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {selectedClub ? (
@@ -835,10 +826,10 @@ export function DraftTradesExplorer({
                           <span className="truncate">{selectedClubLabel}</span>
                         </>
                       ) : (
-                        <span className="truncate text-base-content/80">All clubs</span>
+                        <span className="truncate text-foreground/80">All clubs</span>
                       )}
                     </span>
-                    <span className="shrink-0 text-xs text-base-content/50" aria-hidden>
+                    <span className="shrink-0 text-xs text-muted-foreground" aria-hidden>
                       ▾
                     </span>
                   </ListboxButton>
@@ -859,7 +850,7 @@ export function DraftTradesExplorer({
                       {({ selected }) => (
                         <>
                           <span
-                            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-base-300 bg-base-200/50 text-[10px] font-semibold text-base-content/40"
+                            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-muted/50 text-xs font-semibold text-muted-foreground"
                             aria-hidden
                           >
                             —
@@ -917,10 +908,10 @@ export function DraftTradesExplorer({
               </Listbox>
             </div>
 
-            <label className="form-control">
-              <span className="label-text text-sm font-medium">Type</span>
+            <label className={fieldLabelStyles}>
+              <span className="text-sm font-medium">Type</span>
               <select
-                className="select select-bordered select-sm w-full"
+                className={cn(fieldStyles({ size: 'sm' }), 'w-full')}
                 value={selectedType}
                 onChange={(event) => setType(event.target.value)}
                 aria-label="Filter by trade type"
@@ -932,24 +923,24 @@ export function DraftTradesExplorer({
               </select>
             </label>
 
-            <label className="form-control md:col-span-2">
-              <span className="label-text text-sm font-medium">Search</span>
+            <label className={cn(fieldLabelStyles, 'md:col-span-2')}>
+              <span className="text-sm font-medium">Search</span>
               <input
                 type="search"
-                className="input input-bordered input-sm w-full"
+                className={cn(fieldStyles({ size: 'sm' }), 'w-full')}
                 placeholder="Search by trade title or club..."
                 value={queryInput}
                 onChange={(event) => setQueryInput(event.target.value)}
               />
             </label>
 
-            <div className="form-control">
-              <span className="label-text text-sm font-medium max-md:hidden" aria-hidden="true">
+            <div className={fieldLabelStyles}>
+              <span className="text-sm font-medium max-md:hidden" aria-hidden="true">
                 &nbsp;
               </span>
               <button
                 type="button"
-                className="btn btn-outline btn-sm w-full shrink-0"
+                className={cn(buttonStyles({ variant: 'outline', size: 'sm' }), 'w-full shrink-0')}
                 onClick={clearFilters}
                 disabled={!hasClearableFilters}
                 aria-label="Clear club, type, search, and open trade; keep current season"
@@ -960,20 +951,26 @@ export function DraftTradesExplorer({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-base-content/70">
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span
-            className={`badge ${filterBadgeClass('meta')}`}
+            className={badgeStyles({ tone: filterBadgeTone('meta') })}
             suppressHydrationWarning
           >{`${filteredTrades.length} trades in view`}</span>
-          <span className={`badge ${filterBadgeClass('meta')}`}>{`Season ${year}`}</span>
+          <span className={badgeStyles({ tone: filterBadgeTone('meta') })}>{`Season ${year}`}</span>
           {selectedClub && (
-            <span className={`badge ${filterBadgeClass('club')}`}>Club: {selectedClubLabel}</span>
+            <span className={badgeStyles({ tone: filterBadgeTone('club') })}>
+              Club: {selectedClubLabel}
+            </span>
           )}
           {selectedType && (
-            <span className={`badge ${filterBadgeClass('type')}`}>Type: {selectedType}</span>
+            <span className={badgeStyles({ tone: filterBadgeTone('type') })}>
+              Type: {selectedType}
+            </span>
           )}
           {queryInput && (
-            <span className={`badge ${filterBadgeClass('query')}`}>Query: {queryInput}</span>
+            <span className={badgeStyles({ tone: filterBadgeTone('query') })}>
+              Query: {queryInput}
+            </span>
           )}
         </div>
       </div>
@@ -990,9 +987,7 @@ export function DraftTradesExplorer({
       <div className="space-y-3 lg:hidden">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Mobile trade index
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Mobile trade index</p>
             <h3 className="text-lg font-semibold text-foreground">Browse and expand in place</h3>
           </div>
           <div className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
@@ -1014,7 +1009,7 @@ export function DraftTradesExplorer({
             <article
               key={`mobile-${trade.tradeId}`}
               id={`mobile-trade-row-${trade.tradeId}`}
-              className={`rounded-xl border border-base-300 bg-base-100 p-3 shadow-sm transition motion-safe:duration-200 ${
+              className={`rounded-xl border border-border bg-background p-3 shadow-sm transition motion-safe:duration-200 ${
                 isExpanded ? 'ring-1 ring-primary/30' : ''
               } ${activeTradeId === trade.tradeId ? 'border-primary/50' : ''}`}
               onMouseEnter={() => setActiveTradeId(trade.tradeId)}
@@ -1023,14 +1018,16 @@ export function DraftTradesExplorer({
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-semibold leading-tight">{trade.title}</h3>
-                    <span className="badge badge-ghost badge-xs">#{trade.seqInYear}</span>
+                    <span className={badgeStyles({ tone: 'muted', size: 'xs' })}>
+                      #{trade.seqInYear}
+                    </span>
                   </div>
-                  <p className="text-xs text-base-content/70">{summarizeTrade(trade)}</p>
+                  <p className="text-xs text-muted-foreground">{summarizeTrade(trade)}</p>
                   <div className="flex flex-wrap gap-1">
                     {tradeTypeBadges(trade).map((badge) => (
                       <span
                         key={`${trade.tradeId}-${badge}`}
-                        className={`badge badge-xs ${tradeTypeBadgeClass(badge)}`}
+                        className={badgeStyles({ tone: tradeTypeBadgeTone(badge), size: 'xs' })}
                       >
                         {badge}
                       </span>
@@ -1039,9 +1036,10 @@ export function DraftTradesExplorer({
                 </div>
                 <button
                   type="button"
-                  className={`btn btn-xs gap-1 rounded-full px-2 normal-case ${
-                    isExpanded ? 'btn-primary' : 'btn-ghost'
-                  }`}
+                  className={buttonStyles({
+                    variant: isExpanded ? 'primary' : 'ghost',
+                    size: 'xs',
+                  })}
                   onClick={() => toggleExpanded(trade.tradeId)}
                   onMouseEnter={() => prefetchTradeDetail(trade.tradeId)}
                   onFocus={() => prefetchTradeDetail(trade.tradeId)}
@@ -1050,7 +1048,7 @@ export function DraftTradesExplorer({
                   aria-label={isExpanded ? `Collapse ${trade.title}` : `Expand ${trade.title}`}
                   data-no-row-toggle
                 >
-                  <span className="text-[11px] font-semibold">
+                  <span className="text-xs font-semibold">
                     {isLoadingDetail ? 'Loading' : isExpanded ? 'Hide' : 'Details'}
                   </span>
                   <span
@@ -1079,7 +1077,7 @@ export function DraftTradesExplorer({
                   ) : null}
                 </div>
               ) : null}
-              <div className="mt-2 space-y-1 rounded-md border border-base-300 bg-base-200/35 p-2">
+              <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/35 p-2">
                 {renderReceiveSummary(receives, `mobile-receives-${trade.tradeId}`)}
               </div>
 
@@ -1089,13 +1087,10 @@ export function DraftTradesExplorer({
                   return (
                     <span
                       key={`mobile-${trade.tradeId}-${clubName}`}
-                      className="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-100 px-2 py-1 text-xs"
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs"
                     >
                       <DraftTeamLogo team={clubName} size={12} withCircle />
-                      <Link
-                        href={`/draft/clubs/${clubSlug}`}
-                        className="link link-hover no-underline"
-                      >
+                      <Link href={`/draft/clubs/${clubSlug}`} className={textLinkStyles}>
                         {clubName}
                       </Link>
                     </span>
@@ -1112,18 +1107,18 @@ export function DraftTradesExplorer({
                       aria-live="polite"
                       aria-label="Loading trade details"
                     >
-                      <div className="h-4 w-1/3 animate-pulse rounded bg-base-300" />
-                      <div className="h-4 w-2/3 animate-pulse rounded bg-base-300" />
-                      <div className="h-24 animate-pulse rounded bg-base-300" />
+                      <div className="h-4 w-1/3 animate-pulse rounded bg-border" />
+                      <div className="h-4 w-2/3 animate-pulse rounded bg-border" />
+                      <div className="h-24 animate-pulse rounded bg-border" />
                     </div>
                   )}
                   {!isLoadingDetail && detailError && (
-                    <p className="text-sm text-error" role="alert">
+                    <p className="text-sm text-result-loss" role="alert">
                       Could not load trade details: {detailError}
                     </p>
                   )}
                   {!isLoadingDetail && !detailError && expandedDetail?.trade && (
-                    <div className="rounded-lg border border-base-300 bg-base-200/30 p-2 motion-safe:transition-all motion-safe:duration-200 motion-reduce:transition-none">
+                    <div className="rounded-lg border border-border bg-muted/30 p-2 motion-safe:transition-all motion-safe:duration-200 motion-reduce:transition-none">
                       <DraftTradeDetail
                         detail={expandedDetail}
                         showOpenFullPageLink
@@ -1142,7 +1137,7 @@ export function DraftTradesExplorer({
           );
         })}
         {filteredTrades.length === 0 && (
-          <div className="rounded-lg border border-base-300 py-10 text-center text-sm text-base-content/70">
+          <div className="rounded-lg border border-border py-10 text-center text-sm text-muted-foreground">
             No trades match the selected filters.
           </div>
         )}
@@ -1152,9 +1147,7 @@ export function DraftTradesExplorer({
         <section className="min-w-0 space-y-4">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Trade index
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground">Trade index</p>
               <h3 className="text-xl font-semibold text-foreground">
                 Scan the market with context preserved
               </h3>
@@ -1172,10 +1165,14 @@ export function DraftTradesExplorer({
           </div>
 
           {filteredTrades.length === 0 ? (
-            <div className="rounded-2xl border border-base-300 bg-base-100 py-14 text-center text-sm text-base-content/70 shadow-sm">
+            <div className="rounded-2xl border border-border bg-background py-14 text-center text-sm text-muted-foreground shadow-sm">
               <div className="space-y-2">
                 <p>No trades match the selected filters.</p>
-                <button type="button" className="btn btn-outline btn-sm" onClick={clearFilters}>
+                <button
+                  type="button"
+                  className={buttonStyles({ variant: 'outline', size: 'sm' })}
+                  onClick={clearFilters}
+                >
                   Clear filters
                 </button>
               </div>
@@ -1219,7 +1216,10 @@ export function DraftTradesExplorer({
                           {tradeTypeBadges(trade).map((badge) => (
                             <span
                               key={`${trade.tradeId}-card-${badge}`}
-                              className={`badge badge-sm ${tradeTypeBadgeClass(badge)}`}
+                              className={badgeStyles({
+                                tone: tradeTypeBadgeTone(badge),
+                                size: 'sm',
+                              })}
                             >
                               {badge}
                             </span>
@@ -1233,7 +1233,10 @@ export function DraftTradesExplorer({
                       <div className="flex shrink-0 items-center gap-2">
                         <button
                           type="button"
-                          className={`btn btn-sm ${isExpanded ? 'btn-primary' : 'btn-outline bg-background'}`}
+                          className={buttonStyles({
+                            variant: isExpanded ? 'primary' : 'outline',
+                            size: 'sm',
+                          })}
                           aria-label={`${isExpanded ? 'Close details for' : 'Open details for'} ${trade.title}`}
                           onClick={() =>
                             isExpanded ? toggleExpanded(trade.tradeId) : openTrade(trade.tradeId)
@@ -1275,10 +1278,7 @@ export function DraftTradesExplorer({
                             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs text-muted-foreground"
                           >
                             <DraftTeamLogo team={clubName} size={14} withCircle />
-                            <Link
-                              href={`/draft/clubs/${clubSlug}`}
-                              className="link link-hover no-underline"
-                            >
+                            <Link href={`/draft/clubs/${clubSlug}`} className={textLinkStyles}>
                               {clubName}
                             </Link>
                           </span>
@@ -1288,7 +1288,7 @@ export function DraftTradesExplorer({
 
                     <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                       <div className="rounded-xl border border-border bg-muted/70 p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        <p className="text-xs font-semibold text-muted-foreground">
                           Receive snapshot
                         </p>
                         <div className="mt-2 space-y-1.5">
@@ -1297,17 +1297,13 @@ export function DraftTradesExplorer({
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-center">
                         <div className="rounded-xl border border-border bg-background px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                            Parties
-                          </p>
+                          <p className="text-xs text-muted-foreground">Parties</p>
                           <p className="text-lg font-semibold text-foreground">
                             {trade.partyCount}
                           </p>
                         </div>
                         <div className="rounded-xl border border-border bg-background px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                            Assets
-                          </p>
+                          <p className="text-xs text-muted-foreground">Assets</p>
                           <p className="text-lg font-semibold text-foreground">
                             {trade.assetCount}
                           </p>
@@ -1329,9 +1325,7 @@ export function DraftTradesExplorer({
             {!selectedTrade ? (
               <div className="p-4 md:p-5">
                 <div className="border-b border-border pb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Detail rail
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground">Detail rail</p>
                   <h3 className="mt-1 text-lg font-semibold text-foreground">
                     Open a trade to load the full breakdown
                   </h3>
@@ -1375,18 +1369,19 @@ export function DraftTradesExplorer({
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          Trade detail
-                        </p>
+                        <p className="text-xs font-semibold text-muted-foreground">Trade detail</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Trade #{selectedTrade.seqInYear} · {year}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        <div className="join">
+                        <div className="inline-flex">
                           <button
                             type="button"
-                            className="btn btn-xs join-item btn-outline"
+                            className={cn(
+                              buttonStyles({ variant: 'outline', size: 'xs' }),
+                              'rounded-none first:rounded-l-md last:-ml-px last:rounded-r-md'
+                            )}
                             disabled={!railNav.prev}
                             onClick={() => railNav.prev && openTrade(railNav.prev.tradeId)}
                             aria-label="Previous trade in list"
@@ -1395,7 +1390,10 @@ export function DraftTradesExplorer({
                           </button>
                           <button
                             type="button"
-                            className="btn btn-xs join-item btn-outline"
+                            className={cn(
+                              buttonStyles({ variant: 'outline', size: 'xs' }),
+                              'rounded-none first:rounded-l-md last:-ml-px last:rounded-r-md'
+                            )}
                             disabled={!railNav.next}
                             onClick={() => railNav.next && openTrade(railNav.next.tradeId)}
                             aria-label="Next trade in list"
@@ -1413,7 +1411,7 @@ export function DraftTradesExplorer({
                         ) : null}
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs"
+                          className={buttonStyles({ variant: 'ghost', size: 'xs' })}
                           onClick={() => toggleExpanded(selectedTrade.tradeId)}
                         >
                           Close
@@ -1442,20 +1440,20 @@ export function DraftTradesExplorer({
                 >
                   {loadingTradeId === selectedTrade.tradeId ? (
                     <div
-                      className="space-y-2 rounded-2xl border border-base-300 bg-base-100 p-4"
+                      className="space-y-2 rounded-2xl border border-border bg-background p-4"
                       role="status"
                       aria-live="polite"
                       aria-label="Loading trade details"
                     >
-                      <div className="h-4 w-1/3 animate-pulse rounded bg-base-300" />
-                      <div className="h-4 w-2/3 animate-pulse rounded bg-base-300" />
-                      <div className="h-40 animate-pulse rounded bg-base-300" />
+                      <div className="h-4 w-1/3 animate-pulse rounded bg-border" />
+                      <div className="h-4 w-2/3 animate-pulse rounded bg-border" />
+                      <div className="h-40 animate-pulse rounded bg-border" />
                     </div>
                   ) : null}
 
                   {loadingTradeId !== selectedTrade.tradeId && detailError ? (
                     <div
-                      className="rounded-2xl border border-error/30 bg-error/5 p-4 text-sm text-error"
+                      className="rounded-2xl border border-result-loss/30 bg-result-loss/5 p-4 text-sm text-result-loss"
                       role="alert"
                     >
                       Could not load trade details: {detailError}

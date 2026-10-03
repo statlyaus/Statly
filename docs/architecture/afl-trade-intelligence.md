@@ -636,6 +636,17 @@ both limits are checked before publication and on reads. Direct low-level caller
 limit retain the 192 MiB envelope ceiling. This prevents an accepted write from becoming unreadable
 solely because encoding made it larger, without changing artifact identity or filesystem safeguards.
 
+Custody rows prove which bytes an artifact is, not where they are kept. Migration 0246 adds the
+`outcome_artifact_store` registry and the append-only `outcome_artifact_custody_location` table. A
+store row names its environment, assurance, root locator and, once recorded, its mirror locator; a
+local filesystem store may exist only in `non_production`, at most once there, at an absolute root,
+and store rows are never deleted. A location row binds one custody row to one store and object key.
+The key must end in the artifact's own `sha256/<aa>/<bb>/<sha256>` path, and the store's
+environment must equal the custody row's. Location is a separate table, not a custody column,
+because custody rows are immutable. A custody row with no location row has no known copy of its
+bytes. For the local filesystem store, the object key is the repository directory relative to the
+store root joined to the envelope's own key, so the key alone resolves the envelope file.
+
 ### Maturity-review acceptance criteria
 
 The broader Statly data-platform maturity review identified contract drift, name-derived player IDs,
@@ -865,6 +876,30 @@ workbook lookup or legacy `Expected`/`Actual` field.
 
 Redis may coordinate locks, queues, and caches but never owns durable analytical state. A projection
 failure must not cause Firestore, CSV, or a client fallback to become canonical.
+
+### Advisory-lock ordering
+
+The analytical schema serializes contested writes with transaction-scoped advisory locks taken inside
+its SQL functions, rather than by widening isolation levels. Those locks are taken parent-first, then
+in a sorted set: a function locks the entity it is acting on first, and any set of related keys is
+ordered (`ORDER BY value`, `ORDER BY 1`) before it is locked, so two transactions touching the same
+keys cannot take them in opposite orders.
+
+A new or changed lock site must follow that order. Order the keys explicitly, and keep any set-based
+lock loop sorted before it locks.
+
+Two limits are worth stating for the next reader, because both were discovered by getting them wrong:
+
+- **Nothing enforces the convention.** No check verifies that a multi-lock function sorts its keys, so
+  it holds by author diligence. The one place it had been broken — a legacy registration function
+  locking one family in document order while its successor ordered the same family — was found by
+  reading the deployed function bodies and is fixed by `0232`.
+- **Comparing lock families across functions is not evidence of a conflict.** The same outer prefix
+  carries different id namespaces, so two functions can appear to take "the same two families" in
+  opposite orders while their concrete keys can never collide. For example `outcome-release-parent:` is
+  used with release ids (`^outcome-release:[a-f0-9]{64}$`) in one function and with spell version ids
+  in another. A contradiction is only real once the concrete keys can be the same; family prefixes are
+  not.
 
 ## Gate 1: architecture and authority
 
@@ -1251,7 +1286,13 @@ current player-identity decisions and independently retained `afl_trade_canonica
 authority; it is atomic, idempotent and cannot write release or publication pointers. One traded pick
 entitlement and its eventual selection retain the same stable `pick_id`: `exercised_as` is a
 realization relation, while `OutcomePickLineageEdge` remains reserved for genuine entitlement
-transformations such as splitting, combining or substitution. Recurring production still requires
+transformations such as splitting, combining or substitution. The canonical pick row itself stays
+append-only; when a later reviewed-lineage promotion knows facts that an earlier promotion stored as
+empty (round, nominal pick number, original club), migration 0237 records them as a gap-free,
+append-only `outcome_draft_pick_enrichment` version bound to that promotion, its approval and the
+current reviewed pick-lineage registration. Enrichment fills empty facts only; a differing known
+value is still an immutable conflict. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
+current facts, and release-bound readers pass the release cutoff. Recurring production still requires
 deployment scheduling, execution and monitoring of the reviewed discovery plan, missed-period monitoring, reviewed
 promotion of the historical candidate set, and a completed non-production backfill and reconciliation
 rehearsal described below.
@@ -1717,6 +1758,25 @@ effective-through date, and a compare-and-swap head. Partial coverage remains la
 conflicting or quarantined evidence withholds the value. Achievements and awards deliberately remain
 separate season-, round-, or event-grain facts: they are never inferred from numeric statistics or
 summed merely to fit the acquisition-spell metric shape.
+
+Appearance membership (acquisition registration v3) is a deliberately narrower spell used only to
+attribute HPN season PAV. Season PAV needs every appearing player in a season bound to exactly one
+current spell, while reviewed entry spells need a promoted incoming asset that most league players do
+not yet have. A v3 spell binds a player, represented club and season to the first and last reviewed
+appearance facts and asserts nothing about entry, departure or trade custody, so metric, release,
+valuation dataset, player PAV observation and postseason consumers reject it. Its boundary and
+completeness facts count only while their player, match and club identity decisions stay current. It is
+a bridge: a current reviewed entry spell whose possible membership contains its whole window retires it
+automatically, player by player, and it must not be used where acquisition timing matters.
+Season HPN input building and finalization evaluate each candidate spell's registration currency once
+per input set rather than once per row (migration 0236), with the same currency rules.
+Finalization reads its content JSON once per statement rather than once per row (migration 0240),
+so its memory and time are linear in the season's size, with the same checks and exceptions.
+Both evaluate identity-assignment continuity once per assignment case rather than once per row
+(migration 0242), with the same rules and the same review-subject locks.
+Its row-conservation and appearance-envelope checks cost time linear in the season whichever join
+plan PostgreSQL chooses (migration 0243), with the same checks and exceptions.
+The operations runbook records its storage and guard details.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
@@ -2466,10 +2526,26 @@ The local private worker now delegates dispatch to the existing recalculation co
 factual evidence must pass the existing model-evidence composition and prepared-cohort owner before
 batch execution. Its optional construction input supplies the exact model-pair and cohort dependencies;
 it does not select or manufacture admission, methodology or qualification authority. Missing construction
-configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path.
-Unavailable factual refreshes remain unavailable, while substantive no-change dispatches retain the
-existing batch reuse path. The command-line composition does not yet supply genuine construction
-configuration, and this wiring does not complete native PAV execution or the genuine-data rehearsal.
+configuration raises `MISSING_CONSTRUCTION_CONFIGURATION` before the changed-evidence batch path, and
+that failure now carries the composition root's named `blockerCodes` instead of only a generic message.
+A dispatch-bound cohort half is accepted as well as fixed dependencies, because construction evidence
+authenticates exactly one live dispatch identity. Unavailable factual refreshes remain unavailable,
+while substantive no-change dispatches retain the existing batch reuse path. The command-line
+composition does not yet supply genuine reviewed construction authority, and this wiring does not
+complete native PAV execution or the genuine-data rehearsal.
+
+`development/localPrivateValuationConstruction.ts` is the composition root for a declared scope. It
+resolves the declared scope policy, asks the HPN owner's own lane resolver which reviewed source
+authority each lane has, reports each field a declared selection omits, and reports the per-trade
+construction owner that does not exist yet. It composes only from owners that already exist —
+`localGenuineAdmittedPlayerContribution.ts`, `postgresGenuineDispatchBoundPickPav.ts`,
+`localPrivateValuationQualification.ts`, `localPrivateValuationHpnCapture.ts`,
+`postgresPrivateValuationHpnPreparation.ts`, `retainedValuationInputBundleConstruction.ts` and
+`localPrivateValuationConstructionEvidence.ts` — and never substitutes fixture or synthetic authority
+for a reviewed declaration. Inspection is read-only and reports `qualificationGranted: false`;
+composition returns a `blocked` verdict naming every missing authority, and never claims the chain is
+complete while any is missing. The report is reported once, at the root, so the command, the worker and
+the preflight read the same verdict rather than a second workflow ledger.
 
 The `outcomes:valuation:inspect-local` command reads an existing admitted loopback database using
 the existing inventory owner. Runtime identity and inventory share one repeatable-read, read-only
@@ -2538,7 +2614,27 @@ policy and finalized HPN ancestry, without selecting the active public release. 
 owner now also supplies exact retained selection, and `localPrivateValuationConstructionEvidence.ts`
 composes the sealed reader, bundle constructor and artifact custody within the prepared-cohort
 transaction. Evidence-derived per-trade input assembly and full worker composition remain required.
-Replaying a retained fixture manifest proves none of this genuine fresh-construction evidence.
+The exact shape of that remaining assembly is now enumerated, because it is the difference between
+"the owners exist" and "the chain runs". Each parent of a current private trade construction has a
+producer that no `src/` or `Scripts/` caller invokes, so the assembly is net-new work over existing
+contracts rather than a new model:
+
+| Manifest parent             | Producer                                                                                                                | What the producer needs                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input_trace`               | `createGovernedPrivateEvaluationInputTrace`                                                                             | selector, factual release id, bundle id, both component runs, and the trade transaction projected into clubs, transfers, season universe, player horizons and pick lineages |
+| `calculation_input_package` | `materializeAflTradeValuationCase` over `createAflTradeComponentDrawSet` and `createAflTradeRealizedContributionLedger` | the trade's promotion-backed archive membership, the draw set, the realized contribution ledger and the package policy                                                      |
+| `explanation_policy`        | `createGovernedPrivateEvaluationExplanationPolicy`                                                                      | the retained policy content the bundle's `explanationPolicyArtifact` refers to                                                                                              |
+| `lineage_graph`             | `createAflTradeLineageGraph`                                                                                            | asset lineage evidence for the trade's player and pick assets                                                                                                               |
+| `pick_benchmark`            | `fitAflTradePickPavDistributionBenchmark`                                                                               | a retained pick PAV observation set                                                                                                                                         |
+| `player_observation`        | `createAflTradePlayerPavObservation`                                                                                    | retained private player PAV observations per spell                                                                                                                          |
+
+`createGovernedPrivateEvaluationInputTrace` and `createGovernedPrivateEvaluationExplanationPolicy`
+have no production caller at all today; every existing exercise of them is a fixture. The sealed
+trade reader and the retained release membership supply the trade's assets, so the projection from
+membership into the trace's transaction shape is the first concrete step, and the fail-closed planner
+in `privateValuationTradeConstructionPlan.ts` is what decides, per trade, whether that projection can
+proceed. Replaying a retained fixture manifest proves none of this genuine fresh-construction
+evidence.
 
 ### Retained construction compatibility assessment
 
@@ -2869,6 +2965,17 @@ at database time under the existing Gate lock; it does not backdate authorizatio
 gap or claim that internal owner approval establishes an upstream licence. Generic capture, training
 and publication checks do not acquire this retained-use exception.
 
+Forward migration 0234 adds one more way a retained capture can stay usable: the latest decision in
+its Gate chain may govern it when that decision is a general Gate 0A, not a retained-capture renewal.
+The capture's original acquisition checks still run first and are unchanged. The latest decision must
+be approved, current at database time, content-addressed, and not superseded. It must be scoped to
+the capture's competition, season, fitzRoy capability and `derived_feature_creation`. Its own rights
+artifact must be for the same provider and fitzRoy acquisition, and must permit every consumed field
+for that season. It grants nothing beyond that rights artifact. A blocked, expired, withdrawn or
+out-of-scope latest decision still fails closed, and a later retained-scoped decision still has to
+satisfy the 0136 renewal rules. The change exists because a newer general permission for a source
+previously made every earlier capture of that source unusable, and 0136 could not renew on top of it.
+
 Forward migration 0137 validates source-first assessment field permissions independently of
 JavaScript and PostgreSQL sorting differences. It compares complete field records in the same
 database order, preserving duplicate counts and rejecting missing or changed permissions. The
@@ -3015,7 +3122,11 @@ to twelve decimal places, matching the shared numerical core. Migration 0119 ali
 PostgreSQL total check with that order without relaxing component precision. Source-value comparison
 must also be scoped to the exact calculation before joining expected and stored teams: migration
 0120 prevents previously finalized seasons from appearing as unmatched teams in a later calculation.
-Missing, extra or mismatched teams within that calculation remain invalid.
+Missing, extra or mismatched teams within that calculation remain invalid. Migration 0245 compares
+each stored league, team and player value with its exact NUMERIC derivation within 1e-9 instead of
+after rounding both to twelve decimals: double-precision values on a genuine season (AFLM 2024)
+differed from the exact derivation by up to 1.35e-12, which straddled the twelfth decimal and blocked
+finalization, while any real difference remains far above the bound.
 
 Historical coverage follows from the existing strict label-purge rule. For an `H`-season target,
 adjacent partition origin years must be at least `H + 1` years apart when mature outcomes are recorded
@@ -3408,6 +3519,35 @@ larger requests fail explicitly rather than silently sampling a cohort. Public-i
 fixture-only observations, hand-worked numerical expectations, held-out-label substitutions,
 retrospective custody, short histories, departure/censoring, exact horizons and overflow regressions.
 These tests establish implementation behavior, not predictive performance on genuine AFL seasons.
+
+### Private evaluation read contract
+
+The private workspace reader is per-trade and self-consistent. A request names one selector (valuation
+scope plus trade) and one selection — `{kind:'current'}` or `{kind:'generation', generationId}` — and an
+available result returns the `generationId`, the `projectionManifestId`, the lifecycle, the document
+reference and the artifact bytes. A generation id pins one trade, because generations are per-trade
+(`g.trade_id=e.trade_id`), so it cannot pin a batch across trades.
+
+The `current` selection resolves in a single query that joins the one head row
+(`outcome_current_private_evaluation_batch`) with the entry, the generation and any withdrawal
+(`postgresGovernedPrivateEvaluationReadRepository.ts:191-203`). A read therefore cannot straddle two
+batches, and it needs no batch identifier to be consistent with itself.
+
+Cross-trade batch pinning is deliberately deferred until a multi-trade reader exists. No list, page,
+pagination or export path reads more than one trade today, and the workspace is instantiated only in
+local development. When the first such reader is built it will need batch identity anyway, and the
+shape is already decided so it can be added additively: a `batchId` field on the available result, so a
+caller learns which batch it read, plus a `{kind:'batch', batchId}` member on the selection union so a
+caller can pin it. Existing selections and results are unchanged, and the head row already carries
+`batch_id`, so no schema change is required. Estimate two to four hours when that reader is built.
+
+### Automated model-validity authority
+
+The automated model-validity authority is carried by `authorityKind: 'automated_validation_record'`
+inside the existing `afl-trade-gate-decision/v1` record — not by a separate v2 schema, and there is no
+`gate-decision/v2` anywhere in the repository. The v1 record was extended in place because its records
+are already written and consumed, and versioning them retroactively would break consumers to satisfy a
+label. Read the authority from `authorityKind`, not from a version number.
 
 ### Current valuation refresh trace
 

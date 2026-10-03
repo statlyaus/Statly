@@ -36,14 +36,14 @@ const DraftControls = memo(function DraftControls({
         status:
           'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
         button:
-          'bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-text)] hover:opacity-90',
+          'bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-solid-text)] hover:opacity-90',
       }
     : {
         icon: 'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
         status:
           'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
         button:
-          'bg-[color:var(--draft-broadcast-red)] text-[color:var(--draft-broadcast-text)] hover:opacity-90',
+          'bg-[color:var(--draft-broadcast-red)] text-[color:var(--draft-broadcast-solid-text)] hover:opacity-90',
       };
 
   // Cleanup AbortController on unmount

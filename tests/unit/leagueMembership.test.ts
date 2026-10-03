@@ -28,10 +28,10 @@ vi.mock('../../src/lib/prisma', () => ({
 }));
 
 import {
-  canManageLeague,
   getLeagueMembership,
   isActiveMembershipData,
   isLeagueManagerRole,
+  listActiveFirestoreLeagueMembers,
   listActiveLeagueMembers,
   listActiveUserLeagueMemberships,
   queueLeagueMembershipSet,
@@ -61,36 +61,26 @@ describe('leagueMembership architecture helpers', () => {
     expect(isLeagueManagerRole(undefined)).toBe(false);
   });
 
-  it('authorizes Prisma league owners as managers', async () => {
+  it('does not treat a removed member as belonging to the league', async () => {
     prismaMocks.leagueFindUnique.mockResolvedValue({
       ownerId: 'owner-user',
-      members: [{ role: 'member' }],
-    });
-
-    await expect(canManageLeague('league-1', 'owner-user')).resolves.toBe(true);
-
-    expect(prismaMocks.leagueFindUnique).toHaveBeenCalledWith({
-      where: { id: 'league-1' },
-      select: {
-        ownerId: true,
-        members: {
-          where: { userId: 'owner-user' },
-          select: { role: true },
-          take: 1,
+      members: [
+        {
+          id: 'member-2',
+          userId: 'removed-user',
+          role: 'MANAGER',
+          teamName: 'Gone FC',
+          joinedAt: new Date('2026-06-01T00:00:00.000Z'),
+          isActive: false,
+          status: 'removed',
         },
-      },
-    });
-    expect(adminMocks.doc).not.toHaveBeenCalled();
-  });
-
-  it('authorizes Prisma manager roles without Firestore fallback', async () => {
-    prismaMocks.leagueFindUnique.mockResolvedValue({
-      ownerId: 'owner-user',
-      members: [{ role: 'MANAGER' }],
+      ],
     });
 
-    await expect(canManageLeague('league-1', 'manager-user')).resolves.toBe(true);
-
+    await expect(getLeagueMembership('league-1', 'removed-user')).resolves.toEqual({
+      isMember: false,
+      source: 'none',
+    });
     expect(adminMocks.doc).not.toHaveBeenCalled();
   });
 
@@ -108,6 +98,8 @@ describe('leagueMembership architecture helpers', () => {
           teamLogoPositionY: 70,
           teamLogoZoom: 1.6,
           joinedAt: new Date('2026-06-01T00:00:00.000Z'),
+          isActive: true,
+          status: 'ACTIVE',
         },
       ],
     });
@@ -134,50 +126,6 @@ describe('leagueMembership architecture helpers', () => {
     });
     expect(adminMocks.doc).not.toHaveBeenCalled();
     expect(adminMocks.collection).not.toHaveBeenCalled();
-  });
-
-  it('rejects non-manager Prisma members without trusting stale Firestore roles', async () => {
-    prismaMocks.leagueFindUnique.mockResolvedValue({
-      ownerId: 'owner-user',
-      members: [{ role: 'MEMBER' }],
-    });
-
-    await expect(canManageLeague('league-1', 'member-user')).resolves.toBe(false);
-
-    expect(adminMocks.doc).not.toHaveBeenCalled();
-  });
-
-  it('falls back to legacy Firestore owner when no Prisma league exists', async () => {
-    adminMocks.doc.mockReturnValue({
-      get: vi.fn().mockResolvedValue({
-        exists: false,
-        data: () => undefined,
-      }),
-    });
-    const legacyGet = vi.fn().mockResolvedValue({
-      empty: true,
-      docs: [],
-    });
-    const query = {
-      where: vi.fn(() => query),
-      limit: vi.fn(() => ({ get: legacyGet })),
-    };
-    const leagueDoc = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        data: () => ({ ownerId: 'owner-user' }),
-      }),
-    };
-    const leaguesCollection = { doc: vi.fn(() => leagueDoc) };
-
-    adminMocks.collection.mockImplementation((collectionName: string) =>
-      collectionName === 'leagueMembers' ? query : leaguesCollection
-    );
-
-    await expect(canManageLeague('league-1', 'owner-user')).resolves.toBe(true);
-
-    expect(adminMocks.collection).toHaveBeenCalledWith('leagues');
-    expect(leaguesCollection.doc).toHaveBeenCalledWith('league-1');
   });
 
   it('normalizes canonical member documents with embedded defaults', () => {
@@ -637,5 +585,96 @@ describe('leagueMembership architecture helpers', () => {
       source: 'legacy',
       isActive: true,
     });
+  });
+
+  it('lists members of a Prisma league from Prisma, skipping removed rows', async () => {
+    const joinedAt = new Date('2026-06-01T00:00:00.000Z');
+    prismaMocks.leagueFindUnique.mockResolvedValue({
+      ownerId: 'owner-user',
+      members: [
+        {
+          id: 'm-owner',
+          userId: 'owner-user',
+          role: 'OWNER',
+          teamName: 'Owner FC',
+          teamLogoUrl: null,
+          teamLogoPositionX: null,
+          teamLogoPositionY: null,
+          teamLogoZoom: null,
+          joinedAt,
+          leftAt: null,
+          isActive: true,
+          status: 'ACTIVE',
+          isCoCommissioner: false,
+        },
+        {
+          id: 'm-co',
+          userId: 'co-user',
+          role: 'MANAGER',
+          teamName: 'Co FC',
+          teamLogoUrl: 'https://cdn.example.com/co.png',
+          teamLogoPositionX: null,
+          teamLogoPositionY: null,
+          teamLogoZoom: null,
+          joinedAt,
+          leftAt: null,
+          isActive: true,
+          status: 'ACTIVE',
+          isCoCommissioner: true,
+        },
+        {
+          id: 'm-gone',
+          userId: 'gone-user',
+          role: 'MANAGER',
+          teamName: 'Gone FC',
+          teamLogoUrl: null,
+          teamLogoPositionX: null,
+          teamLogoPositionY: null,
+          teamLogoZoom: null,
+          joinedAt,
+          leftAt: joinedAt,
+          isActive: false,
+          status: 'removed',
+          isCoCommissioner: false,
+        },
+      ],
+    });
+
+    const members = await listActiveLeagueMembers('league-1');
+
+    expect(members).toEqual([
+      {
+        id: 'm-owner',
+        leagueId: 'league-1',
+        userId: 'owner-user',
+        role: 'owner',
+        teamName: 'Owner FC',
+        joinedAt,
+        isActive: true,
+        source: 'prisma',
+      },
+      {
+        id: 'm-co',
+        leagueId: 'league-1',
+        userId: 'co-user',
+        role: 'admin',
+        teamName: 'Co FC',
+        teamLogoUrl: 'https://cdn.example.com/co.png',
+        joinedAt,
+        isActive: true,
+        source: 'prisma',
+      },
+    ]);
+    expect(adminMocks.collection).not.toHaveBeenCalled();
+  });
+
+  it('reads Firestore directly when a caller needs the compatibility projection', async () => {
+    prismaMocks.leagueFindUnique.mockResolvedValue({ ownerId: 'owner-user', members: [] });
+    adminMocks.collection.mockImplementation(() => {
+      throw new Error('firestore-read');
+    });
+
+    await expect(listActiveFirestoreLeagueMembers('league-1')).rejects.toThrow('firestore-read');
+    expect(prismaMocks.leagueFindUnique).not.toHaveBeenCalled();
   });
 });

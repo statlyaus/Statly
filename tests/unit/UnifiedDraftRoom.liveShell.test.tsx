@@ -20,14 +20,33 @@ const draftWatchlistSpy = vi.hoisted(() => vi.fn());
 const openLeagueSocialSpy = vi.hoisted(() => vi.fn());
 const setLeagueContextSpy = vi.hoisted(() => vi.fn());
 const updateQueueSpy = vi.hoisted(() => vi.fn());
+const makePickSpy = vi.hoisted(() => vi.fn());
+const dismissPickFeedbackSpy = vi.hoisted(() => vi.fn());
+const forceRefreshSpy = vi.hoisted(() => vi.fn());
+const startDraftSpy = vi.hoisted(() => vi.fn());
+const dismissStartFeedbackSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
   availablePlayers: DraftRoomPlayerFixture[];
   isSaving: boolean;
+  canMakePick: boolean;
+  isYourTurn: boolean;
+  startFeedback: { message: string } | null;
+  pickFeedback: {
+    status: 'submitting' | 'failed';
+    playerId: string;
+    playerName?: string;
+    message?: string;
+    recovery?: 'retry' | 'refresh' | 'choose-another';
+  } | null;
 }>(() => ({
   status: 'LIVE',
   isSaving: false,
+  canMakePick: false,
+  isYourTurn: false,
+  startFeedback: null,
+  pickFeedback: null,
   availablePlayers: [
     {
       id: 'player-1',
@@ -76,8 +95,8 @@ vi.mock('@/components/ui/ErrorBoundary', () => ({
 }));
 
 vi.mock('@/components/LivePickHeader', () => ({
-  default: () => (
-    <section role="banner" aria-label="Live draft status">
+  default: ({ isYourTurn }: { isYourTurn: boolean }) => (
+    <section role="banner" aria-label="Live draft status" data-your-turn={String(isYourTurn)}>
       Live pick header
     </section>
   ),
@@ -183,7 +202,13 @@ vi.mock('@/components/draft/PlayerGrid', () => ({
 vi.mock('@/contexts/DraftContext', () => ({
   useDraft: () => ({
     availablePlayers: draftContext.availablePlayers,
-    canMakePick: false,
+    canMakePick: draftContext.canMakePick,
+    isYourTurn: draftContext.isYourTurn,
+    pickFeedback: draftContext.pickFeedback,
+    dismissPickFeedback: dismissPickFeedbackSpy,
+    startFeedback: draftContext.startFeedback,
+    dismissStartFeedback: dismissStartFeedbackSpy,
+    startDraft: startDraftSpy,
     connection: { status: 'disconnected' },
     draft: {
       id: 'draft-1',
@@ -203,11 +228,11 @@ vi.mock('@/contexts/DraftContext', () => ({
     },
     draftReadiness: { blockers: [] },
     error: null,
-    forceRefresh: vi.fn(),
+    forceRefresh: forceRefreshSpy,
     isLoading: false,
     isSaving: draftContext.isSaving,
     liveState: { isYourTurn: false },
-    makePick: vi.fn(),
+    makePick: makePickSpy,
     participants: [
       {
         id: 'member-1',
@@ -266,6 +291,15 @@ describe('UnifiedDraftRoom live shell composition', () => {
     updateQueueSpy.mockResolvedValue(undefined);
     draftContext.status = 'LIVE';
     draftContext.isSaving = false;
+    draftContext.canMakePick = false;
+    draftContext.isYourTurn = false;
+    draftContext.pickFeedback = null;
+    draftContext.startFeedback = null;
+    startDraftSpy.mockReset();
+    dismissStartFeedbackSpy.mockReset();
+    makePickSpy.mockReset();
+    dismissPickFeedbackSpy.mockReset();
+    forceRefreshSpy.mockReset();
     draftContext.availablePlayers = [
       {
         id: 'player-1',
@@ -284,6 +318,10 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     expect(screen.getByText('Test AFL Champions League - LIVE')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute('href', '/drafts');
+    // Leaving the room is a quiet secondary action, never the loudest control on the page.
+    expect(screen.getByRole('link', { name: 'Back to drafts' }).className).not.toMatch(
+      /draft-broadcast-red|rounded-full|shadow-\[0_0/
+    );
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/drafts/history?leagueId=league-1'
@@ -528,5 +566,112 @@ describe('UnifiedDraftRoom live shell composition', () => {
     fireEvent.keyDown(mobileFeedButton as HTMLElement, { key: 'Escape' });
 
     expect(screen.queryByRole('dialog', { name: 'Pick Feed' })).not.toBeInTheDocument();
+  });
+
+  it('announces a pick while the server confirms it', () => {
+    draftContext.pickFeedback = {
+      status: 'submitting',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('status', { name: 'Pick status' })).toHaveTextContent(
+      'Submitting your pick: Caleb Daniel'
+    );
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+  });
+
+  it('keeps the board open and offers Retry and Dismiss after a rejected pick', () => {
+    draftContext.canMakePick = true;
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+      message: 'Failed to make pick',
+      recovery: 'retry',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    const alert = screen.getByRole('alert', { name: 'Pick status' });
+    expect(alert).toHaveTextContent('Pick not made: Caleb Daniel. Failed to make pick');
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry pick' }));
+    expect(makePickSpy).toHaveBeenCalledWith('player-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(dismissPickFeedbackSpy).toHaveBeenCalled();
+  });
+
+  it('asks for a refresh instead of a retry when the pick may already be saved', () => {
+    draftContext.canMakePick = true;
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      message: 'The pick was sent but the room did not receive confirmation. Refresh the room.',
+      recovery: 'refresh',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('button', { name: 'Retry pick' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh room' }));
+    expect(forceRefreshSpy).toHaveBeenCalled();
+  });
+
+  it("offers only Dismiss when the player was taken or it is not the manager's turn", () => {
+    draftContext.canMakePick = true;
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+      message: 'That player was just drafted by someone else.',
+      recovery: 'choose-another',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('alert', { name: 'Pick status' })).toHaveTextContent(
+      'That player was just drafted by someone else.'
+    );
+    expect(screen.queryByRole('button', { name: 'Retry pick' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh room' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+  });
+
+  it('keeps the room open and offers Try again after the draft fails to start', () => {
+    draftContext.status = 'SCHEDULED';
+    draftContext.startFeedback = { message: 'Failed to start draft' };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('alert', { name: 'Draft start status' })).toHaveTextContent(
+      'The draft did not start. Failed to start draft'
+    );
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try starting again' }));
+    expect(startDraftSpy).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss draft start message' }));
+    expect(dismissStartFeedbackSpy).toHaveBeenCalled();
+  });
+
+  it('drops a stale start-failure alert once the draft is live', () => {
+    draftContext.status = 'LIVE';
+    draftContext.startFeedback = { message: 'Failed to start draft' };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('alert', { name: 'Draft start status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try starting again' })).not.toBeInTheDocument();
+  });
+
+  it("tells the pick header it is the manager's turn from the room's on-clock state", () => {
+    // liveState.isYourTurn is never set by the server, so the header must not rely on it.
+    draftContext.isYourTurn = true;
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('banner', { name: 'Live draft status' })).toHaveAttribute(
+      'data-your-turn',
+      'true'
+    );
   });
 });

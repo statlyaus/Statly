@@ -35,6 +35,10 @@ import {
   aflTradePreparedValuationInputSetSchema,
   type AflTradePreparedValuationInputSet,
 } from './preparedValuationInputSet';
+import {
+  type AflTradePrivateEvaluationCohortExecutionLimits,
+  resolveAflTradePrivateEvaluationCohortExecutionLimits,
+} from './privateEvaluationCohortExecution';
 
 type PublicCurrentValuationCohortConstructionContext = Extract<
   AflTradeCurrentValuationCohortConstructionContext,
@@ -1024,12 +1028,14 @@ export function createPostgresAflTradeCurrentValuationCohortCoordinator(dependen
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
   readonly factualReleaseScopeKey: string;
-  readonly maximumConcurrency?: number;
+  readonly executionLimits?: AflTradePrivateEvaluationCohortExecutionLimits;
   readonly loadConstructionEvidence: Parameters<
     typeof createPostgresAflTradeCurrentValuationCohortAuthorityCapture
   >[0]['loadConstructionEvidence'];
   readonly constructTrade: AflTradeCurrentValuationTradePreparationDependencies['construct'];
 }) {
+  const executionLimits =
+    dependencies.executionLimits ?? resolveAflTradePrivateEvaluationCohortExecutionLimits();
   const staging = createPostgresGovernedPrivateEvaluationStagingRepository({
     client: dependencies.client,
     artifactRepository: dependencies.artifactRepository,
@@ -1045,9 +1051,7 @@ export function createPostgresAflTradeCurrentValuationCohortCoordinator(dependen
     registerManifest: (manifest) => manifests.register(manifest),
   });
   return createAflTradeCurrentValuationCohortCoordinator({
-    ...(dependencies.maximumConcurrency === undefined
-      ? {}
-      : { maximumConcurrency: dependencies.maximumConcurrency }),
+    maximumConcurrency: executionLimits.maximumConcurrency,
     captureCurrent: createPostgresAflTradeCurrentValuationCohortAuthorityCapture({
       client: dependencies.client,
       factualReleaseScopeKey: dependencies.factualReleaseScopeKey,
@@ -1065,7 +1069,7 @@ export function createPostgresAflTradePrivateCurrentValuationCohortCoordinator(d
   readonly client: AflOutcomeSqlClient;
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
-  readonly maximumConcurrency?: number;
+  readonly executionLimits?: AflTradePrivateEvaluationCohortExecutionLimits;
   /** Required for a new v2 target cohort; legacy v1 retains its existing release parent. */
   readonly cohortLineageAdmissionId?: string;
   readonly selectValuationInputBundleId: AflTradePrivateCurrentValuationInputBundleSelector;
@@ -1074,6 +1078,8 @@ export function createPostgresAflTradePrivateCurrentValuationCohortCoordinator(d
   >[0]['loadConstructionEvidence'];
   readonly constructTrade: AflTradeCurrentValuationTradePreparationDependencies['construct'];
 }) {
+  const executionLimits =
+    dependencies.executionLimits ?? resolveAflTradePrivateEvaluationCohortExecutionLimits();
   const capture = createPostgresAflTradePrivateCurrentValuationCohortAuthorityCapture({
     client: dependencies.client,
     selectValuationInputBundleId: dependencies.selectValuationInputBundleId,
@@ -1122,9 +1128,7 @@ export function createPostgresAflTradePrivateCurrentValuationCohortCoordinator(d
 
         const context = await capture(input);
         const coordinator = createAflTradeCurrentValuationCohortCoordinator({
-          ...(dependencies.maximumConcurrency === undefined
-            ? {}
-            : { maximumConcurrency: dependencies.maximumConcurrency }),
+          maximumConcurrency: executionLimits.maximumConcurrency,
           captureCurrent: async () => context,
           prepareTrade: (preparation) => tradePreparer.prepare(preparation),
           commitIfCurrent: ({ context: unparsedContext, preparedInputSet }) => {

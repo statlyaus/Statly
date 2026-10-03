@@ -101,8 +101,6 @@ export interface StartingLineupRequirements {
   RUCK: number;
   FLEX?: number; // Flexible positions
   UTIL?: number; // Utility positions
-  CAPTAIN: number; // Captain selections
-  VICE_CAPTAIN: number; // Vice-captain selections
 }
 
 export interface PositionLimits {
@@ -188,8 +186,6 @@ export interface PointsSystemSettings {
   baseScoring: { [statName: string]: number };
   bonusRules: ScoringBonusRule[];
   penaltyRules: PenaltyRule[];
-  captainMultiplier: number;
-  viceCaptainMultiplier: number;
   emergencyScoring: boolean;
 }
 
@@ -265,7 +261,6 @@ export interface LockoutSchedule {
   weeklyLockout: boolean; // Lock entire roster at start of week
   customLockouts: CustomLockout[];
   emergencyChanges: EmergencyChangeSettings;
-  captainLockout: CaptainLockoutSettings;
 }
 
 export interface CustomLockout {
@@ -280,12 +275,6 @@ export interface EmergencyChangeSettings {
   emergencyWindow: number; // Hours before game start
   maxEmergencyChanges: number; // Per round
   positions: string[]; // Which positions allow emergency changes
-}
-
-export interface CaptainLockoutSettings {
-  captainLockoutTime: string; // Time before round starts
-  allowCaptainChanges: boolean;
-  viceCaptainPromotion: boolean; // Auto-promote VC if C doesn't play
 }
 
 export interface PositionConfiguration {
@@ -1208,8 +1197,6 @@ export class UserProfileService {
         MID: 8,
         FWD: 6,
         RUCK: 2,
-        CAPTAIN: 1,
-        VICE_CAPTAIN: 1,
       },
       positionLimits: {
         DEF: { min: 6, max: 10 },
@@ -1259,8 +1246,6 @@ export class UserProfileService {
         },
         bonusRules: [],
         penaltyRules: [],
-        captainMultiplier: 2,
-        viceCaptainMultiplier: 1.5,
         emergencyScoring: true,
       },
       matchupSettings: {
@@ -1301,11 +1286,6 @@ export class UserProfileService {
         emergencyWindow: 2, // 2 hours before game
         maxEmergencyChanges: 2,
         positions: ['DEF', 'MID', 'FWD', 'RUCK'],
-      },
-      captainLockout: {
-        captainLockoutTime: '19:30', // 7:30 PM
-        allowCaptainChanges: true,
-        viceCaptainPromotion: true,
       },
     };
   }

@@ -32,9 +32,19 @@ describe('audited navigation destination contract', () => {
 
   it('preserves Team Analytics as the post-login destination', () => {
     const teamAnalyticsPage = readRepoFile('src/app/(app)/team-analytics/page.tsx');
+    const leagueToolPage = readRepoFile('src/components/league/tools/LeagueToolPage.tsx');
 
-    expect(teamAnalyticsPage).toContain('href="/login?callbackUrl=/team-analytics"');
+    expect(teamAnalyticsPage).toContain('path="/team-analytics"');
+    expect(leagueToolPage).toContain('redirect(`/login?callbackUrl=${encodeURIComponent(path)}`)');
     expect(teamAnalyticsPage).not.toContain('/auth/signin');
     expect(teamAnalyticsPage).not.toContain('window.location.href');
+  });
+
+  it("scopes the league tools to one of the viewer's leagues instead of demo data", () => {
+    for (const route of ['leaderboard', 'live-scoring', 'team-analytics']) {
+      const page = readRepoFile(`src/app/(app)/${route}/page.tsx`);
+      expect(page).toContain('LeagueToolPage');
+      expect(page).not.toMatch(/mock|Matthew's Monstrous Team|The Bulldogs/);
+    }
   });
 });

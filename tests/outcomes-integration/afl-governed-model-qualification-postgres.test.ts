@@ -128,13 +128,15 @@ function componentRuns() {
 async function qualificationFixture(
   runs: Awaited<ReturnType<typeof componentRuns>>,
   suffix: string,
-  passing: boolean
+  passing: boolean,
+  scopeKey = 'afl-men:2026-trades'
 ) {
   const policy = createGovernedValuationModelQualificationPolicy({
     player: {
       schemaVersion: 'governed-player-model-qualification-criteria/v1' as const,
       minimumComparableObservations: suffix === 'premature' ? 99 : 100,
-      minimumRelativeMaeImprovement: suffix === 'v2' ? 0.04 : passing ? 0.05 : 0.1,
+      minimumRelativeMaeImprovement:
+        suffix === 'v2' ? 0.04 : suffix === 'superseding' ? 0.045 : passing ? 0.05 : 0.1,
       minimumRelativeRmseImprovement: 0.05,
       requiredAcceptanceOutcome: 'meets_declared_predictive_thresholds' as const,
     },
@@ -162,7 +164,7 @@ async function qualificationFixture(
   const pickEvidence = deriveGovernedPickModelQualificationEvidence(runs.pickValidationReport);
   const qualification = createGovernedValuationModelQualification({
     environment: 'non_production',
-    scopeKey: 'afl-men:2026-trades',
+    scopeKey,
     evaluatedAt,
     policy,
     policyArtifact: await retain(policy, evaluatedAt),
@@ -1593,5 +1595,100 @@ describe('governed model qualification PostgreSQL registry', () => {
         },
       ],
     });
+  }, 120_000);
+
+  it('advances a superseding qualified pair and marks the first pair superseded', async () => {
+    // A newer qualified pair must succeed the older one, which no passing registration in this suite
+    // did: they all asserted revision 1. This runs on its own scope so the head starts empty and the
+    // seeded component runs have no accepted model operation. The dispatch fence in 0079 keys on
+    // (scope, player run, pick run), so reusing the default scope would demand a live claim that a
+    // later registration cannot hold.
+    const scopeKey = 'afl-men:2027-trades';
+    // A second player run makes the pair new. The dispatch fence in 0079 keys on the run pair, not on
+    // the scope, so reusing the suite's seeded runs would demand a live dispatch claim that a plain
+    // registration cannot hold — and it is a newer pair that this test exists to prove.
+    const runs = await seedGovernedQualificationComponentRuns({
+      pool,
+      artifacts,
+      retain,
+      retainedAt,
+      variant: 'successor',
+    });
+    const repository = new PostgresGovernedValuationModelQualificationRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository: artifacts,
+      maximumArtifactBytes: 1024 * 1024,
+    });
+    const ledgerRevision = async () =>
+      (await pool.query<{ revision: number }>('SELECT revision FROM outcome_gate_ledger_head'))
+        .rows[0]!.revision;
+    // The ledger CAS requires each append to be chronologically later than everything already
+    // recorded, so derive the decision times from the data rather than a fixed constant.
+    const latestDecision = (
+      await pool.query<{ at: Date | null }>(
+        'SELECT max(decided_at) AS at FROM outcome_gate_decision'
+      )
+    ).rows[0]!.at;
+
+    const first = await qualificationFixture(runs, 'v1', true, scopeKey);
+    const firstGates = createGovernedValuationModelQualificationGateRecords({
+      ...first,
+      decidedAt: new Date((latestDecision ?? new Date(0)).getTime() + 60_000).toISOString(),
+      automationPrincipal: 'statly-model-qualification-agent',
+      accountableOwner: 'statly-model-owner',
+      versions: { player: 1, pick: 1 },
+      supersedes: { player: null, pick: null },
+    });
+    await expect(
+      repository.register({
+        ...first,
+        expectedGateLedgerRevision: await ledgerRevision(),
+        expectedCurrentRevision: 0,
+        gateRecords: firstGates,
+      }),
+      'layer: the first pair must establish outcome_current_governed_valuation_model_pair at revision 1'
+    ).resolves.toMatchObject({
+      status: 'advanced',
+      idempotentReplay: false,
+      current: { revision: 1, qualificationId: first.qualification.qualificationId },
+    });
+
+    const second = await qualificationFixture(runs, 'superseding', true, scopeKey);
+    const secondGates = createGovernedValuationModelQualificationGateRecords({
+      ...second,
+      decidedAt: new Date((latestDecision ?? new Date(0)).getTime() + 120_000).toISOString(),
+      automationPrincipal: 'statly-model-qualification-agent',
+      accountableOwner: 'statly-model-owner',
+      versions: { player: 2, pick: 2 },
+      supersedes: {
+        player: firstGates[0].decision.decisionId,
+        pick: firstGates[1].decision.decisionId,
+      },
+    });
+    await expect(
+      repository.register({
+        ...second,
+        expectedGateLedgerRevision: await ledgerRevision(),
+        expectedCurrentRevision: 1,
+        gateRecords: secondGates,
+      }),
+      'layer: the superseding pair must advance the head 1 -> 2 through the gate ledger CAS; a ' +
+        'STALE_GATE_LEDGER or STALE_CURRENT_PAIR code here means the successor was refused, not applied'
+    ).resolves.toMatchObject({
+      status: 'advanced',
+      idempotentReplay: false,
+      current: { revision: 2, qualificationId: second.qualification.qualificationId },
+    });
+    // The first pair is superseded rather than merely replaced: both of its decisions now have a
+    // successor, which is what makes the earlier authority stale.
+    await expect(
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM outcome_gate_decision
+          WHERE supersedes_decision_id=ANY($1::text[])`,
+        [[firstGates[0].decision.decisionId, firstGates[1].decision.decisionId]]
+      ),
+      'layer: outcome_gate_decision.supersedes_decision_id must link both v1 decisions to their ' +
+        'successors; fewer than two means the earlier authority was replaced rather than superseded'
+    ).resolves.toMatchObject({ rows: [{ count: 2 }] });
   }, 120_000);
 });

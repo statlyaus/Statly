@@ -25,92 +25,34 @@ export default async function RegisterPage({
     toSafeRedirect(pickFirst(params.callbackUrl)) ?? toSafeRedirect(pickFirst(params.next));
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="flex">
-        {/* Left side - Branding */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 to-blue-700 relative overflow-hidden">
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="relative z-10 flex flex-col justify-center px-12 text-white">
-            <div className="max-w-md">
-              <h2 className="text-4xl font-bold mb-6">Join Statly Today</h2>
-              <p className="text-xl mb-8 text-purple-100">
-                Create your account and start dominating your fantasy leagues with advanced
-                analytics and insights.
-              </p>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">Free to start, premium features available</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">
-                    Join thousands of fantasy sports enthusiasts
-                  </span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-300 rounded-full"></div>
-                  <span className="text-purple-100">Advanced AI-powered recommendations</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* Decorative elements */}
-          <div
-            className="absolute top-10 right-10 w-32 h-32 bg-white/10 rounded-full blur-xl"
-            aria-hidden="true"
-            role="presentation"
-          ></div>
-          <div
-            className="absolute bottom-10 left-10 w-24 h-24 bg-white/10 rounded-full blur-xl"
-            aria-hidden="true"
-            role="presentation"
-          ></div>
-        </div>
-
-        {/* Right side - Register Form */}
-        <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-          <div className="w-full max-w-md">
-            {/* Mobile branding */}
-            <div className="lg:hidden text-center mb-8">
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-4 py-8 sm:px-6 lg:px-8">
+        <section className="w-full py-8 sm:py-10">
+          <div className="mx-auto w-full max-w-xl">
+            <div className="mb-10 text-center">
               <Image
-                src="/brand/statly-wordmark-logo.png"
+                src="/brand/statly-primary-logo.png"
                 alt="Statly"
-                width={182}
-                height={60}
+                width={312}
+                height={118}
                 priority
-                className="mx-auto mb-2 h-auto w-36"
+                className="mx-auto mb-8 h-auto w-64 max-w-full sm:w-80"
               />
-              <p className="text-slate-600 dark:text-slate-400">Fantasy Sports Dashboard</p>
+              <h1 className="text-3xl font-semibold tracking-normal text-foreground">
+                Create your Statly account
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                Start or join a category head-to-head AFL fantasy league.
+              </p>
             </div>
 
-            {/* Register Card */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
-              <div className="text-center mb-8">
-                <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 mb-4">
-                  <Image
-                    src="/brand/statly-compact-logo.png"
-                    alt="Statly logo"
-                    width={58}
-                    height={39}
-                    priority
-                    className="h-10 w-14 object-contain"
-                  />
-                </div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                  Create Account
-                </h1>
-                <p className="text-slate-600 dark:text-slate-400">
-                  Join Statly to track your fantasy sports performance
-                </p>
-              </div>
-
+            <div className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
               <Suspense
                 fallback={
                   <div className="animate-pulse space-y-6">
-                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                    <div className="h-12 rounded-lg bg-muted"></div>
+                    <div className="h-12 rounded-lg bg-muted"></div>
+                    <div className="h-12 rounded-lg bg-muted"></div>
                   </div>
                 }
               >
@@ -123,20 +65,19 @@ export default async function RegisterPage({
                 />
               </Suspense>
 
-              {/* Additional actions */}
-              <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-                <div className="flex flex-col space-y-3">
-                  <Button href="/login" variant="secondary" className="w-full justify-center">
-                    Already have an account? Sign in
-                  </Button>
-                </div>
+              <div className="mt-8 border-t border-border pt-6">
+                <Button href="/login" variant="secondary" className="w-full justify-center">
+                  Already have an account? Sign in
+                </Button>
               </div>
             </div>
 
-            {/* Footer */}
-            <LegalLinks prefix="By creating an account, you agree to our" className="mt-8" />
+            <LegalLinks
+              prefix="By creating an account, you agree to our"
+              className="mt-8 text-center"
+            />
           </div>
-        </div>
+        </section>
       </div>
     </main>
   );

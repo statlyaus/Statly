@@ -58,6 +58,11 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: FetchJsonIni
 import { isDevelopmentAuthEnabled, readStoredDevelopmentAuthUserId } from '@/lib/devAuth';
 import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewStore';
 
+/** Callers such as the draft room choose recovery by status (409 taken, 423 not your turn). */
+function withHttpStatus(error: Error, status: number): Error & { status: number } {
+  return Object.assign(error, { status });
+}
+
 /**
  * A reusable fetch wrapper for making API calls.
  * This function should be exported so it can be used in other files.
@@ -110,10 +115,16 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       errorData = responseText.trim() ? JSON.parse(responseText) : null;
     } catch (_parseError) {
       const suffix = responseText.trim() ? ` - ${responseText.trim()}` : '';
-      throw new Error(`HTTP ${response.status}: ${response.statusText}${suffix}`);
+      throw withHttpStatus(
+        new Error(`HTTP ${response.status}: ${response.statusText}${suffix}`),
+        response.status
+      );
     }
 
-    throw new Error(getApiErrorMessage(errorData, response.status, response.statusText));
+    throw withHttpStatus(
+      new Error(getApiErrorMessage(errorData, response.status, response.statusText)),
+      response.status
+    );
   }
 
   // Check if response has content

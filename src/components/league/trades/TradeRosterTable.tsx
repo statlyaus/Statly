@@ -17,9 +17,14 @@ interface TradeRosterTableProps {
   selectedIds: string[];
   disabled: boolean;
   onTogglePlayer: (playerId: string) => void;
+  /** Replaces the selected count at the end of the toolbar, e.g. a "Next" step. */
+  toolbarEnd?: React.ReactNode;
 }
 
 type SortKey = 'player' | LeaguePlayerStatDatasetDto['columns'][number]['key'];
+
+const POSITION_FILTERS = ['ALL', 'DEF', 'MID', 'RUC', 'FWD'] as const;
+type PositionFilter = (typeof POSITION_FILTERS)[number];
 type SortDirection = 'ascending' | 'descending';
 
 export function TradeRosterTable({
@@ -28,18 +33,26 @@ export function TradeRosterTable({
   selectedIds,
   disabled,
   onTogglePlayer,
+  toolbarEnd,
 }: TradeRosterTableProps): React.JSX.Element {
   const id = useId();
   const [query, setQuery] = useState('');
+  const [position, setPosition] = useState<PositionFilter>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('player');
   const [sortDirection, setSortDirection] = useState<SortDirection>('ascending');
   const normalizedQuery = query.trim().toLowerCase();
   const heading = `${team.teamName} sends`;
   const visiblePlayers = useMemo(() => {
-    const filtered = team.players.filter((player) =>
-      [player.name, player.club, player.position].some((value) =>
-        value.toLowerCase().includes(normalizedQuery)
-      )
+    const filtered = team.players.filter(
+      (player) =>
+        (position === 'ALL' ||
+          player.position
+            .split('/')
+            .map((part) => part.trim().toUpperCase())
+            .includes(position)) &&
+        [player.name, player.club, player.position].some((value) =>
+          value.toLowerCase().includes(normalizedQuery)
+        )
     );
 
     return [...filtered].sort((left, right) => {
@@ -54,7 +67,7 @@ export function TradeRosterTable({
         sortDirection
       );
     });
-  }, [normalizedQuery, playerStats.playersById, sortDirection, sortKey, team.players]);
+  }, [normalizedQuery, playerStats.playersById, position, sortDirection, sortKey, team.players]);
 
   function updateSort(nextKey: SortKey): void {
     if (nextKey === sortKey) {
@@ -66,46 +79,57 @@ export function TradeRosterTable({
   }
 
   return (
-    <section
-      aria-labelledby={`${id}-heading`}
-      className="min-w-0 overflow-hidden rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]"
-    >
-      <div className="space-y-4 border-b border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h4 id={`${id}-heading`} className="text-base font-bold text-[color:var(--trade-text)]">
-              {heading}
-            </h4>
-            <p className="mt-0.5 text-xs text-[color:var(--trade-text-muted)]">
-              Select players from {team.teamName}
-            </p>
-          </div>
-          <span className="shrink-0 rounded-md border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-2 py-1 text-xs font-bold tabular-nums text-[color:var(--trade-text)]">
-            {selectedIds.length} selected
-          </span>
+    <section aria-labelledby={`${id}-heading`} className="min-w-0 bg-[color:var(--trade-surface)]">
+      <h4 id={`${id}-heading`} className="sr-only">
+        {heading}
+      </h4>
+      <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--trade-border)] px-3 py-2.5">
+        <label htmlFor={`${id}-search`} className="sr-only">
+          Search {team.teamName} roster
+        </label>
+        <div className="relative min-w-0 flex-1 basis-44">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--trade-text-muted)]"
+          />
+          <input
+            id={`${id}-search`}
+            type="search"
+            value={query}
+            disabled={disabled}
+            onChange={(event) => setQuery(event.target.value)}
+            className="h-11 w-full rounded-md border sm:h-9 border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] pl-9 pr-3 text-sm text-[color:var(--trade-text)] outline-none placeholder:text-[color:var(--trade-text-muted)] focus:border-[color:var(--trade-focus)] focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]/20 disabled:opacity-60"
+            placeholder="Search players"
+          />
         </div>
-        <div>
-          <label
-            htmlFor={`${id}-search`}
-            className="text-xs font-semibold text-[color:var(--trade-text)]"
-          >
-            Search <span className="sr-only">{team.teamName} </span>roster
-          </label>
-          <div className="relative mt-1.5">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--trade-text-muted)]"
-            />
-            <input
-              id={`${id}-search`}
-              type="search"
-              value={query}
+        <div
+          role="group"
+          aria-label={`Filter ${team.teamName} by position`}
+          className="flex h-11 items-stretch rounded-md sm:h-9 border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] p-0.5"
+        >
+          {POSITION_FILTERS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={position === option}
               disabled={disabled}
-              onChange={(event) => setQuery(event.target.value)}
-              className="h-11 w-full rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] pl-10 pr-3 text-sm text-[color:var(--trade-text)] outline-none placeholder:text-[color:var(--trade-text-muted)] focus:border-[color:var(--trade-focus)] focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]/20 disabled:opacity-60"
-              placeholder="Player, club, or position"
-            />
-          </div>
+              onClick={() => setPosition(option)}
+              className={`rounded px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] disabled:opacity-60 ${
+                position === option
+                  ? 'bg-[color:var(--trade-selection)] text-white'
+                  : 'text-[color:var(--trade-text-muted)] hover:text-[color:var(--trade-text)]'
+              }`}
+            >
+              {option === 'ALL' ? 'All' : option}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex shrink-0 items-center">
+          {toolbarEnd ?? (
+            <span className="text-xs font-semibold tabular-nums text-[color:var(--trade-text-muted)]">
+              {selectedIds.length} selected
+            </span>
+          )}
         </div>
       </div>
 
@@ -113,7 +137,7 @@ export function TradeRosterTable({
       <div
         tabIndex={0}
         aria-label={`${team.teamName} roster table, horizontally scrollable`}
-        className="max-h-[32rem] overflow-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
+        className="relative max-h-[min(36rem,65dvh)] overflow-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
       >
         <table className="w-full min-w-max border-collapse text-left">
           <caption className="sr-only">
@@ -121,11 +145,11 @@ export function TradeRosterTable({
             selected.
           </caption>
           <thead className="sticky top-0 z-20 bg-[color:var(--trade-surface-subtle)]">
-            <tr className="border-b border-[color:var(--trade-border-strong)]">
+            <tr className="border-b border-[color:var(--trade-border)]">
               <th
                 scope="col"
                 aria-sort={sortKey === 'player' ? sortDirection : 'none'}
-                className="sticky left-0 z-30 min-w-60 border-l-[3px] border-l-transparent bg-[color:var(--trade-surface-subtle)] px-3"
+                className="sticky left-0 z-30 min-w-56 border-l-[3px] border-l-transparent bg-[color:var(--trade-surface-subtle)] px-3"
               >
                 <SortButton
                   label="Player"
@@ -140,7 +164,7 @@ export function TradeRosterTable({
                   key={column.key}
                   scope="col"
                   aria-sort={sortKey === column.key ? sortDirection : 'none'}
-                  className="min-w-24 px-3 text-right"
+                  className="w-14 min-w-14 px-2 text-right"
                 >
                   <SortButton
                     label={column.shortLabel}
@@ -175,7 +199,7 @@ export function TradeRosterTable({
                     }
                     onTogglePlayer(player.id);
                   }}
-                  className={`group h-14 border-b border-[color:var(--trade-border)] transition-colors last:border-0 ${
+                  className={`group h-12 border-b border-[color:var(--trade-border)] transition-colors last:border-0 ${
                     disabled ? 'cursor-default' : 'cursor-pointer'
                   } ${
                     selected
@@ -222,11 +246,10 @@ export function TradeRosterTable({
                           <span className="block truncate text-sm font-semibold text-[color:var(--trade-text)]">
                             {player.name}
                           </span>
-                          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-[color:var(--trade-text-muted)]">
-                            <span className="rounded border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-1.5 py-0.5 font-semibold text-[color:var(--trade-text)]">
-                              {player.position}
-                            </span>
-                            <span className="font-medium">{teamAbbreviation}</span>
+                          <span className="block truncate text-xs text-[color:var(--trade-text-muted)]">
+                            <span className="font-semibold">{player.position}</span>
+                            <span aria-hidden="true"> · </span>
+                            <span>{teamAbbreviation}</span>
                           </span>
                         </span>
                       </label>
@@ -235,7 +258,7 @@ export function TradeRosterTable({
                   {playerStats.columns.map((column) => (
                     <td
                       key={column.key}
-                      className="px-3 py-2 text-right text-sm font-medium tabular-nums text-[color:var(--trade-text)]"
+                      className="px-2 py-2 text-right text-sm tabular-nums text-[color:var(--trade-text)]"
                     >
                       {formatStatValue(
                         playerStats.playersById[player.id]?.values[column.key],
@@ -252,9 +275,7 @@ export function TradeRosterTable({
                   colSpan={playerStats.columns.length + 1}
                   className="bg-[color:var(--trade-surface-subtle)] p-6 text-center text-sm text-[color:var(--trade-text-muted)]"
                 >
-                  {team.players.length === 0
-                    ? 'No rostered players are available.'
-                    : 'No players match.'}
+                  {team.players.length === 0 ? 'No players on this roster.' : 'No players match.'}
                 </td>
               </tr>
             )}
@@ -292,7 +313,7 @@ function SortButton({
       title={`${completeLabel}. ${accessibleState}.`}
       onClick={onClick}
       aria-label={actionLabel}
-      className={`inline-flex h-11 w-full items-center gap-1.5 rounded p-0 text-xs font-bold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] ${
+      className={`inline-flex h-10 w-full items-center gap-1 rounded p-0 text-xs font-semibold text-[color:var(--trade-text-muted)] hover:text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] ${
         kind === 'player' ? 'justify-start' : 'justify-end'
       }`}
     >

@@ -220,6 +220,97 @@ Until the source and factual checklist passes, the public archive may expose onl
 historical records and truthful factual-unavailable states. Until the additional model checklist passes, it may
 expose reviewed factual outcomes but must keep valuation numerical states unavailable.
 
+## Raw evidence payload retention
+
+Evidence is retained in two layers with different lifetimes.
+
+**Retained indefinitely** — the verifiable chain: artifact custody rows, artifact ids and
+`content_sha256` digests, source captures, evidence batches, gate decisions, execution receipts,
+transition intents, completions, generations, and every canonical JSON payload that names them. These
+are what make a claim checkable, and nothing in this policy authorises deleting them.
+
+**Retained for at least 90 days, and for the capture's recorded retention term where that is
+longer** — raw payload bytes: the capture bodies themselves (the HTML or JSON a provider served, and
+derived artifacts whose bytes are only needed to reproduce a reading). Approved external captures
+record `rawRetentionDays` in their admission terms, and `outcome_external_retained_target_is_current`
+enforces `at_time < captured_at + rawRetentionDays`. Pruning earlier than that term would leave a
+capture the guard still treats as retained while its payload is unavailable, so the recorded term
+wins over the 90-day floor.
+
+After pruning, evidence is **verifiable but not replayable**. The custody row still proves which bytes
+were retained and what they hashed to, and the receipt chain still proves the order of events. A
+repository read of a removed object does not raise: `loadExact` returns `null`, and the higher-level
+`verifyAflTradeArtifactReadback` escalates that into a generic `READBACK_MISMATCH` error carrying no
+way to say why. Every procedure that depends on re-reading a payload — rehearsing a capture,
+reconciling a provider claim from its raw body, rebuilding a prepared input set from source bytes —
+must therefore complete inside the retention term, or the bytes must be restored from backup first.
+
+This policy changes no custody check. `outcome_external_retained_artifact_current` matches the custody
+row, which survives; it does not read bytes.
+
+### Pruning is not permitted until a pruned payload is distinguishable from a lost one
+
+Today the two are indistinguishable: after pruning the custody check still passes, while the byte
+reader fails generically, so a deliberate policy decision would look exactly like custody corruption
+to an operator and to the fail-closed guards.
+
+Pruning therefore requires, in the same change:
+
+1. a marker on the artifact custody row (for example `payload_pruned_at`, with the retention basis),
+   written when the bytes are removed, so a reader can tell pruned from missing; and
+2. the pruning job itself, deleting in bounded batches so locks stay short and autovacuum can reclaim
+   the space.
+
+Until both exist, retain everything.
+
+The 90-day floor is deliberately not recorded in the execution policy or any other constant
+beforehand. Recording a value before the reader that consumes it exists is precisely the defect the
+private evaluation execution policy carried until it was hardened; the floor becomes a recorded
+policy value only in the change that introduces its consumer, and even then the per-capture
+`rawRetentionDays` term takes precedence over it.
+
+### Where the bytes live, and what vacuum has to do with it
+
+Payload bytes are held in object storage, not in PostgreSQL: `outcome_artifact_custody` retains the
+reference and its `content_sha256` only. Deleting payloads is therefore an object-store operation, it
+creates no dead tuples, and it needs no `VACUUM` policy today.
+
+If a later change moves payload bodies into a table, that table becomes the first in this domain to
+take bulk deletes, and it will need explicit `autovacuum_vacuum_threshold` and
+`autovacuum_vacuum_scale_factor` overrides plus a `pg_stat_user_tables` check after each window. Until
+then the append-mostly defaults are adequate: the registry, gate, review, receipt and custody tables
+are small or append-only and are unaffected by pruning.
+
+### Locating retained evidence bytes
+
+Each non-production database has one registered local artifact store. A custody row is located when
+`outcome_artifact_custody_location` names the store and object key that hold its bytes. Run the
+location command against the loopback outcomes database and the store root that holds the
+repositories:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:locate-local -- \
+  --store-id <store-id> --artifact-root <durable-absolute-dir> \
+  --report <absolute-report.json>
+```
+
+The default is a dry run, which writes nothing to the database. It reads every envelope under the
+root back in full and prints what it would locate. Add `--apply` to register the store, at most once
+and at a permanent root, and to record locations. A rerun only adds locations that are still
+missing. The report file is created once and never overwritten. It is reserved before any database
+change, so an existing or unwritable report path stops the run with nothing registered or located,
+and a run that fails before finishing removes it. It lists:
+
+- located and already-located counts;
+- envelope-named files that are ordinary JSON, and envelopes that fail exact read-back;
+- files with no custody row, and duplicate copies;
+- conflicts, where the envelope's media type, length or environment differs from its custody row;
+- every unlocated custody row, grouped by class and by the custody the row recorded.
+
+Unlocated rows are never changed or deleted. Their bytes are missing from the registered store, and
+the grouping shows where each row said they were kept.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
@@ -547,6 +638,118 @@ supersede production Gate authority, and production execution cannot reuse non-p
     real-PostgreSQL contention and restart tests. A tick does not discover links, activate a release,
     calculate a grade, use the workbook, or publish unreviewed facts. Canonical promotion remains a
     reviewed private-corpus operation; factual and valuation activation remain separate milestones.
+
+### Capturing reviewed provider pages locally
+
+The owner's machine can capture `draftguru-trade-index`, `draftguru-trade-detail` and
+`official-afl-completed-draft-session` pages under the recorded issue-579 narrow decisions without
+S3, KMS or Redis. One command, `npm run outcomes:sources:capture-local-external`, serves every
+capability; only its target and URL builder differ per capability. It uses the same governed
+boundary as `outcomes:sources:ingest-external` (`ingestAuthorizedAflTradeExternalPage`): Gate 0A
+authority is resolved before and after each fetch, the capture/execution receipt is re-authenticated
+by PostgreSQL, and every parsed claim and issue is staged with `publicationEligible: false`. Only the
+custody and admission adapters differ:
+
+- raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
+  same adapter the local official-AFL and AFLCA captures use) under
+  `<artifact-root>/draftguru-trade-raw` or `<artifact-root>/official-afl-session-raw`; this custody
+  cannot satisfy production or public-release storage; and
+- provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
+  admission semantics: one lease per provider at a time, then the provider's five-second cooldown
+  and a request cooldown for the same source fetch equal to the reviewed cache period (86,400 s for
+  Draftguru, 3,600 s for Official AFL). Separate runs on the same machine share this pacing. As in the
+  deployed path, the request cooldown is keyed by the request without its capture and effective
+  instants, so a new run cannot refetch the same page inside the reviewed cache period.
+
+Prerequisites:
+
+1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
+   command loads, and never records, widens or supersedes:
+   - `draftguru-trade-index-issue-579-private-non_production` and
+     `draftguru-trade-detail-issue-579-private-non_production`; and
+   - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
+     per captured season, for example
+     `official-afl-completed-draft-session-issue579-private-2020-session-v18`. The key names the
+     current parser version, so a parser change needs a newly recorded decision; the runner never
+     falls back to an earlier season key or parser. Every season in a run must have its decision
+     before any page is fetched.
+2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
+   `draftguru-trade-parser/v1` or `official-afl-completed-draft-session/v18`), seasons inside one
+   range, 1 request per 5 seconds with burst 1, 365-day raw retention, the reviewed cache (86,400 s
+   for Draftguru, 3,600 s for Official AFL) and exactly one `provider-egress-control` evidence
+   record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
+   parser, pacing, cache or retention fails closed; the runner does not adapt.
+3. `AFL_OUTCOMES_DATABASE_URL` names the loopback PostgreSQL outcomes database, and
+   `AFL_TRADE_EXTERNAL_USER_AGENT` identifies Statly and includes `contact:`.
+   The database already contains the `AFLM` row in `outcome_competition_season` for every captured
+   anchor season; the runner does not create reference rows, and a missing season fails at staging.
+4. `--artifact-root` is an existing, absolute, private, durable directory kept outside Git and
+   backed up with the database. The system temporary directories are refused. Keep using the same
+   root for the same database: the retained bytes and the database custody rows describe each other.
+
+Capture the Official AFL completed draft sessions for 2019, 2020 and 2021. Each `--season` expands to
+its exact reviewed completed-session pages (2019: the club-review summary of both nights; 2020: the
+single completed report; 2021: the night-one and night-two reports), fetched sequentially:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability official-afl-completed-draft-session \
+  --season 2019 --season 2020 --season 2021
+```
+
+Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
+(2010-2018) are not enumerable here and are refused. Capture one named Draftguru trade page, for
+example the 2020 Jeremy Cameron trade (the season comes from the URL and must fall inside the
+authority's range):
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability draftguru-trade-detail \
+  --url https://www.draftguru.com.au/trades/2020-jeremy-cameron
+```
+
+Repeat `--url` to capture several trade pages sequentially in one run. Capture a season's links from
+the `/trades` index with `--capability draftguru-trade-index --season 2020`, adding
+`--from-season <year>` to bound a wider range. Use the exact detail URLs the staged index emitted;
+slugs may contain an apostrophe literally or as `%27`.
+
+Each completed page prints one JSON line with `status` (`staged` or `not_modified`), the capture,
+artifact and batch IDs, `evidenceCount`, `issueCount` and `idempotentReplay`. A nonzero `issueCount`
+means parser issues were staged with the batch; review them before using the batch. A reviewed
+Official AFL page that no longer matches its reviewed structure yields no session claim and fails
+with `EMPTY_EVIDENCE`; nothing is finalized for it. The run stops at the first failure and does not
+attempt later targets. Failure diagnosis:
+
+- `AUTHORITY_MISMATCH: No effective … decision` — the decision for that capability and season is
+  missing, pending, not yet effective, withdrawn or for another environment. Check the Gate ledger;
+  do not edit it to make capture pass.
+- `AUTHORITY_MISMATCH` naming the provider, parser, pacing, cache, retention or
+  `provider-egress-control` evidence — the recorded rights are not the narrow authority this runner
+  enforces. A changed authority needs a new owner decision, not a runner change.
+- `Gate 0A no longer admits …` or `SOURCE_NOT_AUTHORIZED` — the authority changed or expired between
+  loading and capture, or its terms or revalidation time passed.
+- `The recorded … authority is limited to seasons …` or `INVALID_SCOPE` — the URL, season or
+  capability is outside the approved scope; nothing was fetched.
+- `ADMISSION_EXHAUSTED` — another local run holds the provider lease. Wait for it to finish.
+- `REQUEST_COOLDOWN` — the same page was fetched within the reviewed cache period. Nothing was
+  fetched; use the earlier capture or retry after the printed time.
+- `Local capture admission is locked by another run` — a lock file survived an interrupted run.
+  Confirm no capture process is running, then delete only the named `.lock` file.
+- `… capture returned unexpected status …`, an unsupported content type or an oversized response —
+  the provider response was refused; no bytes or receipt were retained for it.
+- `CUSTODY_MISMATCH` or `READBACK_MISMATCH` — the artifact root does not hold the bytes the database
+  custody row describes. Stop and restore the matching root; never overwrite retained bytes.
+
+A retained capture plan keeps the parser version recorded in each capture's execution receipt.
+Official AFL captures made under an earlier, previously authorised version of the same pinned parser
+remain valid retained targets after the parser advances; PostgreSQL still re-authenticates each
+receipt against its own recorded rights and decision. New captures always require the current parser.
 
 ### Reconciling provider claims
 
@@ -1233,8 +1436,54 @@ over the evaluation horizon or establish historical 668/668 coverage. Authentica
 and compute that requirement separately. The `preflight-genuine-local` command remains an
 empty-database bootstrap smoke check, not an inspection of this populated runtime.
 
+### Provisioned genuine composition acceptance
+
+`npm run outcomes:valuation:provision-and-dispatch-local` is the acceptance command for the local
+private valuation composition root. With no local launch environment it provisions and owns one
+disposable loopback PostgreSQL container, applies the complete migration history, installs its own
+runtime identity nonce and never prints it, then inspects and composes the declared scope. With
+`AFL_OUTCOMES_DATABASE_URL` supplied it instead requires that admitted loopback `statly_outcomes_test`
+database and its exact `STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE`, refuses any other host, database name,
+query option or fragment, and provisions nothing. Either way it writes no shared authority, dispatches
+nothing public, and accepts no arbitrary scope: `--scope` is limited to `afl-men:2025-trades` and
+`afl-men:2026-trades`, and the default is `afl-men:2025-trades`.
+
+```sh
+npm run outcomes:valuation:provision-and-dispatch-local
+npm run outcomes:valuation:provision-and-dispatch-local -- --scope afl-men:2025-trades
+```
+
+The command prints exactly one JSON receipt with purpose `genuine_composition_acceptance`,
+`databaseOrigin`, the scope, `constructionState`, `qualificationGranted: false`, and either the named
+`blockerCodes` and `blockers` or the retained dispatch request id and terminal result. Exit code `2`
+means the scope was inspected and blocked by named authority, `1` means the acceptance run itself
+failed, and `0` means the chain composed and a private batch reached a terminal state. Retain receipts
+outside Git alongside the corresponding persistent database/artefact checkpoint; never retain the nonce.
+
+`blockerCodes` is the composition root's stable vocabulary. Each code names reviewed authority the
+scope must supply, or the one composition owner that does not exist yet; it is never a generic failure:
+
+| Code                                             | Meaning                                                                                                                                                                                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hpn_source_authority_missing`                   | The named `subject.id` source role has no exact reviewed authority for the scope's season. For 2025 that is the `hpn_corroborating_player_stats` lane only, because the completed-results and primary-player-stat lanes resolve. |
+| `hpn_preparation_authority_not_declared`         | No reviewed HPN source, factual, method and capture authority was declared, so HPN preparation has no exact inputs.                                                                                                              |
+| `construction_selection_not_supplied`            | No reviewed construction selection was declared, so no policy, component run, specification or target was selected.                                                                                                              |
+| `construction_selection_field_missing`           | The declared selection omits the named `subject.id` field.                                                                                                                                                                       |
+| `cohort_trade_construction_owner_missing`        | No genuine evidence-derived per-trade valuation-input assembly owner exists yet, so the private cohort cannot construct a trade.                                                                                                 |
+| `construction_readiness_unavailable`             | The selected inputs could not be assessed at all; the reason names the assessment's own blocker code, such as `calculation_input_package_missing` or `policy_missing`.                                                           |
+| `construction_view_incompatible`                 | The named asset and view of the declared valuation case cannot be packaged, and the reason is the assessment's own reason for that asset and view.                                                                               |
+| `construction_artifact_not_retained`             | A reference the declared selection names is not in private artifact custody, so it cannot be used.                                                                                                                               |
+| `construction_scope_unsupported`                 | The scope is outside the supported `afl-men:<season>-trades` policy.                                                                                                                                                             |
+| `cohort_construction_evidence_scope_unsupported` | The local construction-evidence owner is configured for one exact 2025 dispatch and claim.                                                                                                                                       |
+
+A `blocked` receipt is the expected result on an empty or scope-less disposable database, and it is
+the honest result until the named authority exists. A receipt that reports `composable` while the
+retained parents it depends on are absent is wrong; investigate it rather than trusting it.
+
 The required `afl-men:2025-trades` clean-checkout rehearsal is not currently runnable from the local
 command. Treat this as an authority/composition blocker, not as permission to use fixture data. The
+provisioned composition acceptance command above now composes the chain and reports each missing
+authority by name; it still cannot complete a genuine run. The
 current HPN preparation implementation admits both `afl-men:2025-trades` and
 `afl-men:2026-trades` through an exact scope-to-season policy. The default local 2025 source resolver
 still fails closed until a genuinely reviewed independent corroborating player-stat source, its
@@ -1247,6 +1496,13 @@ request-bound factual handoff must authenticate that player-match authority toge
 independent genuinely admitted draft-trade release before the shipped HPN, genuine player, genuine
 pick, qualification/model-evidence, valuation-bundle/trade-construction, and private prepared-v3
 adapters can be composed by the worker.
+
+Migration `0241_hpn_historical_season_map_scope` lets a private governed season PAV input for
+AFLM 2011–2024 admit its source-first projected field maps under the season-only scope key
+`afl-men:hpn-pav-season-<YYYY>`. Only the projected-map verifier used by the HPN season input build
+accepts these keys, and only for the exact season each names. The trade-valuation scope policy and
+every valuation consumer are unchanged, so a historical-season map can never be admitted into a
+trade valuation.
 
 The admitted-player factual output uses v2 with multiple admitted captures and a dataset/admission
 parent. HPN preparation, model-pair input selection, and current-model-evidence ancestry accept that
@@ -1518,7 +1774,10 @@ spells, acquisition rules, event versions, event assets, or registered HPN metho
 player/club pairs lacked an approved acquisition spell, and no genuine HPN input set was created.
 A later owned-target step registered the retained HPN method through its existing owner. Genuine
 acquisition ancestry remains outstanding; the participation decisions supply neither entry dates nor
-spell authority.
+spell authority. After the preserved-archive recovery the measured position is 247 of the 668
+cohort players holding a registered, fully approved spell spanning 2018-11-22 to 2024-11-21, with
+identity reconciliation complete for all 668; the exact counts and their derivation are recorded in
+the private acquisition evidence decision for issue 579.
 
 Acquisition registration now has a dedicated public repository and migration 0142. Before applying
 that migration to an owned target, complete the scoped PostgreSQL regressions and independent review,
@@ -2876,6 +3135,22 @@ uniqueness remains intact. Promotion writes and factual/archive readback preserv
 predecessors; old records without predecessors retain their prior serialized shape. This storage
 support does not resolve candidate issues, supply draft sessions or admit the genuine reviewed set.
 
+Migration 0237 enriches canonical picks that an earlier promotion stored with empty facts. The
+2019–2021 national-draft session promotions stored every selected pick with no round, nominal pick
+number or original club, and `outcome_draft_pick` is append-only, so a later reviewed-lineage promotion
+of the same stable `pick_id` used to fail with `IMMUTABLE_CONFLICT`. Promotion now compares its pick
+definition with the currently resolved facts: equal facts need no write; facts that are empty in the
+stored pick are filled by a new `outcome_draft_pick_enrichment` version (cumulative facts, the
+promotion, its approval decision, the reviewed pick-lineage registration and the contributing transfer
+and custody IDs). Enrichment requires that registration (the candidate's reviewed scope/correction, or
+one registered against the promoted candidate itself) with its current approval; without it the
+conflict stands. A known value never changes, and a definition that omits a known value is still a
+conflict. Versions are gap-free and append-only, and promotion replay adds no version. Readers use
+`outcome_draft_pick_facts(pick_ids, as_of)`: promotion resolves current facts, while the public archive,
+pick-PAV selection and pick-PAV finalization pass the release's `effective_through`, so an enrichment
+recorded after a release never changes that release's reconstruction. Apply 0237 through the normal
+migration owner; it grants the pick-PAV coordinator read access to the enrichment table.
+
 Migration0166 adds typed non-player pick realizations: `passed`, `not_exercised`, and
 `incorporated_into_later_package`. These require `terminal_outcome` and no draft-selection row;
 `exercised_as` retains its selection reference. The candidate, canonical writer and archive preserve
@@ -3168,6 +3443,174 @@ Migration0206 repairs the shared exact-acquisition guard: valuation dataset rows
 `acquisition_spell_version_id`; the six metric, release, calculation and observation consumers use
 `spell_version_id`. It preserves v2 rejection on inserts and updates and changes no stored data.
 Apply this forward repair without editing the immutable0197 migration.
+
+Acquisition registration v3 (migration0233) is **appearance membership**, a labelled bridge for league-wide
+HPN season PAV attribution only. HPN season PAV aggregates every primary player-match row under exactly
+one current spell, so a season cannot be calculated until every appearing player has one; reviewed entry
+spells (v1/v2) require a promoted incoming asset that most league players do not yet have. A v3 spell
+binds one player, one represented club and one season to its first and last reviewed appearance facts
+(`outcome_provider_player_appearance_fact`, `availability='measured'`, `appeared=TRUE`, approved fact
+batch). It has no entry or departure event: `start_event_version_id` and `start_asset_version_id` are
+null only for v3, `start_date`/`end_date` are the first/last appearance days and `end_reason` is
+`last_reviewed_appearance_in_season`. Currentness also requires that no reviewed appearance for that
+player, club and season lies outside the window. Both boundary facts and that completeness scan use
+only facts whose player, match and represented-club identities are still current
+(`outcome_acquisition_appearance_fact_identity_current`: assignment continuity plus a resolution naming
+the same player, match or club), so a later identity reversal withdraws the window. The v3 rule
+fixes `purpose: hpn_season_pav_attribution_only` and
+`retirement: retired_by_covering_reviewed_entry_spell`.
+
+`deriveAflTradeAppearanceMembershipSpells` proposes one v3 spell per player and club for a season from
+the stored facts; non-appearances are ignored, never inferred. Each proposal still needs its rule-bound
+review decision and repository registration. The shared exact-acquisition guard rejects v3 on every
+metric, release, valuation dataset and player PAV observation consumer; only
+`outcome_hpn_pav_calculation_player` accepts it. The postseason authority and postseason observation
+contract reject it explicitly, and the v2 HPN input finalizer accepts it through
+`outcome_acquisition_is_appearance_membership` (the legacy v1 finalizer does not). Trade attribution, pick
+benchmarks and realized contribution therefore still require reviewed entry spells.
+
+A v3 spell may supersede only a v3 spell for the same season; that is how a window grows during a
+season (`deriveAflTradeAppearanceMembershipSpells` takes the current v3 spells, skips unchanged windows
+and proposes the next version for changed ones). Retirement needs no supersession: a v3 spell is not
+current while a current reviewed v1/v2 spell for the same player and club has possible membership that
+contains its whole window, and the same-club overlap guard admits a reviewed spell over a current v3
+window only under that same containment (never the reverse), so one multi-season entry spell retires
+every covered season window at once. A reviewed spell that only partly overlaps a current v3 window is
+rejected as an overlap; supersede or narrow the v3 window first. A reviewed spell whose entry event
+version has a successor can never be current again, so the overlap guard ignores it (migration0244) and
+a v3 window may cover that player and club until a reviewed successor spell is registered. Inputs retained against a retired
+window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
+grading.
+
+Migration 0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
+chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only
+when that latest decision is approved and current, and names the capture's competition, season,
+capability and `derived_feature_creation`. Its rights artifact must also permit the consumed fields.
+When an HPN build fails with "Source-first factual source rights are no longer current", inspect the
+capture's Gate chain (`supersedes_decision_id` from the manifest's `gate0aReceipt` decision). A
+blocked, expired or out-of-scope latest decision is the cause; record a proper successor decision
+rather than editing an existing one. The ledger is append-only.
+
+Migration 0236 makes acquisition-spell currency cheap enough for a genuine season HPN input. Before
+it, the season build and the v2 input finalizer asked `outcome_hpn_acquisition_spell_is_current` once
+per player-stat row (finalization asked twice). Each call re-derived its spell's whole registration
+currency, which is the same for every row of that spell. A v3 check also scanned too widely. Its
+window-completeness and retirement anti-joins ran `outcome_acquisition_appearance_fact_identity_current`
+on every measured appearance fact, and `outcome_acquisition_spell_registration_current` on every
+reviewed v1/v2 spell. Only then were the results matched to the spell's player and club. At about one
+second a call, a 2025 build of about 20,000 rows exceeded a 60-minute statement timeout. After 0236:
+
+- Those two predicates sit behind `CASE` guards on the conditions already next to them. They now run
+  only for the spell's own out-of-window facts and same-player, same-club covering spells.
+- `outcome_hpn_acquisition_spell_source_current` is copied byte-for-byte from the per-row function. The
+  one change is that it takes the spell's registration currency as an argument.
+- The build evaluates `outcome_acquisition_spell_registration_current` once per candidate spell in a
+  materialized CTE. The finalizer does the same once, into `registered_spells`, before its row loop.
+  Each row still checks its own source, capture, field map and `observedThrough` date.
+
+Currency rules and fail-closed results are unchanged. The per-row function remains for other
+callers. Each edit asserts its fragment and a reverse identity against the deployed definition, and
+`afl-hpn-acquisition-spell-currency-postgres.test.ts` compares the result with the original 0233
+definition. Per-row resolution checks in the finalizer
+(`outcome_hpn_pav_*_resolution_current`) still walk each decision's identity-assignment chain per
+row. If a genuine finalization is still slow, measure those first.
+
+Migration 0240 bounds HPN input finalization to memory and time proportional to its content. A 2025
+season input (about 20,000 player-stat rows and 216 results) carries a content JSON of tens of
+megabytes, stored compressed in TOAST, and every reference to `NEW.input_set_json` in a statement
+decompresses all of it again. Finalization made such references per row. Per-row references in a join
+filter are also kept until the join emits a row. After 0236 the build reached finalization, but one
+backend grew to about 2.5 GB resident in a 3 GB VM and swapped for ten hours. The causes were:
+
+- the exact-transition check ran `to_jsonb(NEW)` and `to_jsonb(OLD)`, which build in-memory trees of
+  the whole row at about fifty times its serialized size;
+- every conserved row was tested with `content.rows @> [row]`, a scan of every row;
+- every factual match and appearance member rescanned the factual-universe envelopes;
+- every candidate spell re-derived the knowledge boundary from the whole document;
+- corroboration scanned the whole input once per match, club and subquery;
+- the excluded-row and statistical-selection helpers re-read the whole document per member.
+- the two finalization triggers' `WHEN` conditions read three content fields each, and all six
+  decompressed copies stayed allocated beneath the triggers and the finalization.
+
+After 0240 the trigger conditions read those fields through `outcome_hpn_pav_json_path_text`, which
+releases its copy on return. The transition compares records, with the two finalization columns
+taken from `OLD`. The
+knowledge boundaries are derived once. Each envelope array is read once per statement. A row is
+first proven contained by the element with its own decoded-row key; only an unproven row is tested
+against the whole array. Two indexes serve corroboration:
+`outcome_hpn_pav_input_row_match_club_idx` (an expression index, absent from `schema.prisma`) and
+`outcome_provider_appearance_match_club_idx`. The repository inserts rows in batches of 1,000 and
+parses the season JSON once. Every check, exception and content hash is unchanged.
+`afl-hpn-input-finalization-memory-postgres.test.ts` compares the outcome of the deployed and exact
+pre-0240 finalizers for a valid input and each tampering. It also finalizes a 20,000-row season
+within a 1 GiB peak resident set and ten minutes, which the pre-0240 finalizer exceeds.
+
+In CI, on a 20,093-row input with 73.6 MB of canonical content, the 0240 finalization peaked at
+580 MB resident and took about 4.4 minutes. The pre-0240 finalization passed 1 GiB within about one
+second and was cancelled at 1.65 GB. Most of the remaining time is the per-row loop, which still
+checks each row's identity and spell currency.
+
+The remaining finalization cost is linear. Each statement still decompresses the document once per
+reference, and the widest reads it four times, so peak memory is several times the content size.
+If a genuine finalization is slow, check `pg_stat_activity` and the backend's `VmHWM` in
+`/proc/<pid>/status` before raising limits.
+
+Migration 0243 makes two 0240 checks independent of the join plan. PostgreSQL estimates every
+`jsonb_array_elements` at 100 rows, so a season was planned as if it were small, and the plan
+depended on whether autovacuum had analysed the just-written input:
+
+- row conservation tested every row against the whole `content.rows` before the anti-join that
+  should have proven it, or rescanned every content row once per durable row. On one 20,093-row
+  season the statement took from 80 seconds to more than 16 minutes;
+- the appearance-envelope check rescanned every envelope fact ID once per member, about 100
+  million comparisons, with or without current statistics.
+
+In CI the 0240 finalization therefore took from about 200 seconds to more than the ten-minute bound
+on identical input. After 0243 a row is first proven by the element at its own ordinal, the position
+the builder wrote it from, and only an unproven row is tested against the whole array. Members and
+envelopes meet in one window partition per fact ID. On a local PostgreSQL 16 the season finalization
+fell from about 155 to about 50 seconds, and to about 46 seconds with hash and merge joins
+disabled. The checks, exceptions and outcomes are unchanged.
+
+Migration 0242 evaluates provider identity-assignment continuity once per assignment case rather
+than once per row. The season build's decoded-row load asked
+`outcome_provider_assignment_continuity_current` for each row's player, match, home-club and
+away-club resolution, and the finalizer asked again for each row check. Each call re-reads its chain
+from the origin revision to the head. It try-locks every review subject on that span, row-locks the
+head, and walks the span link by link. Every club occurrence shares its club's chain of about 1,700
+revisions, so the cost grew with the square of the chain length. A 2025 build ran for more than an
+hour of CPU time; club lookups cost about 11 ms per row each. After 0242:
+
+- `outcome_provider_assignment_continuity_current_set(text[])` takes every origin decision at once.
+  For each assignment case it try-locks the review subjects of the union of the origins' spans, in the
+  same sorted order and never waiting. It locks the head `FOR SHARE NOWAIT` once and walks the span
+  once from the head down. An origin is current only when its own span passes every per-origin rule
+  and holds no subject that could not be locked. Two kinds of origin fall back to the per-origin
+  function: a decision found in more than one resolution table, and an origin without an assignment
+  revision.
+- The build's decoded-row load builds the candidate decisions in a materialized CTE, calls the set
+  function once, and looks each row up through a hashed subplan.
+- The finalizer computes `current_assignments` once before its row loop. Its per-row checks call
+  `outcome_hpn_pav_{player,match,club}_resolution_current_with_assignment`, which are copied
+  byte-for-byte from the per-row functions. The only change is that continuity is an argument. The
+  migration asserts each fragment and a reverse identity, and refuses to run twice.
+
+The continuity rules and fail-closed results are unchanged, including a held review subject or head
+lock. The per-origin function remains for writers, fact guards and other readers. Each
+`(assignment_case_id, assignment_revision)` chain index already existed from migration 0128.
+`afl-assignment-continuity-set-postgres.test.ts` checks the set function against the per-origin
+function in 22 chain states. These include current, superseded, confirmed, withdrawn, retargeted,
+gapped, duplicated and moved-head chains, and a subject or head held by another session. With 2,000
+rows over twenty 600-revision club chains, the per-row cost fell from about 6 ms to about 0.1 ms.
+
+The advisory-lock count does not change. Both forms hold exactly the review subjects on the spans
+they read until the transaction ends: 11,900 in that measurement. A season build or finalization
+therefore needs a lock-table slot for every distinct review subject from each chain's earliest
+referenced revision to its head. The genuine 2025 build held about 90,000. The shared lock table
+holds about `max_locks_per_transaction × (max_connections + max_prepared_transactions)` entries.
+At `max_locks_per_transaction=1024` it overflowed with "out of shared memory". CI and the disposable
+harness use 2048. Size the setting to the season before a genuine build, then restart PostgreSQL.
+Reducing the lock count would need a different writer protocol, such as one lock per assignment case.
 
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,

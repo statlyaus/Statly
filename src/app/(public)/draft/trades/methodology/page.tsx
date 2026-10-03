@@ -4,7 +4,6 @@ import Link from 'next/link';
 import {
   draftHubHeaderKickerClass,
   draftHubHeroShellClass,
-  draftHubHeroTopAccentClass,
   draftHubSectionPillClass,
   draftHubSubtlePanelClass,
 } from '@/components/draft/draftHubChrome';
@@ -57,7 +56,6 @@ export default async function AflTradeMethodologyPage() {
   return (
     <div className="space-y-6">
       <section aria-labelledby="trade-methodology-heading" className={draftHubHeroShellClass}>
-        <div className={draftHubHeroTopAccentClass} />
         <div className="relative max-w-4xl">
           <p className={draftHubHeaderKickerClass}>Methodology and current status</p>
           <h2

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -25,6 +25,18 @@ const guardedRoutes = [
   },
 ] as const;
 
+const developmentPages = [
+  'demo',
+  'infrastructure-test',
+  'player-analysis-demo',
+  'sentry-test',
+  'test-live-data',
+  'test-myteam',
+  'test-search',
+  'test-socket',
+  'timer-test',
+] as const;
+
 describe('development tools architecture', () => {
   it.each(guardedRoutes)(
     'guards $path before route work begins',
@@ -44,6 +56,20 @@ describe('development tools architecture', () => {
 
     expect(source).toContain('if (!isDevelopmentToolsEnabled())');
     expect(source).toContain('notFound()');
+  });
+
+  it('hides development and demo pages behind the same server gate', () => {
+    const layout = read('src/app/(app)/(development)/layout.tsx');
+
+    expect(layout).toContain('if (!isDevelopmentToolsEnabled())');
+    expect(layout).toContain('notFound()');
+
+    for (const route of developmentPages) {
+      expect(existsSync(join(process.cwd(), `src/app/(app)/(development)/${route}/page.tsx`))).toBe(
+        true
+      );
+      expect(existsSync(join(process.cwd(), `src/app/(app)/${route}`))).toBe(false);
+    }
   });
 
   it('opts in only the canonical local and Playwright harnesses', () => {

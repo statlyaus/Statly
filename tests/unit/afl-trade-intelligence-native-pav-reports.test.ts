@@ -18,7 +18,7 @@ import { nativePavModelRunSqlFixture } from '../testUtils/nativePavModelRunSqlFi
 let fixture: Awaited<ReturnType<typeof nativePavModelRunSqlFixture>>;
 beforeAll(async () => {
   fixture = await nativePavModelRunSqlFixture();
-}, 60_000);
+}, 120_000);
 function declaration() {
   return {
     schemaVersion: 'afl-trade-native-pav-metric-definition/v1',

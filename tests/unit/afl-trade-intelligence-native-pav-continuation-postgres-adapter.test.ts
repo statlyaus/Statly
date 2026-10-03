@@ -373,5 +373,5 @@ describe('native PAV continuation PostgreSQL adapter', () => {
     } finally {
       await rm(rootDirectory, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 });

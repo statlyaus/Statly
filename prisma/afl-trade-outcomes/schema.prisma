@@ -117,6 +117,15 @@ model OutcomeRegistryHead {
   @@map("outcome_registry_head")
 }
 
+model OutcomeDatabaseIdentity {
+  singletonId   Int      @id @map("singleton_id")
+  applicationId String   @map("application_id")
+  schemaFormat  Int      @map("schema_format")
+  stampedAt     DateTime @default(dbgenerated("clock_timestamp()")) @map("stamped_at") @outcomes.Timestamptz(3)
+
+  @@map("outcome_database_identity")
+}
+
 model OutcomeReleaseManifest {
   releaseId                           String                                      @id @map("release_id")
   scopeKey                            String                                      @map("scope_key")
@@ -300,10 +309,37 @@ model OutcomeArtifactCustody {
   governedPickDatasetArtifacts                 OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickDatasetArtifact")
   governedPickAdmissionArtifacts               OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickAdmissionArtifact")
   governedPickProtocolArtifacts                OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickProtocolArtifact")
+  location                                     OutcomeArtifactCustodyLocation?
 
   @@unique([artifactClass, contentSha256], map: "outcome_artifact_class_sha256_key")
   @@index([environment, artifactClass, createdAt], map: "outcome_artifact_environment_class_created_idx")
   @@map("outcome_artifact_custody")
+}
+
+/// A registered home for evidence bytes. Permanent; only the mirror locator may be recorded, once.
+model OutcomeArtifactStore {
+  storeId       String                           @id @map("store_id")
+  environment   OutcomeEnvironment
+  assurance     String
+  rootLocator   String                           @map("root_locator")
+  mirrorLocator String?                          @map("mirror_locator")
+  createdAt     DateTime                         @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
+  locations     OutcomeArtifactCustodyLocation[]
+
+  @@map("outcome_artifact_store")
+}
+
+/// Where one custody row's bytes live. Append-only; a custody row without one has no known location.
+model OutcomeArtifactCustodyLocation {
+  artifactId String                 @id @map("artifact_id")
+  storeId    String                 @map("store_id")
+  objectKey  String                 @map("object_key")
+  locatedAt  DateTime               @default(dbgenerated("clock_timestamp()")) @map("located_at") @outcomes.Timestamptz(3)
+  artifact   OutcomeArtifactCustody @relation(fields: [artifactId], references: [artifactId], onDelete: Restrict, map: "outcome_artifact_custody_location_artifact_fkey")
+  store      OutcomeArtifactStore   @relation(fields: [storeId], references: [storeId], onDelete: Restrict, map: "outcome_artifact_custody_location_store_fkey")
+
+  @@unique([storeId, objectKey], map: "outcome_artifact_custody_location_store_key")
+  @@map("outcome_artifact_custody_location")
 }
 
 model OutcomeGovernedEvidenceReference {
@@ -701,6 +737,7 @@ model OutcomeExternalCanonicalPromotion {
   candidate             OutcomeExternalReconciliationCandidate       @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
   approvalDecision      OutcomeReviewDecision                        @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict)
   importRuns            OutcomeExternalCanonicalPromotionImportRun[]
+  pickEnrichments       OutcomeDraftPickEnrichment[]
   records               OutcomeExternalCanonicalPromotionRecord[]
   corpusMemberships     OutcomePromotionBackedCorpusPromotion[]      @relation("OutcomePromotionCorpusSource")
 
@@ -1008,6 +1045,7 @@ model OutcomeClub {
   assetsFrom          OutcomeEventAsset[]              @relation("OutcomeAssetFromClub")
   assetsTo            OutcomeEventAsset[]              @relation("OutcomeAssetToClub")
   originalPicks       OutcomeDraftPick[]               @relation("OutcomePickOriginalClub")
+  enrichedPicks       OutcomeDraftPickEnrichment[]     @relation("OutcomePickEnrichmentOriginalClub")
   originalPickCustody OutcomePickCustodyObservation[]  @relation("OutcomePickCustodyOriginalClub")
   currentPickCustody  OutcomePickCustodyObservation[]  @relation("OutcomePickCustodyCurrentClub")
   draftSelections     OutcomeDraftSelection[]
@@ -1156,6 +1194,7 @@ model OutcomeProviderResolutionProposal {
 
   @@unique([resolutionCaseId, proposalSha256], map: "outcome_provider_resolution_proposal_case_key")
   @@index([normalizationRunId, subjectType], map: "outcome_provider_resolution_proposal_run_idx")
+  @@index([matchCandidateId], map: "outcome_provider_resolution_proposal_match_candidate_idx")
   @@map("outcome_provider_resolution_proposal")
 }
 
@@ -2246,6 +2285,7 @@ model OutcomeProviderClubResolution {
   @@unique([resolutionCaseId, revision], map: "outcome_provider_club_resolution_revision_key")
   @@index([clubIdentityId, outcome], map: "outcome_provider_club_resolution_identity_idx")
   @@index([clubId, outcome], map: "outcome_provider_club_resolution_club_idx")
+  @@index([matchCandidateId, side], map: "outcome_provider_club_resolution_candidate_side_idx")
   @@map("outcome_provider_club_resolution")
 }
 
@@ -2627,6 +2667,7 @@ model OutcomeProviderPlayerAppearanceFact {
   @@unique([factBatchId, providerDecodedRowId], map: "outcome_provider_appearance_fact_batch_row_key")
   @@index([playerIdentityId, matchIdentityId, availability], map: "outcome_provider_appearance_identity_match_idx")
   @@index([playerId, seasonYear, matchId], map: "outcome_provider_appearance_player_season_idx")
+  @@index([matchId, representedClubId], map: "outcome_provider_appearance_match_club_idx")
   @@map("outcome_provider_player_appearance_fact")
 }
 
@@ -3321,6 +3362,33 @@ model OutcomeEventParty {
   @@map("outcome_event_party")
 }
 
+// Append-only, versioned enrichment of empty canonical pick facts from reviewed pick lineage.
+model OutcomeDraftPickEnrichment {
+  enrichmentId           String   @id @map("enrichment_id")
+  pickId                 String   @map("pick_id")
+  version                Int
+  supersedesEnrichmentId String?  @unique @map("supersedes_enrichment_id")
+  nominalRound           Int?     @map("nominal_round")
+  nominalPick            Int?     @map("nominal_pick")
+  originalClubId         String?  @map("original_club_id")
+  promotionId            String   @map("promotion_id")
+  approvalDecisionId     String   @map("approval_decision_id")
+  registrationId         String   @map("registration_id")
+  sourceJson             Json     @map("source_json")
+  recordedAt             DateTime @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  pick                   OutcomeDraftPick @relation(fields: [pickId], references: [pickId], onDelete: Restrict, onUpdate: NoAction)
+  supersedes             OutcomeDraftPickEnrichment? @relation("OutcomeDraftPickEnrichmentChain", fields: [supersedesEnrichmentId], references: [enrichmentId], onDelete: Restrict, onUpdate: NoAction)
+  successor              OutcomeDraftPickEnrichment? @relation("OutcomeDraftPickEnrichmentChain")
+  originalClub           OutcomeClub? @relation("OutcomePickEnrichmentOriginalClub", fields: [originalClubId], references: [clubId], onDelete: Restrict, onUpdate: NoAction)
+  promotion              OutcomeExternalCanonicalPromotion @relation(fields: [promotionId], references: [promotionId], onDelete: Restrict, onUpdate: NoAction)
+  approval               OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+  registration           OutcomeReviewedPickLineageRegistration @relation(fields: [registrationId], references: [registrationId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([pickId, version])
+  @@unique([pickId, promotionId])
+  @@map("outcome_draft_pick_enrichment")
+}
+
 model OutcomeDraftPick {
   pickId              String                          @id @map("pick_id")
   draftSeasonYear     Int                             @map("draft_season_year")
@@ -3336,6 +3404,8 @@ model OutcomeDraftPick {
   childEdges          OutcomePickLineageEdge[]        @relation("OutcomePickLineageChild")
   custodyObservations OutcomePickCustodyObservation[]
   realizations        OutcomePickRealization[]
+
+  enrichments         OutcomeDraftPickEnrichment[]
 
   @@index([draftSeasonYear, draftKind, nominalPick], map: "outcome_draft_pick_season_kind_pick_idx")
   @@map("outcome_draft_pick")
@@ -3484,6 +3554,7 @@ model OutcomePickRealization {
 model OutcomeReviewDecision {
   canonicalPlayerDepartures OutcomeCanonicalPlayerDeparture[]
   reviewedLineageRegistrations OutcomeReviewedPickLineageRegistration[]
+  draftPickEnrichments OutcomeDraftPickEnrichment[]
   specialIdentityReplacements OutcomeSpecialEntitlementIdentityReplacement[]
   specialRevisions OutcomeSpecialEntitlementRevision[]
   specialLifecycle OutcomeSpecialEntitlementLifecycle[]
@@ -3607,8 +3678,8 @@ model OutcomeAcquisitionSpellVersion {
   version                  Int
   playerId                 String                                 @map("player_id")
   clubId                   String                                 @map("club_id")
-  startEventVersionId      String                                 @map("start_event_version_id")
-  startAssetVersionId      String                                 @map("start_asset_version_id")
+  startEventVersionId      String?                                @map("start_event_version_id")
+  startAssetVersionId      String?                                @map("start_asset_version_id")
   startDate                DateTime?                              @map("start_date") @outcomes.Date
   endDate                  DateTime?                              @map("end_date") @outcomes.Date
   endReason                String?                                @map("end_reason")
@@ -3618,8 +3689,8 @@ model OutcomeAcquisitionSpellVersion {
   recordedAt               DateTime                               @map("recorded_at") @outcomes.Timestamptz(3)
   player                   OutcomePlayer                          @relation(fields: [playerId], references: [playerId], onDelete: Restrict)
   club                     OutcomeClub                            @relation(fields: [clubId], references: [clubId], onDelete: Restrict)
-  startEventVersion        OutcomeEventVersion                    @relation("OutcomeAcquisitionStartEvent", fields: [startEventVersionId], references: [eventVersionId], onDelete: Restrict)
-  startAssetVersion        OutcomeEventAsset                      @relation(fields: [startAssetVersionId], references: [assetVersionId], onDelete: Restrict)
+  startEventVersion        OutcomeEventVersion?                   @relation("OutcomeAcquisitionStartEvent", fields: [startEventVersionId], references: [eventVersionId], onDelete: Restrict)
+  startAssetVersion        OutcomeEventAsset?                     @relation(fields: [startAssetVersionId], references: [assetVersionId], onDelete: Restrict)
   rule                     OutcomeAcquisitionSpellRule            @relation(fields: [ruleId], references: [ruleId], onDelete: Restrict)
   supersedes               OutcomeAcquisitionSpellVersion?        @relation("OutcomeAcquisitionSpellVersionChain", fields: [supersedesSpellVersionId], references: [spellVersionId], onDelete: Restrict)
   supersededBy             OutcomeAcquisitionSpellVersion?        @relation("OutcomeAcquisitionSpellVersionChain")
@@ -6359,6 +6430,8 @@ model OutcomeReviewedPickLineageRegistration {
   registrationJson Json @map("registration_json")
   candidate OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict, onUpdate: NoAction)
   approval OutcomeReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, onUpdate: NoAction)
+
+  pickEnrichments OutcomeDraftPickEnrichment[]
 
   @@map("outcome_reviewed_pick_lineage_registration")
 }

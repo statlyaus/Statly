@@ -18,7 +18,6 @@ export type PlayerIdentityBlockerCode =
   | 'PENDING_ACTION_REFERENCE'
   | 'LINEUP_COLLISION'
   | 'TRADE_COLLISION'
-  | 'CAPTAIN_COLLISION'
   | 'AUTOSUB_REFERENCE'
   | 'AUTOSUB_COLLISION';
 
@@ -257,8 +256,6 @@ export async function planPlayerIdentityConsolidation(
         where: {
           OR: [
             ...referencedPlayerIds.map((playerId) => ({ playerIds: { contains: playerId } })),
-            { captainId: { in: referencedPlayerIds } },
-            { viceCaptainId: { in: referencedPlayerIds } },
             ...referencedPlayerIds.map((playerId) => ({ benchOrder: { contains: playerId } })),
           ],
         },
@@ -469,29 +466,6 @@ export async function planPlayerIdentityConsolidation(
     });
   }
 
-  for (const roster of legacyRosters) {
-    if (
-      ![roster.captainId, roster.viceCaptainId].some(
-        (playerId) => playerId && aliasIds.has(playerId)
-      )
-    ) {
-      continue;
-    }
-    const captainId = roster.captainId ? projectedPlayerId(roster.captainId, aliasMap) : null;
-    const viceCaptainId = roster.viceCaptainId
-      ? projectedPlayerId(roster.viceCaptainId, aliasMap)
-      : null;
-    if (captainId && captainId === viceCaptainId) {
-      blockers.push({
-        code: 'CAPTAIN_COLLISION',
-        canonicalPlayerId: captainId,
-        scopeId: roster.id,
-        aliasIds: [roster.captainId!, roster.viceCaptainId!],
-        message: `Roster ${roster.id} would assign ${captainId} as both captain and vice-captain.`,
-      });
-    }
-  }
-
   for (const autosub of autosubs) {
     const referencedAliasIds = [autosub.outgoingPlayerId, autosub.replacementPlayerId].filter(
       (playerId) => aliasIds.has(playerId)
@@ -553,9 +527,7 @@ export async function planPlayerIdentityConsolidation(
       queueItems: queueItems.filter((row) => aliasIds.has(row.playerId)).length,
       rosterPlayers: rosterPlayers.filter((row) => aliasIds.has(row.playerId)).length,
       legacyRosters: legacyRosters.filter((row) =>
-        [row.playerIds, row.captainId, row.viceCaptainId, row.benchOrder].some((value) =>
-          containsAnyAlias(value, aliasIds)
-        )
+        [row.playerIds, row.benchOrder].some((value) => containsAnyAlias(value, aliasIds))
       ).length,
       lineupPlayers: lineupPlayers.filter((row) => aliasIds.has(row.playerId)).length,
       autosubs: autosubs.filter(

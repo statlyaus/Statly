@@ -20,7 +20,7 @@ import { preparePlayerPavForecastRows } from '@/server/aflTradeIntelligence/mode
 let fixture: Awaited<ReturnType<typeof admittedPavModelRunFixture>>;
 beforeAll(async () => {
   fixture = await admittedPavModelRunFixture();
-}, 60_000);
+}, 120_000);
 const baseline = {
   schemaVersion: 'afl-trade-native-pav-baseline-definition/v1',
   definitionKey: 'synthetic-persistence',

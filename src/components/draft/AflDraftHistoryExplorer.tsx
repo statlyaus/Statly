@@ -93,7 +93,7 @@ function MobileSelectionCard({ selection }: { selection: AflDraftHistorySelectio
     <article className="rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm md:hidden">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <span className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="text-xs font-semibold text-muted-foreground">
             Pick {selection.selectionNumber}
           </span>
           <h3 className="mt-1 text-lg font-semibold text-foreground">
@@ -116,17 +116,13 @@ function MobileSelectionCard({ selection }: { selection: AflDraftHistorySelectio
       </div>
       <dl className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Selected by
-          </dt>
+          <dt className="text-xs font-semibold text-muted-foreground">Selected by</dt>
           <dd className="mt-2">
             <Club name={selection.club.name} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Original club
-          </dt>
+          <dt className="text-xs font-semibold text-muted-foreground">Original club</dt>
           <dd className="mt-2">
             {selection.originalClub ? (
               <Club name={selection.originalClub.name} />
@@ -136,9 +132,7 @@ function MobileSelectionCard({ selection }: { selection: AflDraftHistorySelectio
           </dd>
         </div>
         <div className="sm:col-span-2">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Pick movement
-          </dt>
+          <dt className="text-xs font-semibold text-muted-foreground">Pick movement</dt>
           <dd className="mt-2">
             <Lineage selection={selection} />
           </dd>
@@ -161,7 +155,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
         <div className="border-b border-border bg-muted/40 px-5 py-5 sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <p className="text-xs font-semibold text-muted-foreground">
                 Draft selections and pick history
               </p>
               <h2
@@ -279,9 +273,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
         <section aria-labelledby="draft-selections-heading" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                {query.year} draft year
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground">{query.year} draft year</p>
               <h2 id="draft-selections-heading" className="mt-1 text-2xl font-bold text-foreground">
                 {response.year.filteredSelections.toLocaleString('en-AU')} of{' '}
                 {response.year.totalSelections.toLocaleString('en-AU')} selections
@@ -324,7 +316,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                   <caption className="sr-only">
                     Released AFL draft selections for {query.year}
                   </caption>
-                  <thead className="border-b border-border bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                  <thead className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
                     <tr>
                       <th scope="col" className="px-4 py-3 font-semibold">
                         Pick

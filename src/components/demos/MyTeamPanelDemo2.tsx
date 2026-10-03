@@ -131,9 +131,6 @@ const MyComponent = () => {
       case 'trade':
         // Open trade interface
         break;
-      case 'captain':
-        // Set player as captain
-        break;
       // Handle other actions...
     }
   };
@@ -384,18 +381,6 @@ const MyComponent = () => {
                 ],
               },
               {
-                icon: StarIcon,
-                title: 'Captain System',
-                description:
-                  'Set captains and vice-captains with visual indicators and status tracking.',
-                features: [
-                  'Captain selection',
-                  'Vice-captain support',
-                  'Leadership indicators',
-                  'Status validation',
-                ],
-              },
-              {
                 icon: ChartBarIcon,
                 title: 'Advanced Analytics',
                 description:
@@ -634,7 +619,6 @@ const MyComponent = () => {
                 <ul className="text-sm space-y-1">
                   <li>• Advanced filtering and sorting</li>
                   <li>• Real-time search functionality</li>
-                  <li>• Captain/vice-captain management</li>
                   <li>• Team statistics calculation</li>
                   <li>• Interactive player actions</li>
                   <li>• Responsive design</li>

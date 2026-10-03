@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useFocusTrap, useEscapeKey, useReducedMotion } from '@/hooks/useAccessibility';
 
+import { ConfirmDialogView } from './ConfirmDialog';
+
 // Modal sizes
 export type ModalSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
@@ -308,66 +310,20 @@ export function ConfirmationModal({
   variant = 'info',
   loading = false,
 }: ConfirmationModalProps) {
-  const variantStyles = {
-    danger: {
-      button: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
-      icon: '⚠️',
-    },
-    warning: {
-      button: 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500',
-      icon: '⚠️',
-    },
-    info: {
-      button: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
-      icon: 'ℹ️',
-    },
-  };
-
-  const style = variantStyles[variant];
-
+  if (!isOpen) return null;
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      size="sm"
-      closeOnOverlayClick={!loading}
-      closeOnEscape={!loading}
-      persistent={loading}
-    >
-      <div className="mb-4">
-        <div className="flex items-center">
-          <span className="text-2xl mr-3">{style.icon}</span>
-          <p className="text-gray-700">{message}</p>
-        </div>
-      </div>
-
-      <div className="flex space-x-3 justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {cancelText}
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={loading}
-          className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${style.button}`}
-        >
-          {loading ? (
-            <div className="flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Processing...
-            </div>
-          ) : (
-            confirmText
-          )}
-        </button>
-      </div>
-    </Modal>
+    <ConfirmDialogView
+      options={{
+        title,
+        description: message,
+        confirmLabel: confirmText,
+        cancelLabel: cancelText,
+        tone: variant === 'info' ? 'default' : 'danger',
+      }}
+      busy={loading}
+      onCancel={onClose}
+      onConfirm={() => onConfirm()}
+    />
   );
 }
 

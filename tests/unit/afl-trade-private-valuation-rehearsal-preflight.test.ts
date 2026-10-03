@@ -34,7 +34,7 @@ describe('exact 2025 AFL private valuation rehearsal preflight', () => {
     expect(query.mock.calls[0]?.[1]).toEqual(['afl-men:2025-trades']);
     expect(query.mock.calls[0]?.[0]).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/iu);
     expect(report).toEqual({
-      schemaVersion: 'afl-private-valuation-rehearsal-preflight/v3',
+      schemaVersion: 'afl-private-valuation-rehearsal-preflight/v4',
       scopeKey: 'afl-men:2025-trades',
       competitionCode: 'AFLM',
       season: 2025,
@@ -68,12 +68,67 @@ describe('exact 2025 AFL private valuation rehearsal preflight', () => {
         },
       },
       blockerCodes: ['retained_hpn_corroboration_missing'],
+      constructionReadiness: {
+        status: 'not_inspected',
+        reason: 'selection_not_supplied',
+        report: null,
+      },
       limitationCodes: [
         'source_authority_authentication_not_performed',
         'retained_artifact_replay_not_performed',
         'complete_private_loop_not_executed',
       ],
     });
+  });
+
+  it('reports construction readiness when the caller supplies a selection', async () => {
+    const query = vi.fn(async (_sql: string, _parameters?: readonly unknown[]) => ({
+      rows: [
+        {
+          private_factual_present: true,
+          private_factual_revision: 1,
+          qualified_model_present: true,
+          qualified_model_revision: 1,
+          prepared_v3_present: true,
+          prepared_v3_revision: 1,
+          private_batch_present: true,
+          private_batch_revision: 1,
+          trade_count: 1,
+          ready_count: 1,
+          unavailable_count: 0,
+          cohort_admission_count: 1,
+          cohort_trade_count: 1,
+          current_registered_acquisition_spell_count: 0,
+          finalized_hpn_input_set_count: 0,
+          finalized_hpn_calculation_count: 0,
+          max_finalized_hpn_corroborating_player_row_count: 0,
+        },
+      ],
+    }));
+
+    const report = await inspectExact2025AflPrivateValuationRehearsalPreflight(
+      { query },
+      {
+        inspectConstructionReadiness: async () => ({
+          schemaVersion: 'afl-private-valuation-construction-readiness/v1',
+          state: 'assessed',
+          assessmentState: 'incompatible',
+          qualificationGranted: false,
+          policyArtifactId: 'artifact:policy',
+          requiredViewKeys: ['asset-1/at_trade'],
+          issues: [{ assetId: 'asset-1', view: 'at_trade', reason: 'evidence_reference_missing' }],
+          blockerCodes: ['evidence_reference_missing'],
+        }),
+      }
+    );
+
+    expect(report.constructionReadiness).toEqual({
+      status: 'inspected',
+      reason: null,
+      report: expect.objectContaining({ policyArtifactId: 'artifact:policy' }),
+    });
+    expect(report.blockerCodes).toContain('evidence_reference_missing');
+    expect(report.state).toBe('blocked');
   });
 
   it('names every missing retained stage on an empty migrated database', async () => {

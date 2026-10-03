@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { isCronRequestAuthorized } from '@/lib/cronAuth';
 import { logger } from '@/lib/logger';
 import { processPendingReminders } from '@/lib/reminders';
 
@@ -22,12 +23,8 @@ import { processPendingReminders } from '@/lib/reminders';
 export async function GET(request: NextRequest) {
   try {
     // Verify this is a legitimate cron request
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!isCronRequestAuthorized(request)) {
       logger.warn('Unauthorized cron request', {
-        authHeader,
         userAgent: request.headers.get('user-agent'),
         ip: request.headers.get('x-forwarded-for'),
       });

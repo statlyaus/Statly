@@ -39,8 +39,6 @@ export interface LeagueRoster {
   teamName: string;
   playerIds: string[];
   bench: string[];
-  captain?: string;
-  viceCaptain?: string;
   emergencies: string[];
   leagueId: string; // Redundant for indexing
   updatedAt: Date;
@@ -152,13 +150,7 @@ export interface LeagueTeamAction {
   leagueId: string;
   userId: string;
   teamId: string;
-  actionType:
-    | 'SET_CAPTAIN'
-    | 'SET_VICE_CAPTAIN'
-    | 'TRADE_PROPOSAL'
-    | 'WAIVER_CLAIM'
-    | 'DROP_PLAYER'
-    | 'OPTIMIZE_LINEUP';
+  actionType: 'TRADE_PROPOSAL' | 'WAIVER_CLAIM' | 'DROP_PLAYER';
   status: 'PENDING' | 'PROCESSED' | 'REJECTED' | 'CANCELLED';
   details: Record<string, unknown>;
   targetUserId?: string;
@@ -299,8 +291,6 @@ export class LeagueDataService {
             teamName: typeof raw.teamName === 'string' ? raw.teamName : '',
             playerIds: Array.isArray(raw.playerIds) ? (raw.playerIds as string[]) : [],
             bench: Array.isArray(raw.bench) ? (raw.bench as string[]) : [],
-            captain: typeof raw.captain === 'string' ? raw.captain : undefined,
-            viceCaptain: typeof raw.viceCaptain === 'string' ? raw.viceCaptain : undefined,
             emergencies: Array.isArray(raw.emergencies) ? (raw.emergencies as string[]) : [],
             leagueId: typeof raw.leagueId === 'string' ? raw.leagueId : String(leagueId),
             updatedAt: toDate(raw.updatedAt as Timestamp | Date | null | undefined) || new Date(),
@@ -357,8 +347,6 @@ export class LeagueDataService {
           teamName: typeof raw.teamName === 'string' ? raw.teamName : '',
           playerIds: Array.isArray(raw.playerIds) ? (raw.playerIds as string[]) : [],
           bench: Array.isArray(raw.bench) ? (raw.bench as string[]) : [],
-          captain: typeof raw.captain === 'string' ? raw.captain : undefined,
-          viceCaptain: typeof raw.viceCaptain === 'string' ? raw.viceCaptain : undefined,
           emergencies: Array.isArray(raw.emergencies) ? (raw.emergencies as string[]) : [],
           leagueId: typeof raw.leagueId === 'string' ? raw.leagueId : String(leagueId),
           updatedAt: toDate(raw.updatedAt as Timestamp | Date | null | undefined) || new Date(),
@@ -485,8 +473,7 @@ export class LeagueDataService {
                   ?.rankingType as LeagueMember['scoringPreferences']['rankingType']) ||
                 'H2H_POINTS',
               customWeights: (raw as any)?.scoringPreferences?.customWeights as
-                | Record<string, number>
-                | undefined,
+                Record<string, number> | undefined,
               viewMode:
                 ((raw as any)?.scoringPreferences
                   ?.viewMode as LeagueMember['scoringPreferences']['viewMode']) || 'DETAILED',
@@ -546,7 +533,7 @@ export class LeagueDataService {
             leagueId: String(data.leagueId || leagueId),
             userId: String(data.userId || ''),
             teamId: String(data.teamId || ''),
-            actionType: (data.actionType as LeagueTeamAction['actionType']) || 'OPTIMIZE_LINEUP',
+            actionType: (data.actionType as LeagueTeamAction['actionType']) || 'DROP_PLAYER',
             status: (data.status as LeagueTeamAction['status']) || 'PENDING',
             details: (data.details as Record<string, unknown>) || {},
             targetUserId: data.targetUserId ? String(data.targetUserId) : undefined,

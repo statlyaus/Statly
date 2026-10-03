@@ -323,10 +323,12 @@ npm run prisma:generate
 npx prisma migrate deploy
 ```
 
-Before and after a data-oriented command, verify that the protected database is unchanged:
+`prisma/dev.db` is ignored rather than tracked, so `git status` cannot show changes to it. Before and
+after a data-oriented command, compare its file metadata, which records size and modification time
+without reading the database, to verify that the protected database is unchanged:
 
 ```sh
-git status --short -- prisma/dev.db
+stat prisma/dev.db
 ```
 
 Delete the disposable database after verification only when the explicit path is known and it contains
@@ -350,6 +352,12 @@ isolation for archive-only trades, and removes those schemas afterward. The harn
 force-removal by immutable container ID after success, failure, `SIGINT`, or `SIGTERM`, and reports
 cleanup failure alongside any check failure.
 
+It also starts PostgreSQL with `max_locks_per_transaction=2048`. Each temporary schema holds the
+complete ordered migration history, about 1,200 relations, and `DROP SCHEMA ... CASCADE` has to lock
+every one of them. At the image default of 64 the teardown fails with `out of shared memory`, which
+appears either as that error or as a per-test timeout once several suites run together. CI starts its
+own service container with the same setting.
+
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
 entry point. Never point either `AFL_OUTCOMES_TEST_DATABASE_URL` or `AFL_OUTCOMES_DATABASE_URL` at a
@@ -371,6 +379,24 @@ shared or production PostgreSQL database.
 `npm run test:race` is reserved for a future focused concurrency suite. It currently fails when
 `tests/race` has no test files, so it must not be advertised as coverage or added to aggregate CI until
 real race specifications exist.
+
+## Timeout budgets
+
+The unit configuration keeps a 30 second default so ordinary tests stay bounded. Tests that build the
+large retained native-PAV artifact graphs are genuinely heavy: the slowest runs about 42 seconds in
+isolation and eight more sit between 24 and 39 seconds. That family declares an explicit `120_000`
+budget at the call site instead of the default.
+
+120 seconds is the ceiling. It is roughly twice the worst contended runtime observed on a shared
+runner, and it matches the budget part of that family already used. A test that needs more than that
+is signalling that its work is reducible, and should be profiled rather than given a larger number.
+Do not drop a heavy test back to 60 seconds to make the suite look tidier: at that setting the family
+times out whenever the suite is under load.
+
+Lock-space failures are not budget failures. A suite that reports `out of shared memory` while dropping
+its temporary schema, or that times out only when other suites run beside it, is hitting the disposable
+cluster's lock ceiling rather than its own budget: see the setting described with the local integration
+command above. Raising the call-site budget there hides the cause and still fails.
 
 ## Browser fixtures
 

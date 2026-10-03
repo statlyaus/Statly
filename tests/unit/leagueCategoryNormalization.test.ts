@@ -31,7 +31,7 @@ describe('league category source of truth', () => {
       'G',
       'T',
       'I50',
-      'I',
+      'ITC',
       'CM',
       'R50',
       'CP',

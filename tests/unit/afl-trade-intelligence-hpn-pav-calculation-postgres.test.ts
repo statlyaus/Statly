@@ -28,6 +28,10 @@ const selectionMigrationUrl = new URL(
   '../../prisma/afl-trade-outcomes/migrations/0222_hpn_pav_statistical_selection_membership/migration.sql',
   import.meta.url
 );
+const toleranceMigrationUrl = new URL(
+  '../../prisma/afl-trade-outcomes/migrations/0245_hpn_pav_check_tolerance/migration.sql',
+  import.meta.url
+);
 const sha = (value: string) => sha256AflTradeCanonicalJson(value);
 const addressed = (prefix: string, value: string) => `${prefix}:${sha(value)}`;
 
@@ -216,7 +220,7 @@ async function insertCalculation(
 }
 
 describe('HPN PAV calculation PostgreSQL authority', () => {
-  it('finalizes the selected overlay and rejects value tampering and late children', async () => {
+  it('finalizes the selected overlay, tolerates floating-point noise, and rejects value tampering and late children', async () => {
     const db = await PGlite.create({ extensions: { pgcrypto } });
     await db.exec(`
       CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -267,6 +271,7 @@ describe('HPN PAV calculation PostgreSQL authority', () => {
       throw new Error('Migration 0222 calculation overlay section is missing.');
     }
     await db.exec(selectionMigration.slice(overlayStart, overlayEnd));
+    await db.exec(await readFile(toleranceMigrationUrl, 'utf8'));
     await db.exec(`INSERT INTO outcome_club VALUES ('club:home'),('club:away');
       INSERT INTO outcome_player VALUES ('player:a1'),('player:a2'),('player:b1'),('player:b2');`);
     await db.exec('BEGIN');
@@ -464,6 +469,39 @@ describe('HPN PAV calculation PostgreSQL authority', () => {
       )
     ).rejects.toThrow(/independently derived method/);
     await db.exec('ROLLBACK TO SAVEPOINT tampered_calculation');
+    // Double-precision arithmetic differs from exact NUMERIC derivation by about 1e-12 on genuine
+    // seasons; that is accepted, while a real difference (here 1e-6) is still rejected.
+    const shifted = (delta: number) => {
+      const content = structuredClone(fixture.value.content);
+      content.players[0]!.offensivePav += delta;
+      content.players[0]!.totalPav += delta;
+      content.players[1]!.offensivePav -= delta;
+      content.players[1]!.totalPav -= delta;
+      return aflTradeFinalizedHpnPavCalculationSchema.parse({
+        calculationId: createAflTradeContentAddress('hpn-pav-season', content),
+        content,
+      });
+    };
+    const noisy = shifted(2e-12);
+    await db.exec('SAVEPOINT noisy_calculation');
+    await insertCalculation(db, noisy);
+    await db.query(
+      `UPDATE outcome_hpn_pav_calculation SET status='finalized',finalized_at=calculated_at
+       WHERE calculation_id=$1`,
+      [noisy.calculationId]
+    );
+    await db.exec('ROLLBACK TO SAVEPOINT noisy_calculation');
+    const drifted = shifted(1e-6);
+    await db.exec('SAVEPOINT drifted_calculation');
+    await insertCalculation(db, drifted);
+    await expect(
+      db.query(
+        `UPDATE outcome_hpn_pav_calculation SET status='finalized',finalized_at=calculated_at
+         WHERE calculation_id=$1`,
+        [drifted.calculationId]
+      )
+    ).rejects.toThrow(/independently derived method/);
+    await db.exec('ROLLBACK TO SAVEPOINT drifted_calculation');
     const forgedProvenanceContent = structuredClone(fixture.value.content);
     forgedProvenanceContent.primaryProviders = ['invented_provider'];
     forgedProvenanceContent.resultSourceRowIds = ['row:invented'];

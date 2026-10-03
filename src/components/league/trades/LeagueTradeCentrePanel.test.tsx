@@ -144,46 +144,49 @@ describe('LeagueTradeCentrePanel', () => {
   it('opens a focused proposal workspace for a deep-linked player', () => {
     renderPanel();
 
-    const title = screen.getByRole('heading', { name: 'Trade Centre' });
-    const proposalHeading = screen.getByRole('heading', { name: 'Proposal workspace' });
-    expect(title).toHaveClass('text-[1.75rem]');
-    expect(title.previousElementSibling).toHaveClass('text-xs');
+    const title = screen.getByRole('heading', { level: 2, name: 'Trades' });
+    const proposalHeading = screen.getByRole('heading', { name: 'New trade' });
+    expect(title).toHaveClass('font-display', 'text-2xl');
+    expect(title.previousElementSibling).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Propose trade' })).not.toBeInTheDocument();
     expect(proposalHeading).toHaveClass('text-lg');
-    expect(screen.getByText('Commissioner approval')).toBeInTheDocument();
+    expect(screen.getByText('Commissioner approves')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Alpha FC sends' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Beta FC sends' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
+    expect(selectedPartner()).toBe('member-2');
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Review trade' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Back to offers' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Offers' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept trade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
-  it('renders a scan-first offer ledger with one expanded offer', () => {
+  it('renders a scan-first offer ledger with one expanded offer', async () => {
     renderOffersPanel();
 
     const offersHeading = screen.getByRole('heading', { name: 'Offers' });
     const inboxButton = screen.getByRole('button', { name: /Inbox/ });
     expect(offersHeading).toHaveClass('text-lg');
-    expect(inboxButton).toHaveClass('h-11', 'bg-[color:var(--trade-selection)]');
+    expect(inboxButton).toHaveClass('h-11', 'border-b-2', 'border-[color:var(--trade-brand)]');
+    expect(screen.getByRole('button', { name: /Sent/ })).toHaveClass('border-transparent');
     expect(inboxButton).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'New proposal' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept trade' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Counteroffer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Propose trade' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Counter' })).toBeInTheDocument();
     expect(screen.getByText('Alpha ↔ Beta')).toBeInTheDocument();
-    expect(screen.getByText(/^Offer 1 ·/)).toHaveClass('text-xs');
-    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
+    expect(screen.getByText(/^Beta FC · Offer 1$/)).toHaveClass('text-xs');
+    expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: 'You send package from Alpha FC' })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: 'You receive package from Beta FC' })
     ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Verdict' })).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: /category comparison/i })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'All categories' }));
     expect(screen.getByRole('table', { name: /category comparison/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Discuss trade: Alpha ↔ Beta' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discuss trade: Alpha ↔ Beta' })).toBeInTheDocument();
   });
 
   it('derives commissioner review parties from the trade instead of an unrelated viewer team', () => {
@@ -204,7 +207,7 @@ describe('LeagueTradeCentrePanel', () => {
       ],
     });
 
-    expect(screen.getByText(/^Offer 1 · Alpha FC$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Alpha FC · Offer 1$/)).toBeInTheDocument();
     expect(screen.getByText('Beta ↔ Alpha')).toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: 'Beta FC sends package from Beta FC' })
@@ -232,12 +235,12 @@ describe('LeagueTradeCentrePanel', () => {
       counts: { ...snapshot.counts, inbox: 2 },
     });
 
-    expect(screen.getAllByRole('heading', { name: 'Package comparison' })).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { name: 'Verdict' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Collapse Alpha ↔ Beta' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Expand Alpha ↔ Beta' }));
 
-    expect(screen.getAllByRole('heading', { name: 'Package comparison' })).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { name: 'Verdict' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Collapse Alpha ↔ Beta' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Expand Alpha ↔ Beta' })).toBeInTheDocument();
   });
@@ -252,7 +255,7 @@ describe('LeagueTradeCentrePanel', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: 'Trade Centre' })).toHaveClass('text-[1.75rem]');
+    expect(screen.getByRole('heading', { name: 'Trades' })).toHaveClass('font-display', 'text-2xl');
     expect(screen.getByRole('alert')).toHaveClass('bg-[color:var(--trade-warning-soft)]');
   });
 
@@ -285,13 +288,12 @@ describe('LeagueTradeCentrePanel', () => {
     };
     const rendered = renderPanel(snapshotWithThirdTeam);
 
-    const partner = screen.getByRole('combobox', { name: 'Trade partner' });
-    expect(partner).toHaveValue('member-2');
+    expect(selectedPartner()).toBe('member-2');
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
 
-    await user.selectOptions(partner, 'member-3');
+    await user.selectOptions(partnerSelect(), 'member-3');
 
-    expect(partner).toHaveValue('member-3');
+    expect(selectedPartner()).toBe('member-3');
     expect(screen.getByRole('heading', { name: 'Gamma FC sends' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Beta FC sends' })).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /Gale Gamma/ })).not.toBeChecked();
@@ -299,7 +301,7 @@ describe('LeagueTradeCentrePanel', () => {
 
     rendered.rerender(createPanel(createSnapshotWithThirdTeam()));
 
-    await waitFor(() => expect(partner).toHaveValue('member-3'));
+    await waitFor(() => expect(selectedPartner()).toBe('member-3'));
     expect(screen.getByRole('heading', { name: 'Gamma FC sends' })).toBeInTheDocument();
     expect(screen.getByText('0 players selected')).toBeInTheDocument();
   });
@@ -322,9 +324,7 @@ describe('LeagueTradeCentrePanel', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-3')
-    );
+    await waitFor(() => expect(selectedPartner()).toBe('member-3'));
     expect(screen.getByRole('checkbox', { name: /Gale Gamma/ })).toBeChecked();
     expect(screen.queryByRole('checkbox', { name: /Bailey Beta/ })).not.toBeInTheDocument();
     expect(screen.getByText('1 player selected')).toBeInTheDocument();
@@ -338,7 +338,7 @@ describe('LeagueTradeCentrePanel', () => {
       })
     );
 
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-3');
+    expect(selectedPartner()).toBe('member-3');
     expect(screen.getByRole('checkbox', { name: /Gale Gamma/ })).toBeChecked();
     expect(screen.queryByRole('checkbox', { name: /Bailey Beta/ })).not.toBeInTheDocument();
   });
@@ -352,11 +352,9 @@ describe('LeagueTradeCentrePanel', () => {
         ownerMemberId: 'missing-member',
       })
     );
-    const partner = screen.getByRole('combobox', { name: 'Trade partner' });
-
-    expect(partner).toHaveValue('member-2');
-    await user.selectOptions(partner, 'member-3');
-    expect(partner).toHaveValue('member-3');
+    expect(selectedPartner()).toBe('member-2');
+    await user.selectOptions(partnerSelect(), 'member-3');
+    expect(selectedPartner()).toBe('member-3');
 
     rendered.rerender(
       createPanel(snapshot, {
@@ -365,7 +363,7 @@ describe('LeagueTradeCentrePanel', () => {
       })
     );
 
-    await waitFor(() => expect(partner).toHaveValue('member-2'));
+    await waitFor(() => expect(selectedPartner()).toBe('member-2'));
     expect(screen.getByRole('heading', { name: 'Beta FC sends' })).toBeInTheDocument();
   });
 
@@ -389,12 +387,12 @@ describe('LeagueTradeCentrePanel', () => {
     expect(screen.getByRole('region', { name: 'You receive package' })).toHaveTextContent(
       'Bailey Beta'
     );
-    expect(screen.getByText('No league deadline')).toBeInTheDocument();
-    expect(screen.getByText('72 hours after sending')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { name: 'Package comparison' })).toHaveLength(1);
+    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.getByText('In 72 hours')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All categories' })).toBeInTheDocument();
 
-    await user.type(screen.getByRole('textbox', { name: 'Message (optional)' }), 'Let us swap');
-    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
+    await user.type(screen.getByRole('textbox', { name: 'Note (optional)' }), 'Let us swap');
+    await user.click(screen.getByRole('button', { name: 'Send offer to Beta FC' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(1));
     const [path, request] = authenticatedFetch.mock.calls[0] as [string, RequestInit];
@@ -430,13 +428,13 @@ describe('LeagueTradeCentrePanel', () => {
 
     const sendingPackage = screen.getByRole('region', { name: 'You send package' });
     expect(within(sendingPackage).queryByText('Alex Alpha')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
+    await user.click(screen.getByRole('button', { name: 'Send offer to Beta FC' }));
     expect(authenticatedFetch).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The selected trade package is incomplete. Return to edit and review it.'
+      'A player in this trade has changed. Edit it and check again.'
     );
 
-    await user.click(screen.getByRole('button', { name: 'Back to edit' }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
     expect(screen.getByText('1 player selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review trade' })).toBeDisabled();
 
@@ -454,9 +452,9 @@ describe('LeagueTradeCentrePanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
-    const message = screen.getByRole('textbox', { name: 'Message (optional)' });
+    const message = screen.getByRole('textbox', { name: 'Note (optional)' });
     await user.type(message, 'Keep this draft');
-    await user.click(screen.getByRole('button', { name: 'Back to edit' }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
 
     const reviewButton = screen.getByRole('button', { name: 'Review trade' });
     await waitFor(() => expect(reviewButton).toHaveFocus());
@@ -464,29 +462,27 @@ describe('LeagueTradeCentrePanel', () => {
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
 
     await user.click(reviewButton);
-    expect(screen.getByRole('textbox', { name: 'Message (optional)' })).toHaveValue(
-      'Keep this draft'
-    );
+    expect(screen.getByRole('textbox', { name: 'Note (optional)' })).toHaveValue('Keep this draft');
     expect(authenticatedFetch).not.toHaveBeenCalled();
   });
 
-  it('keeps the selection tray visible in a bounded composer and clears partial selections', async () => {
+  it('keeps the trade panel beside the rosters and clears partial selections', async () => {
     const user = userEvent.setup();
     renderPanel();
 
     const composer = document.querySelector('[data-trade-composer]');
     const content = document.querySelector('[data-trade-composer-content]');
+    const panel = screen.getByRole('complementary', { name: 'Your trade' });
     const tray = document.querySelector('[data-trade-selection-tray]');
-    expect(composer).toHaveClass('h-[clamp(28rem,65dvh,42rem)]', 'min-h-0');
-    expect(content).toHaveClass(
-      'min-h-0',
-      'flex-1',
-      'overflow-y-auto',
-      'overscroll-contain',
-      'min-w-0'
-    );
-    expect(tray).toHaveClass('shrink-0');
-    expect(tray?.parentElement).toBe(composer);
+    expect(composer).toHaveClass('grid', 'lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]');
+    expect(content).toHaveClass('min-w-0');
+    expect(panel).toHaveClass('lg:sticky');
+    expect(panel).toContainElement(tray as HTMLElement);
+    expect(within(panel).getByRole('region', { name: 'You get' })).toHaveTextContent('Bailey Beta');
+    // Removing a player from the panel unticks them in the roster.
+    await user.click(within(panel).getByRole('button', { name: 'Remove Bailey Beta' }));
+    expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).not.toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /Bailey Beta/ }));
 
     expect(screen.getByText('1 player selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review trade' })).toBeDisabled();
@@ -511,22 +507,22 @@ describe('LeagueTradeCentrePanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
-    await user.type(screen.getByRole('textbox', { name: 'Message (optional)' }), 'Retry me');
-    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
+    await user.type(screen.getByRole('textbox', { name: 'Note (optional)' }), 'Retry me');
+    await user.click(screen.getByRole('button', { name: 'Send offer to Beta FC' }));
     const submissionAlert = await screen.findByRole('alert');
 
     expect(submissionAlert).toHaveTextContent('Temporary response failure');
     expect(submissionAlert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
     expect(submissionAlert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
     expect(screen.getByRole('heading', { name: 'Send to Beta FC?' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Message (optional)' })).toHaveValue('Retry me');
+    expect(screen.getByRole('textbox', { name: 'Note (optional)' })).toHaveValue('Retry me');
     expect(screen.getByRole('region', { name: 'You send package' })).toHaveTextContent(
       'Alex Alpha'
     );
     expect(screen.getByRole('region', { name: 'You receive package' })).toHaveTextContent(
       'Bailey Beta'
     );
-    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
+    await user.click(screen.getByRole('button', { name: 'Send offer to Beta FC' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(2));
     const firstBody = JSON.parse(
@@ -543,27 +539,25 @@ describe('LeagueTradeCentrePanel', () => {
     const user = userEvent.setup();
     renderOffersPanel();
 
-    await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
-    expect(screen.getByRole('heading', { name: 'Counteroffer workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toBeDisabled();
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
-    expect(screen.getByRole('button', { name: 'Cancel counteroffer' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Counter' }));
+    expect(screen.getByRole('heading', { name: 'Counteroffer' })).toBeInTheDocument();
+    expect(partnerSelect()).toBeDisabled();
+    expect(selectedPartner()).toBe('member-2');
+    expect(screen.getByRole('button', { name: 'Cancel counter' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review trade' })).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Cancel counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel counter' }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
 
-    await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Counter' }));
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('checkbox', { name: /Bailey Beta/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
 
-    expect(
-      screen.getByRole('button', { name: 'Send counteroffer to Beta FC' })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancel counteroffer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send counter to Beta FC' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel counter' })).toBeInTheDocument();
     expect(authenticatedFetch).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Cancel counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel counter' }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
   });
 
@@ -572,8 +566,8 @@ describe('LeagueTradeCentrePanel', () => {
     const snapshotWithThirdTeam = createSnapshotWithThirdTeam();
     const rendered = renderOffersPanel(snapshotWithThirdTeam);
 
-    await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
+    await user.click(screen.getByRole('button', { name: 'Counter' }));
+    expect(selectedPartner()).toBe('member-2');
 
     rendered.rerender(
       createPanel({
@@ -583,13 +577,13 @@ describe('LeagueTradeCentrePanel', () => {
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'This counteroffer is no longer available because the original trade partner is not active.'
+      'The other team is no longer in the league.'
     );
-    expect(screen.queryByRole('combobox', { name: 'Trade partner' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Trade with' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Gamma FC sends' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Review trade' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Cancel counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel counter' }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
   });
 
@@ -598,7 +592,7 @@ describe('LeagueTradeCentrePanel', () => {
     const snapshotWithThirdTeam = createSnapshotWithThirdTeam();
     const rendered = renderOffersPanel(snapshotWithThirdTeam);
 
-    await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Counter' }));
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('checkbox', { name: /Bailey Beta/ }));
 
@@ -609,7 +603,7 @@ describe('LeagueTradeCentrePanel', () => {
       })
     );
 
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
+    expect(selectedPartner()).toBe('member-2');
     expect(screen.getByRole('checkbox', { name: /Alex Alpha/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
     expect(screen.queryByRole('heading', { name: 'Gamma FC sends' })).not.toBeInTheDocument();
@@ -619,11 +613,11 @@ describe('LeagueTradeCentrePanel', () => {
     const user = userEvent.setup();
     renderOffersPanel();
 
-    await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Counter' }));
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('checkbox', { name: /Bailey Beta/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
-    await user.click(screen.getByRole('button', { name: 'Send counteroffer to Beta FC' }));
+    await user.click(screen.getByRole('button', { name: 'Send counter to Beta FC' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(1));
     expect(authenticatedFetch.mock.calls[0]?.[0]).toBe(
@@ -637,11 +631,11 @@ describe('LeagueTradeCentrePanel', () => {
     const user = userEvent.setup();
     renderOffersPanel();
 
-    await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Counter' }));
 
-    expect(screen.getByRole('heading', { name: 'Counteroffer workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Trade partner' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Accept trade' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Counteroffer' })).toBeInTheDocument();
+    expect(partnerSelect()).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Offers' })).not.toBeInTheDocument();
   });
 
@@ -654,18 +648,17 @@ describe('LeagueTradeCentrePanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
-    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
+    await user.click(screen.getByRole('button', { name: 'Send offer to Beta FC' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Keep this composer error.');
 
     expect(authenticatedFetch).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alert')).toHaveTextContent('Keep this composer error.');
     expect(screen.getByRole('heading', { name: 'Send to Beta FC?' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept trade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
   it('confirms acceptance before posting the expected trade version', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     authenticatedFetch.mockResolvedValue(
       new Response(JSON.stringify({ threadId: 'trade-1', status: 'PENDING_ADMIN_REVIEW' }), {
         status: 200,
@@ -673,6 +666,7 @@ describe('LeagueTradeCentrePanel', () => {
     );
     renderOffersPanel();
 
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(1));
@@ -687,7 +681,6 @@ describe('LeagueTradeCentrePanel', () => {
 
   it('reuses an action idempotency key when a committed response must be retried', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     authenticatedFetch
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: 'Temporary response failure' }), { status: 503 })
@@ -699,10 +692,12 @@ describe('LeagueTradeCentrePanel', () => {
       );
     renderOffersPanel();
 
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
     const actionAlert = await screen.findByRole('alert');
     expect(actionAlert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
     expect(actionAlert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(2));
@@ -757,4 +752,12 @@ function createSnapshotWithThirdTeam(): LeagueTradeCentreSnapshot {
       },
     ],
   };
+}
+
+function partnerSelect(): HTMLSelectElement {
+  return screen.getByRole('combobox', { name: 'Trade with' }) as HTMLSelectElement;
+}
+
+function selectedPartner(): string | undefined {
+  return partnerSelect().value;
 }

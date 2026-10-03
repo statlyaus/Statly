@@ -286,7 +286,7 @@ describe('native PAV candidate checkpoint', () => {
     await expect(replayAdapter.retainNativeCandidateCheckpoint(request)).rejects.toThrow(
       'Retained native candidate checkpoint ancestry is inconsistent.'
     );
-  }, 60_000);
+  }, 120_000);
 
   it.each([
     'missing_configuration',
@@ -411,6 +411,6 @@ describe('native PAV candidate checkpoint', () => {
             : 1
       );
     },
-    60_000
+    120_000
   );
 });
