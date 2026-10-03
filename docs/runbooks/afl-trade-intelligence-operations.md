@@ -311,6 +311,28 @@ and a run that fails before finishing removes it. It lists:
 Unlocated rows are never changed or deleted. Their bytes are missing from the registered store, and
 the grouping shows where each row said they were kept.
 
+### Registering reviewed acquisition spells
+
+Register a reviewed rule or spell only through this command. It writes the evidence into the
+registered store first, so the record can never cite bytes that were not retained:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:spells:register-reviewed -- --input <absolute-registration.json>
+```
+
+The input file (`statly-reviewed-spell-registration-input/v1`) names the store id, a repository id
+inside it, the evidence class (`raw_source` or `capture_metadata`), the `non_production` execution
+scope, an absolute path for every evidence artifact, and the rule, the spell, or both, each with its
+existing approval decision id. The approvals are recorded beforehand through the normal review
+owner; the command does not approve anything.
+
+The command stores each evidence file and reads it back before any database write. In one
+transaction it then records each location and the registration. It refuses evidence that has no
+custody row, and refuses with `AflTradeArtifactUnlocatedError` a spell whose rule cites evidence that
+was never located. A failure leaves no location and no registration, so the same input can be
+re-run once the cause is fixed.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
