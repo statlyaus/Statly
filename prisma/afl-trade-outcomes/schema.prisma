@@ -309,10 +309,37 @@ model OutcomeArtifactCustody {
   governedPickDatasetArtifacts                 OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickDatasetArtifact")
   governedPickAdmissionArtifacts               OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickAdmissionArtifact")
   governedPickProtocolArtifacts                OutcomeGovernedPickPavModelExecution[]               @relation("GovernedPickProtocolArtifact")
+  location                                     OutcomeArtifactCustodyLocation?
 
   @@unique([artifactClass, contentSha256], map: "outcome_artifact_class_sha256_key")
   @@index([environment, artifactClass, createdAt], map: "outcome_artifact_environment_class_created_idx")
   @@map("outcome_artifact_custody")
+}
+
+/// A registered home for evidence bytes. Permanent; only the mirror locator may be recorded, once.
+model OutcomeArtifactStore {
+  storeId       String                           @id @map("store_id")
+  environment   OutcomeEnvironment
+  assurance     String
+  rootLocator   String                           @map("root_locator")
+  mirrorLocator String?                          @map("mirror_locator")
+  createdAt     DateTime                         @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
+  locations     OutcomeArtifactCustodyLocation[]
+
+  @@map("outcome_artifact_store")
+}
+
+/// Where one custody row's bytes live. Append-only; a custody row without one has no known location.
+model OutcomeArtifactCustodyLocation {
+  artifactId String                 @id @map("artifact_id")
+  storeId    String                 @map("store_id")
+  objectKey  String                 @map("object_key")
+  locatedAt  DateTime               @default(dbgenerated("clock_timestamp()")) @map("located_at") @outcomes.Timestamptz(3)
+  artifact   OutcomeArtifactCustody @relation(fields: [artifactId], references: [artifactId], onDelete: Restrict, map: "outcome_artifact_custody_location_artifact_fkey")
+  store      OutcomeArtifactStore   @relation(fields: [storeId], references: [storeId], onDelete: Restrict, map: "outcome_artifact_custody_location_store_fkey")
+
+  @@unique([storeId, objectKey], map: "outcome_artifact_custody_location_store_key")
+  @@map("outcome_artifact_custody_location")
 }
 
 model OutcomeGovernedEvidenceReference {
