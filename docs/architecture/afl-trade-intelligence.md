@@ -412,6 +412,17 @@ spell; a later return creates a separate episode. Entry uses the incoming asset'
 an outgoing event closes the inclusive interval on the previous day. Appearance dates never supply
 missing acquisition dates.
 
+Outside `test_fixture`, reviewed rule and spell registration writes its evidence first. The
+repository takes a binding to the registered artifact store, stores each evidence artifact with
+`putIfAbsent` and reads it back in full before it opens the registration transaction. That
+transaction records each artifact's location, refuses evidence without a matching custody row, and
+refuses any cited artifact, including the rule's evidence cited by a spell, that still has no
+location, with the named `AflTradeArtifactUnlocatedError`. A failed write or read-back therefore
+leaves no location and no registration. A season (v3) spell cites no evidence bytes and is exempt.
+`test_fixture` has no store, because a local store may only exist in `non_production`, so fixtures
+keep the read-and-compare path. Reviewers register through `npm run
+outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.
+
 External canonical-target registration v2 uses the existing provider-resolution repository and
 reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
 from a current retained capture completion, an exact governed target snapshot, supporting custody
@@ -646,6 +657,8 @@ environment must equal the custody row's. Location is a separate table, not a cu
 because custody rows are immutable. A custody row with no location row has no known copy of its
 bytes. For the local filesystem store, the object key is the repository directory relative to the
 store root joined to the envelope's own key, so the key alone resolves the envelope file.
+`bindLocalAflTradeArtifactStore` builds a repository from a store id rather than a directory: it
+reads the store's root from its registration, so bytes written through it can always be located.
 
 ### Maturity-review acceptance criteria
 
