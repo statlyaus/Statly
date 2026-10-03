@@ -356,7 +356,15 @@ It also starts PostgreSQL with `max_locks_per_transaction=2048`. Each temporary 
 complete ordered migration history, about 1,200 relations, and `DROP SCHEMA ... CASCADE` has to lock
 every one of them. At the image default of 64 the teardown fails with `out of shared memory`, which
 appears either as that error or as a per-test timeout once several suites run together. CI starts its
-own service container with the same setting.
+own service container with the same setting, and additionally with `fsync`, `synchronous_commit` and
+`full_page_writes` off, because the database is disposable and each suite replays about 250 migration
+transactions.
+
+The suite runs four files at a time (`maxWorkers: 4` in `vitest.config.outcomes-int.ts`), which matches
+the CI runner's four cores. It ran one file at a time before the lock ceiling was raised; at 2048 four
+concurrent teardowns fit the lock table. Unit tests also run on four workers, and V8 coverage is off
+by default because it slowed the heavy native-PAV files by about two thirds and no gate reads the
+report. Pass `--coverage.enabled=true` to collect it locally.
 
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
