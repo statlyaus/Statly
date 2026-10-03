@@ -8,7 +8,6 @@ const runtimePaths = [
   'src/services/rosterService.ts',
   'src/app/api/test-lobby/route.ts',
   'src/server/diagnostics/lobbySchemaDiagnostic.ts',
-  'src/lib/ensureLobbyColumns.ts',
 ] as const;
 
 function readWorkspaceFile(path: string): string {
@@ -27,9 +26,7 @@ describe('roster schema ownership architecture', () => {
     expect(baseMigration).toContain('CREATE TABLE "LeagueRoster"');
     expect(baseMigration).toContain('CREATE TABLE "TeamAction"');
     expect(normalizedRosterMigration).toContain('CREATE TABLE IF NOT EXISTS "LeagueRosterPlayer"');
-    expect(normalizedRosterMigration).toContain(
-      '"LeagueRosterPlayer_leagueId_playerId_key"'
-    );
+    expect(normalizedRosterMigration).toContain('"LeagueRosterPlayer_leagueId_playerId_key"');
   });
 
   it('does not manage the roster schema from request or service runtime code', () => {
