@@ -470,14 +470,16 @@ describe('PrismaWaiverClaimStore', () => {
       leagueMember: {
         findMany: vi.fn().mockResolvedValue([{ id: 'member-1', userId: 'user-1' }]),
       },
-      $queryRaw: vi.fn().mockResolvedValue([
-        {
-          memberId: 'member-1',
-          priority: 4,
-          remainingFAAB: 93,
-          pendingBidTotal: 7,
-        },
-      ]),
+      waiverPriority: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            memberId: 'member-1',
+            priority: 4,
+            remainingFAAB: 93,
+            pendingBidTotal: 7,
+          },
+        ]),
+      },
     };
     const { firestore } = createCompatibilityProjectionMock();
     const store = new PrismaWaiverClaimStore(db as never, firestore as never);
@@ -524,15 +526,22 @@ describe('PrismaWaiverClaimStore', () => {
         create: vi.fn().mockResolvedValue({ id: 'action-1' }),
         update: vi.fn().mockResolvedValue({ id: 'action-1' }),
       },
-      $queryRaw: vi
-        .fn()
-        .mockResolvedValue([
-          { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
-        ])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ memberId: 'member-1', finalPick: 1 }])
-        .mockResolvedValueOnce([{ memberId: 'member-1', remainingFAAB: 100, pendingBidTotal: 0 }]),
-      $executeRaw: vi.fn().mockResolvedValue(1),
+      waiverPriority: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
+          ])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 0 },
+          ]),
+        create: vi.fn().mockResolvedValue({}),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      pick: {
+        groupBy: vi.fn().mockResolvedValue([{ memberId: 'member-1', _max: { overall: 1 } }]),
+      },
       $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
     };
     const { firestore, waiverDoc, activityDoc } = createCompatibilityProjectionMock();
@@ -560,7 +569,10 @@ describe('PrismaWaiverClaimStore', () => {
         }),
       })
     );
-    expect(db.$executeRaw).toHaveBeenCalled();
+    expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1' },
+      data: { pendingBidTotal: { increment: 7 } },
+    });
     expect(waiverDoc.set).toHaveBeenCalledWith(
       expect.objectContaining({
         leagueId: 'league-1',
@@ -594,18 +606,22 @@ describe('PrismaWaiverClaimStore', () => {
         create: vi.fn().mockResolvedValue({ id: 'action-1' }),
         update: vi.fn().mockResolvedValue({ id: 'action-1' }),
       },
-      $queryRaw: vi
-        .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { memberId: 'member-2', finalPick: 4 },
-          { memberId: 'member-1', finalPick: 3 },
-        ])
-        .mockResolvedValue([
-          { memberId: 'member-2', priority: 1, remainingFAAB: null, pendingBidTotal: 0 },
-          { memberId: 'member-1', priority: 2, remainingFAAB: null, pendingBidTotal: 0 },
+      waiverPriority: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValue([
+            { memberId: 'member-2', priority: 1, remainingFAAB: null, pendingBidTotal: 0 },
+            { memberId: 'member-1', priority: 2, remainingFAAB: null, pendingBidTotal: 0 },
+          ]),
+        create: vi.fn().mockResolvedValue({}),
+      },
+      pick: {
+        groupBy: vi.fn().mockResolvedValue([
+          { memberId: 'member-1', _max: { overall: 3 } },
+          { memberId: 'member-2', _max: { overall: 4 } },
         ]),
-      $executeRaw: vi.fn().mockResolvedValue(1),
+      },
       $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
     };
     const { firestore, waiverDoc, activityDoc } = createCompatibilityProjectionMock();
@@ -620,28 +636,12 @@ describe('PrismaWaiverClaimStore', () => {
       waiverSettings: { system: 'PRIORITY' },
     });
 
-    expect(db.$executeRaw).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      expect.any(String),
-      'league-1',
-      'member-2',
-      1,
-      null,
-      expect.any(Date),
-      expect.any(Date)
-    );
-    expect(db.$executeRaw).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      expect.any(String),
-      'league-1',
-      'member-1',
-      2,
-      null,
-      expect.any(Date),
-      expect.any(Date)
-    );
+    expect(db.waiverPriority.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({ memberId: 'member-2', priority: 1, remainingFAAB: null }),
+    });
+    expect(db.waiverPriority.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({ memberId: 'member-1', priority: 2, remainingFAAB: null }),
+    });
     expect(waiverDoc.set).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'member-2' }));
     expect(activityDoc.set).toHaveBeenCalledWith(expect.objectContaining({ claimId: 'action-1' }));
   });
@@ -684,12 +684,14 @@ describe('PrismaWaiverClaimStore', () => {
       teamAction: {
         update: vi.fn().mockResolvedValue({ id: 'action-1' }),
       },
-      $queryRaw: vi
-        .fn()
-        .mockResolvedValue([
-          { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 0 },
-        ]),
-      $executeRaw: vi.fn().mockResolvedValue(1),
+      waiverPriority: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 0 },
+          ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
       $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
     };
     const { firestore, waiverDoc } = createCompatibilityProjectionMock();
@@ -709,7 +711,10 @@ describe('PrismaWaiverClaimStore', () => {
         processedAt: expect.any(Date),
       }),
     });
-    expect(db.$executeRaw).toHaveBeenCalled();
+    expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1', pendingBidTotal: { gte: 7 } },
+      data: { pendingBidTotal: { decrement: 7 } },
+    });
     expect(waiverDoc.update).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'CANCELLED',
