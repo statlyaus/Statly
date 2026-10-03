@@ -34,8 +34,10 @@ skill conflicts with repository policy.
   specification and tickets for approval.
 - For a difficult bug, regression, intermittent failure, or performance problem, load
   `diagnosing-bugs`. Establish one reproducible failing command before proposing a fix.
-- For implementation, load `implement`, agree the observable behaviour and public test seams, then
-  load `tdd`. Work in red-green-refactor slices and keep focused checks passing between slices.
+- For implementation, load `ponytail` in place of `implement` (`implement` stays installed but is
+  not the default route), agree the observable behaviour and public test seams, then load `tdd`.
+  Ponytail never overrides the planning gates, `tdd`, or its own validation, security, and
+  accessibility exceptions. Work in red-green-refactor slices and keep focused checks passing between slices.
 - For an architecture or domain-language decision, load `codebase-design` and `domain-modeling`.
   Preserve Prisma, Firebase, Firestore, Redis, league/season scoping, ETL, and realtime ownership
   boundaries defined by Statly documentation.
