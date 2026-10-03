@@ -19,7 +19,14 @@ import type { League, LeagueMember } from '@/types/leagues';
 import { getTeamInitials, getTeamLogoImageStyle } from '../leagueTabPanelUtils';
 
 export type OverviewTarget =
-  'matchups' | 'lineup' | 'standings' | 'teams' | 'trades' | 'waivers' | 'draft';
+  | 'matchups'
+  | 'lineup'
+  | 'standings'
+  | 'teams'
+  | 'trades'
+  | 'waivers'
+  | 'draft'
+  | 'league-settings';
 
 export interface OverviewWaiverClaimSummary {
   id: string;
@@ -178,7 +185,8 @@ export function LeagueOverviewPanel({
       </h2>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-5">
-          {isCommissioner && (openTeamSlots > 0 || draftBlockers.length > 0) ? (
+          {isCommissioner &&
+          (openTeamSlots > 0 || draftNeedsCommissioner(league, draftBlockers)) ? (
             <SetupChecklist
               league={league}
               memberCount={activeMembers.length}
@@ -400,6 +408,25 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+// The draft row only covers what a commissioner can act on: the date and the minimum team count.
+// Room creation, draft order and the player pool are system concerns that stay in the draft room.
+const MIN_DRAFT_TEAMS = 2; // DraftReadinessService's insufficient_members rule
+
+type DraftBlocker = { code?: string };
+
+function draftNeedsDate(league: League, blockers: readonly DraftBlocker[]): boolean {
+  return (
+    !league.draftDate ||
+    blockers.some((b) => b.code === 'draft_time_missing' || b.code === 'settings_missing')
+  );
+}
+
+function draftNeedsCommissioner(league: League, blockers: readonly DraftBlocker[]): boolean {
+  return (
+    draftNeedsDate(league, blockers) || blockers.some((b) => b.code === 'insufficient_members')
+  );
+}
+
 function SetupChecklist({
   league,
   memberCount,
@@ -409,23 +436,38 @@ function SetupChecklist({
 }: {
   league: League;
   memberCount: number;
-  draftBlockers: readonly { id?: string; code?: string; message: string }[];
+  draftBlockers: readonly DraftBlocker[];
   noFixturesYet: boolean;
   onNavigate: (target: OverviewTarget) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  // Read in the browser only: this panel is server-rendered too.
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(typeof navigator.share === 'function'), []);
+  const inviteUrl = () =>
+    `${window.location.origin}/leagues/join?code=${encodeURIComponent(league.code)}`;
+  const scheduledFor = draftNeedsDate(league, draftBlockers)
+    ? null
+    : formatLeagueDateTime(league.draftDate, league.timeZone);
+  const needsTeams = draftBlockers.some((b) => b.code === 'insufficient_members');
 
-  async function copyCode() {
+  async function copyInviteLink() {
     try {
-      await navigator.clipboard.writeText(league.code);
+      await navigator.clipboard.writeText(inviteUrl());
       setCopied(true);
     } catch {
       setCopied(false);
     }
   }
 
+  function shareInvite() {
+    // A dismissed share sheet rejects; there is nothing to recover.
+    navigator.share({ title: `Join ${league.name} on Statly`, url: inviteUrl() }).catch(() => {});
+  }
+
   const buttonClass =
     'min-h-11 shrink-0 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar';
+  const rowClass = 'flex flex-wrap items-center justify-between gap-3 px-4 py-3';
 
   return (
     <section
@@ -441,40 +483,54 @@ function SetupChecklist({
         </h2>
       </header>
       <ul className="divide-y divide-border text-sm">
-        <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <li className={rowClass}>
           <div>
             <p className="font-semibold text-foreground">Invite managers</p>
             <p className="text-muted-foreground">
-              {memberCount} of {league.maxTeams} teams · join code{' '}
+              {memberCount} of {league.maxTeams} teams · code{' '}
               <code className="font-semibold text-foreground">{league.code}</code>
             </p>
           </div>
-          <button type="button" onClick={() => void copyCode()} className={buttonClass}>
-            {copied ? 'Copied' : 'Copy code'}
-          </button>
+          <div className="flex gap-2">
+            {canShare ? (
+              <button type="button" onClick={shareInvite} className={buttonClass}>
+                Share
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void copyInviteLink()} className={buttonClass}>
+              {copied ? 'Copied' : 'Copy invite link'}
+            </button>
+          </div>
         </li>
-        {draftBlockers.length > 0 ? (
-          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <p className="font-semibold text-foreground">Draft</p>
-              <ul className="text-muted-foreground">
-                {draftBlockers.map((blocker) => (
-                  <li key={blocker.id ?? `${blocker.code ?? 'blocker'}:${blocker.message}`}>
-                    {blocker.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
+        <li className={rowClass}>
+          <div>
+            <p className="font-semibold text-foreground">Draft</p>
+            <p className="text-muted-foreground">{scheduledFor ?? 'Not scheduled'}</p>
+            {needsTeams ? (
+              <p className="text-muted-foreground">
+                Needs at least {MIN_DRAFT_TEAMS} teams to draft ({memberCount} joined)
+              </p>
+            ) : null}
+          </div>
+          {scheduledFor ? (
             <button type="button" onClick={() => onNavigate('draft')} className={buttonClass}>
               Open draft
             </button>
-          </li>
-        ) : null}
-        {noFixturesYet ? (
-          <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          ) : (
+            <button
+              type="button"
+              onClick={() => onNavigate('league-settings')}
+              className={buttonClass}
+            >
+              Set draft date
+            </button>
+          )}
+        </li>
+        {noFixturesYet && league.fixtureGenerationMode === 'MANUAL' ? (
+          <li className={rowClass}>
             <div>
               <p className="font-semibold text-foreground">Fixtures</p>
-              <p className="text-muted-foreground">No fixtures yet.</p>
+              <p className="text-muted-foreground">Not generated</p>
             </div>
             <button type="button" onClick={() => onNavigate('matchups')} className={buttonClass}>
               Open match centre
@@ -483,7 +539,7 @@ function SetupChecklist({
         ) : null}
       </ul>
       <p role="status" className="sr-only">
-        {copied ? 'Join code copied' : ''}
+        {copied ? 'Invite link copied' : ''}
       </p>
     </section>
   );
