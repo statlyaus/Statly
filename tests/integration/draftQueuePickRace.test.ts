@@ -1,10 +1,8 @@
-import { execFileSync } from 'node:child_process';
-import { accessSync, constants as fsConstants, copyFileSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
-
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+
+vi.mock('server-only', () => ({}));
 
 const ids = {
   draft: 'queue-pick-race-draft',
@@ -41,20 +39,6 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve: resolvePromise, reject: rejectPromise };
 }
 
-function resolveExecutablePath(executable: string): string {
-  for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    const candidate = join(directory, executable);
-    try {
-      accessSync(candidate, fsConstants.X_OK);
-      return candidate;
-    } catch {
-      // Try the next PATH entry.
-    }
-  }
-
-  throw new Error(`${executable} is required to run the queue/pick race test`);
-}
-
 function createRequestOrderedClient(
   client: PrismaClient,
   queueTransactionRequested: Deferred<void>,
@@ -83,6 +67,15 @@ function createRequestOrderedClient(
       const value = Reflect.get(target, property, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
+  });
+}
+
+async function deleteFixtures(client: PrismaClient): Promise<void> {
+  await deleteLeagueFixtures(client, {
+    leagueIds: [ids.league],
+    playerIds: [ids.selectedPlayer, ids.remainingPlayer],
+    settingsIds: [ids.settings],
+    userIds: [ids.ownerUser, ids.opponentUser],
   });
 }
 
@@ -199,7 +192,6 @@ async function seedDraft(client: PrismaClient): Promise<void> {
 }
 
 describe.sequential('draft queue request ordering and accepted-pick convergence', () => {
-  let databaseDirectory: string | undefined;
   let client: PrismaClient | undefined;
   let privateStateService: InstanceType<
     typeof import('@/server/draft/services/DraftPrivateStateService').DraftPrivateStateService
@@ -211,40 +203,15 @@ describe.sequential('draft queue request ordering and accepted-pick convergence'
   let allowQueueTransactionToStart: Deferred<void>;
 
   beforeAll(async () => {
-    databaseDirectory = mkdtempSync(join(tmpdir(), 'statly-draft-queue-race-'));
-    const databasePath = resolve(databaseDirectory, 'queue-pick-race.db');
-    const databaseUrl = `file:${databasePath}`;
-    const schemaPath = resolve(databaseDirectory, 'schema.prisma');
-    const prismaCli = resolve(process.cwd(), 'node_modules/.bin/prisma');
-
-    copyFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), schemaPath);
-    const schemaSql = execFileSync(
-      prismaCli,
-      ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', schemaPath, '--script'],
-      {
-        cwd: databaseDirectory,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          DATABASE_URL: databaseUrl,
-          PRISMA_HIDE_UPDATE_MESSAGE: '1',
-        },
-      }
-    );
-    execFileSync(resolveExecutablePath('sqlite3'), [databasePath], {
-      cwd: databaseDirectory,
-      input: schemaSql,
-      stdio: 'pipe',
-    });
-
-    client = new PrismaClient({ datasourceUrl: databaseUrl });
+    client = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL_TEST });
     await client.$connect();
+    await deleteFixtures(client);
     await seedDraft(client);
 
     queueTransactionRequested = createDeferred<void>();
     allowQueueTransactionToStart = createDeferred<void>();
-    // Prisma's SQLite client serializes competing interactive transactions. This barrier instead
-    // orders concurrent service requests at the repository boundary without claiming DB overlap.
+    // This barrier orders concurrent service requests at the repository boundary so the queue
+    // request starts first but persists after the pick, deterministically.
     const gatedClient = createRequestOrderedClient(
       client,
       queueTransactionRequested,
@@ -283,10 +250,8 @@ describe.sequential('draft queue request ordering and accepted-pick convergence'
     vi.doUnmock('@/lib/logger');
     vi.doUnmock('@/lib/prisma');
     vi.resetModules();
+    if (client) await deleteFixtures(client);
     await client?.$disconnect();
-    if (databaseDirectory?.startsWith(join(tmpdir(), 'statly-draft-queue-race-'))) {
-      rmSync(databaseDirectory, { recursive: true, force: true });
-    }
   });
 
   it('filters a picked player when its queue request starts first but persists after the pick', async () => {
