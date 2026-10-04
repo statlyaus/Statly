@@ -18,6 +18,8 @@ const databaseUrl =
     throw new Error('AFL_OUTCOMES_TEST_DATABASE_URL must identify disposable PostgreSQL.');
   })();
 const schemaName = `afl_current_model_evidence_${process.pid}_${Date.now()}`;
+// Scoped to this database: a role-level setting is server-wide and parallel files share the role.
+const outcomesDatabaseName = decodeURIComponent(new URL(databaseUrl).pathname.slice(1));
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 3,
@@ -39,7 +41,7 @@ beforeAll(async () => {
   END $roles$`);
   await pool.query(`CREATE SCHEMA "${schemaName}"`);
   await pool.query(
-    `ALTER ROLE afl_trade_private_evaluation_coordinator SET search_path TO "${schemaName}"`
+    `ALTER ROLE afl_trade_private_evaluation_coordinator IN DATABASE "${outcomesDatabaseName}" SET search_path TO "${schemaName}"`
   );
   await pool.query(
     `GRANT USAGE ON SCHEMA "${schemaName}" TO afl_trade_private_evaluation_coordinator`
@@ -210,7 +212,9 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await pool.query(`ALTER ROLE afl_trade_private_evaluation_coordinator RESET search_path`);
+  await pool.query(
+    `ALTER ROLE afl_trade_private_evaluation_coordinator IN DATABASE "${outcomesDatabaseName}" RESET search_path`
+  );
   await pool.query(`DROP SCHEMA "${schemaName}" CASCADE`);
   await pool.end();
 });

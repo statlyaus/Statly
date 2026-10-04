@@ -38,7 +38,7 @@ function localConfiguration(environment: Readonly<Record<string, string | undefi
   if (
     !['postgres:', 'postgresql:'].includes(database.protocol) ||
     !LOOPBACK_HOSTS.has(database.hostname) ||
-    database.pathname !== '/statly_outcomes_test' ||
+    !/^\/statly_outcomes_test(?:_\d+_\d+)?$/u.test(database.pathname) ||
     database.search !== '' ||
     database.hash !== ''
   ) {
