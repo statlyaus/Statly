@@ -1,32 +1,18 @@
-import { execFileSync } from 'node:child_process';
-import {
-  accessSync,
-  constants as fsConstants,
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
-
-import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { prisma } from '@/lib/prisma';
 import {
   consolidatePlayerIdentities,
   PlayerIdentityConsolidationBlockedError,
-} from '../../src/server/players/playerIdentityConsolidation';
-import { createPlayerIdentitySourceFingerprint } from '../../src/server/players/playerIdentityConsolidationCli';
-import { planPlayerIdentityConsolidation } from '../../src/server/players/playerIdentityConsolidationPlanner';
+} from '@/server/players/playerIdentityConsolidation';
+import { createPlayerIdentitySourceFingerprint } from '@/server/players/playerIdentityConsolidationCli';
+import { planPlayerIdentityConsolidation } from '@/server/players/playerIdentityConsolidationPlanner';
 import {
   AmbiguousPlayerIdentityError,
   resolveCanonicalPlayerId,
   upsertCanonicalPlayer,
-} from '../../src/server/players/playerIdentityService';
+} from '@/server/players/playerIdentityService';
+import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
 const canonicalPlayerId = 'jack_ginnivan';
 const aliasPlayerId = 'jack-ginnivan-hawthorn';
@@ -34,65 +20,33 @@ const conflictCanonicalId = 'same_player';
 const conflictAliasId = 'same-player-club';
 const now = new Date('2026-07-24T00:00:00.000Z');
 
-const databaseDirectoryPrefix = join(tmpdir(), 'statly-verify-player-migration-');
+const fixtureLeagueIds = ['league-a', 'league-b'];
+const fixturePlayerIds = [
+  canonicalPlayerId,
+  aliasPlayerId,
+  conflictCanonicalId,
+  conflictAliasId,
+  'autosub-history-alias',
+  'autosub-history-replacement',
+  'autosub_history_canonical',
+  'draft-history-player-club',
+  'draft_history_player',
+  'fingerprint-guard-alias',
+  'fingerprint_guard_canonical',
+  'legacy-conflict-player-club',
+  'legacy_conflict_player',
+  'unrelated-roster-alias',
+  'unrelated_roster_canonical',
+];
 
-let databaseDirectory: string | undefined;
-let databasePath: string;
-let schemaPath: string;
-let prisma: PrismaClient;
-let protectedDatabaseBefore: ProtectedDatabaseSnapshot | undefined;
-
-type ProtectedDatabaseSnapshot =
-  { exists: false } | { exists: true; size: number; mtimeMs: number; ino: number };
-
-// prisma/dev.db is git-ignored and may be absent (for example in CI), so the snapshot records
-// existence as well as metadata: the migration must neither create nor modify it.
-function snapshotProtectedDatabase(): ProtectedDatabaseSnapshot {
-  try {
-    const stats = statSync(resolve(process.cwd(), 'prisma/dev.db'));
-    return { exists: true, size: stats.size, mtimeMs: stats.mtimeMs, ino: stats.ino };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { exists: false };
-    throw error;
-  }
-}
-
-function runPrisma(args: string[]) {
-  const prismaCli = resolve(process.cwd(), 'node_modules/.bin/prisma');
-  return execFileSync(prismaCli, args, {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    env: { ...process.env, DATABASE_URL: 'file:./player-identity.db' },
+async function deleteFixtures() {
+  await prisma.queueItem.deleteMany({ where: { memberId: 'queue-member' } });
+  await deleteLeagueFixtures(prisma, {
+    leagueIds: fixtureLeagueIds,
+    playerIds: fixturePlayerIds,
+    settingsIds: ['settings-a', 'settings-b'],
+    userIds: ['user-a', 'user-b', 'user-c'],
   });
-}
-
-function oldSchemaWithoutExternalIdentities(): string {
-  const source = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8');
-  const withoutRelation = source.replace('  externalIdentities PlayerExternalIdentity[]\n', '');
-  if (withoutRelation === source) {
-    throw new Error('Test schema setup could not remove Player.externalIdentities');
-  }
-  const withoutModel = withoutRelation.replace(
-    /\nmodel PlayerExternalIdentity \{[\s\S]*?\n\}\n\nmodel Pick \{/,
-    '\nmodel Pick {'
-  );
-  if (withoutModel === withoutRelation) {
-    throw new Error('Test schema setup could not remove PlayerExternalIdentity model');
-  }
-  return withoutModel;
-}
-
-function resolveExecutablePath(executable: string): string {
-  for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    const candidate = join(directory, executable);
-    try {
-      accessSync(candidate, fsConstants.X_OK);
-      return candidate;
-    } catch {
-      // Try the next PATH entry.
-    }
-  }
-  throw new Error(`${executable} is required to run the player identity migration test`);
 }
 
 async function seedTwoLeagueOwnerships() {
@@ -220,79 +174,26 @@ async function seedTwoLeagueOwnerships() {
       },
     ],
   });
+  await prisma.playerExternalIdentity.createMany({
+    data: [canonicalPlayerId, aliasPlayerId].map((playerId) => ({
+      playerId,
+      provider: 'statly-legacy',
+      externalId: playerId,
+    })),
+  });
 }
 
-describe.sequential('canonical player identity migration', () => {
+describe.sequential('player identity consolidation', () => {
   beforeAll(async () => {
-    protectedDatabaseBefore = snapshotProtectedDatabase();
-
-    databaseDirectory = mkdtempSync(databaseDirectoryPrefix);
-    databasePath = resolve(databaseDirectory, 'player-identity.db');
-    schemaPath = resolve(databaseDirectory, 'schema.prisma');
-    writeFileSync(schemaPath, oldSchemaWithoutExternalIdentities());
-
-    const schemaSql = runPrisma([
-      'migrate',
-      'diff',
-      '--from-empty',
-      '--to-schema-datamodel',
-      schemaPath,
-      '--script',
-    ]);
-    execFileSync(resolveExecutablePath('sqlite3'), [databasePath], {
-      input: schemaSql,
-      stdio: 'pipe',
-    });
-
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient({ datasourceUrl: `file:${databasePath}` });
-    await prisma.$connect();
+    await deleteFixtures();
     await seedTwoLeagueOwnerships();
-
-    const migrationRoot = resolve(databaseDirectory, 'migrations');
-    const baselineDirectory = resolve(migrationRoot, '20260724180000_test_baseline');
-    const migrationDirectory = resolve(
-      migrationRoot,
-      '20260724190000_add_player_external_identity'
-    );
-    mkdirSync(baselineDirectory, { recursive: true });
-    mkdirSync(migrationDirectory, { recursive: true });
-    writeFileSync(resolve(baselineDirectory, 'migration.sql'), '-- Test-only schema baseline.\n');
-    cpSync(
-      resolve(process.cwd(), 'prisma/migrations/migration_lock.toml'),
-      resolve(migrationRoot, 'migration_lock.toml')
-    );
-    cpSync(
-      resolve(
-        process.cwd(),
-        'prisma/migrations/20260724190000_add_player_external_identity/migration.sql'
-      ),
-      resolve(migrationDirectory, 'migration.sql')
-    );
-    runPrisma([
-      'migrate',
-      'resolve',
-      '--applied',
-      '20260724180000_test_baseline',
-      '--schema',
-      schemaPath,
-    ]);
-    runPrisma(['migrate', 'deploy', '--schema', schemaPath]);
-  }, 60_000);
-
-  afterAll(async () => {
-    await prisma?.$disconnect();
-    if (databaseDirectory?.startsWith(databaseDirectoryPrefix)) {
-      rmSync(databaseDirectory, { recursive: true, force: true });
-    }
-
-    if (!protectedDatabaseBefore) return;
-
-    expect(snapshotProtectedDatabase()).toEqual(protectedDatabaseBefore);
   });
 
-  it('backfills legacy IDs and preserves independent ownership in different leagues', async () => {
-    await expect(prisma.playerExternalIdentity.count()).resolves.toBe(2);
+  afterAll(async () => {
+    await deleteFixtures();
+  });
+
+  it('consolidates an alias and preserves independent ownership in different leagues', async () => {
     await expect(resolveCanonicalPlayerId(' ', undefined, prisma)).resolves.toBeNull();
 
     await prisma.queueItem.createMany({
@@ -320,10 +221,15 @@ describe.sequential('canonical player identity migration', () => {
     await consolidatePlayerIdentities(prisma, mapping);
 
     await expect(
-      prisma.player.findMany({ orderBy: { id: 'asc' }, select: { id: true } })
+      prisma.player.findMany({
+        where: { id: { in: [canonicalPlayerId, aliasPlayerId] } },
+        orderBy: { id: 'asc' },
+        select: { id: true },
+      })
     ).resolves.toEqual([{ id: canonicalPlayerId }]);
     await expect(
       prisma.leagueRosterPlayer.findMany({
+        where: { leagueId: { in: fixtureLeagueIds } },
         orderBy: { leagueId: 'asc' },
         select: { leagueId: true, memberId: true, playerId: true },
       })
@@ -380,15 +286,9 @@ describe.sequential('canonical player identity migration', () => {
       })
     ).rejects.toBeInstanceOf(AmbiguousPlayerIdentityError);
     await expect(prisma.player.count({ where: { name: 'Jack Ginnivan' } })).resolves.toBe(1);
-    await expect(
-      prisma.$queryRawUnsafe<Array<Record<string, unknown>>>('PRAGMA foreign_key_check')
-    ).resolves.toEqual([]);
 
     const repeatedPlan = await consolidatePlayerIdentities(prisma, mapping);
     expect(repeatedPlan.mappings).toEqual([]);
-    expect(runPrisma(['migrate', 'deploy', '--schema', schemaPath])).toContain(
-      'No pending migrations to apply.'
-    );
   });
 
   it('blocks two different owners of aliases inside the same league', async () => {

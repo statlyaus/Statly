@@ -17,8 +17,8 @@ supported categories and whether higher or lower values win.
 
 Statly is a Next.js 16 and React 19 application written in TypeScript.
 
-- Prisma with SQLite currently owns protected relational state. Managed PostgreSQL is the accepted
-  production target, but that cutover is not complete.
+- Prisma with PostgreSQL 16 owns protected relational state. The managed production database is
+  not provisioned yet; see the [go-live checklist](docs/runbooks/postgresql-cutover.md).
 - Firebase Authentication owns user identity; server services enforce league and season access.
 - Firestore receives live-stat ingestion and temporary compatibility projections. It is not the
   canonical store for protected league state.
@@ -32,7 +32,8 @@ See [runtime and data ownership](docs/architecture/data-platform.md) for the com
 ## Prerequisites
 
 - Node.js 22 and npm
-- A local SQLite-compatible environment for ordinary development and tests
+- A PostgreSQL 16 server for development and tests: local, Docker, or a remote dev server reached
+  over an SSH tunnel
 - A Firebase project or the Firebase emulators for authenticated/live-data flows
 - Redis for realtime and worker flows that are not run with the repository's disabled/test mode
 - R plus the packages documented in [the ETL guide](etl/README.md) for ingestion work
@@ -84,8 +85,8 @@ and must never be enabled in production.
 | Browser tests            | `npm run test:e2e`     |
 | Production build         | `npm run build`        |
 
-Integration and browser verification must use the configured test database or another disposable
-database. Do not point tests at `prisma/dev.db`.
+Integration and browser verification must use the configured test database (`DATABASE_URL_TEST`)
+or another disposable database. Never point tests at the development database.
 
 ## Data and ETL
 
