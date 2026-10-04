@@ -214,66 +214,73 @@ export const aflTradeAcquisitionSpellRegistrationSchema = z
         message: 'Spell content address differs.',
       });
     }
-    if (record.content.schemaVersion === 'afl-trade-acquisition-registration/v4') {
-      const c = record.content;
-      if (
-        c.entry.eventDate > c.createdAt.slice(0, 10) ||
-        (c.version === 1) !== (c.supersedesSpellVersionId === null) ||
-        c.entry.evidence.some((ref) => Date.parse(ref.createdAt) > Date.parse(c.createdAt))
-      ) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Arrival chronology or version ancestry is invalid.',
-        });
-      }
-      return;
-    }
-    if (record.content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
-      const c = record.content;
-      const season = String(c.seasonYear);
-      if (
-        c.firstAppearance.date > c.lastAppearance.date ||
-        c.firstAppearance.date.slice(0, 4) !== season ||
-        c.lastAppearance.date.slice(0, 4) !== season ||
-        c.observedThrough !== c.lastAppearance.date ||
-        c.observedThrough > c.createdAt.slice(0, 10) ||
-        (c.version === 1) !== (c.supersedesSpellVersionId === null)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Appearance membership chronology or version ancestry is invalid.',
-        });
-      }
-      return;
-    }
-    const c = record.content;
-    const entry = eventBounds(c.entry);
-    const departure = c.departure === null ? null : eventBounds(c.departure);
-    if (
-      c.schemaVersion === 'afl-trade-acquisition-registration/v2' &&
-      c.entry.eventDate !== null &&
-      (c.departure === null || c.departure.eventDate !== null)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Window registration v2 requires explicit uncertain event precision.',
-      });
-    }
-    const refs = [...c.entry.evidence, ...c.continuityEvidence, ...(c.departure?.evidence ?? [])];
-    if (
-      entry.latest > c.observedThrough ||
-      c.observedThrough > c.createdAt.slice(0, 10) ||
-      (departure !== null &&
-        (departure.earliest <= entry.latest || departure.latest > c.observedThrough)) ||
-      (c.version === 1) !== (c.supersedesSpellVersionId === null) ||
-      refs.some((ref) => Date.parse(ref.createdAt) > Date.parse(c.createdAt))
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Spell chronology or version ancestry is invalid.',
-      });
+    for (const message of spellChronologyIssues(record.content)) {
+      context.addIssue({ code: 'custom', message });
     }
   });
+
+type SpellContent =
+  | z.infer<typeof spellContent>
+  | z.infer<typeof windowSpellContent>
+  | z.infer<typeof appearanceSpellContent>
+  | z.infer<typeof arrivalSpellContent>;
+
+function hasConsistentAncestry(c: SpellContent): boolean {
+  return (c.version === 1) === (c.supersedesSpellVersionId === null);
+}
+
+function spellChronologyIssues(c: SpellContent): string[] {
+  if (c.schemaVersion === 'afl-trade-acquisition-registration/v4') return arrivalIssues(c);
+  if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') return appearanceIssues(c);
+  return reviewedEntryIssues(c);
+}
+
+function arrivalIssues(c: z.infer<typeof arrivalSpellContent>): string[] {
+  const valid =
+    c.entry.eventDate <= c.createdAt.slice(0, 10) &&
+    hasConsistentAncestry(c) &&
+    c.entry.evidence.every((ref) => Date.parse(ref.createdAt) <= Date.parse(c.createdAt));
+  return valid ? [] : ['Arrival chronology or version ancestry is invalid.'];
+}
+
+function appearanceIssues(c: z.infer<typeof appearanceSpellContent>): string[] {
+  const season = String(c.seasonYear);
+  const valid =
+    c.firstAppearance.date <= c.lastAppearance.date &&
+    c.firstAppearance.date.slice(0, 4) === season &&
+    c.lastAppearance.date.slice(0, 4) === season &&
+    c.observedThrough === c.lastAppearance.date &&
+    c.observedThrough <= c.createdAt.slice(0, 10) &&
+    hasConsistentAncestry(c);
+  return valid ? [] : ['Appearance membership chronology or version ancestry is invalid.'];
+}
+
+function reviewedEntryIssues(
+  c: z.infer<typeof spellContent> | z.infer<typeof windowSpellContent>
+): string[] {
+  const issues: string[] = [];
+  if (
+    c.schemaVersion === 'afl-trade-acquisition-registration/v2' &&
+    c.entry.eventDate !== null &&
+    (c.departure === null || c.departure.eventDate !== null)
+  ) {
+    issues.push('Window registration v2 requires explicit uncertain event precision.');
+  }
+  const entry = eventBounds(c.entry);
+  const departure = c.departure === null ? null : eventBounds(c.departure);
+  const refs = [...c.entry.evidence, ...c.continuityEvidence, ...(c.departure?.evidence ?? [])];
+  const departureValid =
+    departure === null ||
+    (departure.earliest > entry.latest && departure.latest <= c.observedThrough);
+  const valid =
+    entry.latest <= c.observedThrough &&
+    c.observedThrough <= c.createdAt.slice(0, 10) &&
+    departureValid &&
+    hasConsistentAncestry(c) &&
+    refs.every((ref) => Date.parse(ref.createdAt) <= Date.parse(c.createdAt));
+  if (!valid) issues.push('Spell chronology or version ancestry is invalid.');
+  return issues;
+}
 
 export type AflTradeAcquisitionSpellRegistrationRule = z.infer<
   typeof aflTradeAcquisitionSpellRegistrationRuleSchema
