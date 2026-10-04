@@ -133,7 +133,13 @@ jobs:
         # Each suite schema holds the complete ordered migration history, about 1,200 relations, and
         # DROP SCHEMA ... CASCADE has to lock every one of them. The image default of 64 locks fails
         # that teardown with "out of shared memory" once suites run in parallel.
-        command: -c max_locks_per_transaction=2048
+        # The database is disposable, so durability is switched off: every suite replays about 250
+        # migration transactions and fsync on the runner disk was a large share of that time.
+        command: >-
+          -c max_locks_per_transaction=2048
+          -c fsync=off
+          -c synchronous_commit=off
+          -c full_page_writes=off
         env:
           POSTGRES_DB: statly_outcomes_test
           POSTGRES_USER: statly_test
@@ -229,7 +235,6 @@ jobs:
         with:
           name: test-artifacts
           path: |
-            coverage/**
             playwright-report/**
             test-results/**
           if-no-files-found: ignore
