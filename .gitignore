@@ -16,6 +16,7 @@ src/lib/serviceAccountKey.json
 secrets/serviceAccountKey.json
 !secrets/serviceAccountKey.example.json
 statly-*.json
+.sentryclirc
 
 # --- Node ---
 node_modules/
