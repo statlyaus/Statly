@@ -7,8 +7,8 @@ import { captureAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRo
 import { PostgresAflTradeProviderObservationRepository } from '../source/postgresProviderObservationRepository';
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
-import { createAflTradeCurrentValuationEvidenceCoordinator } from '../valuation/currentValuationEvidenceOrchestration';
-import { createAflTradeCurrentValuationRefresh } from '../valuation/currentValuationRefresh';
+import { createAflTradeCurrentValuationEvidenceCoordinator, type AflTradeCurrentValuationEvidenceOrchestrationResult } from '../valuation/currentValuationEvidenceOrchestration';
+import { createAflTradeCurrentValuationRefresh, type AflTradeCurrentValuationRefreshRequest } from '../valuation/currentValuationRefresh';
 import { createAflTradePrivateRecalculationCoordinator } from '../valuation/privateRecalculationCoordinator';
 import { composePostgresAflTradeCurrentValuationModelEvidenceDispatch } from '../valuation/postgresCurrentValuationModelEvidencePreparation';
 import { createPostgresAflTradePrivateCurrentValuationCohortCoordinator } from '../valuation/postgresCurrentValuationCohortPreparation';
@@ -99,7 +99,17 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
   readonly construction?: AflTradeLocalPrivateValuationConstruction;
   /** Why `construction` is absent, so the configuration failure names each missing authority. */
   readonly constructionBlockers?: readonly LocalPrivateValuationConstructionBlocker[];
-}): ReturnType<typeof createPostgresAflTradePrivateValuationDispatcher> {
+}): ReturnType<typeof createPostgresAflTradePrivateValuationDispatcher> & {
+  /**
+   * First-run evidence bootstrap: drives the current-evidence coordinator directly without the
+   * dispatcher's "current prepared valuation input set" gate. This records the seven stage
+   * receipts and, once reviewed authority + factual head exist, is how the dispatcher becomes
+   * current on a fresh genuine database.
+   */
+  refreshEvidence(
+    request: AflTradeCurrentValuationRefreshRequest
+  ): Promise<AflTradeCurrentValuationEvidenceOrchestrationResult>;
+} {
   const client = createPgAflOutcomeSqlClient(input.pool);
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);
   const providerObservationRepository = new PostgresAflTradeProviderObservationRepository(client);
@@ -369,7 +379,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     },
     batch: runner,
   });
-  return createPostgresAflTradePrivateValuationDispatcher({
+  const dispatcher = createPostgresAflTradePrivateValuationDispatcher({
     repository: new PostgresAflTradePrivateValuationScheduleRepository(client),
     runner: {
       run: (dispatch) => coordinator.run(dispatch),
@@ -378,4 +388,8 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     },
     workerId: input.workerId,
   });
+  return {
+    ...dispatcher,
+    refreshEvidence: (request) => evidence.refreshCurrent(request),
+  };
 }

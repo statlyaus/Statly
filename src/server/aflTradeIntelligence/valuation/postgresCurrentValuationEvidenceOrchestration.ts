@@ -12,7 +12,7 @@ import type {
 } from '../outcomes/postgresOutcomeReleaseRepository';
 import { AflTradeFitzRoyCaptureError } from '../source/fitzRoyCaptureRuntime';
 import { AflTradeFitzRoyStagingError } from '../source/fitzRoyCaptureToStaging';
-import { requireCurrentAflTradeFitzRoyCaptureAuthority } from '../source/fitzRoyProviderIngestion';
+import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
 import { AflTradeFitzRoyDecodeError } from '../source/fitzRoyObservationDecodeRuntime';
 import { createAflTradeFitzRoyFieldMapSha256 } from '../source/fitzRoyObservationContracts';
 import { AFL_TRADE_FITZROY_NORMALIZER_VERSION } from '../source/fitzRoyObservationNormalizer';
@@ -327,22 +327,21 @@ export function createPostgresAflTradeCurrentValuationEvidenceSourceRuntime(depe
       } catch {
         return unavailable('capture_authority', 'missing');
       }
-      if (
-        !exactJson(resolved.sourceRights, authority.capture.sourceRights) ||
-        !resolved.ledger.decisions.some(({ decisionId }) => decisionId === authority.gateDecisionId)
-      ) {
+      if (!exactJson(resolved.sourceRights, authority.capture.sourceRights)) {
         return unavailable('capture_authority', 'mismatched');
       }
-      try {
-        const evaluatedAt = dependencies.clock.now();
-        requireCurrentAflTradeFitzRoyCaptureAuthority({
-          ledger: resolved.ledger,
-          sourceRights: resolved.sourceRights,
-          request: { ...authority.capture.gateRequest, evaluatedAt },
-          capturedDecisionId: authority.gateDecisionId,
-          evaluatedAt,
-        });
-      } catch {
+      const evaluatedAt = dependencies.clock.now();
+      const currentAuthorization = evaluateAflTradeGate0A(
+        resolved.ledger,
+        resolved.sourceRights,
+        { ...authority.capture.gateRequest, evaluatedAt }
+      );
+      const currentDecisionId = currentAuthorization.decisionId;
+      if (
+        currentAuthorization.status !== 'mechanically_eligible' ||
+        currentDecisionId === null ||
+        !resolved.ledger.decisions.some(({ decisionId }) => decisionId === currentDecisionId)
+      ) {
         return unavailable('capture_authority', 'stale');
       }
 
@@ -390,7 +389,7 @@ export function createPostgresAflTradeCurrentValuationEvidenceSourceRuntime(depe
       const authoritySha256 = sha256AflTradeCanonicalJson({
         source,
         sourceRightsArtifactId: authority.capture.sourceRights.rightsArtifactId,
-        gateDecisionId: authority.gateDecisionId,
+        gateDecisionId: currentDecisionId,
         fieldMapSha256,
         decoderDependencyLockSha256: dependencies.normalizationRuntime.dependencyLockSha256,
         decoderImageDigest: dependencies.normalizationRuntime.imageDigest,

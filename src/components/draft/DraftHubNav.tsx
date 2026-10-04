@@ -10,7 +10,10 @@ import {
 
 export function DraftHubNav() {
   const pathname = usePathname() ?? '';
-  const outcomesActive = pathname === '/draft/outcomes' || pathname.startsWith('/draft/outcomes/');
+  const hpnPavActive =
+    pathname === '/draft/outcomes/hpn-pav' || pathname.startsWith('/draft/outcomes/hpn-pav/');
+  const outcomesActive =
+    !hpnPavActive && (pathname === '/draft/outcomes' || pathname.startsWith('/draft/outcomes/'));
   const methodologyActive =
     pathname === '/draft/trades/methodology' || pathname.startsWith('/draft/trades/methodology/');
   const tradesActive =
@@ -31,6 +34,13 @@ export function DraftHubNav() {
       label: 'Trade archive',
       description: 'Scan historical deals by season, club, and asset profile.',
       active: tradesActive,
+    },
+    {
+      href: '/draft/outcomes/hpn-pav',
+      kicker: 'Valuations',
+      label: 'HPN player values',
+      description: 'Grade every trade against genuine HPN player value and draft-pick value.',
+      active: hpnPavActive,
     },
     {
       href: '/draft/drafts',
@@ -58,7 +68,7 @@ export function DraftHubNav() {
   return (
     <nav className="mt-5" aria-label="AFL Draft and Trade Outcomes sections">
       <div
-        className={`${draftHubSubtlePanelClass} grid grid-cols-2 gap-2 p-2 lg:grid-cols-3 xl:grid-cols-5`}
+        className={`${draftHubSubtlePanelClass} grid grid-cols-2 gap-2 p-2 lg:grid-cols-3`}
       >
         {sections.map((section) => (
           <Link
