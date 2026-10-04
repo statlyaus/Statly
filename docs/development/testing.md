@@ -182,8 +182,13 @@ npm run dev:outcomes:review-afl-tables-2021-2025
 npm run dev:outcomes:review-official-2026
 export AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/private/path/to/workbook.xlsx"
 export AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<64-character-sha256>"
+export DATABASE_URL="postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_workbook_scratch"
 npm run dev:full:workbook-evaluation
 ```
+
+`DATABASE_URL` must name a disposable fantasy database, never the development one. The launcher
+points `DIRECT_DATABASE_URL` at the same database so the fantasy migrations and seed cannot fall back
+to the `.env` connection.
 
 The authentication command first requires the exact loopback database name and installs a private
 runtime nonce. Capture staging and the launcher must re-authenticate that nonce before mutation or
@@ -254,7 +259,7 @@ The CI workflow has five explicit ownership boundaries:
 - root jobs own documentation, root lint, application and test typechecks, unit/integration/browser tests, and the
   production build;
 - `Draft worker E2E` owns the isolated Chromium, Socket.IO, and BullMQ lifecycle against its own Redis
-  service and disposable SQLite database;
+  service and disposable PostgreSQL database;
 - `Functions` owns its independent install, flat-ESLint config, typecheck, compiled smoke test, and
   build; and
 - `ETL` owns its independent install, Node/R static validation, typecheck, deterministic compiled
@@ -307,33 +312,24 @@ verification requires an available `Rscript` and may use a newer compatible R re
 
 ## Database isolation
 
-`prisma/dev.db` is protected developer state. Automated checks, smoke tests, migrations, data runners,
-and reproduction steps must not read from or write to it.
+The development database is protected developer state. Automated checks, smoke tests, migrations,
+data runners, and reproduction steps must not read from or write to it.
 
 Integration tests use `DATABASE_URL_TEST` and then assign that value to `DATABASE_URL` inside their
-test setup. For an ad hoc Prisma verification, create a disposable path outside the repository:
+test setup. The suite applies migrations to that database first, files run one at a time, and each
+file deletes only its own fixtures. For an ad hoc Prisma verification, create a disposable database
+on your PostgreSQL server and point both connection variables at it:
 
 ```sh
-STATLY_VERIFY_DIR="$(mktemp -d /tmp/statly-verify.XXXXXX)"
-STATLY_VERIFY_DB="$(mktemp "${STATLY_VERIFY_DIR}/verify.XXXXXX.db")"
-export STATLY_VERIFY_DIR
-export STATLY_VERIFY_DB
-export DATABASE_URL="file:${STATLY_VERIFY_DB}"
+createdb statly_verify_scratch
+export DATABASE_URL="postgresql://statly:change-me@127.0.0.1:55440/statly_verify_scratch"
+export DIRECT_DATABASE_URL="$DATABASE_URL"
 npm run prisma:generate
 npx prisma migrate deploy
 ```
 
-`prisma/dev.db` is ignored rather than tracked, so `git status` cannot show changes to it. Before and
-after a data-oriented command, compare its file metadata, which records size and modification time
-without reading the database, to verify that the protected database is unchanged:
-
-```sh
-stat prisma/dev.db
-```
-
-Delete the disposable database after verification only when the explicit path is known and it contains
-no required evidence. Never use a recursive delete, repository glob, or unresolved environment variable
-for cleanup.
+Drop the disposable database by its exact name after verification, and only when it holds no
+required evidence. Never drop the development or test database.
 
 The public AFL outcomes authority uses its own PostgreSQL schema and migration history. Its supported
 local integration command requires a running Docker daemon and provisions PostgreSQL 16 itself:
@@ -356,7 +352,21 @@ It also starts PostgreSQL with `max_locks_per_transaction=2048`. Each temporary 
 complete ordered migration history, about 1,200 relations, and `DROP SCHEMA ... CASCADE` has to lock
 every one of them. At the image default of 64 the teardown fails with `out of shared memory`, which
 appears either as that error or as a per-test timeout once several suites run together. CI starts its
-own service container with the same setting.
+own service container with the same setting, and additionally with `fsync`, `synchronous_commit` and
+`full_page_writes` off, because the database is disposable and each suite replays about 250 migration
+transactions.
+
+The suite runs one file at a time, and the lock ceiling is not the reason. The outcomes SQL takes
+transaction advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and
+advisory locks are scoped to the database, not the schema. Fixtures are content-addressed, so two files
+in different schemas produce identical lock keys. A four-worker run (PR #763) failed seven tests this
+way: lock waits past the test budget, a try-lock raising `changed concurrently` for a row in another
+schema, and a cancelled statement landing on the wrong finalizer. Running files in parallel requires
+one database per file, so the advisory key spaces are disjoint.
+
+Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
+native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
+collect it locally.
 
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
@@ -410,7 +420,7 @@ intentional cross-browser coverage rather than an unused browser download.
 `@draft-worker` tests. The representative browser lifecycle intentionally stops at four picks: one
 manual pick, one queued auto-pick, one fallback auto-pick, and completion. The full 12-team by
 22-player, 264-pick contract runs through the persisted application boundary in integration tests so
-browser, dev-server, and SQLite transport pressure cannot masquerade as a product failure.
+browser, dev-server, and database transport pressure cannot masquerade as a product failure.
 
 Use `npm run test:e2e:draft-worker` for the real expiry-worker lifecycle; it requires an isolated Redis
 instance and a migrated disposable database. Never combine worker expiry with another progression

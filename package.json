@@ -102,10 +102,6 @@
     "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
     "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
     "check:etl": "tsx Scripts/check-etl-setup.ts",
-    "player-data:dry-run": "tsx Scripts/player-data-convergence-dry-run.ts",
-    "player-data:temp-db-runner": "tsx Scripts/player-data-convergence-temp-db-runner.ts",
-    "player-data:temp-db-apply-simulation": "tsx Scripts/player-data-convergence-temp-db-apply-simulation.ts",
-    "player-data:runner": "tsx Scripts/player-data-convergence-runner.ts",
     "player-identity:consolidate": "tsx Scripts/player-identity-consolidation.ts",
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
@@ -154,7 +150,7 @@
     "@sentry/react": "^10.69.0",
     "@socket.io/redis-adapter": "8.3.0",
     "@tanstack/react-query": "^5.101.4",
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "bullmq": "^5.81.3",
     "chart.js": "^4.5.1",
     "cheerio": "^1.2.0",
@@ -220,14 +216,14 @@
     "cross-env": "^10.1.0",
     "esbuild": "0.25.8",
     "eslint": "^9.39.5",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^16.5.0",
     "jsdom": "^26.1.0",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "postcss": "^8.5.25",
     "postcss-nesting": "^13.0.2",
     "prettier": "^3.9.6",
@@ -243,7 +239,6 @@
     "vitest": "^4.1.11"
   },
   "description": "This is a comprehensive fantasy sports platform for the Australian Football League (AFL), built with Next.js, React, TypeScript, and Firebase, featuring real-time player statistics and live scoring.",
-  "main": "check-data.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/statlyaus/Statly.git"
@@ -269,7 +264,8 @@
     },
     "jsonwebtoken": {
       "jws": "3.2.3"
-    }
+    },
+    "@grpc/grpc-js": "^1.14.5"
   },
   "engines": {
     "node": ">=22 <23"
