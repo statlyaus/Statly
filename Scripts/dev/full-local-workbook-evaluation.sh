@@ -51,7 +51,10 @@ node -e '
 
 mkdir -p "$ROOT_DIR/.statly-local"
 export AFL_OUTCOMES_DEV_WORKBOOK_READ_ENABLED="true"
-export DATABASE_URL="file:$ROOT_DIR/.statly-local/statly-app.db"
+export DATABASE_URL="${DATABASE_URL:?set DATABASE_URL to a disposable fantasy PostgreSQL database}"
+# The disposable database has no pooler, so migrations use the same connection. Never let
+# Prisma fall back to the DIRECT_DATABASE_URL in .env, which is the development database.
+export DIRECT_DATABASE_URL="$DATABASE_URL"
 export STATLY_LOCAL_REUSE_OUTCOMES_DATABASE="true"
 export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"
 export STATLY_NEXT_DEV_BUNDLER="webpack"

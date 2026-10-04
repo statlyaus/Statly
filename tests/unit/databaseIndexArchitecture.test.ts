@@ -32,11 +32,10 @@ describe('production database index architecture', () => {
     expect(model(schema, 'SocialOutboxEvent')).toContain('@@index([lockedAt, createdAt])');
   });
 
-  it('ships the hot-path indexes through an additive migration', () => {
-    const migration = read('prisma/migrations/20260728033000_add_hot_path_indexes/migration.sql');
+  it('ships the hot-path indexes in the PostgreSQL baseline migration', () => {
+    const migration = read('prisma/migrations/20261004000000_postgresql_baseline/migration.sql');
 
     expect(migration).toContain('"Player_active_position_name_idx"');
     expect(migration).toContain('"LeagueMatchupScore_leagueId_status_idx"');
-    expect(migration).not.toMatch(/DROP (TABLE|COLUMN|INDEX)/);
   });
 });

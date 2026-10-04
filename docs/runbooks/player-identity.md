@@ -8,7 +8,8 @@ not proof that two records represent the same person.
 
 1. Deploy the additive `PlayerExternalIdentity` schema and application compatibility code.
 2. Put roster, draft, waiver, lineup, and trade mutations into maintenance mode.
-3. Create a SQLite backup outside the repository and verify that it opens successfully.
+3. Take a `pg_dump` backup outside the repository and verify that it restores into a scratch
+   database.
 4. Generate a proposal from the production database.
 5. Review every mapping. Set `reviewed` to `true`, and fill in `reviewedBy` and `reviewedAt` without
    changing `sourceFingerprint`.
@@ -23,9 +24,12 @@ collisions. Ownership in different leagues is expected and remains separate.
 
 ## Commands
 
-Set `DATABASE_URL` and `STATLY_PLAYER_IDENTITY_PRODUCTION_DB` to the same absolute production SQLite
-file. The command rejects the repository's `prisma/dev.db`, URL options, symlinks, and mismatched
-paths.
+Set `DATABASE_URL` and `STATLY_PLAYER_IDENTITY_PRODUCTION_DB` to the same production
+`postgresql://` address. The command rejects non-PostgreSQL addresses, a host or database name that
+differs between the two, and the `statly_fantasy_dev` and `statly_fantasy_test` databases.
+
+Practice runs without `--production` need `DATABASE_URL` and `STATLY_VERIFY_DB` set to the same
+disposable database whose name starts with `statly_verify_player_`.
 
 Generate the proposal:
 
@@ -39,7 +43,8 @@ Review the plan without changing data:
 npm run player-identity:consolidate -- --production --manifest player-identity-manifest.json
 ```
 
-For apply, also set `STATLY_PLAYER_IDENTITY_BACKUP` to the separate, verified backup file and set
+For apply, also set `STATLY_PLAYER_IDENTITY_BACKUP` to the verified `pg_dump` file (non-empty and less than 24
+hours old) and set
 `STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT` to the exact Firebase project ID paired with this
 production database. The command checks the resolved Firestore client before changing relational
 data or projecting waivers:
@@ -70,12 +75,12 @@ npm run player-identity:consolidate -- --production --project-waivers
 
 If relational apply succeeds but a Firestore projection fails, keep the backup and use the standalone
 projection command before declaring the rollout complete. Do not restore only Firestore or only
-SQLite.
+PostgreSQL.
 
 ## Rollback
 
 1. Keep maintenance mode enabled and stop all roster, draft, waiver, lineup, and trade writes.
-2. Restore the verified SQLite backup as the complete relational source of truth.
+2. Restore the verified `pg_dump` backup as the complete relational source of truth.
 3. Run the standalone `--production --project-waivers` command with
    `STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT` still pinned to the paired Firebase project. This
    rebuilds Firestore from the restored relational state.
@@ -83,5 +88,5 @@ SQLite.
    ownership documents together.
 5. Re-enable writes only after both stores agree.
 
-Never restore SQLite or Firestore independently; the waiver projection must be regenerated after a
+Never restore PostgreSQL or Firestore independently; the waiver projection must be regenerated after a
 relational rollback.

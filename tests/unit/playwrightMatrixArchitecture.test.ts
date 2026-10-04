@@ -83,8 +83,10 @@ describe('Playwright browser matrix', () => {
     expect(testsJob).toContain('npm run test:e2e');
     expect(testsJob).toContain('npx playwright install --with-deps chromium firefox webkit');
 
-    expect(workerJob).toContain('DATABASE_URL: file:./ci-draft-worker.db');
-    expect(workerJob).toContain('DATABASE_URL_TEST: file:./ci-draft-worker.db');
+    expect(workerJob).toContain('image: postgres:16-alpine');
+    expect(workerJob).toContain(
+      'DATABASE_URL_TEST: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test'
+    );
     expect(workerJob).toContain("PLAYWRIGHT_WITH_DRAFT_WORKER: 'true'");
     expect(workerJob).toContain('npx playwright install --with-deps chromium');
     expect(workerJob).toContain('npm run test:e2e:draft-worker');
