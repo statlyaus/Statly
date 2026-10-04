@@ -1,4 +1,4 @@
-import { Client } from 'pg';
+import { Pool } from 'pg';
 
 import { runOutcomesPrismaTestCommand } from '../outcomes-integration/outcomesPrismaTestCli';
 
@@ -22,16 +22,15 @@ export function assertSharedOutcomesTestDatabase(databaseUrl: string): void {
   }
 }
 
-export async function withOutcomesAdminClient<Result>(
+export async function withOutcomesAdminPool<Result>(
   databaseUrl: string,
-  action: (client: Client) => Promise<Result>
+  action: (admin: Pool) => Promise<Result>
 ): Promise<Result> {
-  const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
+  const admin = new Pool({ connectionString: databaseUrl, max: 1 });
   try {
-    return await action(client);
+    return await action(admin);
   } finally {
-    await client.end();
+    await admin.end();
   }
 }
 
@@ -47,12 +46,12 @@ export async function prepareSharedOutcomesRoles(sharedUrl: string): Promise<voi
   warmUpUrl.pathname = `/${warmUpDatabase}`;
   warmUpUrl.searchParams.set('schema', 'outcomes_role_warm_up');
 
-  await withOutcomesAdminClient(sharedUrl, (admin) =>
+  await withOutcomesAdminPool(sharedUrl, (admin) =>
     admin.query(`CREATE DATABASE "${warmUpDatabase}"`)
   );
   try {
     runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: warmUpUrl.toString() });
-    await withOutcomesAdminClient(sharedUrl, (admin) =>
+    await withOutcomesAdminPool(sharedUrl, (admin) =>
       admin.query(`DO $roles$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'afl_trade_nonproduction_governance_registry_writer') THEN
           CREATE ROLE afl_trade_nonproduction_governance_registry_writer NOLOGIN;
@@ -66,7 +65,7 @@ export async function prepareSharedOutcomesRoles(sharedUrl: string): Promise<voi
       END $roles$`)
     );
   } finally {
-    await withOutcomesAdminClient(sharedUrl, (admin) =>
+    await withOutcomesAdminPool(sharedUrl, (admin) =>
       admin.query(`DROP DATABASE IF EXISTS "${warmUpDatabase}" WITH (FORCE)`)
     );
   }
@@ -74,7 +73,7 @@ export async function prepareSharedOutcomesRoles(sharedUrl: string): Promise<voi
 
 /** Drops per-file databases a crashed or interrupted file left behind. */
 export async function dropLeftoverOutcomesDatabases(sharedUrl: string): Promise<void> {
-  await withOutcomesAdminClient(sharedUrl, async (admin) => {
+  await withOutcomesAdminPool(sharedUrl, async (admin) => {
     const leftovers = await admin.query<{ datname: string }>(
       `SELECT datname FROM pg_database WHERE datname LIKE $1`,
       [PER_FILE_DATABASE_PATTERN]

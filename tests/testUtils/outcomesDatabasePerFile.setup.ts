@@ -1,10 +1,10 @@
-import { Client } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll } from 'vitest';
 
 import {
   OUTCOMES_SHARED_DATABASE_URL_KEY,
   assertSharedOutcomesTestDatabase,
-  withOutcomesAdminClient,
+  withOutcomesAdminPool,
 } from './outcomesParallelDatabases';
 
 /**
@@ -36,7 +36,7 @@ if (sharedUrl) {
     process.env.AFL_OUTCOMES_DATABASE_URL === undefined ||
     process.env.AFL_OUTCOMES_DATABASE_URL.trim() === sharedUrl;
 
-  await withOutcomesAdminClient(sharedUrl, (admin: Client) =>
+  await withOutcomesAdminPool(sharedUrl, (admin: Pool) =>
     admin.query(`CREATE DATABASE "${databaseName}"`)
   );
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL = fileUrl.toString();
@@ -51,7 +51,7 @@ if (sharedUrl) {
     if (runtimeUrlFollowsTestUrl && process.env.AFL_OUTCOMES_DATABASE_URL !== undefined) {
       process.env.AFL_OUTCOMES_DATABASE_URL = sharedUrl;
     }
-    await withOutcomesAdminClient(sharedUrl, (admin: Client) =>
+    await withOutcomesAdminPool(sharedUrl, (admin: Pool) =>
       admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
     );
   });
