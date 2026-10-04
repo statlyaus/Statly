@@ -182,8 +182,13 @@ npm run dev:outcomes:review-afl-tables-2021-2025
 npm run dev:outcomes:review-official-2026
 export AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/private/path/to/workbook.xlsx"
 export AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<64-character-sha256>"
+export DATABASE_URL="postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_workbook_scratch"
 npm run dev:full:workbook-evaluation
 ```
+
+`DATABASE_URL` must name a disposable fantasy database, never the development one. The launcher
+points `DIRECT_DATABASE_URL` at the same database so the fantasy migrations and seed cannot fall back
+to the `.env` connection.
 
 The authentication command first requires the exact loopback database name and installs a private
 runtime nonce. Capture staging and the launcher must re-authenticate that nonce before mutation or
