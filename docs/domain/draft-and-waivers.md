@@ -130,6 +130,19 @@ Claims validate membership, league settings, player availability, optional drop 
 capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
 
+### Concurrent writers
+
+PostgreSQL runs writers concurrently, so budget and pick state are written as guarded updates rather
+than values read earlier and written back. A FAAB reservation increments the reserved total first and
+then checks it against the balance, rolling back when it is over. A FAAB debit is a decrement guarded
+by the balance, so two debits both apply or the second is refused. Waiver transactions stay at READ
+COMMITTED; draft transactions run at Serializable and retry serialization failures. A pick that hits a
+unique key is re-read outside the aborted transaction: it is replayed as idempotent only when the slot
+holds the player that call sent, and refused otherwise. Two first claims in a league can both create
+priority rows; the second keeps the first's rows, but the two members can end up sharing a priority
+number, because priority is not unique. That is accepted. `tests/integration/postgresConcurrency.test.ts`
+exercises each of these races against PostgreSQL.
+
 ## Reliability verification
 
 For affected flows, verify:
