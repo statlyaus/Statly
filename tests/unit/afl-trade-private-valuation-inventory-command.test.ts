@@ -11,6 +11,7 @@ const env = {
 describe('populated local valuation inventory command', () => {
   it.each([
     'postgresql://localhost/production',
+    'postgresql://localhost/statly_outcomes_test_production',
     'postgresql://remote.example/statly_outcomes_test',
     'postgresql://localhost/statly_outcomes_test?host=remote.example',
     'postgresql://localhost/statly_outcomes_test?options=-c%20default_transaction_read_only=off',

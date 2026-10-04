@@ -26,10 +26,12 @@ export default defineConfig({
     // two files sharing one database take identical keys: PR #763 ran four workers on one database
     // and saw cross-file lock waits, a try-lock failing with "changed concurrently", and timeouts.
     // Roles are server-wide, so the global setup creates them once before any file starts.
+    // Two workers, not four: at four, the 4-core runner was CPU-bound and the heaviest files ran
+    // two to three times slower than alone, past their timeouts.
     globalSetup: ['tests/testUtils/outcomesParallelDatabases.globalSetup.ts'],
     setupFiles: ['tests/testUtils/outcomesDatabasePerFile.setup.ts'],
     fileParallelism: true,
-    maxWorkers: 4,
+    maxWorkers: 2,
     // The per-file database is dropped by the setup file's afterAll, which must run after the
     // file's own afterAll hooks have closed their pools.
     sequence: { hooks: 'stack' },

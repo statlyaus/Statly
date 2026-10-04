@@ -356,7 +356,8 @@ own service container with the same setting, and additionally with `fsync`, `syn
 `full_page_writes` off, because the database is disposable and each suite replays about 250 migration
 transactions.
 
-The suite runs four files at a time, each in its own database. The outcomes SQL takes transaction
+The suite runs two files at a time, each in its own database. Four saturated the 4-core runner: the
+heaviest files ran two to three times slower than alone and passed their timeouts. The outcomes SQL takes transaction
 advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and advisory locks
 are scoped to the database, not the schema. Fixtures are content-addressed, so two files in different
 schemas of one database produce identical lock keys. A four-worker run on one database (PR #763) failed
