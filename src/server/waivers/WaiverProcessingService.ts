@@ -33,7 +33,12 @@ export interface WaiverClaim {
 export interface WaiverProcessingResult {
   processed: number;
   results: Array<{ id: string; status: string; reason?: string }>;
+  /** Another run holds this league's lease, so this one processed nothing. */
+  alreadyRunning?: true;
 }
+
+// A run that dies keeps the lease only this long before the next run may take it over.
+const WAIVER_RUN_LEASE_MS = 15 * 60 * 1000;
 
 interface PriorityEntry {
   userId: string;
@@ -41,6 +46,8 @@ interface PriorityEntry {
 }
 
 interface ClaimStore {
+  acquireProcessingLease?(leagueId: string): Promise<Date | null>;
+  releaseProcessingLease?(leagueId: string, startedAt: Date): Promise<void>;
   loadWaiverSettings?(leagueId: string): Promise<WaiverSettings>;
   loadPendingClaims?(leagueId: string): Promise<WaiverClaim[]>;
   markSuccessful(input: { leagueId: string; claimId: string; claim: WaiverClaim }): Promise<void>;
@@ -264,16 +271,25 @@ export class WaiverProcessingService {
   ) {}
 
   async processLeague(input: { leagueId: string }): Promise<WaiverProcessingResult> {
-    const [waiverSettings, claims] = await Promise.all([
-      this.claimStore.loadWaiverSettings?.(input.leagueId) ?? Promise.resolve({}),
-      this.claimStore.loadPendingClaims?.(input.leagueId) ?? Promise.resolve([]),
-    ]);
+    // One run per league: two runs would each load the same pending claims, debit them twice, and
+    // could award one player to two members.
+    const lease = await this.claimStore.acquireProcessingLease?.(input.leagueId);
+    if (lease === null) return { processed: 0, results: [], alreadyRunning: true };
 
-    return this.processClaims({
-      leagueId: input.leagueId,
-      waiverSettings,
-      claims,
-    });
+    try {
+      const [waiverSettings, claims] = await Promise.all([
+        this.claimStore.loadWaiverSettings?.(input.leagueId) ?? Promise.resolve({}),
+        this.claimStore.loadPendingClaims?.(input.leagueId) ?? Promise.resolve([]),
+      ]);
+
+      return await this.processClaims({
+        leagueId: input.leagueId,
+        waiverSettings,
+        claims,
+      });
+    } finally {
+      if (lease) await this.claimStore.releaseProcessingLease?.(input.leagueId, lease);
+    }
   }
 
   async processClaims(input: {
@@ -576,6 +592,31 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     private readonly db: PrismaWaiverStoreDb = prisma,
     private readonly firestore: FirestoreLike = adminDb
   ) {}
+
+  // Taken only when no run holds the lease or its holder has gone stale; returns this run's token.
+  async acquireProcessingLease(leagueId: string): Promise<Date | null> {
+    const startedAt = new Date();
+    const { count } = await this.db.league.updateMany({
+      where: {
+        id: leagueId,
+        OR: [
+          { waiverRunStartedAt: null },
+          { waiverRunStartedAt: { lt: new Date(startedAt.getTime() - WAIVER_RUN_LEASE_MS) } },
+        ],
+      },
+      data: { waiverRunStartedAt: startedAt },
+    });
+    return count === 1 ? startedAt : null;
+  }
+
+  // Cleared only while it still holds this run's token, so a run that outlived its lease cannot
+  // release the run that took over.
+  async releaseProcessingLease(leagueId: string, startedAt: Date): Promise<void> {
+    await this.db.league.updateMany({
+      where: { id: leagueId, waiverRunStartedAt: startedAt },
+      data: { waiverRunStartedAt: null },
+    });
+  }
 
   async loadWaiverSettings(leagueId: string): Promise<WaiverSettings> {
     const [league, settingsSnap] = await Promise.all([
