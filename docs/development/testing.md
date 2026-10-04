@@ -331,6 +331,48 @@ npx prisma migrate deploy
 Drop the disposable database by its exact name after verification, and only when it holds no
 required evidence. Never drop the development or test database.
 
+The public AFL outcomes authority uses its own PostgreSQL schema and migration history. Its supported
+local integration command requires a running Docker daemon and provisions PostgreSQL 16 itself:
+
+```sh
+npm run test:outcomes:int
+```
+
+The harness invokes Docker directly so Compose cannot load repository environment files. It creates a
+uniquely named `postgres:16-alpine` container with test-only credentials, binds Docker's dynamic port
+to `127.0.0.1`, stores `PGDATA` on `tmpfs`, and replaces both outcomes database URLs only for its child
+checks. It validates and generates the isolated Prisma schema, then runs the PostgreSQL suite. The
+suite creates unique temporary schemas, applies the complete ordered migration history, exercises
+native triggers, rollback, concurrency behavior, the 783-trade idempotent local seed and valuation
+isolation for archive-only trades, and removes those schemas afterward. The harness attempts bounded
+force-removal by immutable container ID after success, failure, `SIGINT`, or `SIGTERM`, and reports
+cleanup failure alongside any check failure.
+
+It also starts PostgreSQL with `max_locks_per_transaction=2048`. Each temporary schema holds the
+complete ordered migration history, about 1,200 relations, and `DROP SCHEMA ... CASCADE` has to lock
+every one of them. At the image default of 64 the teardown fails with `out of shared memory`, which
+appears either as that error or as a per-test timeout once several suites run together. CI starts its
+own service container with the same setting, and additionally with `fsync`, `synchronous_commit` and
+`full_page_writes` off, because the database is disposable and each suite replays about 250 migration
+transactions.
+
+The suite runs one file at a time, and the lock ceiling is not the reason. The outcomes SQL takes
+transaction advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and
+advisory locks are scoped to the database, not the schema. Fixtures are content-addressed, so two files
+in different schemas produce identical lock keys. A four-worker run (PR #763) failed seven tests this
+way: lock waits past the test budget, a try-lock raising `changed concurrently` for a row in another
+schema, and a cancelled statement landing on the wrong finalizer. Running files in parallel requires
+one database per file, so the advisory key spaces are disjoint.
+
+Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
+native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
+collect it locally.
+
+CI already owns a disposable PostgreSQL service and therefore runs
+`npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
+entry point. Never point either `AFL_OUTCOMES_TEST_DATABASE_URL` or `AFL_OUTCOMES_DATABASE_URL` at a
+shared or production PostgreSQL database.
+
 ## Test layers
 
 - Unit tests cover pure domain rules, normalization, read-model projection, and component behavior.
