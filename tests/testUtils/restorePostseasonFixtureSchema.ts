@@ -8,9 +8,10 @@ export async function restorePostseasonFixtureSchema(
   schema: string
 ) {
   const url = new URL(databaseUrl);
+  const databaseName = decodeURIComponent(url.pathname.slice(1));
   const containerId = process.env.AFL_OUTCOMES_TEST_CONTAINER_ID;
   if (
-    url.pathname !== '/statly_outcomes_test' ||
+    !/^statly_outcomes_test(?:_\d+_\d+)?$/.test(databaseName) ||
     !['localhost', '127.0.0.1'].includes(url.hostname) ||
     !/^postseason_context_[0-9_]+$/.test(schema) ||
     !containerId ||
@@ -33,12 +34,7 @@ export async function restorePostseasonFixtureSchema(
       ],
       { stdio: 'pipe', timeout: 30_000 }
     );
-  const connection = [
-    '--username',
-    decodeURIComponent(url.username),
-    '--dbname',
-    'statly_outcomes_test',
-  ];
+  const connection = ['--username', decodeURIComponent(url.username), '--dbname', databaseName];
   try {
     run('pg_dump', [
       ...connection,
