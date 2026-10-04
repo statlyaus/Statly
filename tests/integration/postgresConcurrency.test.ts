@@ -188,6 +188,36 @@ describe('waiver FAAB under two writers', () => {
     }
   });
 
+  it('keeps both first claims when they race to create the priority rows', async () => {
+    for (let round = 0; round < ROUNDS; round += 1) {
+      await prisma.teamAction.deleteMany({ where: { leagueId: LEAGUE } });
+      await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });
+
+      const results = await Promise.allSettled(
+        [0, 1].map((index) =>
+          store().submitClaim({
+            leagueId: LEAGUE,
+            userId: users[index],
+            teamId: members[index],
+            playerId: players[index],
+            priority: 1,
+            waiverSettings: { system: 'PRIORITY' },
+          })
+        )
+      );
+
+      expect(
+        results.map((result) => result.status),
+        `round ${round}`
+      ).toEqual(['fulfilled', 'fulfilled']);
+      const rows = await prisma.waiverPriority.findMany({
+        where: { leagueId: LEAGUE },
+        select: { memberId: true },
+      });
+      expect(rows.map((row) => row.memberId).sort(), `round ${round}`).toEqual([...members].sort());
+    }
+  });
+
   it('applies both debits when two debits race', async () => {
     for (let round = 0; round < ROUNDS; round += 1) {
       await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });
@@ -207,18 +237,45 @@ describe('waiver FAAB under two writers', () => {
 });
 
 describe('draft pick under two writers', () => {
+  it('refuses a player drafted at another slot instead of failing the aborted transaction', async () => {
+    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    // A stale client submits a player who already holds a later slot: the insert violates
+    // (draftId, playerId), which PostgreSQL answers by aborting the whole transaction.
+    await prisma.pick.create({
+      data: {
+        draftId: DRAFT,
+        overall: 2,
+        round: 1,
+        slot: 2,
+        memberId: members[1],
+        playerId: players[0],
+      },
+    });
+
+    await expect(
+      service.makePick({ draftId: DRAFT, actorUserId: users[0], playerId: players[0] })
+    ).rejects.toThrow('bad_request:Player already picked');
+    expect(
+      await prisma.draft.findUniqueOrThrow({ where: { id: DRAFT }, select: { currentPick: true } })
+    ).toEqual({ currentPick: 1 });
+  });
+
   it('persists exactly one pick when the member on the clock submits twice at once', async () => {
     const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
 
     for (let round = 0; round < ROUNDS; round += 1) {
+      // Events are keyed by clock revision, which follows schedulingVersion, so the previous round's
+      // events must go when the version is reset.
+      await prisma.draftEvent.deleteMany({ where: { draftId: DRAFT } });
       await prisma.pick.deleteMany({ where: { draftId: DRAFT } });
       await prisma.draft.update({
         where: { id: DRAFT },
         data: { status: 'LIVE', currentPick: 1, schedulingVersion: 0 },
       });
 
+      const sent = [players[0], players[1]];
       const results = await Promise.allSettled(
-        [players[0], players[1]].map((playerId) =>
+        sent.map((playerId) =>
           service.makePick({ draftId: DRAFT, actorUserId: users[0], playerId })
         )
       );
@@ -228,10 +285,12 @@ describe('draft pick under two writers', () => {
         select: { playerId: true },
       });
       expect(persisted, `round ${round}`).toHaveLength(1);
-      for (const result of results) {
+      for (const [index, result] of results.entries()) {
         if (result.status === 'fulfilled') {
-          // A collision may replay the slot's pick, but only by reporting what actually persisted.
-          expect(result.value.data.pick.player.id, `round ${round}`).toBe(persisted[0].playerId);
+          // Success, first-hand or replayed, only ever reports the player this call sent, and that
+          // player is the one that persisted.
+          expect(result.value.data.pick.player.id, `round ${round}`).toBe(sent[index]);
+          expect(persisted[0].playerId, `round ${round}`).toBe(sent[index]);
         } else {
           // The loser gets a domain refusal, not a raw database error surfacing as a 500.
           expect(String(result.reason?.message), `round ${round}`).toMatch(
