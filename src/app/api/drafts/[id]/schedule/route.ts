@@ -163,6 +163,18 @@ export async function DELETE(
   try {
     const { id: draftId } = await params;
 
+    // Cancelling the schedule starts the draft immediately, so it needs the same commissioner gate
+    // as rescheduling it.
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const access = await getDraftMembershipAccess(draftId, userId);
+    if (!access.canManage) {
+      return errorResponse('Commissioner access required', 403);
+    }
+
     // Find the draft
     const draft = await prisma.draft.findUnique({
       where: { id: draftId },

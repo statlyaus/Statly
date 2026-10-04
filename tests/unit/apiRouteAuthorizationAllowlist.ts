@@ -12,13 +12,31 @@
  * the client that has to move to `authenticatedFetch` first.
  */
 export interface PublicRouteEntry {
-  /** Route path relative to `/api`, for example `/players`. */
+  /**
+   * Route path relative to `/api`, for example `/players`, covering every handler in the file; or
+   * one handler, for example `DELETE /auth/session`, when only that handler is public.
+   */
   readonly route: string;
   /** Why this route is reachable without an authenticated caller. */
   readonly reason: string;
 }
 
 export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
+  // Single public handlers in otherwise guarded routes.
+  {
+    route: 'DELETE /auth/session',
+    reason: "Clears the caller's own session cookie; same-origin checked and reads nothing.",
+  },
+  {
+    route: 'GET /leagues',
+    reason:
+      'Lists leagues whose Firestore projection is marked public. REVIEW: Firestore is not the league authority.',
+  },
+  {
+    route: 'POST /leagues/[id]/draft',
+    reason: 'Disabled legacy endpoint; always returns 409 and touches no state.',
+  },
+
   // Operational probes. No user or league data is returned.
   { route: '/ping', reason: 'Liveness probe; reads nothing.' },
   { route: '/auth/health', reason: 'Authentication subsystem probe; reports status only.' },

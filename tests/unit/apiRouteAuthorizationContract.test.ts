@@ -30,6 +30,7 @@ const AUTHORIZATION_PATTERNS: readonly RegExp[] = [
   /canManageLeague/,
   /authorizeLeagueTradeAccess/,
   /withLeagueSocialRoute/,
+  /handlePickCommand/,
   /requireLeagueSocialAccess/,
   // Operator and scheduler credentials.
   /isAdminRequest/,
@@ -42,6 +43,46 @@ const AUTHORIZATION_PATTERNS: readonly RegExp[] = [
   // Local development tooling.
   /isDevelopmentToolsEnabled/,
 ];
+
+const HANDLER_START = /^export (?:async )?(?:function|const) (GET|POST|PUT|PATCH|DELETE)\b/gm;
+const LOCAL_FUNCTION_START = /^(?:async )?function (\w+)|^const (\w+) = (?:async )?\(/gm;
+
+/** Split a source file at each match of `start`, returning the name and text of every section. */
+function sections(source: string, start: RegExp): { name: string; body: string }[] {
+  const matches = [...source.matchAll(start)];
+  return matches.map((match, index) => ({
+    name: match[1] ?? match[2] ?? '',
+    body: source.slice(match.index, matches[index + 1]?.index ?? source.length),
+  }));
+}
+
+/**
+ * Exported state-changing or reading handlers that resolve no caller. A handler counts as guarded
+ * when its own body matches an authorization pattern or calls a module-level function that does,
+ * so one guarded handler cannot hide an unguarded sibling in the same file.
+ */
+function unguardedHandlers(source: string): string[] {
+  const isGuarded = (text: string) => AUTHORIZATION_PATTERNS.some((pattern) => pattern.test(text));
+  const guardHelpers = sections(source, LOCAL_FUNCTION_START)
+    .filter((helper) => helper.name && isGuarded(helper.body))
+    .map((helper) => new RegExp(`\\b${helper.name}\\(`));
+
+  const handlers = sections(source, HANDLER_START);
+  const callsGuard = (body: string) => guardHelpers.some((call) => call.test(body));
+  const guardedHandlers = handlers
+    .filter((handler) => isGuarded(handler.body) || callsGuard(handler.body))
+    .map((handler) => new RegExp(`\\b${handler.name}\\(`));
+
+  // A handler that delegates to a guarded sibling, such as POST returning GET(request), is guarded.
+  return handlers
+    .filter(
+      (handler) =>
+        !isGuarded(handler.body) &&
+        !callsGuard(handler.body) &&
+        !guardedHandlers.some((call) => call.test(handler.body))
+    )
+    .map((handler) => handler.name);
+}
 
 function findRouteFiles(dir: string): string[] {
   const found: string[] = [];
@@ -73,19 +114,28 @@ describe('API route authorization contract', () => {
 
   it('resolves a caller for every route that is not recorded as intentionally public', () => {
     const unguarded = routeFiles
-      .filter((file) => {
-        const source = readFileSync(file, 'utf8');
-        return !AUTHORIZATION_PATTERNS.some((pattern) => pattern.test(source));
-      })
-      .map(toRoutePath)
-      .filter((route) => !allowlisted.has(route))
+      .filter((file) => !allowlisted.has(toRoutePath(file)))
+      .flatMap((file) =>
+        unguardedHandlers(readFileSync(file, 'utf8')).map(
+          (method) => `${method} ${toRoutePath(file)}`
+        )
+      )
+      .filter((handler) => !allowlisted.has(handler))
       .sort();
 
     expect(unguarded).toEqual([]);
   });
 
   it('keeps every recorded public route tied to a route that still exists', () => {
-    const known = new Set(routeFiles.map(toRoutePath));
+    const known = new Set(
+      routeFiles.flatMap((file) => {
+        const route = toRoutePath(file);
+        const methods = sections(readFileSync(file, 'utf8'), HANDLER_START).map(
+          (handler) => `${handler.name} ${route}`
+        );
+        return [route, ...methods];
+      })
+    );
     const stale = PUBLIC_API_ROUTES.map((entry) => entry.route)
       .filter((route) => !known.has(route))
       .sort();
