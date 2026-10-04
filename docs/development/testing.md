@@ -356,13 +356,25 @@ own service container with the same setting, and additionally with `fsync`, `syn
 `full_page_writes` off, because the database is disposable and each suite replays about 250 migration
 transactions.
 
-The suite runs one file at a time, and the lock ceiling is not the reason. The outcomes SQL takes
-transaction advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and
-advisory locks are scoped to the database, not the schema. Fixtures are content-addressed, so two files
-in different schemas produce identical lock keys. A four-worker run (PR #763) failed seven tests this
-way: lock waits past the test budget, a try-lock raising `changed concurrently` for a row in another
-schema, and a cancelled statement landing on the wrong finalizer. Running files in parallel requires
-one database per file, so the advisory key spaces are disjoint.
+The suite runs four files at a time, each in its own database. The outcomes SQL takes transaction
+advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and advisory locks
+are scoped to the database, not the schema. Fixtures are content-addressed, so two files in different
+schemas of one database produce identical lock keys. A four-worker run on one database (PR #763) failed
+seven tests this way: lock waits past the test budget, a try-lock raising `changed concurrently` for a
+row in another schema, and a cancelled statement landing on the wrong finalizer.
+
+`tests/testUtils/outcomesDatabasePerFile.setup.ts` runs before each file: it creates
+`statly_outcomes_test_<pid>_<n>` on the server named by `AFL_OUTCOMES_TEST_DATABASE_URL`, points that
+variable (and `AFL_OUTCOMES_DATABASE_URL` when it names the same database) at it, and drops it with
+`FORCE` after the file's own `afterAll` hooks. Each file still creates its own schema and runs
+`prisma migrate deploy` into it, exactly as before. Roles and role memberships are server-wide, and
+migrations and fixtures create fixed role names guarded only against an existing role, so two files
+creating one at the same moment fail with `unique_violation`. The global setup
+(`tests/testUtils/outcomesParallelDatabases.globalSetup.ts`) therefore deploys every migration once
+into a throwaway database and creates the fixture-only roles before any file starts, and drops leftover
+per-file databases before and after the run. Code that names the database (`pg_dump`/`pg_restore`
+arguments, disposable-database guards) reads it from the URL or accepts the `statly_outcomes_test_<pid>_<n>`
+form. A role setting a file needs is scoped with `ALTER ROLE ... IN DATABASE`, never server-wide.
 
 Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
 native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
