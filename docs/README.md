@@ -44,7 +44,8 @@ authority when a document and implementation disagree; fix the document in the s
 - [Public AFL Draft & Trade Outcomes operations](runbooks/afl-trade-intelligence-operations.md) —
   workbook/fitzRoy capture, factual release operations, optional valuation scheduling, health,
   incidents, recovery, and model-change review.
-- [PostgreSQL cutover](runbooks/postgresql-cutover.md) — planned, not yet executed.
+- [PostgreSQL go-live checklist](runbooks/postgresql-cutover.md) — provisioning, secrets, schema,
+  deploy order, and smoke checks for the production fantasy database; not started.
 - [Player identity consolidation](runbooks/player-identity.md) — reviewed production data operation.
 
 ## Subsystem guides
