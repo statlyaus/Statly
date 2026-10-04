@@ -25,9 +25,8 @@ export default defineConfig({
     globals: true,
     globalSetup: ['tests/setup/int.globalSetup.ts'],
     setupFiles: ['tests/setup/int.setup.ts'],
-    // Every integration file writes to the same disposable SQLite database (DATABASE_URL_TEST).
-    // Running files concurrently makes one file's long transaction lock out another's writes,
-    // which surfaces as Prisma socket timeouts, so files run one at a time.
+    // Every integration file writes to the same disposable PostgreSQL database (DATABASE_URL_TEST)
+    // and cleans up only its own fixtures, so files run one at a time.
     fileParallelism: false,
     testTimeout: 30000,
     hookTimeout: 60000,
