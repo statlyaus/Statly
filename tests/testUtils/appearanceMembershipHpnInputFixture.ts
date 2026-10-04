@@ -22,6 +22,7 @@ import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
 import { PostgresAflTradeFactualReconciliationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresFactualReconciliationRepository';
 import { stageLocalAflTradeFitzRoyFixture } from './localFitzRoyStagingFixture';
+import { bindTestEvidenceStore } from './testEvidenceStore';
 import { registerSourceFirstHpnPlayerMapFixture } from './sourceFirstHpnPlayerMapFixture';
 import { registerSourceFirstHpnResultsMapFixture } from './sourceFirstHpnResultsMapFixture';
 
@@ -158,9 +159,11 @@ export async function buildAppearanceMembershipHpnInputFixture({
       ruleEvidence.createdAt,
     ]
   );
-  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(client, {
-    read: async () => ruleEvidenceBytes,
-  });
+  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
+    client,
+    { read: async () => ruleEvidenceBytes },
+    await bindTestEvidenceStore(pool)
+  );
   const rule = createAflTradeAppearanceMembershipSpellRule({
     ...scope,
     ruleVersion: 'synthetic-appearance-membership-hpn-v1',

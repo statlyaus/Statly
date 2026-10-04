@@ -2,6 +2,12 @@ import {
   doesAflTradeArtifactRefMatchBytes,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
+import {
+  recordAflTradeEvidenceLocations,
+  requireAflTradeEvidenceLocated,
+  storeAndReadBackAflTradeEvidence,
+  type AflTradeEvidenceStoreBinding,
+} from '../artifacts/artifactStoreLocation';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import {
   aflTradeAcquisitionSpellRegistrationSchema,
@@ -23,11 +29,16 @@ export interface AflTradeAcquisitionRegistrationExecution {
   readonly competition: 'AFLM' | 'AFLW';
 }
 
-/** Writes only proposals already approved by the existing review owner. */
+/**
+ * Writes only proposals already approved by the existing review owner. Outside test fixtures,
+ * evidence is written first: its bytes are stored and read back through the registered evidence
+ * store before the transaction that records their location and the registration.
+ */
 export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
   constructor(
     private readonly database: AflOutcomeSqlClient,
-    private readonly evidence: AflTradeAcquisitionRegistrationEvidenceReader
+    private readonly evidence: AflTradeAcquisitionRegistrationEvidenceReader,
+    private readonly evidenceStore?: AflTradeEvidenceStoreBinding
   ) {}
 
   async registerReviewedRule(
@@ -41,15 +52,16 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
       rule.content.competition !== execution.competition
     )
       throw new Error('Acquisition rule registration scope differs.');
-    for (const ref of rule.content.evidence) {
-      if (!doesAflTradeArtifactRefMatchBytes(ref, await this.evidence.read(ref))) {
-        throw new Error('Acquisition rule evidence bytes differ.');
-      }
-    }
+    const evidence = await this.readExactEvidence(
+      rule.content.evidence,
+      'Acquisition rule evidence bytes differ.'
+    );
+    await this.writeEvidenceFirst(execution, evidence);
     return this.database.transaction(async (transaction) => {
       await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
         `outcome-review-subject:acquisition_spell_rule:${rule.ruleId}`,
       ]);
+      await this.locateEvidence(transaction, execution, rule.content.evidence, []);
       await transaction.query(
         `INSERT INTO outcome_acquisition_spell_rule
           (rule_id,rule_version,definition_json,status,created_at,
@@ -86,13 +98,14 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
     execution: AflTradeAcquisitionRegistrationExecution
   ): Promise<AflTradeAcquisitionSpellRegistration> {
     const spell = aflTradeAcquisitionSpellRegistrationSchema.parse(input);
-    await this.authenticateSpell(spell, execution);
+    const evidence = await this.authenticateSpell(spell, execution);
+    await this.writeEvidenceFirst(execution, evidence);
     return this.database.transaction(async (transaction) => {
       await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
         `outcome-review-subject:acquisition_spell_registration:${spell.spellVersionId}`,
       ]);
       const c = spell.content;
-      await this.authenticateRule(transaction, c.ruleId);
+      const rule = await this.authenticateRule(transaction, c.ruleId);
       if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') {
         // Appearance membership: no entry event; the window is the first and last reviewed
         // appearance in one season, verified against appearance facts by the database guard.
@@ -124,6 +137,14 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
         );
         return this.requireRegistered(transaction, spell, approvalDecisionId);
       }
+      // A season (v3) spell cites no evidence bytes and returned above. A reviewed spell must find
+      // its own evidence and its rule's evidence located before it is recorded.
+      await this.locateEvidence(
+        transaction,
+        execution,
+        evidence.map(({ reference }) => reference),
+        rule.content.evidence
+      );
       await transaction.query(
         `INSERT INTO outcome_acquisition_spell_version
           (spell_version_id,spell_id,version,player_id,club_id,start_event_version_id,
@@ -202,7 +223,7 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
   private async authenticateRule(
     transaction: AflOutcomeSqlTransaction,
     ruleId: string
-  ): Promise<void> {
+  ): Promise<AflTradeAcquisitionSpellRegistrationRule> {
     const result = await transaction.query<{ definition_json: unknown }>(
       `SELECT definition_json FROM outcome_acquisition_spell_rule
        WHERE rule_id=$1 AND outcome_acquisition_rule_registration_current(rule_id,transaction_timestamp())
@@ -214,29 +235,69 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
     const rule = aflTradeAcquisitionSpellRegistrationRuleSchema.parse(
       result.rows[0]!.definition_json
     );
-    for (const ref of rule.content.evidence) {
-      if (!doesAflTradeArtifactRefMatchBytes(ref, await this.evidence.read(ref)))
-        throw new Error('Acquisition rule evidence bytes differ.');
-    }
+    await this.readExactEvidence(rule.content.evidence, 'Acquisition rule evidence bytes differ.');
+    return rule;
   }
 
   private async authenticateSpell(
     spell: AflTradeAcquisitionSpellRegistration,
     execution: AflTradeAcquisitionRegistrationExecution
-  ): Promise<void> {
+  ): Promise<{ reference: AflTradeArtifactRef; bytes: Uint8Array }[]> {
     const c = spell.content;
     if (c.environment !== execution.environment || c.competition !== execution.competition)
       throw new Error('Acquisition spell registration scope differs.');
     // Appearance membership (v3) binds reviewed appearance facts, which the database authenticates;
     // it carries no retained evidence bytes of its own.
-    if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') return;
-    for (const ref of [
-      ...c.entry.evidence,
-      ...c.continuityEvidence,
-      ...(c.departure?.evidence ?? []),
-    ]) {
-      if (!doesAflTradeArtifactRefMatchBytes(ref, await this.evidence.read(ref)))
-        throw new Error('Acquisition spell evidence bytes differ.');
+    if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') return [];
+    return this.readExactEvidence(
+      [...c.entry.evidence, ...c.continuityEvidence, ...(c.departure?.evidence ?? [])],
+      'Acquisition spell evidence bytes differ.'
+    );
+  }
+
+  private async readExactEvidence(
+    references: readonly AflTradeArtifactRef[],
+    mismatch: string
+  ): Promise<{ reference: AflTradeArtifactRef; bytes: Uint8Array }[]> {
+    const evidence: { reference: AflTradeArtifactRef; bytes: Uint8Array }[] = [];
+    for (const reference of references) {
+      const bytes = await this.evidence.read(reference);
+      if (!doesAflTradeArtifactRefMatchBytes(reference, bytes)) throw new Error(mismatch);
+      evidence.push({ reference, bytes });
     }
+    return evidence;
+  }
+
+  /** Stores and reads back evidence before any transaction records it; fixtures have no store. */
+  private async writeEvidenceFirst(
+    execution: AflTradeAcquisitionRegistrationExecution,
+    evidence: readonly { reference: AflTradeArtifactRef; bytes: Uint8Array }[]
+  ): Promise<void> {
+    if (execution.environment === 'test_fixture' || evidence.length === 0) return;
+    await storeAndReadBackAflTradeEvidence(this.requireEvidenceStore(), evidence);
+  }
+
+  private requireEvidenceStore(): AflTradeEvidenceStoreBinding {
+    if (this.evidenceStore === undefined) {
+      throw new Error('Non-production reviewed registration requires a registered evidence store.');
+    }
+    return this.evidenceStore;
+  }
+
+  /** Records the written evidence's locations, then refuses any cited evidence still unlocated. */
+  private async locateEvidence(
+    transaction: AflOutcomeSqlTransaction,
+    execution: AflTradeAcquisitionRegistrationExecution,
+    written: readonly AflTradeArtifactRef[],
+    cited: readonly AflTradeArtifactRef[]
+  ): Promise<void> {
+    if (execution.environment === 'test_fixture') return;
+    if (written.length > 0) {
+      await recordAflTradeEvidenceLocations(transaction, this.requireEvidenceStore(), written);
+    }
+    await requireAflTradeEvidenceLocated(
+      transaction,
+      [...written, ...cited].map((reference) => reference.artifactId)
+    );
   }
 }
