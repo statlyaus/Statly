@@ -1,8 +1,11 @@
 import type { Pool } from 'pg';
-import { afterAll } from 'vitest';
+import { afterAll, inject } from 'vitest';
+
+import { OUTCOMES_TEMPLATE_SCHEMA_KEY } from '../outcomes-integration/outcomesPrismaTestCli';
 
 import {
   OUTCOMES_SHARED_DATABASE_URL_KEY,
+  OUTCOMES_TEMPLATE_SCHEMA,
   assertSharedOutcomesTestDatabase,
   withOutcomesAdminPool,
 } from './outcomesParallelDatabases';
@@ -36,9 +39,17 @@ if (sharedUrl) {
     process.env.AFL_OUTCOMES_DATABASE_URL === undefined ||
     process.env.AFL_OUTCOMES_DATABASE_URL.trim() === sharedUrl;
 
+  // Cloned from the migrated template when global setup proved adoption equivalent to a deploy, so
+  // the file's first `migrate deploy` adopts the template schema instead of replaying migrations.
+  const templateDatabase = inject('outcomesTemplateDatabase');
   await withOutcomesAdminPool(sharedUrl, (admin: Pool) =>
-    admin.query(`CREATE DATABASE "${databaseName}"`)
+    admin.query(
+      templateDatabase
+        ? `CREATE DATABASE "${databaseName}" TEMPLATE "${templateDatabase}"`
+        : `CREATE DATABASE "${databaseName}"`
+    )
   );
+  if (templateDatabase) process.env[OUTCOMES_TEMPLATE_SCHEMA_KEY] = OUTCOMES_TEMPLATE_SCHEMA;
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL = fileUrl.toString();
   if (runtimeUrlFollowsTestUrl && process.env.AFL_OUTCOMES_DATABASE_URL !== undefined) {
     process.env.AFL_OUTCOMES_DATABASE_URL = fileUrl.toString();
@@ -47,6 +58,7 @@ if (sharedUrl) {
   // Registered first, so with sequence.hooks 'stack' it runs after the file's own afterAll hooks
   // have closed their pools. FORCE ends any connection a file left open.
   afterAll(async () => {
+    delete process.env[OUTCOMES_TEMPLATE_SCHEMA_KEY];
     process.env.AFL_OUTCOMES_TEST_DATABASE_URL = sharedUrl;
     if (runtimeUrlFollowsTestUrl && process.env.AFL_OUTCOMES_DATABASE_URL !== undefined) {
       process.env.AFL_OUTCOMES_DATABASE_URL = sharedUrl;
