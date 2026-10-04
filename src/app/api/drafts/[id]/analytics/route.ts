@@ -2,15 +2,27 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await params;
 
   try {
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const access = await getDraftMembershipAccess(draftId, userId);
+    if (!access.isMember) {
+      return NextResponse.json({ error: 'Draft access required' }, { status: 403 });
+    }
+
     // Fetch picks and draft timing data
     const [picksOrdered, draftTimes] = await Promise.all([
       prisma.pick.findMany({
