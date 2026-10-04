@@ -48,9 +48,11 @@ describe('private reviewed evidence currentness migration', () => {
     );
 
     expect(LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256).toBe(
+      '7d90b71f07c106b6131d5d36709bab89c55fda53daeeef3b17d84c87ef1832d4'
+    );
+    expect(migration).toContain(
       '41a90da56a0e682888d50f0e95e729af838f9103708eba50bffae82f33c4523b'
     );
-    expect(migration).toContain(LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256);
     expect(migration).toContain('7ef741add1ae94133c597581f8a2175118058bedd2ffe8a107213630e1b0fd10');
     expect(migration).not.toContain(
       '7a76a916d814f908002db3ee1d59ac907f47f430f92f19bf487aed951f7ef0c8'
@@ -63,6 +65,28 @@ describe('private reviewed evidence currentness migration', () => {
     expect(migration).toContain('validate_outcome_private_reviewed_evidence_bundle_insert()');
     expect(migration).toContain('outcome_private_reviewed_evidence_bundle_is_current_v1(text)');
     expect(migration).toContain('Admitted private review-set decisions are append-only');
+  });
+
+  it('rotates to the genuine 2026 re-acquisition generation', () => {
+    const migration = read(
+      'prisma/afl-trade-outcomes/migrations/0233_rotate_private_review_generation_2026_reacquisition/migration.sql'
+    );
+
+    expect(migration).toContain(
+      '7d90b71f07c106b6131d5d36709bab89c55fda53daeeef3b17d84c87ef1832d4'
+    );
+    expect(migration).toContain(
+      '41a90da56a0e682888d50f0e95e729af838f9103708eba50bffae82f33c4523b'
+    );
+    expect(migration).toContain('pg_get_functiondef');
+    expect(migration).toContain('outcome_private_reviewed_evidence_is_current()');
+    expect(migration).toContain('validate_outcome_private_reviewed_evidence_bundle_insert()');
+    expect(migration).toContain('outcome_private_reviewed_evidence_bundle_is_current_v1(text)');
+    expect(migration).toContain('outcome_review_decision_private_set_current_idx');
+    expect(migration).toContain('Admitted private review-set decisions are append-only');
+    expect(migration).not.toContain(
+      '7a76a916d814f908002db3ee1d59ac907f47f430f92f19bf487aed951f7ef0c8'
+    );
   });
 
   it('makes reviewed scoped AFLCA identity mappings append-only and validates their consumers', () => {
