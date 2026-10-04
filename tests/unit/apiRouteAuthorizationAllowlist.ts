@@ -57,13 +57,6 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
       'Stateless injury-text parser. REVIEW: confirm the `ingest` mode never persists before treating this as settled.',
   },
 
-  // Pure computation.
-  {
-    route: '/scheduling/generate',
-    reason: 'Generates a schedule from the request body; stores nothing.',
-  },
-  { route: '/scheduling/presets', reason: 'Returns static scheduling presets.' },
-
   // Telemetry.
   {
     route: '/analytics/performance',

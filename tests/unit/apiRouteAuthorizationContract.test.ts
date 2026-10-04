@@ -35,6 +35,7 @@ const AUTHORIZATION_PATTERNS: readonly RegExp[] = [
   /isAdminRequest/,
   /ADMIN_SECRET/,
   /CRON_SECRET/,
+  /isCronRequestAuthorized/,
   /INTERNAL_TASK_SECRET/,
   /METRICS_API_KEY/,
   /METRICS_BEARER_TOKEN/,
