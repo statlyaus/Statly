@@ -252,6 +252,44 @@ PGlite's PostgreSQL socket compatibility layer is for local development only and
 a one-connection `test_fixture` read pool. Migration triggers and concurrent repository behavior remain
 owned by the disposable real-PostgreSQL outcomes integration job described below.
 
+## Secured endpoint testing
+
+Some endpoints require a credential by design and fail closed when it is absent:
+
+- `/api/admin/*` requires the `x-admin-secret` header carrying `ADMIN_SECRET`.
+- `/api/cron/*` requires `Authorization: Bearer $CRON_SECRET` (`src/lib/cronAuth.ts`). An unset
+  `CRON_SECRET` denies every request outside `NODE_ENV=development`.
+- `/api/user/watchlists`, `/api/user/leagues`, and `/api/user/leagues/[id]/settings` derive the user
+  from a verified identity and ignore any client-supplied `userId`. In local development the scripted
+  identity is accepted when both `STATLY_ENABLE_DEV_AUTH` and `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH` are
+  `true` and the process is not running in production mode.
+
+Set local values in `.env.local`, which is ignored and never committed. Generate one value per
+secret so no two environments share a credential:
+
+```sh
+ADMIN_SECRET=<paste the output of: openssl rand -hex 32>
+CRON_SECRET=<paste a different output of: openssl rand -hex 32>
+```
+
+`Scripts/dev/curl-admin.sh` loads those values without printing them and forwards them as headers:
+
+```sh
+Scripts/dev/curl-admin.sh admin /api/admin/queue
+Scripts/dev/curl-admin.sh cron /api/cron/daily
+Scripts/dev/curl-admin.sh user /api/user/leagues
+```
+
+Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
+succeed. The admin and user contracts are enforced by
+`tests/unit/adminControlPlaneAuthorization.test.ts` and
+`tests/unit/userScopedRouteAuthorization.test.ts`, which run in the unit lane without Firebase,
+Redis, or a running server.
+
+Never weaken these checks to make local testing easier and never add a development bypass that
+behaves differently from production; use local credential values instead. See the
+[authorization model](../architecture/authorization.md) for the tier these endpoints belong to.
+
 ## CI architecture
 
 The CI workflow has five explicit ownership boundaries:
@@ -371,9 +409,9 @@ variable (and `AFL_OUTCOMES_DATABASE_URL` when it names the same database) at it
 `prisma migrate deploy` into it, exactly as before. Roles and role memberships are server-wide, and
 migrations and fixtures create fixed role names guarded only against an existing role, so two files
 creating one at the same moment fail with `unique_violation`. The global setup
-(`tests/testUtils/outcomesParallelDatabases.globalSetup.ts`) therefore deploys every migration once
-into a throwaway database and creates the fixture-only roles before any file starts, and drops leftover
-per-file databases before and after the run. Code that names the database (`pg_dump`/`pg_restore`
+(`tests/testUtils/outcomesParallelDatabases.globalSetup.ts`) therefore migrates the template database
+described below once, which creates the migration roles, creates the fixture-only roles before any file
+starts, and drops the template and leftover per-file databases before and after the run. Code that names the database (`pg_dump`/`pg_restore`
 arguments, disposable-database guards) reads it from the URL or accepts the `statly_outcomes_test_<pid>_<n>`
 form. A role setting a file needs is scoped with `ALTER ROLE ... IN DATABASE`, never server-wide.
 
