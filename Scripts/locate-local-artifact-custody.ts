@@ -39,7 +39,7 @@ function usage(message: string): never {
   throw new TypeError(`${message} See the runbook section "Locating retained evidence bytes".`);
 }
 
-function requireLoopbackDatabaseUrl(value: string | undefined): string {
+export function requireLoopbackDatabaseUrl(value: string | undefined): string {
   const databaseUrl = value?.trim() ?? '';
   let host = '';
   try {
