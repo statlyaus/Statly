@@ -53,8 +53,11 @@ describe('AFL trade outcomes command executor', () => {
         '-e',
         [
           "const fs = require('node:fs');",
-          `fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));`,
+          // Register the handler before publishing the pid file. The parent polls for that file and may
+          // abort as soon as it appears, and a SIGTERM arriving before this line takes the default
+          // action: the child dies at once and the rejection lands inside the floor asserted below.
           "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 250));",
+          `fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));`,
           'setInterval(() => {}, 1_000);',
         ].join(''),
       ],

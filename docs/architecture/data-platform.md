@@ -1,17 +1,17 @@
 # Runtime and data platform
 
 - Status: accepted ownership model; PostgreSQL production cutover is not complete
-- Last verified against source: 2026-07-30
+- Last verified against source: 2026-10-04
 
 ## Current state
 
 Statly is a modular Next.js application with separate process entry points for web/API, Socket.IO,
-workers, and ETL. The current Prisma schema uses SQLite. SQLite is supported for local development and
-disposable tests, but it is not a safe shared production writer for horizontally scaled processes.
+workers, and ETL. The Prisma schema uses PostgreSQL 16 for
+development, tests, and CI.
 
-Managed PostgreSQL is the accepted production target. This document does not claim that it has been
-provisioned, rehearsed, or deployed. Production database migration remains blocked until the
-[cutover runbook](../runbooks/postgresql-cutover.md) is satisfied.
+The managed production PostgreSQL database is not provisioned yet. This document does not claim that
+it has been deployed. Go-live remains blocked until the
+[go-live checklist](../runbooks/postgresql-cutover.md) is satisfied.
 
 ## Ownership map
 
@@ -31,18 +31,36 @@ rights, roster ownership, draft participation, or waiver eligibility.
 
 ## Relational target
 
-Managed PostgreSQL will replace SQLite for production Prisma workloads. The provider must supply
+Production Prisma workloads run on managed PostgreSQL. The provider must supply
 encrypted connections, automated backups, point-in-time recovery, monitoring, and a rehearsed restore
 path.
 
 - `DATABASE_URL` is the pooled application connection for web, Socket.IO, and workers.
 - `DIRECT_DATABASE_URL` is the direct migration/administrative connection.
 - Connection budgets include every process class, not only the web tier.
-- The first provider cutover preserves IDs, relationships, enums, timestamps, and current string-JSON
+- The PostgreSQL baseline preserves IDs, relationships, enums, timestamps, and current string-JSON
   semantics. JSON redesign is a separate migration.
 
-The repository's SQLite migration history is provider-specific. It must not be replayed blindly on
-PostgreSQL; the cutover requires a reviewed baseline and transfer process.
+The migration history starts at a reviewed PostgreSQL baseline. No user data existed on SQLite, so
+there is no transfer. The SQLite history is archived in `prisma/migrations-sqlite-archive/` and must
+never be replayed.
+
+### Database identity
+
+The AFL trade outcomes database states which application and schema format it satisfies.
+`outcome_database_identity` holds a single CHECK-enforced row — `application_id`
+(`statly-afl-trade-outcomes`) and `schema_format` — mirroring the way SQLite's file header records an
+application id and a schema format number so a reader can refuse a file written for a different
+contract instead of misreading it. The migration that writes the row asserts it before committing,
+and `afl-outcomes-postgres.test.ts` binds the deployed row to `OUTCOME_DATABASE_IDENTITY` in code.
+
+Bump `schema_format` only when a reader built for the previous format would misread a database at the
+new one; it is a compatibility decision, not a refactor. The applied migration head is deliberately
+not duplicated in the row, because `_prisma_migrations` already reports it and a copy would rot.
+
+Startup does not yet assert compatibility. Enforcement is currently at deploy time (the migration
+fails closed) and in CI (the binding test); a runtime precondition that refuses a database whose
+identity disagrees with the running application is still outstanding.
 
 ## Firebase boundaries
 
@@ -109,7 +127,7 @@ guessing. Use the [player identity runbook](../runbooks/player-identity.md) for 
 
 ## Completion criteria for PostgreSQL
 
-The target is implemented only after the cutover has been rehearsed and executed, all process classes
-use the managed connections, backup/restore evidence exists, domain validation and smoke checks pass,
-and the former production SQLite writer is retired. Until then, documentation and deployment reports
-must describe PostgreSQL as a target, not current production state.
+Production is on PostgreSQL only after the managed database is provisioned, all process classes use
+the managed connections, backup/restore evidence exists, and domain validation and smoke checks pass.
+Until then, documentation and deployment reports must describe the managed database as a target, not
+current production state.

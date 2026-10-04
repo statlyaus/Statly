@@ -1,4 +1,4 @@
-import { symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,10 +15,6 @@ import {
 } from '../../src/server/players/playerIdentityConsolidationCli';
 
 const createdPaths: string[] = [];
-
-function tempDatabasePath(suffix: string): string {
-  return join(tmpdir(), `statly-verify-player-${process.pid}-${suffix}.db`);
-}
 
 afterEach(() => {
   for (const filePath of createdPaths.splice(0)) {
@@ -96,72 +92,95 @@ describe('player identity consolidation CLI safety', () => {
     ).toMatchObject({ reviewed: true, reviewedBy: 'operator@example.test' });
   });
 
-  it('accepts only a matching regular disposable database file', () => {
-    const databasePath = tempDatabasePath('valid');
-    createdPaths.push(databasePath);
-    writeFileSync(databasePath, 'sqlite fixture');
+  const verifyUrl = 'postgresql://statly:pw@127.0.0.1:55440/statly_verify_player_run1';
+  const productionUrl = 'postgresql://statly:pw@db.internal:5432/statly_fantasy';
 
+  it('accepts only a matching statly_verify_player_* PostgreSQL database', () => {
     expect(
-      validateDisposablePlayerIdentityDatabase({
-        databaseUrl: `file:${databasePath}`,
-        expectedPath: databasePath,
-        repositoryRoot: join(tmpdir(), 'statly-repository-without-dev-db'),
-      })
-    ).toBe(`file:${databasePath}`);
-  });
-
-  it('rejects a disposable-looking symlink', () => {
-    const symlinkPath = tempDatabasePath('symlink');
-    createdPaths.push(symlinkPath);
-    symlinkSync('prisma/dev.db', symlinkPath);
-
+      validateDisposablePlayerIdentityDatabase({ databaseUrl: verifyUrl, expectedUrl: verifyUrl })
+    ).toBe(verifyUrl);
     expect(() =>
       validateDisposablePlayerIdentityDatabase({
-        databaseUrl: `file:${symlinkPath}`,
-        expectedPath: symlinkPath,
+        databaseUrl: 'file:/tmp/statly-verify-player-1.db',
+        expectedUrl: verifyUrl,
       })
-    ).toThrow('regular non-symlink file');
+    ).toThrow('postgresql://');
+    expect(() =>
+      validateDisposablePlayerIdentityDatabase({
+        databaseUrl: verifyUrl,
+        expectedUrl: verifyUrl.replace('run1', 'run2'),
+      })
+    ).toThrow('exactly match STATLY_VERIFY_DB');
   });
 
-  it('requires an explicitly matched production database and separate backup for apply', () => {
-    const databasePath = join(tmpdir(), `statly-production-player-${process.pid}.db`);
-    const backupPath = join(tmpdir(), `statly-production-player-${process.pid}.backup.db`);
-    createdPaths.push(databasePath, backupPath);
-    writeFileSync(databasePath, 'production sqlite fixture');
-    writeFileSync(backupPath, 'backup sqlite fixture');
+  it('rejects a disposable run aimed at the development database', () => {
+    const devUrl = 'postgresql://statly:pw@127.0.0.1:55440/statly_fantasy_dev';
+    expect(() =>
+      validateDisposablePlayerIdentityDatabase({ databaseUrl: devUrl, expectedUrl: devUrl })
+    ).toThrow('statly_verify_player_*');
+  });
+
+  it('requires an explicitly matched production database and a backup for apply', () => {
+    const backupPath = join(tmpdir(), `statly-production-player-${process.pid}.dump`);
+    createdPaths.push(backupPath);
+    writeFileSync(backupPath, 'pg_dump fixture');
 
     expect(
       validateProductionPlayerIdentityDatabase({
-        databaseUrl: `file:${databasePath}`,
-        expectedPath: databasePath,
+        databaseUrl: productionUrl,
+        expectedUrl: productionUrl,
         backupPath,
         requireBackup: true,
       })
-    ).toBe(`file:${databasePath}`);
+    ).toBe(productionUrl);
     expect(() =>
       validateProductionPlayerIdentityDatabase({
-        databaseUrl: `file:${databasePath}`,
-        expectedPath: databasePath,
+        databaseUrl: productionUrl,
+        expectedUrl: productionUrl,
         requireBackup: true,
       })
     ).toThrow('BACKUP');
+    expect(() =>
+      validateProductionPlayerIdentityDatabase({
+        databaseUrl: productionUrl,
+        expectedUrl: productionUrl.replace('db.internal', 'other.internal'),
+        requireBackup: false,
+      })
+    ).toThrow('exactly match STATLY_PLAYER_IDENTITY_PRODUCTION_DB');
+    const testUrl = 'postgresql://statly:pw@127.0.0.1:55440/statly_fantasy_test';
+    expect(() =>
+      validateProductionPlayerIdentityDatabase({
+        databaseUrl: testUrl,
+        expectedUrl: testUrl,
+        requireBackup: false,
+      })
+    ).toThrow('development or test database');
   });
 
-  it('rejects empty backups and mismatched Firestore projects', () => {
-    const databasePath = join(tmpdir(), `statly-production-player-${process.pid}-guard.db`);
-    const backupPath = join(tmpdir(), `statly-production-player-${process.pid}-empty.db`);
-    createdPaths.push(databasePath, backupPath);
-    writeFileSync(databasePath, 'production sqlite fixture');
-    writeFileSync(backupPath, '');
+  it('rejects empty or stale backups and mismatched Firestore projects', () => {
+    const emptyPath = join(tmpdir(), `statly-production-player-${process.pid}-empty.dump`);
+    const stalePath = join(tmpdir(), `statly-production-player-${process.pid}-stale.dump`);
+    createdPaths.push(emptyPath, stalePath);
+    writeFileSync(emptyPath, '');
+    writeFileSync(stalePath, 'pg_dump fixture');
 
     expect(() =>
       validateProductionPlayerIdentityDatabase({
-        databaseUrl: `file:${databasePath}`,
-        expectedPath: databasePath,
-        backupPath,
+        databaseUrl: productionUrl,
+        expectedUrl: productionUrl,
+        backupPath: emptyPath,
         requireBackup: true,
       })
     ).toThrow('must not be empty');
+    expect(() =>
+      validateProductionPlayerIdentityDatabase({
+        databaseUrl: productionUrl,
+        expectedUrl: productionUrl,
+        backupPath: stalePath,
+        requireBackup: true,
+        now: new Date(Date.now() + 25 * 60 * 60 * 1000),
+      })
+    ).toThrow('more than 24 hours old');
     expect(() =>
       validatePlayerIdentityFirestoreProject({
         expectedProjectId: 'statly-production',

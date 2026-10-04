@@ -9,6 +9,8 @@ import type {
   AflTradeValueDetailResponse,
   AflTradeValueResult,
 } from '@/types/aflTradeIntelligence';
+import { badgeStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 type AflTradeValueDetailPanelProps = {
   analysis: AflTradeValueDetailResponse;
@@ -170,7 +172,7 @@ export function AflTradeValueDetailPanel({ analysis }: AflTradeValueDetailPanelP
       <div className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0 max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="text-xs font-semibold text-muted-foreground">
               Statly verdict · {viewLabels[headline.view]}
             </p>
             <h3
@@ -242,19 +244,22 @@ export function AflTradeValueDetailPanel({ analysis }: AflTradeValueDetailPanelP
                             {statlyGrade?.grade ? (
                               <span className="inline-flex flex-col items-end gap-0.5">
                                 <span
-                                  className="badge badge-primary badge-outline min-w-10 justify-center font-semibold"
+                                  className={cn(
+                                    badgeStyles({ tone: 'brand', size: 'sm' }),
+                                    'min-w-10 justify-center font-semibold'
+                                  )}
                                   aria-label={`${club.clubName} Statly grade ${statlyGrade.grade}`}
                                 >
                                   {statlyGrade.grade}
                                 </span>
                                 {statlyGrade.state === 'provisional' ? (
-                                  <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  <span className="text-xs font-medium text-muted-foreground">
                                     Provisional
                                   </span>
                                 ) : null}
                               </span>
                             ) : (
-                              <span className="text-[10px] font-medium text-muted-foreground">
+                              <span className="text-xs font-medium text-muted-foreground">
                                 Grade unavailable
                               </span>
                             )}
@@ -321,7 +326,7 @@ export function AflTradeValueDetailPanel({ analysis }: AflTradeValueDetailPanelP
               key={asset.assetId}
               className="rounded-xl border border-border bg-background p-4"
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <p className="text-xs font-semibold text-muted-foreground">
                 {asset.assetKind.replaceAll('_', ' ')} · received by{' '}
                 {clubNames.get(asset.receivedByAflClubId) ?? asset.receivedByAflClubId}
               </p>

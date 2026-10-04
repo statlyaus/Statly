@@ -66,7 +66,9 @@ describe('Playwright browser matrix', () => {
     expect(lifecycleTest).toContain("toContainText('Pick 1 of 4')");
     expect(lifecycleTest).toContain('seedDraftLifecycleFixture');
     expect(lifecycleTest).toContain("getByText('Draft is complete')");
-    expect(lifecycleTest).toContain("getByRole('table', { name: 'Robbo Rockers roster table' })");
+    // Old roster links open My Team, which shows the drafted squad and the round lineup.
+    expect(lifecycleTest).toContain("getByRole('heading', { level: 2, name: 'My team' })");
+    expect(lifecycleTest).toContain("getByRole('region', { name: 'Lineup readiness' })");
     expect(existsSync(join(root, 'tests/e2e/draft-full-soak.test.ts'))).toBe(false);
     expect(existsSync(join(root, 'tests/e2e/helpers/fullDraftSoakFixture.ts'))).toBe(false);
   });
@@ -81,8 +83,10 @@ describe('Playwright browser matrix', () => {
     expect(testsJob).toContain('npm run test:e2e');
     expect(testsJob).toContain('npx playwright install --with-deps chromium firefox webkit');
 
-    expect(workerJob).toContain('DATABASE_URL: file:./ci-draft-worker.db');
-    expect(workerJob).toContain('DATABASE_URL_TEST: file:./ci-draft-worker.db');
+    expect(workerJob).toContain('image: postgres:16-alpine');
+    expect(workerJob).toContain(
+      'DATABASE_URL_TEST: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test'
+    );
     expect(workerJob).toContain("PLAYWRIGHT_WITH_DRAFT_WORKER: 'true'");
     expect(workerJob).toContain('npx playwright install --with-deps chromium');
     expect(workerJob).toContain('npm run test:e2e:draft-worker');

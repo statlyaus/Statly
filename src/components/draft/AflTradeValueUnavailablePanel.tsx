@@ -59,7 +59,7 @@ export function AflTradeValueUnavailablePanel({
       >
         <div className="min-w-0 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="inline-flex rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
               {viewLabels[availability.view]} view
             </span>
             <span className="text-xs font-medium text-muted-foreground">No numerical result</span>

@@ -10,6 +10,7 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { OUTCOME_DATABASE_IDENTITY } from '@/server/aflTradeIntelligence/outcomes/outcomeDatabaseIdentity';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { AflDraftTradeOutcomeReleaseRepositoryError } from '@/server/aflTradeIntelligence/outcomes/outcomeReleaseRepository';
 import { createAflTradeFactualProjectionItemSet } from '@/server/aflTradeIntelligence/outcomes/factualProjectionItemSetContracts';
@@ -1003,6 +1004,48 @@ afterAll(async () => {
 });
 
 describe('isolated AFL outcomes PostgreSQL migration', () => {
+  it('states the application and schema format it satisfies', async () => {
+    // The database answers "who are you, and which contract do you satisfy?" the way a SQLite file
+    // answers it from its header, so a reader never has to infer it from a migration ledger.
+    const identity = await query<{
+      application_id: string;
+      schema_format: number;
+      stamped_at: Date;
+    }>('SELECT application_id,schema_format,stamped_at FROM outcome_database_identity');
+
+    expect(identity.rows).toHaveLength(1);
+    expect(identity.rows[0]!.application_id).toBe(OUTCOME_DATABASE_IDENTITY.applicationId);
+    expect(identity.rows[0]!.schema_format).toBe(OUTCOME_DATABASE_IDENTITY.schemaFormat);
+    expect(identity.rows[0]!.stamped_at).toBeInstanceOf(Date);
+  });
+
+  it('orders every legacy registration lock loop that locks governed evidence', async () => {
+    // The v1 registration owner takes one advisory key per governed evidence reference. Taking them
+    // in document order could deadlock against the v2 owner, which orders the same family.
+    //
+    // Assert the property over every lock loop in the deployed body rather than looking for expected
+    // text: a body that keeps an unsorted loop beside the sorted one, or reuses the fragment in an
+    // unrelated expression, must still fail.
+    const definition = await query<{ definition: string }>(
+      `SELECT pg_get_functiondef(
+         'register_outcome_reviewed_canonical_target(text,text,text,text)'::regprocedure) AS definition`
+    );
+    const body = definition.rows[0]!.definition;
+    const loopBody = (match: RegExpMatchArray) =>
+      body.slice(match.index! + match[0].length, match.index! + match[0].length + 400);
+
+    const evidenceLockLoops = [...body.matchAll(/FOR\s+\w+\s+IN\b([\s\S]*?)LOOP/g)].filter(
+      (match) =>
+        loopBody(match).includes('pg_advisory_xact_lock') &&
+        loopBody(match).includes('governed_evidence_reference')
+    );
+
+    expect(evidenceLockLoops.length).toBeGreaterThan(0);
+    for (const loop of evidenceLockLoops) {
+      expect(loop[1]).toMatch(/ORDER BY/i);
+    }
+  });
+
   it('deploys the complete ordered migration history and has no structural datamodel drift', () => {
     const applied = runOutcomesPrismaTestCommand(
       [
@@ -1258,6 +1301,22 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0228_historical_pilot_native_identity_binding',
       '0229_cameron_hpn_statistical_season_scope',
       '0230_cameron_2020_retained_private_source_use',
+      '0231_outcome_database_identity',
+      '0232_reviewed_registration_lock_order',
+      '0233_appearance_membership_spells',
+      '0233_rotate_private_review_generation_2026_reacquisition',
+      '0234_current_successor_source_rights',
+      '0235_club_resolution_candidate_index',
+      '0236_hpn_acquisition_spell_set_currency',
+      '0237_canonical_pick_enrichment',
+      '0239_provider_identity_root_proposal_indexes',
+      '0240_hpn_input_finalization_bounded_memory',
+      '0241_hpn_historical_season_map_scope',
+      '0242_assignment_continuity_once_per_case',
+      '0243_hpn_finalization_plan_independent_joins',
+      '0244_superseded_entry_spells_release_overlap',
+      '0245_hpn_pav_check_tolerance',
+      '0246_artifact_store_registry',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -1394,10 +1453,17 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
         'require_outcome_hpn_pav_statistical_selections'
       );
     }
-    expect(
-      hpnV5Functions.rows.find((row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()')
-        ?.definition
-    ).toContain('outcome_hpn_acquisition_spell_is_current');
+    const hpnV2Finalizer = hpnV5Functions.rows.find(
+      (row) => row.signature === 'finalize_outcome_hpn_pav_input_set_v2()'
+    )?.definition;
+    // 0236 evaluates each candidate spell's registration currency once per finalization.
+    expect(hpnV2Finalizer).toContain('outcome_hpn_acquisition_spell_source_current');
+    expect(hpnV2Finalizer).toContain('registered_spells');
+    expect(hpnV2Finalizer).not.toContain('outcome_hpn_acquisition_spell_is_current');
+    // 0242 evaluates every row's assignment continuity once per assignment case.
+    expect(hpnV2Finalizer).toContain('outcome_provider_assignment_continuity_current_set');
+    expect(hpnV2Finalizer).toContain('current_assignments');
+    expect(hpnV2Finalizer).not.toMatch(/outcome_hpn_pav_(player|match|club)_resolution_current"\(/);
     const hpnSelectionGuard = await query<{ definition: string }>(
       `SELECT pg_get_functiondef(
         'require_outcome_hpn_pav_statistical_selections(text,boolean)'::regprocedure) AS definition`

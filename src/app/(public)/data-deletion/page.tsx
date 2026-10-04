@@ -1,3 +1,5 @@
+import { PUBLIC_CONTACT_EMAIL } from '@/lib/publicContact';
+
 export const metadata = {
   title: 'Data Deletion | Statly',
   description: 'How to delete your Statly account and personal data.',
@@ -8,9 +10,7 @@ export default function DataDeletionPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Data Deletion</h1>
-      <p className="text-sm text-base-content/60 mb-8">
-        Last updated: {new Date().toLocaleDateString()}
-      </p>
+      <p className="text-sm text-muted-foreground mb-8">Last updated: 11 August 2026</p>
 
       <section className="prose prose-neutral dark:prose-invert max-w-none">
         <p>
@@ -22,7 +22,7 @@ export default function DataDeletionPage() {
         <h2>How to request deletion</h2>
         <ol>
           <li>
-            Send an email to <a href="mailto:robaddisonlbm@gmail.com">robaddisonlbm@gmail.com</a>{' '}
+            Send an email to <a href={`mailto:${PUBLIC_CONTACT_EMAIL}`}>{PUBLIC_CONTACT_EMAIL}</a>{' '}
             from the email address associated with your Statly account, with the subject:{' '}
             <em>Account Deletion Request</em>.
           </li>
@@ -45,8 +45,8 @@ export default function DataDeletionPage() {
         <h2>Questions</h2>
         <p>
           If you have questions about data deletion or privacy, contact us at
-          <a className="ml-1" href="mailto:robaddisonlbm@gmail.com">
-            robaddisonlbm@gmail.com
+          <a className="ml-1" href={`mailto:${PUBLIC_CONTACT_EMAIL}`}>
+            {PUBLIC_CONTACT_EMAIL}
           </a>
           .
         </p>

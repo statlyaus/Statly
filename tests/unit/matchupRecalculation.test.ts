@@ -9,13 +9,18 @@ const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn(),
   league: { findUnique: vi.fn() },
   leagueCompetitionRound: { findUnique: vi.fn() },
-  leagueMatchup: { findMany: vi.fn() },
+  leagueMatchup: { findMany: vi.fn(), update: vi.fn() },
+  leagueMatchupScore: { upsert: vi.fn() },
   leagueLineup: { findMany: vi.fn() },
   leagueMember: { findMany: vi.fn() },
 }));
+const carryForwardMock = vi.hoisted(() => vi.fn().mockResolvedValue(0));
 
-vi.mock('@/lib/etlIntegration', () => etlMocks);
+vi.mock('@/server/etl/etlRoundData', () => etlMocks);
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
+vi.mock('@/server/leagues/defaultLineups', () => ({
+  ensureDefaultLineups: carryForwardMock,
+}));
 
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
 
@@ -48,6 +53,25 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
   it('loads provider data using the mapped AFL round for a versioned fixture', async () => {
     prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
     prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2' },
+    ]);
+    prismaMocks.leagueLineup.findMany.mockResolvedValue([
+      {
+        id: 'lineup-1',
+        memberId: 'member-1',
+        players: [
+          { id: 'a-1', playerId: 'player-1', slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+        ],
+      },
+      {
+        id: 'lineup-2',
+        memberId: 'member-2',
+        players: [
+          { id: 'a-2', playerId: 'player-2', slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+        ],
+      },
+    ]);
 
     await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
 
@@ -66,6 +90,25 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
 
   it('falls back to the fantasy round only for legacy unversioned fixtures', async () => {
     prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(0));
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2' },
+    ]);
+    prismaMocks.leagueLineup.findMany.mockResolvedValue([
+      {
+        id: 'lineup-1',
+        memberId: 'member-1',
+        players: [
+          { id: 'a-1', playerId: 'player-1', slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+        ],
+      },
+      {
+        id: 'lineup-2',
+        memberId: 'member-2',
+        players: [
+          { id: 'a-2', playerId: 'player-2', slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+        ],
+      },
+    ]);
 
     await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
 
@@ -109,17 +152,17 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
 
   it.each([
     {
-      scenario: 'a participant lineup is missing',
+      scenario: 'a participant with no lineup to carry forward',
       lineups: [{ id: 'lineup-1', memberId: 'member-1', players: [{ id: 'assignment-1' }] }],
     },
     {
-      scenario: 'a participant lineup is empty',
+      scenario: 'an empty participant lineup',
       lineups: [
         { id: 'lineup-1', memberId: 'member-1', players: [{ id: 'assignment-1' }] },
         { id: 'lineup-2', memberId: 'member-2', players: [] },
       ],
     },
-  ])('does not load stats or score when $scenario', async ({ lineups }) => {
+  ])('does not load stats or score when the only matchup has $scenario', async ({ lineups }) => {
     prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
     prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
     prismaMocks.leagueMatchup.findMany.mockResolvedValue([
@@ -224,5 +267,71 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
       roundStatus: { hasUnavailableStatus: true },
     });
     expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('carries lineups forward for every matchup participant before scoring', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
+    prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2' },
+      { id: 'matchup-2', homeMemberId: 'member-3', awayMemberId: null, byeMemberId: 'member-3' },
+    ]);
+
+    await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
+
+    expect(carryForwardMock).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      round: 4,
+      memberIds: ['member-1', 'member-2'],
+    });
+  });
+
+  it('scores the matchups that have lineups when another matchup is missing one', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
+    prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2' },
+      { id: 'matchup-2', homeMemberId: 'member-3', awayMemberId: 'member-4' },
+    ]);
+    const lineup = (memberId: string, playerId: string) => ({
+      id: `lineup-${memberId}`,
+      memberId,
+      players: [
+        { id: `a-${playerId}`, playerId, slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+      ],
+    });
+    prismaMocks.leagueLineup.findMany.mockResolvedValue([
+      lineup('member-1', 'player-1'),
+      lineup('member-2', 'player-2'),
+      lineup('member-3', 'player-3'),
+    ]);
+    etlMocks.getRoundPlayerStatsResult.mockResolvedValue({
+      ok: true,
+      stats: ['player-1', 'player-2'].map((playerUid) => ({
+        player_uid: playerUid,
+        round_number: 12,
+        status: 'live',
+        stats: { goals: playerUid === 'player-1' ? 2 : 1 },
+      })),
+    });
+    etlMocks.getRoundMatchesResult.mockResolvedValue({
+      ok: true,
+      matches: [
+        {
+          match_uid: 'afl-match-1',
+          status: 'scheduled',
+          home_team: 'GWS Giants',
+          away_team: 'Collingwood',
+        },
+      ],
+    });
+
+    const result = await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
+
+    expect(result).toMatchObject({ round: 4, recalculated: 1 });
+    expect(prismaMocks.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMocks.leagueMatchup.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'matchup-1' } })
+    );
   });
 });

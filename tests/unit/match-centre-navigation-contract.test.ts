@@ -28,7 +28,9 @@ describe('live scoring and AFL match route ownership', () => {
     expect(dashboardQuickActions).toContain("href: '/live-scoring'");
 
     expect(matchesPage).toContain('RealTimeMatchCenter');
-    expect(liveScoringPage).toContain('LiveScoringMatchup');
+    expect(liveScoringPage).toContain('LeagueMatchupsPanel');
+    expect(liveScoringPage).toContain('LeagueToolPage');
+    expect(liveScoringPage).not.toContain('LiveScoringMatchup');
   });
 
   it('keeps one page title above the reusable live match section', () => {

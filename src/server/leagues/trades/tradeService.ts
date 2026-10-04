@@ -632,26 +632,12 @@ async function syncLegacyRoster(
   leagueId: string,
   memberId: string
 ): Promise<void> {
-  const [players, legacy] = await Promise.all([
-    tx.leagueRosterPlayer.findMany({
-      where: { leagueId, memberId },
-      select: { playerId: true },
-      orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
-    }),
-    tx.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId } },
-      select: { captainId: true, viceCaptainId: true },
-    }),
-  ]);
-  const playerIds = players.map((player) => player.playerId);
-  const data = {
-    playerIds: JSON.stringify(playerIds),
-    captainId: legacy?.captainId && playerIds.includes(legacy.captainId) ? legacy.captainId : null,
-    viceCaptainId:
-      legacy?.viceCaptainId && playerIds.includes(legacy.viceCaptainId)
-        ? legacy.viceCaptainId
-        : null,
-  };
+  const players = await tx.leagueRosterPlayer.findMany({
+    where: { leagueId, memberId },
+    select: { playerId: true },
+    orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
+  });
+  const data = { playerIds: JSON.stringify(players.map((player) => player.playerId)) };
   await tx.leagueRoster.upsert({
     where: { leagueId_memberId: { leagueId, memberId } },
     update: data,

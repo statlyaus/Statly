@@ -11,7 +11,7 @@ import PickFeed from '@/components/PickFeed';
 import { useLeagueSocialWidget } from '@/components/league/social';
 import { useConfirmation } from '@/components/ui/Modal';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
-import { useDraft } from '@/contexts/DraftContext';
+import { useDraft, type DraftPickFeedback } from '@/contexts/DraftContext';
 import {
   toLivePickHeaderData,
   toFeedPicks,
@@ -195,6 +195,69 @@ function buildRosterSlots({
   });
 }
 
+/** Remaps the base tokens to the broadcast palette for banners that sit directly on the draft page. */
+const DRAFT_BROADCAST_TOKEN_SCOPE =
+  '[--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--foreground:var(--draft-broadcast-text)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]';
+
+function PickStatusBanner({
+  feedback,
+  canRetry,
+  onRetry,
+  onRefresh,
+  onDismiss,
+}: {
+  feedback: DraftPickFeedback;
+  canRetry: boolean;
+  onRetry: (playerId: string) => void;
+  onRefresh: () => void;
+  onDismiss: () => void;
+}): React.JSX.Element {
+  const playerLabel = feedback.playerName ?? 'selected player';
+  const buttonClass =
+    'inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  if (feedback.status === 'submitting') {
+    return (
+      <div
+        role="status"
+        aria-label="Pick status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="mt-4 rounded-lg border border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)] px-4 py-3 text-sm font-medium text-foreground"
+      >
+        Submitting your pick: {playerLabel}. Waiting for the server to confirm.
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="alert"
+      aria-label="Pick status"
+      className="mt-4 flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-alert-soft)] px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p>
+        <span className="font-semibold">Pick not made: {playerLabel}.</span> {feedback.message}
+      </p>
+      <div className="flex gap-2">
+        {feedback.recovery === 'retry' && canRetry ? (
+          <button type="button" onClick={() => onRetry(feedback.playerId)} className={buttonClass}>
+            Retry pick
+          </button>
+        ) : null}
+        {feedback.recovery === 'refresh' ? (
+          <button type="button" onClick={onRefresh} className={buttonClass}>
+            Refresh room
+          </button>
+        ) : null}
+        <button type="button" onClick={onDismiss} className={buttonClass}>
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
@@ -244,15 +307,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     return ['ALL', ...Array.from(positions).sort()];
   }, [playersList]);
 
-  // Handle player selection
+  // Handle player selection. makePick reports failures through draft.pickFeedback, not by throwing.
   const handlePlayerSelect = useCallback(
     async (player: DraftPlayer) => {
       if (!draft.canMakePick) return;
-      try {
-        await draft.makePick(player.id);
-      } catch (error) {
-        console.error('Failed to make pick:', error);
-      }
+      await draft.makePick(player.id);
     },
     [draft]
   );
@@ -260,11 +319,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const handlePlayerSelectById = useCallback(
     async (playerId: string) => {
       if (!draft.canMakePick) return;
-      try {
-        await draft.makePick(playerId);
-      } catch (error) {
-        console.error('Failed to make pick:', error);
-      }
+      await draft.makePick(playerId);
     },
     [draft]
   );
@@ -381,13 +436,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]',
       COUNTDOWN:
         'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
-      LIVE: 'bg-[color:var(--draft-broadcast-red)] text-white ring-1 ring-[color:var(--draft-broadcast-red)]',
+      LIVE: 'bg-result-loss text-result-loss-foreground ring-1 ring-result-loss',
       PAUSED:
         'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
       COMPLETED:
         'bg-[color:var(--draft-broadcast-green)] text-white ring-1 ring-[color:var(--draft-broadcast-green)]',
       CANCELLED:
-        'bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)] ring-1 ring-[color:var(--draft-broadcast-red)]',
+        'bg-[color:var(--draft-broadcast-alert-soft)] text-[color:var(--draft-broadcast-alert)] ring-1 ring-[color:var(--draft-broadcast-alert)]',
     }[draftStatus] ??
     'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]';
 
@@ -585,6 +640,39 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             onStatusChange={() => draft.forceRefresh()}
           />
 
+          {/* A realtime update can start the draft after a failed attempt; the failure is then stale. */}
+          {draft.startFeedback && activeDraft.status !== 'LIVE' && !isCompletedDraft ? (
+            <div
+              role="alert"
+              aria-label="Draft start status"
+              className="flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-alert-soft)] px-4 py-3 text-sm text-[color:var(--draft-broadcast-text)] sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p>
+                <span className="font-semibold">The draft did not start.</span>{' '}
+                {draft.startFeedback.message}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void draft.startDraft()}
+                  disabled={draft.isSaving}
+                  aria-label="Try starting again"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)] disabled:cursor-wait disabled:opacity-60"
+                >
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  onClick={draft.dismissStartFeedback}
+                  aria-label="Dismiss draft start message"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)]"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {/* Draft Status Banner */}
           {activeDraft.status !== 'LIVE' && (
             <DraftStatusBanner
@@ -598,7 +686,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           <LivePickHeader
             draftData={toLivePickHeaderData(activeDraft, participants, picks, draft.liveState)}
             timePerPick={timePerPick}
-            isYourTurn={Boolean(draft.liveState?.isYourTurn)}
+            isYourTurn={Boolean(draft.isYourTurn)}
             yourSlot={yourSlot}
           />
         </div>
@@ -608,12 +696,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {isCompletedDraft ? (
             <section
               aria-label="Draft complete next steps"
-              className="rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:p-6"
+              className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:p-6"
             >
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(36rem,48rem)] xl:items-end">
                 <div className="min-w-0">
                   <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                    className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
                   >
                     Completed
                   </span>
@@ -633,7 +721,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={leagueHubHref}
                     aria-label="Go back to league hub"
-                    className="rounded-2xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       Go back to league hub
@@ -645,7 +733,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={historyHref}
                     aria-label="Review completed draft"
-                    className="rounded-2xl border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-4 text-left text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-4 text-left text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold">Review completed draft</span>
                     <span className="mt-2 block text-xs leading-5 text-white/80">
@@ -655,7 +743,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={rosterHref}
                     aria-label="Review my roster"
-                    className="rounded-2xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       Review my roster
@@ -668,12 +756,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
             </section>
           ) : (
-            <section className="rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:px-5">
+            <section className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
                     >
                       {draftStatus}
                     </span>
@@ -691,7 +779,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     <button
                       type="button"
                       onClick={() => openLeagueSocial({ view: 'chat' })}
-                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <MessagesSquare className="size-4" aria-hidden="true" />
                       League chat
@@ -699,13 +787,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   ) : null}
                   <Link
                     href="/drafts"
-                    className="inline-flex items-center rounded-full bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Back to drafts
                   </Link>
                   <Link
                     href={historyHref}
-                    className="inline-flex items-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {historyLinkLabel}
                   </Link>
@@ -714,62 +802,77 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             </section>
           )}
 
-          {!isCompletedDraft && queueMutationFeedback ? (
-            <div
-              className={`mt-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
-                queueMutationFeedback.kind === 'error'
-                  ? 'border-destructive/40 bg-destructive/10 text-foreground'
-                  : 'border-border bg-muted/30 text-foreground'
-              }`}
-            >
-              <p
-                role={
-                  queueMutationFeedback.kind === 'error' && !isQueueMutationPending
-                    ? 'alert'
-                    : 'status'
-                }
-                aria-live={
-                  queueMutationFeedback.kind === 'success' || isQueueMutationPending
-                    ? 'polite'
-                    : undefined
-                }
-                aria-atomic="true"
-              >
-                {queueMutationFeedback.kind === 'error' && isQueueMutationPending
-                  ? 'Retrying queue update…'
-                  : queueMutationFeedback.message}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isQueueMutationPending) return;
-                  if (queueMutationFeedback.kind === 'error') {
-                    void handleRetryQueueUpdate();
-                  } else {
-                    setQueueMutationFeedback(null);
-                    setQueueAnnouncement('');
-                  }
+          <div className={DRAFT_BROADCAST_TOKEN_SCOPE}>
+            {!isCompletedDraft && draft.pickFeedback ? (
+              <PickStatusBanner
+                feedback={draft.pickFeedback}
+                canRetry={draft.canMakePick}
+                onRetry={(playerId) => void handlePlayerSelectById(playerId)}
+                onRefresh={() => {
+                  draft.dismissPickFeedback();
+                  void draft.forceRefresh();
                 }}
-                aria-disabled={isQueueMutationPending}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
+                onDismiss={draft.dismissPickFeedback}
+              />
+            ) : null}
+
+            {!isCompletedDraft && queueMutationFeedback ? (
+              <div
+                className={`mt-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+                  queueMutationFeedback.kind === 'error'
+                    ? 'border-destructive/40 bg-destructive/10 text-foreground'
+                    : 'border-border bg-muted/30 text-foreground'
+                }`}
               >
-                {queueMutationFeedback.kind === 'error' ? 'Retry queue update' : 'Dismiss'}
-              </button>
-            </div>
-          ) : !isCompletedDraft && isQueueMutationPending ? (
-            <div
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-foreground"
-            >
-              Saving queue…
-            </div>
-          ) : !isCompletedDraft && queueAnnouncement ? (
-            <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-              {queueAnnouncement}
-            </p>
-          ) : null}
+                <p
+                  role={
+                    queueMutationFeedback.kind === 'error' && !isQueueMutationPending
+                      ? 'alert'
+                      : 'status'
+                  }
+                  aria-live={
+                    queueMutationFeedback.kind === 'success' || isQueueMutationPending
+                      ? 'polite'
+                      : undefined
+                  }
+                  aria-atomic="true"
+                >
+                  {queueMutationFeedback.kind === 'error' && isQueueMutationPending
+                    ? 'Retrying queue update…'
+                    : queueMutationFeedback.message}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isQueueMutationPending) return;
+                    if (queueMutationFeedback.kind === 'error') {
+                      void handleRetryQueueUpdate();
+                    } else {
+                      setQueueMutationFeedback(null);
+                      setQueueAnnouncement('');
+                    }
+                  }}
+                  aria-disabled={isQueueMutationPending}
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
+                >
+                  {queueMutationFeedback.kind === 'error' ? 'Retry queue update' : 'Dismiss'}
+                </button>
+              </div>
+            ) : !isCompletedDraft && isQueueMutationPending ? (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-foreground"
+              >
+                Saving queue…
+              </div>
+            ) : !isCompletedDraft && queueAnnouncement ? (
+              <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+                {queueAnnouncement}
+              </p>
+            ) : null}
+          </div>
 
           <section
             aria-label={isCompletedDraft ? 'Completed draft background' : undefined}
@@ -835,7 +938,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         <button
           ref={openFeedBtnRef}
           onClick={() => setIsPickFeedOpen(true)}
-          className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

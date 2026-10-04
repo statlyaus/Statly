@@ -3,7 +3,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 
 import Image from 'next/image';
 
-import { CheckCircle2, Info, ListPlus, Star } from 'lucide-react';
+import { CheckCircle2, Info, ListPlus, Star, X } from 'lucide-react';
 
 import Tooltip from '@/components/ui/Tooltip';
 import { getStatlyZPresentation, STATLY_Z_DESCRIPTION } from '@/lib/statlyZPresentation';
@@ -112,12 +112,24 @@ function getQueueActionClass(isDisabled: boolean): string {
   }`;
 }
 
-function getSelectActionClass(isDisabled: boolean): string {
+function getSelectActionClass(isDisabled: boolean, isArmed = false): string {
+  if (isDisabled) {
+    return `${ACTION_BUTTON_BASE_CLASS} font-semibold cursor-not-allowed bg-muted text-muted-foreground`;
+  }
+
   return `${ACTION_BUTTON_BASE_CLASS} font-semibold ${
-    isDisabled
-      ? 'cursor-not-allowed bg-muted text-muted-foreground'
+    isArmed
+      ? 'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] hover:bg-[color:var(--draft-broadcast-yellow)]/90'
       : 'bg-primary text-primary-foreground hover:bg-primary/90'
   }`;
+}
+
+/** Row clicks and Enter only choose a player; drafting needs the explicit Confirm pick button. */
+interface PickControls {
+  armedPlayerId: string | null;
+  onArm: (player: DraftPlayer) => void;
+  onConfirm: (player: DraftPlayer) => void;
+  onCancel: () => void;
 }
 
 interface PlayerIdentityCellProps {
@@ -264,7 +276,7 @@ interface PlayerRowActionsProps {
   pendingSelectionId: string | null;
   onToggleWatchlist: (player: DraftPlayer) => void;
   onAddToQueue: (player: DraftPlayer) => void;
-  onSelect: (player: DraftPlayer) => void;
+  pickControls: PickControls;
 }
 
 function PlayerRowActions({
@@ -279,8 +291,9 @@ function PlayerRowActions({
   pendingSelectionId,
   onToggleWatchlist,
   onAddToQueue,
-  onSelect,
+  pickControls,
 }: PlayerRowActionsProps): React.JSX.Element {
+  const isArmed = pickControls.armedPlayerId === player.id;
   const actionDisabled = isLoading || selectionInFlight;
   const watchlistDisabled = isWatchlistPending;
   const queueDisabled = isQueueMutationPending || isQueued;
@@ -289,19 +302,38 @@ function PlayerRowActions({
   return (
     <td className="border-l border-border/60 px-3 py-4 align-middle">
       <div className="grid grid-cols-3 items-center gap-2">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleWatchlist(player);
-          }}
-          disabled={watchlistDisabled}
-          className={getWatchActionClass(watchlistDisabled, isWatched)}
-          aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
-        >
-          <Star className="h-4 w-4" aria-hidden="true" fill={isWatched ? 'currentColor' : 'none'} />
-          <span className="hidden 2xl:inline">{isWatched ? 'Watched' : 'Watch'}</span>
-        </button>
+        {isArmed ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              pickControls.onCancel();
+            }}
+            className={`${ACTION_BUTTON_BASE_CLASS} ${ACTION_BUTTON_OUTLINE_CLASS} font-medium`}
+            aria-label={`Cancel pick: ${player.name}`}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden 2xl:inline">Cancel</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleWatchlist(player);
+            }}
+            disabled={watchlistDisabled}
+            className={getWatchActionClass(watchlistDisabled, isWatched)}
+            aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
+          >
+            <Star
+              className="h-4 w-4"
+              aria-hidden="true"
+              fill={isWatched ? 'currentColor' : 'none'}
+            />
+            <span className="hidden 2xl:inline">{isWatched ? 'Watched' : 'Watch'}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={(event) => {
@@ -319,15 +351,23 @@ function PlayerRowActions({
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            onSelect(player);
+            if (isArmed) {
+              pickControls.onConfirm(player);
+            } else {
+              pickControls.onArm(player);
+            }
           }}
           disabled={selectDisabled}
-          className={getSelectActionClass(selectDisabled)}
-          aria-label={`Select ${player.name}`}
+          className={getSelectActionClass(selectDisabled, isArmed)}
+          aria-label={isArmed ? `Confirm pick: ${player.name}` : `Select ${player.name}`}
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden 2xl:inline">
-            {isLoading || pendingSelectionId === player.id ? 'Selecting' : 'Select'}
+          <span className={isArmed ? 'inline' : 'hidden 2xl:inline'}>
+            {isLoading || pendingSelectionId === player.id
+              ? 'Selecting'
+              : isArmed
+                ? 'Confirm'
+                : 'Select'}
           </span>
         </button>
       </div>
@@ -351,7 +391,7 @@ interface PlayerTableRowProps {
   visibleCategories: FantasyCategoryKey[];
   onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
   onFocusChange: (index: number | null) => void;
-  onSelect: (player: DraftPlayer) => void;
+  pickControls: PickControls;
   onAddToQueue: (player: DraftPlayer) => void;
   onToggleWatchlist: (player: DraftPlayer) => void;
   registerRow: (index: number, element: HTMLTableRowElement | null) => void;
@@ -373,7 +413,7 @@ function PlayerTableRow({
   visibleCategories,
   onKeyDown,
   onFocusChange,
-  onSelect,
+  pickControls,
   onAddToQueue,
   onToggleWatchlist,
   registerRow,
@@ -393,8 +433,8 @@ function PlayerTableRow({
       onKeyDown={(event) => onKeyDown(event, index)}
       onFocus={() => onFocusChange(index)}
       onBlur={() => onFocusChange(null)}
-      onClick={() => onSelect(player)}
-      aria-label={`${player.name}, ${player.position}, ${player.club}. Press Enter to select.`}
+      onClick={() => pickControls.onArm(player)}
+      aria-label={`${player.name}, ${player.position}, ${player.club}. Press Enter to choose, then confirm the pick.`}
       aria-rowindex={index + (visibleCategories.length > 0 ? 3 : 2)}
       data-selected={isSelected ? 'true' : undefined}
       data-player-row="true"
@@ -420,7 +460,7 @@ function PlayerTableRow({
         pendingSelectionId={pendingSelectionId}
         onToggleWatchlist={onToggleWatchlist}
         onAddToQueue={onAddToQueue}
-        onSelect={onSelect}
+        pickControls={pickControls}
       />
     </tr>
   );
@@ -648,7 +688,7 @@ interface PlayerGridTableProps {
   setScrollTop: (scrollTop: number) => void;
   onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
   onFocusChange: (index: number | null) => void;
-  onSelect: (player: DraftPlayer) => void;
+  pickControls: PickControls;
   onAddToQueue: (player: DraftPlayer) => void;
   onToggleWatchlist: (player: DraftPlayer) => void;
 }
@@ -678,7 +718,7 @@ function PlayerGridTable({
   setScrollTop,
   onKeyDown,
   onFocusChange,
-  onSelect,
+  pickControls,
   onAddToQueue,
   onToggleWatchlist,
 }: PlayerGridTableProps): React.JSX.Element {
@@ -829,7 +869,7 @@ function PlayerGridTable({
                   visibleCategories={visibleCategories}
                   onKeyDown={onKeyDown}
                   onFocusChange={onFocusChange}
-                  onSelect={onSelect}
+                  pickControls={pickControls}
                   onAddToQueue={onAddToQueue}
                   onToggleWatchlist={onToggleWatchlist}
                   registerRow={registerRow}
@@ -892,6 +932,7 @@ export default function PlayerGrid({
 }: PlayerGridProps): React.JSX.Element {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
+  const [armedPlayerId, setArmedPlayerId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(FALLBACK_TABLE_VIEWPORT_HEIGHT);
@@ -1022,6 +1063,7 @@ export default function PlayerGrid({
         );
       };
 
+      setArmedPlayerId(null);
       setPendingSelectionId(player.id);
       setSelectedPlayerId(player.id);
 
@@ -1036,6 +1078,32 @@ export default function PlayerGrid({
     },
     [canMakePick, onPlayerSelect, selectionInFlight]
   );
+
+  const handlePlayerArm = useCallback(
+    (player: DraftPlayer) => {
+      setSelectedPlayerId(player.id);
+      setArmedPlayerId(canMakePick && !selectionInFlight ? player.id : null);
+    },
+    [canMakePick, selectionInFlight]
+  );
+
+  const pickControls = useMemo<PickControls>(
+    () => ({
+      armedPlayerId,
+      onArm: handlePlayerArm,
+      onConfirm: handlePlayerSelect,
+      onCancel: () => setArmedPlayerId(null),
+    }),
+    [armedPlayerId, handlePlayerArm, handlePlayerSelect]
+  );
+
+  // An armed pick never outlives the clock or the player's availability.
+  useEffect(() => {
+    if (!armedPlayerId) return;
+    if (!canMakePick || !players.some((player) => player.id === armedPlayerId)) {
+      setArmedPlayerId(null);
+    }
+  }, [armedPlayerId, canMakePick, players]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback(
@@ -1057,8 +1125,14 @@ export default function PlayerGrid({
         }
         case 'Enter':
         case ' ': {
+          // Let a focused Confirm, Cancel, Queue or Watch button activate natively.
+          if (event.target !== event.currentTarget) break;
           event.preventDefault();
-          void handlePlayerSelect(filteredPlayers[playerIndex]);
+          handlePlayerArm(filteredPlayers[playerIndex]);
+          break;
+        }
+        case 'Escape': {
+          setArmedPlayerId(null);
           break;
         }
         case 'Home': {
@@ -1078,7 +1152,7 @@ export default function PlayerGrid({
           break;
       }
     },
-    [filteredPlayers, handlePlayerSelect]
+    [filteredPlayers, handlePlayerArm]
   );
 
   // Focus management
@@ -1173,7 +1247,7 @@ export default function PlayerGrid({
         setScrollTop={handleScrollTopChange}
         onKeyDown={handleKeyDown}
         onFocusChange={setFocusedRow}
-        onSelect={handlePlayerSelect}
+        pickControls={pickControls}
         onAddToQueue={onAddToQueue}
         onToggleWatchlist={onToggleWatchlist}
       />

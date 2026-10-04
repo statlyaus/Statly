@@ -6,6 +6,8 @@ import type {
   AflTradeValueBearingSummary,
   AflTradeValueSummary,
 } from '@/types/aflTradeIntelligence';
+import { badgeStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 type AflTradeValueSummaryCardProps = {
   valuation: AflTradeValueSummary;
@@ -87,7 +89,7 @@ export function AflTradeValueSummaryCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-xs font-semibold text-muted-foreground">
             {viewLabels[valuation.view]}
           </p>
           <h4 className="mt-1 text-sm font-semibold text-foreground">{verdict(valuation)}</h4>
@@ -114,19 +116,20 @@ export function AflTradeValueSummaryCard({
                 {statlyGrade?.grade ? (
                   <span className="inline-flex shrink-0 flex-col items-end gap-0.5">
                     <span
-                      className="badge badge-primary badge-outline badge-sm min-w-9 justify-center font-semibold"
+                      className={cn(
+                        badgeStyles({ tone: 'brand', size: 'sm' }),
+                        'min-w-9 justify-center font-semibold'
+                      )}
                       aria-label={`${club.clubName} Statly grade ${statlyGrade.grade}`}
                     >
                       {statlyGrade.grade}
                     </span>
                     {statlyGrade.state === 'provisional' ? (
-                      <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Provisional
-                      </span>
+                      <span className="text-xs font-medium text-muted-foreground">Provisional</span>
                     ) : null}
                   </span>
                 ) : (
-                  <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
                     Grade unavailable
                   </span>
                 )}

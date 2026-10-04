@@ -24,7 +24,6 @@ export default function TeamAnalyticsModuleClient({ socket: _socket }: TeamAnaly
     risingStars: 3,
     formConcerns: 2,
     injuryConcerns: 1,
-    captainScore: 178,
     topPerformers: [
       { name: 'M. Bontempelli', score: 142, position: 'MID' },
       { name: 'Max Gawn', score: 125, position: 'RUC' },

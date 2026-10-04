@@ -3,10 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import {
-  draftHubNavKickerClass,
-  draftHubSubtlePanelClass,
-} from '@/components/draft/draftHubChrome';
+import { draftHubSubtlePanelClass } from '@/components/draft/draftHubChrome';
 
 export function DraftHubNav() {
   const pathname = usePathname() ?? '';
@@ -20,37 +17,27 @@ export function DraftHubNav() {
   const sections = [
     {
       href: '/draft/outcomes',
-      kicker: 'Status',
       label: 'Outcomes',
-      description: 'Check whether a reviewed numerical outcome publication is available.',
       active: outcomesActive,
     },
     {
       href: '/draft/trades',
-      kicker: 'Explorer',
       label: 'Trade archive',
-      description: 'Scan historical deals by season, club, and asset profile.',
       active: tradesActive,
     },
     {
       href: '/draft/drafts',
-      kicker: 'Selections',
       label: 'Draft history',
-      description: 'Follow official selections, original clubs, players, and pick movement.',
       active: draftsActive,
     },
     {
       href: '/draft/clubs',
-      kicker: 'Directory',
       label: 'Club histories',
-      description: 'Compare club-level trade activity and historical movement.',
       active: clubsActive,
     },
     {
       href: '/draft/trades/methodology',
-      kicker: 'Evidence',
       label: 'Methodology & status',
-      description: 'Read the publication rules, limitations, and current unavailable state.',
       active: methodologyActive,
     },
   ] as const;
@@ -58,24 +45,20 @@ export function DraftHubNav() {
   return (
     <nav className="mt-5" aria-label="AFL Draft and Trade Outcomes sections">
       <div
-        className={`${draftHubSubtlePanelClass} grid grid-cols-2 gap-2 p-2 lg:grid-cols-3 xl:grid-cols-5`}
+        className={`${draftHubSubtlePanelClass} grid grid-cols-2 gap-1 p-1 sm:grid-cols-3 lg:grid-cols-5`}
       >
         {sections.map((section) => (
           <Link
             key={section.href}
             href={section.href}
-            className={`flex min-h-16 min-w-0 flex-col justify-center rounded-[1.2rem] border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4 sm:py-3 ${
+            className={`flex min-h-11 min-w-0 items-center justify-center rounded-md px-3 py-2 text-center text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
               section.active
-                ? 'border-primary/30 bg-primary/10 text-foreground shadow-sm'
-                : 'border-transparent bg-transparent text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground'
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             }`}
             aria-current={section.active ? 'page' : undefined}
           >
-            <p className={draftHubNavKickerClass}>{section.kicker}</p>
-            <p className="mt-1 text-sm font-semibold">{section.label}</p>
-            <p className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
-              {section.description}
-            </p>
+            {section.label}
           </Link>
         ))}
       </div>

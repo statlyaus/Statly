@@ -23,7 +23,7 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import { ArrowLeftRight, Crown, Eye } from 'lucide-react';
+import { ArrowLeftRight, Eye } from 'lucide-react';
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -50,7 +50,7 @@ type MyTeamPanelProps = {
 };
 
 type SortField = 'name' | 'position' | 'team' | 'totalValue' | 'recent';
-type FilterType = 'all' | 'starters' | 'bench' | 'captain' | 'injury';
+type FilterType = 'all' | 'starters' | 'bench' | 'injury';
 
 interface TeamStats {
   totalPlayers: number;
@@ -60,15 +60,10 @@ interface TeamStats {
   averageScore: number;
   projectedScore: number;
   positionBreakdown: Record<string, number>;
-  captainSet: boolean;
-  viceCaptainSet: boolean;
   rosterComplete: boolean;
 }
 
-// Extend Player type for captain functionality
 interface ExtendedPlayer extends Player {
-  isCaptain?: boolean;
-  isViceCaptain?: boolean;
   recentForm?: number;
   rank?: number;
   totalValue?: number;
@@ -98,7 +93,7 @@ function capFirst(str = '') {
 }
 
 const rosterTarget = 22;
-const filterTypes: FilterType[] = ['all', 'starters', 'bench', 'captain', 'injury'];
+const filterTypes: FilterType[] = ['all', 'starters', 'bench', 'injury'];
 const sortControlFields: Array<[SortField, string]> = [
   ['totalValue', 'Statly Z'],
   ['recent', 'Form'],
@@ -128,8 +123,6 @@ const ROSTER_ACTION_BUTTON_BASE_CLASS =
   'inline-flex h-10 w-full items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ROSTER_ACTION_BUTTON_OUTLINE_CLASS =
   'border border-input bg-background text-foreground hover:bg-muted';
-const ROSTER_ACTION_BUTTON_PRIMARY_CLASS =
-  'border border-border bg-accent text-accent-foreground hover:bg-accent/80';
 
 function getSafeRankings(rankings: unknown): RankingEntry[] {
   return Array.isArray(rankings) ? rankings : [];
@@ -151,17 +144,11 @@ function getPositionBreakdownEntries(positionBreakdown: Record<string, number>) 
   });
 }
 
-function isCaptainRole(player: Player) {
-  const extPlayer = player as ExtendedPlayer;
-  return extPlayer.isCaptain || extPlayer.isViceCaptain;
-}
-
 function getFilterCounts(players: Player[]): Record<FilterType, number> {
   return {
     all: players.length,
     starters: players.slice(0, 18).length,
     bench: players.slice(18).length,
-    captain: players.filter(isCaptainRole).length,
     injury: players.filter((player) => player.injury).length,
   };
 }
@@ -172,8 +159,6 @@ function filterByRosterRole(players: Player[], filterType: FilterType): Player[]
       return players.slice(0, 18);
     case 'bench':
       return players.slice(18);
-    case 'captain':
-      return players.filter(isCaptainRole);
     case 'injury':
       return players.filter((player) => player.injury);
     default:
@@ -191,7 +176,8 @@ function playerMatchesSearch(player: Player, searchTerm: string) {
 }
 
 function readPlayerScore(player: Player, key: 'averageScore' | 'projectedScore' | 'form') {
-  const value = (player as ExtendedPlayer)[key] ?? (key === 'averageScore' ? player.avg : undefined);
+  const value =
+    (player as ExtendedPlayer)[key] ?? (key === 'averageScore' ? player.avg : undefined);
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
@@ -252,11 +238,8 @@ function calculateTeamStats(
   const statlyZValues: number[] = [];
   const averageScores: number[] = [];
   const projectedScores: number[] = [];
-  let captainSet = false;
-  let viceCaptainSet = false;
 
   draftedPlayers.forEach((player) => {
-    const extPlayer = player as ExtendedPlayer;
     const position = player.position || 'UNK';
     positionBreakdown[position] = (positionBreakdown[position] || 0) + 1;
 
@@ -268,9 +251,6 @@ function calculateTeamStats(
 
     const projectedScore = readPlayerScore(player, 'projectedScore');
     if (projectedScore !== null) projectedScores.push(projectedScore);
-
-    if (extPlayer.isCaptain) captainSet = true;
-    if (extPlayer.isViceCaptain) viceCaptainSet = true;
   });
 
   const totalValue = statlyZValues.reduce((sum, value) => sum + value, 0);
@@ -285,8 +265,6 @@ function calculateTeamStats(
     averageScore: averageScores.length > 0 ? sumAverage / averageScores.length : 0,
     projectedScore: projectedScores.length > 0 ? sumProjected / projectedScores.length : 0,
     positionBreakdown,
-    captainSet,
-    viceCaptainSet,
     rosterComplete: draftedPlayers.length >= rosterTarget,
   };
 }
@@ -404,20 +382,6 @@ function EmptyRosterState({
   );
 }
 
-function PlayerRoleBadges({ player }: { player: Player }) {
-  const extPlayer = player as ExtendedPlayer;
-  return (
-    <>
-      {extPlayer.isCaptain && (
-        <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800">C</span>
-      )}
-      {extPlayer.isViceCaptain && (
-        <span className="rounded bg-blue-100 px-1.5 py-0.5 font-semibold text-blue-800">VC</span>
-      )}
-    </>
-  );
-}
-
 function TeamPanelHeader({
   teamName,
   compact,
@@ -445,15 +409,23 @@ function TeamPanelHeader({
             <TrophyIcon className="h-5 w-5 text-blue-600" aria-hidden="true" />
           </span>
           <div>
-            <h2 id="team-heading" className={`${compact ? 'text-base' : 'text-xl'} font-semibold text-slate-950`}>
+            <h2
+              id="team-heading"
+              className={`${compact ? 'text-base' : 'text-xl'} font-semibold text-slate-950`}
+            >
               {teamName}
             </h2>
             <p className="text-sm text-slate-600">
-              {rosterComplete ? 'Completed roster review' : `${openSlots} open roster ${openSlots === 1 ? 'slot' : 'slots'}`}
+              {rosterComplete
+                ? 'Completed roster review'
+                : `${openSlots} open roster ${openSlots === 1 ? 'slot' : 'slots'}`}
             </p>
           </div>
           {isLoading && (
-            <span className="ml-1 h-2.5 w-2.5 rounded-full bg-blue-500" aria-label="Loading team data" />
+            <span
+              className="ml-1 h-2.5 w-2.5 rounded-full bg-blue-500"
+              aria-label="Loading team data"
+            />
           )}
         </div>
       </div>
@@ -530,7 +502,10 @@ function TeamMetricGrid({
     categoryColumns.length > 0
       ? categoryColumns
           .slice(0, 4)
-          .map((category) => FANTASY_CATEGORIES[category].shortLabel ?? FANTASY_CATEGORIES[category].label)
+          .map(
+            (category) =>
+              FANTASY_CATEGORIES[category].shortLabel ?? FANTASY_CATEGORIES[category].label
+          )
           .join(', ')
       : 'League categories pending';
 
@@ -539,7 +514,10 @@ function TeamMetricGrid({
       <MetricCard label="Roster" value={`${teamStats.totalPlayers} / ${rosterTarget}`}>
         {teamStats.rosterComplete ? 'Complete' : `${openSlots} slots remaining`}
       </MetricCard>
-      <MetricCard label="Statly Z Coverage" value={hasStatlyZ ? formatMetric(teamStats.avgValue, 2) : 'Not available'}>
+      <MetricCard
+        label="Statly Z Coverage"
+        value={hasStatlyZ ? formatMetric(teamStats.avgValue, 2) : 'Not available'}
+      >
         {rankingStatus}
       </MetricCard>
       <MetricCard label="League Categories" value={`${categoryColumns.length}`}>
@@ -684,7 +662,9 @@ function RosterToolbar({
               }`}
             >
               {capFirst(filter)}
-              <span className={filterType === filter ? 'ml-2 text-blue-100' : 'ml-2 text-slate-500'}>
+              <span
+                className={filterType === filter ? 'ml-2 text-blue-100' : 'ml-2 text-slate-500'}
+              >
                 {filterCounts[filter]}
               </span>
             </button>
@@ -692,7 +672,8 @@ function RosterToolbar({
         </div>
       </div>
       <div className="mt-2 text-sm text-slate-600">
-        Sorted by {activeSortLabel[sortField]} {sortDirection === 'desc' ? 'high to low' : 'low to high'}.
+        Sorted by {activeSortLabel[sortField]}{' '}
+        {sortDirection === 'desc' ? 'high to low' : 'low to high'}.
       </div>
     </div>
   );
@@ -751,7 +732,11 @@ function RosterTable({
       </colgroup>
       <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
         <tr>
-          <th scope="col" rowSpan={headerRowCount} className="px-4 py-3 text-left font-medium sm:px-5">
+          <th
+            scope="col"
+            rowSpan={headerRowCount}
+            className="px-4 py-3 text-left font-medium sm:px-5"
+          >
             Player
           </th>
           <th scope="col" rowSpan={headerRowCount} className="px-4 py-3 text-left font-medium">
@@ -772,7 +757,8 @@ function RosterTable({
           <tr className="border-t border-border/70">
             {categoryColumns.map((category) => {
               const categoryData = FANTASY_CATEGORIES[category];
-              const shortLabel = categoryData.abbrev ?? categoryData.shortLabel ?? categoryData.label;
+              const shortLabel =
+                categoryData.abbrev ?? categoryData.shortLabel ?? categoryData.label;
 
               return (
                 <th
@@ -861,11 +847,7 @@ function RosterRow({
       aria-rowindex={index + (categoryColumns.length > 0 ? 3 : 2)}
       data-selected={selected ? 'true' : undefined}
     >
-      <RosterIdentityCell
-        player={player}
-        role={role}
-        getPerformanceIcon={getPerformanceIcon}
-      />
+      <RosterIdentityCell player={player} role={role} getPerformanceIcon={getPerformanceIcon} />
       <RosterProfileCell player={player} ranking={ranking} />
       <RosterStatCells player={player} categoryColumns={categoryColumns} />
       <RosterRowActions player={player} onTeamAction={onTeamAction} />
@@ -903,12 +885,13 @@ function RosterIdentityCell({
         </span>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate font-semibold text-foreground">
-              {capWords(player.name)}
-            </span>
+            <span className="truncate font-semibold text-foreground">{capWords(player.name)}</span>
             {getPerformanceIcon(player)}
             {player.injury && (
-              <InformationCircleIcon className="h-4 w-4 text-destructive" aria-label={player.injury} />
+              <InformationCircleIcon
+                className="h-4 w-4 text-destructive"
+                aria-label={player.injury}
+              />
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -920,7 +903,6 @@ function RosterIdentityCell({
             </span>
             <span>{getRosterClubLabel(player)}</span>
             <span className="rounded-md bg-muted px-2 py-0.5">{role}</span>
-            <PlayerRoleBadges player={player} />
           </div>
         </div>
       </div>
@@ -928,13 +910,7 @@ function RosterIdentityCell({
   );
 }
 
-function RosterProfileCell({
-  player,
-  ranking,
-}: {
-  player: Player;
-  ranking?: RankingEntry;
-}) {
+function RosterProfileCell({ player, ranking }: { player: Player; ranking?: RankingEntry }) {
   const statlyZ = getPlayerStatlyZ(player, ranking);
 
   return (
@@ -991,9 +967,7 @@ function RosterStatCells({
             className="border-l border-border/60 px-3 py-4 text-center align-middle text-sm font-semibold text-foreground"
             aria-label={`${categoryData.label}: ${displayValue}`}
           >
-            <span className="inline-flex min-w-12 justify-center tabular-nums">
-              {displayValue}
-            </span>
+            <span className="inline-flex min-w-12 justify-center tabular-nums">{displayValue}</span>
           </td>
         );
       })}
@@ -1022,18 +996,6 @@ function RosterRowActions({
         >
           <Eye className="h-4 w-4" aria-hidden="true" />
           <span className="hidden 2xl:inline">View</span>
-        </button>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onTeamAction?.('captain', player);
-          }}
-          className={`${ROSTER_ACTION_BUTTON_BASE_CLASS} ${ROSTER_ACTION_BUTTON_PRIMARY_CLASS}`}
-          aria-label={`Set ${player.name} as captain`}
-        >
-          <Crown className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden 2xl:inline">Captain</span>
         </button>
         <button
           type="button"

@@ -8,7 +8,6 @@ const runtimePaths = [
   'src/services/rosterService.ts',
   'src/app/api/test-lobby/route.ts',
   'src/server/diagnostics/lobbySchemaDiagnostic.ts',
-  'src/lib/ensureLobbyColumns.ts',
 ] as const;
 
 function readWorkspaceFile(path: string): string {
@@ -17,19 +16,14 @@ function readWorkspaceFile(path: string): string {
 
 describe('roster schema ownership architecture', () => {
   it('keeps roster tables and league-scoped ownership in Prisma migrations', () => {
-    const baseMigration = readWorkspaceFile(
-      'prisma/migrations/20250823150655_add_draft_league_status_index/migration.sql'
-    );
-    const normalizedRosterMigration = readWorkspaceFile(
-      'prisma/migrations/20260606073500_add_league_roster_player/migration.sql'
+    const baseline = readWorkspaceFile(
+      'prisma/migrations/20261004000000_postgresql_baseline/migration.sql'
     );
 
-    expect(baseMigration).toContain('CREATE TABLE "LeagueRoster"');
-    expect(baseMigration).toContain('CREATE TABLE "TeamAction"');
-    expect(normalizedRosterMigration).toContain('CREATE TABLE IF NOT EXISTS "LeagueRosterPlayer"');
-    expect(normalizedRosterMigration).toContain(
-      '"LeagueRosterPlayer_leagueId_playerId_key"'
-    );
+    expect(baseline).toContain('CREATE TABLE "LeagueRoster" (');
+    expect(baseline).toContain('CREATE TABLE "TeamAction" (');
+    expect(baseline).toContain('CREATE TABLE "LeagueRosterPlayer" (');
+    expect(baseline).toContain('"LeagueRosterPlayer_leagueId_playerId_key"');
   });
 
   it('does not manage the roster schema from request or service runtime code', () => {

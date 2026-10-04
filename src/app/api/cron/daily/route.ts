@@ -1,18 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Daily cron endpoint triggered by Vercel (see vercel.json)
-// - Runs on Node.js runtime so firebase-admin and other Node libs work
-// - Optional protection via CRON_SECRET env var; pass ?token=... from Vercel
-export const runtime = 'nodejs';
+import { isCronRequestAuthorized } from '@/lib/cronAuth';
 
-const CRON_SECRET = process.env.CRON_SECRET;
+// Daily cron endpoint, called by the hosting scheduler
+// - Runs on Node.js runtime so firebase-admin and other Node libs work
+// - Protected by CRON_SECRET via isCronRequestAuthorized (fails closed outside development)
+export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   const started = Date.now();
 
-  // Optional: simple token auth via query param
-  const token = req.nextUrl.searchParams.get('token');
-  if (CRON_SECRET && token !== CRON_SECRET) {
+  if (!isCronRequestAuthorized(req)) {
     return NextResponse.json(
       { ok: false, error: 'unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } }

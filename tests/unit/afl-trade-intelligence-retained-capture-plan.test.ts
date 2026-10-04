@@ -2,6 +2,9 @@ import { expect, it } from 'vitest';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeRetainedExternalCapturePlan } from '@/server/aflTradeIntelligence/source/externalDraftTradeDiscoveryContracts';
 import { createAflTradeRetainedExternalCaptureCompletion } from '@/server/aflTradeIntelligence/source/externalHistoricalCaptureCompletionContracts';
+import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
+import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
+import { parseIngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 const at = '2026-09-10T00:00:00.000Z';
 const id = (kind: string, letter: string) => `${kind}:${letter.repeat(64)}`;
 const target = {
@@ -112,5 +115,47 @@ it('completes only the exact retained target set while preserving actual source 
       completedAt: completion.content.completedAt,
       results: [{ ...result, executionReceiptId: id('external-capture-execution', 'f') }],
     })
+  ).toThrow();
+});
+it('retains an earlier authorized official session parser version without loosening new captures', () => {
+  const official = {
+    ...target,
+    request: {
+      ...target.request,
+      provider: 'official_afl' as const,
+      anchorSeasonYear: 2020,
+      dataset: 'Official AFL 2020 completed national draft sessions',
+      capabilityId: 'official-afl-completed-draft-session',
+      sourceUrl:
+        'https://www.afl.com.au/news/528411/every-pick-every-player-check-out-who-your-club-drafted',
+      effectiveAt: '2020-12-09T00:00:00.000Z',
+      parserVersion: 'official-afl-completed-draft-session/v5',
+    },
+  };
+  const plan = (parserVersion: string, sourceUrl = official.request.sourceUrl) =>
+    createAflTradeRetainedExternalCapturePlan({
+      environment: 'non_production',
+      competition: 'AFLM',
+      plannedAt: '2026-09-10T00:01:00.000Z',
+      scopeEvidence: [createAflTradeCanonicalJsonArtifactRef({ syntheticReview: true }, at)],
+      targets: [{ ...official, request: { ...official.request, parserVersion, sourceUrl } }],
+    });
+  // The recorded parser identity is retained, not rewritten to the current version.
+  expect(
+    plan('official-afl-completed-draft-session/v5').content.targets[0]!.content.request
+      .parserVersion
+  ).toBe('official-afl-completed-draft-session/v5');
+  expect(() => plan(OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION)).not.toThrow();
+  expect(() => plan('official-afl-completed-draft-session/v999')).toThrow();
+  expect(() => plan('official-afl-completed-draft-session/v0')).toThrow();
+  expect(() => plan('draftguru-national-year-page/v1')).toThrow();
+  expect(() =>
+    plan(
+      'official-afl-completed-draft-session/v5',
+      'https://www.afl.com.au/news/1/an-unreviewed-article'
+    )
+  ).toThrow();
+  expect(() =>
+    validateAflTradeExternalCaptureScope(parseIngestAflTradeExternalPageRequest(official.request))
   ).toThrow();
 });
