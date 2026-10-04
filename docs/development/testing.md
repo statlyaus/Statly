@@ -377,6 +377,24 @@ per-file databases before and after the run. Code that names the database (`pg_d
 arguments, disposable-database guards) reads it from the URL or accepts the `statly_outcomes_test_<pid>_<n>`
 form. A role setting a file needs is scoped with `ALTER ROLE ... IN DATABASE`, never server-wide.
 
+Replaying the full migration history was about half of the job's time: 89 `migrate deploy` calls of
+about 8 seconds each, and CPU-bound, so more workers did not help. The global setup therefore migrates
+one template database (`statly_outcomes_template`, schema `outcomes_template`) and each per-file
+database is a `CREATE DATABASE ... TEMPLATE` clone. A file's first `migrate deploy` into an absent or
+untouched empty schema (no objects, no schema grants, no default privileges) adopts the clone's
+migrated schema instead of replaying: `tests/testUtils/adoptOutcomesTemplateSchema.mjs` renames it to
+the requested name, rewrites each function's stored `search_path`, and re-creates the few functions
+whose migrations embedded the schema name in their body (0135 and 0139 build `%I.<table>%ROWTYPE`).
+Everything else refers to the schema by OID. Any other deploy, including a file's second schema, runs
+the real command.
+
+The global setup proves adoption on every run before enabling it: it deploys into one fresh database,
+adopts into a template clone under the same schema name, and compares every routine definition and
+privilege, relation, column, constraint, index, trigger, view, policy, type, sequence value, row count
+and recorded migration. Any difference prints a `::warning::` with the differing items and the files
+replay migrations as before, so a new migration that embeds the schema name another way slows the job
+down rather than producing a wrong schema.
+
 Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
 native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
 collect it locally.
