@@ -74,6 +74,50 @@ function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEve
 
 const DRAFT_MANAGER_ROLES = new Set(['OWNER', 'MANAGER', 'COMMISSIONER', 'ADMIN']);
 
+type PickResult = DraftCommandResult<PickCommandData>;
+type FilledPick = NonNullable<Awaited<ReturnType<typeof draftRepository.findPickByOverall>>>;
+
+/**
+ * The pick slot was taken by a concurrent writer (P2002 on draftId + overall). PostgreSQL has aborted
+ * the transaction by then, so the slot is re-read outside it. A plain Error, not a Prisma error, so
+ * the repository never retries it.
+ */
+class PickSlotTakenError extends Error {
+  constructor(
+    readonly overall: number,
+    readonly playerId: string,
+    readonly replay: (existing: FilledPick) => PickResult
+  ) {
+    super(`conflict:Pick slot ${overall} already filled`);
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof PrismaNS.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+// Runs a pick transaction. A unique violation is re-read outside the aborted transaction: the slot is
+// replayed only when it holds the player this call asked for; anything else is refused.
+async function transactPick(
+  draftId: string,
+  work: (tx: PrismaNS.TransactionClient) => Promise<PickResult>
+): Promise<PickResult> {
+  try {
+    return await draftRepository.transaction(work);
+  } catch (error) {
+    if (!(error instanceof PickSlotTakenError)) throw error;
+    const existing = await draftRepository.transaction((tx) =>
+      draftRepository.findPickByOverall(tx, draftId, error.overall)
+    );
+    // An empty slot means the violation was the player, already drafted at another slot.
+    if (!existing) throw new Error('bad_request:Player already picked');
+    if (existing.player?.id !== error.playerId) {
+      throw new Error('conflict:Pick slot already filled');
+    }
+    return error.replay(existing);
+  }
+}
+
 function isDraftManagerRole(role: string | null | undefined): boolean {
   return DRAFT_MANAGER_ROLES.has(String(role ?? '').toUpperCase());
 }
@@ -342,7 +386,7 @@ export class DraftApplicationService {
   }): Promise<DraftCommandResult<PickCommandData>> {
     const { draftId, actorUserId, playerId } = input;
 
-    const result = await draftRepository.transaction(async (tx) => {
+    const result = await transactPick(draftId, async (tx) => {
       const draft = await draftRepository.getDraftAggregate(tx, draftId);
       if (!draft) {
         throw new Error('not_found:Draft not found');
@@ -461,9 +505,8 @@ export class DraftApplicationService {
           },
         };
       } catch (error) {
-        if (error instanceof PrismaNS.PrismaClientKnownRequestError && error.code === 'P2002') {
-          const existing = await draftRepository.findPickByOverall(tx, draftId, draft.currentPick);
-          if (existing?.player) {
+        if (isUniqueViolation(error)) {
+          throw new PickSlotTakenError(draft.currentPick, playerId, (existing) => {
             const eventPick = draftRepository.toEventPick(
               existing,
               draft.currentPick,
@@ -491,8 +534,7 @@ export class DraftApplicationService {
                 pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
               },
             };
-          }
-          throw new Error('bad_request:Player already picked');
+          });
         }
 
         throw error;
@@ -517,7 +559,7 @@ export class DraftApplicationService {
   }): Promise<DraftCommandResult<PickCommandData>> {
     const { draftId } = input;
 
-    const result = await draftRepository.transaction(async (tx) => {
+    const result = await transactPick(draftId, async (tx) => {
       const draft = await draftRepository.getDraftAggregate(tx, draftId);
       if (!draft) {
         throw new Error('not_found:Draft not found');
@@ -668,9 +710,8 @@ export class DraftApplicationService {
           },
         };
       } catch (error) {
-        if (error instanceof PrismaNS.PrismaClientKnownRequestError && error.code === 'P2002') {
-          const existing = await draftRepository.findPickByOverall(tx, draftId, draft.currentPick);
-          if (existing?.player) {
+        if (isUniqueViolation(error)) {
+          throw new PickSlotTakenError(draft.currentPick, selectedPlayer.id, (existing) => {
             return {
               draftId,
               leagueId: draft.leagueId,
@@ -692,8 +733,7 @@ export class DraftApplicationService {
                 pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
               },
             };
-          }
-          throw new Error('bad_request:Player already picked');
+          });
         }
 
         throw error;
