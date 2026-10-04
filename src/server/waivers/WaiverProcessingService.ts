@@ -829,27 +829,30 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     }
 
     try {
+      const bid = claim.bidAmount;
+      const member = { leagueId: claim.leagueId, memberId: claim.teamId };
       const result = await this.db.$transaction(async (tx) => {
-        const [priority] = await this.loadPriorityRows(tx, claim.leagueId, claim.teamId);
-        const remainingFAAB =
-          typeof priority?.remainingFAAB === 'number'
-            ? priority.remainingFAAB
-            : waiverSettings.faabBudget;
-
-        if (typeof remainingFAAB !== 'number') {
-          return { ok: false, reason: 'FAAB balance unavailable' };
+        // An unset balance starts at the league budget. Guarded on null, so a concurrent writer
+        // that already set it is left alone.
+        if (typeof waiverSettings.faabBudget === 'number') {
+          await tx.waiverPriority.updateMany({
+            where: { ...member, remainingFAAB: null },
+            data: { remainingFAAB: waiverSettings.faabBudget },
+          });
         }
 
-        if (claim.bidAmount! > remainingFAAB) {
-          return { ok: false, reason: 'Insufficient FAAB' };
-        }
-
-        await tx.waiverPriority.updateMany({
-          where: { leagueId: claim.leagueId, memberId: claim.teamId },
-          data: { remainingFAAB: remainingFAAB - claim.bidAmount! },
+        // A decrement guarded by the balance, never a balance read earlier and written back: a
+        // concurrent debit re-checks the guard against the committed balance after the row lock.
+        const { count } = await tx.waiverPriority.updateMany({
+          where: { ...member, remainingFAAB: { gte: bid } },
+          data: { remainingFAAB: { decrement: bid } },
         });
+        if (count === 1) return { ok: true };
 
-        return { ok: true };
+        const [priority] = await this.loadPriorityRows(tx, claim.leagueId, claim.teamId);
+        return typeof priority?.remainingFAAB === 'number'
+          ? { ok: false, reason: 'Insufficient FAAB' }
+          : { ok: false, reason: 'FAAB balance unavailable' };
       });
       if (result.ok) {
         await this.mirrorPriorityProjection(claim.leagueId, claim.teamId);
@@ -987,24 +990,23 @@ export class PrismaWaiverClaimStore implements ClaimStore {
         : members;
     const existingMemberIds = new Set(existingRows.map((row) => row.memberId));
     const existingPriorities = existingRows.map((row) => row.priority);
-    let nextPriority = existingPriorities.length > 0 ? Math.max(...existingPriorities) + 1 : 1;
+    const firstPriority = existingPriorities.length > 0 ? Math.max(...existingPriorities) + 1 : 1;
+    const missingMembers = orderedMembers.filter((member) => !existingMemberIds.has(member.id));
+    if (missingMembers.length === 0) return;
 
-    for (const member of orderedMembers) {
-      if (existingMemberIds.has(member.id)) continue;
-
-      await tx.waiverPriority.create({
-        data: {
-          id: randomUUID(),
-          leagueId,
-          memberId: member.id,
-          priority: nextPriority,
-          remainingFAAB:
-            waiverSettings.system === 'FAAB' ? (waiverSettings.faabBudget ?? 100) : null,
-          pendingBidTotal: 0,
-        },
-      });
-      nextPriority += 1;
-    }
+    // Two first claims can both find no rows. skipDuplicates lets the second writer keep the rows the
+    // first one created instead of failing the claim on the (leagueId, memberId) unique key.
+    await tx.waiverPriority.createMany({
+      data: missingMembers.map((member, index) => ({
+        id: randomUUID(),
+        leagueId,
+        memberId: member.id,
+        priority: firstPriority + index,
+        remainingFAAB: waiverSettings.system === 'FAAB' ? (waiverSettings.faabBudget ?? 100) : null,
+        pendingBidTotal: 0,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   private async reservePendingBid(
@@ -1016,6 +1018,14 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       waiverSettings: WaiverSettings;
     }
   ): Promise<void> {
+    // Increment first, then check. A concurrent claim blocks on the row lock until this transaction
+    // ends and then increments the committed total, so a check made after the write sees every
+    // reservation; throwing rolls this increment back.
+    await tx.waiverPriority.updateMany({
+      where: { leagueId: input.leagueId, memberId: input.memberId },
+      data: { pendingBidTotal: { increment: input.bidAmount } },
+    });
+
     const [priority] = await this.loadPriorityRows(tx, input.leagueId, input.memberId);
     const remainingFAAB =
       typeof priority?.remainingFAAB === 'number'
@@ -1025,15 +1035,9 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       throw new WaiverClaimStoreError('FAAB_BALANCE_UNAVAILABLE', 'FAAB balance unavailable');
     }
 
-    const pendingBidTotal = priority?.pendingBidTotal ?? 0;
-    if (pendingBidTotal + input.bidAmount > remainingFAAB) {
+    if ((priority?.pendingBidTotal ?? input.bidAmount) > remainingFAAB) {
       throw new WaiverClaimStoreError('INSUFFICIENT_FAAB', 'Insufficient FAAB remaining');
     }
-
-    await tx.waiverPriority.updateMany({
-      where: { leagueId: input.leagueId, memberId: input.memberId },
-      data: { pendingBidTotal: { increment: input.bidAmount } },
-    });
   }
 
   private async releasePendingBid(
