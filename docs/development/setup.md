@@ -28,8 +28,15 @@ To intentionally regenerate the local file, back up any required values first, t
 
 The example file groups variables by purpose. Common local flows use:
 
-- `DATABASE_URL`: use a disposable or explicitly chosen SQLite file URL. Tests override this with
-  their test database; do not use `prisma/dev.db` for verification.
+- `DATABASE_URL`: the PostgreSQL 16 development database. `DIRECT_DATABASE_URL` is the same server
+  without a connection pooler and is what Prisma migrations use; locally both can be identical.
+- `DATABASE_URL_TEST`: a separate disposable PostgreSQL database for integration tests. Never point
+  it at the development database.
+
+Apply migrations with `npx prisma migrate deploy`. The history starts at the
+`20261004000000_postgresql_baseline` migration; the earlier SQLite history is archived in
+`prisma/migrations-sqlite-archive/` for reference only and must never be replayed.
+
 - `NEXT_PUBLIC_FIREBASE_*`: public Firebase Web SDK configuration.
 - `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`: server-only encoded service-account JSON for admin/ETL
   operations that genuinely require a remote project.

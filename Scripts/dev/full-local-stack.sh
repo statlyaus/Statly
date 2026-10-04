@@ -160,6 +160,11 @@ wait_for_port "Firestore emulator" "127.0.0.1" "8080"
 wait_for_port "Firebase Auth emulator" "127.0.0.1" "9099"
 
 npm run prisma:generate
+if [[ -n "${DATABASE_URL:-}" && -z "${DIRECT_DATABASE_URL:-}" ]]; then
+  # A caller that overrides DATABASE_URL gets its migrations on the same database. Otherwise the
+  # Prisma CLI reads DIRECT_DATABASE_URL from .env and migrates the development database instead.
+  export DIRECT_DATABASE_URL="$DATABASE_URL"
+fi
 npx prisma migrate deploy
 npm run dev:seed:local
 if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "true" ]]; then
