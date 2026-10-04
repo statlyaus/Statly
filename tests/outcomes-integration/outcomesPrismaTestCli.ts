@@ -128,8 +128,15 @@ export function runOutcomesPrismaTestCommand(
   args: readonly string[],
   options: RunOutcomesPrismaTestCommandOptions
 ): string {
+  if (adoptedTemplateSchema(args, options, options.dependencies ?? {})) return '';
+  return runPrismaCommand(args, options);
+}
+
+function runPrismaCommand(
+  args: readonly string[],
+  options: RunOutcomesPrismaTestCommandOptions
+): string {
   const dependencies = options.dependencies ?? {};
-  if (adoptedTemplateSchema(args, options, dependencies)) return '';
   const workspaceRoot = dependencies.workspaceRoot ?? DEFAULT_WORKSPACE_ROOT;
   const schemaPath = join(workspaceRoot, 'prisma', 'afl-trade-outcomes', 'schema.prisma');
   const safeWorkingDirectory = (
