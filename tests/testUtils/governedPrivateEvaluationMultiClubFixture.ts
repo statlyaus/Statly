@@ -17,7 +17,9 @@ function distribution(mean: number) {
   return { mean, median: mean, p10: mean - 1, p90: mean + 1 };
 }
 
-export function createGovernedPrivateEvaluationMultiClubNarrativeFixture(clubCount: 3 | 4) {
+export function createGovernedPrivateEvaluationMultiClubNarrativeFixture(
+  clubCount: 3 | 4
+) {
   const clubs = Array.from({ length: clubCount }, (_, index) => ({
     aflClubId: `afl-club:fixture-${index + 1}`,
     clubName: `Fixture Club ${index + 1}`,

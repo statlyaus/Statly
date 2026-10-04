@@ -121,7 +121,10 @@ function createObservationSet() {
 export function createGovernedPickPavModelExecutionFixture() {
   const observationSet = createObservationSet();
   const datasetId = addressed('dataset', 'governed-pick-dataset');
-  const datasetAdmissionId = addressed('dataset-admission', 'governed-pick-dataset-admission');
+  const datasetAdmissionId = addressed(
+    'dataset-admission',
+    'governed-pick-dataset-admission'
+  );
   const datasetDocument = {
     content: { factualParent: { factualReleaseId: observationSet.content.releaseId } },
   } as const;
@@ -160,7 +163,10 @@ export function createGovernedPickPavModelExecutionFixture() {
     completedAt: COMPLETED_AT,
     authority: {
       datasetId,
-      datasetArtifact: createAflTradeCanonicalJsonArtifactRef(datasetDocument, RETAINED_AT),
+      datasetArtifact: createAflTradeCanonicalJsonArtifactRef(
+        datasetDocument,
+        RETAINED_AT
+      ),
       datasetAdmissionId,
       datasetAdmissionArtifact: createAflTradeCanonicalJsonArtifactRef(
         datasetAdmissionDocument,
@@ -168,7 +174,10 @@ export function createGovernedPickPavModelExecutionFixture() {
       ),
       datasetAdmissionGateLedgerRevision: 7,
       protocolId,
-      protocolArtifact: createAflTradeCanonicalJsonArtifactRef(protocolDocument, RETAINED_AT),
+      protocolArtifact: createAflTradeCanonicalJsonArtifactRef(
+        protocolDocument,
+        RETAINED_AT
+      ),
     },
   });
   return {
