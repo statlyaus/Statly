@@ -12,6 +12,8 @@ export default function setupIntegrationDatabase(): void {
     env: {
       ...process.env,
       DATABASE_URL: testDatabaseUrl,
+      // Prisma migrations connect through directUrl, so it must name the test database too.
+      DIRECT_DATABASE_URL: testDatabaseUrl,
     },
   });
 }
