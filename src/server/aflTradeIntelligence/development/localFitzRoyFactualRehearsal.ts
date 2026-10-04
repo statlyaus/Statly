@@ -188,7 +188,7 @@ async function assertDisposableRehearsalDatabase(client: AflOutcomeSqlClient): P
   );
   const current = identity.rows[0];
   if (
-    current?.database_name !== 'statly_outcomes_test' ||
+    !/^statly_outcomes_test(?:_\d+_\d+)?$/.test(current?.database_name ?? '') ||
     !/^afl_fitzroy_factual_rehearsal_\d+_\d+$/.test(current.schema_name)
   ) {
     throw new TypeError(
