@@ -110,8 +110,8 @@ describe('local full stack development architecture', () => {
       workbookStack.indexOf('review-local-workbook-player-identities.ts')
     );
     expect(workbookStack).toContain('mkdir -p "$ROOT_DIR/.statly-local"');
-    expect(workbookStack.indexOf('mkdir -p "$ROOT_DIR/.statly-local"')).toBeLessThan(
-      workbookStack.indexOf('DATABASE_URL="file:$ROOT_DIR/.statly-local/statly-app.db"')
+    expect(workbookStack).toContain(
+      'DATABASE_URL="${DATABASE_URL:?set DATABASE_URL to a disposable fantasy PostgreSQL database}"'
     );
     expect(localStack).toContain('STATLY_LOCAL_REUSE_OUTCOMES_DATABASE');
     expect(localStack).toContain('reusing the caller-owned disposable AFL outcomes database');

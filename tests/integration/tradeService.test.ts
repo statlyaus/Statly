@@ -1,9 +1,6 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import type { PrismaClient, TradeReviewMode } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
 vi.mock('server-only', () => ({}));
 
@@ -24,53 +21,31 @@ const ids = {
 
 const now = new Date('2026-07-21T10:00:00.000Z');
 
-type TradeServiceModule = typeof import('./tradeService');
-type TradeReadModelModule = typeof import('./tradeReadModel');
+type TradeServiceModule = typeof import('@/server/leagues/trades/tradeService');
+type TradeReadModelModule = typeof import('@/server/leagues/trades/tradeReadModel');
 
-let databaseDirectory: string;
 let prisma: PrismaClient;
 let service: TradeServiceModule;
 let readModel: TradeReadModelModule;
 
 describe.sequential('league trade service transactions', () => {
   beforeAll(async () => {
-    databaseDirectory = mkdtempSync('/tmp/statly-trade-service-');
-    const databasePath = resolve(databaseDirectory, 'trade-service.db');
-    const databaseUrl = `file:${databasePath}`;
-    const prismaCli = resolve(process.cwd(), 'node_modules/.bin/prisma');
-
-    const schemaSql = execFileSync(
-      prismaCli,
-      [
-        'migrate',
-        'diff',
-        '--from-empty',
-        '--to-schema-datamodel',
-        'prisma/schema.prisma',
-        '--script',
-      ],
-      {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-      }
-    );
-    execFileSync('/usr/bin/sqlite3', [databasePath], { input: schemaSql, stdio: 'pipe' });
-
     const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient({ datasourceUrl: databaseUrl });
+    prisma = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL_TEST });
     await prisma.$connect();
+    await deleteFixtures();
     await seedLeague();
 
     vi.resetModules();
     vi.doMock('@/lib/prisma', () => ({ prisma }));
-    service = await import('./tradeService');
-    readModel = await import('./tradeReadModel');
+    service = await import('@/server/leagues/trades/tradeService');
+    readModel = await import('@/server/leagues/trades/tradeReadModel');
   }, 60_000);
 
   afterAll(async () => {
     vi.doUnmock('@/lib/prisma');
+    if (prisma) await deleteFixtures();
     await prisma?.$disconnect();
-    if (databaseDirectory) rmSync(databaseDirectory, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
@@ -90,8 +65,12 @@ describe.sequential('league trade service transactions', () => {
       )
     ).rejects.toMatchObject({ code: 'ROSTER_CHANGED', status: 409 });
 
-    await expect(prisma.leagueTradeThread.count()).resolves.toBe(0);
-    await expect(prisma.leagueTradeCommand.count()).resolves.toBe(0);
+    await expect(prisma.leagueTradeThread.count({ where: { leagueId: ids.league } })).resolves.toBe(
+      0
+    );
+    await expect(
+      prisma.leagueTradeCommand.count({ where: { leagueId: ids.league } })
+    ).resolves.toBe(0);
   });
 
   it('returns the original result for a repeated idempotency key', async () => {
@@ -101,9 +80,15 @@ describe.sequential('league trade service transactions', () => {
     const replay = await service.createLeagueTrade(ids.league, ids.firstUser, input, now);
 
     expect(replay).toEqual(first);
-    await expect(prisma.leagueTradeThread.count()).resolves.toBe(1);
-    await expect(prisma.leagueTradeOffer.count()).resolves.toBe(1);
-    await expect(prisma.leagueTradeCommand.count()).resolves.toBe(1);
+    await expect(prisma.leagueTradeThread.count({ where: { leagueId: ids.league } })).resolves.toBe(
+      1
+    );
+    await expect(
+      prisma.leagueTradeOffer.count({ where: { thread: { leagueId: ids.league } } })
+    ).resolves.toBe(1);
+    await expect(
+      prisma.leagueTradeCommand.count({ where: { leagueId: ids.league } })
+    ).resolves.toBe(1);
   });
 
   it('resolves a retired player alias before validating trade ownership', async () => {
@@ -225,7 +210,9 @@ describe.sequential('league trade service transactions', () => {
       )
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT', status: 409 });
 
-    await expect(prisma.leagueTradeThread.count()).resolves.toBe(1);
+    await expect(prisma.leagueTradeThread.count({ where: { leagueId: ids.league } })).resolves.toBe(
+      1
+    );
   });
 
   it('allows an even exchange when legacy rosters already exceed the configured limit', async () => {
@@ -284,7 +271,9 @@ describe.sequential('league trade service transactions', () => {
     ).rejects.toMatchObject({ code: 'STALE_VERSION', status: 409 });
 
     await expect(
-      prisma.leagueTradeEvent.count({ where: { eventType: 'COMPLETED' } })
+      prisma.leagueTradeEvent.count({
+        where: { eventType: 'COMPLETED', thread: { leagueId: ids.league } },
+      })
     ).resolves.toBe(1);
   });
 
@@ -823,9 +812,18 @@ async function seedLeague(): Promise<void> {
   });
 }
 
+async function deleteFixtures(): Promise<void> {
+  await deleteLeagueFixtures(prisma, {
+    leagueIds: [ids.league],
+    playerIds: [ids.firstPlayer, ids.firstPlayerAlias, ids.secondPlayer],
+    settingsIds: [ids.settings],
+    userIds: [ids.commissionerUser, ids.firstUser, ids.secondUser],
+  });
+}
+
 async function resetTradeState(): Promise<void> {
-  await prisma.leagueTradeCommand.deleteMany();
-  await prisma.leagueTradeThread.deleteMany();
+  await prisma.leagueTradeCommand.deleteMany({ where: { leagueId: ids.league } });
+  await prisma.leagueTradeThread.deleteMany({ where: { leagueId: ids.league } });
   await prisma.player.update({
     where: { id: ids.firstPlayer },
     data: { name: 'First Player', club: 'AAA', position: 'MID' },
