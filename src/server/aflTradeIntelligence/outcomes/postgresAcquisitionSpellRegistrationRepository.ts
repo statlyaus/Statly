@@ -154,7 +154,8 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
          SELECT $1,COALESCE((SELECT spell_id FROM outcome_acquisition_spell_version
                     WHERE spell_version_id=$2),$1),$3,$4,$5,$6,$7,$8::date,
            CASE WHEN $9::date IS NULL THEN NULL ELSE $9::date-1 END,
-           CASE WHEN $12::text::jsonb->'departure'='null'::jsonb THEN NULL ELSE 'reviewed_departure' END,
+           CASE WHEN COALESCE($12::text::jsonb->'departure','null'::jsonb)='null'::jsonb
+             THEN NULL ELSE 'reviewed_departure' END,
            $10,'approved',$2,$11,$12,$13,date_trunc('milliseconds',transaction_timestamp())
          WHERE NOT EXISTS (SELECT 1 FROM outcome_acquisition_spell_version WHERE spell_version_id=$1)
          ON CONFLICT (spell_version_id) DO NOTHING`,
@@ -167,7 +168,8 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
           c.entry.eventVersionId,
           c.entry.assetVersionId,
           c.entry.eventDate,
-          c.departure?.eventDate ?? null,
+          // An arrival-only (v4) spell records no departure; its stint is closed by season spells.
+          'departure' in c ? (c.departure?.eventDate ?? null) : null,
           c.ruleId,
           c.createdAt,
           canonicalizeAflTradeJson(c),
@@ -249,6 +251,10 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
     // Appearance membership (v3) binds reviewed appearance facts, which the database authenticates;
     // it carries no retained evidence bytes of its own.
     if (c.schemaVersion === 'afl-trade-acquisition-registration/v3') return [];
+    // An arrival-only (v4) spell cites its entry evidence and nothing else.
+    if (c.schemaVersion === 'afl-trade-acquisition-registration/v4') {
+      return this.readExactEvidence(c.entry.evidence, 'Acquisition spell evidence bytes differ.');
+    }
     return this.readExactEvidence(
       [...c.entry.evidence, ...c.continuityEvidence, ...(c.departure?.evidence ?? [])],
       'Acquisition spell evidence bytes differ.'

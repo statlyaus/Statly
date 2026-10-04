@@ -68,10 +68,21 @@ const appearanceRuleContent = z
   })
   .strict();
 
+/**
+ * Arrival only (v4): a reviewed entry spell that proves how the player arrived and nothing more. It
+ * carries no observedThrough, continuity evidence or departure; continuity in a season comes from
+ * that season's appearance-membership spell, and the stint closes when he appears for another club.
+ */
+const arrivalRuleContent = ruleContent.extend({
+  schemaVersion: z.literal('afl-trade-acquisition-registration-rule/v4'),
+  departure: z.literal('none_continuity_from_appearance_spells'),
+  intervals: z.literal('arrival_only_open_stint_no_same_club_reviewed_overlap'),
+});
+
 export const aflTradeAcquisitionSpellRegistrationRuleSchema = z
   .object({
     ruleId: aflTradeContentAddressedIdSchema('acquisition-spell-rule'),
-    content: z.union([ruleContent, windowRuleContent, appearanceRuleContent]),
+    content: z.union([ruleContent, windowRuleContent, appearanceRuleContent, arrivalRuleContent]),
   })
   .strict()
   .superRefine((record, context) => {
@@ -157,6 +168,22 @@ const appearanceSpellContent = z
   })
   .strict();
 
+const arrivalSpellContent = z
+  .object({
+    schemaVersion: z.literal('afl-trade-acquisition-registration/v4'),
+    ...scope,
+    playerId: id,
+    clubId: id,
+    entry: event,
+    ruleId: aflTradeContentAddressedIdSchema('acquisition-spell-rule'),
+    version: z.number().int().positive(),
+    supersedesSpellVersionId: aflTradeContentAddressedIdSchema(
+      'acquisition-spell-version'
+    ).nullable(),
+    createdAt: instant,
+  })
+  .strict();
+
 function eventBounds(
   value: z.infer<typeof precisionEvent> | z.infer<typeof canonicalDepartureSpellBindingSchema>
 ) {
@@ -168,7 +195,12 @@ function eventBounds(
 export const aflTradeAcquisitionSpellRegistrationSchema = z
   .object({
     spellVersionId: aflTradeContentAddressedIdSchema('acquisition-spell-version'),
-    content: z.union([spellContent, windowSpellContent, appearanceSpellContent]),
+    content: z.union([
+      spellContent,
+      windowSpellContent,
+      appearanceSpellContent,
+      arrivalSpellContent,
+    ]),
   })
   .strict()
   .superRefine((record, context) => {
@@ -181,6 +213,20 @@ export const aflTradeAcquisitionSpellRegistrationSchema = z
         path: ['spellVersionId'],
         message: 'Spell content address differs.',
       });
+    }
+    if (record.content.schemaVersion === 'afl-trade-acquisition-registration/v4') {
+      const c = record.content;
+      if (
+        c.entry.eventDate > c.createdAt.slice(0, 10) ||
+        (c.version === 1) !== (c.supersedesSpellVersionId === null) ||
+        c.entry.evidence.some((ref) => Date.parse(ref.createdAt) > Date.parse(c.createdAt))
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Arrival chronology or version ancestry is invalid.',
+        });
+      }
+      return;
     }
     if (record.content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
       const c = record.content;
@@ -235,9 +281,15 @@ export type AflTradeAcquisitionSpellRegistrationRule = z.infer<
 export type AflTradeAcquisitionSpellRegistration = z.infer<
   typeof aflTradeAcquisitionSpellRegistrationSchema
 >;
-/** A reviewed entry spell (v1 exact or v2 window): the only kind trade attribution may consume. */
+/**
+ * A reviewed entry spell (v1 exact, v2 window or v4 arrival): the only kind trade attribution may
+ * consume.
+ */
 export type AflTradeReviewedAcquisitionSpellRegistration = AflTradeAcquisitionSpellRegistration & {
-  content: z.infer<typeof spellContent> | z.infer<typeof windowSpellContent>;
+  content:
+    | z.infer<typeof spellContent>
+    | z.infer<typeof windowSpellContent>
+    | z.infer<typeof arrivalSpellContent>;
 };
 
 export function createAflTradeAcquisitionSpellRegistrationRule(
@@ -351,6 +403,48 @@ export function createAflTradeAppearanceMembershipSpell(
   return { ...registration, content };
 }
 
+export function createAflTradeArrivalSpellRule(
+  input: Omit<
+    z.input<typeof arrivalRuleContent>,
+    'schemaVersion' | 'entry' | 'departure' | 'intervals' | 'missingEvidence'
+  >
+): AflTradeAcquisitionSpellRegistrationRule {
+  const content = arrivalRuleContent.parse({
+    ...input,
+    schemaVersion: 'afl-trade-acquisition-registration-rule/v4',
+    entry: 'exact_promoted_incoming_player_asset_on_event_date',
+    departure: 'none_continuity_from_appearance_spells',
+    intervals: 'arrival_only_open_stint_no_same_club_reviewed_overlap',
+    missingEvidence: 'reject_never_infer_from_appearances',
+  });
+  return aflTradeAcquisitionSpellRegistrationRuleSchema.parse({
+    ruleId: createAflTradeContentAddress('acquisition-spell-rule', content),
+    content,
+  });
+}
+
+export function createAflTradeArrivalSpell(
+  input: Omit<z.input<typeof arrivalSpellContent>, 'schemaVersion'>
+): AflTradeAcquisitionSpellRegistration & { content: z.infer<typeof arrivalSpellContent> } {
+  const content = arrivalSpellContent.parse({
+    ...input,
+    schemaVersion: 'afl-trade-acquisition-registration/v4',
+  });
+  const registration = aflTradeAcquisitionSpellRegistrationSchema.parse({
+    spellVersionId: createAflTradeContentAddress('acquisition-spell-version', content),
+    content,
+  });
+  return { ...registration, content };
+}
+
+export function isAflTradeArrivalSpell(
+  spell: AflTradeAcquisitionSpellRegistration
+): spell is AflTradeAcquisitionSpellRegistration & {
+  content: z.infer<typeof arrivalSpellContent>;
+} {
+  return spell.content.schemaVersion === 'afl-trade-acquisition-registration/v4';
+}
+
 export function isAflTradeAppearanceMembershipSpell(
   spell: AflTradeAcquisitionSpellRegistration
 ): spell is AflTradeAcquisitionSpellRegistration & {
@@ -362,6 +456,11 @@ export function isAflTradeAppearanceMembershipSpell(
 /** Logical membership bounds from reviewed dates and continuity; does not grant source authority. */
 export function deriveAflTradeAcquisitionMembershipBounds(input: unknown) {
   const { content } = aflTradeAcquisitionSpellRegistrationSchema.parse(input);
+  if (content.schemaVersion === 'afl-trade-acquisition-registration/v4') {
+    throw new TypeError(
+      'An arrival-only spell has no recorded end; its stint comes from the season spells.'
+    );
+  }
   if (content.schemaVersion === 'afl-trade-acquisition-registration/v3') {
     const window = {
       startDate: content.firstAppearance.date,
