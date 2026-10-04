@@ -38,6 +38,7 @@ import {
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
+import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
 import { registerSourceFirstHpnPlayerMapFixture } from '../testUtils/sourceFirstHpnPlayerMapFixture';
 import { registerSourceFirstHpnResultsMapFixture } from '../testUtils/sourceFirstHpnResultsMapFixture';
@@ -206,13 +207,17 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     return id;
   };
   const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
-  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(client, {
-    read: async (reference) => {
-      const artifact = promoted.retainedArtifacts.get(reference.artifactId);
-      if (!artifact) throw new Error('Missing exact retained fixture artifact.');
-      return artifact.bytes;
+  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
+    client,
+    {
+      read: async (reference) => {
+        const artifact = promoted.retainedArtifacts.get(reference.artifactId);
+        if (!artifact) throw new Error('Missing exact retained fixture artifact.');
+        return artifact.bytes;
+      },
     },
-  });
+    await bindTestEvidenceStore(pool)
+  );
   const rule = createAflTradeAcquisitionSpellRegistrationRule({
     ...scope,
     ruleVersion: 'synthetic-complete-hpn-v1',
