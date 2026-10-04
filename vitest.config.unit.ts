@@ -34,16 +34,17 @@ export default defineConfig({
     ],
     globals: true,
     clearMocks: true,
-    // Replay, canonicalization, and hostile-size contract tests run under full V8 coverage in CI.
-    // Keep them bounded, while allowing realistic shared-runner instrumentation overhead.
     // Ordinary tests stay bounded; the heavy retained native-PAV graph tests declare an explicit
     // 120_000 budget at the call site. See docs/development/testing.md, "Timeout budgets".
     testTimeout: 30_000,
     pool: 'threads',
-    maxWorkers: 2,
+    // The CI runner has four cores. The heaviest files peak under 400 MB of heap each.
+    maxWorkers: 4,
     setupFiles: ['tests/setup/unit.setup.ts'],
+    // Coverage is off by default: V8 instrumentation measured a 66% slowdown on the heavy
+    // native-PAV files and no gate reads the report. Opt in with --coverage.enabled=true.
     coverage: {
-      enabled: true,
+      enabled: false,
       exclude: ['**/.next/**', '**/tmp/**'],
       reportsDirectory: 'coverage/unit',
       provider: 'v8',

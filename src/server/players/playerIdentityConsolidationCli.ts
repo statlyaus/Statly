@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { lstatSync } from 'node:fs';
 
 import type { PlayerAliasMapping } from './playerIdentityConsolidationPlanner';
 
@@ -174,60 +172,49 @@ export function validatePlayerIdentityFirestoreProject(input: {
   return actualProjectId;
 }
 
-function safeRealpath(filePath: string): string | null {
+// Development and test databases are never consolidation targets.
+const PROTECTED_DATABASE = /^statly_fantasy_(dev|test)$/;
+const BACKUP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function parsePostgresUrl(value: string, label: string): URL {
+  let url: URL;
   try {
-    return realpathSync(filePath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} must be a postgresql:// URL`);
+  }
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+    throw new Error(`${label} must be a postgresql:// URL`);
+  }
+  return url;
+}
+
+const databaseName = (url: URL) => decodeURIComponent(url.pathname.replace(/^\//, ''));
+
+function assertSameDatabase(actual: URL, expected: URL, message: string): void {
+  if (actual.host !== expected.host || databaseName(actual) !== databaseName(expected)) {
+    throw new Error(message);
   }
 }
 
 export function validateDisposablePlayerIdentityDatabase(input: {
   databaseUrl: string;
-  expectedPath: string;
-  repositoryRoot?: string;
+  expectedUrl: string;
 }): string {
   const databaseUrl = input.databaseUrl.trim();
-  const expectedPath = input.expectedPath.trim();
-  if (!databaseUrl || !expectedPath) {
+  const expectedUrl = input.expectedUrl.trim();
+  if (!databaseUrl || !expectedUrl) {
     throw new Error('DATABASE_URL and STATLY_VERIFY_DB are required');
   }
 
-  const parsedUrl = new URL(databaseUrl);
-  if (parsedUrl.protocol !== 'file:' || parsedUrl.host || parsedUrl.search || parsedUrl.hash) {
-    throw new Error('Identity consolidation requires a plain local file: URL');
-  }
-
-  const databasePath = path.normalize(decodeURIComponent(parsedUrl.pathname));
-  const normalizedExpectedPath = path.normalize(expectedPath);
-  const verificationDirectory = path.normalize(tmpdir());
-  if (
-    databasePath !== normalizedExpectedPath ||
-    path.dirname(normalizedExpectedPath) !== verificationDirectory ||
-    !/^statly-verify-player-[^/]+\.db$/.test(path.basename(normalizedExpectedPath))
-  ) {
-    throw new Error(
-      `Identity consolidation is restricted to matching ${verificationDirectory}/statly-verify-player-*.db files`
-    );
-  }
-
-  let stat;
-  try {
-    stat = lstatSync(normalizedExpectedPath);
-  } catch {
-    throw new Error('Identity verification database must exist and be readable');
-  }
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error('Identity verification database must be a regular non-symlink file');
-  }
-
-  const realDatabasePath = realpathSync(normalizedExpectedPath);
-  const protectedDatabasePath = safeRealpath(
-    path.resolve(input.repositoryRoot ?? process.cwd(), 'prisma/dev.db')
+  const actual = parsePostgresUrl(databaseUrl, 'DATABASE_URL');
+  assertSameDatabase(
+    actual,
+    parsePostgresUrl(expectedUrl, 'STATLY_VERIFY_DB'),
+    'DATABASE_URL must exactly match STATLY_VERIFY_DB'
   );
-  if (protectedDatabasePath && realDatabasePath === protectedDatabasePath) {
-    throw new Error('Refusing to use protected prisma/dev.db');
+  if (!/^statly_verify_player_[a-z0-9_]+$/.test(databaseName(actual))) {
+    throw new Error('Identity consolidation is restricted to statly_verify_player_* databases');
   }
 
   return databaseUrl;
@@ -235,44 +222,25 @@ export function validateDisposablePlayerIdentityDatabase(input: {
 
 export function validateProductionPlayerIdentityDatabase(input: {
   databaseUrl: string;
-  expectedPath: string;
+  expectedUrl: string;
   backupPath?: string;
   requireBackup: boolean;
-  repositoryRoot?: string;
+  now?: Date;
 }): string {
   const databaseUrl = input.databaseUrl.trim();
-  const expectedPath = input.expectedPath.trim();
-  if (!databaseUrl || !expectedPath) {
+  const expectedUrl = input.expectedUrl.trim();
+  if (!databaseUrl || !expectedUrl) {
     throw new Error('DATABASE_URL and STATLY_PLAYER_IDENTITY_PRODUCTION_DB are required');
   }
 
-  const parsedUrl = new URL(databaseUrl);
-  if (parsedUrl.protocol !== 'file:' || parsedUrl.host || parsedUrl.search || parsedUrl.hash) {
-    throw new Error('Production identity consolidation requires a plain local file: URL');
-  }
-
-  const databasePath = path.normalize(decodeURIComponent(parsedUrl.pathname));
-  const normalizedExpectedPath = path.normalize(expectedPath);
-  if (databasePath !== normalizedExpectedPath) {
-    throw new Error('DATABASE_URL must exactly match STATLY_PLAYER_IDENTITY_PRODUCTION_DB');
-  }
-
-  let stat;
-  try {
-    stat = lstatSync(normalizedExpectedPath);
-  } catch {
-    throw new Error('Production identity database must exist and be readable');
-  }
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error('Production identity database must be a regular non-symlink file');
-  }
-
-  const realDatabasePath = realpathSync(normalizedExpectedPath);
-  const protectedDatabasePath = safeRealpath(
-    path.resolve(input.repositoryRoot ?? process.cwd(), 'prisma/dev.db')
+  const actual = parsePostgresUrl(databaseUrl, 'DATABASE_URL');
+  assertSameDatabase(
+    actual,
+    parsePostgresUrl(expectedUrl, 'STATLY_PLAYER_IDENTITY_PRODUCTION_DB'),
+    'DATABASE_URL must exactly match STATLY_PLAYER_IDENTITY_PRODUCTION_DB'
   );
-  if (protectedDatabasePath && realDatabasePath === protectedDatabasePath) {
-    throw new Error('Refusing to use protected prisma/dev.db');
+  if (PROTECTED_DATABASE.test(databaseName(actual))) {
+    throw new Error('Refusing to use the development or test database');
   }
 
   if (input.requireBackup) {
@@ -292,11 +260,8 @@ export function validateProductionPlayerIdentityDatabase(input: {
     if (backupStat.size === 0) {
       throw new Error('Production backup must not be empty');
     }
-    if (realpathSync(backupPath) === realDatabasePath) {
-      throw new Error('Production backup must be a separate file');
-    }
-    if (backupStat.mtimeMs < stat.mtimeMs) {
-      throw new Error('Production backup is older than the database; create a fresh backup');
+    if ((input.now ?? new Date()).getTime() - backupStat.mtimeMs > BACKUP_MAX_AGE_MS) {
+      throw new Error('Production backup is more than 24 hours old; create a fresh pg_dump');
     }
   }
 

@@ -8,6 +8,7 @@ if (!testDatabaseUrl) {
 }
 
 process.env.DATABASE_URL = testDatabaseUrl;
+process.env.DIRECT_DATABASE_URL = testDatabaseUrl;
 
 const prisma = new PrismaClient({
   datasources: { db: { url: testDatabaseUrl } },

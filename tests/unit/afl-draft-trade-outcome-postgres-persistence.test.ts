@@ -34,7 +34,7 @@ describe('isolated AFL outcome PostgreSQL persistence architecture', () => {
     expect(schema).not.toMatch(/model (?:User|League|LeagueMember|LeagueTrade|Roster)/);
 
     const fantasySchema = readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8');
-    expect(fantasySchema).toContain('provider = "sqlite"');
+    expect(fantasySchema).toContain('url       = env("DATABASE_URL")');
     expect(fantasySchema).not.toContain('OutcomeRegistryHead');
   });
 
