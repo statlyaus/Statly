@@ -394,13 +394,44 @@ own service container with the same setting, and additionally with `fsync`, `syn
 `full_page_writes` off, because the database is disposable and each suite replays about 250 migration
 transactions.
 
-The suite runs one file at a time, and the lock ceiling is not the reason. The outcomes SQL takes
-transaction advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and
-advisory locks are scoped to the database, not the schema. Fixtures are content-addressed, so two files
-in different schemas produce identical lock keys. A four-worker run (PR #763) failed seven tests this
-way: lock waits past the test budget, a try-lock raising `changed concurrently` for a row in another
-schema, and a cancelled statement landing on the wrong finalizer. Running files in parallel requires
-one database per file, so the advisory key spaces are disjoint.
+The suite runs two files at a time, each in its own database. Four saturated the 4-core runner: the
+heaviest files ran two to three times slower than alone and passed their timeouts. The outcomes SQL takes transaction
+advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and advisory locks
+are scoped to the database, not the schema. Fixtures are content-addressed, so two files in different
+schemas of one database produce identical lock keys. A four-worker run on one database (PR #763) failed
+seven tests this way: lock waits past the test budget, a try-lock raising `changed concurrently` for a
+row in another schema, and a cancelled statement landing on the wrong finalizer.
+
+`tests/testUtils/outcomesDatabasePerFile.setup.ts` runs before each file: it creates
+`statly_outcomes_test_<pid>_<n>` on the server named by `AFL_OUTCOMES_TEST_DATABASE_URL`, points that
+variable (and `AFL_OUTCOMES_DATABASE_URL` when it names the same database) at it, and drops it with
+`FORCE` after the file's own `afterAll` hooks. Each file still creates its own schema and runs
+`prisma migrate deploy` into it, exactly as before. Roles and role memberships are server-wide, and
+migrations and fixtures create fixed role names guarded only against an existing role, so two files
+creating one at the same moment fail with `unique_violation`. The global setup
+(`tests/testUtils/outcomesParallelDatabases.globalSetup.ts`) therefore migrates the template database
+described below once, which creates the migration roles, creates the fixture-only roles before any file
+starts, and drops the template and leftover per-file databases before and after the run. Code that names the database (`pg_dump`/`pg_restore`
+arguments, disposable-database guards) reads it from the URL or accepts the `statly_outcomes_test_<pid>_<n>`
+form. A role setting a file needs is scoped with `ALTER ROLE ... IN DATABASE`, never server-wide.
+
+Replaying the full migration history was about half of the job's time: 89 `migrate deploy` calls of
+about 8 seconds each, and CPU-bound, so more workers did not help. The global setup therefore migrates
+one template database (`statly_outcomes_template`, schema `outcomes_template`) and each per-file
+database is a `CREATE DATABASE ... TEMPLATE` clone. A file's first `migrate deploy` into an absent or
+untouched empty schema (no objects, no schema grants, no default privileges) adopts the clone's
+migrated schema instead of replaying: `tests/testUtils/adoptOutcomesTemplateSchema.mjs` renames it to
+the requested name, rewrites each function's stored `search_path`, and re-creates the few functions
+whose migrations embedded the schema name in their body (0135 and 0139 build `%I.<table>%ROWTYPE`).
+Everything else refers to the schema by OID. Any other deploy, including a file's second schema, runs
+the real command.
+
+The global setup proves adoption on every run before enabling it: it deploys into one fresh database,
+adopts into a template clone under the same schema name, and compares every routine definition and
+privilege, relation, column, constraint, index, trigger, view, policy, type, sequence value, row count
+and recorded migration. Any difference prints a `::warning::` with the differing items and the files
+replay migrations as before, so a new migration that embeds the schema name another way slows the job
+down rather than producing a wrong schema.
 
 Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
 native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
