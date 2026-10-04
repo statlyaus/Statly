@@ -106,23 +106,30 @@ function createChildEnvironment(
   return childEnvironment;
 }
 
+/**
+ * A first deploy into an untouched schema of a template-cloned database adopts the template's
+ * migrated schema instead of replaying every migration. Anything else runs the real command.
+ */
+function adoptedTemplateSchema(
+  args: readonly string[],
+  options: RunOutcomesPrismaTestCommandOptions,
+  dependencies: OutcomesPrismaTestCommandDependencies
+): boolean {
+  const templateSchema = (dependencies.environment ?? process.env)[OUTCOMES_TEMPLATE_SCHEMA_KEY];
+  const isDeploy = args.length === 2 && args[0] === 'migrate' && args[1] === 'deploy';
+  if (!templateSchema || !isDeploy) return false;
+  return (dependencies.adoptTemplateSchema ?? adoptTemplateSchema)(
+    options.databaseUrl,
+    templateSchema
+  );
+}
+
 export function runOutcomesPrismaTestCommand(
   args: readonly string[],
   options: RunOutcomesPrismaTestCommandOptions
 ): string {
   const dependencies = options.dependencies ?? {};
-  // A first deploy into an untouched schema of a template-cloned database adopts the template's
-  // migrated schema instead of replaying every migration. Anything else runs the real command.
-  const templateSchema = (dependencies.environment ?? process.env)[OUTCOMES_TEMPLATE_SCHEMA_KEY];
-  if (
-    templateSchema &&
-    args.length === 2 &&
-    args[0] === 'migrate' &&
-    args[1] === 'deploy' &&
-    (dependencies.adoptTemplateSchema ?? adoptTemplateSchema)(options.databaseUrl, templateSchema)
-  ) {
-    return '';
-  }
+  if (adoptedTemplateSchema(args, options, dependencies)) return '';
   const workspaceRoot = dependencies.workspaceRoot ?? DEFAULT_WORKSPACE_ROOT;
   const schemaPath = join(workspaceRoot, 'prisma', 'afl-trade-outcomes', 'schema.prisma');
   const safeWorkingDirectory = (
