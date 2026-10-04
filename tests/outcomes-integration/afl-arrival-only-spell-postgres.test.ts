@@ -16,7 +16,15 @@ import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
 import { buildAppearanceMembershipHpnInputFixture } from '../testUtils/appearanceMembershipHpnInputFixture';
 import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
-import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import {
+  OUTCOMES_TEMPLATE_SCHEMA_KEY,
+  runOutcomesPrismaTestCommand,
+} from './outcomesPrismaTestCli';
+
+function withoutTemplateAdoption(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { [OUTCOMES_TEMPLATE_SCHEMA_KEY]: _template, ...rest } = environment;
+  return rest;
+}
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -72,7 +80,12 @@ beforeAll(async () => {
   scoped.searchParams.set('schema', schemaName);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
     databaseUrl: scoped.toString(),
-    dependencies: { workspaceRoot: preMigrationWorkspace },
+    // Replay the history up to the previous migration; a template-cloned file database would
+    // otherwise adopt the template's schema, which already includes this migration.
+    dependencies: {
+      workspaceRoot: preMigrationWorkspace,
+      environment: withoutTemplateAdoption(process.env),
+    },
   });
   const latest = await pool.query<{ migration_name: string }>(
     `SELECT migration_name FROM _prisma_migrations ORDER BY migration_name DESC LIMIT 1`
