@@ -19,6 +19,7 @@ import {
 import { PostgresAflTradeExternalIdentityReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
 import { PostgresAflTradeExternalCanonicalPromotionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
+import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
@@ -838,13 +839,17 @@ it('runs the reviewed 2016 proof through public promotion and current spell guar
       await pool.query<{ at: Date }>("SELECT date_trunc('milliseconds',clock_timestamp()) AS at")
     ).rows[0]!.at.toISOString();
   const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
-  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(sql, {
-    read: async (reference) => {
-      const retained = promoted.retainedArtifacts.get(reference.artifactId);
-      if (!retained) throw new Error('Missing retained Official 2016 fixture bytes.');
-      return retained.bytes;
+  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
+    sql,
+    {
+      read: async (reference) => {
+        const retained = promoted.retainedArtifacts.get(reference.artifactId);
+        if (!retained) throw new Error('Missing retained Official 2016 fixture bytes.');
+        return retained.bytes;
+      },
     },
-  });
+    await bindTestEvidenceStore(pool)
+  );
   const approve = async (subjectType: string, subjectId: string, evidence: unknown) => {
     const decisionId = `official-2016-lifecycle-review:${subjectId}`;
     await pool.query(
@@ -988,7 +993,8 @@ it('runs the reviewed 2017 proof through the non-production public promotion and
         if (!retained) throw new Error('Missing retained Official 2017 fixture bytes.');
         return retained.bytes;
       },
-    }
+    },
+    await bindTestEvidenceStore(pool)
   );
   const approve = async (subjectType: string, subjectId: string, evidence: unknown) => {
     const decisionId = `official-2017-lifecycle-review:${subjectId}`;

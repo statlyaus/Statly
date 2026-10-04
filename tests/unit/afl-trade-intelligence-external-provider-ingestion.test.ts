@@ -444,6 +444,40 @@ describe('authorized external provider ingestion', () => {
     );
   });
 
+  it('admits by source-fetch identity so the reviewed request cooldown survives a new capture instant', async () => {
+    const admissionKeys: string[] = [];
+    const ingestAt = async (overrides: Partial<typeof request>) => {
+      const fixture = fixtureDependencies();
+      const acquire = fixture.dependencies.admission.acquire;
+      fixture.dependencies.admission.acquire = vi.fn(async (input) => {
+        admissionKeys.push(input.requestSha256);
+        return acquire(input);
+      });
+      fixture.dependencies.ingestion.capturePage = async ({ url }) => ({
+        status: 'not_modified' as const,
+        sourceUrl: url,
+        eTag: 'fixture-etag',
+        lastModified: null,
+      });
+      await ingestAuthorizedAflTradeExternalPage(
+        { request: { ...request, ...overrides }, gateRequest },
+        fixture.dependencies
+      );
+    };
+    await ingestAt({});
+    // The trusted clock stamps every execution, and the effective instant does not change the fetch.
+    await ingestAt({
+      capturedAt: '2026-08-09T23:59:53.000Z',
+      effectiveAt: '2026-08-09T12:00:00.000Z',
+    });
+    await ingestAt({ sourceUrl: 'https://www.draftguru.com.au/trades/2026-other-fixture' });
+
+    expect(admissionKeys[1]).toBe(admissionKeys[0]);
+    expect(admissionKeys[2]).not.toBe(admissionKeys[0]);
+    // The receipt still binds the exact complete request, including its instants.
+    expect(admissionKeys[0]).not.toBe(sha256AflTradeCanonicalJson(request));
+  });
+
   it('rejects parser output outside the exact reviewed source-field manifest', () => {
     const gate0aReceipt = createAflTradeGate0AReceipt(
       { proposals: [records.proposal], decisions: [records.decision] },

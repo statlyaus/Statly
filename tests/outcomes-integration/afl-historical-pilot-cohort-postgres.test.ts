@@ -36,6 +36,7 @@ import {
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import { PostgresAflTradePrivateValuationTradeEvidence } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationTradeEvidence';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
+import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
@@ -257,7 +258,11 @@ async function exercisePilot(
     },
   };
   const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
-  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(sql, evidence);
+  const spells = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
+    sql,
+    evidence,
+    await bindTestEvidenceStore(pool)
+  );
   const rule = createAflTradeWindowAcquisitionSpellRegistrationRule({
     ...scope,
     ruleVersion: 'historical-pilot-2020-v1',

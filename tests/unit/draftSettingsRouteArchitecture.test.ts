@@ -11,13 +11,14 @@ describe('league draft-settings route architecture', () => {
 
     expect(source).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(source).toContain(
-      "import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership'"
+      "import { getLeagueMembershipAccess } from '@/server/leagues/membership'"
     );
     expect(source).toContain('authorizeDraftSettingsRead(request, id)');
     expect(source).toContain('authorizeDraftSettingsWrite(request, id)');
     expect(source).toContain('const userId = await getAuthenticatedUserId(request);');
-    expect(source).toContain('const membership = await getLeagueMembership(leagueId, userId);');
-    expect(source).toContain('!isLeagueManagerRole(membership.data?.role)');
+    expect(source).toContain('const access = await getLeagueMembershipAccess(leagueId, userId);');
+    expect(source).toContain('if (!access.canManage)');
+    expect(source).not.toContain('isLeagueManagerRole');
     expect(source.indexOf('authorizeDraftSettingsWrite(request, id)')).toBeLessThan(
       source.indexOf('prisma.league.findUnique')
     );

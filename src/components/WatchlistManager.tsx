@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import type { UserWatchlist, LeagueMembership } from '@/services/userProfileService';
 
@@ -56,6 +57,7 @@ export function WatchlistManager({
   onPlayerSelect,
   compact = false,
 }: WatchlistManagerProps) {
+  const { confirm: confirmInPage, dialog: confirmDialog } = useConfirmDialog();
   const {
     watchlists,
     loading,
@@ -121,7 +123,13 @@ export function WatchlistManager({
 
   const handleDeleteWatchlist = useCallback(
     async (watchlistId: string) => {
-      if (confirm('Are you sure you want to delete this watchlist?')) {
+      const confirmed = await confirmInPage({
+        title: 'Delete this watchlist?',
+        description: 'The list goes. The players aren’t affected.',
+        confirmLabel: 'Delete watchlist',
+        tone: 'danger',
+      });
+      if (confirmed) {
         try {
           await deleteWatchlist(watchlistId);
         } catch (err) {
@@ -129,7 +137,7 @@ export function WatchlistManager({
         }
       }
     },
-    [deleteWatchlist]
+    [confirmInPage, deleteWatchlist]
   );
 
   const handleReorderWatchlist = useCallback(
@@ -163,6 +171,7 @@ export function WatchlistManager({
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

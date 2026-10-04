@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   return { getRoundMatchesResult: vi.fn(), prisma };
 });
 
-vi.mock('@/lib/etlIntegration', () => ({
+vi.mock('@/server/etl/etlRoundData', () => ({
   getRoundMatchesResult: mocks.getRoundMatchesResult,
 }));
 
@@ -474,12 +474,12 @@ describe('save boundary invariants', () => {
     });
   });
 
-  it('fails explicitly before mutation when official timing cannot be loaded', async () => {
+  it('fails explicitly before mutation when official timing is unavailable mid-round', async () => {
     mocks.prisma.league.findUnique.mockResolvedValue({ settings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
-      startsAt: new Date('2027-07-18T09:00:00.000Z'),
+      startsAt: new Date('2026-01-01T09:00:00.000Z'),
     });
     mocks.getRoundMatchesResult.mockResolvedValue({
       ok: false,
@@ -521,5 +521,29 @@ describe('save boundary invariants', () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(mocks.getRoundMatchesResult).not.toHaveBeenCalled();
+  });
+
+  it('saves before the round starts even when official timing is unavailable', async () => {
+    mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+    mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2027-07-18T09:00:00.000Z'),
+    });
+    mocks.getRoundMatchesResult.mockResolvedValue({
+      ok: false,
+      error: new Error('provider unavailable'),
+    });
+    mocks.prisma.leagueLineup.findUnique.mockResolvedValue(null);
+    mocks.prisma.leagueLineup.upsert.mockResolvedValue({ id: 'lineup-1' });
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [],
+    });
+
+    expect(result).toMatchObject({ ok: true });
   });
 });

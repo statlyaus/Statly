@@ -41,7 +41,7 @@ const prismaMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/activity', () => activityMocks);
-vi.mock('@/lib/etlIntegration', () => etlMocks);
+vi.mock('@/server/etl/etlRoundData', () => etlMocks);
 vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
 
@@ -115,6 +115,18 @@ describe('publishCompetition', () => {
     });
     expect(txMocks.leagueSettings.update.mock.calls[0]?.[0].data).not.toHaveProperty(
       'competitionRulesVersion'
+    );
+  });
+
+  it('publishes fixtures only for active members, never removed ones', async () => {
+    await publishCompetition({ leagueId: 'league-1', actorMemberId: 'member-owner', rules });
+
+    expect(prismaMocks.league.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          members: expect.objectContaining({ where: { isActive: true } }),
+        }),
+      })
     );
   });
 

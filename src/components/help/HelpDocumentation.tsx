@@ -90,10 +90,6 @@ Your team consists of:
 - **8 Defenders**: Defensive stalwarts
 - **4 Rucks**: The big men
 
-## Captain Selection
-
-Choose a captain who scores double points and a vice-captain who scores 1.5x points.
-
 Good luck and enjoy your AFL Fantasy journey!`,
     category: 'Getting Started',
     tags: ['basics', 'scoring', 'team structure'],
@@ -161,17 +157,6 @@ const mockVideos: VideoTutorial[] = [
     views: 15420,
     rating: 4.9,
   },
-  {
-    id: '2',
-    title: 'Captain Selection Masterclass',
-    description: 'Advanced strategies for choosing the perfect captain each week.',
-    duration: '8:45',
-    thumbnail: '/api/placeholder/300/200',
-    category: 'Strategy',
-    difficulty: 'intermediate',
-    views: 8930,
-    rating: 4.7,
-  },
 ];
 
 const mockFAQs: FAQ[] = [
@@ -190,14 +175,6 @@ const mockFAQs: FAQ[] = [
       'Player prices update every Tuesday night at midnight, based on their recent performance and ownership levels.',
     category: 'Pricing',
     helpful: 189,
-  },
-  {
-    id: '3',
-    question: 'Can I change my captain after teams are announced?',
-    answer:
-      'Yes, you can change your captain and vice-captain until the first bounce of the round, typically Thursday night.',
-    category: 'Team Selection',
-    helpful: 167,
   },
 ];
 

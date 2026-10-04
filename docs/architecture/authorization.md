@@ -1,7 +1,7 @@
 # Authorization model
 
 - Status: documented current behaviour; describes what is enforced today, not a proposed redesign
-- Last verified against source: 2026-09-20
+- Last verified against source: 2026-10-04
 
 Statly keeps three questions separate: who is calling, which league context they are acting in, and
 whether the action is operational rather than competition state.
@@ -15,7 +15,7 @@ whether the action is operational rather than competition state.
 | League participant | active `LeagueMember`                           | `getLeagueMembershipAccess` (`src/server/leagues/membership.ts`) | own roster and lineup writes, social posting, own draft queue and watchlist    |
 | League manager     | league owner or co-commissioner                 | `canManageLeague` / `LeagueMembershipAccess.canManage`           | waiver processing, league settings, social moderation, draft lifecycle actions |
 | Operator           | `x-admin-secret` header carrying `ADMIN_SECRET` | `isAdminRequest` (`src/lib/adminAuth.ts`)                        | queue and worker control plane                                                 |
-| Scheduler          | `Authorization: Bearer $CRON_SECRET`            | per-route cron guards                                            | `/api/cron/*`                                                                  |
+| Scheduler          | `Authorization: Bearer $CRON_SECRET`            | `isCronRequestAuthorized` (`src/lib/cronAuth.ts`)                | `/api/cron/*`                                                                  |
 | Local development  | non-production only, both dev-auth flags true   | `isServerDevelopmentAuthEnabled` (`src/lib/devAuth.ts`)          | scripted identity `statly-dev-tester`                                          |
 
 Each tier above Public resolves identity at the transport boundary and then calls shared server logic

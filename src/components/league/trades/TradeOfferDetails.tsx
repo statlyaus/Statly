@@ -1,10 +1,13 @@
-import { MessageSquareText, ShieldCheck } from 'lucide-react';
+'use client';
+
+import { ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
+import { useId, useState } from 'react';
 
 import { LeagueSocialDiscussButton } from '@/components/league/LeagueSocialDiscussButton';
 import type {
   LeagueTradeDto,
-  TradeActionName,
   TradeOfferPlayerDto,
+  TradePlayerDto,
   TradeRulesDto,
 } from '@/server/leagues/trades/tradeContracts';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
@@ -12,7 +15,9 @@ import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 import { TradeComparisonTable } from './TradeComparisonTable';
 import { TradeOfferAssets } from './TradeOfferAssets';
 import { TRADE_STATUS_LABELS } from './TradeOfferStatus';
+import { TradeSquadImpact, TradeVerdictStrip } from './TradeVerdictStrip';
 import { formatTradeDateTime } from './tradeDateFormatting';
+import { squadPositionImpact, type TradeVerdict } from './tradeVerdict';
 
 interface TradeOfferDetailsProps {
   id: string;
@@ -26,21 +31,19 @@ interface TradeOfferDetailsProps {
   opponentTeamName: string;
   displayTitle: string;
   playerStats: LeaguePlayerStatDatasetDto;
+  verdict: TradeVerdict;
+  /** "you", or the proposing team when a commissioner is reviewing. */
+  youLabel: string;
+  /** The perspective team's current squad, for the position impact; null when unknown. */
+  perspectiveSquad: TradePlayerDto[] | null;
+  /** League rules are summarised once in the Trade Centre header, not repeated per offer. */
   rules?: TradeRulesDto;
-  isPending: boolean;
-  onAction: (trade: LeagueTradeDto, action: Exclude<TradeActionName, 'counter'>) => void;
-  onCounter: (trade: LeagueTradeDto) => void;
 }
 
-const ACTION_LABELS: Record<Exclude<TradeActionName, 'counter'>, string> = {
-  accept: 'Accept trade',
-  decline: 'Decline',
-  withdraw: 'Withdraw offer',
-  approve: 'Approve trade',
-  reject: 'Reject trade',
-  veto: 'Veto trade',
-};
-
+/**
+ * An expanded offer: what each side gives, the verdict, what it does to the squad, the message,
+ * and the full numbers on request. Decisions live in the offer header.
+ */
 export function TradeOfferDetails({
   id,
   leagueId,
@@ -53,16 +56,21 @@ export function TradeOfferDetails({
   opponentTeamName,
   displayTitle,
   playerStats,
-  rules,
-  isPending,
-  onAction,
-  onCounter,
+  verdict,
+  youLabel,
+  perspectiveSquad,
 }: TradeOfferDetailsProps): React.JSX.Element {
+  const breakdownId = useId();
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const offer = trade.currentOffer;
+  const proposerTeamName =
+    offer.proposerMemberId === trade.memberOne.memberId
+      ? trade.memberOne.teamName
+      : trade.memberTwo.teamName;
 
   return (
     <div id={id} className="border-t border-[color:var(--trade-border)]">
-      <div className="grid min-w-0 gap-4 px-4 py-4 sm:px-5 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-x-6 gap-y-4 px-4 pt-4 sm:px-5 lg:grid-cols-2">
         <TradeOfferAssets
           heading={sendingHeading}
           teamName={perspectiveTeamName}
@@ -79,80 +87,83 @@ export function TradeOfferDetails({
         />
       </div>
 
-      <dl className="grid gap-px border-y border-[color:var(--trade-border)] bg-[color:var(--trade-border)] text-xs sm:grid-cols-3">
-        <MetadataItem
-          label="Position balance"
-          value={summarizePositionBalance(sendingPlayers, receivingPlayers)}
-        />
-        <MetadataItem label="Trade deadline" value={formatDeadline(rules?.deadline)} />
-        <MetadataItem label="Offer expiry" value={formatTradeDateTime(offer.expiresAt)} />
-      </dl>
-
-      <div className="p-4 sm:p-5">
-        <TradeComparisonTable
-          sendingTeamName={sendingHeading}
-          receivingTeamName={receivingHeading}
-          sendingPlayerIds={sendingPlayers.map((player) => player.id)}
-          receivingPlayerIds={receivingPlayers.map((player) => player.id)}
-          playerStats={playerStats}
-        />
-      </div>
-
       {offer.message && (
-        <blockquote className="mx-4 mb-4 rounded-lg border-l-[3px] border-[color:var(--trade-action)] bg-[color:var(--trade-action-soft)] px-4 py-3 text-sm leading-5 text-[color:var(--trade-text-muted)] sm:mx-5 sm:mb-5">
-          <span className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[color:var(--trade-text)]">
-            <MessageSquareText aria-hidden="true" className="size-3.5" />
-            Offer message
-          </span>
-          {offer.message}
-        </blockquote>
+        <figure className="mx-4 mt-4 border-l-2 border-[color:var(--trade-border-strong)] pl-3 sm:mx-5">
+          <figcaption className="text-xs font-semibold text-[color:var(--trade-text-muted)]">
+            Note from {proposerTeamName}
+          </figcaption>
+          <blockquote className="mt-0.5 text-sm leading-5 text-[color:var(--trade-text)]">
+            {offer.message}
+          </blockquote>
+        </figure>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 pb-4 text-xs font-medium text-[color:var(--trade-text-muted)] sm:px-5 sm:pb-5">
-        {offer.reviewEndsAt && (
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck aria-hidden="true" className="size-3.5" />
-            Review ends {formatTradeDateTime(offer.reviewEndsAt)}
-          </span>
-        )}
-        {trade.status === 'ACCEPTED_PENDING_REVIEW' && offer.reviewMode === 'veto' && (
-          <span>
-            {offer.vetoCount} of {offer.vetoThreshold} vetoes
-          </span>
-        )}
+      <div className="mx-4 mt-4 grid min-w-0 gap-x-10 gap-y-5 border-t border-[color:var(--trade-border)] pt-4 sm:mx-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
+        <TradeVerdictStrip
+          verdict={verdict}
+          otherSide={opponentTeamName}
+          youLabel={youLabel}
+          season={playerStats.context.season}
+          compact
+        />
+        {perspectiveSquad ? (
+          <TradeSquadImpact
+            changes={squadPositionImpact(perspectiveSquad, sendingPlayers, receivingPlayers)}
+            teamLabel={youLabel === 'you' ? 'Your squad' : `${youLabel}'s squad`}
+            showBasis={false}
+          />
+        ) : null}
+      </div>
+      <p className="mx-4 mt-3 text-xs text-[color:var(--trade-text-muted)] sm:mx-5">
+        Per-game averages, {playerStats.context.season} season. Dual-position players count in both.
+      </p>
+
+      <div className="px-4 pb-4 pt-2 sm:px-5">
+        <button
+          type="button"
+          aria-expanded={showBreakdown}
+          aria-controls={breakdownId}
+          onClick={() => setShowBreakdown((current) => !current)}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-semibold text-[color:var(--trade-text)] hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]"
+        >
+          {showBreakdown ? (
+            <ChevronDown aria-hidden="true" className="size-4" />
+          ) : (
+            <ChevronRight aria-hidden="true" className="size-4" />
+          )}
+          All categories
+        </button>
+        {showBreakdown ? (
+          <div id={breakdownId} className="mt-2">
+            <TradeComparisonTable
+              sendingTeamName={sendingHeading}
+              receivingTeamName={receivingHeading}
+              sendingPlayerIds={sendingPlayers.map((player) => player.id)}
+              receivingPlayerIds={receivingPlayers.map((player) => player.id)}
+              playerStats={playerStats}
+            />
+          </div>
+        ) : null}
       </div>
 
-      <footer
-        aria-label={`Actions for ${displayTitle}`}
-        className="flex flex-wrap gap-2 border-t border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-3 sm:px-5"
-      >
-        {trade.allowedActions.map((action) =>
-          action === 'counter' ? (
-            <button
-              key={action}
-              type="button"
-              disabled={isPending}
-              onClick={() => onCounter(trade)}
-              className={secondaryButtonClasses}
-            >
-              Counteroffer
-            </button>
-          ) : (
-            <button
-              key={action}
-              type="button"
-              disabled={isPending}
-              onClick={() => onAction(trade, action)}
-              className={
-                action === 'accept' || action === 'approve'
-                  ? primaryButtonClasses
-                  : secondaryButtonClasses
-              }
-            >
-              {isPending ? 'Working…' : ACTION_LABELS[action]}
-            </button>
-          )
-        )}
+      {(offer.reviewEndsAt ||
+        (trade.status === 'ACCEPTED_PENDING_REVIEW' && offer.reviewMode === 'veto')) && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 pb-4 text-xs font-medium text-[color:var(--trade-text-muted)] sm:px-5">
+          {offer.reviewEndsAt && (
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck aria-hidden="true" className="size-3.5" />
+              Review ends {formatTradeDateTime(offer.reviewEndsAt)}
+            </span>
+          )}
+          {trade.status === 'ACCEPTED_PENDING_REVIEW' && offer.reviewMode === 'veto' && (
+            <span>
+              {offer.vetoCount} of {offer.vetoThreshold} vetoes
+            </span>
+          )}
+        </div>
+      )}
+
+      <footer className="flex flex-wrap items-center gap-2 border-t border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-2 sm:px-5">
         <LeagueSocialDiscussButton
           leagueId={leagueId}
           label="Discuss trade"
@@ -163,20 +174,11 @@ export function TradeOfferDetails({
             subtitle: TRADE_STATUS_LABELS[trade.status],
             metadata: { offerId: offer.id, status: trade.status },
           }}
-          className="!min-h-11 !rounded-lg !border-[color:var(--trade-border-strong)] !bg-[color:var(--trade-surface)] !px-4 !text-sm !text-[color:var(--trade-text)] hover:!bg-[color:var(--trade-action-soft)] focus-visible:!ring-[3px] focus-visible:!ring-[color:var(--trade-focus)]"
+          className="!min-h-11 !rounded-md !border-transparent !bg-transparent !px-3 !text-sm !text-[color:var(--trade-text)] hover:!bg-[color:var(--trade-action-soft)] focus-visible:!ring-2 focus-visible:!ring-[color:var(--trade-focus)]"
         />
       </footer>
 
       {(trade.offerHistory.length > 1 || trade.events.length > 0) && <TradeHistory trade={trade} />}
-    </div>
-  );
-}
-
-function MetadataItem({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <div className="bg-[color:var(--trade-surface-subtle)] px-4 py-3 sm:px-5">
-      <dt className="font-semibold text-[color:var(--trade-text-muted)]">{label}</dt>
-      <dd className="mt-1 font-bold text-[color:var(--trade-text)]">{value}</dd>
     </div>
   );
 }
@@ -186,20 +188,15 @@ function TradeHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
 
   return (
     <details className="border-t border-[color:var(--trade-border)] px-4 py-3 sm:px-5">
-      <summary className="cursor-pointer rounded text-sm font-semibold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]">
+      <summary className="cursor-pointer rounded text-sm font-semibold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]">
         Trade history
       </summary>
       {offers.length > 1 && (
         <section aria-label="Previous offer terms" className="mt-4">
-          <h4 className="text-xs font-bold uppercase tracking-wide text-[color:var(--trade-text-muted)]">
-            Offer terms
-          </h4>
-          <ol className="mt-2 space-y-3">
+          <h4 className="text-sm font-semibold text-[color:var(--trade-text)]">Offer terms</h4>
+          <ol className="mt-2 divide-y divide-[color:var(--trade-border)] border-y border-[color:var(--trade-border)]">
             {offers.map((offer) => (
-              <li
-                key={offer.id}
-                className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-3 text-xs"
-              >
+              <li key={offer.id} className="py-2.5 text-xs">
                 <p className="font-semibold text-[color:var(--trade-text)]">
                   Offer {offer.sequence} · {formatLifecycleLabel(offer.status)} ·{' '}
                   {formatTradeDateTime(offer.createdAt)}
@@ -208,7 +205,7 @@ function TradeHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
                   {offer.players.map((player) => player.name).join(', ')}
                 </p>
                 {offer.message && (
-                  <blockquote className="mt-2 border-l-2 border-[color:var(--trade-action)] pl-2 text-[color:var(--trade-text-muted)]">
+                  <blockquote className="mt-2 border-l-2 border-[color:var(--trade-border-strong)] pl-2 text-[color:var(--trade-text-muted)]">
                     {offer.message}
                   </blockquote>
                 )}
@@ -219,9 +216,7 @@ function TradeHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
       )}
       {trade.events.length > 0 && (
         <section aria-label="Trade decisions" className="mt-4">
-          <h4 className="text-xs font-bold uppercase tracking-wide text-[color:var(--trade-text-muted)]">
-            Decisions
-          </h4>
+          <h4 className="text-sm font-semibold text-[color:var(--trade-text)]">Decisions</h4>
           <ol className="mt-2 space-y-2 border-l border-[color:var(--trade-border)] pl-4 text-xs text-[color:var(--trade-text-muted)]">
             {trade.events.map((event) => (
               <li key={event.id}>
@@ -241,36 +236,9 @@ function TradeHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
   );
 }
 
-function summarizePositionBalance(
-  sendingPlayers: TradeOfferPlayerDto[],
-  receivingPlayers: TradeOfferPlayerDto[]
-): string {
-  const deltas = new Map<string, number>();
-  for (const player of sendingPlayers) {
-    deltas.set(player.position, (deltas.get(player.position) ?? 0) - 1);
-  }
-  for (const player of receivingPlayers) {
-    deltas.set(player.position, (deltas.get(player.position) ?? 0) + 1);
-  }
-  const summary = [...deltas.entries()]
-    .filter(([, delta]) => delta !== 0)
-    .map(([position, delta]) => `${position} ${delta > 0 ? '+' : '−'}${Math.abs(delta)}`);
-  return summary.length > 0 ? summary.join(' · ') : 'Balanced';
-}
-
 function formatLifecycleLabel(value: string): string {
   return value
     .toLowerCase()
     .replaceAll('_', ' ')
     .replace(/^\w/, (letter) => letter.toUpperCase());
 }
-
-function formatDeadline(value: string | null | undefined): string {
-  if (!value) return 'No deadline';
-  return formatTradeDateTime(value);
-}
-
-const primaryButtonClasses =
-  'inline-flex h-11 items-center justify-center rounded-lg bg-[color:var(--trade-action)] px-4 text-sm font-bold text-white transition-colors hover:bg-[color:var(--trade-action-hover)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
-const secondaryButtonClasses =
-  'inline-flex h-11 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';

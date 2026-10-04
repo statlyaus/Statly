@@ -1,11 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import LeagueTabs from '@/components/league/LeagueTabs';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
-
-const myTeamPanelSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/leagues/league-1',
@@ -17,25 +15,8 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-vi.mock('@/components/MyTeamPanel', () => ({
-  default: (props: {
-    team?: { players?: Array<string | number> };
-    players: Array<{ id: string }>;
-    selectedCategories?: string[];
-  }) => {
-    myTeamPanelSpy(props);
-
-    return (
-      <section aria-label="Mock team panel">
-        <span>Team players: {props.team?.players?.length ?? 0}</span>
-        <span>Hydrated players: {props.players.length}</span>
-      </section>
-    );
-  },
-}));
-
 vi.mock('@/lib/authenticatedFetch', () => ({
-  authenticatedFetch: vi.fn().mockResolvedValue({ ok: false }),
+  authenticatedFetch: vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
 }));
 
 const league: League = {
@@ -71,51 +52,15 @@ const members: LeagueMember[] = [
   },
 ];
 
-describe('LeagueTabs roster tab', () => {
-  it('passes completed draft roster players from the wrapped roster API response into MyTeamPanel', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: {
-          roster: {
-            id: 'roster-1',
-            leagueId: 'league-1',
-            memberId: 'member-1',
-            teamName: 'Robbo Rockers',
-            players: [
-              { id: 'player-1', name: 'Darcy Cameron', position: 'RUC', team: 'Collingwood' },
-              { id: 'player-2', name: 'Jacob Wehr', position: 'MID', team: 'GWS' },
-            ],
-          },
-          leagueSettings: {
-            selectedCategories: [...REAL_DATA_NINE_CATEGORY_PRESET],
-          },
-        },
-      }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+describe('LeagueTabs roster links', () => {
+  it('opens the combined My Team tab for old ?tab=roster links', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
 
     render(<LeagueTabs league={league} members={members} currentUserId="statly-dev-tester" />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Team players: 2')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('Hydrated players: 2')).toBeInTheDocument();
-    expect(myTeamPanelSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        team: expect.objectContaining({
-          id: 'roster-1',
-          name: 'Robbo Rockers',
-          players: ['player-1', 'player-2'],
-        }),
-        players: expect.arrayContaining([
-          expect.objectContaining({ id: 'player-1', name: 'Darcy Cameron' }),
-          expect.objectContaining({ id: 'player-2', name: 'Jacob Wehr' }),
-        ]),
-        selectedCategories: [...REAL_DATA_NINE_CATEGORY_PRESET],
-      })
-    );
+    expect(await screen.findByRole('heading', { level: 2, name: 'My team' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My Team' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'My Roster' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'My Lineup' })).not.toBeInTheDocument();
   });
 });

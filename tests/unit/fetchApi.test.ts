@@ -66,6 +66,24 @@ describe('fetchApi', () => {
     );
   });
 
+  it('keeps the HTTP status on thrown errors so callers can choose a recovery', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Player already drafted' }), {
+          status: 409,
+          statusText: 'Conflict',
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(fetchApi('drafts/draft-1/picks', { method: 'POST' })).rejects.toMatchObject({
+      message: 'Player already drafted',
+      status: 409,
+    });
+  });
+
   it('normalizes legacy and standardized API errors through one contract', () => {
     expect(getApiErrorMessage({ error: 'Legacy failure' }, 400, 'Bad Request')).toBe(
       'Legacy failure'

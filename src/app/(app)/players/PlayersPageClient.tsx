@@ -1,71 +1,65 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDownAZ, ArrowUpAZ, Search, SlidersHorizontal, Users } from 'lucide-react';
+import { Search } from 'lucide-react';
 
-import { LeagueSocialDiscussButton } from '@/components/league/LeagueSocialDiscussButton';
-import type { Player } from '@/types/players';
+import {
+  FANTASY_CATEGORIES,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
+import { readPerGameValue } from '@/server/players/readModels/leaguePlayerStatReadModel';
+import type { Player, PlayerSeasonStatSource } from '@/types/players';
 
 interface PlayersPageClientProps {
   players: Player[];
 }
 
-type SortKey =
-  | 'name'
-  | 'team'
-  | 'position'
-  | 'aflFantasy'
-  | 'supercoach'
-  | 'disposals'
-  | 'goals'
-  | 'tackles'
-  | 'marks';
+type SortKey = 'name' | 'games' | FantasyCategoryKey;
 type SortDir = 'asc' | 'desc';
 
-const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
-  { value: 'name', label: 'Name' },
-  { value: 'team', label: 'Club' },
-  { value: 'position', label: 'Position' },
-  { value: 'aflFantasy', label: 'AFL Fantasy' },
-  { value: 'supercoach', label: 'SuperCoach' },
-  { value: 'disposals', label: 'Disposals' },
-  { value: 'goals', label: 'Goals' },
-  { value: 'tackles', label: 'Tackles' },
-  { value: 'marks', label: 'Marks' },
-];
+const PAGE_SIZE = 50;
 
-const CORE_STATS: Array<{ key: SortKey; label: string }> = [
-  { key: 'aflFantasy', label: 'AF' },
-  { key: 'supercoach', label: 'SC' },
-  { key: 'disposals', label: 'D' },
-  { key: 'goals', label: 'G' },
-  { key: 'tackles', label: 'T' },
-];
+const CATEGORY_COLUMNS = REAL_DATA_NINE_CATEGORY_PRESET.map((key) => ({
+  key,
+  label: FANTASY_CATEGORIES[key].label,
+  shortLabel: FANTASY_CATEGORIES[key].shortLabel ?? FANTASY_CATEGORIES[key].label,
+}));
 
-function getPlayerValue(player: Player, key: SortKey): string | number | null {
-  const direct = player[key as keyof Player];
-  const nested = player.stats?.[key];
-  const value = direct ?? nested;
-
-  if (typeof value === 'number' || typeof value === 'string') return value;
-  return null;
+function gamesPlayed(player: Player): number {
+  const games = (player as Player & { games?: unknown }).games;
+  return typeof games === 'number' && games > 0 ? games : 0;
 }
 
-function formatStat(value: string | number | null): string {
-  if (value == null || value === '') return '-';
-  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(1);
-  return value;
+/** The season source the stats came from; older records without one are season totals. */
+function seasonSource(player: Player): PlayerSeasonStatSource {
+  const recorded = player.statsSeason
+    ? player.statsBySeason?.[String(player.statsSeason)]
+    : undefined;
+  if (recorded) return recorded;
+  const stats = player.stats ?? {};
+  return {
+    games: gamesPlayed(player),
+    dataThrough: null,
+    stats,
+    basisByStat: Object.fromEntries(Object.keys(stats).map((key) => [key, 'TOTAL' as const])),
+  };
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
+function perGame(player: Player, key: FantasyCategoryKey): number | null {
+  return readPerGameValue(seasonSource(player), key);
+}
+
+function sortValue(player: Player, key: SortKey): string | number | null {
+  if (key === 'name') return player.name;
+  if (key === 'games') return gamesPlayed(player) || null;
+  return perGame(player, key);
+}
+
+function formatAverage(value: number | null): string {
+  if (value === null) return '–';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 export default function PlayersPageClient({ players }: PlayersPageClientProps) {
@@ -73,246 +67,234 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
   const [teamFilter, setTeamFilter] = useState('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const teams = useMemo(() => {
-    const unique = new Set(
-      players
-        .map((player) => player.team)
-        .filter((value): value is string => Boolean(value))
-        .map((value) => value.trim()),
-    );
-    return ['ALL', ...Array.from(unique).sort()];
-  }, [players]);
+  const teams = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          players.map((player) => player.team?.trim()).filter((team): team is string => !!team)
+        )
+      ).sort(),
+    [players]
+  );
+
+  const season = useMemo(
+    () => Math.max(0, ...players.map((player) => player.statsSeason ?? 0)) || null,
+    [players]
+  );
 
   const visiblePlayers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const direction = sortDir === 'asc' ? 1 : -1;
 
     return players
-      .filter((player) => {
-        const matchesQuery =
-          normalizedQuery.length === 0 ||
-          player.name.toLowerCase().includes(normalizedQuery) ||
-          player.team?.toLowerCase().includes(normalizedQuery);
-        const matchesTeam = teamFilter === 'ALL' || player.team === teamFilter;
-        return matchesQuery && matchesTeam;
-      })
+      .filter(
+        (player) =>
+          (teamFilter === 'ALL' || player.team === teamFilter) &&
+          (normalizedQuery.length === 0 ||
+            player.name.toLowerCase().includes(normalizedQuery) ||
+            player.team?.toLowerCase().includes(normalizedQuery))
+      )
       .sort((a, b) => {
-        const aValue = getPlayerValue(a, sortKey);
-        const bValue = getPlayerValue(b, sortKey);
-
-        if (aValue == null && bValue == null) return a.name.localeCompare(b.name);
-        if (aValue == null) return 1;
-        if (bValue == null) return -1;
-
-        const direction = sortDir === 'asc' ? 1 : -1;
+        const aValue = sortValue(a, sortKey);
+        const bValue = sortValue(b, sortKey);
+        if (aValue === null && bValue === null) return a.name.localeCompare(b.name);
+        if (aValue === null) return 1;
+        if (bValue === null) return -1;
         if (typeof aValue === 'number' && typeof bValue === 'number') {
-          return (aValue - bValue) * direction;
+          return (aValue - bValue) * direction || a.name.localeCompare(b.name);
         }
-
         return String(aValue).localeCompare(String(bValue)) * direction;
       });
   }, [players, teamFilter, query, sortDir, sortKey]);
 
-  const featuredPlayers = visiblePlayers.slice(0, 12);
+  const shownPlayers = visiblePlayers.slice(0, visibleCount);
+  const nextPageCount = Math.min(PAGE_SIZE, visiblePlayers.length - shownPlayers.length);
+
+  const sortBy = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      // Names read A–Z; games and categories read best first.
+      setSortDir(key === 'name' ? 'asc' : 'desc');
+    }
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  const ariaSort = (key: SortKey) =>
+    key === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+
+  const sortButton = (key: SortKey, label: string, content: ReactNode) => (
+    <button
+      type="button"
+      onClick={() => sortBy(key)}
+      className="inline-flex min-h-11 items-center gap-1 font-semibold hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {/* The full name labels the column; aria-sort on the header carries the order. */}
+      <span aria-hidden="true">{content}</span>
+      <span className="sr-only">{label}</span>
+      {key === sortKey ? <span aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span> : null}
+    </button>
+  );
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                Player database
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
-                AFL player board
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--league-text-muted)] sm:text-base">
-                Search the player pool, compare core production, and move quickly from rankings
-                into player profiles.
-              </p>
-            </div>
+    <div className="mx-auto flex w-full max-w-[var(--app-shell-max-width)] flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+      <header>
+        <h1 className="text-2xl font-semibold text-foreground">Players</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Per-game averages in the default scoring categories
+          {season ? `, ${season} season` : ''}. Select a column to rank players by it.
+        </p>
+      </header>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:min-w-[360px]">
-              <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
-                  Players
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">
-                  {players.length}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
-                  Showing
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">
-                  {visiblePlayers.length}
-                </p>
-              </div>
-              <div className="col-span-2 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:col-span-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
-                  Clubs
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">
-                  {Math.max(teams.length - 1, 0)}
-                </p>
-              </div>
-            </div>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+        <label className="relative block">
+          <span className="sr-only">Search players</span>
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            placeholder="Search player or club"
+            className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </label>
+        <label className="block">
+          <span className="sr-only">Filter by club</span>
+          <select
+            value={teamFilter}
+            onChange={(event) => {
+              setTeamFilter(event.target.value);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="ALL">All clubs</option>
+            {teams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {/* Stays mounted so a search that empties the list is announced too. */}
+      <p className="text-sm font-medium text-muted-foreground" aria-live="polite">
+        {shownPlayers.length > 0
+          ? `Showing ${shownPlayers.length} of ${visiblePlayers.length} ${
+              visiblePlayers.length === 1 ? 'player' : 'players'
+            }`
+          : 'Showing 0 players'}
+      </p>
+
+      {shownPlayers.length > 0 ? (
+        <>
+          <div className="relative overflow-x-auto rounded-lg border border-border bg-background">
+            <table className="w-full min-w-[760px] border-collapse text-sm tabular-nums">
+              <caption className="sr-only">
+                Players with per-game averages in each scoring category
+              </caption>
+              <thead className="bg-muted text-xs text-muted-foreground">
+                <tr>
+                  <th
+                    scope="col"
+                    aria-sort={ariaSort('name')}
+                    className="sticky left-0 z-10 bg-muted px-3 text-left"
+                  >
+                    {sortButton('name', 'Player', 'Player')}
+                  </th>
+                  <th scope="col" aria-sort={ariaSort('games')} className="px-2 text-right">
+                    {sortButton('games', 'Games played', <abbr title="Games played">GP</abbr>)}
+                  </th>
+                  {CATEGORY_COLUMNS.map((column) => (
+                    <th
+                      key={column.key}
+                      scope="col"
+                      aria-sort={ariaSort(column.key)}
+                      className="px-2 text-right"
+                    >
+                      {sortButton(
+                        column.key,
+                        column.label,
+                        <abbr title={column.label} className="no-underline">
+                          {column.shortLabel}
+                        </abbr>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {shownPlayers.map((player) => (
+                  <tr key={player.id} className="border-t border-border">
+                    <th
+                      scope="row"
+                      className="sticky left-0 z-10 bg-background px-3 py-2 text-left font-normal"
+                    >
+                      <Link
+                        href={`/players/${player.id}`}
+                        className="font-semibold text-foreground underline decoration-transparent underline-offset-4 hover:decoration-current focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {player.name}
+                      </Link>
+                      <span className="block text-xs text-muted-foreground">
+                        {[player.team, player.position].filter(Boolean).join(' · ') || 'No club'}
+                      </span>
+                    </th>
+                    <td className="px-2 py-2 text-right text-muted-foreground">
+                      {gamesPlayed(player) || '–'}
+                    </td>
+                    {CATEGORY_COLUMNS.map((column) => (
+                      <td
+                        key={column.key}
+                        className={`px-2 py-2 text-right ${
+                          column.key === sortKey
+                            ? 'font-semibold text-foreground'
+                            : 'text-foreground'
+                        }`}
+                      >
+                        {formatAverage(perGame(player, column.key))}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </section>
-
-        <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-[0_22px_70px_-48px_rgba(23,34,48,0.28)] sm:p-5">
-          <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_180px_180px_auto]">
-            <label className="relative block">
-              <span className="sr-only">Search players</span>
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--league-text-muted)]" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search player or club"
-                className="h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] pl-10 pr-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
-              />
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Filter by club</span>
-              <select
-                value={teamFilter}
-                onChange={(event) => setTeamFilter(event.target.value)}
-                className="h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
-              >
-                {teams.map((option) => (
-                  <option key={option} value={option}>
-                    {option === 'ALL' ? 'All clubs' : option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Sort players</span>
-              <select
-                value={sortKey}
-                onChange={(event) => setSortKey(event.target.value as SortKey)}
-                className="h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    Sort: {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {CATEGORY_COLUMNS.map((column) => (
+              <li key={column.key}>
+                <span className="font-semibold text-foreground">{column.shortLabel}</span>{' '}
+                {column.label}
+              </li>
+            ))}
+          </ul>
+          {nextPageCount > 0 ? (
             <button
               type="button"
-              onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-              aria-label={`Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`}
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+              className="mx-auto inline-flex h-11 items-center justify-center rounded-md border border-border bg-background px-5 text-sm font-semibold text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {sortDir === 'asc' ? (
-                <ArrowDownAZ className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <ArrowUpAZ className="h-4 w-4" aria-hidden="true" />
-              )}
-              {sortDir === 'asc' ? 'Ascending' : 'Descending'}
+              Show {nextPageCount} more {nextPageCount === 1 ? 'player' : 'players'}
             </button>
-          </div>
+          ) : null}
+        </>
+      ) : (
+        <section className="rounded-lg border border-border bg-background p-8 text-center">
+          <h2 className="text-lg font-semibold text-foreground">No players match those filters</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            Clear the search field or choose all clubs to see every player.
+          </p>
         </section>
-
-        {featuredPlayers.length > 0 ? (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {featuredPlayers.map((player) => (
-              <article
-                key={player.id}
-                className="group rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.4)] transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)]/35 hover:shadow-[0_24px_60px_-42px_rgba(23,34,48,0.45)]"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--league-primary)] text-sm font-semibold text-white">
-                    {getInitials(player.name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="truncate text-base font-semibold tracking-tight text-[color:var(--league-text)]">
-                          {player.name}
-                        </h2>
-                        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                          {[player.team, player.position].filter(Boolean).join(' / ') || 'No club'}
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-primary-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--league-primary)]">
-                        {player.position || player.team?.slice(0, 3).toUpperCase() || 'AFL'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <dl className="mt-5 grid grid-cols-5 gap-2">
-                  {CORE_STATS.map((stat) => (
-                    <div
-                      key={stat.key}
-                      className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2 py-2 text-center"
-                    >
-                      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        {stat.label}
-                      </dt>
-                      <dd className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
-                        {formatStat(getPlayerValue(player, stat.key))}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--league-border)] pt-4">
-                  <div className="inline-flex items-center gap-2 text-xs font-medium text-[color:var(--league-text-muted)]">
-                    <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                    {sortKey === 'name'
-                      ? 'Profile ready'
-                      : `${SORT_OPTIONS.find((option) => option.value === sortKey)?.label}: ${formatStat(
-                          getPlayerValue(player, sortKey),
-                        )}`}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <LeagueSocialDiscussButton
-                      context={{
-                        type: 'player',
-                        id: String(player.id),
-                        title: player.name,
-                        subtitle:
-                          [player.team, player.position].filter(Boolean).join(' · ') || undefined,
-                        metadata: {
-                          ...(player.team ? { club: player.team } : {}),
-                          ...(player.position ? { position: player.position } : {}),
-                        },
-                      }}
-                    />
-                    <Link
-                      href={`/players/${player.id}`}
-                      className="rounded-full bg-[color:var(--league-primary)] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
-                    >
-                      View profile
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </section>
-        ) : (
-          <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
-              <Users className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold text-[color:var(--league-text)]">
-              No players match those filters
-            </h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[color:var(--league-text-muted)]">
-              Clear the search field or choose all clubs to return to the full player board.
-            </p>
-          </section>
-        )}
-      </div>
-    </main>
+      )}
+    </div>
   );
 }

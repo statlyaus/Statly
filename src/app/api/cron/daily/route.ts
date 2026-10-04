@@ -1,24 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Daily cron endpoint triggered by a scheduler (see vercel.json)
+import { isCronRequestAuthorized } from '@/lib/cronAuth';
+
+// Daily cron endpoint, called by the hosting scheduler
 // - Runs on Node.js runtime so firebase-admin and other Node libs work
-// - Requires the scheduler credential as `Authorization: Bearer $CRON_SECRET`
+// - Protected by CRON_SECRET via isCronRequestAuthorized (fails closed outside development)
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   const started = Date.now();
 
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) {
-    console.error('[CRON] CRON_SECRET is not configured; refusing the daily job');
-    return NextResponse.json(
-      { ok: false, error: 'Scheduled jobs are not configured' },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } }
-    );
-  }
-
-  if (req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!isCronRequestAuthorized(req)) {
     return NextResponse.json(
       { ok: false, error: 'unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } }

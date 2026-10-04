@@ -11,6 +11,8 @@ import type {
   AflTradeValueDetailResponse,
   AflTradeValueSummary,
 } from '@/types/aflTradeIntelligence';
+import { badgeStyles, buttonStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
 
 export type DraftTradeHeaderView = {
   tradeId: string;
@@ -64,17 +66,11 @@ function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
   return 'Other';
 }
 
-function assetTypeBadgeClass(assetType: DraftTradeAssetView['assetType']): string {
-  if (assetType === 'player') {
-    return 'badge-success badge-outline';
-  }
-  if (assetType === 'future_pick') {
-    return 'badge-warning badge-outline';
-  }
-  if (assetType === 'pick') {
-    return 'badge-info badge-outline';
-  }
-  return 'badge-ghost';
+/** Asset types are categories, not results, so they share the neutral tone. */
+function assetTypeBadgeTone(assetType: DraftTradeAssetView['assetType']): 'neutral' | 'muted' {
+  return assetType === 'player' || assetType === 'pick' || assetType === 'future_pick'
+    ? 'neutral'
+    : 'muted';
 }
 
 /**
@@ -104,7 +100,7 @@ function gradeForClub(
 function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) {
   if (!grade?.grade) {
     return (
-      <span className="text-sm text-base-content/55">
+      <span className="text-sm text-muted-foreground">
         <span aria-hidden="true">—</span>
         <span className="sr-only">Grade not available</span>
       </span>
@@ -114,15 +110,16 @@ function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) 
   return (
     <span className="inline-flex flex-col items-end gap-1">
       <span
-        className="badge badge-primary badge-outline min-w-10 justify-center font-semibold"
+        className={cn(
+          badgeStyles({ tone: 'brand', size: 'sm' }),
+          'min-w-10 justify-center font-semibold'
+        )}
         aria-label={`Grade ${grade.grade}`}
       >
         {grade.grade}
       </span>
       {grade.state === 'provisional' ? (
-        <span className="text-[10px] font-medium uppercase tracking-wide text-base-content/55">
-          Provisional
-        </span>
+        <span className="text-xs font-medium text-muted-foreground">Provisional</span>
       ) : null}
     </span>
   );
@@ -185,7 +182,7 @@ function TradeModuleAccent({ tone }: { tone: 'summary' | 'parties' | 'receives' 
     tone === 'summary'
       ? 'bg-linear-to-r from-primary/70 via-secondary/60 to-primary/70'
       : tone === 'parties'
-        ? 'bg-linear-to-r from-base-content/28 via-base-content/12 to-base-content/28'
+        ? 'bg-linear-to-r from-foreground/28 via-foreground/12 to-foreground/28'
         : 'bg-linear-to-r from-secondary/55 via-secondary/30 to-secondary/55';
 
   return (
@@ -219,12 +216,12 @@ function TradeModuleHeader({
   /** `lead` = styled paragraph (Summary); keeps a single h2 for the trade title below. */
   titleAs?: 'section' | 'lead';
 }) {
-  const titleClass = `mt-1 font-semibold text-base-content ${isInline ? 'text-base' : 'text-lg'}`;
+  const titleClass = `mt-1 font-semibold text-foreground ${isInline ? 'text-base' : 'text-lg'}`;
 
   return (
-    <div className={`flex gap-3 border-b border-base-300 bg-base-200/50 ${pad}`}>
+    <div className={`flex gap-3 border-b border-border bg-muted/50 ${pad}`}>
       <div className="flex shrink-0 flex-col pt-0.5" aria-hidden="true">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-base-300 bg-base-100 text-sm font-bold tabular-nums text-base-content/80 shadow-sm">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-border bg-background text-sm font-bold tabular-nums text-foreground/80 shadow-sm">
           {step}
         </span>
       </div>
@@ -235,9 +232,9 @@ function TradeModuleHeader({
             {title}
           </h3>
         ) : (
-          <p className={`${titleClass} text-base-content/90`}>{title}</p>
+          <p className={`${titleClass} text-foreground/90`}>{title}</p>
         )}
-        <p className="mt-1 text-sm leading-relaxed text-base-content/65">{description}</p>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
       </div>
     </div>
   );
@@ -258,17 +255,13 @@ export function DraftTradeDetail({
   ).length;
   const isInline = mode === 'inline';
   const summaryTiles = [
-    { label: 'Players', value: playerAssetCount, className: 'bg-success/8 ring-1 ring-success/15' },
-    { label: 'Picks', value: pickAssetCount, className: 'bg-info/8 ring-1 ring-info/15' },
-    {
-      label: 'Future',
-      value: futurePickAssetCount,
-      className: 'bg-warning/8 ring-1 ring-warning/15',
-    },
+    { label: 'Players', value: playerAssetCount, className: 'bg-muted ring-1 ring-border' },
+    { label: 'Picks', value: pickAssetCount, className: 'bg-muted ring-1 ring-border' },
+    { label: 'Future', value: futurePickAssetCount, className: 'bg-muted ring-1 ring-border' },
   ];
 
   const sectionHeaderPad = isInline ? 'px-4 py-3' : 'px-5 py-3.5';
-  const sectionEyebrow = 'text-xs font-semibold uppercase tracking-[0.14em]';
+  const sectionEyebrow = 'text-xs font-semibold';
   const atTradeGrades = statlyValues ? deriveAflTradeStatlyGrades(statlyValues.atTrade) : null;
   const currentGrades = statlyValues ? deriveAflTradeStatlyGrades(statlyValues.current) : null;
   const partyGrades = detail.parties
@@ -286,7 +279,7 @@ export function DraftTradeDetail({
       <section
         id="trade-detail-summary"
         aria-labelledby="trade-detail-heading"
-        className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+        className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm"
       >
         <TradeModuleHeader
           step={1}
@@ -295,11 +288,11 @@ export function DraftTradeDetail({
           title="Snapshot"
           description="Official trade title plus a quick count of players, picks, and future picks. Clubs are listed in Parties below."
           pad={sectionHeaderPad}
-          eyebrowClass={`${sectionEyebrow} text-base-content/55`}
+          eyebrowClass={`${sectionEyebrow} text-muted-foreground`}
           isInline={isInline}
         />
         <div
-          className={`relative bg-linear-to-b from-base-200/35 to-base-100 ${isInline ? 'p-3' : 'p-4'}`}
+          className={`relative bg-linear-to-b from-muted/35 to-background ${isInline ? 'p-3' : 'p-4'}`}
         >
           <TradeModuleAccent tone="summary" />
           <div className="space-y-4 pt-2">
@@ -308,14 +301,24 @@ export function DraftTradeDetail({
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <h2
                     id="trade-detail-heading"
-                    className={`${isInline ? 'text-lg' : 'text-xl'} font-semibold leading-snug text-base-content`}
+                    className={`${isInline ? 'text-lg' : 'text-xl'} font-semibold leading-snug text-foreground`}
                   >
                     {detail.trade.title}
                   </h2>
-                  <span className="badge badge-outline badge-sm shrink-0 sm:badge-md">
+                  <span
+                    className={cn(
+                      badgeStyles({ tone: 'neutral', size: 'sm' }),
+                      'shrink-0 sm:px-2.5 sm:py-0.5 sm:text-sm'
+                    )}
+                  >
                     #{detail.trade.seqInYear}
                   </span>
-                  <span className="badge badge-primary badge-outline badge-sm shrink-0 sm:badge-md">
+                  <span
+                    className={cn(
+                      badgeStyles({ tone: 'brand', size: 'sm' }),
+                      'shrink-0 sm:px-2.5 sm:py-0.5 sm:text-sm'
+                    )}
+                  >
                     {detail.trade.year}
                   </span>
                 </div>
@@ -333,7 +336,7 @@ export function DraftTradeDetail({
                           withCircle
                           decorative
                         />
-                        <span className="text-sm font-medium text-base-content/90">{name}</span>
+                        <span className="text-sm font-medium text-foreground/90">{name}</span>
                       </div>
                     ))}
                   </div>
@@ -342,14 +345,14 @@ export function DraftTradeDetail({
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 <a
                   href={`/api/draft-trades/${detail.trade.tradeId}/export`}
-                  className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
+                  className={buttonStyles({ variant: 'outline', size: isInline ? 'xs' : 'sm' })}
                 >
                   Export CSV
                 </a>
                 {showOpenFullPageLink && (
                   <Link
                     href={`/draft/trades/${detail.trade.tradeId}`}
-                    className={`btn btn-outline ${isInline ? 'btn-xs' : 'btn-sm'}`}
+                    className={buttonStyles({ variant: 'outline', size: isInline ? 'xs' : 'sm' })}
                   >
                     Open full page
                   </Link>
@@ -366,10 +369,10 @@ export function DraftTradeDetail({
                   key={tile.label}
                   className={`min-w-0 rounded-2xl px-2.5 py-2 shadow-sm sm:px-3 ${tile.className} ${isInline ? '' : 'sm:py-3'}`}
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-base-content/55 sm:text-xs sm:tracking-[0.14em]">
+                  <p className="text-xs font-semibold text-muted-foreground sm:text-xs">
                     {tile.label}
                   </p>
-                  <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-base-content sm:mt-1 sm:text-2xl">
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-foreground sm:mt-1 sm:text-2xl">
                     {tile.value}
                   </p>
                 </div>
@@ -383,7 +386,7 @@ export function DraftTradeDetail({
 
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">
-        <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
           <TradeModuleHeader
             step={2}
             eyebrow="Parties"
@@ -391,13 +394,13 @@ export function DraftTradeDetail({
             title="Who was in the deal"
             description="Each row is one club side. Statly grades compare the assets received using the selected model view."
             pad={sectionHeaderPad}
-            eyebrowClass={`${sectionEyebrow} text-base-content/55`}
+            eyebrowClass={`${sectionEyebrow} text-muted-foreground`}
             isInline={isInline}
           />
-          <div className="bg-base-100 px-2 pb-2 pt-2 sm:px-3 sm:pb-3">
-            <div className="relative overflow-hidden rounded-xl bg-base-100 shadow-sm ring-1 ring-base-200/50">
+          <div className="bg-background px-2 pb-2 pt-2 sm:px-3 sm:pb-3">
+            <div className="relative overflow-hidden rounded-xl bg-background shadow-sm ring-1 ring-border/50">
               <TradeModuleAccent tone="parties" />
-              <p className="px-4 pb-3 pt-4 text-sm leading-6 text-base-content/65 sm:px-5">
+              <p className="px-4 pb-3 pt-4 text-sm leading-6 text-muted-foreground sm:px-5">
                 At trade uses information available at the time. Current combines observed
                 contribution with remaining uncertainty. Provisional grades are shown while careers
                 or pick outcomes remain open.
@@ -412,25 +415,23 @@ export function DraftTradeDetail({
                     key={party.id}
                     role="listitem"
                     aria-label={party.clubName}
-                    className="rounded-xl border border-base-300 bg-base-100 p-3"
+                    className="rounded-xl border border-border bg-background p-3"
                   >
                     <div className="flex items-center gap-2.5">
                       <DraftTeamLogo team={party.clubName} size={24} withCircle decorative />
-                      <h4 className="min-w-0 text-base font-semibold leading-snug text-base-content">
+                      <h4 className="min-w-0 text-base font-semibold leading-snug text-foreground">
                         {party.clubName}
                       </h4>
                     </div>
-                    <div className="mt-3 border-t border-base-200 pt-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-base-content/55">
-                        Assets received
-                      </p>
-                      <p className="mt-1 wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-base-content/90">
+                    <div className="mt-3 border-t border-border pt-3">
+                      <p className="text-xs font-semibold text-muted-foreground">Assets received</p>
+                      <p className="mt-1 wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
                         {party.assetsRaw}
                       </p>
                     </div>
-                    <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-base-200 pt-3">
+                    <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3">
                       <div>
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-base-content/55">
+                        <dt className="text-xs font-semibold text-muted-foreground">
                           At-trade grade
                         </dt>
                         <dd className="mt-1 text-base tabular-nums">
@@ -438,7 +439,7 @@ export function DraftTradeDetail({
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-base-content/55">
+                        <dt className="text-xs font-semibold text-muted-foreground">
                           Current grade
                         </dt>
                         <dd className="mt-1 text-base tabular-nums">
@@ -460,7 +461,7 @@ export function DraftTradeDetail({
                       <col className="w-24 sm:w-28" />
                     </colgroup>
                     <thead>
-                      <tr className="border-b border-base-200 bg-base-200/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-base-content/65">
+                      <tr className="border-b border-border bg-muted/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:text-muted-foreground">
                         <th scope="col" className="whitespace-nowrap text-left">
                           Club
                         </th>
@@ -475,9 +476,9 @@ export function DraftTradeDetail({
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="[&>tr]:border-b [&>tr]:border-base-200/80 [&>tr:last-child]:border-b-0">
+                    <tbody className="[&>tr]:border-b [&>tr]:border-border/80 [&>tr:last-child]:border-b-0">
                       {partyGrades.map(({ party, atTradeGrade, currentGrade }) => (
-                        <tr key={party.id} className="transition-colors hover:bg-base-200/25">
+                        <tr key={party.id} className="transition-colors hover:bg-muted/25">
                           <td className="align-top text-left text-base font-medium leading-snug">
                             <div className="flex items-start gap-2.5">
                               <DraftTeamLogo
@@ -490,7 +491,7 @@ export function DraftTradeDetail({
                               <span className="min-w-0">{party.clubName}</span>
                             </div>
                           </td>
-                          <td className="wrap-break-word min-w-0 align-top whitespace-pre-wrap text-left text-base leading-relaxed text-base-content/90">
+                          <td className="wrap-break-word min-w-0 align-top whitespace-pre-wrap text-left text-base leading-relaxed text-foreground/90">
                             {party.assetsRaw}
                           </td>
                           <td className="align-top text-right text-base tabular-nums">
@@ -512,7 +513,7 @@ export function DraftTradeDetail({
 
       {/* Receives: same card language — part three of the same story */}
       <section id="trade-detail-receives" aria-labelledby="trade-receives-heading">
-        <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
           <TradeModuleHeader
             step={3}
             eyebrow="Club receives"
@@ -520,19 +521,19 @@ export function DraftTradeDetail({
             title="What each club gained"
             description="Structured view: assets grouped by club, then by players, picks, and future picks."
             pad={sectionHeaderPad}
-            eyebrowClass={`${sectionEyebrow} text-base-content/55`}
+            eyebrowClass={`${sectionEyebrow} text-muted-foreground`}
             isInline={isInline}
           />
-          <div className={`relative bg-base-100 ${isInline ? 'p-3' : 'p-4'}`}>
+          <div className={`relative bg-background ${isInline ? 'p-3' : 'p-4'}`}>
             <TradeModuleAccent tone="receives" />
             <div className={`grid pt-2 lg:grid-cols-2 ${isInline ? 'gap-4' : 'gap-5'}`}>
               {groupedAssets.map((group) => (
                 <article
                   key={`${detail.trade.tradeId}-${group.displayClubName}`}
-                  className={`rounded-xl border border-base-200 bg-base-100 ${isInline ? 'p-3' : 'p-4'}`}
+                  className={`rounded-xl border border-border bg-background ${isInline ? 'p-3' : 'p-4'}`}
                 >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-base-200 pb-3">
-                    <h4 className="flex min-w-0 items-center gap-2.5 text-base font-semibold text-base-content sm:text-lg">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                    <h4 className="flex min-w-0 items-center gap-2.5 text-base font-semibold text-foreground sm:text-lg">
                       <DraftTeamLogo
                         team={group.displayClubName}
                         size={isInline ? 28 : 32}
@@ -540,11 +541,11 @@ export function DraftTradeDetail({
                         decorative
                       />
                       <span className="min-w-0 leading-snug">
-                        <span className="text-base-content">{group.displayClubName}</span>
-                        <span className="font-normal text-base-content/80"> receives</span>
+                        <span className="text-foreground">{group.displayClubName}</span>
+                        <span className="font-normal text-foreground/80"> receives</span>
                       </span>
                     </h4>
-                    <span className="text-sm tabular-nums text-base-content/60">
+                    <span className="text-sm tabular-nums text-muted-foreground">
                       {group.assets.length} assets
                     </span>
                   </div>
@@ -562,29 +563,32 @@ export function DraftTradeDetail({
                       <div className={isInline ? 'space-y-3' : 'space-y-4'}>
                         {blocks.map((block) => (
                           <div key={block.key}>
-                            <h5 className="text-xs font-semibold uppercase tracking-wide text-base-content/55 sm:text-sm">
+                            <h5 className="text-xs font-semibold text-muted-foreground sm:text-sm">
                               {block.label}{' '}
-                              <span className="font-normal text-base-content/45">
+                              <span className="font-normal text-muted-foreground">
                                 ({block.assets.length})
                               </span>
                             </h5>
-                            <ul className="mt-2 divide-y divide-base-200 rounded-lg border border-base-200 bg-base-200/25">
+                            <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-muted/25">
                               {block.assets.map((asset) => (
                                 <li
                                   key={asset.id}
                                   className="flex flex-col gap-1 px-3 py-2.5 sm:px-4 sm:py-3"
                                 >
                                   <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span className="text-sm font-medium text-base-content sm:text-base">
+                                    <span className="text-sm font-medium text-foreground sm:text-base">
                                       {asset.assetText}
                                     </span>
                                     <span
-                                      className={`badge badge-sm ${assetTypeBadgeClass(asset.assetType)}`}
+                                      className={badgeStyles({
+                                        tone: assetTypeBadgeTone(asset.assetType),
+                                        size: 'sm',
+                                      })}
                                     >
                                       {assetTypeLabel(asset.assetType)}
                                     </span>
                                   </div>
-                                  <p className="text-sm leading-snug text-base-content/70">
+                                  <p className="text-sm leading-snug text-muted-foreground">
                                     {asset.playerName ??
                                       asset.draftedPlayer ??
                                       'No player recorded'}

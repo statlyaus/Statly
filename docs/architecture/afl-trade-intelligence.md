@@ -412,6 +412,17 @@ spell; a later return creates a separate episode. Entry uses the incoming asset'
 an outgoing event closes the inclusive interval on the previous day. Appearance dates never supply
 missing acquisition dates.
 
+Outside `test_fixture`, reviewed rule and spell registration writes its evidence first. The
+repository takes a binding to the registered artifact store, stores each evidence artifact with
+`putIfAbsent` and reads it back in full before it opens the registration transaction. That
+transaction records each artifact's location, refuses evidence without a matching custody row, and
+refuses any cited artifact, including the rule's evidence cited by a spell, that still has no
+location, with the named `AflTradeArtifactUnlocatedError`. A failed write or read-back therefore
+leaves no location and no registration. A season (v3) spell cites no evidence bytes and is exempt.
+`test_fixture` has no store, because a local store may only exist in `non_production`, so fixtures
+keep the read-and-compare path. Reviewers register through `npm run
+outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.
+
 External canonical-target registration v2 uses the existing provider-resolution repository and
 reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
 from a current retained capture completion, an exact governed target snapshot, supporting custody
@@ -635,6 +646,19 @@ store. Its encoded-envelope limit includes base64 expansion and a bounded metada
 both limits are checked before publication and on reads. Direct low-level callers that omit a raw
 limit retain the 192 MiB envelope ceiling. This prevents an accepted write from becoming unreadable
 solely because encoding made it larger, without changing artifact identity or filesystem safeguards.
+
+Custody rows prove which bytes an artifact is, not where they are kept. Migration 0246 adds the
+`outcome_artifact_store` registry and the append-only `outcome_artifact_custody_location` table. A
+store row names its environment, assurance, root locator and, once recorded, its mirror locator; a
+local filesystem store may exist only in `non_production`, at most once there, at an absolute root,
+and store rows are never deleted. A location row binds one custody row to one store and object key.
+The key must end in the artifact's own `sha256/<aa>/<bb>/<sha256>` path, and the store's
+environment must equal the custody row's. Location is a separate table, not a custody column,
+because custody rows are immutable. A custody row with no location row has no known copy of its
+bytes. For the local filesystem store, the object key is the repository directory relative to the
+store root joined to the envelope's own key, so the key alone resolves the envelope file.
+`bindLocalAflTradeArtifactStore` builds a repository from a store id rather than a directory: it
+reads the store's root from its registration, so bytes written through it can always be located.
 
 ### Maturity-review acceptance criteria
 
@@ -1275,7 +1299,13 @@ current player-identity decisions and independently retained `afl_trade_canonica
 authority; it is atomic, idempotent and cannot write release or publication pointers. One traded pick
 entitlement and its eventual selection retain the same stable `pick_id`: `exercised_as` is a
 realization relation, while `OutcomePickLineageEdge` remains reserved for genuine entitlement
-transformations such as splitting, combining or substitution. Recurring production still requires
+transformations such as splitting, combining or substitution. The canonical pick row itself stays
+append-only; when a later reviewed-lineage promotion knows facts that an earlier promotion stored as
+empty (round, nominal pick number, original club), migration 0237 records them as a gap-free,
+append-only `outcome_draft_pick_enrichment` version bound to that promotion, its approval and the
+current reviewed pick-lineage registration. Enrichment fills empty facts only; a differing known
+value is still an immutable conflict. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
+current facts, and release-bound readers pass the release cutoff. Recurring production still requires
 deployment scheduling, execution and monitoring of the reviewed discovery plan, missed-period monitoring, reviewed
 promotion of the historical candidate set, and a completed non-production backfill and reconciliation
 rehearsal described below.
@@ -1741,6 +1771,25 @@ effective-through date, and a compare-and-swap head. Partial coverage remains la
 conflicting or quarantined evidence withholds the value. Achievements and awards deliberately remain
 separate season-, round-, or event-grain facts: they are never inferred from numeric statistics or
 summed merely to fit the acquisition-spell metric shape.
+
+Appearance membership (acquisition registration v3) is a deliberately narrower spell used only to
+attribute HPN season PAV. Season PAV needs every appearing player in a season bound to exactly one
+current spell, while reviewed entry spells need a promoted incoming asset that most league players do
+not yet have. A v3 spell binds a player, represented club and season to the first and last reviewed
+appearance facts and asserts nothing about entry, departure or trade custody, so metric, release,
+valuation dataset, player PAV observation and postseason consumers reject it. Its boundary and
+completeness facts count only while their player, match and club identity decisions stay current. It is
+a bridge: a current reviewed entry spell whose possible membership contains its whole window retires it
+automatically, player by player, and it must not be used where acquisition timing matters.
+Season HPN input building and finalization evaluate each candidate spell's registration currency once
+per input set rather than once per row (migration 0236), with the same currency rules.
+Finalization reads its content JSON once per statement rather than once per row (migration 0240),
+so its memory and time are linear in the season's size, with the same checks and exceptions.
+Both evaluate identity-assignment continuity once per assignment case rather than once per row
+(migration 0242), with the same rules and the same review-subject locks.
+Its row-conservation and appearance-envelope checks cost time linear in the season whichever join
+plan PostgreSQL chooses (migration 0243), with the same checks and exceptions.
+The operations runbook records its storage and guard details.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
@@ -2929,6 +2978,17 @@ at database time under the existing Gate lock; it does not backdate authorizatio
 gap or claim that internal owner approval establishes an upstream licence. Generic capture, training
 and publication checks do not acquire this retained-use exception.
 
+Forward migration 0234 adds one more way a retained capture can stay usable: the latest decision in
+its Gate chain may govern it when that decision is a general Gate 0A, not a retained-capture renewal.
+The capture's original acquisition checks still run first and are unchanged. The latest decision must
+be approved, current at database time, content-addressed, and not superseded. It must be scoped to
+the capture's competition, season, fitzRoy capability and `derived_feature_creation`. Its own rights
+artifact must be for the same provider and fitzRoy acquisition, and must permit every consumed field
+for that season. It grants nothing beyond that rights artifact. A blocked, expired, withdrawn or
+out-of-scope latest decision still fails closed, and a later retained-scoped decision still has to
+satisfy the 0136 renewal rules. The change exists because a newer general permission for a source
+previously made every earlier capture of that source unusable, and 0136 could not renew on top of it.
+
 Forward migration 0137 validates source-first assessment field permissions independently of
 JavaScript and PostgreSQL sorting differences. It compares complete field records in the same
 database order, preserving duplicate counts and rejecting missing or changed permissions. The
@@ -3075,7 +3135,11 @@ to twelve decimal places, matching the shared numerical core. Migration 0119 ali
 PostgreSQL total check with that order without relaxing component precision. Source-value comparison
 must also be scoped to the exact calculation before joining expected and stored teams: migration
 0120 prevents previously finalized seasons from appearing as unmatched teams in a later calculation.
-Missing, extra or mismatched teams within that calculation remain invalid.
+Missing, extra or mismatched teams within that calculation remain invalid. Migration 0245 compares
+each stored league, team and player value with its exact NUMERIC derivation within 1e-9 instead of
+after rounding both to twelve decimals: double-precision values on a genuine season (AFLM 2024)
+differed from the exact derivation by up to 1.35e-12, which straddled the twelfth decimal and blocked
+finalization, while any real difference remains far above the bound.
 
 Historical coverage follows from the existing strict label-purge rule. For an `H`-season target,
 adjacent partition origin years must be at least `H + 1` years apart when mature outcomes are recorded

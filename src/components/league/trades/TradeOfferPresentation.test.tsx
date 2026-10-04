@@ -54,15 +54,17 @@ describe('persisted trade offer presentation', () => {
     const packageRegion = screen.getByRole('region', {
       name: 'You send package from Alpha FC',
     });
-    expect(within(packageRegion).getByRole('listitem')).toHaveTextContent(
-      'Alex AlphaAdelaide Crows · MID12 GPsample size'
-    );
+    const item = within(packageRegion).getByRole('listitem');
+    expect(item).toHaveTextContent('Alex Alpha');
+    expect(item).toHaveTextContent('MID · ADL');
+    // The stat the player stands out in, per game.
+    expect(item.textContent).toMatch(/20(\.0)?Kicks/);
     expect(
       screen.queryByRole('region', { name: /player averages, horizontally scrollable/ })
     ).not.toBeInTheDocument();
   });
 
-  it('distinguishes outgoing and incoming packages with semantic trade tokens', () => {
+  it('distinguishes outgoing and incoming packages by label, not colour', () => {
     render(
       <>
         <TradeOfferAssets
@@ -87,30 +89,28 @@ describe('persisted trade offer presentation', () => {
       name: 'You receive package from Beta FC',
     });
 
-    expect(outgoing).toHaveStyle('border-top-color: var(--trade-send)');
-    expect(incoming).toHaveStyle('border-top-color: var(--trade-receive)');
-    expect(outgoing.firstElementChild).toHaveStyle('background-color: var(--trade-send-soft)');
-    expect(incoming.firstElementChild).toHaveStyle('background-color: var(--trade-receive-soft)');
-    expect(within(outgoing).getByRole('heading', { name: 'You send' })).toHaveStyle(
-      'color: var(--trade-send)'
+    expect(within(outgoing).getByRole('heading', { name: 'You send' })).toHaveClass(
+      'text-[color:var(--trade-text)]'
     );
-    expect(within(incoming).getByRole('heading', { name: 'You receive' })).toHaveStyle(
-      'color: var(--trade-receive)'
+    expect(within(incoming).getByRole('heading', { name: 'You receive' })).toHaveClass(
+      'text-[color:var(--trade-text)]'
     );
+    expect(outgoing.outerHTML).not.toMatch(/trade-(?:send|receive)/);
+    expect(incoming.outerHTML).not.toMatch(/trade-(?:send|receive)/);
   });
 
   it.each([
-    ['PENDING', 'Awaiting response'],
-    ['ACCEPTED_PENDING_REVIEW', 'Accepted · review pending'],
+    ['PENDING', 'Pending'],
+    ['ACCEPTED_PENDING_REVIEW', 'Accepted · in review'],
     ['FAILED', 'Failed'],
-  ] as const)('%s uses the direct warning surface', (status, labelText) => {
+  ] as const)('%s shows a plain label with a status dot', (status, labelText) => {
     render(<TradeOfferStatus status={status} />);
 
     const label = screen.getByText(labelText);
-    expect(label).toHaveClass(
-      'bg-[color:var(--trade-warning-soft)]',
-      'text-[color:var(--trade-warning)]'
+    expect(label).toHaveClass('text-[color:var(--trade-text)]');
+    const dot = label.querySelector('[aria-hidden="true"]');
+    expect(dot).toHaveClass(
+      status === 'FAILED' ? 'bg-[color:var(--trade-negative)]' : 'bg-[color:var(--trade-warning)]'
     );
-    expect(label.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
   });
 });

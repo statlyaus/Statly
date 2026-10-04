@@ -80,12 +80,16 @@ export function createLocalAflTradeDockerFitzRoyDecodeExecutor(
       try {
         await mkdir(inputDirectory, { mode: 0o700 });
         await mkdir(outputDirectory, { mode: 0o700 });
-        await writeFile(sourcePath, input.sourceRdsBytes, { flag: 'wx', mode: 0o400 });
+        await writeFile(sourcePath, input.sourceRdsBytes, { flag: 'wx', mode: 0o444 });
         await writeFile(contextPath, canonicalizeAflTradeJson(input.context), {
           encoding: 'utf8',
           flag: 'wx',
-          mode: 0o400,
+          mode: 0o444,
         });
+        // The image runs as its own non-root UID; on a Linux Docker host a bind-mounted file keeps
+        // the host owner, so read-only inputs must be readable by others (and writable by none).
+        await chmod(sourcePath, 0o444);
+        await chmod(contextPath, 0o444);
         await chmod(outputDirectory, 0o777);
         const args = [
           'run',
@@ -122,10 +126,7 @@ export function createLocalAflTradeDockerFitzRoyDecodeExecutor(
           throw new Error('The offline decoder emitted output outside its decoded artifact.');
         }
         const metadata = await stat(decodedOutputPath);
-        if (
-          metadata.size <= 0 ||
-          metadata.size > input.context.maximumOutputBytes
-        ) {
+        if (metadata.size <= 0 || metadata.size > input.context.maximumOutputBytes) {
           throw new Error('The offline decoder output violated its approved byte bound.');
         }
         return Uint8Array.from(await readFile(decodedOutputPath));

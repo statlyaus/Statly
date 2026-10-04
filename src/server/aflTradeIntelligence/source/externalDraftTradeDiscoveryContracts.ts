@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
 import { parseIngestAflTradeExternalPageRequest } from './externalDraftTradeIngestion';
-import { validateAflTradeExternalCaptureScope } from './externalDraftTradeProviderIngestion';
+import { validateAflTradeRetainedCaptureScope } from './externalDraftTradeProviderIngestion';
 
 import {
   addAflTradeContentAddressIssue,
@@ -479,7 +479,7 @@ function retainedYearBounds(years: readonly number[]) {
 const retainedRequestSchema = z.unknown().transform((value, context) => {
   try {
     const request = parseIngestAflTradeExternalPageRequest(value);
-    validateAflTradeExternalCaptureScope(request);
+    validateAflTradeRetainedCaptureScope(request);
     return request;
   } catch {
     context.addIssue({

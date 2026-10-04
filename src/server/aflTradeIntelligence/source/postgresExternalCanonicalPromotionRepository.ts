@@ -286,6 +286,102 @@ function pickDefinitions(content: CandidateContent): Map<string, PickDefinition>
   return definitions;
 }
 
+interface ResolvedPickRow {
+  pick_id: string;
+  draft_season_year: number;
+  draft_kind: string;
+  nominal_round: number | null;
+  nominal_pick: number | null;
+  original_club_id: string | null;
+  status: string;
+  enrichment_id: string | null;
+  enrichment_version: number | null;
+}
+
+type PickFacts = Pick<PickDefinition, 'nominalRound' | 'nominalPick' | 'originalClubId'>;
+const PICK_FACT_COLUMNS = {
+  nominalRound: 'nominal_round',
+  nominalPick: 'nominal_pick',
+  originalClubId: 'original_club_id',
+} as const;
+
+/**
+ * Compares a promotion's pick definition with the currently resolved canonical facts. A known fact
+ * never changes. A fact that is empty in the stored pick may be filled (an enrichment); every other
+ * difference, including a definition that omits a known fact, stays an immutable conflict.
+ */
+export function planPickEnrichment(
+  resolved: ResolvedPickRow,
+  definition: PickDefinition & { draftKind: string }
+): { kind: 'exact' } | { kind: 'enrich'; facts: PickFacts } | { kind: 'conflict' } {
+  if (
+    resolved.status !== 'approved' ||
+    resolved.draft_season_year !== definition.draftYear ||
+    resolved.draft_kind !== definition.draftKind
+  )
+    return { kind: 'conflict' };
+  const facts: PickFacts = { nominalRound: null, nominalPick: null, originalClubId: null };
+  let enriched = false;
+  for (const [key, column] of Object.entries(PICK_FACT_COLUMNS) as [
+    keyof PickFacts,
+    (typeof PICK_FACT_COLUMNS)[keyof PickFacts],
+  ][]) {
+    const stored = resolved[column];
+    const incoming = definition[key];
+    if (stored !== null && incoming !== stored) return { kind: 'conflict' };
+    if (stored === null && incoming !== null) enriched = true;
+    (facts as Record<string, unknown>)[key] = stored ?? incoming;
+  }
+  return enriched ? { kind: 'enrich', facts } : { kind: 'exact' };
+}
+
+async function reviewedLineageRegistrationFor(
+  transaction: AflOutcomeSqlTransaction,
+  candidateId: string
+): Promise<string | undefined> {
+  const result = await transaction.query<{ registration_id: string }>(
+    `SELECT registration_id FROM outcome_reviewed_pick_lineage_registration
+      WHERE candidate_id=$1 FOR SHARE`,
+    [candidateId]
+  );
+  return result.rows[0]?.registration_id;
+}
+
+async function persistPickEnrichment(
+  transaction: AflOutcomeSqlTransaction,
+  input: {
+    pickId: string;
+    version: number;
+    supersedesEnrichmentId: string | null;
+    facts: PickFacts;
+    promotionId: string;
+    approvalDecisionId: string;
+    registrationId: string;
+    source: { candidateId: string; transferIds: string[]; custodyIds: string[] };
+  }
+): Promise<void> {
+  const enrichmentId = createAflTradeContentAddress('draft-pick-enrichment', input);
+  await transaction.query(
+    `INSERT INTO outcome_draft_pick_enrichment
+      (enrichment_id,pick_id,version,supersedes_enrichment_id,nominal_round,nominal_pick,
+       original_club_id,promotion_id,approval_decision_id,registration_id,source_json)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+    [
+      enrichmentId,
+      input.pickId,
+      input.version,
+      input.supersedesEnrichmentId,
+      input.facts.nominalRound,
+      input.facts.nominalPick,
+      input.facts.originalClubId,
+      input.promotionId,
+      input.approvalDecisionId,
+      input.registrationId,
+      canonicalizeAflTradeJson(input.source),
+    ]
+  );
+}
+
 async function loadCandidate(
   transaction: AflOutcomeSqlTransaction,
   candidateId: string
@@ -1295,26 +1391,66 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               definition.originalClubId,
             ]
           );
-          const exact = await transaction.query(
-            `SELECT pick_id FROM outcome_draft_pick
-            WHERE pick_id=$1 AND draft_season_year=$2 AND draft_kind=$3::"OutcomeEventKind"
-              AND nominal_round IS NOT DISTINCT FROM $4 AND nominal_pick IS NOT DISTINCT FROM $5
-              AND original_club_id IS NOT DISTINCT FROM $6 AND status='approved'::"OutcomeRecordStatus"
-            FOR SHARE`,
-            [
-              definition.pickId,
-              definition.draftYear,
-              kind.eventKind,
-              definition.nominalRound,
-              definition.nominalPick,
-              definition.originalClubId,
-            ]
+          await transaction.query(
+            `SELECT pick_id FROM outcome_draft_pick WHERE pick_id=$1 FOR SHARE`,
+            [definition.pickId]
           );
-          if (exact.rows.length !== 1) {
+          const stored = await transaction.query<ResolvedPickRow>(
+            `SELECT pick_id,draft_season_year,draft_kind::text AS draft_kind,nominal_round,nominal_pick,
+                    original_club_id,status::text AS status,enrichment_id,enrichment_version
+               FROM outcome_draft_pick_facts(ARRAY[$1]::text[],NULL)`,
+            [definition.pickId]
+          );
+          const resolved = stored.rows[0];
+          const plan =
+            resolved === undefined
+              ? null
+              : planPickEnrichment(resolved, {
+                  ...definition,
+                  draftKind: kind.eventKind,
+                });
+          if (plan === null || plan.kind === 'conflict') {
             throw new AflTradeExternalCanonicalPromotionError(
               'IMMUTABLE_CONFLICT',
               `Pick ${definition.pickId} already has different canonical facts.`
             );
+          }
+          if (plan.kind === 'enrich') {
+            // Filling empty facts on a stored pick needs the reviewed lineage that supports them.
+            const registrationId =
+              content.reviewedCorrection?.registrationId ??
+              content.reviewedScope?.registrationId ??
+              (await reviewedLineageRegistrationFor(transaction, candidate.candidateId));
+            if (!registrationId) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'IMMUTABLE_CONFLICT',
+                `Pick ${definition.pickId} already has different canonical facts; enrichment requires reviewed pick lineage.`
+              );
+            }
+            await persistPickEnrichment(transaction, {
+              pickId: definition.pickId,
+              version: (resolved?.enrichment_version ?? 0) + 1,
+              supersedesEnrichmentId: resolved?.enrichment_id ?? null,
+              facts: plan.facts,
+              promotionId: request.promotionId,
+              approvalDecisionId: input.approvalDecisionId,
+              registrationId,
+              source: {
+                candidateId: candidate.candidateId,
+                transferIds: content.transfers
+                  .filter(
+                    (transfer) =>
+                      transfer.asset.kind === 'pick_entitlement' &&
+                      transfer.asset.pickId === definition.pickId
+                  )
+                  .map((transfer) => transfer.transferId)
+                  .sort(),
+                custodyIds: content.pickCustody
+                  .filter((custody) => custody.pickId === definition.pickId)
+                  .map((custody) => custody.custodyId)
+                  .sort(),
+              },
+            });
           }
         }
       }
@@ -1561,6 +1697,22 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               'IMMUTABLE_CONFLICT',
               'Promotion cannot backdate a draft-event correction.'
             );
+          }
+          if (predecessor) {
+            // A new version replaces the whole session, so it must keep every recorded selection
+            // slot. Reviewed corrections may change who holds a slot, but never drop one.
+            const proposed = new Set(selections.map(({ selectionNumber }) => selectionNumber));
+            const recorded = await transaction.query<{ selection_number: number }>(
+              `SELECT selection_number FROM outcome_draft_selection WHERE event_version_id=$1`,
+              [predecessor.eventVersionId]
+            );
+            const dropped = recorded.rows.filter((row) => !proposed.has(row.selection_number));
+            if (dropped.length > 0) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'IMMUTABLE_CONFLICT',
+                `Draft event ${eventId} correction would drop ${dropped.length} recorded selection(s).`
+              );
+            }
           }
           const version = (predecessor?.version ?? 0) + 1;
           const eventVersionId = createAflTradeContentAddress('event-version', {

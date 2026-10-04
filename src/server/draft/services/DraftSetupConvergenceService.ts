@@ -26,7 +26,10 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
       where: { id: leagueId },
       include: {
         settings: true,
-        members: { orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
+        members: {
+          where: { isActive: true },
+          orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
+        },
         drafts: { include: { orders: true, picks: true }, take: 1 },
       },
     });

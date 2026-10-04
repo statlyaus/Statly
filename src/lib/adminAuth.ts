@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -17,10 +19,15 @@ import { logger } from '@/lib/logger';
 export const ADMIN_SECRET_HEADER = 'x-admin-secret';
 
 export function isAdminRequest(request: NextRequest): boolean {
-  const expected = process.env.ADMIN_SECRET;
+  const expected = process.env.ADMIN_SECRET?.trim();
   if (!expected) return false;
 
-  return request.headers.get(ADMIN_SECRET_HEADER) === expected;
+  const presented = request.headers.get(ADMIN_SECRET_HEADER);
+  if (presented === null) return false;
+
+  // Hash both sides so the comparison is constant-time regardless of input length.
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  return timingSafeEqual(digest(presented), digest(expected));
 }
 
 export function adminForbiddenResponse(request: NextRequest): NextResponse {

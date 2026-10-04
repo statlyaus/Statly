@@ -1,5 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import LivePickHeader from '@/components/LivePickHeader';
 
@@ -64,6 +64,22 @@ const draftData = {
 };
 
 describe('LivePickHeader', () => {
+  it('settles when the on-clock flag and the pick sequence briefly disagree', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      // On the clock per the context, while slot 3's next pick is still two picks away.
+      render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={3} />);
+
+      expect(
+        consoleError.mock.calls.filter(([message]) =>
+          String(message).includes('Maximum update depth exceeded')
+        )
+      ).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('renders canonical live status with accessible timer and pick train', () => {
     render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />);
 
@@ -82,5 +98,92 @@ describe('LivePickHeader', () => {
     expect(screen.getByText('On the clock')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Marcus Bontempelli')).toBeInTheDocument();
+  });
+
+  it('does not announce every tick of the pick clock', () => {
+    render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />);
+
+    const timer = screen.getByRole('timer', { name: /time remaining/i });
+    expect(timer).not.toHaveAttribute('aria-live');
+    expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent('');
+  });
+
+  it('announces the start of your turn once', () => {
+    render(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
+
+    // The visual badge must not be a second live region repeating the turn announcement.
+    expect(screen.getByText('Your turn')).not.toHaveAttribute('role', 'alert');
+    expect(screen.queryAllByRole('alert')).toHaveLength(0);
+
+    expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent(
+      /^Your turn to pick\. \d+m \d+s remaining\.$/
+    );
+  });
+
+  it('gives the on-the-clock state its own dominant treatment', () => {
+    const { rerender } = render(
+      <LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />
+    );
+    const clock = screen.getByRole('region', { name: 'Draft clock' });
+    expect(clock).not.toHaveClass('border-t-[color:var(--draft-broadcast-yellow)]');
+
+    rerender(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
+
+    const onClock = screen.getByRole('region', { name: 'Draft clock' });
+    expect(onClock).toHaveClass(
+      'border-t-[color:var(--draft-broadcast-yellow)]',
+      'bg-[color:var(--draft-broadcast-yellow-soft)]'
+    );
+    expect(onClock).not.toHaveClass('bg-[color:var(--draft-broadcast-panel)]');
+    expect(screen.getByText('Your turn')).toHaveClass(
+      'bg-[color:var(--draft-broadcast-yellow)]',
+      'text-[color:var(--draft-broadcast-yellow-text)]'
+    );
+    expect(screen.getByText('Your turn').className).not.toMatch(/shadow-\[0_0/);
+  });
+
+  it('announces the real time left when the turn starts after a milestone has passed', () => {
+    const nearlyOut = {
+      ...draftData,
+      pickDeadlineAt: new Date(Date.now() + 8_000).toISOString(),
+    };
+    render(<LivePickHeader draftData={nearlyOut} isYourTurn={true} yourSlot={1} />);
+
+    expect(screen.getByTestId('pick-clock-announcer')).toHaveTextContent(
+      'Your turn to pick. 8s remaining.'
+    );
+    const clockIcon = screen.getByRole('timer').querySelector('svg');
+    expect(clockIcon).not.toHaveClass('animate-spin');
+  });
+
+  it('announces 10 seconds and time up only as the clock crosses them', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-27T12:00:00.000Z'));
+    try {
+      const running = {
+        ...draftData,
+        pickDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
+      };
+      render(<LivePickHeader draftData={running} isYourTurn={true} yourSlot={1} />);
+      const announcer = screen.getByTestId('pick-clock-announcer');
+      expect(announcer).toHaveTextContent('Your turn to pick. 12s remaining.');
+
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(announcer).toHaveTextContent('Your turn to pick. 12s remaining.');
+
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      expect(announcer).toHaveTextContent('10 seconds left.');
+
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(announcer).toHaveTextContent('Time is up.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

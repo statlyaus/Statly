@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { isCronRequestAuthorized } from '@/lib/cronAuth';
 import { logger } from '@/lib/logger';
 import { processDueLeagueTrades } from '@/server/leagues/trades/tradeService';
 
@@ -8,17 +9,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) {
-    logger.error('CRON_SECRET is not configured; refusing to process due league trades');
-    return NextResponse.json(
-      { ok: false, error: 'Scheduled jobs are not configured' },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } }
-    );
-  }
-
-  if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!isCronRequestAuthorized(request)) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } }

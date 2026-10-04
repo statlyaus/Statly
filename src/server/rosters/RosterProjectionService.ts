@@ -129,8 +129,6 @@ export class RosterProjectionService {
     leagueId: string;
     memberId: string;
     submittedPlayerIds: string[];
-    captainId?: string | null;
-    viceCaptainId?: string | null;
     benchOrder?: string[] | null;
   }) {
     return this.db.$transaction(async (tx) => {
@@ -162,24 +160,6 @@ export class RosterProjectionService {
         );
       }
 
-      if (input.captainId && !authoritativeIds.has(input.captainId)) {
-        throw new RosterPreferenceError('INVALID_SELECTION', 'Captain must be on the roster.', 400);
-      }
-      if (input.viceCaptainId && !authoritativeIds.has(input.viceCaptainId)) {
-        throw new RosterPreferenceError(
-          'INVALID_SELECTION',
-          'Vice-captain must be on the roster.',
-          400
-        );
-      }
-      if (input.captainId && input.captainId === input.viceCaptainId) {
-        throw new RosterPreferenceError(
-          'INVALID_SELECTION',
-          'Captain and vice-captain cannot be the same player.',
-          400
-        );
-      }
-
       const benchOrder = input.benchOrder ?? [];
       if (
         new Set(benchOrder).size !== benchOrder.length ||
@@ -200,22 +180,16 @@ export class RosterProjectionService {
           leagueId: input.leagueId,
           memberId: input.memberId,
           playerIds: JSON.stringify(playerIds),
-          captainId: input.captainId ?? null,
-          viceCaptainId: input.viceCaptainId ?? null,
           benchOrder: input.benchOrder ? JSON.stringify(input.benchOrder) : null,
         },
         update: {
           playerIds: JSON.stringify(playerIds),
-          captainId: input.captainId ?? null,
-          viceCaptainId: input.viceCaptainId ?? null,
           benchOrder: input.benchOrder ? JSON.stringify(input.benchOrder) : null,
         },
         select: {
           id: true,
           leagueId: true,
           memberId: true,
-          captainId: true,
-          viceCaptainId: true,
           benchOrder: true,
           updatedAt: true,
         },

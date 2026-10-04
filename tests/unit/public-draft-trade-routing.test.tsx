@@ -60,19 +60,17 @@ describe('public AFL draft trade routing', () => {
     navigation.pathname = '/draft/trades';
   });
 
-  it('puts the public archive and unpublished outcome status in the homepage hero', () => {
+  it('leads the homepage with the public archive and unpublished outcome status', () => {
     render(<HomePage />);
 
     const promise = screen.getByRole('heading', {
       level: 1,
-      name: 'Explore AFL draft trades. Run your fantasy league.',
+      name: 'Explore AFL Draft & Trade Outcomes. Run your fantasy league.',
     });
 
     expect(promise).toBeVisible();
     expect(promise).not.toHaveClass('sr-only');
-    expect(
-      screen.getByText(/The public AFL archive is separate from Statly Fantasy/)
-    ).toBeVisible();
+    expect(screen.getByText(/are not owned by Statly users or fantasy teams/)).toBeVisible();
     expect(screen.getByRole('link', { name: 'Explore AFL trade archive' })).toHaveAttribute(
       'href',
       '/draft/trades'
@@ -101,10 +99,10 @@ describe('public AFL draft trade routing', () => {
     ).not.toBe(0);
     expect(screen.getByText(/are not owned by Statly users or fantasy teams/)).toBeVisible();
 
-    const archiveLink = screen.getByRole('link', { name: /explore trade archive/i });
+    const archiveLink = screen.getByRole('link', { name: 'Explore AFL trade archive' });
     expect(archiveLink).toHaveAttribute('href', '/draft/trades');
     expect(archiveLink).not.toHaveAttribute('href', '/tradecentre');
-    expect(screen.getByRole('link', { name: 'View outcome status' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Outcome publication status' })).toHaveAttribute(
       'href',
       '/draft/outcomes'
     );
@@ -130,6 +128,16 @@ describe('public AFL draft trade routing', () => {
     });
     expect(outcomesLink).toHaveAttribute('href', '/draft/trades');
     expect(outcomesLink).toHaveAttribute('aria-current', 'page');
+
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+      'href',
+      '/privacy'
+    );
+    expect(within(footer).getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+      'href',
+      '/terms'
+    );
   });
 
   it('keeps /tradecentre owned by the public AFL archive', () => {
