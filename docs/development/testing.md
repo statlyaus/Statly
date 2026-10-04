@@ -360,11 +360,17 @@ own service container with the same setting, and additionally with `fsync`, `syn
 `full_page_writes` off, because the database is disposable and each suite replays about 250 migration
 transactions.
 
-The suite runs four files at a time (`maxWorkers: 4` in `vitest.config.outcomes-int.ts`), which matches
-the CI runner's four cores. It ran one file at a time before the lock ceiling was raised; at 2048 four
-concurrent teardowns fit the lock table. Unit tests also run on four workers, and V8 coverage is off
-by default because it slowed the heavy native-PAV files by about two thirds and no gate reads the
-report. Pass `--coverage.enabled=true` to collect it locally.
+The suite runs one file at a time, and the lock ceiling is not the reason. The outcomes SQL takes
+transaction advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and
+advisory locks are scoped to the database, not the schema. Fixtures are content-addressed, so two files
+in different schemas produce identical lock keys. A four-worker run (PR #763) failed seven tests this
+way: lock waits past the test budget, a try-lock raising `changed concurrently` for a row in another
+schema, and a cancelled statement landing on the wrong finalizer. Running files in parallel requires
+one database per file, so the advisory key spaces are disjoint.
+
+Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
+native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
+collect it locally.
 
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local

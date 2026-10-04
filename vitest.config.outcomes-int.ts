@@ -20,10 +20,14 @@ export default defineConfig({
     globals: true,
     testTimeout: 30_000,
     hookTimeout: 60_000,
-    // Each file deploys its own schema and drops it with CASCADE, about 1,200 relations. Files ran
-    // one at a time until the lock ceiling was raised to 2048 (#671); with that ceiling four files
-    // fit the lock table together, which matches the CI runner's four cores.
-    maxWorkers: 4,
+    // Files must run one at a time while they share one database. The outcomes SQL takes
+    // transaction advisory locks keyed by hashtextextended(<text key>, 0) with no schema component,
+    // and advisory locks are per database, not per schema. The fixtures are content-addressed, so
+    // two files in different schemas produce identical keys: PR #763 ran four workers and saw
+    // cross-file lock waits, a try-lock failing with "changed concurrently", and timeouts. Files
+    // can run in parallel once each has its own database.
+    fileParallelism: false,
+    maxWorkers: 1,
     reporters: ['default'],
   },
 });
