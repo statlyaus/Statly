@@ -13,11 +13,14 @@ export async function publishLeagueSystemMessage({
   eventType,
   relatedEntityId,
   content,
+  context,
 }: {
   leagueId: string;
   eventType: string;
   relatedEntityId: string;
   content: string;
+  /** Structured detail for readers that render the event themselves, stored as contextJson. */
+  context?: Record<string, unknown>;
 }): Promise<SocialMessage> {
   const normalizedContent = content.trim();
   if (!normalizedContent || normalizedContent.length > SOCIAL_MESSAGE_MAX_LENGTH) {
@@ -65,6 +68,7 @@ export async function publishLeagueSystemMessage({
         content: normalizedContent,
         relatedEntityType: eventType,
         relatedEntityId,
+        ...(context ? { contextJson: JSON.stringify(context) } : {}),
       },
       include: socialMessageInclude,
     });
