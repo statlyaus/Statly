@@ -13,6 +13,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/artifactStoreLocation';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { registerLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactCustodyLocationBackfill';
+import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
 import { bindLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactStoreBinding';
 import {
   createAflTradeAcquisitionSpellRegistration,
@@ -34,7 +35,8 @@ const STORE_ID = 'write-first-test-store';
 const REPOSITORY_ID = 'reviewed-registration-evidence';
 let storeRoot = '';
 
-const reviewBytes = (label: string) => new TextEncoder().encode(canonicalizeAflTradeJson({ label }));
+const reviewBytes = (label: string) =>
+  new TextEncoder().encode(canonicalizeAflTradeJson({ label }));
 const reviewRef = (label: string) =>
   createAflTradeCanonicalJsonArtifactRef({ label }, '2026-09-01T00:00:00.000Z');
 
@@ -44,7 +46,14 @@ async function insertCustody(ref: AflTradeArtifactRef): Promise<void> {
       (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
        environment,created_at,verified_at,custody_json)
      VALUES ($1,$2,$3,$4,$5,'capture_metadata','non_production',$6,$6,'{}')`,
-    [ref.artifactId, ref.contentSha256, ref.storageUri, ref.mediaType, ref.byteLength, ref.createdAt]
+    [
+      ref.artifactId,
+      ref.contentSha256,
+      ref.storageUri,
+      ref.mediaType,
+      ref.byteLength,
+      ref.createdAt,
+    ]
   );
 }
 
@@ -111,6 +120,8 @@ beforeAll(async () => {
   );
   storeRoot = await mkdtemp(join(tmpdir(), 'statly-write-first-store-'));
   await registerLocalAflTradeArtifactStore(client, { storeId: STORE_ID, rootDirectory: storeRoot });
+  // Reviewed registration requires a clean custody readback (migration 0250); the store is empty.
+  await readBackLocalAflTradeArtifactCustody({ client, storeId: STORE_ID });
 }, 120_000);
 
 afterAll(async () => {
@@ -189,9 +200,7 @@ it('stores a spell’s entry and continuity evidence before registering the spel
   ).resolves.toEqual(spell);
 
   for (const artifactId of [promoted.sourceArtifact.artifactId, continuity.artifactId]) {
-    expect(
-      await countRows('outcome_artifact_custody_location', 'artifact_id', artifactId)
-    ).toBe(1);
+    expect(await countRows('outcome_artifact_custody_location', 'artifact_id', artifactId)).toBe(1);
   }
 });
 
@@ -209,7 +218,9 @@ it('leaves no location and no rule when the store write fails', async () => {
   } finally {
     await chmod(join(storeRoot, REPOSITORY_ID), 0o700);
   }
-  expect(await countRows('outcome_artifact_custody_location', 'artifact_id', ref.artifactId)).toBe(0);
+  expect(await countRows('outcome_artifact_custody_location', 'artifact_id', ref.artifactId)).toBe(
+    0
+  );
   expect(await countRows('outcome_acquisition_spell_rule', 'rule_id', rule.ruleId)).toBe(0);
 });
 
@@ -230,7 +241,9 @@ it('leaves no location and no rule when the readback differs from the evidence',
   await expect(repository.registerReviewedRule(rule, approval, execution)).rejects.toThrow(
     'read back'
   );
-  expect(await countRows('outcome_artifact_custody_location', 'artifact_id', ref.artifactId)).toBe(0);
+  expect(await countRows('outcome_artifact_custody_location', 'artifact_id', ref.artifactId)).toBe(
+    0
+  );
   expect(await countRows('outcome_acquisition_spell_rule', 'rule_id', rule.ruleId)).toBe(0);
 });
 
@@ -303,7 +316,12 @@ it('refuses a spell that cites a rule whose evidence was never located', async (
     continuityEvidence: [continuity],
     createdAt,
   });
-  await approve('acquisition_spell_registration', spell.spellVersionId, spell, 'unlocated-approval');
+  await approve(
+    'acquisition_spell_registration',
+    spell.spellVersionId,
+    spell,
+    'unlocated-approval'
+  );
   const repository = new PostgresAflTradeAcquisitionSpellRegistrationRepository(
     client,
     {
