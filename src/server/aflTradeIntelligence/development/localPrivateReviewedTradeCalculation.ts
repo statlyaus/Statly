@@ -6,6 +6,7 @@ import {
   type AflTradePrivateReviewedHpnCalculation,
 } from '../modeling/privateReviewedHpnCalculation';
 import type { AflTradeDevelopmentReconciledAcquisitionOutcome } from '../modeling/developmentWorkbookValueProjection';
+import type { LocalPrivateTradeEvaluationGeneration } from '../valuation/localPrivateTradeEvaluationContracts';
 
 export interface LocalPrivateReviewedPlayerIdentityEvidence {
   readonly sourcePlayerName?: string;
@@ -13,6 +14,33 @@ export interface LocalPrivateReviewedPlayerIdentityEvidence {
   readonly canonicalPlayerId: string;
   readonly identityDecisionIds: readonly string[];
   readonly reviewedSeasonIds: readonly string[];
+}
+
+export interface LocalPrivateReviewedSelectionLineageEvidence {
+  readonly assetId: string;
+  readonly draftYear: number;
+  readonly selectionNumber: number;
+  readonly draftedPlayerName: string;
+  readonly recordedName: string;
+  readonly canonicalPlayerId: string;
+  readonly selectionDecisionId: string;
+  readonly identityDecisionIds: readonly string[];
+  readonly reviewedSeasonIds: readonly string[];
+}
+
+/**
+ * A separately authenticated bridge from the traded pick root to the selected player's later
+ * acquisition. Selection identity alone cannot supply these facts.
+ */
+export interface LocalGovernedPickRealizationEvidence {
+  readonly rootAssetId: string;
+  readonly selectionNumber: number;
+  readonly canonicalPlayerId: string;
+  readonly draftSelectionId: string;
+  readonly lineageEdgeIds: readonly string[];
+  readonly acquisitionEventId: string;
+  readonly acquisitionAssetVersionId: string;
+  readonly receivingClubId: string;
 }
 
 interface AvailableView {
@@ -38,6 +66,10 @@ interface UnavailableView {
     | 'reviewed_season_unavailable'
     | 'post_trade_season_unavailable'
     | 'no_reviewed_receiving_club_allocation'
+    | 'reviewed_acquisition_spell_unavailable'
+    | 'reviewed_acquisition_spell_allocation_mismatch'
+    | 'historical_value_model_not_authorized'
+    | 'selection_value_model_not_authorized'
     | 'predictive_model_not_authorized';
 }
 
@@ -46,6 +78,7 @@ export type LocalPrivateReviewedPostTradeGames =
       state: 'observed' | 'partial';
       gamesPlayed: number;
       effectiveThrough: string;
+      effectiveThroughSeason?: number;
       source: 'reconciled_acquisition_spell';
       rightCensored: boolean;
     }>
@@ -58,11 +91,13 @@ export type LocalPrivateReviewedTradeAssetCalculation =
       canonicalPlayerId: string;
       identityDecisionIds: readonly string[];
       reviewedSeasonIds: readonly string[];
+      selectionLineageDecisionId?: string;
+      governedPickRealization?: LocalGovernedPickRealizationEvidence;
       postTradeGames: LocalPrivateReviewedPostTradeGames;
-      atTrade: AvailableView | UnavailableView;
+      atTrade: UnavailableView;
       realized: AvailableView | UnavailableView;
       remaining: UnavailableView;
-      current: AvailableView | UnavailableView;
+      current: UnavailableView;
     }>
   | Readonly<{
       asset: DraftTradeAssetItem;
@@ -75,16 +110,17 @@ export type LocalPrivateReviewedTradeAssetCalculation =
     }>;
 
 export interface LocalPrivateReviewedTradeCalculation {
+  readonly generation?: LocalPrivateTradeEvaluationGeneration;
   readonly projectionId: string;
   readonly tradeId: string;
   readonly workbookSha256: string;
   readonly methodId: string | null;
   readonly valueUnit: 'season_pav';
   readonly policy: {
-    readonly atTrade: 'latest_reviewed_season_at_or_before_trade_year';
+    readonly atTrade: 'unavailable_without_authorized_historical_value_model';
     readonly realized: 'reviewed_seasons_after_trade_year_at_receiving_club';
     readonly remaining: 'unavailable_without_authorized_predictive_model';
-    readonly current: 'latest_reviewed_post_trade_season_at_receiving_club';
+    readonly current: 'unavailable_without_authorized_predictive_model';
   };
   readonly assets: readonly LocalPrivateReviewedTradeAssetCalculation[];
   readonly clubTotals: null;
@@ -145,6 +181,93 @@ function availableView(
   };
 }
 
+function postTradeGamesFor(
+  outcome: AflTradeDevelopmentReconciledAcquisitionOutcome | undefined
+): LocalPrivateReviewedPostTradeGames {
+  if (outcome === undefined) {
+    return { state: 'unavailable', reason: 'reviewed_acquisition_outcome_unavailable' };
+  }
+  const games = outcome.metrics.games;
+  return games?.state === 'observed'
+    ? {
+        state: 'observed',
+        gamesPlayed: games.value,
+        effectiveThrough: outcome.effectiveThrough,
+        source: 'reconciled_acquisition_spell',
+        rightCensored: false,
+      }
+    : games?.state === 'partial'
+      ? {
+          state: 'partial',
+          gamesPlayed: games.observedValue,
+          effectiveThrough: outcome.effectiveThrough,
+          source: 'reconciled_acquisition_spell',
+          rightCensored: true,
+        }
+      : { state: 'unavailable', reason: 'reviewed_acquisition_outcome_unavailable' };
+}
+
+function realizedSpellView(
+  allocations: Parameters<typeof availableView>[0],
+  outcome: AflTradeDevelopmentReconciledAcquisitionOutcome | undefined,
+  postTradeGames: LocalPrivateReviewedPostTradeGames,
+  expected: {
+    acquisitionEventId: string;
+    startAssetVersionId?: string;
+    canonicalPlayerId: string;
+    receivingClubId: string;
+  },
+  fallback: UnavailableView
+): AvailableView | UnavailableView {
+  if (postTradeGames.state === 'unavailable' || outcome?.exactMatchSet === undefined) {
+    return { state: 'unavailable', reason: 'reviewed_acquisition_spell_unavailable' };
+  }
+  if (allocations.length === 0) return fallback;
+  const exact = outcome.exactMatchSet;
+  if (
+    exact.acquisitionEventId !== expected.acquisitionEventId ||
+    (expected.startAssetVersionId !== undefined &&
+      exact.startAssetVersionId !== expected.startAssetVersionId) ||
+    exact.canonicalPlayerId !== expected.canonicalPlayerId ||
+    exact.receivingClubId !== expected.receivingClubId
+  ) {
+    return { state: 'unavailable', reason: 'reviewed_acquisition_spell_allocation_mismatch' };
+  }
+  const allocationRowsBySeason = new Map<number, string[]>();
+  for (const { calculation, allocation } of allocations) {
+    const sourceRows = allocationRowsBySeason.get(calculation.content.seasonYear) ?? [];
+    sourceRows.push(...allocation.sourceRowIds);
+    allocationRowsBySeason.set(calculation.content.seasonYear, sourceRows);
+  }
+  const exactRowsBySeason = new Map(
+    exact.seasons.map(({ seasonYear, providerDecodedRowIds }) => [
+      seasonYear,
+      [...providerDecodedRowIds].sort(),
+    ])
+  );
+  const allocationSeasons = [...allocationRowsBySeason.keys()].sort((left, right) => left - right);
+  const exactSeasons = [...exactRowsBySeason.keys()].sort((left, right) => left - right);
+  const matchSetAgrees =
+    new Set(exact.seasons.map(({ seasonYear }) => seasonYear)).size === exact.seasons.length &&
+    allocationSeasons.length === exactSeasons.length &&
+    allocationSeasons.every((seasonYear, index) => {
+      if (seasonYear !== exactSeasons[index]) return false;
+      const allocationRows = [...new Set(allocationRowsBySeason.get(seasonYear) ?? [])].sort();
+      const exactRows = exactRowsBySeason.get(seasonYear) ?? [];
+      return (
+        allocationRows.length === exactRows.length &&
+        allocationRows.every((rowId, rowIndex) => rowId === exactRows[rowIndex])
+      );
+    });
+  const exactGameCount = exact.seasons.reduce(
+    (sum, { providerDecodedRowIds }) => sum + new Set(providerDecodedRowIds).size,
+    0
+  );
+  return matchSetAgrees && exactGameCount === postTradeGames.gamesPlayed
+    ? availableView(allocations)
+    : { state: 'unavailable', reason: 'reviewed_acquisition_spell_allocation_mismatch' };
+}
+
 function allocationsFor(
   calculations: readonly AflTradePrivateReviewedHpnCalculation[],
   canonicalPlayerId: string,
@@ -188,36 +311,104 @@ function projectPlayer(input: {
     return { asset: input.asset, state: 'unavailable', reason: 'player_identity_ambiguous' };
   }
   const canonicalPlayerId = canonicalIds[0]!;
-  const atTradeSeasons = input.calculations
-    .map(({ content }) => content.seasonYear)
-    .filter((season) => season <= input.tradeYear);
-  const atTradeSeason = atTradeSeasons.length > 0 ? Math.max(...atTradeSeasons) : null;
-  const atTradeAllocations =
-    atTradeSeason === null
-      ? []
-      : allocationsFor(
-          input.calculations,
-          canonicalPlayerId,
-          ({ content }) => content.seasonYear === atTradeSeason
-        );
+  const reviewedSeasonIds = new Set(matching.flatMap(({ reviewedSeasonIds }) => reviewedSeasonIds));
+  const eligibleCalculations = input.calculations.filter(({ content }) =>
+    reviewedSeasonIds.has(content.reviewedSeasonId)
+  );
   const receivingClubId = `local-afl-club:${input.asset.clubSlug}`;
   const realizedAllocations = allocationsFor(
-    input.calculations,
+    eligibleCalculations,
     canonicalPlayerId,
     ({ content }) => content.seasonYear > input.tradeYear,
     receivingClubId
   );
-  const postTradeSeasons = input.calculations
+  const postTradeSeasons = eligibleCalculations
     .map(({ content }) => content.seasonYear)
     .filter((season) => season > input.tradeYear);
-  const currentSeason = postTradeSeasons.length > 0 ? Math.max(...postTradeSeasons) : null;
-  const currentAllocations =
-    currentSeason === null
+  const postTradeUnavailable: UnavailableView = {
+    state: 'unavailable',
+    reason:
+      postTradeSeasons.length === 0
+        ? 'post_trade_season_unavailable'
+        : 'no_reviewed_receiving_club_allocation',
+  };
+  const postTradeGames = postTradeGamesFor(input.outcome);
+  return {
+    asset: input.asset,
+    state: 'calculated',
+    canonicalPlayerId,
+    identityDecisionIds: [...new Set(matching.flatMap(({ identityDecisionIds }) => identityDecisionIds))].sort(),
+    reviewedSeasonIds: [...new Set(matching.flatMap(({ reviewedSeasonIds }) => reviewedSeasonIds))].sort(),
+    postTradeGames,
+    atTrade: { state: 'unavailable', reason: 'historical_value_model_not_authorized' },
+    realized: realizedSpellView(
+      realizedAllocations,
+      input.outcome,
+      postTradeGames,
+      {
+        acquisitionEventId: input.asset.id,
+        canonicalPlayerId,
+        receivingClubId,
+      },
+      postTradeUnavailable
+    ),
+    remaining: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
+    current: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
+  };
+}
+
+function projectSelection(input: {
+  asset: DraftTradeAssetItem;
+  tradeYear: number;
+  selections: readonly LocalPrivateReviewedSelectionLineageEvidence[];
+  pickRealizations: readonly LocalGovernedPickRealizationEvidence[];
+  calculations: readonly AflTradePrivateReviewedHpnCalculation[];
+  outcome: AflTradeDevelopmentReconciledAcquisitionOutcome | undefined;
+}): LocalPrivateReviewedTradeAssetCalculation {
+  const matching = input.selections.filter(
+    (selection) =>
+      selection.assetId === input.asset.id &&
+      selection.draftYear === input.asset.year &&
+      selection.selectionNumber === input.asset.pick.numberActual &&
+      input.asset.draftedPlayer !== null &&
+      normalizeName(selection.draftedPlayerName) === normalizeName(input.asset.draftedPlayer)
+  );
+  if (matching.length !== 1) {
+    return {
+      asset: input.asset,
+      state: 'unavailable',
+      reason: 'selection_lineage_not_reviewed',
+    };
+  }
+  const selection = matching[0]!;
+  const matchingRealizations = input.pickRealizations.filter(
+    (realization) =>
+      realization.rootAssetId === input.asset.id &&
+      realization.selectionNumber === selection.selectionNumber &&
+      realization.canonicalPlayerId === selection.canonicalPlayerId &&
+      realization.draftSelectionId.length > 0 &&
+      realization.lineageEdgeIds.length > 0 &&
+      realization.acquisitionEventId.length > 0 &&
+      realization.acquisitionEventId !== realization.rootAssetId &&
+      realization.acquisitionAssetVersionId.length > 0 &&
+      realization.receivingClubId.length > 0
+  );
+  const realization = matchingRealizations.length === 1 ? matchingRealizations[0] : undefined;
+  const reviewedSeasonIds = new Set(selection.reviewedSeasonIds);
+  const eligibleCalculations = input.calculations.filter(({ content }) =>
+    reviewedSeasonIds.has(content.reviewedSeasonId)
+  );
+  const receivingClubId = realization?.receivingClubId;
+  const postTradeSeasons = eligibleCalculations
+    .map(({ content }) => content.seasonYear)
+    .filter((season) => season > input.tradeYear);
+  const realizedAllocations =
+    receivingClubId === undefined
       ? []
       : allocationsFor(
-          input.calculations,
-          canonicalPlayerId,
-          ({ content }) => content.seasonYear === currentSeason,
+          eligibleCalculations,
+          selection.canonicalPlayerId,
+          ({ content }) => content.seasonYear > input.tradeYear,
           receivingClubId
         );
   const postTradeUnavailable: UnavailableView = {
@@ -227,41 +418,32 @@ function projectPlayer(input: {
         ? 'post_trade_season_unavailable'
         : 'no_reviewed_receiving_club_allocation',
   };
-  const games = input.outcome?.metrics.games;
-  const postTradeGames: LocalPrivateReviewedPostTradeGames =
-    games?.state === 'observed'
-      ? {
-          state: 'observed',
-          gamesPlayed: games.value,
-          effectiveThrough: input.outcome!.effectiveThrough,
-          source: 'reconciled_acquisition_spell',
-          rightCensored: false,
-        }
-      : games?.state === 'partial'
-        ? {
-            state: 'partial',
-            gamesPlayed: games.observedValue,
-            effectiveThrough: input.outcome!.effectiveThrough,
-            source: 'reconciled_acquisition_spell',
-            rightCensored: true,
-          }
-        : { state: 'unavailable', reason: 'reviewed_acquisition_outcome_unavailable' };
+  const governedOutcome = realization === undefined ? undefined : input.outcome;
+  const postTradeGames = postTradeGamesFor(governedOutcome);
   return {
     asset: input.asset,
     state: 'calculated',
-    canonicalPlayerId,
-    identityDecisionIds: [...new Set(matching.flatMap(({ identityDecisionIds }) => identityDecisionIds))].sort(),
-    reviewedSeasonIds: [...new Set(matching.flatMap(({ reviewedSeasonIds }) => reviewedSeasonIds))].sort(),
+    canonicalPlayerId: selection.canonicalPlayerId,
+    identityDecisionIds: [...selection.identityDecisionIds].sort(),
+    reviewedSeasonIds: [...selection.reviewedSeasonIds].sort(),
+    selectionLineageDecisionId: selection.selectionDecisionId,
+    ...(realization === undefined ? {} : { governedPickRealization: realization }),
     postTradeGames,
-    atTrade:
-      atTradeAllocations.length > 0
-        ? availableView(atTradeAllocations)
-        : { state: 'unavailable', reason: 'reviewed_season_unavailable' },
-    realized:
-      realizedAllocations.length > 0 ? availableView(realizedAllocations) : postTradeUnavailable,
+    atTrade: { state: 'unavailable', reason: 'selection_value_model_not_authorized' },
+    realized: realizedSpellView(
+      realizedAllocations,
+      governedOutcome,
+      postTradeGames,
+      {
+        acquisitionEventId: realization?.acquisitionEventId ?? '',
+        startAssetVersionId: realization?.acquisitionAssetVersionId,
+        canonicalPlayerId: selection.canonicalPlayerId,
+        receivingClubId: receivingClubId ?? '',
+      },
+      postTradeUnavailable
+    ),
     remaining: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
-    current:
-      currentAllocations.length > 0 ? availableView(currentAllocations) : postTradeUnavailable,
+    current: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
   };
 }
 
@@ -269,6 +451,8 @@ export function projectLocalPrivateReviewedTradeCalculation(input: Readonly<{
   detail: DraftTradeDetail;
   workbookSha256: string;
   identities: readonly LocalPrivateReviewedPlayerIdentityEvidence[];
+  selections?: readonly LocalPrivateReviewedSelectionLineageEvidence[];
+  pickRealizations?: readonly LocalGovernedPickRealizationEvidence[];
   calculations: readonly unknown[];
   outcomesByAssetId?: ReadonlyMap<string, AflTradeDevelopmentReconciledAcquisitionOutcome>;
 }>): LocalPrivateReviewedTradeCalculation {
@@ -290,7 +474,17 @@ export function projectLocalPrivateReviewedTradeCalculation(input: Readonly<{
         outcome: input.outcomesByAssetId?.get(asset.id),
       });
     }
-    if (asset.assetType === 'pick' || asset.assetType === 'future_pick') {
+    if (asset.assetType === 'pick') {
+      return projectSelection({
+        asset,
+        tradeYear: input.detail.trade.year,
+        selections: input.selections ?? [],
+        pickRealizations: input.pickRealizations ?? [],
+        calculations,
+        outcome: input.outcomesByAssetId?.get(asset.id),
+      });
+    }
+    if (asset.assetType === 'future_pick') {
       return { asset, state: 'unavailable', reason: 'selection_lineage_not_reviewed' } as const;
     }
     return { asset, state: 'unavailable', reason: 'asset_kind_unsupported' } as const;
@@ -301,10 +495,10 @@ export function projectLocalPrivateReviewedTradeCalculation(input: Readonly<{
     methodId: methodIds[0] ?? null,
     valueUnit: 'season_pav' as const,
     policy: {
-      atTrade: 'latest_reviewed_season_at_or_before_trade_year' as const,
+      atTrade: 'unavailable_without_authorized_historical_value_model' as const,
       realized: 'reviewed_seasons_after_trade_year_at_receiving_club' as const,
       remaining: 'unavailable_without_authorized_predictive_model' as const,
-      current: 'latest_reviewed_post_trade_season_at_receiving_club' as const,
+      current: 'unavailable_without_authorized_predictive_model' as const,
     },
     assets,
     clubTotals: null,
@@ -313,7 +507,7 @@ export function projectLocalPrivateReviewedTradeCalculation(input: Readonly<{
       reason: 'asset_values_incomplete_and_distribution_unavailable' as const,
     },
     limitation:
-      'Private reviewed historical season PAV only; pick values, remaining value, predictive distributions, letter grades, publication, and production use remain unavailable.',
+      'Private reviewed realized season PAV only; at-trade value, remaining value, current value, predictive distributions, letter grades, publication, and production use remain unavailable.',
     publicationEligible: false as const,
     publicationProhibited: true as const,
   };

@@ -309,13 +309,36 @@ readiness says qualification has not run; it does not reconstruct policy from co
 infer new rights, or substitute a zero value. The workbook
 review service no longer imports or exports the legacy name/year/pick value projection: it exposes
 factual transaction records plus a separately labelled, publication-prohibited synthetic scenario.
-A later ready-input contract must use the existing authenticated dataset admission and
-admitted-model-run authorities, require both exact current Gate 3 component runs, and retain and
-exactly read back every bounded input and trace artifact before finalization.
-There is intentionally no caller-injected "governed" writer or real scorer in this phase: the next
-stage must obtain trusted database time and authenticate the exact release, input-bundle custody,
-dataset admissions, and both current Gate 3 model runs in one PostgreSQL snapshot before it may create
-the first ready-capable construction plan.
+The private governed calculation boundary is now implemented as
+`governed-private-valuation-calculation-input/v3`. It binds one exact confirmed-result artifact,
+source-use assessments that permit only private derived calculation, the current private evaluation
+decision, an active factual release, both exact non-production component runs, their datasets and
+current Gate 3 decisions, and a separately Gate 3-approved valuation bundle. The resolver reads the
+current append-only Gate ledger, requires exact affected-artifact membership for every component and
+the bundle, and authenticates each retained decision artifact before it can construct authority. A
+missing, expired, withdrawn, superseded, environment-mismatched or artifact-mismatched decision is an
+explicit unavailable result; it cannot be supplied by a caller as a boolean.
+
+The governed runner reuses the existing deterministic valuation kernel and emits content-addressed
+calculation-input and calculation artifacts. The factual projection admits each player only from
+exact reviewed HPN calculations scoped to the receiving club and acquisition spell, with completed
+seasons distinct from the current right-censored season. It admits a pick only when the trade-time
+distribution, exact final-selection lineage, selected-player contribution horizons and remaining
+distribution share one retained ancestry. Missing values stay unavailable and never become zero;
+workbook labels and synthetic fixtures cannot satisfy either factual admission.
+
+One authenticated explanation then projects a private generation with `at_trade`, `realized`,
+`remaining` and `current` views for every asset and club. Each view retains component scores,
+distribution uncertainty and evidence references. Club received, given-up and net totals derive from
+that same explanation, and a provisional private grade or verdict exists only when every required
+asset is calculated and the package is balanced. The generation, its PostgreSQL row, archive/detail
+read model and immutable JSON artifact all carry the same content address. Schema and database
+constraints fix the environment to non-production and publication eligibility to false.
+
+This implementation does not grant the missing real-data authorities. The current local rehearsal
+must still obtain exact source-use permission plus succeeded player, pick and valuation-bundle runs
+with current non-production Gate 3 decisions. Until those retained parents exist, readiness stops at
+that external authority boundary and the governed runner is not invoked.
 
 Migration `0050_private_valuation_evaluation_authority` adds the narrower authority needed before
 that next stage can use retained real evidence for internal calculations. This append-only decision
@@ -455,6 +478,38 @@ for Sam Flanders through 28 May 2026; that season remains explicitly right-censo
 recorded zero is preserved as source input but does not override those post-trade observations.
 Missing evidence remains unavailable rather than becoming zero. This path is private development
 evidence only: it does not itself approve a public factual release or make the workbook authoritative.
+
+The generation-first private evaluator seals factual appearances separately from numerical views.
+An exact current official review can therefore retain 12 right-censored appearances while current-
+season PAV remains unavailable; a missing PAV calculation never rewrites an observed appearance count
+to zero. Every generation binds the exact confirmed-result artifact, exact workbook transaction
+membership and any exact pick-selection confirmation. The writer and reader both re-authenticate the
+player games, PAV score and components, evidence references, explicit multi-party asset directions,
+derived club totals and unavailable grade. A content-addressed generation that disagrees with any
+parent is rejected before activation and again when read.
+
+The private calculator also supports an append-only workbook pick-selection confirmation. It binds
+one pinned pick asset and exact valuation scope to its recorded final selection number and an
+explicitly operator-confirmed selected-player identity from the exact current reviewed evidence
+bundle. Workbook text or a unique surname is not identity proof and remains review work until the
+operator supplies the canonical identity mapping. The confirmation grants no numerical or model
+authority. Once retained, the confirmation becomes one input to the still-required governed
+pick-realization chain: traded pick root,
+lineage edges, draft selection, selected-player acquisition event/asset and acquisition spell. The
+trade pick's workbook asset ID is never reused as the later player-acquisition event. Once that exact
+chain exists, the reviewed HPN calculation may show the selected player's confirmed post-draft
+contribution for the receiving club in `season_pav` only when the outcome and calculation bind the same acquisition
+asset, current approved acquisition-spell version and start event/asset, canonical player, receiving
+club, effective interval, season and exact decoded player-match row set. Matching an aggregate game
+total, player name or club name is insufficient. Rows outside the authenticated spell interval are
+excluded, so a departure-and-return interval cannot silently inherit the original acquisition. If the
+canonical spell ancestry is absent, realized PAV remains unavailable. It may not use the eventual
+player to reconstruct the pick's expected value at trade time, train a pick model, estimate remaining
+or current value, or issue a trade
+grade. Missing confirmations, ambiguous or mismatched identities, missing final selections, future
+picks, and players outside reviewed evidence remain unavailable with explicit reasons. Readiness
+reports these local confirmations as partial evidence; they do not substitute for canonical release
+selection, realization and lineage membership.
 
 The same private page may also render a **private calculation scenario** beside the reviewed evidence.
 A scenario is a content-addressed, deterministic set of explicitly synthetic assumptions used only to

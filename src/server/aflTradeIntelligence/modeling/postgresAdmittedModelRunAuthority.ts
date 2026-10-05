@@ -13,6 +13,8 @@ import {
 import {
   aflTradeValuationDatasetAdmissionReceiptSchema,
   aflTradeValuationDatasetCandidateSchema,
+  type AflTradeValuationDatasetAdmissionReceipt,
+  type AflTradeValuationDatasetCandidate,
 } from '../artifacts/valuationDatasetAdmissionContracts';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import type { AflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
@@ -81,6 +83,16 @@ interface EvidenceRow extends Record<string, unknown> {
 
 interface JsonRow extends Record<string, unknown> {
   document_json: unknown;
+}
+
+interface CompletedPlayerRunChainRow extends Record<string, unknown> {
+  run_json: unknown;
+  intent_json: unknown;
+  authorization_json: unknown;
+  protocol_json: unknown;
+  observation_json: unknown;
+  admission_json: unknown;
+  dataset_json: unknown;
 }
 
 interface InstantRow extends Record<string, unknown> {
@@ -220,6 +232,89 @@ async function persistGate0Receipt(
     expected: receipt,
     description: 'run-start Gate 0A receipt',
   });
+}
+
+export interface AflTradeAuthenticatedCompletedPlayerModelRunChain {
+  run: AflTradeModelRunManifestV3;
+  intent: AflTradeModelRunIntent;
+  authorization: AflTradeModelRunAuthorization;
+  protocol: AflTradePlayerContributionModelProtocolV2;
+  observationSet: AflTradePlayerObservationSetV2;
+  admission: AflTradeValuationDatasetAdmissionReceipt;
+  dataset: AflTradeValuationDatasetCandidate;
+}
+
+export async function loadAuthenticatedAflTradeCompletedPlayerModelRunChain(
+  transaction: AflOutcomeSqlTransaction,
+  runId: string
+): Promise<AflTradeAuthenticatedCompletedPlayerModelRunChain | null> {
+  const result = await transaction.query<CompletedPlayerRunChainRow>(
+    `SELECT run.run_json,intent.intent_json,run_authority.authorization_json,
+            protocol.protocol_json,observation.observation_json,
+            admission.admission_json,dataset.dataset_json
+       FROM outcome_valuation_model_run run
+       JOIN outcome_valuation_model_run_intent intent
+         ON intent.intent_id=run.intent_id
+       JOIN outcome_valuation_model_run_authorization run_authority
+         ON run_authority.authorization_id=run.authorization_id
+        AND run_authority.intent_id=run.intent_id
+        AND run_authority.consumed_at IS NOT NULL
+       JOIN outcome_valuation_model_protocol protocol
+         ON protocol.protocol_id=intent.protocol_id
+        AND protocol.dataset_id=intent.dataset_id
+        AND protocol.admission_id=intent.admission_id
+       JOIN outcome_valuation_player_observation_set observation
+         ON observation.observation_set_id=intent.observation_set_id
+        AND observation.protocol_id=intent.protocol_id
+        AND observation.dataset_id=intent.dataset_id
+        AND observation.admission_id=intent.admission_id
+       JOIN outcome_valuation_dataset_admission admission
+         ON admission.admission_id=intent.admission_id
+        AND admission.dataset_id=intent.dataset_id
+        AND admission.status='finalized'
+        AND admission.finalized_at IS NOT NULL
+       JOIN outcome_valuation_dataset_candidate dataset
+         ON dataset.dataset_id=intent.dataset_id
+        AND dataset.status='finalized'
+        AND dataset.finalized_at IS NOT NULL
+      WHERE run.run_id=$1
+      FOR KEY SHARE OF run,intent,run_authority,protocol,observation,admission,dataset`,
+    [runId]
+  );
+  if (result.rows.length === 0) return null;
+  const row = requireOne(result.rows, 'completed player model-run chain');
+  const run = aflTradeModelRunManifestV3Schema.parse(row.run_json);
+  const intent = aflTradeModelRunIntentSchema.parse(row.intent_json);
+  const authorization = aflTradeModelRunAuthorizationSchema.parse(row.authorization_json);
+  const protocol = aflTradePlayerContributionModelProtocolV2Schema.parse(row.protocol_json);
+  const observationSet = aflTradePlayerObservationSetV2Schema.parse(row.observation_json);
+  const admission = aflTradeValuationDatasetAdmissionReceiptSchema.parse(row.admission_json);
+  const dataset = aflTradeValuationDatasetCandidateSchema.parse(row.dataset_json);
+  authenticateAflTradeAuthorizedModelRunManifest({ run, intent, authorization });
+  if (
+    run.runId !== runId ||
+    run.content.modelProtocolId !== protocol.protocolId ||
+    run.content.observationSetId !== observationSet.observationSetId ||
+    run.content.datasetId !== dataset.datasetId ||
+    run.content.datasetAdmissionId !== admission.admissionId ||
+    intent.content.modelProtocolId !== protocol.protocolId ||
+    intent.content.observationSetId !== observationSet.observationSetId ||
+    intent.content.datasetId !== dataset.datasetId ||
+    intent.content.datasetAdmissionId !== admission.admissionId ||
+    protocol.content.datasetId !== dataset.datasetId ||
+    protocol.content.datasetAdmission.admissionId !== admission.admissionId ||
+    observationSet.content.modelProtocolId !== protocol.protocolId ||
+    observationSet.content.datasetId !== dataset.datasetId ||
+    observationSet.content.datasetAdmissionId !== admission.admissionId ||
+    admission.content.datasetId !== dataset.datasetId ||
+    admission.content.datasetSha256 !== dataset.datasetId.slice('dataset:'.length)
+  ) {
+    throw new AflTradeModelRunPersistenceError(
+      'CONFLICTING_REPLAY',
+      'Completed player model-run chain has mixed or incomplete ancestry.'
+    );
+  }
+  return { run, intent, authorization, protocol, observationSet, admission, dataset };
 }
 
 export class PostgresAflTradeAdmittedModelRunAuthority

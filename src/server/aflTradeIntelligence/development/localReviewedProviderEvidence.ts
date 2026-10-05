@@ -13,7 +13,10 @@ import {
   type AflTradePrivateReviewedEvidenceBundle,
 } from '../valuation/privateReviewedEvidenceEvaluation';
 import { LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 } from './localFiveSeasonAflTablesReview';
-import { LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256 } from './localOfficialAfl2026Review';
+import {
+  LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID,
+  LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256,
+} from './localOfficialAfl2026Review';
 
 export const LOCAL_REVIEWED_PROVIDER_EVIDENCE_SCOPE_KEY =
   'afl-player-match-reviewed-2021-2026' as const;
@@ -22,8 +25,10 @@ const HISTORICAL_REVIEWER = 'local-five-season-evidence-reviewer';
 const OFFICIAL_REVIEWER = 'local-workbook-evidence-reviewer';
 const HISTORICAL_REVIEW_SET_DECISION_ID =
   `local-afl-tables-review:set:${LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256}` as const;
-const OFFICIAL_REVIEW_SET_DECISION_ID =
+const SUPERSEDED_OFFICIAL_REVIEW_SET_DECISION_ID =
   `local-official-afl-review:set:${LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256}` as const;
+const OFFICIAL_REVIEW_SET_DECISION_ID =
+  `local-official-afl-review:v2:set:${LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256}` as const;
 
 const instantSchema = z.union([z.date(), z.iso.datetime({ offset: true })]);
 const publicIdSchema = z.string().trim().min(1).max(1_000);
@@ -48,6 +53,7 @@ interface ReviewSetRow extends Record<string, unknown> {
   decided_by: string;
   decided_at: Date | string;
   current: boolean;
+  official_predecessor_exists: boolean;
 }
 
 interface ReviewHealthRow extends Record<string, unknown> {
@@ -110,12 +116,19 @@ async function loadReviewSets(transaction: AflOutcomeSqlTransaction) {
             NOT EXISTS (
               SELECT 1 FROM outcome_review_decision successor
                WHERE successor.supersedes_decision_id=marker.decision_id
-            ) AS current
+            ) AS current,
+            EXISTS (
+              SELECT 1 FROM outcome_review_decision predecessor
+               WHERE predecessor.decision_id=$2
+            ) AS official_predecessor_exists
        FROM outcome_review_decision marker
       WHERE marker.decision_id=ANY($1::text[])
       ORDER BY marker.subject_id
       FOR KEY SHARE OF marker`,
-    [[HISTORICAL_REVIEW_SET_DECISION_ID, OFFICIAL_REVIEW_SET_DECISION_ID]]
+    [
+      [HISTORICAL_REVIEW_SET_DECISION_ID, OFFICIAL_REVIEW_SET_DECISION_ID],
+      SUPERSEDED_OFFICIAL_REVIEW_SET_DECISION_ID,
+    ]
   );
   if (result.rows.length !== 2) {
     throw new TypeError('Both exact retained provider review sets must exist.');
@@ -128,6 +141,12 @@ async function loadReviewSets(transaction: AflOutcomeSqlTransaction) {
         : row.subject_id === LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256
           ? OFFICIAL_REVIEWER
           : null;
+    const expectedSupersededDecisionId =
+      row.subject_id === LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256
+        ? row.official_predecessor_exists
+          ? SUPERSEDED_OFFICIAL_REVIEW_SET_DECISION_ID
+          : null
+        : null;
     if (
       expectedReviewer === null ||
       evidence.evidenceSetSha256 !== row.subject_id ||
@@ -135,7 +154,7 @@ async function loadReviewSets(transaction: AflOutcomeSqlTransaction) {
       row.decision !== 'approved' ||
       row.canonical_record_type !== 'local_review_set' ||
       row.canonical_record_id !== row.subject_id ||
-      row.supersedes_decision_id !== null ||
+      row.supersedes_decision_id !== expectedSupersededDecisionId ||
       row.decided_by !== expectedReviewer ||
       !row.current
     ) {
@@ -262,6 +281,21 @@ async function assertOfficialHealth(transaction: AflOutcomeSqlTransaction): Prom
           AND decision.decided_by=$3
           AND decision.evidence_json->>'evidenceSetSha256'=$2
           AND decision.subject_type=ANY($4::text[])
+          AND (
+            decision.subject_type<>'provider_identity_candidate'
+            OR (
+              decision.canonical_record_type='local_canonical_player_club'
+              AND decision.evidence_json->>'canonicalPlayerId'=$5
+            )
+          )
+          AND (
+            decision.subject_type<>'provider_match_candidate'
+            OR decision.canonical_record_type='local_afl_match'
+          )
+          AND (
+            decision.subject_type<>'local_reconciled_player_match_fact'
+            OR decision.canonical_record_type='local_player_match_fact'
+          )
           AND NOT EXISTS (
             SELECT 1 FROM outcome_review_decision successor
              WHERE successor.supersedes_decision_id=decision.decision_id
@@ -308,6 +342,7 @@ async function assertOfficialHealth(transaction: AflOutcomeSqlTransaction): Prom
         'provider_match_candidate',
         'local_reconciled_player_match_fact',
       ],
+      LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID,
     ]
   );
   const row = result.rows[0];

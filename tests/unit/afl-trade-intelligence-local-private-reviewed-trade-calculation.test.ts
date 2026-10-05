@@ -1,7 +1,9 @@
 import type { DraftTradeDetail } from '@/lib/draftTrades/read';
 import {
   projectLocalPrivateReviewedTradeCalculation,
+  type LocalGovernedPickRealizationEvidence,
   type LocalPrivateReviewedPlayerIdentityEvidence,
+  type LocalPrivateReviewedSelectionLineageEvidence,
 } from '@/server/aflTradeIntelligence/development/localPrivateReviewedTradeCalculation';
 import {
   calculateAflTradePrivateReviewedHpnSeason,
@@ -165,9 +167,9 @@ const detail: DraftTradeDetail = {
         year: null,
         round: null,
         originalClub: null,
-        numberActual: null,
+        numberActual: 12,
       },
-      draftedPlayer: null,
+      draftedPlayer: 'Player One',
       games: null,
       note: null,
     },
@@ -184,23 +186,95 @@ const identity: LocalPrivateReviewedPlayerIdentityEvidence = {
   ],
 };
 
+const selection: LocalPrivateReviewedSelectionLineageEvidence = {
+  assetId: 'asset-pick',
+  draftYear: 2024,
+  selectionNumber: 12,
+  draftedPlayerName: 'Player One',
+  recordedName: 'Player One',
+  canonicalPlayerId: 'local-afl-player:100',
+  selectionDecisionId: `local-workbook-selection-lineage:${'9'.repeat(64)}`,
+  identityDecisionIds: identity.identityDecisionIds,
+  reviewedSeasonIds: identity.reviewedSeasonIds,
+};
+
+const pickRealization: LocalGovernedPickRealizationEvidence = {
+  rootAssetId: 'asset-pick',
+  selectionNumber: 12,
+  canonicalPlayerId: 'local-afl-player:100',
+  draftSelectionId: 'draft-selection:12',
+  lineageEdgeIds: ['pick-lineage-edge:root-to-selection'],
+  acquisitionEventId: 'draft-acquisition-event:player-one',
+  acquisitionAssetVersionId: 'asset-version:player-one-to-b',
+  receivingClubId: 'local-afl-club:b',
+};
+
 describe('local private reviewed trade calculation projection', () => {
-  it('shows an at-trade season and realized post-trade components while blocking unsupported picks', () => {
+  it('shows confirmed realized components for a player and a reviewed selected-player lineage', () => {
     const projected = projectLocalPrivateReviewedTradeCalculation({
       detail,
       workbookSha256: '8'.repeat(64),
       identities: [identity],
-      calculations: [calculation(2024, 'a'), calculation(2025, 'b')],
+      selections: [selection],
+      pickRealizations: [pickRealization],
+      calculations: [
+        calculation(2024, 'a'),
+        calculation(2025, 'b'),
+        calculation(2026, 'b'),
+      ],
       outcomesByAssetId: new Map([
         [
           'asset-player',
           {
             source: 'reconciled_acquisition_spell',
             effectiveThrough: '2026-08-15T00:00:00.000Z',
+            exactMatchSet: {
+              acquisitionEventId: 'asset-player',
+              acquisitionSpellVersionId: 'spell-version:player',
+              startEventVersionId: 'event-version:player',
+              startAssetVersionId: 'asset-version:player',
+              effectiveFrom: '2025-01-01',
+              effectiveThrough: null,
+              canonicalPlayerId: 'local-afl-player:100',
+              receivingClubId: 'local-afl-club:b',
+              seasons: [
+                { seasonYear: 2025, providerDecodedRowIds: ['provider-row:2025:player'] },
+              ],
+            },
             metrics: {
               games: {
                 state: 'partial',
-                observedValue: 12,
+                observedValue: 1,
+                reason: 'active_career_right_censored',
+              },
+              goals: { state: 'unavailable', reason: 'source_missing' },
+              coachesVotes: { state: 'unavailable', reason: 'source_missing' },
+              brownlowVotes: { state: 'unavailable', reason: 'source_missing' },
+            },
+          },
+        ],
+        [
+          'asset-pick',
+          {
+            source: 'reconciled_acquisition_spell',
+            effectiveThrough: '2026-08-15T00:00:00.000Z',
+            exactMatchSet: {
+              acquisitionEventId: 'draft-acquisition-event:player-one',
+              acquisitionSpellVersionId: 'spell-version:pick',
+              startEventVersionId: 'event-version:pick',
+              startAssetVersionId: 'asset-version:player-one-to-b',
+              effectiveFrom: '2025-01-01',
+              effectiveThrough: null,
+              canonicalPlayerId: 'local-afl-player:100',
+              receivingClubId: 'local-afl-club:b',
+              seasons: [
+                { seasonYear: 2025, providerDecodedRowIds: ['provider-row:2025:player'] },
+              ],
+            },
+            metrics: {
+              games: {
+                state: 'partial',
+                observedValue: 1,
                 reason: 'active_career_right_censored',
               },
               goals: { state: 'unavailable', reason: 'source_missing' },
@@ -214,19 +288,37 @@ describe('local private reviewed trade calculation projection', () => {
     const player = projected.assets[0];
     expect(player?.state).toBe('calculated');
     if (player?.state !== 'calculated') throw new Error('Expected calculated player.');
-    expect(player.atTrade.state).toBe('available');
+    expect(player.atTrade).toEqual({
+      state: 'unavailable',
+      reason: 'historical_value_model_not_authorized',
+    });
     expect(player.realized.state).toBe('available');
     expect(player.realized.gamesPlayed).toBe(1);
     expect(player.realized.seasons).toEqual([2025]);
     expect(player.realized.components.offensivePav).toBeGreaterThan(0);
     expect(player.postTradeGames).toMatchObject({
       state: 'partial',
-      gamesPlayed: 12,
+      gamesPlayed: 1,
       rightCensored: true,
     });
-    expect(projected.assets[1]).toMatchObject({
+    const pick = projected.assets[1];
+    expect(pick?.state).toBe('calculated');
+    if (pick?.state !== 'calculated') throw new Error('Expected calculated pick lineage.');
+    expect(pick.atTrade).toEqual({
       state: 'unavailable',
-      reason: 'selection_lineage_not_reviewed',
+      reason: 'selection_value_model_not_authorized',
+    });
+    expect(pick.realized.state).toBe('available');
+    expect(pick.realized.seasons).toEqual([2025]);
+    expect(pick.realized.score).toBe(player.realized.score);
+    expect(pick.governedPickRealization).toEqual(pickRealization);
+    expect(pick.remaining).toEqual({
+      state: 'unavailable',
+      reason: 'predictive_model_not_authorized',
+    });
+    expect(pick.current).toEqual({
+      state: 'unavailable',
+      reason: 'predictive_model_not_authorized',
     });
     expect(projected.overallGrade).toEqual({
       state: 'unavailable',
@@ -248,6 +340,210 @@ describe('local private reviewed trade calculation projection', () => {
     expect(ambiguous.assets[0]).toMatchObject({
       state: 'unavailable',
       reason: 'player_identity_ambiguous',
+    });
+    expect(ambiguous.assets[1]).toMatchObject({
+      state: 'unavailable',
+      reason: 'selection_lineage_not_reviewed',
+    });
+  });
+
+  it('does not attribute club PAV when it does not reconcile to the reviewed acquisition spell', () => {
+    const projected = projectLocalPrivateReviewedTradeCalculation({
+      detail,
+      workbookSha256: '8'.repeat(64),
+      identities: [identity],
+      selections: [selection],
+      pickRealizations: [pickRealization],
+      calculations: [calculation(2024, 'a'), calculation(2025, 'b')],
+      outcomesByAssetId: new Map([
+        [
+          'asset-pick',
+          {
+            source: 'reconciled_acquisition_spell',
+            effectiveThrough: '2026-08-15T00:00:00.000Z',
+            exactMatchSet: {
+              acquisitionEventId: 'draft-acquisition-event:player-one',
+              acquisitionSpellVersionId: 'spell-version:pick',
+              startEventVersionId: 'event-version:pick',
+              startAssetVersionId: 'asset-version:player-one-to-b',
+              effectiveFrom: '2025-01-01',
+              effectiveThrough: null,
+              canonicalPlayerId: 'local-afl-player:100',
+              receivingClubId: 'local-afl-club:b',
+              seasons: [
+                {
+                  seasonYear: 2025,
+                  providerDecodedRowIds: [
+                    'provider-row:2025:player',
+                    'provider-row:2025:different-match',
+                  ],
+                },
+              ],
+            },
+            metrics: {
+              games: { state: 'observed', value: 2 },
+              goals: { state: 'unavailable', reason: 'source_missing' },
+              coachesVotes: { state: 'unavailable', reason: 'source_missing' },
+              brownlowVotes: { state: 'unavailable', reason: 'source_missing' },
+            },
+          },
+        ],
+      ]),
+    });
+
+    expect(projected.assets[1]).toMatchObject({
+      state: 'calculated',
+      realized: {
+        state: 'unavailable',
+        reason: 'reviewed_acquisition_spell_allocation_mismatch',
+      },
+    });
+  });
+
+  it('rejects an equal game total when the reviewed post-acquisition match set differs', () => {
+    const projected = projectLocalPrivateReviewedTradeCalculation({
+      detail,
+      workbookSha256: '8'.repeat(64),
+      identities: [identity],
+      selections: [selection],
+      pickRealizations: [pickRealization],
+      calculations: [calculation(2024, 'a'), calculation(2025, 'b')],
+      outcomesByAssetId: new Map([
+        [
+          'asset-pick',
+          {
+            source: 'reconciled_acquisition_spell',
+            effectiveThrough: '2026-08-15T00:00:00.000Z',
+            exactMatchSet: {
+              acquisitionEventId: 'draft-acquisition-event:player-one',
+              acquisitionSpellVersionId: 'spell-version:pick',
+              startEventVersionId: 'event-version:pick',
+              startAssetVersionId: 'asset-version:player-one-to-b',
+              effectiveFrom: '2025-01-01',
+              effectiveThrough: null,
+              canonicalPlayerId: 'local-afl-player:100',
+              receivingClubId: 'local-afl-club:b',
+              seasons: [
+                { seasonYear: 2025, providerDecodedRowIds: ['provider-row:2025:other'] },
+              ],
+            },
+            metrics: {
+              games: { state: 'observed', value: 1 },
+              goals: { state: 'unavailable', reason: 'source_missing' },
+              coachesVotes: { state: 'unavailable', reason: 'source_missing' },
+              brownlowVotes: { state: 'unavailable', reason: 'source_missing' },
+            },
+          },
+        ],
+      ]),
+    });
+
+    expect(projected.assets[1]).toMatchObject({
+      state: 'calculated',
+      realized: {
+        state: 'unavailable',
+        reason: 'reviewed_acquisition_spell_allocation_mismatch',
+      },
+    });
+  });
+
+  it('does not treat the traded pick root as the selected player acquisition event', () => {
+    const projected = projectLocalPrivateReviewedTradeCalculation({
+      detail,
+      workbookSha256: '8'.repeat(64),
+      identities: [identity],
+      selections: [selection],
+      pickRealizations: [
+        {
+          ...pickRealization,
+          acquisitionEventId: 'asset-pick',
+          acquisitionAssetVersionId: 'asset-version:invalid-root-substitution',
+        },
+      ],
+      calculations: [calculation(2025, 'b')],
+      outcomesByAssetId: new Map([
+        [
+          'asset-pick',
+          {
+            source: 'reconciled_acquisition_spell',
+            effectiveThrough: '2026-08-15T00:00:00.000Z',
+            exactMatchSet: {
+              acquisitionEventId: 'asset-pick',
+              acquisitionSpellVersionId: 'spell-version:invalid-root-substitution',
+              startEventVersionId: 'event-version:invalid-root-substitution',
+              startAssetVersionId: 'asset-version:invalid-root-substitution',
+              effectiveFrom: '2025-01-01',
+              effectiveThrough: null,
+              canonicalPlayerId: 'local-afl-player:100',
+              receivingClubId: 'local-afl-club:b',
+              seasons: [
+                { seasonYear: 2025, providerDecodedRowIds: ['provider-row:2025:player'] },
+              ],
+            },
+            metrics: {
+              games: { state: 'observed', value: 1 },
+              goals: { state: 'unavailable', reason: 'source_missing' },
+              coachesVotes: { state: 'unavailable', reason: 'source_missing' },
+              brownlowVotes: { state: 'unavailable', reason: 'source_missing' },
+            },
+          },
+        ],
+      ]),
+    });
+
+    expect(projected.assets[1]).toMatchObject({
+      state: 'calculated',
+      realized: {
+        state: 'unavailable',
+        reason: 'reviewed_acquisition_spell_unavailable',
+      },
+    });
+  });
+
+  it('rejects trade-root outcome ancestry even when the governed realization binding is valid', () => {
+    const projected = projectLocalPrivateReviewedTradeCalculation({
+      detail,
+      workbookSha256: '8'.repeat(64),
+      identities: [identity],
+      selections: [selection],
+      pickRealizations: [pickRealization],
+      calculations: [calculation(2025, 'b')],
+      outcomesByAssetId: new Map([
+        [
+          'asset-pick',
+          {
+            source: 'reconciled_acquisition_spell',
+            effectiveThrough: '2026-08-15T00:00:00.000Z',
+            exactMatchSet: {
+              acquisitionEventId: 'asset-pick',
+              acquisitionSpellVersionId: 'spell-version:wrong-event',
+              startEventVersionId: 'event-version:wrong-event',
+              startAssetVersionId: 'asset-version:wrong-event',
+              effectiveFrom: '2025-01-01',
+              effectiveThrough: null,
+              canonicalPlayerId: 'local-afl-player:100',
+              receivingClubId: 'local-afl-club:b',
+              seasons: [
+                { seasonYear: 2025, providerDecodedRowIds: ['provider-row:2025:player'] },
+              ],
+            },
+            metrics: {
+              games: { state: 'observed', value: 1 },
+              goals: { state: 'unavailable', reason: 'source_missing' },
+              coachesVotes: { state: 'unavailable', reason: 'source_missing' },
+              brownlowVotes: { state: 'unavailable', reason: 'source_missing' },
+            },
+          },
+        ],
+      ]),
+    });
+
+    expect(projected.assets[1]).toMatchObject({
+      state: 'calculated',
+      realized: {
+        state: 'unavailable',
+        reason: 'reviewed_acquisition_spell_allocation_mismatch',
+      },
     });
   });
 });

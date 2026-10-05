@@ -59,36 +59,69 @@ describe('local staged workbook outcome projection', () => {
         return {
           rows: [
             {
+              event_id: '2025_0016',
               normalized_player_name: 'sam flanders',
               normalized_club_name: 'st kilda',
               provider: 'official_afl',
               season_year: 2026,
               identity_count: 1,
+              canonical_player_id: 'local-afl-player:afl-tables:12824',
+              canonical_player_count: 1,
+              receiving_club_id: 'local-afl-club:st-kilda',
+              spell_version_id: 'acquisition-spell-version:flanders-st-kilda',
+              spell_start_event_version_id: 'event-version:flanders-trade',
+              spell_start_asset_version_id: 'asset-version:flanders-to-st-kilda',
+              spell_start_date: '2025-10-16',
+              spell_end_date: null,
               appearance_count: 12,
+              provider_decoded_row_ids: Array.from(
+                { length: 12 },
+                (_, index) => `provider-row:flanders:${index + 1}`
+              ),
               exact_goals: 1,
               goals_complete: true,
               effective_through: '2026-05-28T09:30:00.000Z',
               source_through_season: 2026,
             },
             {
+              event_id: '2020_0001',
               normalized_player_name: 'player mature',
               normalized_club_name: 'carlton',
               provider: 'afl_tables',
               season_year: 2021,
               identity_count: 1,
+              canonical_player_id: 'local-afl-player:afl-tables:100',
+              canonical_player_count: 1,
+              receiving_club_id: 'local-afl-club:carlton',
+              spell_version_id: null,
+              spell_start_event_version_id: null,
+              spell_start_asset_version_id: null,
+              spell_start_date: null,
+              spell_end_date: null,
               appearance_count: 40,
+              provider_decoded_row_ids: ['provider-row:mature:incomplete'],
               exact_goals: null,
               goals_complete: false,
               effective_through: '2026-05-28T09:30:00.000Z',
               source_through_season: 2026,
             },
             {
+              event_id: 'not-requested',
               normalized_player_name: 'not requested',
               normalized_club_name: 'nowhere',
               provider: 'official_afl',
               season_year: 2026,
               identity_count: 1,
+              canonical_player_id: 'local-afl-player:afl-tables:999',
+              canonical_player_count: 1,
+              receiving_club_id: 'local-afl-club:nowhere',
+              spell_version_id: null,
+              spell_start_event_version_id: null,
+              spell_start_asset_version_id: null,
+              spell_start_date: null,
+              spell_end_date: null,
               appearance_count: 0,
+              provider_decoded_row_ids: [],
               exact_goals: 0,
               goals_complete: true,
               effective_through: '2026-05-28T09:30:00.000Z',
@@ -133,9 +166,37 @@ describe('local staged workbook outcome projection', () => {
       "review_set.decision_id='local-official-afl-review:set:' || $4"
     );
     expect(executedSql).toContain("decision.subject_type='local_review_set'");
+    expect(executedSql).toContain(
+      'array_agg(DISTINCT scoped_provider_rows.provider_decoded_row_id'
+    );
+    expect(executedSql).toContain("'local-afl-player:afl-tables:' || candidate.native_entity_id");
+    expect(executedSql).toContain('JOIN outcome_acquisition_spell_version spell');
+    expect(executedSql).toContain('spell.start_asset_version_id=asset.asset_version_id');
+    expect(executedSql).toContain('asset.source_import_row_id=requested.event_id');
+    expect(executedSql).toContain('provider_rows.match_date_text::date>=spell.start_date');
+    expect(executedSql).toContain('provider_rows.match_date_text::date<=spell.end_date');
     expect(outcomes.get('2025_0016')).toEqual({
       source: 'reconciled_acquisition_spell',
       effectiveThrough: '2026-05-28T09:30:00.000Z',
+      exactMatchSet: {
+        acquisitionEventId: '2025_0016',
+        acquisitionSpellVersionId: 'acquisition-spell-version:flanders-st-kilda',
+        startEventVersionId: 'event-version:flanders-trade',
+        startAssetVersionId: 'asset-version:flanders-to-st-kilda',
+        effectiveFrom: '2025-10-16',
+        effectiveThrough: null,
+        canonicalPlayerId: 'local-afl-player:afl-tables:12824',
+        receivingClubId: 'local-afl-club:st-kilda',
+        seasons: [
+          {
+            seasonYear: 2026,
+            providerDecodedRowIds: Array.from(
+              { length: 12 },
+              (_, index) => `provider-row:flanders:${index + 1}`
+            ).sort(),
+          },
+        ],
+      },
       metrics: {
         games: {
           state: 'partial',

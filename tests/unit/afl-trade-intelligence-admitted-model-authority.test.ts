@@ -28,6 +28,7 @@ import {
   type AflTradeModelRunAuthorizationStore,
 } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
 import { createAflTradePlayerObservationSetV2 } from '@/server/aflTradeIntelligence/modeling/playerContributionContracts';
+import { loadAuthenticatedAflTradeCompletedPlayerModelRunChain } from '@/server/aflTradeIntelligence/modeling/postgresAdmittedModelRunAuthority';
 import {
   AFL_TRADE_ACQUISITION_SPELL_METRIC_AUTHORITY_BOUNDARY,
   AFL_TRADE_ACQUISITION_SPELL_METRIC_SCHEMA_VERSION,
@@ -38,6 +39,7 @@ import {
   createAflTradeReconciledFactualMetric,
   createAflTradeReconciledSubjectKey,
 } from '@/server/aflTradeIntelligence/outcomes/factualReconciliationContracts';
+import type { AflOutcomeSqlTransaction } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
@@ -1018,6 +1020,36 @@ describe('admitted AFL trade model authority contracts', () => {
 
     if (result.status !== 'completed') throw new Error(JSON.stringify(result));
     expect(result.status).toBe('completed');
+    const transaction = {
+      query: async () => ({
+        rows: [
+          {
+            run_json: result.run,
+            intent_json: fixture.intent,
+            authorization_json: result.authorization,
+            protocol_json: fixture.protocol,
+            observation_json: fixture.observationSet,
+            admission_json: fixture.admission,
+            dataset_json: fixture.datasetCandidate,
+          },
+        ],
+        rowCount: 1,
+      }),
+    } satisfies AflOutcomeSqlTransaction;
+    await expect(
+      loadAuthenticatedAflTradeCompletedPlayerModelRunChain(
+        transaction,
+        result.run.runId
+      )
+    ).resolves.toEqual({
+      run: result.run,
+      intent: fixture.intent,
+      authorization: result.authorization,
+      protocol: fixture.protocol,
+      observationSet: fixture.observationSet,
+      admission: fixture.admission,
+      dataset: fixture.datasetCandidate,
+    });
     expect(result.authorization.content).toMatchObject({
       datasetId: fixture.admission.content.datasetId,
       datasetAdmissionId: fixture.admission.admissionId,

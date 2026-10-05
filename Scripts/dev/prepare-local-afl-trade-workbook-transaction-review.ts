@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import { Pool } from 'pg';
 import { z } from 'zod';
@@ -153,13 +153,15 @@ export async function runPrepareLocalAflTradeWorkbookTransactionReviewCommand(
 }
 
 const invokedPath = process.argv[1];
-if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).href) {
+if (invokedPath !== undefined && resolve(invokedPath) === fileURLToPath(import.meta.url)) {
   runPrepareLocalAflTradeWorkbookTransactionReviewCommand({
     argv: process.argv.slice(2),
     env: process.env,
-  }).catch(() => {
+  }).catch((error: unknown) => {
     process.stderr.write(
-      'Local workbook transaction review preparation failed; no approval, release, publication, or activation was assumed.\n'
+      `Local workbook transaction review preparation failed: ${
+        error instanceof Error ? error.message : 'unknown error'
+      }. No approval, release, publication, or activation was assumed.\n`
     );
     process.exitCode = 1;
   });

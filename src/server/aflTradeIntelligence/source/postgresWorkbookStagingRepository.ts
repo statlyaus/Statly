@@ -400,7 +400,7 @@ async function insertIssues(input: {
         input.captureId,
         importRowId,
         issue.code,
-        issue.severity,
+        issue.severity === 'review' ? 'warning' : issue.severity,
         'workbook_row',
         stagingRow?.stagingRowId ?? issue.issueId,
         { importRunId: input.importRunId, issue },

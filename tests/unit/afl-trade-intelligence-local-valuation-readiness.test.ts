@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { inspectLocalAflTradeValuationReadiness } from '@/server/aflTradeIntelligence/development/localAflTradeValuationReadiness';
+import {
+  assessLocalAflTradeAssetValuationReadiness,
+  inspectLocalAflTradeValuationReadiness,
+} from '@/server/aflTradeIntelligence/development/localAflTradeValuationReadiness';
 import {
   createAflTradePrivateReviewedEvidenceBundle,
   createAflTradePrivateReviewedEvidenceEvaluationDecision,
@@ -35,27 +38,74 @@ const noReviewedEvidence = {
   reviewed_source_rights_count: null,
 };
 
+const noNumericalInfrastructure = {
+  private_confirmed_result_count: 0,
+  private_hpn_calculation_count: 0,
+  private_hpn_season_years: [],
+  release_draft_selection_count: 0,
+  release_pick_realization_count: 0,
+  release_pick_lineage_count: 0,
+  private_workbook_selection_count: 0,
+  pick_observation_set_count: 0,
+  pick_model_execution_count: 0,
+  player_observation_set_count: 0,
+  player_model_run_count: 0,
+};
+
 describe('local AFL trade valuation readiness', () => {
+  it('keeps confirmed right-censored appearances separate from unavailable realized PAV', () => {
+    expect(
+      assessLocalAflTradeAssetValuationReadiness({
+        assetId: 'workbook-2025-c64962fd1891b951-st-kilda-2',
+        assetKind: 'player',
+        transaction: 'confirmed',
+        identity: 'resolved',
+        acquisitionSpell: 'resolved',
+        appearances: 'right_censored',
+        realizedPav: 'calculation_field_unavailable',
+      })
+    ).toEqual({
+      assetId: 'workbook-2025-c64962fd1891b951-st-kilda-2',
+      assetKind: 'player',
+      appearances: {
+        state: 'eligible',
+        coverage: 'right_censored',
+      },
+      realizedPav: {
+        state: 'blocked',
+        reasons: ['calculation_field_unavailable'],
+      },
+      completeTradeContribution: {
+        state: 'blocked',
+        reasons: ['calculation_field_unavailable'],
+      },
+    });
+  });
+
   it('reports the latest exact qualification and its bound blocker set', async () => {
     const readiness = await inspectLocalAflTradeValuationReadiness(
       {
-        query: async () => ({
-          rows: [
-            {
-              qualification_report_id: `valuation-source-qualification:${'b'.repeat(64)}`,
-              factual_release_id: `outcome-release:${'c'.repeat(64)}`,
-              decision_state: 'blocked',
-              evaluated_at: '2026-08-15T02:00:00.000Z',
-              source_ids: ['afl-tables-five-season', 'official-afl-2026'],
-              prepared_input_set_id: `prepared-valuation-input-set:${'a'.repeat(64)}`,
-              private_evaluation_decision_id: null,
-              private_evaluation_status: null,
-              private_evaluation_decided_at: null,
-              private_evaluation_decision_json: null,
-              ...noReviewedEvidence,
-            },
-          ],
-        }),
+        query: async (_sql, parameters) => {
+          expect(parameters).toEqual(['afl-men:2025-trades', 2025, null]);
+          return {
+            rows: [
+              {
+                qualification_report_id: `valuation-source-qualification:${'b'.repeat(64)}`,
+                factual_release_id: `outcome-release:${'c'.repeat(64)}`,
+                decision_state: 'blocked',
+                evaluated_at: '2026-08-15T02:00:00.000Z',
+                source_ids: ['afl-tables-five-season', 'official-afl-2026'],
+                prepared_input_set_id: `prepared-valuation-input-set:${'a'.repeat(64)}`,
+                private_evaluation_decision_id: null,
+                private_evaluation_status: null,
+                private_evaluation_decided_at: null,
+                private_evaluation_decision_json: null,
+                ...noReviewedEvidence,
+                ...noNumericalInfrastructure,
+              },
+            ],
+          };
+        },
       },
       {
         scopeKey: 'afl-men:2025-trades',
@@ -74,6 +124,18 @@ describe('local AFL trade valuation readiness', () => {
       blockerCodes: ['source_blocked', 'private_evaluation_not_authorized'],
       privateEvaluationAuthorityState: 'not_authorized',
       requiredNextAuthority: 'private_nonproduction_derived_calculation_authority',
+      capabilities: {
+        completeTrade: {
+          state: 'blocked',
+          blockerCodes: [
+            'confirmed_player_pav_not_materialized',
+            'selection_lineage_not_materialized',
+            'pick_observation_set_not_materialized',
+            'pick_model_execution_not_present',
+            'player_model_execution_not_present',
+          ],
+        },
+      },
     });
     expect(readiness.sources).toHaveLength(2);
     expect(readiness.preparedInputSetIds).toHaveLength(1);
@@ -113,25 +175,29 @@ describe('local AFL trade valuation readiness', () => {
     });
     const readiness = await inspectLocalAflTradeValuationReadiness(
       {
-        query: async () => ({
-          rows: [
-            {
-              qualification_report_id: null,
-              factual_release_id: `outcome-release:${'c'.repeat(64)}`,
-              decision_state: null,
-              evaluated_at: null,
-              source_ids: [],
-              prepared_input_set_id: null,
-              private_evaluation_decision_id: decision.decisionId,
-              private_evaluation_status: 'authorized',
-              private_evaluation_decided_at: '2026-08-16T02:00:00.000Z',
-              private_evaluation_decision_json: decision,
-              ...noReviewedEvidence,
-            },
-          ],
-        }),
+        query: async (_sql, parameters) => {
+          expect(parameters).toEqual(['afl-men:2025-trades', 2025, digest('f')]);
+          return {
+            rows: [
+              {
+                qualification_report_id: null,
+                factual_release_id: `outcome-release:${'c'.repeat(64)}`,
+                decision_state: null,
+                evaluated_at: null,
+                source_ids: [],
+                prepared_input_set_id: null,
+                private_evaluation_decision_id: decision.decisionId,
+                private_evaluation_status: 'authorized',
+                private_evaluation_decided_at: '2026-08-16T02:00:00.000Z',
+                private_evaluation_decision_json: decision,
+                ...noReviewedEvidence,
+                ...noNumericalInfrastructure,
+              },
+            ],
+          };
+        },
       },
-      { scopeKey: 'afl-men:2025-trades' }
+      { scopeKey: 'afl-men:2025-trades', workbookSha256: digest('f') }
     );
 
     expect(readiness).toMatchObject({
@@ -191,9 +257,11 @@ describe('local AFL trade valuation readiness', () => {
 
     const readiness = await inspectLocalAflTradeValuationReadiness(
       {
-        query: async () => ({
-          rows: [
-            {
+        query: async (_sql, parameters) => {
+          expect(parameters).toEqual(['afl-men:2025-trades', 2025, digest('f')]);
+          return {
+            rows: [
+              {
               qualification_report_id: null,
               factual_release_id: null,
               decision_state: null,
@@ -215,16 +283,30 @@ describe('local AFL trade valuation readiness', () => {
               reviewed_decision_count: 146_343,
               reviewed_source_capture_count: 1,
               reviewed_source_rights_count: 1,
-            },
-          ],
-        }),
+              ...noNumericalInfrastructure,
+              private_confirmed_result_count: 1,
+              private_hpn_calculation_count: 5,
+              private_hpn_season_years: [2021, 2022, 2023, 2024, 2025],
+              release_draft_selection_count: 1,
+              release_pick_realization_count: 1,
+              release_pick_lineage_count: 1,
+                private_workbook_selection_count: 1,
+              pick_observation_set_count: 1,
+              pick_model_execution_count: 1,
+              player_observation_set_count: 1,
+              player_model_run_count: 1,
+              },
+            ],
+          };
+        },
       },
-      { scopeKey: 'afl-men:2025-trades' }
+      { scopeKey: 'afl-men:2025-trades', workbookSha256: digest('f') }
     );
 
     expect(readiness).toMatchObject({
       state: 'blocked',
-      numericalCalculationsAvailable: false,
+      numericalCalculationsAvailable: true,
+      confirmedRealizedTradeCalculationCount: 1,
       factualReleaseId: null,
       privateEvaluationAuthorityState: 'authorized',
       privateEvaluationEvidenceKind: 'retained_private_review',
@@ -234,6 +316,35 @@ describe('local AFL trade valuation readiness', () => {
       retainedEvidenceDecisionCount: 146_343,
       blockerCodes: ['model_not_approved'],
       requiredNextAuthority: 'authenticated_private_calculation_inputs',
+      capabilities: {
+        confirmedHistoricalPlayerPav: {
+          state: 'evidence_present',
+          calculationCount: 5,
+          seasonYears: [2021, 2022, 2023, 2024, 2025],
+        },
+        reviewedSelectionLineage: {
+          state: 'partial_evidence',
+          draftSelectionCount: 1,
+          pickRealizationCount: 1,
+          lineageEdgeCount: 1,
+          privateWorkbookSelectionCount: 1,
+        },
+        pickModel: {
+          state: 'unverified_evidence',
+          observationSetCount: 1,
+          executionCount: 1,
+        },
+        playerModel: {
+          state: 'unverified_evidence',
+          observationSetCount: 1,
+          executionCount: 1,
+        },
+        completeTrade: {
+          state: 'evidence_ready_for_authentication',
+          blockerCodes: [],
+        },
+      },
     });
+    expect(readiness.explanation).toMatch(/one confirmed realized trade calculation exists/i);
   });
 });

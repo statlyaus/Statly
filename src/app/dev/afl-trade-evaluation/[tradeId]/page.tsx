@@ -6,6 +6,7 @@ import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/develop
 
 import { LocalValuationReadinessNotice } from '../LocalValuationReadinessNotice';
 import { LocalPrivateReviewedTradeCalculationPanel } from './LocalPrivateReviewedTradeCalculationPanel';
+import { LocalPrivateTradeEvaluationGenerationPanel } from './LocalPrivateTradeEvaluationGenerationPanel';
 import { LocalSyntheticTradeExplanationPanel } from './LocalSyntheticTradeExplanationPanel';
 
 export const dynamic = 'force-dynamic';
@@ -36,8 +37,15 @@ export default async function LocalWorkbookTradeEvaluationPage({
     evaluation.numericalEvaluation.state === 'partial'
       ? evaluation.numericalEvaluation.calculation
       : null;
+  const privateGeneration =
+    evaluation.numericalEvaluation.state === 'partial'
+      ? evaluation.numericalEvaluation.generation
+      : null;
   const calculationAssets = new Map(
     privateCalculation?.assets.map((asset) => [asset.asset.id, asset]) ?? []
+  );
+  const generationAssets = new Map(
+    privateGeneration?.content.assets.map((asset) => [asset.assetId, asset]) ?? []
   );
 
   const { detail } = evaluation;
@@ -112,10 +120,12 @@ export default async function LocalWorkbookTradeEvaluationPage({
 
       <LocalValuationReadinessNotice
         readiness={valuationReadiness}
-        historicalCalculationAvailable={privateCalculation !== null}
+        historicalCalculationAvailable={privateCalculation !== null || privateGeneration !== null}
       />
 
-      {privateCalculation ? (
+      {privateGeneration ? (
+        <LocalPrivateTradeEvaluationGenerationPanel generation={privateGeneration} />
+      ) : privateCalculation ? (
         <LocalPrivateReviewedTradeCalculationPanel calculation={privateCalculation} />
       ) : null}
 
@@ -177,6 +187,11 @@ export default async function LocalWorkbookTradeEvaluationPage({
         <ul className="mt-5 divide-y divide-border border-y border-border">
           {detail.assets.map((asset) => {
             const calculatedAsset = calculationAssets.get(asset.id);
+            const generatedAsset = generationAssets.get(asset.id);
+            const generatedViews = generatedAsset
+              ? Object.values(generatedAsset.views).filter(({ state }) => state === 'calculated')
+                  .length
+              : 0;
             return (
             <li key={asset.id} className="grid gap-4 py-4 sm:grid-cols-2">
               <div>
@@ -193,14 +208,16 @@ export default async function LocalWorkbookTradeEvaluationPage({
                   Governed numerical evidence
                 </p>
                 <p className="mt-1 font-semibold text-foreground">
-                  {calculatedAsset?.state === 'calculated'
-                    ? 'Reviewed historical PAV linked'
+                  {generatedViews > 0 || calculatedAsset?.state === 'calculated'
+                    ? privateGeneration
+                      ? `${generatedViews} of 4 views calculated`
+                      : 'Reviewed historical PAV linked'
                     : 'Unavailable at this gate'}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {calculatedAsset?.state === 'calculated'
-                    ? 'See the component calculation above; predictive and grade authority remain unavailable.'
-                    : 'Exact identity or selection lineage and supported calculation evidence are required.'}
+                  {generatedViews > 0 || calculatedAsset?.state === 'calculated'
+                    ? 'See the asset calculation above; each missing view names the exact remaining authority gate.'
+                    : 'Exact identity, pick-selection confirmation, canonical realization, and supported calculation evidence may still be required.'}
                 </p>
               </div>
             </li>
@@ -219,7 +236,7 @@ export default async function LocalWorkbookTradeEvaluationPage({
               Pinned factual input identity
             </h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              {privateCalculation
+              {privateCalculation || privateGeneration
                 ? 'Reviewed historical player calculations are private and publication-prohibited; unsupported assets and predictive grades remain blocked.'
                 : 'No factual calculation, dataset, or model identity is claimed while numerical evaluation remains blocked.'}
             </p>

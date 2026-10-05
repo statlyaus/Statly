@@ -13,6 +13,7 @@ import type { DraftTradeDetail, DraftTradeListItem } from '@/lib/draftTrades/rea
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import type { LocalAflTradeValuationReadiness } from './localAflTradeValuationReadiness';
 import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
+import type { AnyLocalPrivateTradeEvaluationGeneration } from '../valuation/localPrivateTradeEvaluationContracts';
 import {
   prepareLocalWorkbookSyntheticValuation,
   type LocalWorkbookSyntheticValuationPreparation,
@@ -27,7 +28,12 @@ export type LocalWorkbookValuationReadinessInspector = (
 export type LocalWorkbookPrivateCalculationLoader = (
   detail: DraftTradeDetail,
   workbookSha256: string
-) => Promise<LocalPrivateReviewedTradeCalculation | null>;
+) => Promise<LocalWorkbookPrivateNumericalResult | null>;
+
+export interface LocalWorkbookPrivateNumericalResult {
+  calculation: LocalPrivateReviewedTradeCalculation | null;
+  generation: AnyLocalPrivateTradeEvaluationGeneration | null;
+}
 
 export interface LocalWorkbookEvaluationDependencies {
   loadRepository(
@@ -63,7 +69,8 @@ export interface LocalWorkbookBlockedNumericalEvaluation {
 export interface LocalWorkbookPartialNumericalEvaluation {
   state: 'partial';
   readiness: LocalAflTradeValuationReadiness;
-  calculation: LocalPrivateReviewedTradeCalculation;
+  calculation: LocalPrivateReviewedTradeCalculation | null;
+  generation: AnyLocalPrivateTradeEvaluationGeneration | null;
 }
 
 export interface LocalWorkbookEvaluationArchive {
@@ -255,15 +262,15 @@ export function createLocalWorkbookEvaluationService(
         await prepareScenarios(dependencies, repository, [detail.trade], environment, scenarioCache)
       ).get(tradeId)!;
       const workbookSha256 = inputIdentity(environment).sha256;
-      const privateCalculation = await loadPrivateCalculation?.(detail, workbookSha256);
+      const privateNumericalResult = await loadPrivateCalculation?.(detail, workbookSha256);
       return {
         input: inputIdentity(environment),
         detail,
         scenario,
         numericalEvaluation:
-          privateCalculation === undefined || privateCalculation === null
+          privateNumericalResult === undefined || privateNumericalResult === null
             ? { state: 'blocked', readiness }
-            : { state: 'partial', readiness, calculation: privateCalculation },
+            : { state: 'partial', readiness, ...privateNumericalResult },
         publicationEligible: false,
       };
     },

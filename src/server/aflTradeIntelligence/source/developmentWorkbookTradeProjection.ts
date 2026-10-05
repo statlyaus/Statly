@@ -55,12 +55,11 @@ function extractGames(assetText: string): number | null {
   return last ? Number(last) : null;
 }
 
-function extractParenthetical(assetText: string): string | null {
-  return /\(([^()]*)\)/.exec(assetText)?.[1]?.trim() ?? null;
+function extractParentheticals(assetText: string): string[] {
+  return Array.from(assetText.matchAll(/\(([^()]*)\)/g), (match) => match[1]?.trim() ?? '');
 }
 
-function extractDraftedPlayer(assetText: string): string | null {
-  const inner = extractParenthetical(assetText);
+function extractDraftedPlayer(inner: string | null): string | null {
   if (!inner || inner === '-') return null;
   const withoutActualPick = inner.replace(/^#\d+\s*-\s*/, '');
   const withoutGames = withoutActualPick.replace(/\s*-\s*\d+\s+games?\b.*$/i, '').trim();
@@ -82,9 +81,15 @@ function createAsset(input: {
     : pick
       ? 'pick'
       : 'player';
-  const inner = extractParenthetical(input.assetText);
-  const actualPick = inner ? /^#(\d+)\b/.exec(inner) : null;
-  const futureOriginalClub = futurePick && inner && inner !== '-' ? inner : null;
+  const parentheticals = extractParentheticals(input.assetText);
+  const futureOriginalClub =
+    futurePick && parentheticals[0] && parentheticals[0] !== '-'
+      ? parentheticals[0]
+      : null;
+  const selection = futurePick
+    ? (parentheticals.slice(1).find((value) => /^#\d+\b/.test(value)) ?? null)
+    : (parentheticals.find((value) => /^#\d+\b/.test(value)) ?? parentheticals[0] ?? null);
+  const actualPick = selection ? /^#(\d+)\b/.exec(selection) : null;
   const playerName = assetType === 'player' ? input.assetText.split('(')[0]?.trim() || null : null;
 
   return {
@@ -105,7 +110,10 @@ function createAsset(input: {
       originalClub: futureOriginalClub,
       numberActual: actualPick ? Number(actualPick[1]) : null,
     },
-    draftedPlayer: assetType === 'pick' ? extractDraftedPlayer(input.assetText) : null,
+    draftedPlayer:
+      assetType === 'pick' || assetType === 'future_pick'
+        ? extractDraftedPlayer(selection)
+        : null,
     games: extractGames(input.assetText),
     note: null,
   };

@@ -8,7 +8,10 @@ import {
   assessAflTradeWorkbookTransactionReviewSet,
   createAflTradeWorkbookTransactionOracleFacts,
   createAflTradeWorkbookTransactionReviewDecision,
+  createAflTradeWorkbookTransactionReviewDecisionV2,
+  parseAnyAflTradeWorkbookTransactionReviewDecision,
   parseAflTradeWorkbookTransactionReviewDecision,
+  parseAflTradeWorkbookTransactionReviewDecisionV2,
 } from '@/server/aflTradeIntelligence/source/workbookTransactionReviewDecision';
 import {
   createAflTradeContentAddress,
@@ -284,6 +287,227 @@ describe('workbook transaction review set', () => {
       publicationEligible: false,
       publicationProhibited: true,
     });
+  });
+
+  it('binds an approved v2 review to the exact date, parties, directions, and exhaustive assets', () => {
+    const reviewSet = createAflTradeWorkbookTransactionReviewSet(stagingPackage(validRows()));
+    const subject = reviewSet.content.transactions[0]!;
+    const decision = createAflTradeWorkbookTransactionReviewDecisionV2({
+      reviewSet,
+      reviewSubjectId: subject.reviewSubjectId,
+      workbookTradeId: 'workbook-2025-fact-bound-trade',
+      occurredOn: '2025-10-15',
+      occurrencePrecision: 'date',
+      outcome: 'approved',
+      parties: [
+        {
+          stagingRowId: subject.parties[0]!.stagingRowId,
+          canonicalClubId: 'afl-club:st-kilda',
+          assets: [
+            {
+              assetId: 'workbook-2025-fact-bound-trade-st-kilda-1',
+              sourceAssetText: 'Sam Flanders',
+              assetKind: 'player',
+              sendingClubId: 'afl-club:gold-coast',
+              receivingClubId: 'afl-club:st-kilda',
+              canonicalPlayerId: 'local-afl-player:afl-tables:12625',
+              selection: null,
+            },
+          ],
+        },
+        {
+          stagingRowId: subject.parties[1]!.stagingRowId,
+          canonicalClubId: 'afl-club:gold-coast',
+          assets: [
+            {
+              assetId: 'workbook-2025-fact-bound-trade-gold-coast-2',
+              sourceAssetText: 'Pick 8',
+              assetKind: 'pick',
+              sendingClubId: 'afl-club:st-kilda',
+              receivingClubId: 'afl-club:gold-coast',
+              canonicalPlayerId: null,
+              selection: {
+                seasonYear: 2025,
+                round: 1,
+                number: 8,
+                originalClubId: null,
+              },
+            },
+          ],
+        },
+      ],
+      revision: 1,
+      supersedesDecisionId: null,
+      reviewerId: 'local-reviewer:robert',
+      rationale: 'Reviewed the exact date, clubs, directions, and every source asset.',
+      decidedAt: '2026-08-16T00:00:00.000Z',
+    });
+
+    expect(parseAflTradeWorkbookTransactionReviewDecisionV2(decision)).toEqual(decision);
+    expect(parseAnyAflTradeWorkbookTransactionReviewDecision(decision)).toEqual(decision);
+    expect(
+      assessAflTradeWorkbookTransactionReviewSet({
+        reviewSet,
+        currentDecisions: [decision],
+      })
+    ).toMatchObject({ approved: 1, rejected: 0, pending: 0, readyForShadowOracle: true });
+    expect(decision.content).toMatchObject({
+      schemaVersion: 'afl-trade-workbook-transaction-review-decision/v2',
+      workbookTradeId: 'workbook-2025-fact-bound-trade',
+      occurredOn: '2025-10-15',
+      occurrencePrecision: 'date',
+      outcome: 'approved',
+      parties: [
+        {
+          canonicalClubId: 'afl-club:st-kilda',
+          assets: [
+            expect.objectContaining({
+              sourceAssetText: 'Sam Flanders',
+              canonicalPlayerId: 'local-afl-player:afl-tables:12625',
+            }),
+          ],
+        },
+        {
+          canonicalClubId: 'afl-club:gold-coast',
+          assets: [
+            expect.objectContaining({
+              sourceAssetText: 'Pick 8',
+              canonicalPlayerId: null,
+            }),
+          ],
+        },
+      ],
+      publicationEligible: false,
+      publicationProhibited: true,
+    });
+  });
+
+  it('rejects a v2 approval that does not exhaustively interpret the exact source asset text', () => {
+    const reviewSet = createAflTradeWorkbookTransactionReviewSet(stagingPackage(validRows()));
+    const subject = reviewSet.content.transactions[0]!;
+
+    expect(() =>
+      createAflTradeWorkbookTransactionReviewDecisionV2({
+        reviewSet,
+        reviewSubjectId: subject.reviewSubjectId,
+        workbookTradeId: 'workbook-2025-incomplete-trade',
+        occurredOn: '2025-10-15',
+        occurrencePrecision: 'date',
+        outcome: 'approved',
+        parties: [
+          {
+            stagingRowId: subject.parties[0]!.stagingRowId,
+            canonicalClubId: 'afl-club:st-kilda',
+            assets: [
+              {
+                assetId: 'workbook-2025-incomplete-trade-st-kilda-1',
+                sourceAssetText: 'Sam',
+                assetKind: 'player',
+                sendingClubId: 'afl-club:gold-coast',
+                receivingClubId: 'afl-club:st-kilda',
+                canonicalPlayerId: 'local-afl-player:afl-tables:12625',
+                selection: null,
+              },
+            ],
+          },
+          {
+            stagingRowId: subject.parties[1]!.stagingRowId,
+            canonicalClubId: 'afl-club:gold-coast',
+            assets: [
+              {
+                assetId: 'workbook-2025-incomplete-trade-gold-coast-2',
+                sourceAssetText: 'Pick 8',
+                assetKind: 'pick',
+                sendingClubId: 'afl-club:st-kilda',
+                receivingClubId: 'afl-club:gold-coast',
+                canonicalPlayerId: null,
+                selection: {
+                  seasonYear: 2025,
+                  round: 1,
+                  number: 8,
+                  originalClubId: null,
+                },
+              },
+            ],
+          },
+        ],
+        revision: 1,
+        supersedesDecisionId: null,
+        reviewerId: 'local-reviewer:robert',
+        rationale: 'This deliberately omits part of one exact source asset.',
+        decidedAt: '2026-08-16T00:00:00.000Z',
+      })
+    ).toThrow(/exhaustively interpret/i);
+  });
+
+  it('represents a year-only occurrence as a normalized lower bound without claiming an exact date', () => {
+    const reviewSet = createAflTradeWorkbookTransactionReviewSet(stagingPackage(validRows()));
+    const subject = reviewSet.content.transactions[0]!;
+
+    const decision = createAflTradeWorkbookTransactionReviewDecisionV2({
+      reviewSet,
+      reviewSubjectId: subject.reviewSubjectId,
+      workbookTradeId: 'workbook-2025-year-only-trade',
+      occurredOn: '2025-01-01',
+      occurrencePrecision: 'year',
+      outcome: 'approved',
+      parties: [
+        {
+          stagingRowId: subject.parties[0]!.stagingRowId,
+          canonicalClubId: 'afl-club:st-kilda',
+          assets: [
+            {
+              assetId: 'workbook-2025-year-only-trade-st-kilda-1',
+              sourceAssetText: 'Sam Flanders',
+              assetKind: 'player',
+              sendingClubId: 'afl-club:gold-coast',
+              receivingClubId: 'afl-club:st-kilda',
+              canonicalPlayerId: 'local-afl-player:afl-tables:12625',
+              selection: null,
+            },
+          ],
+        },
+        {
+          stagingRowId: subject.parties[1]!.stagingRowId,
+          canonicalClubId: 'afl-club:gold-coast',
+          assets: [
+            {
+              assetId: 'workbook-2025-year-only-trade-gold-coast-2',
+              sourceAssetText: 'Pick 8',
+              assetKind: 'pick',
+              sendingClubId: 'afl-club:st-kilda',
+              receivingClubId: 'afl-club:gold-coast',
+              canonicalPlayerId: null,
+              selection: {
+                seasonYear: 2025,
+                round: 1,
+                number: 8,
+                originalClubId: null,
+              },
+            },
+          ],
+        },
+      ],
+      revision: 1,
+      supersedesDecisionId: null,
+      reviewerId: 'local-reviewer:robert',
+      rationale: 'The workbook proves the 2025 transaction year, but no exact day.',
+      decidedAt: '2026-08-16T00:00:00.000Z',
+    });
+
+    expect(decision.content).toMatchObject({
+      occurredOn: '2025-01-01',
+      occurrencePrecision: 'year',
+    });
+
+    expect(() =>
+      createAflTradeWorkbookTransactionReviewDecisionV2({
+        ...decision.content,
+        reviewSet,
+        reviewSubjectId: subject.reviewSubjectId,
+        occurredOn: '2025-10-15',
+      })
+    ).toThrow(/year precision/i);
   });
 
   it('rejects an approval that does not resolve every party to a distinct canonical club', () => {

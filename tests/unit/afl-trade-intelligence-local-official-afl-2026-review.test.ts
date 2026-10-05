@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID,
   LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256,
   reviewLocalOfficialAfl2026SamFlandersEvidence,
 } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Review';
@@ -40,7 +41,7 @@ function reviewedRows() {
   }));
 }
 
-function atomicReviewClient(options: { failAtInsert?: number } = {}) {
+function atomicReviewClient(options: { failAtInsert?: number; predecessorPrefix?: string } = {}) {
   const committed: unknown[][] = [];
   const client: AflOutcomeSqlClient = {
     async query() {
@@ -53,6 +54,19 @@ function atomicReviewClient(options: { failAtInsert?: number } = {}) {
           if (sql.includes('pg_advisory_xact_lock')) return { rows: [] as Row[], rowCount: 1 };
           if (sql.includes('FROM outcome_provider_decoded_row decoded')) {
             return { rows: reviewedRows() as Row[], rowCount: 12 };
+          }
+          if (sql.includes('FROM outcome_review_decision current')) {
+            const predecessor = options.predecessorPrefix
+              ? {
+                  decision_id: `${options.predecessorPrefix}:${parameters?.[1]}`,
+                  canonical_record_type: 'legacy_local_identity',
+                  canonical_record_id: 'legacy-target',
+                }
+              : null;
+            return {
+              rows: (predecessor ? [predecessor] : []) as Row[],
+              rowCount: predecessor ? 1 : 0,
+            };
           }
           if (sql.includes('INSERT INTO outcome_review_decision')) {
             pending.push([...(parameters ?? [])]);
@@ -105,8 +119,34 @@ describe('local official AFL 2026 review', () => {
       ])
     );
     expect(committed.at(-1)?.[0]).toBe(
+      `local-official-afl-review:v2:set:${LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256}`
+    );
+    expect(committed.at(-1)?.[6]).toBe(
       `local-official-afl-review:set:${LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256}`
     );
+    const identityDecision = committed.find(
+      (parameters) => parameters[1] === 'provider_identity_candidate'
+    );
+    expect(identityDecision?.[3]).toBe('local_canonical_player_club');
+    expect(JSON.parse(String(identityDecision?.[7]))).toMatchObject({
+      canonicalPlayerId: LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID,
+      nativeEntityId: 'CD_I1009260',
+      recordedName: 'Sam Flanders',
+      recordedClubName: 'St Kilda',
+    });
+  });
+
+  it('supersedes the sole current approval for every corrected official subject', async () => {
+    const { client, committed } = atomicReviewClient({ predecessorPrefix: 'legacy-review' });
+
+    await reviewLocalOfficialAfl2026SamFlandersEvidence(
+      client,
+      'source-capture:official-2026',
+      'provider-normalization-run:official-2026'
+    );
+
+    expect(committed.slice(0, 36).every((parameters) => parameters[5] ===
+      `legacy-review:${parameters[2]}`)).toBe(true);
   });
 
   it('rejects a native match or date mutation against the pinned evidence digest', async () => {

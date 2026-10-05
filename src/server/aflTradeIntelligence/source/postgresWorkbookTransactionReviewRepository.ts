@@ -6,7 +6,12 @@ import type {
 import {
   assessAflTradeWorkbookTransactionReviewSet,
   createAflTradeWorkbookTransactionReviewDecision,
-  parseAflTradeWorkbookTransactionReviewDecision,
+  createAflTradeWorkbookTransactionReviewDecisionV2,
+  isAflTradeWorkbookTransactionReviewDecisionV2,
+  parseAnyAflTradeWorkbookTransactionReviewDecision,
+  type AflTradeWorkbookTransactionReviewPartyV2,
+  type AflTradeWorkbookTransactionReviewDecisionV2,
+  type AnyAflTradeWorkbookTransactionReviewDecision,
   type AflTradeWorkbookTransactionReviewAssessment,
   type AflTradeWorkbookTransactionReviewDecision,
 } from './workbookTransactionReviewDecision';
@@ -45,6 +50,18 @@ export type RecordAflTradeWorkbookTransactionReviewDecisionInput = Readonly<{
         transferDirection?: never;
       }>
   );
+
+export type RecordAflTradeWorkbookTransactionReviewDecisionV2Input = Readonly<{
+  reviewSetId: string;
+  reviewSubjectId: string;
+  expectedCurrentDecisionId: string | null;
+  workbookTradeId: string;
+  occurredOn: string;
+  occurrencePrecision: 'date' | 'year';
+  parties: readonly AflTradeWorkbookTransactionReviewPartyV2[];
+  reviewerId: string;
+  rationale: string;
+}>;
 
 interface ImportRunRow extends Record<string, unknown> {
   import_kind: string;
@@ -528,9 +545,153 @@ export class PostgresAflTradeWorkbookTransactionReviewRepository {
     });
   }
 
+  async recordDecisionV2(
+    input: RecordAflTradeWorkbookTransactionReviewDecisionV2Input
+  ): Promise<AflTradeWorkbookTransactionReviewDecisionV2> {
+    return this.client.transaction(async (transaction) => {
+      await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+        `outcome-workbook-transaction-review:${input.reviewSetId}:${input.reviewSubjectId}`,
+      ]);
+      const reviewSet = await loadReviewSetFrom(transaction, input.reviewSetId, true);
+      if (
+        !reviewSet ||
+        !reviewSet.content.transactions.some(
+          ({ reviewSubjectId }) => reviewSubjectId === input.reviewSubjectId
+        )
+      ) {
+        throw new AflTradeWorkbookTransactionReviewPersistenceError(
+          'NOT_FOUND',
+          'Workbook transaction review subject is unavailable.'
+        );
+      }
+      const headResult = await transaction.query<HeadRow>(
+        `SELECT head.review_subject_id,head.revision,head.decision_id,head.outcome,
+                head.updated_at,decision.decision_json
+           FROM outcome_workbook_transaction_review_head head
+           JOIN outcome_workbook_transaction_review_decision decision
+             ON decision.decision_id=head.decision_id
+          WHERE head.review_set_id=$1 AND head.review_subject_id=$2
+          FOR UPDATE OF head`,
+        [input.reviewSetId, input.reviewSubjectId]
+      );
+      if (headResult.rows.length > 1) {
+        throw new AflTradeWorkbookTransactionReviewPersistenceError(
+          'IMMUTABLE_CONFLICT',
+          'Workbook transaction review has more than one current head.'
+        );
+      }
+      const head = headResult.rows[0] ?? null;
+      if (head) {
+        const current = parseAnyAflTradeWorkbookTransactionReviewDecision(head.decision_json);
+        if (
+          isAflTradeWorkbookTransactionReviewDecisionV2(current) &&
+          exactJson(
+            {
+              workbookTradeId: current.content.workbookTradeId,
+              occurredOn: current.content.occurredOn,
+              occurrencePrecision: current.content.occurrencePrecision,
+              parties: current.content.parties,
+              reviewerId: current.content.reviewerId,
+              rationale: current.content.rationale,
+            },
+            {
+              workbookTradeId: input.workbookTradeId,
+              occurredOn: input.occurredOn,
+              occurrencePrecision: input.occurrencePrecision,
+              parties: input.parties,
+              reviewerId: input.reviewerId,
+              rationale: input.rationale,
+            }
+          )
+        ) {
+          return current;
+        }
+      }
+      if ((head?.decision_id ?? null) !== input.expectedCurrentDecisionId) {
+        throw new AflTradeWorkbookTransactionReviewPersistenceError(
+          'STALE_DECISION',
+          'Stale workbook transaction review decision; current head has changed.'
+        );
+      }
+      const clock = await transaction.query<{ decided_at: Date | string }>(
+        `SELECT clock_timestamp() AS decided_at`
+      );
+      const decision = createAflTradeWorkbookTransactionReviewDecisionV2({
+        reviewSet,
+        reviewSubjectId: input.reviewSubjectId,
+        workbookTradeId: input.workbookTradeId,
+        occurredOn: input.occurredOn,
+        occurrencePrecision: input.occurrencePrecision,
+        outcome: 'approved',
+        parties: input.parties,
+        revision: head ? Number(head.revision) + 1 : 1,
+        supersedesDecisionId: head?.decision_id ?? null,
+        reviewerId: input.reviewerId,
+        rationale: input.rationale,
+        decidedAt: instant(clock.rows[0]!.decided_at),
+      });
+      await transaction.query(
+        `INSERT INTO outcome_workbook_transaction_review_decision
+          (decision_id,review_set_id,review_subject_id,revision,supersedes_decision_id,outcome,
+           reviewer_id,decided_at,decision_sha256,decision_content_canonical_json,decision_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+        [
+          decision.decisionId,
+          input.reviewSetId,
+          input.reviewSubjectId,
+          decision.content.revision,
+          decision.content.supersedesDecisionId,
+          decision.content.outcome,
+          decision.content.reviewerId,
+          decision.content.decidedAt,
+          decision.decisionId.split(':')[1],
+          canonicalizeAflTradeJson(decision.content),
+          canonicalizeAflTradeJson(decision),
+        ]
+      );
+      const written = head
+        ? await transaction.query(
+            `UPDATE outcome_workbook_transaction_review_head
+                SET revision=$3,decision_id=$4,outcome=$5,updated_at=$6
+              WHERE review_set_id=$1 AND review_subject_id=$2
+                AND revision=$7 AND decision_id=$8`,
+            [
+              input.reviewSetId,
+              input.reviewSubjectId,
+              decision.content.revision,
+              decision.decisionId,
+              decision.content.outcome,
+              decision.content.decidedAt,
+              head.revision,
+              head.decision_id,
+            ]
+          )
+        : await transaction.query(
+            `INSERT INTO outcome_workbook_transaction_review_head
+              (review_set_id,review_subject_id,revision,decision_id,outcome,updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [
+              input.reviewSetId,
+              input.reviewSubjectId,
+              decision.content.revision,
+              decision.decisionId,
+              decision.content.outcome,
+              decision.content.decidedAt,
+            ]
+          );
+      if (written.rowCount !== 1) {
+        throw new AflTradeWorkbookTransactionReviewPersistenceError(
+          'STALE_DECISION',
+          'Stale workbook transaction review decision failed compare-and-swap.'
+        );
+      }
+      return decision;
+    });
+  }
+
   async loadCurrentDecisions(
     reviewSetId: string
-  ): Promise<readonly AflTradeWorkbookTransactionReviewDecision[]> {
+  ): Promise<readonly AnyAflTradeWorkbookTransactionReviewDecision[]> {
     const reviewSet = await this.loadReviewSet(reviewSetId);
     if (!reviewSet) return [];
     const result = await this.client.query<HeadRow>(
@@ -547,7 +708,7 @@ export class PostgresAflTradeWorkbookTransactionReviewRepository {
       [reviewSetId]
     );
     return result.rows.map((row) => {
-      const decision = parseAflTradeWorkbookTransactionReviewDecision(row.decision_json);
+      const decision = parseAnyAflTradeWorkbookTransactionReviewDecision(row.decision_json);
       if (
         decision.content.reviewSetId !== reviewSetId ||
         decision.content.reviewSubjectId !== row.review_subject_id ||

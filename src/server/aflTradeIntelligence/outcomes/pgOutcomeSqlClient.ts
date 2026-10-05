@@ -2,6 +2,7 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlQueryResult,
   AflOutcomeSqlTransaction,
+  AflOutcomeSqlTransactionOptions,
 } from './postgresOutcomeReleaseRepository';
 
 interface PgQueryResultLike {
@@ -36,6 +37,23 @@ function createTransaction(client: AflOutcomePgPoolClient): AflOutcomeSqlTransac
   };
 }
 
+const ISOLATION_LEVEL_SQL = {
+  read_committed: 'READ COMMITTED',
+  repeatable_read: 'REPEATABLE READ',
+  serializable: 'SERIALIZABLE',
+} as const;
+
+const ACCESS_MODE_SQL = {
+  read_write: 'READ WRITE',
+  read_only: 'READ ONLY',
+} as const;
+
+function transactionStartSql(options: AflOutcomeSqlTransactionOptions = {}): string {
+  const isolationLevel = ISOLATION_LEVEL_SQL[options.isolationLevel ?? 'read_committed'];
+  const accessMode = options.accessMode ? ` ${ACCESS_MODE_SQL[options.accessMode]}` : '';
+  return `BEGIN ISOLATION LEVEL ${isolationLevel}${accessMode}`;
+}
+
 /**
  * Adapts an explicitly configured pg Pool to the factual-outcomes persistence port. Configuration
  * remains the caller's responsibility so this boundary cannot discover or borrow fantasy secrets.
@@ -46,10 +64,13 @@ export function createPgAflOutcomeSqlClient(pool: AflOutcomePgPool): AflOutcomeS
       return normalizeResult<Row>(await pool.query(sql, parameters));
     },
 
-    async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>) {
+    async transaction<T>(
+      work: (transaction: AflOutcomeSqlTransaction) => Promise<T>,
+      options?: AflOutcomeSqlTransactionOptions
+    ) {
       const client = await pool.connect();
       try {
-        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query(transactionStartSql(options));
         const result = await work(createTransaction(client));
         await client.query('COMMIT');
         return result;

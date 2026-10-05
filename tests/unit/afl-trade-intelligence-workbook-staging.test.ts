@@ -370,6 +370,7 @@ function createSqlClient(input: { captureId: string; artifactId: string; content
   let partitionCount = 0;
   let issueCount = 0;
   const insertedPayloads: unknown[] = [];
+  const insertedIssueSeverities: unknown[] = [];
   const transaction: AflOutcomeSqlTransaction = {
     async query<Row>(sql: string, parameters: readonly unknown[] = []) {
       if (sql.includes('pg_advisory_xact_lock')) {
@@ -440,6 +441,9 @@ function createSqlClient(input: { captureId: string; artifactId: string; content
       }
       if (sql.startsWith('INSERT INTO outcome_data_exception')) {
         issueCount += parameters.length / 9;
+        for (let index = 4; index < parameters.length; index += 9) {
+          insertedIssueSeverities.push(parameters[index]);
+        }
         return { rows: [], rowCount: parameters.length / 9 };
       }
       if (sql.includes('AS row_count')) {
@@ -459,7 +463,12 @@ function createSqlClient(input: { captureId: string; artifactId: string; content
       return work(transaction);
     },
   };
-  return { client, insertedPayloads, getRunManifest: () => run?.manifest };
+  return {
+    client,
+    insertedPayloads,
+    insertedIssueSeverities,
+    getRunManifest: () => run?.manifest,
+  };
 }
 
 describe('PostgreSQL workbook staging repository', () => {
@@ -504,6 +513,8 @@ describe('PostgreSQL workbook staging repository', () => {
     });
     expect(replay).toEqual({ ...first, idempotentReplay: true });
     expect(sql.insertedPayloads).toHaveLength(12);
+    expect(sql.insertedIssueSeverities).not.toContain('review');
+    expect(sql.insertedIssueSeverities).toContain('warning');
     expect(sql.insertedPayloads).toContainEqual(
       expect.objectContaining({
         stagingPackageId: staging.stagingPackageId,

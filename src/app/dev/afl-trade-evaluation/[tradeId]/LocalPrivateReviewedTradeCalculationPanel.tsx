@@ -7,7 +7,7 @@ type CalculatedAsset = Extract<
   LocalPrivateReviewedTradeAssetCalculation,
   { state: 'calculated' }
 >;
-type CalculationView = CalculatedAsset['atTrade'];
+type CalculationView = CalculatedAsset['realized'];
 
 const VIEW_LABELS = {
   atTrade: 'At trade',
@@ -17,10 +17,10 @@ const VIEW_LABELS = {
 } as const;
 
 const VIEW_DESCRIPTIONS = {
-  atTrade: 'Last reviewed season at or before the trade year.',
+  atTrade: 'Historical value requires an authorized point-in-time valuation model.',
   realized: 'Reviewed post-trade seasons for the receiving club.',
   remaining: 'Future value requires an authorized predictive model.',
-  current: 'Latest reviewed post-trade season for the receiving club.',
+  current: 'Current value requires realized plus an authorized remaining-value model.',
 } as const;
 
 function format(value: number): string {
@@ -30,9 +30,17 @@ function format(value: number): string {
 function unavailableReason(reason: string): string {
   const explanations: Record<string, string> = {
     reviewed_season_unavailable: 'No reviewed pre-trade season is loaded for this player.',
+    historical_value_model_not_authorized:
+      'No authorized point-in-time valuation model exists for at-trade value.',
     post_trade_season_unavailable: 'No full reviewed post-trade league season is loaded yet.',
     no_reviewed_receiving_club_allocation:
       'The reviewed seasons contain no allocation for this player at the receiving club.',
+    reviewed_acquisition_spell_unavailable:
+      'A current approved acquisition spell and its exact reviewed player-match set are required before realized PAV can be attributed.',
+    reviewed_acquisition_spell_allocation_mismatch:
+      'The HPN player-match rows do not reconcile to the exact reviewed post-acquisition set, so realized PAV is unavailable.',
+    selection_value_model_not_authorized:
+      'Expected selection value requires an authorized pick model; it is not inferred from the eventual player.',
     predictive_model_not_authorized:
       'No authorized predictive model exists for remaining value.',
     player_identity_unavailable:
@@ -49,9 +57,11 @@ function unavailableReason(reason: string): string {
 function ViewSummary({
   name,
   view,
+  description,
 }: {
   name: keyof typeof VIEW_LABELS;
   view: CalculationView;
+  description?: string;
 }) {
   return (
     <section className="rounded-lg border border-border bg-background p-4">
@@ -59,7 +69,7 @@ function ViewSummary({
         <div>
           <h4 className="text-sm font-semibold text-foreground">{VIEW_LABELS[name]}</h4>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {VIEW_DESCRIPTIONS[name]}
+            {description ?? VIEW_DESCRIPTIONS[name]}
           </p>
         </div>
         {view.state === 'available' ? (
@@ -128,8 +138,12 @@ function ViewSummary({
             </dl>
             <p className="mt-3 break-all font-mono">
               {view.calculationIds.length} authenticated calculation
-              {view.calculationIds.length === 1 ? '' : 's'} · {view.allocationIds.length}{' '}
-              allocation{view.allocationIds.length === 1 ? '' : 's'}
+              {view.calculationIds.length === 1 ? ' artifact' : ' artifacts'}
+              {view.allocationIds.length > 0
+                ? ` · ${view.allocationIds.length} allocation${
+                    view.allocationIds.length === 1 ? '' : 's'
+                  }`
+                : ''}
             </p>
           </details>
         </>
@@ -164,20 +178,39 @@ function AssetCalculation({ asset }: { asset: LocalPrivateReviewedTradeAssetCalc
     );
   }
 
+  const isReviewedSelection =
+    asset.asset.assetType === 'pick' && asset.selectionLineageDecisionId !== undefined;
+  const pickDescriptions = {
+    atTrade: 'Expected value at the selection requires an authorized pick model.',
+    realized: 'Reviewed contribution by the selected player after the draft.',
+    remaining: 'Future contribution requires an authorized predictive model.',
+    current: 'Current value requires realized plus an authorized remaining-value model.',
+  } as const;
   return (
     <li className="overflow-hidden rounded-xl border border-border bg-background">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-muted/40 p-4">
         <div>
           <h3 className="font-semibold text-foreground">{asset.asset.assetText}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Received by {asset.asset.clubName} · exact reviewed player identity
+            {isReviewedSelection ? (
+              <>
+                Selection #{asset.asset.pick.numberActual} · {asset.asset.draftedPlayer}
+              </>
+            ) : (
+              <>Received by {asset.asset.clubName} · exact reviewed player identity</>
+            )}
           </p>
         </div>
         <span className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">
-          Historical PAV
+          {isReviewedSelection ? 'Selected player PAV' : 'Historical PAV'}
         </span>
       </header>
-      {asset.postTradeGames.state === 'unavailable' ? (
+      {isReviewedSelection ? (
+        <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
+          Realized values use the selected player&apos;s confirmed HPN contribution for{' '}
+          {asset.asset.clubName}; they do not reconstruct an at-trade pick forecast.
+        </p>
+      ) : asset.postTradeGames.state === 'unavailable' ? (
         <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
           Confirmed post-trade games are not available from the reviewed acquisition-spell evidence.
         </p>
@@ -187,16 +220,36 @@ function AssetCalculation({ asset }: { asset: LocalPrivateReviewedTradeAssetCalc
             {asset.postTradeGames.gamesPlayed} confirmed post-trade games
           </p>
           <p className="text-xs text-muted-foreground">
-            Through {asset.postTradeGames.effectiveThrough.slice(0, 10)}
-            {asset.postTradeGames.rightCensored ? ' · active spell, total still growing' : ''}
+            {asset.postTradeGames.effectiveThroughSeason === undefined
+              ? `Through ${asset.postTradeGames.effectiveThrough.slice(0, 10)}`
+              : `Reviewed through ${asset.postTradeGames.effectiveThroughSeason} season`}
+            {asset.postTradeGames.rightCensored
+              ? ' · active spell, later games not included'
+              : ''}
           </p>
         </div>
       )}
       <div className="grid gap-3 p-4 lg:grid-cols-2">
-        <ViewSummary name="atTrade" view={asset.atTrade} />
-        <ViewSummary name="realized" view={asset.realized} />
-        <ViewSummary name="remaining" view={asset.remaining} />
-        <ViewSummary name="current" view={asset.current} />
+        <ViewSummary
+          name="atTrade"
+          view={asset.atTrade}
+          description={isReviewedSelection ? pickDescriptions.atTrade : undefined}
+        />
+        <ViewSummary
+          name="realized"
+          view={asset.realized}
+          description={isReviewedSelection ? pickDescriptions.realized : undefined}
+        />
+        <ViewSummary
+          name="remaining"
+          view={asset.remaining}
+          description={isReviewedSelection ? pickDescriptions.remaining : undefined}
+        />
+        <ViewSummary
+          name="current"
+          view={asset.current}
+          description={isReviewedSelection ? pickDescriptions.current : undefined}
+        />
       </div>
     </li>
   );
@@ -219,12 +272,12 @@ export function LocalPrivateReviewedTradeCalculationPanel({
             id="private-reviewed-calculation-heading"
             className="text-xl font-semibold text-foreground"
           >
-            Confirmed historical player calculation
+            Confirmed realized asset calculation
           </h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Real HPN season PAV calculated from reviewed local match rows. Asset scores show offence,
-            midfield, and defence; they are historical contribution values, not forecasts or trade
-            grades.
+            Real HPN season PAV calculated from reviewed local match rows. Player assets use their
+            reviewed identity; reviewed picks use the eventual selected player. These are historical
+            contribution values, not forecasts or trade grades.
           </p>
         </div>
         <span className="rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-foreground">

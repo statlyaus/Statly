@@ -48,6 +48,25 @@ export type AflTradeDevelopmentReconciledOutcomeMetric =
 export interface AflTradeDevelopmentReconciledAcquisitionOutcome {
   source: 'reconciled_acquisition_spell';
   effectiveThrough: string;
+  /**
+   * Present only when the private projection can bind the outcome to the exact reviewed player,
+   * receiving club, acquisition event, season, and decoded player-match rows. Consumers must not
+   * infer numerical authority from the aggregate metrics when this evidence is absent.
+   */
+  exactMatchSet?: {
+    acquisitionEventId: string;
+    acquisitionSpellVersionId: string;
+    startEventVersionId: string;
+    startAssetVersionId: string;
+    effectiveFrom: string;
+    effectiveThrough: string | null;
+    canonicalPlayerId: string;
+    receivingClubId: string;
+    seasons: readonly {
+      seasonYear: number;
+      providerDecodedRowIds: readonly string[];
+    }[];
+  };
   metrics: {
     games: AflTradeDevelopmentReconciledOutcomeMetric;
     goals: AflTradeDevelopmentReconciledOutcomeMetric;

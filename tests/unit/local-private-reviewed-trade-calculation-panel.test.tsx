@@ -40,7 +40,7 @@ const available = {
     defensivePav: 5,
   },
   calculationIds: [`private-reviewed-hpn-calculation:${'1'.repeat(64)}`],
-  allocationIds: [`private-hpn-allocation:${'2'.repeat(64)}`],
+  allocationIds: [],
 };
 
 const calculation: LocalPrivateReviewedTradeCalculation = {
@@ -50,10 +50,10 @@ const calculation: LocalPrivateReviewedTradeCalculation = {
   methodId: `private-reviewed-hpn-method:${'5'.repeat(64)}`,
   valueUnit: 'season_pav',
   policy: {
-    atTrade: 'latest_reviewed_season_at_or_before_trade_year',
+    atTrade: 'unavailable_without_authorized_historical_value_model',
     realized: 'reviewed_seasons_after_trade_year_at_receiving_club',
     remaining: 'unavailable_without_authorized_predictive_model',
-    current: 'latest_reviewed_post_trade_season_at_receiving_club',
+    current: 'unavailable_without_authorized_predictive_model',
   },
   assets: [
     {
@@ -66,24 +66,41 @@ const calculation: LocalPrivateReviewedTradeCalculation = {
         state: 'partial',
         gamesPlayed: 12,
         effectiveThrough: '2026-08-15T00:00:00.000Z',
+        effectiveThroughSeason: 2025,
         source: 'reconciled_acquisition_spell',
         rightCensored: true,
       },
-      atTrade: available,
+      atTrade: { state: 'unavailable', reason: 'historical_value_model_not_authorized' },
       realized: available,
       remaining: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
-      current: available,
+      current: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
     },
     {
       asset: {
         ...asset,
         id: 'asset-pick',
         assetType: 'pick',
-        assetText: '#18',
+        assetText: '#7 (#12 - Pickett - 0 games)',
         playerName: null,
+        pick: { ...asset.pick, code: '7', numberGiven: 7, numberActual: 12 },
+        draftedPlayer: 'Pickett',
       },
-      state: 'unavailable',
-      reason: 'selection_lineage_not_reviewed',
+      state: 'calculated',
+      canonicalPlayerId: 'local-afl-player:2',
+      identityDecisionIds: ['identity-review:2'],
+      reviewedSeasonIds: [`hpn-reviewed-season:${'7'.repeat(64)}`],
+      selectionLineageDecisionId: `local-workbook-selection-lineage:${'8'.repeat(64)}`,
+      postTradeGames: {
+        state: 'unavailable',
+        reason: 'reviewed_acquisition_outcome_unavailable',
+      },
+      atTrade: {
+        state: 'unavailable',
+        reason: 'selection_value_model_not_authorized',
+      },
+      realized: available,
+      remaining: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
+      current: { state: 'unavailable', reason: 'predictive_model_not_authorized' },
     },
   ],
   clubTotals: null,
@@ -102,19 +119,33 @@ describe('local private reviewed trade calculation panel', () => {
     render(<LocalPrivateReviewedTradeCalculationPanel calculation={calculation} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Confirmed historical player calculation' })
+      screen.getByRole('heading', { name: 'Confirmed realized asset calculation' })
     ).toBeVisible();
     const player = screen.getByRole('heading', { name: 'Player One' }).closest('li');
     expect(player).not.toBeNull();
-    expect(within(player!).getAllByText('12.50')).toHaveLength(3);
+    expect(within(player!).getAllByText('12.50')).toHaveLength(1);
     expect(within(player!).getAllByText('Offence')).not.toHaveLength(0);
     expect(within(player!).getAllByText('Midfield')).not.toHaveLength(0);
     expect(within(player!).getAllByText('Defence')).not.toHaveLength(0);
     expect(within(player!).getAllByText('11 games · season 2025')).not.toHaveLength(0);
-    expect(within(player!).getByText('12 confirmed post-trade games')).toBeVisible();
-    expect(screen.getByText('Overall trade grade: unavailable')).toBeVisible();
     expect(
-      screen.getByText(/Pick selection lineage has not been reviewed/i)
+      within(player!).getByText('1 authenticated calculation artifact')
+    ).toBeInTheDocument();
+    expect(within(player!).queryByText(/0 allocations/i)).not.toBeInTheDocument();
+    expect(within(player!).getByText('12 confirmed post-trade games')).toBeVisible();
+    expect(
+      within(player!).getByText('Reviewed through 2025 season · active spell, later games not included')
+    ).toBeVisible();
+    expect(within(player!).queryByText(/Through 2026-08-15/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Overall trade grade: unavailable')).toBeVisible();
+    const pick = screen
+      .getByRole('heading', { name: '#7 (#12 - Pickett - 0 games)' })
+      .closest('li');
+    expect(pick).not.toBeNull();
+    expect(within(pick!).getByText(/Selection #12 · Pickett/i)).toBeVisible();
+    expect(within(pick!).getByText('Selected player PAV')).toBeVisible();
+    expect(
+      within(pick!).getByText(/Expected selection value requires an authorized pick model/i)
     ).toBeVisible();
   });
 });

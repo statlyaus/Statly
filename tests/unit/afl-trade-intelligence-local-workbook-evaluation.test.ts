@@ -279,7 +279,10 @@ describe('private local workbook evaluation', () => {
       publicationEligible: false,
       publicationProhibited: true,
     } as never;
-    const loadPrivateCalculation = vi.fn().mockResolvedValue(calculation);
+    const loadPrivateCalculation = vi.fn().mockResolvedValue({
+      calculation,
+      generation: null,
+    });
 
     await expect(
       service.loadTrade(
@@ -293,6 +296,7 @@ describe('private local workbook evaluation', () => {
         state: 'partial',
         readiness: sourceBlockedReadiness,
         calculation,
+        generation: null,
       },
     });
     expect(loadPrivateCalculation).toHaveBeenCalledWith(
@@ -301,6 +305,37 @@ describe('private local workbook evaluation', () => {
       }),
       digest
     );
+  });
+
+  it('keeps an authenticated sealed generation visible when its legacy calculation index is absent', async () => {
+    const service = createLocalWorkbookEvaluationService(dependencies());
+    const generation = {
+      schemaVersion: 'local-private-trade-evaluation-generation/v1',
+      generationId: `local-private-trade-evaluation-generation:${'e'.repeat(64)}`,
+      content: {
+        tradeId: 'workbook-2025-0001',
+      },
+    } as never;
+    const loadPrivateCalculation = vi.fn().mockResolvedValue({
+      calculation: null,
+      generation,
+    });
+
+    await expect(
+      service.loadTrade(
+        'workbook-2025-0001',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness),
+        loadPrivateCalculation
+      )
+    ).resolves.toMatchObject({
+      numericalEvaluation: {
+        state: 'partial',
+        readiness: sourceBlockedReadiness,
+        calculation: null,
+        generation,
+      },
+    });
   });
 
   it('reuses a content-pinned scenario within one local service instance', async () => {

@@ -16,8 +16,17 @@ function scopeKeyFromArguments(arguments_: readonly string[]): string {
 
 const databaseUrl = process.env.AFL_OUTCOMES_DATABASE_URL?.trim();
 const runtimeNonce = process.env.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE?.trim();
-if (!databaseUrl || !runtimeNonce || !/^[a-f0-9]{64}$/u.test(runtimeNonce)) {
-  throw new Error('The admitted local outcomes database URL and runtime nonce are required.');
+const workbookSha256 = process.env.AFL_OUTCOMES_DEV_WORKBOOK_SHA256?.trim().toLowerCase();
+if (
+  !databaseUrl ||
+  !runtimeNonce ||
+  !/^[a-f0-9]{64}$/u.test(runtimeNonce) ||
+  !workbookSha256 ||
+  !/^[a-f0-9]{64}$/u.test(workbookSha256)
+) {
+  throw new Error(
+    'The admitted local outcomes database URL, runtime nonce, and pinned workbook digest are required.'
+  );
 }
 const database = new URL(databaseUrl);
 if (
@@ -38,6 +47,7 @@ try {
   await assertLocalAflTradeOutcomesRuntimeIdentity(pool, runtimeNonce);
   const readiness = await inspectLocalAflTradeValuationReadiness(pool, {
     scopeKey: scopeKeyFromArguments(process.argv.slice(2)),
+    workbookSha256,
   });
   process.stdout.write(`${JSON.stringify(readiness, null, 2)}\n`);
 } finally {

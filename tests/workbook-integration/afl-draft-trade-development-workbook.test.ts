@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { evaluateAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookEvaluation';
@@ -22,6 +24,7 @@ if (!workbookPath || !expectedSha256) {
 
 let workbook: AflOutcomesDevelopmentWorkbook;
 let staging: AflTradeWorkbookStagingPackage;
+let sourceBytes: Uint8Array;
 
 beforeAll(async () => {
   const evidence = await loadAflOutcomesDevelopmentWorkbookEvidence({
@@ -31,11 +34,15 @@ beforeAll(async () => {
   });
   workbook = evidence.workbook;
   staging = evidence.staging;
+  sourceBytes = evidence.sourceBytes;
 });
 
 describe('AFL Draft and Trade development workbook', () => {
   it('loads the exact pinned external workbook into consistent annual staging rows', () => {
     expect(workbook.sourceArtifact.contentSha256).toBe(expectedSha256.toLowerCase());
+    expect(createHash('sha256').update(sourceBytes).digest('hex')).toBe(
+      workbook.sourceArtifact.contentSha256
+    );
     expect(workbook.report.annualSheetCount).toBeGreaterThan(0);
     expect(workbook.report.totalRows).toBeGreaterThan(0);
     expect(workbook.report.annualSheets).toEqual(
@@ -67,6 +74,30 @@ describe('AFL Draft and Trade development workbook', () => {
         assets.some(({ assetType }) => assetType === 'future_pick')
       )
     ).toBe(true);
+  });
+
+  it('preserves a future pick entitlement and its later recorded settlement as distinct facts', () => {
+    const projection = projectAflOutcomesDevelopmentWorkbookTrades(workbook);
+    const dawsonTrade = projection.detailsById.get('workbook-2021-e7f7d1484744f855');
+    const weddlePick = dawsonTrade?.assets.find(({ assetText }) =>
+      assetText.startsWith('#2022R1 (Melbourne)')
+    );
+
+    expect(weddlePick).toMatchObject({
+      year: 2021,
+      assetType: 'future_pick',
+      assetText: '#2022R1 (Melbourne) (#18 - Weddle - 60 games)',
+      pick: {
+        code: '2022R1',
+        numberGiven: null,
+        year: 2022,
+        round: 1,
+        originalClub: 'Melbourne',
+        numberActual: 18,
+      },
+      draftedPlayer: 'Weddle',
+      games: 60,
+    });
   });
 
   it('reconciles every annual row to its exact acquisition mechanism', () => {

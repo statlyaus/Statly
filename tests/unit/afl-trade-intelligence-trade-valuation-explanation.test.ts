@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DraftTradeDetail } from '@/lib/draftTrades/firestore';
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { prepareLocalWorkbookSyntheticValuation } from '@/server/aflTradeIntelligence/development/localWorkbookSyntheticValuation';
 import { createAflTradeValuationExplanation } from '@/server/aflTradeIntelligence/valuation/tradeValuationExplanation';
@@ -169,6 +170,134 @@ function explanationInput(scenario: ReturnType<typeof preparedScenario>) {
 }
 
 describe('AFL trade valuation explanation document', () => {
+  it('admits exact governed-private evidence without relabelling synthetic assumptions factual', () => {
+    const scenario = preparedScenario();
+    const base = explanationInput(scenario);
+    const retainedAt = '2026-08-15T03:00:00.000Z';
+    const artifact = createAflTradeCanonicalJsonArtifactRef({ retained: 'governed' }, retainedAt);
+    const authority = {
+      kind: 'governed_private_nonproduction' as const,
+      confirmedFacts: {
+        resultId: `private-confirmed-valuation-result:${'1'.repeat(64)}`,
+        resultArtifact: artifact,
+        valuationScopeKey: 'afl-men:2025-trades',
+        transactionPromotionId: `private-workbook-transaction-promotion:${'2'.repeat(64)}`,
+        tradeId: scenario.valuationCase.content.tradeId,
+        valueUnitId: scenario.valuationCase.content.valueUnitId,
+        assetIds: scenario.valuationCase.content.parties
+          .flatMap(({ receivedRootAssetIds }) => receivedRootAssetIds)
+          .sort(),
+      },
+      sourceUseAssessments: [
+        {
+          assessmentId: `hpn-private-source-use-assessment:${'3'.repeat(64)}`,
+          assessmentArtifact: artifact,
+          state: 'permitted_private_calculation' as const,
+          operation: 'derived_feature_creation' as const,
+          valuationScopeKey: 'afl-men:2025-trades',
+          modelTraining: 'blocked' as const,
+          evidenceRefs: [artifact],
+        },
+      ],
+      privateEvaluation: {
+        decisionId: `private-valuation-evaluation-decision:${'4'.repeat(64)}`,
+        decisionArtifact: artifact,
+        state: 'authorized_private_calculation' as const,
+        environment: 'non_production' as const,
+        modelTrainingAuthorized: false as const,
+        liveCaptureAuthorized: false as const,
+        publicationAuthorized: false as const,
+        evidenceRefs: [artifact],
+      },
+      factualRelease: {
+        releaseId: `outcome-release:${'5'.repeat(64)}`,
+        releaseArtifact: artifact,
+        state: 'active' as const,
+        evidenceRefs: [artifact],
+      },
+      components: [
+        {
+          role: 'player_contribution_and_availability' as const,
+          modelKind: 'player_contribution_and_availability' as const,
+          protocolId: `model-protocol:${'6'.repeat(64)}`,
+          runId: `model-run:${'7'.repeat(64)}`,
+          datasetId: `dataset:${'8'.repeat(64)}`,
+          gate3DecisionId: `gate-decision:${'9'.repeat(64)}`,
+          environment: 'non_production' as const,
+          outcome: 'succeeded' as const,
+          gate3State: 'approved' as const,
+          runArtifact: artifact,
+          gate3DecisionArtifact: artifact,
+          evidenceRefs: [artifact],
+        },
+        {
+          role: 'draft_pick_and_future_pick_distribution' as const,
+          modelKind: 'draft_pick_and_future_pick_distribution' as const,
+          protocolId: `model-protocol:${'a'.repeat(64)}`,
+          runId: `model-run:${'b'.repeat(64)}`,
+          datasetId: `dataset:${'c'.repeat(64)}`,
+          gate3DecisionId: `gate-decision:${'d'.repeat(64)}`,
+          environment: 'non_production' as const,
+          outcome: 'succeeded' as const,
+          gate3State: 'approved' as const,
+          runArtifact: artifact,
+          gate3DecisionArtifact: artifact,
+          evidenceRefs: [artifact],
+        },
+      ],
+      valuationBundle: {
+        bundleId: scenario.valuationCase.content.valuationBundleId,
+        bundleArtifact: artifact,
+        gate3DecisionId: `gate-decision:${'e'.repeat(64)}`,
+        gate3DecisionArtifact: artifact,
+        environment: 'non_production' as const,
+        gate3State: 'approved' as const,
+        evidenceRefs: [artifact],
+      },
+      publicationProhibited: true as const,
+    };
+    const evidenceContent = {
+      schemaVersion: 'local-private-governed-explanation-evidence/v1' as const,
+      evidenceClassification: 'retained_factual_and_governed_model_output' as const,
+      governedCalculationInputId: `governed-private-valuation-calculation-input:${'f'.repeat(64)}`,
+      tradeId: scenario.valuationCase.content.tradeId,
+      valuationCaseId: scenario.valuationCase.valuationCaseId,
+      valuationCalculationId: scenario.calculation.valuationCalculationId,
+      transferDirections: scenario.assumptionSet.content.transferDirections.map((transfer) => ({
+        ...transfer,
+        directionBasis: 'confirmed_canonical_transfer' as const,
+      })),
+      explanationPolicy: {
+        ...scenario.assumptionSet.content.explanationPolicy,
+        schemaVersion: 'governed-private-explanation-policy/v1' as const,
+      },
+      effectiveAt: scenario.assumptionSet.content.effectiveAt,
+      effectiveThrough: scenario.assumptionSet.content.effectiveThrough,
+      publicationEligible: false as const,
+    };
+    const evidenceId = createAflTradeContentAddress('artifact', evidenceContent);
+
+    const result = createAflTradeValuationExplanation({
+      authority,
+      governedDirectionEvidence: { evidenceId, content: evidenceContent },
+      valuationCase: base.valuationCase,
+      valuationCalculation: base.valuationCalculation,
+      selectedLayer: base.selectedLayer,
+      gradeContext: base.gradeContext,
+    });
+
+    expect(result.state).toBe('available');
+    if (result.state !== 'available') throw new Error('Expected governed explanation.');
+    expect(result.document.authority).toMatchObject({
+      kind: 'governed_private_nonproduction',
+      confirmedFacts: { resultId: authority.confirmedFacts.resultId },
+      publicationProhibited: true,
+    });
+    expect(result.document.methodology.practicalEquivalencePolicy.authorityEvidenceId).toBe(
+      evidenceId
+    );
+  });
+
   it('reconciles additive asset contributions while retaining package uncertainty separately', () => {
     const result = createAflTradeValuationExplanation(explanationInput(preparedScenario()));
 
@@ -201,7 +330,11 @@ describe('AFL trade valuation explanation document', () => {
     expect(adelaide.net.additiveMean).toBe(5.2);
     expect(adelaide.net.distribution).toEqual({ mean: 5.2, median: 6, p10: 4, p90: 6 });
     expect(adelaide.finishAheadProbability).toBe(1);
-    expect(adelaide.grade).toMatchObject({ grade: 'A+', state: 'provisional' });
+    expect(adelaide.grade).toMatchObject({
+      grade: 'A+',
+      state: 'provisional',
+      normalizedPerformance: 1,
+    });
 
     const current = result.document.views.find(({ view }) => view === 'current')!;
     const currentAsset = current.clubs.find(({ aflClubId }) => aflClubId === 'afl-club:adelaide')!

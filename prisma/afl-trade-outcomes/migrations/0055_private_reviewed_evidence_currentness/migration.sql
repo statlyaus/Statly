@@ -1,8 +1,38 @@
 -- Keep the exhaustive raw-candidate proof at the governance transition, then make interactive
 -- reads authenticate the immutable bundle and the compact events that could invalidate it.
 DO $$
+DECLARE
+  has_target_private_evidence BOOLEAN;
 BEGIN
-  IF NOT "outcome_private_reviewed_evidence_is_current"() THEN
+  SELECT EXISTS (
+           SELECT 1
+             FROM "outcome_source_capture" capture
+            WHERE capture."environment"='non_production'
+              AND ((capture."provider"='afl_tables'
+                    AND capture."capability_id"='afl-tables-player-stats'
+                    AND capture."anchor_season_year" BETWEEN 2021 AND 2025)
+                OR (capture."provider"='official_afl'
+                    AND capture."capability_id"='official-afl-player-stats'
+                    AND capture."anchor_season_year"=2026))
+         ) OR EXISTS (
+           SELECT 1
+             FROM "outcome_review_decision" decision
+            WHERE decision."decided_by" IN (
+                    'local-five-season-evidence-reviewer',
+                    'local-workbook-evidence-reviewer'
+                  )
+              AND decision."evidence_json"->>'evidenceSetSha256' IN (
+                    'aef663452e66a433048605a71fb4178ed1a5e1d9610c6d3ed75bfb796308b5cb',
+                    '4e58a390b7088d50b119bdd2c945a1f66ba2025fd8bbbf8710fc8a270dad2dca'
+                  )
+         ) OR EXISTS (
+           SELECT 1 FROM "outcome_private_reviewed_evidence_bundle"
+         )
+    INTO has_target_private_evidence;
+
+  IF has_target_private_evidence
+     AND NOT "outcome_private_reviewed_evidence_is_current"()
+  THEN
     RAISE EXCEPTION 'Private reviewed evidence is not current before optimization';
   END IF;
 END $$;

@@ -199,11 +199,13 @@ describe('AFL trade-intelligence gate decisions', () => {
 
   it.each([
     ['valuation_bundle', 'valuation-bundle'],
+    ['valuation_evidence_bundle', 'valuation-evidence-bundle'],
     ['architecture_current_state', 'architecture-current-state'],
     ['architecture_decision_package', 'architecture-decision-package'],
     ['authority_transition', 'authority-transition'],
     ['factual_release_candidate', 'factual-release-candidate'],
     ['corpus_factual_lineage', 'corpus-factual-lineage'],
+    ['pick_model_candidate', 'pick-pav-model-candidate'],
   ] as const)('enforces the %s artifact content-address prefix', (kind, prefix) => {
     expect(
       aflTradeGovernedArtifactRefSchema.safeParse({

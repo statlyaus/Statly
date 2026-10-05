@@ -197,7 +197,7 @@ export async function runDisposableAflTradeOutcomesTests(
           '--publish',
           `127.0.0.1::${POSTGRES_CONTAINER_PORT}`,
           '--tmpfs',
-          '/var/lib/postgresql/data:rw,noexec,nosuid,size=512m',
+          '/var/lib/postgresql/data:rw,noexec,nosuid,size=1g',
           '--env',
           `POSTGRES_DB=${POSTGRES_DATABASE}`,
           '--env',

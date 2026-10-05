@@ -60,8 +60,26 @@ echo "workbook evaluation: authenticating and migrating the disposable outcomes 
 npx tsx Scripts/dev/verify-local-afl-trade-outcomes-db.ts
 npm run outcomes:prisma:migrate:deploy
 
-echo "workbook evaluation: retaining exact local player identity reviews"
-npx tsx Scripts/dev/review-local-workbook-player-identities.ts
+if [[ -n "${AFL_TRADE_PRIVATE_CONFIRMED_SCOPE:-}" || -n "${AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID:-}" ]]; then
+  if [[ -z "${AFL_TRADE_PRIVATE_CONFIRMED_SCOPE:-}" || -z "${AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID:-}" ]]; then
+    echo "workbook evaluation: both AFL_TRADE_PRIVATE_CONFIRMED_SCOPE and AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID are required" >&2
+    exit 1
+  fi
+  echo "workbook evaluation: retaining exact local player identity reviews"
+  npx tsx Scripts/dev/review-local-workbook-player-identities.ts \
+    --scope "$AFL_TRADE_PRIVATE_CONFIRMED_SCOPE" \
+    --trade "$AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID"
+
+  echo "workbook evaluation: reporting local pick-selection confirmation work"
+  npm run outcomes:modeling:confirm-local-pick-selections
+
+  echo "workbook evaluation: constructing and activating the approved private generation"
+  npm run outcomes:modeling:construct-local-private-confirmed-valuation -- \
+    --scope "$AFL_TRADE_PRIVATE_CONFIRMED_SCOPE" \
+    --trade "$AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID"
+else
+  echo "workbook evaluation: no confirmed trade requested; retained active generations remain readable"
+fi
 
 echo "workbook evaluation: verifying the pinned private input"
 npm run outcomes:workbook:inspect

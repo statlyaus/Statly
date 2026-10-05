@@ -350,6 +350,71 @@ describe('PostgreSQL workbook transaction review repository', () => {
         rationale: 'Stale operator write.',
       })
     ).rejects.toThrow(/stale/i);
+    const approvedV2Input = {
+      reviewSetId: reviewSet.reviewSetId,
+      reviewSubjectId: subject.reviewSubjectId,
+      expectedCurrentDecisionId: approved.decisionId,
+      workbookTradeId: 'workbook-2025-fact-bound-trade',
+      occurredOn: '2025-01-01',
+      occurrencePrecision: 'year' as const,
+      parties: [
+        {
+          stagingRowId: subject.parties[0]!.stagingRowId,
+          canonicalClubId: 'afl-club:st-kilda',
+          assets: [
+            {
+              assetId: 'workbook-2025-fact-bound-trade-st-kilda-1',
+              sourceAssetText: 'Player',
+              assetKind: 'player' as const,
+              sendingClubId: 'afl-club:gold-coast',
+              receivingClubId: 'afl-club:st-kilda',
+              canonicalPlayerId: 'local-afl-player:fixture',
+              selection: null,
+            },
+          ],
+        },
+        {
+          stagingRowId: subject.parties[1]!.stagingRowId,
+          canonicalClubId: 'afl-club:gold-coast',
+          assets: [
+            {
+              assetId: 'workbook-2025-fact-bound-trade-gold-coast-2',
+              sourceAssetText: 'Pick 8',
+              assetKind: 'pick' as const,
+              sendingClubId: 'afl-club:st-kilda',
+              receivingClubId: 'afl-club:gold-coast',
+              canonicalPlayerId: null,
+              selection: {
+                seasonYear: 2025,
+                round: 1,
+                number: 8,
+                originalClubId: null,
+              },
+            },
+          ],
+        },
+      ],
+      reviewerId: 'local-reviewer:robert',
+      rationale: 'Exact v2 transaction interpretation.',
+    };
+    const approvedV2 = await repository.recordDecisionV2(approvedV2Input);
+    expect(approvedV2.content).toMatchObject({
+      revision: 3,
+      supersedesDecisionId: approved.decisionId,
+      outcome: 'approved',
+    });
+    await expect(
+      repository.recordDecisionV2({ ...approvedV2Input, expectedCurrentDecisionId: null })
+    ).resolves.toEqual(approvedV2);
+    await expect(repository.loadCurrentDecisions(reviewSet.reviewSetId)).resolves.toEqual([
+      approvedV2,
+    ]);
+    await expect(repository.assess(reviewSet.reviewSetId)).resolves.toMatchObject({
+      approved: 1,
+      rejected: 0,
+      pending: 0,
+      readyForShadowOracle: true,
+    });
     const history = await pool.query<{ decision_id: string }>(
       `SELECT decision_id FROM outcome_workbook_transaction_review_decision
         WHERE review_set_id=$1 ORDER BY revision`,
@@ -358,6 +423,7 @@ describe('PostgreSQL workbook transaction review repository', () => {
     expect(history.rows).toEqual([
       { decision_id: rejected.decisionId },
       { decision_id: approved.decisionId },
+      { decision_id: approvedV2.decisionId },
     ]);
   });
 

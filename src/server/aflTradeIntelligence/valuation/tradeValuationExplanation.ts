@@ -12,6 +12,10 @@ import {
   aflTradeValuationCalculationSchema,
   type AflTradeValuationCalculation,
 } from './tradeValuationCalculation';
+import {
+  governedPrivateValuationAuthoritySchema,
+  type GovernedPrivateValuationCalculationInput,
+} from './governedPrivateValuationCalculationInput';
 import { aflTradeValuationCaseSchema, type AflTradeValuationCase } from './valuationCaseContracts';
 
 export const AFL_TRADE_VALUATION_EXPLANATION_SCHEMA_VERSION =
@@ -21,12 +25,14 @@ type ValuationView = (typeof AFL_TRADE_VALUATION_VIEWS)[number];
 type SelectedLayer = 'gross' | 'listSpotAdjusted' | 'scarcityAdjusted';
 type AssetKind = 'player' | 'current_pick' | 'future_pick';
 
-export type AflTradeValuationExplanationAuthority = {
-  kind: 'private_synthetic';
-  assumptionSetId: string;
-  publicationProhibited: true;
-  warning: 'Fabricated rank-based test values — not real AFL data.';
-};
+export type AflTradeValuationExplanationAuthority =
+  | {
+      kind: 'private_synthetic';
+      assumptionSetId: string;
+      publicationProhibited: true;
+      warning: 'Fabricated rank-based test values — not real AFL data.';
+    }
+  | GovernedPrivateValuationCalculationInput['content']['authority'];
 
 export interface AflTradeValuationExplanationTransfer {
   transferId: string;
@@ -38,7 +44,8 @@ export interface AflTradeValuationExplanationTransfer {
   directionBasis:
     | 'two_party_other_club_assumption'
     | 'deterministic_fixture_transfer_map_v1'
-    | 'archive_recorded_transfer';
+    | 'archive_recorded_transfer'
+    | 'confirmed_canonical_transfer';
 }
 
 export interface AflTradeValuationExplanationDirectionEvidence {
@@ -131,6 +138,80 @@ const directionEvidenceSchema = z
   })
   .strict();
 
+export interface AflTradeGovernedValuationExplanationEvidence {
+  evidenceId: string;
+  content: {
+    schemaVersion: 'local-private-governed-explanation-evidence/v1';
+    evidenceClassification: 'retained_factual_and_governed_model_output';
+    governedCalculationInputId: string;
+    tradeId: string;
+    valuationCaseId: string;
+    valuationCalculationId: string;
+    transferDirections: readonly AflTradeValuationExplanationTransfer[];
+    explanationPolicy: {
+      schemaVersion: 'governed-private-explanation-policy/v1';
+      valueUnitId: string;
+      practicalEquivalenceBandByView: Record<ValuationView, number>;
+      practicalEquivalenceBasis: string;
+    };
+    effectiveAt: string;
+    effectiveThrough: string;
+    publicationEligible: false;
+  };
+}
+
+const governedDirectionEvidenceSchema = z
+  .object({
+    evidenceId: z.string().regex(/^artifact:[a-f0-9]{64}$/u),
+    content: z
+      .object({
+        schemaVersion: z.literal('local-private-governed-explanation-evidence/v1'),
+        evidenceClassification: z.literal('retained_factual_and_governed_model_output'),
+        governedCalculationInputId: z
+          .string()
+          .regex(/^governed-private-valuation-calculation-input:[a-f0-9]{64}$/u),
+        tradeId: z.string().trim().min(1).max(200),
+        valuationCaseId: z.string().regex(/^valuation-case:[a-f0-9]{64}$/u),
+        valuationCalculationId: z.string().regex(/^valuation-calculation:[a-f0-9]{64}$/u),
+        transferDirections: z
+          .array(
+            z
+              .object({
+                transferId: z.string().trim().min(1).max(200),
+                fromClubId: z.string().trim().min(1).max(200),
+                toClubId: z.string().trim().min(1).max(200),
+                assetId: z.string().trim().min(1).max(200),
+                assetKind: z.enum(['player', 'current_pick', 'future_pick']),
+                displayLabel: z.string().trim().min(1).max(240),
+                directionBasis: z.literal('confirmed_canonical_transfer'),
+              })
+              .strict()
+          )
+          .min(2)
+          .max(100),
+        explanationPolicy: z
+          .object({
+            schemaVersion: z.literal('governed-private-explanation-policy/v1'),
+            valueUnitId: z.string().trim().min(1).max(200),
+            practicalEquivalenceBandByView: z
+              .object({
+                at_trade: z.number().finite().nonnegative(),
+                realized: z.number().finite().nonnegative(),
+                remaining: z.number().finite().nonnegative(),
+                current: z.number().finite().nonnegative(),
+              })
+              .strict(),
+            practicalEquivalenceBasis: z.string().trim().min(1).max(1_000),
+          })
+          .strict(),
+        effectiveAt: z.iso.datetime({ offset: true }),
+        effectiveThrough: z.iso.datetime({ offset: true }),
+        publicationEligible: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict();
+
 export interface AflTradeValuationDistributionSummary {
   mean: number;
   median: number;
@@ -179,6 +260,7 @@ export interface AflTradeValuationExplanationClub {
   grade: {
     grade: AflTradeStatlyGrade | null;
     state: AflTradeStatlyGradeState;
+    normalizedPerformance: number | null;
     reasonCode: string;
   };
 }
@@ -221,15 +303,14 @@ export interface AflTradeValuationExplanationDocument {
     practicalEquivalenceBasis: string;
     practicalEquivalencePolicy: {
       assumptionSetId: string;
+      authorityEvidenceId?: string;
       valueUnitId: string;
       bandByView: Record<ValuationView, number>;
     };
   };
 }
 
-export interface CreateAflTradeValuationExplanationInput {
-  admittedAssumptionSetId: string;
-  directionEvidence: AflTradeValuationExplanationDirectionEvidence;
+interface CreateAflTradeValuationExplanationCommonInput {
   valuationCase: AflTradeValuationCase;
   valuationCalculation: AflTradeValuationCalculation;
   selectedLayer: SelectedLayer;
@@ -238,6 +319,19 @@ export interface CreateAflTradeValuationExplanationInput {
     developmentPreview: boolean;
   };
 }
+
+export type CreateAflTradeValuationExplanationInput =
+  CreateAflTradeValuationExplanationCommonInput &
+    (
+      | {
+          admittedAssumptionSetId: string;
+          directionEvidence: AflTradeValuationExplanationDirectionEvidence;
+        }
+      | {
+          authority: GovernedPrivateValuationCalculationInput['content']['authority'];
+          governedDirectionEvidence: AflTradeGovernedValuationExplanationEvidence;
+        }
+    );
 
 export type AflTradeValuationExplanationResult =
   | {
@@ -361,17 +455,22 @@ function validateInput(input: CreateAflTradeValuationExplanationInput): {
   calculation: AflTradeValuationCalculation;
   authority: AflTradeValuationExplanationAuthority;
   transfers: readonly AflTradeValuationExplanationTransfer[];
+  authorityEvidenceId: string;
+  effectiveAt: string;
+  effectiveThrough: string;
+  explanationPolicy: Omit<
+    AflTradeGovernedValuationExplanationEvidence['content']['explanationPolicy'],
+    'schemaVersion'
+  >;
 } {
   let valuationCase: AflTradeValuationCase;
   let calculation: AflTradeValuationCalculation;
-  let directionEvidence: AflTradeValuationExplanationDirectionEvidence;
   try {
     valuationCase = aflTradeValuationCaseSchema.parse(input.valuationCase);
     calculation = aflTradeValuationCalculationSchema.parse(input.valuationCalculation);
-    directionEvidence = directionEvidenceSchema.parse(input.directionEvidence);
   } catch (error) {
     contractViolation(
-      'Valuation parents or direction evidence are malformed or content-address mismatched.',
+      'Valuation parents are malformed or content-address mismatched.',
       error
     );
   }
@@ -384,27 +483,85 @@ function validateInput(input: CreateAflTradeValuationExplanationInput): {
     contractViolation('Calculation ancestry does not exactly match the valuation case.');
   }
 
-  if (
-    input.admittedAssumptionSetId !== directionEvidence.assumptionSetId ||
-    createAflTradeContentAddress('artifact', directionEvidence.content) !==
-      directionEvidence.assumptionSetId ||
-    directionEvidence.content.evidenceClassification !==
-      'fabricated_test_evidence_not_real_afl_data' ||
-    directionEvidence.content.basis.kind !== 'private_workbook' ||
-    directionEvidence.content.publicationEligible !== false ||
-    directionEvidence.content.tradeId !== valuationCase.content.tradeId ||
-    directionEvidence.content.valuationCaseId !== valuationCase.valuationCaseId ||
-    directionEvidence.content.valuationCalculationId !== calculation.valuationCalculationId ||
-    directionEvidence.content.effectiveAt !== valuationCase.content.viewContexts[0]!.effectiveAt ||
-    directionEvidence.content.effectiveThrough !==
-      valuationCase.content.viewContexts.find(({ view }) => view === 'current')!.effectiveAt ||
-    directionEvidence.content.explanationPolicy.valueUnitId !== valuationCase.content.valueUnitId
-  ) {
-    contractViolation(
-      'Transfer directions require exact private synthetic assumption-set ancestry.'
-    );
+  let authority: AflTradeValuationExplanationAuthority;
+  let transfers: readonly AflTradeValuationExplanationTransfer[];
+  let authorityEvidenceId: string;
+  let effectiveAt: string;
+  let effectiveThrough: string;
+  let explanationPolicy: Omit<
+    AflTradeGovernedValuationExplanationEvidence['content']['explanationPolicy'],
+    'schemaVersion'
+  >;
+  let governed = false;
+  if ('governedDirectionEvidence' in input) {
+    let directionEvidence: AflTradeGovernedValuationExplanationEvidence;
+    try {
+      authority = governedPrivateValuationAuthoritySchema.parse(input.authority);
+      directionEvidence = governedDirectionEvidenceSchema.parse(input.governedDirectionEvidence);
+    } catch (error) {
+      contractViolation('Governed authority or direction evidence is malformed.', error);
+    }
+    if (
+      createAflTradeContentAddress('artifact', directionEvidence.content) !==
+        directionEvidence.evidenceId ||
+      directionEvidence.content.tradeId !== valuationCase.content.tradeId ||
+      directionEvidence.content.valuationCaseId !== valuationCase.valuationCaseId ||
+      directionEvidence.content.valuationCalculationId !== calculation.valuationCalculationId ||
+      directionEvidence.content.effectiveAt !== valuationCase.content.viewContexts[0]!.effectiveAt ||
+      directionEvidence.content.effectiveThrough !==
+        valuationCase.content.viewContexts.find(({ view }) => view === 'current')!.effectiveAt ||
+      directionEvidence.content.explanationPolicy.valueUnitId !== valuationCase.content.valueUnitId ||
+      authority.confirmedFacts.tradeId !== valuationCase.content.tradeId ||
+      authority.confirmedFacts.valueUnitId !== valuationCase.content.valueUnitId ||
+      authority.valuationBundle.bundleId !== valuationCase.content.valuationBundleId
+    ) {
+      contractViolation('Governed transfer directions require exact factual and kernel ancestry.');
+    }
+    governed = true;
+    transfers = directionEvidence.content.transferDirections;
+    authorityEvidenceId = directionEvidence.evidenceId;
+    effectiveAt = directionEvidence.content.effectiveAt;
+    effectiveThrough = directionEvidence.content.effectiveThrough;
+    explanationPolicy = directionEvidence.content.explanationPolicy;
+  } else {
+    let directionEvidence: AflTradeValuationExplanationDirectionEvidence;
+    try {
+      directionEvidence = directionEvidenceSchema.parse(input.directionEvidence);
+    } catch (error) {
+      contractViolation('Synthetic direction evidence is malformed.', error);
+    }
+    if (
+      input.admittedAssumptionSetId !== directionEvidence.assumptionSetId ||
+      createAflTradeContentAddress('artifact', directionEvidence.content) !==
+        directionEvidence.assumptionSetId ||
+      directionEvidence.content.evidenceClassification !==
+        'fabricated_test_evidence_not_real_afl_data' ||
+      directionEvidence.content.basis.kind !== 'private_workbook' ||
+      directionEvidence.content.publicationEligible !== false ||
+      directionEvidence.content.tradeId !== valuationCase.content.tradeId ||
+      directionEvidence.content.valuationCaseId !== valuationCase.valuationCaseId ||
+      directionEvidence.content.valuationCalculationId !== calculation.valuationCalculationId ||
+      directionEvidence.content.effectiveAt !== valuationCase.content.viewContexts[0]!.effectiveAt ||
+      directionEvidence.content.effectiveThrough !==
+        valuationCase.content.viewContexts.find(({ view }) => view === 'current')!.effectiveAt ||
+      directionEvidence.content.explanationPolicy.valueUnitId !== valuationCase.content.valueUnitId
+    ) {
+      contractViolation(
+        'Transfer directions require exact private synthetic assumption-set ancestry.'
+      );
+    }
+    authority = {
+      kind: 'private_synthetic',
+      assumptionSetId: directionEvidence.assumptionSetId,
+      publicationProhibited: true,
+      warning: 'Fabricated rank-based test values — not real AFL data.',
+    };
+    transfers = directionEvidence.content.transferDirections;
+    authorityEvidenceId = directionEvidence.assumptionSetId;
+    effectiveAt = directionEvidence.content.effectiveAt;
+    effectiveThrough = directionEvidence.content.effectiveThrough;
+    explanationPolicy = directionEvidence.content.explanationPolicy;
   }
-  const transfers = directionEvidence.content.transferDirections;
   const partyIds = valuationCase.content.parties.map(({ aflClubId }) => aflClubId);
   const partyIdSet = new Set(partyIds);
   const expectedAssetIds = valuationCase.content.parties.flatMap(
@@ -431,17 +588,23 @@ function validateInput(input: CreateAflTradeValuationExplanationInput): {
     ) {
       contractViolation('Every transfer must connect valid parties and its declared receiver.');
     }
-    const canonicalReceiverIndex = partyIds.indexOf(transfer.toClubId);
-    const expectedSender =
-      partyIds[(canonicalReceiverIndex + partyIds.length - 1) % partyIds.length];
-    if (
-      transfer.fromClubId !== expectedSender ||
-      (partyIds.length === 2 && transfer.directionBasis !== 'two_party_other_club_assumption') ||
-      (partyIds.length > 2 && transfer.directionBasis !== 'deterministic_fixture_transfer_map_v1')
-    ) {
-      contractViolation(
-        'Transfer directions must match the admitted deterministic mapping policy.'
-      );
+    if (governed) {
+      if (transfer.directionBasis !== 'confirmed_canonical_transfer') {
+        contractViolation('Governed transfers require confirmed canonical direction evidence.');
+      }
+    } else {
+      const canonicalReceiverIndex = partyIds.indexOf(transfer.toClubId);
+      const expectedSender =
+        partyIds[(canonicalReceiverIndex + partyIds.length - 1) % partyIds.length];
+      if (
+        transfer.fromClubId !== expectedSender ||
+        (partyIds.length === 2 && transfer.directionBasis !== 'two_party_other_club_assumption') ||
+        (partyIds.length > 2 && transfer.directionBasis !== 'deterministic_fixture_transfer_map_v1')
+      ) {
+        contractViolation(
+          'Transfer directions must match the admitted deterministic mapping policy.'
+        );
+      }
     }
   }
   for (const draw of calculation.content.draws) {
@@ -474,13 +637,12 @@ function validateInput(input: CreateAflTradeValuationExplanationInput): {
   return {
     valuationCase,
     calculation,
-    authority: {
-      kind: 'private_synthetic',
-      assumptionSetId: directionEvidence.assumptionSetId,
-      publicationProhibited: true,
-      warning: 'Fabricated rank-based test values — not real AFL data.',
-    },
+    authority,
     transfers,
+    authorityEvidenceId,
+    effectiveAt,
+    effectiveThrough,
+    explanationPolicy,
   };
 }
 
@@ -587,6 +749,7 @@ function buildViews(input: {
   valuationCase: AflTradeValuationCase;
   calculation: AflTradeValuationCalculation;
   transfers: readonly AflTradeValuationExplanationTransfer[];
+  practicalEquivalenceBandByView: Record<ValuationView, number>;
 }): readonly AflTradeValuationExplanationView[] | null {
   return AFL_TRADE_VALUATION_VIEWS.map((view) => {
     const packages = input.valuationCase.content.parties.map((party) => {
@@ -616,8 +779,7 @@ function buildViews(input: {
     const completePackages = packages.filter((candidate) => candidate !== null);
     const finishAheadProbabilities = completePackages.map(() => 0);
     let practicalEquivalenceProbability = 0;
-    const practicalEquivalenceBand =
-      input.source.directionEvidence.content.explanationPolicy.practicalEquivalenceBandByView[view];
+    const practicalEquivalenceBand = input.practicalEquivalenceBandByView[view];
     input.calculation.content.draws.forEach((draw, drawIndex) => {
       const values = completePackages.map((item) => item.netSamples[drawIndex]!.value);
       const maximum = Math.max(...values);
@@ -682,6 +844,7 @@ function buildViews(input: {
           grade: {
             grade: grade?.grade ?? null,
             state: grade?.state ?? 'unavailable',
+            normalizedPerformance: grade?.normalizedPerformance ?? null,
             reasonCode: gradeResult.reasonCode,
           },
         };
@@ -693,8 +856,23 @@ function buildViews(input: {
 export function createAflTradeValuationExplanation(
   input: CreateAflTradeValuationExplanationInput
 ): AflTradeValuationExplanationResult {
-  const { valuationCase, calculation, authority, transfers } = validateInput(input);
-  const views = buildViews({ source: input, valuationCase, calculation, transfers });
+  const {
+    valuationCase,
+    calculation,
+    authority,
+    transfers,
+    authorityEvidenceId,
+    effectiveAt,
+    effectiveThrough,
+    explanationPolicy,
+  } = validateInput(input);
+  const views = buildViews({
+    source: input,
+    valuationCase,
+    calculation,
+    transfers,
+    practicalEquivalenceBandByView: explanationPolicy.practicalEquivalenceBandByView,
+  });
   if (!views || views.length !== AFL_TRADE_VALUATION_VIEWS.length) {
     return {
       state: 'unavailable',
@@ -714,8 +892,8 @@ export function createAflTradeValuationExplanation(
     valuationBundleId: valuationCase.content.valuationBundleId,
     valuationCaseId: valuationCase.valuationCaseId,
     valuationCalculationId: calculation.valuationCalculationId,
-    effectiveAt: input.directionEvidence.content.effectiveAt,
-    effectiveThrough: input.directionEvidence.content.effectiveThrough,
+    effectiveAt,
+    effectiveThrough,
     coverage: {
       status: 'complete' as const,
       ratio: 1 as const,
@@ -730,12 +908,12 @@ export function createAflTradeValuationExplanation(
       assetGradeTreatment: 'prohibited' as const,
       currentIdentity: 'realized_plus_remaining' as const,
       practicalEquivalenceBasis:
-        input.directionEvidence.content.explanationPolicy.practicalEquivalenceBasis,
+        explanationPolicy.practicalEquivalenceBasis,
       practicalEquivalencePolicy: {
-        assumptionSetId: input.directionEvidence.assumptionSetId,
-        valueUnitId: input.directionEvidence.content.explanationPolicy.valueUnitId,
-        bandByView:
-          input.directionEvidence.content.explanationPolicy.practicalEquivalenceBandByView,
+        assumptionSetId: authorityEvidenceId,
+        authorityEvidenceId,
+        valueUnitId: explanationPolicy.valueUnitId,
+        bandByView: explanationPolicy.practicalEquivalenceBandByView,
       },
     },
   };

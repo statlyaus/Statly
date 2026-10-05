@@ -173,26 +173,71 @@ async function loadBundleRow(
   return row;
 }
 
-async function requireCurrentEvidence(
+async function loadReusableCurrentBundle(
+  transaction: AflOutcomeSqlTransaction
+): Promise<AflTradePrivateReviewedEvidenceBundle | null> {
+  const result = await transaction.query<BundleRow>(
+    `SELECT evidence_bundle_id,evidence_scope_key,candidate_count,decision_count,
+            source_capture_count,source_rights_count,created_at,bundle_json
+       FROM outcome_private_reviewed_evidence_bundle
+      WHERE evidence_scope_key=$1
+        AND outcome_private_reviewed_evidence_bundle_is_current(evidence_bundle_id)
+      ORDER BY created_at DESC
+      FOR KEY SHARE`,
+    [LOCAL_REVIEWED_PROVIDER_EVIDENCE_SCOPE_KEY]
+  );
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  if (result.rows.length !== 1 || !row) {
+    throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+      'IMMUTABLE_CONFLICT',
+      'The current retained reviewed-evidence bundle is ambiguous.'
+    );
+  }
+  const bundle = aflTradePrivateReviewedEvidenceBundleSchema.parse(row.bundle_json);
+  assertBundleRow(row, bundle);
+  return bundle;
+}
+
+async function requireDurableBundleCurrent(
   transaction: AflOutcomeSqlTransaction,
   bundle: AflTradePrivateReviewedEvidenceBundle
 ): Promise<void> {
-  let current: AflTradePrivateReviewedEvidenceBundle;
-  try {
-    current = await loadExactLocalReviewedProviderEvidenceBundle(
-      transaction,
-      bundle.content.createdAt
+  if (!(await isDurableBundleCurrent(transaction, bundle))) {
+    throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+      'EVIDENCE_MISMATCH',
+      'The retained reviewed-evidence bundle is no longer current.'
     );
+  }
+}
+
+async function isDurableBundleCurrent(
+  transaction: AflOutcomeSqlTransaction,
+  bundle: AflTradePrivateReviewedEvidenceBundle
+): Promise<boolean> {
+  const result = await transaction.query<{ is_current: boolean }>(
+    `SELECT outcome_private_reviewed_evidence_bundle_is_current($1) AS is_current`,
+    [bundle.evidenceBundleId]
+  );
+  if (result.rows.length !== 1 || typeof result.rows[0]?.is_current !== 'boolean') {
+    throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+      'IMMUTABLE_CONFLICT',
+      'The retained reviewed-evidence bundle currentness check was ambiguous.'
+    );
+  }
+  return result.rows[0].is_current;
+}
+
+async function createCurrentEvidenceBundle(
+  transaction: AflOutcomeSqlTransaction,
+  decidedAt: string
+): Promise<AflTradePrivateReviewedEvidenceBundle> {
+  try {
+    return await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
   } catch (error) {
     throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
       'EVIDENCE_MISMATCH',
       error instanceof Error ? error.message : 'Retained reviewed evidence is not current.'
-    );
-  }
-  if (!exactJson(current, bundle)) {
-    throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
-      'EVIDENCE_MISMATCH',
-      'The private calculation authority no longer matches the exact retained review evidence.'
     );
   }
 }
@@ -263,9 +308,12 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
           'The private reviewed-evidence decision changed before this write.'
         );
       }
+      const currentBundleIsCurrent = current
+        ? await isDurableBundleCurrent(transaction, current.bundle)
+        : null;
       if (
         (!current && input.status === 'withdrawn') ||
-        current?.decision.content.status === input.status
+        (current?.decision.content.status === input.status && currentBundleIsCurrent === true)
       ) {
         throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
           'INVALID_INPUT',
@@ -276,11 +324,17 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
         `SELECT transaction_timestamp()::timestamptz(3) AS decided_at`
       );
       const decidedAt = isoTimestamp(clock.rows[0]!.decided_at);
+      const reusableBundle =
+        currentBundleIsCurrent === true ? null : await loadReusableCurrentBundle(transaction);
       const bundle =
-        current?.bundle ??
-        (await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt));
-      if (current) await requireCurrentEvidence(transaction, bundle);
-      else await persistBundle(transaction, bundle);
+        currentBundleIsCurrent === true
+          ? current!.bundle
+          : reusableBundle ?? (await createCurrentEvidenceBundle(transaction, decidedAt));
+      if (currentBundleIsCurrent !== true && reusableBundle === null) {
+        await persistBundle(transaction, bundle);
+      } else {
+        await requireDurableBundleCurrent(transaction, bundle);
+      }
 
       const decision = createAflTradePrivateReviewedEvidenceEvaluationDecision({
         status: input.status,
@@ -343,7 +397,7 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
           'The private reviewed-evidence decision did not replay exactly.'
         );
       }
-      await requireCurrentEvidence(transaction, retained.bundle);
+      await requireDurableBundleCurrent(transaction, retained.bundle);
       return retained.decision;
     });
   }
@@ -357,7 +411,7 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
       if (!current) return { state: 'not_authorized', decision: null };
       const row = await loadBundleRow(transaction, current.bundle.evidenceBundleId);
       assertBundleRow(row, current.bundle);
-      await requireCurrentEvidence(transaction, current.bundle);
+      await requireDurableBundleCurrent(transaction, current.bundle);
       return { state: current.decision.content.status, decision: current.decision };
     });
   }

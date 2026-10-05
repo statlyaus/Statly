@@ -12,6 +12,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { AflDraftTradeOutcomeReleaseRepositoryError } from '@/server/aflTradeIntelligence/outcomes/outcomeReleaseRepository';
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeFactualProjectionItemSet } from '@/server/aflTradeIntelligence/outcomes/factualProjectionItemSetContracts';
 import {
   createPostgresAflDraftTradeOutcomeReleaseRepository,
@@ -28,6 +29,8 @@ import {
 import { normalizeAflTradeFitzRoyDecodedTable } from '@/server/aflTradeIntelligence/source/fitzRoyObservationNormalizer';
 import { PostgresAflTradeProviderObservationRepository } from '@/server/aflTradeIntelligence/source/postgresProviderObservationRepository';
 import { PostgresAflTradeProviderResolutionRepository } from '@/server/aflTradeIntelligence/source/postgresProviderResolutionRepository';
+import { createLocalPrivateTradeEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/localPrivateTradeEvaluationContracts';
+import { createLocalPrivateTradeEvaluationGenerationV2 } from '@/server/aflTradeIntelligence/valuation/localPrivateTradeEvaluationGenerationV2';
 import {
   AFL_TRADE_PROVIDER_RESOLUTION_PROPOSAL_SCHEMA_VERSION,
   AFL_TRADE_PROVIDER_RESOLUTION_SCHEMA_VERSION,
@@ -1002,6 +1005,234 @@ afterAll(async () => {
 });
 
 describe('isolated AFL outcomes PostgreSQL migration', () => {
+  it('validates a generation head when the writing session has an empty search path', async () => {
+    const generatedAt = '2026-08-17T08:00:00.000Z';
+    const evidence = createAflTradeCanonicalJsonArtifactRef(
+      { source: 'restore-regression' },
+      generatedAt
+    );
+    const generation = createLocalPrivateTradeEvaluationGeneration({
+      valuationScopeKey: 'afl-men:2021-trades',
+      tradeId: 'workbook-2021-restore-regression',
+      workbookSha256: '1'.repeat(64),
+      dependencyRefs: [evidence],
+      confirmedResultArtifact: evidence,
+      valueUnitId: 'hpn-season-pav/v1',
+      assets: [
+        {
+          assetId: 'workbook-2021-restore-regression-adelaide-1',
+          assetKind: 'player',
+          canonicalPlayerId: 'local-afl-player:restore-regression',
+          sendingClubId: 'local-afl-club:sydney',
+          receivingClubId: 'local-afl-club:adelaide',
+          label: 'Restore regression player',
+          appearances: {
+            state: 'observed',
+            gamesPlayed: 1,
+            coverage: 'right_censored',
+            effectiveThroughSeason: 2022,
+            evidenceRefs: [evidence],
+          },
+          views: {
+            atTrade: {
+              state: 'unavailable',
+              reasons: ['source_rights_not_approved'],
+              evidenceRefs: [],
+            },
+            realized: { state: 'calculated', score: 1, gamesPlayed: 1, evidenceRefs: [evidence] },
+            remaining: {
+              state: 'unavailable',
+              reasons: ['predictive_model_not_authorized'],
+              evidenceRefs: [],
+            },
+            current: {
+              state: 'unavailable',
+              reasons: ['predictive_model_not_authorized'],
+              evidenceRefs: [],
+            },
+          },
+        },
+      ],
+      clubTotals: null,
+      overallGrade: {
+        state: 'unavailable',
+        reasons: ['asset_values_incomplete'],
+        evidenceRefs: [],
+      },
+      generatedAt,
+    });
+    const artifact = createAflTradeCanonicalJsonArtifactRef(generation, generatedAt);
+
+    await query(
+      `INSERT INTO outcome_local_private_trade_evaluation_generation (
+        generation_id, valuation_scope_key, trade_id, workbook_sha256,
+        dependency_fingerprint, generated_at, generation_content_sha256,
+        artifact_sha256, generation_json, artifact_json
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)`,
+      [
+        generation.generationId,
+        generation.content.valuationScopeKey,
+        generation.content.tradeId,
+        generation.content.workbookSha256,
+        generation.content.dependencyFingerprint,
+        generation.content.generatedAt,
+        generation.generationId.slice(generation.generationId.indexOf(':') + 1),
+        artifact.contentSha256,
+        JSON.stringify(generation),
+        JSON.stringify(artifact),
+      ]
+    );
+
+    const client = await adminPool.connect();
+    try {
+      await client.query(`SET search_path TO ''`);
+      await expect(
+        client.query(
+          `INSERT INTO "${schemaName}".outcome_local_private_trade_evaluation_head
+            (trade_id,generation_id,revision,status,withdrawal_reason,updated_at)
+           VALUES ($1,$2,1,'active',NULL,$3)`,
+          [generation.content.tradeId, generation.generationId, generatedAt]
+        )
+      ).resolves.toMatchObject({ rowCount: 1 });
+      await client.query(
+        `UPDATE "${schemaName}".outcome_local_private_trade_evaluation_head
+            SET generation_id=NULL, revision=2, status='withdrawn',
+                withdrawal_reason='Restore regression withdrawal', updated_at=$2
+          WHERE trade_id=$1`,
+        [generation.content.tradeId, generatedAt]
+      );
+      await client.query(
+        `INSERT INTO "${schemaName}".outcome_local_private_trade_evaluation_transition
+          (trade_id,from_generation_id,to_generation_id,action,reason,changed_at)
+         VALUES ($1,$2,NULL,'withdraw','Restore regression withdrawal',$3)`,
+        [generation.content.tradeId, generation.generationId, generatedAt]
+      );
+      await client.query(
+        `UPDATE "${schemaName}".outcome_local_private_trade_evaluation_head
+            SET generation_id=$2, revision=3, status='active',
+                withdrawal_reason=NULL, updated_at=$3
+          WHERE trade_id=$1`,
+        [generation.content.tradeId, generation.generationId, generatedAt]
+      );
+      await client.query(
+        `INSERT INTO "${schemaName}".outcome_local_private_trade_evaluation_transition
+          (trade_id,from_generation_id,to_generation_id,action,reason,changed_at)
+         VALUES ($1,NULL,$2,'rollback',NULL,$3)`,
+        [generation.content.tradeId, generation.generationId, generatedAt]
+      );
+      await expect(
+        client.query<{ action: string }>(
+          `SELECT action
+             FROM "${schemaName}".outcome_local_private_trade_evaluation_transition
+            WHERE trade_id=$1
+            ORDER BY transition_id`,
+          [generation.content.tradeId]
+        )
+      ).resolves.toMatchObject({
+        rows: [{ action: 'withdraw' }, { action: 'rollback' }],
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  it('admits exact v2 private generations and rejects unsupported generation schemas', async () => {
+    const generatedAt = '2026-08-18T00:00:00.000Z';
+    const evidence = createAflTradeCanonicalJsonArtifactRef(
+      { source: 'v2-trigger-regression' },
+      generatedAt
+    );
+    const unavailable = {
+      state: 'unavailable' as const,
+      reasons: ['calculation_evidence_incomplete' as const],
+      evidenceRefs: [evidence],
+    };
+    const generation = createLocalPrivateTradeEvaluationGenerationV2({
+      valuationScopeKey: 'afl-men:2025-trades',
+      tradeId: 'workbook-2025-v2-trigger-regression',
+      workbookSha256: '8'.repeat(64),
+      dependencyRefs: [evidence],
+      confirmedResultArtifact: evidence,
+      valueUnitId: 'season_pav',
+      assets: [
+        {
+          assetId: 'asset:v2-trigger-player',
+          assetKind: 'player',
+          canonicalPlayerId: null,
+          sendingClubId: 'local-afl-club:a',
+          receivingClubId: 'local-afl-club:b',
+          label: 'V2 trigger regression player',
+          evidenceHorizons: [],
+          views: {
+            atTrade: unavailable,
+            realized: unavailable,
+            remaining: unavailable,
+            current: unavailable,
+          },
+        },
+      ],
+      clubTotals: ['local-afl-club:a', 'local-afl-club:b'].map((clubId) => ({
+        clubId,
+        views: {
+          atTrade: unavailable,
+          realized: unavailable,
+          remaining: unavailable,
+          current: unavailable,
+        },
+      })),
+      overallGrades: ['local-afl-club:a', 'local-afl-club:b'].map((clubId) => ({
+        clubId,
+        ...unavailable,
+      })),
+      tradeVerdict: unavailable,
+      generatedAt,
+    });
+    const artifact = createAflTradeCanonicalJsonArtifactRef(generation, generatedAt);
+    const insertSql = `INSERT INTO outcome_local_private_trade_evaluation_generation (
+      generation_id, valuation_scope_key, trade_id, workbook_sha256,
+      dependency_fingerprint, generated_at, generation_content_sha256,
+      artifact_sha256, generation_json, artifact_json
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)`;
+    const parameters = [
+      generation.generationId,
+      generation.content.valuationScopeKey,
+      generation.content.tradeId,
+      generation.content.workbookSha256,
+      generation.content.dependencyFingerprint,
+      generation.content.generatedAt,
+      generation.generationId.slice(generation.generationId.indexOf(':') + 1),
+      artifact.contentSha256,
+      JSON.stringify(generation),
+      JSON.stringify(artifact),
+    ];
+
+    await expect(query(insertSql, parameters)).resolves.toMatchObject({ rowCount: 1 });
+    await expect(
+      query<{ schema_version: string }>(
+        `SELECT generation_json#>>'{content,schemaVersion}' AS schema_version
+           FROM outcome_local_private_trade_evaluation_generation
+          WHERE generation_id=$1`,
+        [generation.generationId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ schema_version: 'local-private-trade-evaluation-generation/v2' }],
+    });
+
+    const unsupported = structuredClone(generation);
+    unsupported.generationId = `local-private-trade-evaluation-generation:${'9'.repeat(64)}`;
+    unsupported.content.schemaVersion = 'local-private-trade-evaluation-generation/v3' as never;
+    await expect(
+      query(insertSql, [
+        unsupported.generationId,
+        ...parameters.slice(1, 6),
+        '9'.repeat(64),
+        ...parameters.slice(7, 8),
+        JSON.stringify(unsupported),
+        JSON.stringify(artifact),
+      ])
+    ).rejects.toThrow('failed exact column authentication');
+  });
+
   it('deploys the complete ordered migration history and has no structural datamodel drift', () => {
     const applied = runOutcomesPrismaTestCommand(
       [
@@ -1078,6 +1309,28 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0049_workbook_transaction_reviews',
       '0050_private_valuation_evaluation_authority',
       '0051_private_reviewed_evidence_evaluation',
+      '0052_hpn_projected_field_map_authority',
+      '0053_hpn_reviewed_season_universe',
+      '0054_private_reviewed_hpn_calculation',
+      '0055_private_reviewed_evidence_currentness',
+      '0056_local_workbook_player_identity_review',
+      '0057_local_workbook_player_identity_authority',
+      '0058_local_workbook_pick_selection_confirmation',
+      '0059_private_workbook_transaction_promotion',
+      '0060_private_confirmed_valuation_lifecycle_v2',
+      '0061_private_transaction_occurrence_precision',
+      '0062_private_reviewed_decision_compact_currentness',
+      '0063_private_workbook_promotion_review_set_guard',
+      '0064_local_private_trade_evaluation_generation',
+      '0065_official_review_canonical_player_currentness',
+      '0066_reviewed_evidence_bundle_refresh',
+      '0067_workbook_identity_review_bundle_versions',
+      '0068_official_review_fresh_install_currentness',
+      '0069_local_private_trade_evaluation_generation_v2',
+      '0070_private_evaluation_inspection_receipts',
+      '0071_governed_pick_candidate_and_private_bundle',
+      '0072_private_valuation_evidence_and_authority_v3',
+      '0073_private_evaluation_generation_v3_lifecycle',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1153,6 +1406,14 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_reviewed_evidence_bundle',
       'outcome_private_reviewed_evaluation_decision',
       'outcome_private_reviewed_evaluation_head',
+      'outcome_local_workbook_player_identity_review',
+      'outcome_local_workbook_pick_selection_confirmation',
+      'outcome_local_private_trade_evaluation_generation',
+      'outcome_local_private_trade_evaluation_head',
+      'outcome_local_private_trade_evaluation_transition',
+      'outcome_private_workbook_transaction_promotion',
+      'outcome_private_confirmed_valuation_plan_v2',
+      'outcome_private_confirmed_valuation_result_v2',
     ]) {
       expect(tableNames).toContain(expected);
     }

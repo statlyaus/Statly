@@ -8,9 +8,11 @@ import type { AflOutcomesDevelopmentAcquisitionItem } from '../source/developmen
 import {
   projectLocalPrivateReviewedTradeCalculation,
   type LocalPrivateReviewedPlayerIdentityEvidence,
+  type LocalPrivateReviewedSelectionLineageEvidence,
   type LocalPrivateReviewedTradeCalculation,
 } from './localPrivateReviewedTradeCalculation';
 import { parseLocalWorkbookPlayerIdentityReview } from './localWorkbookPlayerIdentityReview';
+import { PostgresLocalWorkbookPickSelectionConfirmationRepository } from './postgresLocalWorkbookPickSelectionConfirmationRepository';
 import { loadLocalAflTradeStagedWorkbookOutcomes } from './localStagedWorkbookOutcomeProjection';
 
 interface IdentityRow {
@@ -36,9 +38,9 @@ function acquisitionInputs(
   detail: DraftTradeDetail,
   identities: readonly LocalPrivateReviewedPlayerIdentityEvidence[]
 ): AflOutcomesDevelopmentAcquisitionItem[] {
-  return detail.assets.flatMap((asset) =>
-    asset.assetType === 'player' && asset.playerName
-      ? [
+  return detail.assets.flatMap<AflOutcomesDevelopmentAcquisitionItem>((asset) => {
+    if (asset.assetType === 'player' && asset.playerName) {
+      return [
           {
             eventId: asset.id,
             year: asset.year,
@@ -63,9 +65,13 @@ function acquisitionInputs(
             brownlowVotes: null,
             awards: null,
           },
-        ]
-      : []
-  );
+        ];
+    }
+    // A traded pick asset is not the selected player's later draft-acquisition asset. Until the
+    // governed pick-lineage and draft-selection tables resolve that distinct start event/asset,
+    // no acquisition-spell outcome may be requested for a pick.
+    return [];
+  });
 }
 
 async function loadIdentityEvidence(
@@ -89,9 +95,18 @@ async function loadIdentityEvidence(
        JOIN outcome_hpn_reviewed_season_member member
          ON member.identity_state='resolved'
         AND member.canonical_player_id=review.canonical_player_id
+       JOIN outcome_hpn_reviewed_season_universe season
+         ON season.reviewed_season_id=member.reviewed_season_id
+       JOIN outcome_private_reviewed_evidence_bundle bundle
+         ON bundle.evidence_bundle_id=review.evidence_bundle_id
       WHERE review.workbook_sha256=$1
         AND review.trade_id=$2
         AND review.asset_id=ANY($3::text[])
+        AND season.candidate_json->'content'->>'resolvedReviewSetSha256'
+              IN (SELECT item->>'reviewSetId'
+                    FROM jsonb_array_elements(
+                      bundle.bundle_json->'content'->'reviewSets'
+                    ) review_set(item))
         AND outcome_private_reviewed_evidence_bundle_is_current(review.evidence_bundle_id)
         AND EXISTS (
           SELECT 1
@@ -139,6 +154,55 @@ async function loadIdentityEvidence(
   });
 }
 
+async function loadSelectionEvidence(
+  transaction: AflOutcomeSqlTransaction,
+  detail: DraftTradeDetail,
+  workbookSha256: string
+): Promise<LocalPrivateReviewedSelectionLineageEvidence[]> {
+  const requestedAssets = detail.assets.filter(
+    ({ assetType }) => assetType === 'pick' || assetType === 'future_pick'
+  );
+  const confirmations = await new PostgresLocalWorkbookPickSelectionConfirmationRepository(
+    transactionClient(transaction)
+  ).loadForTrade(
+    workbookSha256,
+    `afl-men:${detail.trade.year}-trades`,
+    detail.trade.tradeId,
+    requestedAssets.map(({ id }) => id)
+  );
+  const assetById = new Map(requestedAssets.map((asset) => [asset.id, asset]));
+  return confirmations.map((confirmation) => {
+    const content = confirmation.content;
+    const asset = assetById.get(content.assetId);
+    const expectedDraftYear = asset?.assetType === 'future_pick' ? asset.pick.year : asset?.year;
+    if (
+      !asset ||
+      content.assetKind !== asset.assetType ||
+      content.sourceAssetText !== asset.assetText ||
+      content.receivingClubName !== asset.clubName ||
+      content.tradeYear !== asset.year ||
+      content.draftYear !== expectedDraftYear ||
+      content.selectionNumber !== asset.pick.numberActual ||
+      content.draftedPlayerName !== asset.draftedPlayer
+    ) {
+      throw new Error(
+        'The local workbook pick-selection confirmation no longer matches its asset.'
+      );
+    }
+    return {
+      assetId: content.assetId,
+      draftYear: content.draftYear,
+      selectionNumber: content.selectionNumber,
+      draftedPlayerName: content.draftedPlayerName,
+      recordedName: content.recordedName,
+      canonicalPlayerId: content.canonicalPlayerId,
+      selectionDecisionId: confirmation.confirmationId,
+      identityDecisionIds: content.identityDecisionIds,
+      reviewedSeasonIds: content.reviewedSeasonIds,
+    };
+  });
+}
+
 export async function loadPostgresLocalPrivateReviewedTradeCalculation(
   client: AflOutcomeSqlClient,
   input: Readonly<{
@@ -148,6 +212,11 @@ export async function loadPostgresLocalPrivateReviewedTradeCalculation(
 ): Promise<LocalPrivateReviewedTradeCalculation> {
   return client.transaction(async (transaction) => {
     const identities = await loadIdentityEvidence(
+      transaction,
+      input.detail,
+      input.workbookSha256
+    );
+    const selections = await loadSelectionEvidence(
       transaction,
       input.detail,
       input.workbookSha256
@@ -165,6 +234,7 @@ export async function loadPostgresLocalPrivateReviewedTradeCalculation(
       detail: input.detail,
       workbookSha256: input.workbookSha256,
       identities,
+      selections,
       calculations: calculationRows.rows.map(({ calculation_json }) => calculation_json),
       outcomesByAssetId,
     });

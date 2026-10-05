@@ -120,6 +120,36 @@ describe('isolated AFL outcome PostgreSQL persistence architecture', () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
+  it('opens an explicit repeatable-read, read-only authority snapshot', async () => {
+    const query = vi.fn(async (_sql: string, _parameters?: readonly unknown[]) => ({
+      rows: [],
+      rowCount: 1,
+    }));
+    const release = vi.fn();
+    const pool = {
+      query,
+      connect: vi.fn(async () => ({ query, release })),
+    };
+    const client = createPgAflOutcomeSqlClient(pool);
+
+    await expect(
+      client.transaction(
+        async (transaction) => {
+          await transaction.query('SELECT transaction_timestamp()');
+          return 'inspected';
+        },
+        { isolationLevel: 'repeatable_read', accessMode: 'read_only' }
+      )
+    ).resolves.toBe('inspected');
+
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY',
+      'SELECT transaction_timestamp()',
+      'COMMIT',
+    ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it('rolls back and releases an injected pg transaction after a write failure', async () => {
     const failure = new Error('injected write failure');
     const query = vi.fn(async (sql: string, _parameters?: readonly unknown[]) => {

@@ -1,23 +1,28 @@
 import 'server-only';
 
-import { isAbsolute } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import { DEVELOPMENT_AUTH_USER_ID } from '@/lib/devAuth';
 import type { DraftTradeDetail } from '@/lib/draftTrades/read';
 import { getExplicitAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
-import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
+import { createLocalPrivateTradeEvaluationReader } from '../valuation/localPrivateTradeEvaluationModule';
+import { PostgresLocalPrivateTradeEvaluationLifecycle } from '../valuation/postgresLocalPrivateTradeEvaluationLifecycle';
+import { PostgresAflTradePrivateConfirmedValuationLifecycleV2 } from '../valuation/postgresPrivateConfirmedTradeValuationLifecycle';
+import type { AnyLocalPrivateTradeEvaluationGeneration } from '../valuation/localPrivateTradeEvaluationContracts';
+import { createLocalAflTradePrivateDerivedArtifactRepository } from './localFileConditionalObjectStore';
 import { getLocalOutcomesRuntimePool } from './localOutcomesRuntimePool';
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from './localOutcomesRuntimeIdentity';
+import { projectPrivateConfirmedValuationResult } from './privateConfirmedValuationProjection';
 import {
   localWorkbookEvaluationService,
   type LocalWorkbookEvaluationArchive,
   type LocalWorkbookEvaluationEnvironment,
+  type LocalWorkbookPrivateNumericalResult,
   type LocalWorkbookEvaluationService,
   type LocalWorkbookTradeEvaluation,
 } from './localWorkbookEvaluation';
-import { loadPostgresLocalPrivateReviewedTradeCalculation } from './postgresLocalPrivateReviewedTradeCalculation';
 import {
   inspectLocalAflTradeValuationReadiness,
   type LocalAflTradeValuationReadiness,
@@ -26,10 +31,12 @@ import {
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const POSTGRES_WAL_LSN_PATTERN = /^[a-f0-9]+\/[a-f0-9]+$/iu;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+const MAXIMUM_PRIVATE_ARTIFACT_BYTES = 16 * 1024 * 1024;
 
 export interface PrivateLocalWorkbookReadEnvironment extends LocalWorkbookEvaluationEnvironment {
   STATLY_ENABLE_DEV_TOOLS?: string;
   STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE?: string;
+  AFL_TRADE_PRIVATE_ARTIFACT_ROOT?: string;
 }
 
 type ArchiveQuery = Parameters<LocalWorkbookEvaluationService['loadArchive']>[0];
@@ -55,7 +62,7 @@ export interface PrivateLocalWorkbookReadDependencies {
     environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
     detail: DraftTradeDetail,
     workbookSha256: string
-  ): Promise<LocalPrivateReviewedTradeCalculation | null>;
+  ): Promise<LocalWorkbookPrivateNumericalResult | null>;
   environment(): PrivateLocalWorkbookReadEnvironment;
   evaluation: LocalWorkbookEvaluationService;
 }
@@ -71,6 +78,7 @@ function snapshotEnvironment(
     AFL_OUTCOMES_DEV_WORKBOOK_SHA256: environment.AFL_OUTCOMES_DEV_WORKBOOK_SHA256,
     AFL_OUTCOMES_DATABASE_URL: environment.AFL_OUTCOMES_DATABASE_URL,
     STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE,
+    AFL_TRADE_PRIVATE_ARTIFACT_ROOT: environment.AFL_TRADE_PRIVATE_ARTIFACT_ROOT,
   });
 }
 
@@ -111,6 +119,37 @@ function hasValidRuntimeConfiguration(
   }
 }
 
+function normalizeWorkbookAssetLabel(value: string): string {
+  return value.replace(/\u00a0/gu, ' ').replace(/\s+/gu, ' ').trim();
+}
+
+export function doesLocalPrivateGenerationMatchPinnedWorkbookTransaction(
+  generation: AnyLocalPrivateTradeEvaluationGeneration,
+  detail: DraftTradeDetail
+): boolean {
+  const clubSlugs = [...new Set(detail.trade.clubSlugs)];
+  if (clubSlugs.length < 2 || generation.content.assets.length !== detail.assets.length) {
+    return false;
+  }
+  const partyIds = new Set(clubSlugs.map((clubSlug) => `local-afl-club:${clubSlug}`));
+  const generatedByAssetId = new Map(
+    generation.content.assets.map((asset) => [asset.assetId, asset] as const)
+  );
+  return detail.assets.every((asset) => {
+    const generated = generatedByAssetId.get(asset.id);
+    return (
+      generated !== undefined &&
+      generated.assetKind === asset.assetType &&
+      normalizeWorkbookAssetLabel(generated.label) ===
+        normalizeWorkbookAssetLabel(asset.assetText) &&
+      generated.receivingClubId === `local-afl-club:${asset.clubSlug}` &&
+      generated.sendingClubId !== generated.receivingClubId &&
+      partyIds.has(generated.sendingClubId) &&
+      partyIds.has(generated.receivingClubId)
+    );
+  });
+}
+
 export function createPrivateLocalWorkbookReads(
   dependencies: PrivateLocalWorkbookReadDependencies
 ): PrivateLocalWorkbookReads {
@@ -125,7 +164,7 @@ export function createPrivateLocalWorkbookReads(
     string,
     Readonly<{
       generation: string;
-      calculation: Promise<LocalPrivateReviewedTradeCalculation | null>;
+      calculation: Promise<LocalWorkbookPrivateNumericalResult | null>;
     }>
   >();
 
@@ -171,17 +210,13 @@ export function createPrivateLocalWorkbookReads(
     environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
     detail: DraftTradeDetail,
     workbookSha256: string
-  ): Promise<LocalPrivateReviewedTradeCalculation | null> {
+  ): Promise<LocalWorkbookPrivateNumericalResult | null> {
     if (!dependencies.loadPrivateCalculation) return null;
     const generation = await dependencies.readValuationReadinessGeneration(environment);
     const cacheKey = `${environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE}\0${workbookSha256}\0${detail.trade.tradeId}`;
     const current = calculationByRuntimeAndTrade.get(cacheKey);
     if (current?.generation === generation) return current.calculation;
-    const calculation = dependencies.loadPrivateCalculation(
-      environment,
-      detail,
-      workbookSha256
-    );
+    const calculation = dependencies.loadPrivateCalculation(environment, detail, workbookSha256);
     const entry = Object.freeze({ generation, calculation });
     calculationByRuntimeAndTrade.set(cacheKey, entry);
     try {
@@ -198,10 +233,8 @@ export function createPrivateLocalWorkbookReads(
     async loadArchive(query) {
       const environment = await admit();
       if (environment === null) return null;
-      return dependencies.evaluation.loadArchive(
-        query,
-        environment,
-        (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey)
+      return dependencies.evaluation.loadArchive(query, environment, (scopeKey) =>
+        inspectCurrentValuationReadiness(environment, scopeKey)
       );
     },
 
@@ -236,19 +269,67 @@ async function inspectAdmittedLocalValuationReadiness(
   scopeKey: string
 ): Promise<LocalAflTradeValuationReadiness> {
   const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
-  return inspectLocalAflTradeValuationReadiness(pool, { scopeKey });
+  return inspectLocalAflTradeValuationReadiness(pool, {
+    scopeKey,
+    workbookSha256: environment.AFL_OUTCOMES_DEV_WORKBOOK_SHA256!,
+  });
 }
 
 async function loadAdmittedPrivateCalculation(
   environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
   detail: DraftTradeDetail,
   workbookSha256: string
-): Promise<LocalPrivateReviewedTradeCalculation> {
+): Promise<LocalWorkbookPrivateNumericalResult | null> {
   const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
-  return loadPostgresLocalPrivateReviewedTradeCalculation(
-    createPgAflOutcomeSqlClient(pool),
-    { detail, workbookSha256 }
-  );
+  const client = createPgAflOutcomeSqlClient(pool);
+  const confirmedLifecycle = new PostgresAflTradePrivateConfirmedValuationLifecycleV2(client);
+  const generationLifecycle = new PostgresLocalPrivateTradeEvaluationLifecycle(client);
+  const head = await generationLifecycle.loadHead(detail.trade.tradeId);
+  if (head?.generationId === null) return null;
+  if (head !== null) {
+    const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: resolve(
+        environment.AFL_TRADE_PRIVATE_ARTIFACT_ROOT?.trim() ||
+          resolve(process.cwd(), '.statly-local/afl-trade-private-confirmed-artifacts')
+      ),
+      repositoryId: 'private-confirmed-valuation-v2',
+      maximumObjectBytes: MAXIMUM_PRIVATE_ARTIFACT_BYTES,
+    });
+    const evaluation = createLocalPrivateTradeEvaluationReader({
+      lifecycle: generationLifecycle,
+      artifactRepository,
+      maximumArtifactBytes: MAXIMUM_PRIVATE_ARTIFACT_BYTES,
+    });
+    const generation = await evaluation.read({
+      kind: 'generation',
+      generationId: head.generationId,
+    });
+    const valuationScopeKey = `afl-men:${detail.trade.year}-trades`;
+    if (
+      generation === null ||
+      generation.content.tradeId !== detail.trade.tradeId ||
+      generation.content.workbookSha256 !== workbookSha256 ||
+      generation.content.valuationScopeKey !== valuationScopeKey ||
+      !doesLocalPrivateGenerationMatchPinnedWorkbookTransaction(generation, detail)
+    ) {
+      throw new Error('Private evaluation head does not resolve its exact retained generation.');
+    }
+    return { calculation: null, generation };
+  }
+  const retained = await confirmedLifecycle.loadLatestResultForTrade({
+    valuationScopeKey: `afl-men:${detail.trade.year}-trades`,
+    tradeId: detail.trade.tradeId,
+    workbookSha256,
+  });
+  const calculation =
+    retained === null
+      ? null
+      : projectPrivateConfirmedValuationResult({
+          detail,
+          authenticatedWorkbookSha256: retained.workbookSha256,
+          result: retained.result,
+        });
+  return calculation === null ? null : { calculation, generation: null };
 }
 
 async function readLocalValuationReadinessGeneration(

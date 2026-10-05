@@ -5,12 +5,22 @@ import { LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 } from './localFiveSea
 import { LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256 } from './localOfficialAfl2026Review';
 
 interface StagedAcquisitionOutcomeRow {
+  event_id: string;
   normalized_player_name: string;
   normalized_club_name: string;
   provider: string;
   season_year: number;
   identity_count: number;
+  canonical_player_id: string | null;
+  canonical_player_count: number;
+  receiving_club_id: string;
+  spell_version_id: string | null;
+  spell_start_event_version_id: string | null;
+  spell_start_asset_version_id: string | null;
+  spell_start_date: string | null;
+  spell_end_date: string | null;
   appearance_count: number;
+  provider_decoded_row_ids: string[];
   exact_goals: number | null;
   goals_complete: boolean;
   effective_through: string;
@@ -37,28 +47,25 @@ export async function loadLocalAflTradeStagedWorkbookOutcomes(
   acquisitions: readonly AflOutcomesDevelopmentAcquisitionItem[]
 ): Promise<ReadonlyMap<string, AflTradeDevelopmentReconciledAcquisitionOutcome>> {
   if (acquisitions.length === 0) return new Map();
-  const requestedPlayerClubs = [
-    ...new Map(
-      acquisitions.map((acquisition) => {
-        const playerName = normalizeName(acquisition.playerName);
-        const clubName = normalizeName(acquisition.clubName);
-        return [`${playerName}\0${clubName}`, { player_name: playerName, club_name: clubName }];
-      })
-    ).values(),
-  ];
+  const requestedAcquisitions = acquisitions.map((acquisition) => ({
+    event_id: acquisition.eventId,
+    player_name: normalizeName(acquisition.playerName),
+    club_name: normalizeName(acquisition.clubName),
+  }));
   const result = await client.query<StagedAcquisitionOutcomeRow>(
-    `WITH requested_player_club AS MATERIALIZED (
-       SELECT requested.player_name,requested.club_name
-         FROM jsonb_to_recordset($1::jsonb) AS requested(player_name text,club_name text)
+    `WITH requested_acquisition AS MATERIALIZED (
+       SELECT requested.event_id,requested.player_name,requested.club_name
+         FROM jsonb_to_recordset($1::jsonb)
+                AS requested(event_id text,player_name text,club_name text)
      ), candidate_rows AS MATERIALIZED (
-       SELECT capture.provider,row.season_year,row.provider_decoded_row_id,
+       SELECT requested.event_id,capture.provider,row.season_year,row.provider_decoded_row_id,
               identity.identity_candidate_id,identity.native_entity_id,
               identity.recorded_name,identity.recorded_club_name,
               match.match_candidate_id,match.order_independent_sha256,match.match_date_text,
               metric.metric_code,metric.definition_version,metric.availability::text AS availability,
               metric.numeric_value,metric.missing_reason
          FROM outcome_provider_identity_candidate identity
-         JOIN requested_player_club requested
+         JOIN requested_acquisition requested
            ON requested.player_name=regexp_replace(lower(identity.recorded_name),'[^a-z0-9]+',' ','g')
           AND requested.club_name=regexp_replace(lower(identity.recorded_club_name),'[^a-z0-9]+',' ','g')
          JOIN outcome_provider_decoded_row row USING (provider_decoded_row_id)
@@ -311,10 +318,16 @@ export async function loadLocalAflTradeStagedWorkbookOutcomes(
              WHERE successor.supersedes_decision_id=decision.decision_id
           )
      ), provider_rows AS (
-       SELECT candidate.provider,candidate.season_year,candidate.provider_decoded_row_id,
+       SELECT candidate.event_id,candidate.provider,candidate.season_year,
+              candidate.provider_decoded_row_id,
               'local_player_club:afl_tables:' || candidate.native_entity_id || ':' ||
                 regexp_replace(lower(candidate.recorded_club_name),'[^a-z0-9]+','-','g')
                 AS reviewed_player_club_id,
+              'local-afl-player:afl-tables:' || candidate.native_entity_id
+                AS canonical_player_id,
+              'local-afl-club:' ||
+                trim(both '-' from regexp_replace(lower(candidate.recorded_club_name),'[^a-z0-9]+','-','g'))
+                AS receiving_club_id,
               regexp_replace(lower(candidate.recorded_name),'[^a-z0-9]+',' ','g')
                 AS normalized_player_name,
               regexp_replace(lower(candidate.recorded_club_name),'[^a-z0-9]+',' ','g')
@@ -326,8 +339,19 @@ export async function loadLocalAflTradeStagedWorkbookOutcomes(
          CROSS JOIN historical_review_health
         WHERE candidate.provider='afl_tables'
        UNION ALL
-       SELECT DISTINCT candidate.provider,candidate.season_year,candidate.provider_decoded_row_id,
+       SELECT DISTINCT candidate.event_id,candidate.provider,candidate.season_year,
+              candidate.provider_decoded_row_id,
               identity_review.canonical_record_id AS reviewed_player_club_id,
+              CASE
+                WHEN identity_review.canonical_record_id ~
+                       '^local_player_club:afl_tables:[^:]+:[^:]+$'
+                THEN 'local-afl-player:afl-tables:' ||
+                       split_part(identity_review.canonical_record_id,':',3)
+                ELSE NULL
+              END AS canonical_player_id,
+              'local-afl-club:' ||
+                trim(both '-' from regexp_replace(lower(candidate.recorded_club_name),'[^a-z0-9]+','-','g'))
+                AS receiving_club_id,
               regexp_replace(lower(candidate.recorded_name),'[^a-z0-9]+',' ','g')
                 AS normalized_player_name,
               regexp_replace(lower(candidate.recorded_club_name),'[^a-z0-9]+',' ','g')
@@ -356,26 +380,96 @@ export async function loadLocalAflTradeStagedWorkbookOutcomes(
           AND candidate.provider='official_afl'
      ), source_cutoff AS (
        SELECT source_through_season,effective_through FROM official_cutoff
+     ), governed_acquisition_spell_candidate AS MATERIALIZED (
+       SELECT requested.event_id AS acquisition_event_id,
+              spell.spell_version_id,spell.player_id,spell.club_id,
+              spell.start_event_version_id,spell.start_asset_version_id,
+              spell.start_date,spell.end_date,
+              count(*) OVER (PARTITION BY requested.event_id) AS candidate_count
+         FROM requested_acquisition requested
+         JOIN outcome_event_asset asset
+           ON asset.source_import_row_id=requested.event_id
+          AND asset.status='approved'
+         JOIN outcome_event_version event
+           ON event.event_version_id=asset.event_version_id
+          AND event.status='approved'
+         JOIN outcome_acquisition_spell_version spell
+           ON spell.start_asset_version_id=asset.asset_version_id
+          AND spell.start_event_version_id=event.event_version_id
+          AND spell.player_id=asset.player_id
+          AND spell.club_id=asset.to_club_id
+          AND spell.status='approved'
+         JOIN outcome_acquisition_spell_rule rule
+           ON rule.rule_id=spell.rule_id
+          AND rule.status='approved'
+        WHERE asset.player_id IS NOT NULL
+          AND asset.to_club_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM outcome_event_version successor
+             WHERE successor.supersedes_version_id=event.event_version_id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM outcome_acquisition_spell_version successor
+             WHERE successor.supersedes_spell_version_id=spell.spell_version_id
+          )
+     ), governed_acquisition_spell AS MATERIALIZED (
+       SELECT acquisition_event_id,spell_version_id,player_id,club_id,
+              start_event_version_id,start_asset_version_id,start_date,end_date
+         FROM governed_acquisition_spell_candidate
+        WHERE candidate_count=1
+     ), scoped_provider_rows AS MATERIALIZED (
+       SELECT provider_rows.*,spell.spell_version_id,
+              spell.start_event_version_id AS spell_start_event_version_id,
+              spell.start_asset_version_id AS spell_start_asset_version_id,
+              spell.start_date AS spell_start_date,
+              spell.end_date AS spell_end_date
+         FROM provider_rows
+         LEFT JOIN governed_acquisition_spell spell
+           ON spell.acquisition_event_id=provider_rows.event_id
+          AND spell.player_id=provider_rows.canonical_player_id
+          AND spell.club_id=provider_rows.receiving_club_id
+        WHERE spell.spell_version_id IS NULL
+           OR (provider_rows.match_date_text::date>=spell.start_date
+               AND (spell.end_date IS NULL
+                    OR provider_rows.match_date_text::date<=spell.end_date))
      )
-     SELECT provider_rows.normalized_player_name,provider_rows.normalized_club_name,
-            provider_rows.provider,provider_rows.season_year,
-            count(DISTINCT provider_rows.reviewed_player_club_id)::integer AS identity_count,
-            count(DISTINCT provider_rows.order_independent_sha256)::integer AS appearance_count,
-            CASE WHEN bool_and(provider_rows.metric_availability='exact')
-                 THEN sum(provider_rows.numeric_value)::integer ELSE NULL END AS exact_goals,
-            bool_and(provider_rows.metric_availability='exact') AS goals_complete,
+     SELECT scoped_provider_rows.event_id,
+            scoped_provider_rows.normalized_player_name,
+            scoped_provider_rows.normalized_club_name,
+            scoped_provider_rows.provider,scoped_provider_rows.season_year,
+            count(DISTINCT scoped_provider_rows.reviewed_player_club_id)::integer AS identity_count,
+            min(scoped_provider_rows.canonical_player_id) AS canonical_player_id,
+            count(DISTINCT scoped_provider_rows.canonical_player_id)::integer AS canonical_player_count,
+            min(scoped_provider_rows.receiving_club_id) AS receiving_club_id,
+            min(scoped_provider_rows.spell_version_id) AS spell_version_id,
+            min(scoped_provider_rows.spell_start_event_version_id)
+              AS spell_start_event_version_id,
+            min(scoped_provider_rows.spell_start_asset_version_id)
+              AS spell_start_asset_version_id,
+            min(scoped_provider_rows.spell_start_date)::text AS spell_start_date,
+            min(scoped_provider_rows.spell_end_date)::text AS spell_end_date,
+            count(DISTINCT scoped_provider_rows.order_independent_sha256)::integer
+              AS appearance_count,
+            array_agg(DISTINCT scoped_provider_rows.provider_decoded_row_id
+                      ORDER BY scoped_provider_rows.provider_decoded_row_id)
+              AS provider_decoded_row_ids,
+            CASE WHEN bool_and(scoped_provider_rows.metric_availability='exact')
+                 THEN sum(scoped_provider_rows.numeric_value)::integer ELSE NULL END AS exact_goals,
+            bool_and(scoped_provider_rows.metric_availability='exact') AS goals_complete,
             cutoff.effective_through,
             cutoff.source_through_season
-       FROM provider_rows
+       FROM scoped_provider_rows
        CROSS JOIN source_cutoff cutoff
       WHERE cutoff.effective_through IS NOT NULL
         AND cutoff.source_through_season IS NOT NULL
-      GROUP BY provider_rows.normalized_player_name,provider_rows.normalized_club_name,
-               provider_rows.provider,provider_rows.season_year,
+      GROUP BY scoped_provider_rows.event_id,
+               scoped_provider_rows.normalized_player_name,
+               scoped_provider_rows.normalized_club_name,
+               scoped_provider_rows.provider,scoped_provider_rows.season_year,
                cutoff.effective_through,cutoff.source_through_season
-     HAVING count(DISTINCT provider_rows.order_independent_sha256)>0`,
+     HAVING count(DISTINCT scoped_provider_rows.order_independent_sha256)>0`,
     [
-      JSON.stringify(requestedPlayerClubs),
+      JSON.stringify(requestedAcquisitions),
       LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256,
       [
         'provider_identity_candidate',
@@ -387,14 +481,14 @@ export async function loadLocalAflTradeStagedWorkbookOutcomes(
   );
   const rowsByPlayerClub = new Map<string, StagedAcquisitionOutcomeRow[]>();
   for (const row of result.rows) {
-    const key = `${row.normalized_player_name}\0${row.normalized_club_name}`;
+    const key = row.event_id;
     const rows = rowsByPlayerClub.get(key) ?? [];
     rows.push(row);
     rowsByPlayerClub.set(key, rows);
   }
   const outcomes = new Map<string, AflTradeDevelopmentReconciledAcquisitionOutcome>();
   for (const acquisition of acquisitions) {
-    const key = `${normalizeName(acquisition.playerName)}\0${normalizeName(acquisition.clubName)}`;
+    const key = acquisition.eventId;
     const rows = (rowsByPlayerClub.get(key) ?? []).filter(
       (row) =>
         row.identity_count === 1 &&
@@ -430,9 +524,63 @@ export async function loadLocalAflTradeStagedWorkbookOutcomes(
             } as const)
           : ({ state: 'observed', value: exactGoals } as const)
         : unavailable;
+    const canonicalPlayerIds = new Set(
+      rows.flatMap((row) =>
+        row.canonical_player_count === 1 && row.canonical_player_id !== null
+          ? [row.canonical_player_id]
+          : []
+      )
+    );
+    const receivingClubIds = new Set(rows.map((row) => row.receiving_club_id));
+    const spellVersionIds = new Set(rows.flatMap((row) => row.spell_version_id ?? []));
+    const spellStartEventVersionIds = new Set(
+      rows.flatMap((row) => row.spell_start_event_version_id ?? [])
+    );
+    const spellStartAssetVersionIds = new Set(
+      rows.flatMap((row) => row.spell_start_asset_version_id ?? [])
+    );
+    const spellStartDates = new Set(rows.flatMap((row) => row.spell_start_date ?? []));
+    const spellEndDates = new Set(rows.map((row) => row.spell_end_date));
+    const exactRowsComplete = rows.every(
+      (row) =>
+        row.canonical_player_count === 1 &&
+        row.canonical_player_id !== null &&
+        row.spell_version_id !== null &&
+        row.spell_start_event_version_id !== null &&
+        row.spell_start_asset_version_id !== null &&
+        row.spell_start_date !== null &&
+        new Set(row.provider_decoded_row_ids).size === row.appearance_count
+    );
+    const exactMatchSet =
+      exactRowsComplete &&
+      canonicalPlayerIds.size === 1 &&
+      receivingClubIds.size === 1 &&
+      spellVersionIds.size === 1 &&
+      spellStartEventVersionIds.size === 1 &&
+      spellStartAssetVersionIds.size === 1 &&
+      spellStartDates.size === 1 &&
+      spellEndDates.size === 1
+        ? {
+            acquisitionEventId: acquisition.eventId,
+            acquisitionSpellVersionId: [...spellVersionIds][0]!,
+            startEventVersionId: [...spellStartEventVersionIds][0]!,
+            startAssetVersionId: [...spellStartAssetVersionIds][0]!,
+            effectiveFrom: [...spellStartDates][0]!,
+            effectiveThrough: [...spellEndDates][0]!,
+            canonicalPlayerId: [...canonicalPlayerIds][0]!,
+            receivingClubId: [...receivingClubIds][0]!,
+            seasons: rows
+              .map((row) => ({
+                seasonYear: row.season_year,
+                providerDecodedRowIds: [...row.provider_decoded_row_ids].sort(),
+              }))
+              .sort((left, right) => left.seasonYear - right.seasonYear),
+          }
+        : undefined;
     outcomes.set(acquisition.eventId, {
       source: 'reconciled_acquisition_spell',
       effectiveThrough,
+      ...(exactMatchSet === undefined ? {} : { exactMatchSet }),
       metrics: { games, goals, coachesVotes: unavailable, brownlowVotes: unavailable },
     });
   }

@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createPrivateLocalWorkbookReads,
+  doesLocalPrivateGenerationMatchPinnedWorkbookTransaction,
   type PrivateLocalWorkbookReadEnvironment,
 } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createLocalPrivateTradeEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/localPrivateTradeEvaluationContracts';
+import type { DraftTradeDetail } from '@/lib/draftTrades/read';
 import type { LocalAflTradeValuationReadiness } from '@/server/aflTradeIntelligence/development/localAflTradeValuationReadiness';
 import type {
   LocalWorkbookEvaluationArchive,
@@ -91,6 +95,96 @@ function dependencies(input?: {
 }
 
 describe('private local workbook reads', () => {
+  it('admits exact asset membership whose explicit direction stays within every pinned party', () => {
+    const generatedAt = '2026-08-17T08:00:00.000Z';
+    const evidence = createAflTradeCanonicalJsonArtifactRef({ source: 'confirmed' }, generatedAt);
+    const detail = {
+      trade: {
+        tradeId: 'workbook-2021-dawson',
+        year: 2021,
+        clubSlugs: ['adelaide', 'sydney', 'collingwood'],
+      },
+      assets: [
+        {
+          id: 'workbook-2021-dawson-adelaide-1',
+          assetType: 'player',
+          assetText: 'Dawson (92 games)',
+          clubSlug: 'adelaide',
+        },
+      ],
+    } as DraftTradeDetail;
+    const generation = (sendingClubId: string) =>
+      createLocalPrivateTradeEvaluationGeneration({
+        valuationScopeKey: 'afl-men:2021-trades',
+        tradeId: detail.trade.tradeId,
+        workbookSha256: 'a'.repeat(64),
+        dependencyRefs: [evidence],
+        confirmedResultArtifact: evidence,
+        valueUnitId: 'hpn-season-pav/v1',
+        assets: [
+          {
+            assetId: detail.assets[0]!.id,
+            assetKind: 'player',
+            canonicalPlayerId: 'local-afl-player:dawson',
+            sendingClubId,
+            receivingClubId: 'local-afl-club:adelaide',
+            label: detail.assets[0]!.assetText.replace(' ', '\u00a0'),
+            appearances: {
+              state: 'observed',
+              gamesPlayed: 1,
+              coverage: 'right_censored',
+              effectiveThroughSeason: 2022,
+              evidenceRefs: [evidence],
+            },
+            views: {
+              atTrade: {
+                state: 'unavailable',
+                reasons: ['source_rights_not_approved'],
+                evidenceRefs: [],
+              },
+              realized: { state: 'calculated', score: 84.1, evidenceRefs: [evidence] },
+              remaining: {
+                state: 'unavailable',
+                reasons: ['predictive_model_not_authorized'],
+                evidenceRefs: [],
+              },
+              current: {
+                state: 'unavailable',
+                reasons: ['predictive_model_not_authorized'],
+                evidenceRefs: [],
+              },
+            },
+          },
+        ],
+        clubTotals: null,
+        overallGrade: {
+          state: 'unavailable',
+          reasons: ['asset_values_incomplete'],
+          evidenceRefs: [],
+        },
+        generatedAt,
+      });
+
+    expect(
+      doesLocalPrivateGenerationMatchPinnedWorkbookTransaction(
+        generation('local-afl-club:sydney'),
+        detail
+      )
+    ).toBe(true);
+    expect(
+      doesLocalPrivateGenerationMatchPinnedWorkbookTransaction(
+        generation('local-afl-club:collingwood'),
+        detail
+      )
+    ).toBe(true);
+    expect(
+      doesLocalPrivateGenerationMatchPinnedWorkbookTransaction(
+        generation('local-afl-club:essendon'),
+        detail
+      )
+    ).toBe(false);
+  });
+
   it.each([null, 'another-authenticated-user'])(
     'conceals the workbook from a non-operator identity (%s)',
     async (userId) => {

@@ -34,6 +34,7 @@ export interface AflOutcomesDevelopmentWorkbookFingerprint {
 export interface AflOutcomesDevelopmentWorkbookEvidence {
   workbook: AflOutcomesDevelopmentWorkbook;
   staging: AflTradeWorkbookStagingPackage;
+  sourceBytes: Uint8Array;
 }
 
 export function assertAflOutcomesDevelopmentWorkbookRuntime(runtimeEnvironment?: string) {
@@ -182,7 +183,7 @@ export async function loadAflOutcomesDevelopmentWorkbookEvidence(
       sourceArtifact,
       originalFilename: basename(resolvedPath),
     });
-    return { workbook, staging };
+    return { workbook, staging, sourceBytes: Uint8Array.from(bytes) };
   } catch (error) {
     if (error instanceof AflOutcomesDevelopmentWorkbookError) throw error;
     throw new AflOutcomesDevelopmentWorkbookError(

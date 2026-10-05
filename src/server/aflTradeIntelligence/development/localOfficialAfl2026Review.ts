@@ -44,7 +44,10 @@ interface LocalReviewDecision {
     | 'provider_match_candidate'
     | 'local_reconciled_player_match_fact';
   subjectId: string;
-  canonicalRecordType: 'local_player_club' | 'local_afl_match' | 'local_player_match_fact';
+  canonicalRecordType:
+    | 'local_canonical_player_club'
+    | 'local_afl_match'
+    | 'local_player_match_fact';
   canonicalRecordId: string;
   rationale: string;
   evidence: Record<string, unknown>;
@@ -93,6 +96,9 @@ export const LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_EVIDENCE_SET_SHA256 = evidence
   REVIEWED_SAM_FLANDERS_2026_FACTS
 );
 
+export const LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID =
+  'local-afl-player:afl-tables:12824';
+
 function localCanonicalId(
   kind: LocalReviewDecision['canonicalRecordType'],
   value: unknown
@@ -105,11 +111,69 @@ async function ensureCurrentApprovedReview(
   decision: LocalReviewDecision
 ): Promise<string> {
   const decisionId = `review-decision:${sha256AflTradeCanonicalJson(decision)}`;
+  const current = await transaction.query<{
+    decision_id: string;
+    canonical_record_type: string | null;
+    canonical_record_id: string | null;
+  }>(
+    `SELECT current.decision_id,current.canonical_record_type,current.canonical_record_id
+       FROM outcome_review_decision current
+      WHERE current.subject_type=$1 AND current.subject_id=$2
+        AND current.decision='approved'
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_review_decision successor
+           WHERE successor.supersedes_decision_id=current.decision_id
+        )
+      ORDER BY current.decision_id
+      FOR KEY SHARE OF current`,
+    [decision.subjectType, decision.subjectId]
+  );
+  const exactCurrent = current.rows.find(({ decision_id }) => decision_id === decisionId);
+  const staleCurrent = current.rows.filter(({ decision_id }) => decision_id !== decisionId);
+  const retainedPredecessor = exactCurrent ? null : staleCurrent.shift();
+  for (const stale of staleCurrent) {
+    const retirementId = `review-decision:${sha256AflTradeCanonicalJson({
+      boundary: 'private-local-official-review-branch-retirement/v1',
+      subjectType: decision.subjectType,
+      subjectId: decision.subjectId,
+      supersedesDecisionId: stale.decision_id,
+      replacementDecisionId: decisionId,
+    })}`;
+    await transaction.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,canonical_record_type,
+         canonical_record_id,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
+       VALUES ($1,$2,$3,'rejected',NULL,NULL,$4,$5,$6::jsonb,$7,$8)
+       ON CONFLICT (decision_id) DO NOTHING`,
+      [
+        retirementId,
+        decision.subjectType,
+        decision.subjectId,
+        stale.decision_id,
+        'Retire a conflicting current approval before admitting the exact canonical official review.',
+        canonicalizeAflTradeJson({
+          replacementDecisionId: decisionId,
+          retiredDecisionId: stale.decision_id,
+        }),
+        'local-workbook-evidence-reviewer',
+        '2026-08-14T12:00:00.000Z',
+      ]
+    );
+  }
+  if (exactCurrent) {
+    if (
+      exactCurrent.canonical_record_type !== decision.canonicalRecordType ||
+      exactCurrent.canonical_record_id !== decision.canonicalRecordId
+    ) {
+      throw new TypeError('The retained private official review target drifted.');
+    }
+    return decisionId;
+  }
   await transaction.query(
     `INSERT INTO outcome_review_decision
       (decision_id,subject_type,subject_id,decision,canonical_record_type,
        canonical_record_id,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
-     VALUES ($1,$2,$3,'approved',$4,$5,NULL,$6,$7::jsonb,$8,$9)
+     VALUES ($1,$2,$3,'approved',$4,$5,$6,$7,$8::jsonb,$9,$10)
      ON CONFLICT (decision_id) DO NOTHING`,
     [
       decisionId,
@@ -117,6 +181,7 @@ async function ensureCurrentApprovedReview(
       decision.subjectId,
       decision.canonicalRecordType,
       decision.canonicalRecordId,
+      retainedPredecessor?.decision_id ?? null,
       decision.rationale,
       canonicalizeAflTradeJson(decision.evidence),
       'local-workbook-evidence-reviewer',
@@ -219,8 +284,8 @@ export async function reviewLocalOfficialAfl2026SamFlandersEvidence(
     ]);
     const rows = await loadCandidateRows(transaction, captureId, normalizationRunId);
     const evidence = assertReviewedSamFlandersRows(rows);
-    const playerClubId = localCanonicalId('local_player_club', {
-      nativeEntityId: rows[0]!.native_entity_id,
+    const playerClubId = localCanonicalId('local_canonical_player_club', {
+      canonicalPlayerId: LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID,
       clubName: evidence.recordedClubName,
     });
     const decisionIds: string[] = [];
@@ -229,7 +294,7 @@ export async function reviewLocalOfficialAfl2026SamFlandersEvidence(
         await ensureCurrentApprovedReview(transaction, {
           subjectType: 'provider_identity_candidate',
           subjectId: row.identity_candidate_id,
-          canonicalRecordType: 'local_player_club',
+          canonicalRecordType: 'local_canonical_player_club',
           canonicalRecordId: playerClubId,
           rationale:
             'Approve this exact provider identity only for private local workbook evaluation.',
@@ -238,6 +303,7 @@ export async function reviewLocalOfficialAfl2026SamFlandersEvidence(
             normalizationRunId,
             evidenceSetSha256: evidence.evidenceSetSha256,
             providerDecodedRowId: row.provider_decoded_row_id,
+            canonicalPlayerId: LOCAL_OFFICIAL_AFL_2026_SAM_FLANDERS_CANONICAL_PLAYER_ID,
             nativeEntityId: row.native_entity_id,
             recordedName: row.recorded_name,
             recordedClubName: row.recorded_club_name,
@@ -307,12 +373,21 @@ export async function reviewLocalOfficialAfl2026SamFlandersEvidence(
         'The exact private local official review set is not current and complete.'
       );
     }
-    const reviewSetDecisionId = `local-official-afl-review:set:${evidence.evidenceSetSha256}`;
+    const supersededReviewSetDecisionId =
+      `local-official-afl-review:set:${evidence.evidenceSetSha256}`;
+    const reviewSetDecisionId =
+      `local-official-afl-review:v2:set:${evidence.evidenceSetSha256}`;
     await transaction.query(
       `INSERT INTO outcome_review_decision
         (decision_id,subject_type,subject_id,decision,canonical_record_type,
          canonical_record_id,supersedes_decision_id,rationale,evidence_json,decided_by,decided_at)
-       VALUES ($1,'local_review_set',$2,'approved','local_review_set',$2,NULL,$3,$4::jsonb,$5,$6)
+       VALUES (
+         $1,'local_review_set',$2,'approved','local_review_set',$2,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM outcome_review_decision predecessor WHERE predecessor.decision_id=$7
+         ) THEN $7 ELSE NULL END,
+         $3,$4::jsonb,$5,$6
+       )
        ON CONFLICT (decision_id) DO NOTHING`,
       [
         reviewSetDecisionId,
@@ -326,6 +401,7 @@ export async function reviewLocalOfficialAfl2026SamFlandersEvidence(
         }),
         'local-workbook-evidence-reviewer',
         '2026-08-14T12:00:00.000Z',
+        supersededReviewSetDecisionId,
       ]
     );
     const admitted = await transaction.query<{ decision_id: string }>(

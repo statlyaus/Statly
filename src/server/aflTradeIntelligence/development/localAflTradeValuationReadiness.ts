@@ -13,6 +13,90 @@ const publicIdSchema = z
   .max(240)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/u);
 const countSchema = z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/u)]);
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
+
+type LocalAflTradePlayerAssetReadinessBlocker =
+  | 'transaction_not_confirmed'
+  | 'asset_identity_unresolved'
+  | 'acquisition_spell_unresolved'
+  | 'calculation_field_unavailable'
+  | 'calculation_method_unavailable'
+  | 'calculation_evidence_incomplete';
+
+export interface LocalAflTradePlayerAssetValuationReadinessInput {
+  readonly assetId: string;
+  readonly assetKind: 'player';
+  readonly transaction: 'confirmed' | 'unconfirmed';
+  readonly identity: 'resolved' | 'unresolved';
+  readonly acquisitionSpell: 'resolved' | 'unresolved';
+  readonly appearances: 'complete' | 'right_censored' | 'unavailable';
+  readonly realizedPav:
+    | 'calculated'
+    | 'calculation_field_unavailable'
+    | 'calculation_method_unavailable'
+    | 'calculation_evidence_incomplete';
+}
+
+export interface LocalAflTradePlayerAssetValuationReadiness {
+  readonly assetId: string;
+  readonly assetKind: 'player';
+  readonly appearances:
+    | { readonly state: 'eligible'; readonly coverage: 'complete' | 'right_censored' }
+    | {
+        readonly state: 'blocked';
+        readonly reasons: readonly LocalAflTradePlayerAssetReadinessBlocker[];
+      };
+  readonly realizedPav:
+    | { readonly state: 'eligible' }
+    | {
+        readonly state: 'blocked';
+        readonly reasons: readonly LocalAflTradePlayerAssetReadinessBlocker[];
+      };
+  readonly completeTradeContribution:
+    | { readonly state: 'eligible' }
+    | {
+        readonly state: 'blocked';
+        readonly reasons: readonly LocalAflTradePlayerAssetReadinessBlocker[];
+      };
+}
+
+export function assessLocalAflTradeAssetValuationReadiness(
+  input: LocalAflTradePlayerAssetValuationReadinessInput
+): LocalAflTradePlayerAssetValuationReadiness {
+  const commonBlockers: LocalAflTradePlayerAssetReadinessBlocker[] = [];
+  if (input.transaction !== 'confirmed') commonBlockers.push('transaction_not_confirmed');
+  if (input.identity !== 'resolved') commonBlockers.push('asset_identity_unresolved');
+  if (input.acquisitionSpell !== 'resolved') {
+    commonBlockers.push('acquisition_spell_unresolved');
+  }
+
+  const appearanceBlockers = [...commonBlockers];
+  if (input.appearances === 'unavailable') {
+    appearanceBlockers.push('calculation_evidence_incomplete');
+  }
+  const realizedBlockers = [...commonBlockers];
+  if (input.realizedPav !== 'calculated') realizedBlockers.push(input.realizedPav);
+
+  const appearances =
+    appearanceBlockers.length === 0
+      ? {
+          state: 'eligible' as const,
+          coverage: input.appearances as 'complete' | 'right_censored',
+        }
+      : { state: 'blocked' as const, reasons: appearanceBlockers };
+  const realizedPav =
+    realizedBlockers.length === 0
+      ? { state: 'eligible' as const }
+      : { state: 'blocked' as const, reasons: realizedBlockers };
+
+  return {
+    assetId: publicIdSchema.parse(input.assetId),
+    assetKind: input.assetKind,
+    appearances,
+    realizedPav,
+    completeTradeContribution: realizedPav,
+  };
+}
 
 const readinessRowSchema = z
   .object({
@@ -39,8 +123,55 @@ const readinessRowSchema = z
     reviewed_decision_count: countSchema.nullable(),
     reviewed_source_capture_count: countSchema.nullable(),
     reviewed_source_rights_count: countSchema.nullable(),
+    private_confirmed_result_count: countSchema,
+    private_hpn_calculation_count: countSchema,
+    private_hpn_season_years: z.array(z.number().int().min(1998).max(2200)),
+    release_draft_selection_count: countSchema,
+    release_pick_realization_count: countSchema,
+    release_pick_lineage_count: countSchema,
+    private_workbook_selection_count: countSchema,
+    pick_observation_set_count: countSchema,
+    pick_model_execution_count: countSchema,
+    player_observation_set_count: countSchema,
+    player_model_run_count: countSchema,
   })
   .strict();
+
+type CompleteTradeBlockerCode =
+  | 'confirmed_player_pav_not_materialized'
+  | 'selection_lineage_not_materialized'
+  | 'pick_observation_set_not_materialized'
+  | 'pick_model_execution_not_present'
+  | 'player_model_execution_not_present';
+
+export interface LocalAflTradeValuationCapabilities {
+  readonly confirmedHistoricalPlayerPav: {
+    readonly state: 'evidence_present' | 'evidence_absent';
+    readonly calculationCount: number;
+    readonly seasonYears: readonly number[];
+  };
+  readonly reviewedSelectionLineage: {
+    readonly state: 'evidence_present' | 'partial_evidence' | 'evidence_absent';
+    readonly draftSelectionCount: number;
+    readonly pickRealizationCount: number;
+    readonly lineageEdgeCount: number;
+    readonly privateWorkbookSelectionCount: number;
+  };
+  readonly pickModel: {
+    readonly state: 'unverified_evidence' | 'evidence_absent';
+    readonly observationSetCount: number;
+    readonly executionCount: number;
+  };
+  readonly playerModel: {
+    readonly state: 'unverified_evidence' | 'evidence_absent';
+    readonly observationSetCount: number;
+    readonly executionCount: number;
+  };
+  readonly completeTrade: {
+    readonly state: 'blocked' | 'evidence_ready_for_authentication';
+    readonly blockerCodes: readonly CompleteTradeBlockerCode[];
+  };
+}
 
 export interface LocalAflTradeValuationReadinessQueryClient {
   query(sql: string, parameters?: unknown[]): Promise<{ rows: unknown[] }>;
@@ -48,7 +179,8 @@ export interface LocalAflTradeValuationReadinessQueryClient {
 
 export interface LocalAflTradeValuationReadiness {
   readonly state: 'blocked';
-  readonly numericalCalculationsAvailable: false;
+  readonly numericalCalculationsAvailable: boolean;
+  readonly confirmedRealizedTradeCalculationCount: number;
   readonly qualificationReportCreated: boolean;
   readonly qualificationReportId: string | null;
   readonly factualReleaseId: string | null;
@@ -82,6 +214,7 @@ export interface LocalAflTradeValuationReadiness {
     | 'authenticated_player_and_pick_model_runs'
     | 'private_nonproduction_derived_calculation_authority'
     | 'authenticated_private_calculation_inputs';
+  readonly capabilities: LocalAflTradeValuationCapabilities;
   readonly explanation: string;
 }
 
@@ -93,6 +226,95 @@ function numericCount(value: number | string | null): number | null {
   return value === null ? null : Number(value);
 }
 
+function capabilitiesFromCounts(input: {
+  readonly privateHpnCalculationCount: number;
+  readonly privateHpnSeasonYears: readonly number[];
+  readonly releaseDraftSelectionCount: number;
+  readonly releasePickRealizationCount: number;
+  readonly releasePickLineageCount: number;
+  readonly privateWorkbookSelectionCount: number;
+  readonly pickObservationSetCount: number;
+  readonly pickModelExecutionCount: number;
+  readonly playerObservationSetCount: number;
+  readonly playerModelRunCount: number;
+}): LocalAflTradeValuationCapabilities {
+  const blockerCodes: CompleteTradeBlockerCode[] = [];
+  if (input.privateHpnCalculationCount === 0) {
+    blockerCodes.push('confirmed_player_pav_not_materialized');
+  }
+  const hasReleaseSelectionLineage =
+    input.releaseDraftSelectionCount > 0 &&
+    input.releasePickRealizationCount > 0 &&
+    input.releasePickLineageCount > 0;
+  if (!hasReleaseSelectionLineage && input.privateWorkbookSelectionCount === 0) {
+    blockerCodes.push('selection_lineage_not_materialized');
+  }
+  if (input.pickObservationSetCount === 0) {
+    blockerCodes.push('pick_observation_set_not_materialized');
+  }
+  if (input.pickModelExecutionCount === 0) {
+    blockerCodes.push('pick_model_execution_not_present');
+  }
+  if (input.playerModelRunCount === 0) {
+    blockerCodes.push('player_model_execution_not_present');
+  }
+  return {
+    confirmedHistoricalPlayerPav: {
+      state: input.privateHpnCalculationCount > 0 ? 'evidence_present' : 'evidence_absent',
+      calculationCount: input.privateHpnCalculationCount,
+      seasonYears: [...input.privateHpnSeasonYears],
+    },
+    reviewedSelectionLineage: {
+      state:
+        input.releaseDraftSelectionCount > 0 ||
+        input.releasePickRealizationCount > 0 ||
+        input.releasePickLineageCount > 0 ||
+        input.privateWorkbookSelectionCount > 0
+            ? 'partial_evidence'
+            : 'evidence_absent',
+      draftSelectionCount: input.releaseDraftSelectionCount,
+      pickRealizationCount: input.releasePickRealizationCount,
+      lineageEdgeCount: input.releasePickLineageCount,
+      privateWorkbookSelectionCount: input.privateWorkbookSelectionCount,
+    },
+    pickModel: {
+      state:
+        input.pickObservationSetCount > 0 || input.pickModelExecutionCount > 0
+          ? 'unverified_evidence'
+          : 'evidence_absent',
+      observationSetCount: input.pickObservationSetCount,
+      executionCount: input.pickModelExecutionCount,
+    },
+    playerModel: {
+      state:
+        input.playerObservationSetCount > 0 || input.playerModelRunCount > 0
+          ? 'unverified_evidence'
+          : 'evidence_absent',
+      observationSetCount: input.playerObservationSetCount,
+      executionCount: input.playerModelRunCount,
+    },
+    completeTrade: {
+      state: blockerCodes.length === 0 ? 'evidence_ready_for_authentication' : 'blocked',
+      blockerCodes,
+    },
+  };
+}
+
+function emptyCapabilities(): LocalAflTradeValuationCapabilities {
+  return capabilitiesFromCounts({
+    privateHpnCalculationCount: 0,
+    privateHpnSeasonYears: [],
+    releaseDraftSelectionCount: 0,
+    releasePickRealizationCount: 0,
+    releasePickLineageCount: 0,
+    privateWorkbookSelectionCount: 0,
+    pickObservationSetCount: 0,
+    pickModelExecutionCount: 0,
+    playerObservationSetCount: 0,
+    playerModelRunCount: 0,
+  });
+}
+
 /**
  * Reads the two explicitly governed private-calculation lanes for one local valuation scope. The
  * retained-review lane is preferred because it owns the real reviewed player-match evidence used by
@@ -101,9 +323,15 @@ function numericCount(value: number | string | null): number | null {
  */
 export async function inspectLocalAflTradeValuationReadiness(
   client: LocalAflTradeValuationReadinessQueryClient,
-  input: { readonly scopeKey: string }
+  input: { readonly scopeKey: string; readonly workbookSha256?: string }
 ): Promise<LocalAflTradeValuationReadiness> {
   const scopeKey = publicIdSchema.parse(input.scopeKey);
+  const workbookSha256 =
+    input.workbookSha256 === undefined
+      ? null
+      : sha256Schema.parse(input.workbookSha256.trim().toLowerCase());
+  const scopeYearMatch = /^afl-men:(\d{4})-trades$/u.exec(scopeKey);
+  const scopeYear = scopeYearMatch === null ? -1 : Number(scopeYearMatch[1]);
   const result = await client.query(
     `WITH candidates AS (
        SELECT qualification.factual_release_id,qualification.evaluated_at AS event_at
@@ -156,7 +384,18 @@ export async function inspectLocalAflTradeValuationReadiness(
             reviewed.candidate_count AS reviewed_candidate_count,
             reviewed.decision_count AS reviewed_decision_count,
             reviewed.source_capture_count AS reviewed_source_capture_count,
-            reviewed.source_rights_count AS reviewed_source_rights_count
+            reviewed.source_rights_count AS reviewed_source_rights_count,
+            capabilities.private_confirmed_result_count,
+            capabilities.private_hpn_calculation_count,
+            capabilities.private_hpn_season_years,
+            capabilities.release_draft_selection_count,
+            capabilities.release_pick_realization_count,
+            capabilities.release_pick_lineage_count,
+            capabilities.private_workbook_selection_count,
+            capabilities.pick_observation_set_count,
+            capabilities.pick_model_execution_count,
+            capabilities.player_observation_set_count,
+            capabilities.player_model_run_count
        FROM (SELECT 1) anchor
        LEFT JOIN selected ON true
        LEFT JOIN LATERAL (
@@ -199,14 +438,107 @@ export async function inspectLocalAflTradeValuationReadiness(
           WHERE head.valuation_scope_key=$1
             AND head.evidence_scope_key='afl-player-match-reviewed-2021-2026'
           LIMIT 1
-       ) reviewed ON true`,
-    [scopeKey]
+       ) reviewed ON true
+       LEFT JOIN LATERAL (
+         SELECT CASE WHEN reviewed.evidence_current IS TRUE AND reviewed.status='authorized'
+                     THEN (SELECT count(*)::integer
+                             FROM outcome_private_confirmed_valuation_result_v2 result
+                             JOIN outcome_private_confirmed_valuation_plan_v2 plan
+                               ON plan.plan_id=result.plan_id
+                             JOIN outcome_private_workbook_transaction_promotion promotion
+                               ON promotion.promotion_id=plan.transaction_promotion_id
+                              AND promotion.status='active'
+                            WHERE result.valuation_scope_key=$1
+                              AND plan.authority_decision_id=reviewed.decision_id
+                              AND plan.evidence_bundle_id=reviewed.evidence_bundle_id
+                              AND result.result_json->'content'->'authority'->>'decisionId'
+                                    =reviewed.decision_id
+                              AND result.result_json->'content'->'authority'->>'evidenceBundleId'
+                                    =reviewed.evidence_bundle_id)
+                     ELSE 0 END AS private_confirmed_result_count,
+                CASE WHEN reviewed.evidence_current IS TRUE AND reviewed.status='authorized'
+                     THEN (SELECT count(*)::integer
+                             FROM outcome_private_reviewed_hpn_calculation calculation
+                             JOIN outcome_hpn_reviewed_season_universe season
+                               ON season.reviewed_season_id=calculation.reviewed_season_id
+                            WHERE season.candidate_json->'content'->>'resolvedReviewSetSha256'
+                                  IN (SELECT item->>'reviewSetId'
+                                        FROM jsonb_array_elements(
+                                          reviewed.bundle_json->'content'->'reviewSets'
+                                        ) review_set(item)))
+                     ELSE 0 END AS private_hpn_calculation_count,
+                CASE WHEN reviewed.evidence_current IS TRUE AND reviewed.status='authorized'
+                     THEN COALESCE((SELECT array_agg(
+                                             DISTINCT calculation.season_year
+                                             ORDER BY calculation.season_year
+                                           )
+                                      FROM outcome_private_reviewed_hpn_calculation calculation
+                                      JOIN outcome_hpn_reviewed_season_universe season
+                                        ON season.reviewed_season_id=calculation.reviewed_season_id
+                                     WHERE season.candidate_json->'content'->>'resolvedReviewSetSha256'
+                                           IN (SELECT item->>'reviewSetId'
+                                                 FROM jsonb_array_elements(
+                                                   reviewed.bundle_json->'content'->'reviewSets'
+                                                 ) review_set(item))),ARRAY[]::integer[])
+                     ELSE ARRAY[]::integer[] END AS private_hpn_season_years,
+                (SELECT count(*)::integer FROM outcome_release_draft_selection member
+                  WHERE member.release_id=selected.factual_release_id)
+                  AS release_draft_selection_count,
+                (SELECT count(*)::integer FROM outcome_release_pick_realization member
+                  WHERE member.release_id=selected.factual_release_id)
+                  AS release_pick_realization_count,
+                (SELECT count(*)::integer FROM outcome_release_pick_lineage member
+                  WHERE member.release_id=selected.factual_release_id)
+                  AS release_pick_lineage_count,
+                (SELECT count(*)::integer
+                   FROM outcome_local_workbook_pick_selection_confirmation confirmation
+                  WHERE confirmation.trade_year=$2
+                    AND confirmation.workbook_sha256=$3
+                    AND confirmation.valuation_scope_key=$1
+                    AND outcome_private_reviewed_evidence_bundle_is_current(
+                      confirmation.evidence_bundle_id
+                    )
+                    AND EXISTS (
+                      SELECT 1
+                        FROM outcome_private_reviewed_evaluation_head head
+                       WHERE head.evidence_bundle_id=confirmation.evidence_bundle_id
+                         AND head.valuation_scope_key=$1
+                         AND head.evidence_scope_key='afl-player-match-reviewed-2021-2026'
+                         AND head.status='authorized'
+                    )) AS private_workbook_selection_count,
+                (SELECT count(*)::integer FROM outcome_pick_pav_observation_set observation_set
+                  WHERE observation_set.release_id=selected.factual_release_id
+                    AND observation_set.status='finalized'
+                    AND observation_set.finalized_at IS NOT NULL)
+                  AS pick_observation_set_count,
+                (SELECT count(*)::integer FROM outcome_pick_pav_model_execution execution
+                  WHERE execution.release_id=selected.factual_release_id
+                    AND execution.status='succeeded') AS pick_model_execution_count,
+                (SELECT count(*)::integer
+                   FROM outcome_valuation_player_observation_set observation_set
+                   JOIN outcome_valuation_dataset_candidate dataset
+                     ON dataset.dataset_id=observation_set.dataset_id
+                  WHERE dataset.factual_release_id=selected.factual_release_id)
+                  AS player_observation_set_count,
+                (SELECT count(*)::integer
+                   FROM outcome_valuation_model_run model_run
+                   JOIN outcome_valuation_model_run_intent intent
+                     ON intent.intent_id=model_run.intent_id
+                   JOIN outcome_valuation_player_observation_set observation_set
+                     ON observation_set.observation_set_id=intent.observation_set_id
+                   JOIN outcome_valuation_dataset_candidate dataset
+                     ON dataset.dataset_id=observation_set.dataset_id
+                  WHERE dataset.factual_release_id=selected.factual_release_id
+                    AND model_run.status='succeeded') AS player_model_run_count
+       ) capabilities ON true`,
+    [scopeKey, scopeYear, workbookSha256]
   );
   const raw = result.rows[0];
   if (raw === undefined) {
     return {
       state: 'blocked',
       numericalCalculationsAvailable: false,
+      confirmedRealizedTradeCalculationCount: 0,
       qualificationReportCreated: false,
       qualificationReportId: null,
       factualReleaseId: null,
@@ -224,6 +556,7 @@ export async function inspectLocalAflTradeValuationReadiness(
       preparedInputSetCount: 0,
       preparedInputSetIds: [],
       scopeKey,
+      capabilities: emptyCapabilities(),
       blockerCodes: ['source_qualification_not_run', 'private_evaluation_not_authorized'],
       sources: [],
       requiredNextAuthority: 'private_nonproduction_derived_calculation_authority',
@@ -287,6 +620,19 @@ export async function inspectLocalAflTradeValuationReadiness(
   }
 
   const reviewedLaneExists = reviewedDecision !== null && reviewedBundle !== null;
+  const confirmedRealizedTradeCalculationCount = Number(row.private_confirmed_result_count);
+  const capabilities = capabilitiesFromCounts({
+    privateHpnCalculationCount: Number(row.private_hpn_calculation_count),
+    privateHpnSeasonYears: row.private_hpn_season_years,
+    releaseDraftSelectionCount: Number(row.release_draft_selection_count),
+    releasePickRealizationCount: Number(row.release_pick_realization_count),
+    releasePickLineageCount: Number(row.release_pick_lineage_count),
+    privateWorkbookSelectionCount: Number(row.private_workbook_selection_count),
+    pickObservationSetCount: Number(row.pick_observation_set_count),
+    pickModelExecutionCount: Number(row.pick_model_execution_count),
+    playerObservationSetCount: Number(row.player_observation_set_count),
+    playerModelRunCount: Number(row.player_model_run_count),
+  });
   const privateEvaluationAuthorityState: LocalAflTradeValuationReadiness['privateEvaluationAuthorityState'] =
     reviewedLaneExists
       ? row.reviewed_evidence_current === true
@@ -295,7 +641,8 @@ export async function inspectLocalAflTradeValuationReadiness(
       : (releaseDecision?.content.status ?? 'not_authorized');
   const common = {
     state: 'blocked' as const,
-    numericalCalculationsAvailable: false as const,
+    numericalCalculationsAvailable: confirmedRealizedTradeCalculationCount > 0,
+    confirmedRealizedTradeCalculationCount,
     qualificationReportCreated: row.qualification_report_id !== null,
     qualificationReportId: row.qualification_report_id,
     factualReleaseId: row.factual_release_id,
@@ -322,6 +669,7 @@ export async function inspectLocalAflTradeValuationReadiness(
     preparedInputSetIds,
     scopeKey,
     sources: row.source_ids,
+    capabilities,
   };
   if (privateEvaluationAuthorityState === 'authorized') {
     return {
@@ -329,7 +677,9 @@ export async function inspectLocalAflTradeValuationReadiness(
       blockerCodes: ['model_not_approved'],
       requiredNextAuthority: 'authenticated_private_calculation_inputs',
       explanation: reviewedLaneExists
-        ? 'The exact retained review sets and source artifacts are authorized for private local non-production derived calculations only. Authenticated player and pick calculation inputs are still required; model training and every publication or production use remain prohibited.'
+        ? confirmedRealizedTradeCalculationCount > 0
+          ? `${confirmedRealizedTradeCalculationCount === 1 ? 'One confirmed realized trade calculation exists' : `${confirmedRealizedTradeCalculationCount} confirmed realized trade calculations exist`} in this private local scope. Pick values, predictive remaining value, complete package totals, and grades remain unavailable until their exact inputs and model authority exist; every publication or production use remains prohibited.`
+          : 'The exact retained review sets and source artifacts are authorized for private local non-production derived calculations only. Authenticated player and pick calculation inputs are still required; model training and every publication or production use remain prohibited.'
         : 'The exact retained release artifacts are authorized for private local non-production derived calculations only. Authenticated calculation inputs are still required; model training and every publication or production use remain prohibited.',
     };
   }

@@ -653,12 +653,23 @@ not write either value to Git, logs, documentation, or a shared environment file
 
 ```sh
 export AFL_OUTCOMES_DATABASE_URL='postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_outcomes_test?sslmode=disable'
+export AFL_OUTCOMES_DEV_WORKBOOK_PATH='<absolute-private-workbook-path>'
+export AFL_OUTCOMES_DEV_WORKBOOK_SHA256='<verified-sha256>'
+export AFL_TRADE_PRIVATE_CONFIRMED_SCOPE='afl-men:<year>-trades'
+export AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID='<workbook-trade-id>'
 npm run dev:outcomes:authenticate
 npm run dev:outcomes:review-afl-tables-2021-2025
 npm run dev:outcomes:review-official-2026
 
-AFL_OUTCOMES_DEV_WORKBOOK_PATH='<absolute-private-workbook-path>' \
-AFL_OUTCOMES_DEV_WORKBOOK_SHA256='<verified-sha256>' \
+# Provider review intentionally makes an older evidence bundle stale. Review the current authority
+# decision ID, then explicitly re-authorize the same private scope against the rebuilt exact bundle.
+npm run outcomes:modeling:record-private-reviewed-evaluation-authority -- \
+  --scope "$AFL_TRADE_PRIVATE_CONFIRMED_SCOPE" \
+  --expected-current '<current-private-reviewed-decision-id>' \
+  --decision authorized \
+  --reviewer '<private-local-reviewer-id>' \
+  --rationale '<reviewed reason for refreshing the exact retained evidence bundle>'
+
 npm run dev:full:workbook-evaluation
 ```
 
@@ -671,6 +682,135 @@ only after all 146,307 receipts are current. An interrupted run leaves partial r
 official command admits exactly 12 current Sam Flanders rows in one transaction only after recording
 12 identity approvals, 12 concluded-match approvals and 12 local reconciled player-match facts; a
 changed native entity, match, date, count or goal value fails closed against the pinned digest.
+The authority refresh is a separate compare-and-set operator decision: the review commands never
+grant calculation authority, and the workbook wrapper never auto-authorizes a rebuilt bundle. If the
+expected decision has changed, the refresh conflicts and the operator must inspect the new head.
+
+When `AFL_TRADE_PRIVATE_CONFIRMED_SCOPE` and `AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID` opt into a new
+construction, the workbook wrapper retains the complete exact promoted player-identity membership
+for that requested scope and trade and runs
+`outcomes:modeling:confirm-local-pick-selections` as a read-only confirmation-work report. With no
+construction opt-in, it skips those mutable preparation indexes and serves only an already sealed,
+active generation. The confirmation command performs no provider request. It authenticates the disposable runtime and the current private
+reviewed-evidence bundle for each exact `afl-men:YYYY-trades` valuation scope. A workbook selected-player
+label is never treated as independently confirmed lineage, even when its surname is unique. After an
+operator verifies the workbook selection against primary local evidence, retain only the reviewed
+mapping with:
+
+```sh
+npm run outcomes:modeling:confirm-local-pick-selections -- \
+  --approve --confirm '<asset-id>=<canonical-player-id>'
+```
+
+Repeat `--confirm` for additional assets. Every retained decision
+binds the valuation scope, workbook digest, trade, asset text, receiving club, draft year, final
+selection number, selected player and exact identity/season evidence. A retained confirmation advances
+the sealed blocker from selection-not-confirmed to canonical-realization-unavailable; it never invents
+the later realization or numerical value. Missing confirmations, mismatched identities, missing
+selections and unsupported rows remain unavailable. Rerunning is create-if-absent with exact readback.
+
+For one operator-reviewed confirmed transaction, use the supported private lifecycle in order. First
+inspect the exact current calculation boundary. This command is read-only and must remain blocked
+until the retained source qualification, private calculation decision, factual calculations, pick
+lineage, observation sets and model runs exist:
+
+```sh
+npm run outcomes:modeling:inspect-local-valuation-readiness -- \
+  --scope "$AFL_TRADE_PRIVATE_CONFIRMED_SCOPE"
+```
+
+Treat `source_qualification_not_run`, `source_blocked`, a missing or withdrawn private decision,
+missing reviewed HPN calculations, incomplete selection lineage, missing observation sets, or missing
+player/pick executions as stop conditions. An `evidence_ready_for_authentication` capability means
+the construction code exists and all coarse evidence classes are present; it is not Gate 3 approval.
+Do not create, infer or relabel an authority merely to continue the rehearsal.
+
+Next stage the pinned workbook and retain the emitted `importRunId`, then register its transaction
+review set:
+
+```sh
+npm run outcomes:workbook:stage-private-local
+npm run outcomes:workbook:prepare-transaction-review -- \
+  --import-run '<workbook-import-run-id>'
+```
+
+Inspect the review set and create a private operator interpretation JSON that retains its exact
+`reviewSetId`, `reviewSubjectId`, trade identity, occurrence precision, parties, asset directions,
+canonical identities, reviewer and rationale. Promotion is intentionally an explicit mutation:
+
+```sh
+npm run outcomes:workbook:promote-private-transaction -- \
+  --interpretation-file '<reviewed-private-interpretation.json>'
+npx tsx Scripts/dev/review-local-workbook-player-identities.ts \
+  --scope "$AFL_TRADE_PRIVATE_CONFIRMED_SCOPE" \
+  --trade "$AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID"
+npm run outcomes:modeling:construct-local-private-confirmed-valuation -- \
+  --scope "$AFL_TRADE_PRIVATE_CONFIRMED_SCOPE" \
+  --trade "$AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID"
+```
+
+The identity command authenticates the current scope authority, exact retained evidence bundle,
+active promoted review set and pinned workbook digest, then retains every promoted player mapping in
+one serializable local transaction. It fails closed on omitted or extra players, scope-year mismatch,
+ambiguous reviewed names or changed canonical identity. The current construction command then stages
+and assembles the exact confirmed result, writes one immutable **v1 confirmed-facts generation**,
+performs exact artifact readback and compare-and-set activation, and leaves unsupported views
+unavailable. It does not calculate PAV, pick value, remaining value or a grade. To have the
+full-workbook wrapper construct that approved trade before starting the stack, set
+`AFL_TRADE_PRIVATE_CONFIRMED_SCOPE` and `AFL_TRADE_PRIVATE_CONFIRMED_TRADE_ID`; setting only one fails
+closed.
+
+The sealed generation keeps confirmed appearances independent of PAV authority. Exact admitted
+official current-season rows may therefore show a right-censored game count while the realized PAV
+view remains unavailable. Construction and serving both reload the exact confirmed-result artifact
+and reject drift in games, numerical components, evidence, transaction membership, multi-party
+directions, club totals or grade. A generation without those retained parent bytes is not readable.
+
+The governed **v2** path is a separate boundary. It can run only after all readiness blockers above
+are cleared and the exact source-use assessments, private evaluation decision, active factual
+release, two succeeded non-production component runs and valuation bundle each resolve through their
+current Gate 3 decision and retained decision artifact. It then authenticates one factual admission
+for every asset, runs the deterministic kernel, retains the calculation input, calculation,
+direction evidence and explanation, projects the four views, saves the immutable generation, and
+activates it with the reviewed head generation and revision. The generation is the JSON export; the
+PostgreSQL lifecycle, private archive card and private detail page must all resolve that same
+`generationId` and dependency fingerprint. No v2 operator run is authorized in the current rehearsal
+because those real player, pick and bundle Gate 3 parents do not exist. Stop here rather than using
+the synthetic verifier, workbook values or zeros as substitutes.
+
+Withdrawal and rollback are dry-run by default and mutate only with `--approve`:
+
+```sh
+npm run outcomes:modeling:manage-local-private-evaluation -- \
+  --trade '<workbook-trade-id>' --withdraw '<operator reason>'
+npm run outcomes:modeling:manage-local-private-evaluation -- \
+  --trade '<workbook-trade-id>' --withdraw '<operator reason>' --approve \
+  --expected-generation '<reviewed-generation-id|none>' --expected-revision '<reviewed-revision|none>'
+npm run outcomes:modeling:manage-local-private-evaluation -- \
+  --trade '<workbook-trade-id>' --rollback '<retained-generation-id>'
+npm run outcomes:modeling:manage-local-private-evaluation -- \
+  --trade '<workbook-trade-id>' --rollback '<retained-generation-id>' --approve \
+  --expected-generation '<reviewed-generation-id|none>' --expected-revision '<reviewed-revision|none>'
+```
+
+Copy both expected values from the dry-run `approvalGuard`; approved execution never derives them from
+a newer head. Each transition authenticates the disposable loopback runtime, requires the reviewed
+head generation and revision as its compare-and-set expectation, authenticates rollback custody,
+requires a rollback target to be distinct and previously active for that trade, appends a distinct
+`withdraw` or `rollback` ledger entry, and reports the before/result/after state.
+Neither action grants publication or production authority.
+
+These decisions confirm selected-player identity but do not by themselves unlock pick **realized**
+HPN. The governed factual admission traverses the traded pick root and lineage edges to the later
+draft selection and selected-player acquisition event/asset; it must never substitute the trade pick
+asset ID for that later event. The page admits a pick realized number only when that chain exists and
+the reviewed outcome and HPN allocation have the same selected-player acquisition asset,
+current approved acquisition-spell version and start event/asset, canonical player, receiving club,
+effective interval, season and exact decoded player-match rows. Equal aggregate game totals are not
+sufficient; missing spell ancestry or exact match-set evidence fails closed.
+Expected-at-trade pick value, remaining value, overall grades, publication and production remain
+blocked by their independent authorities. Current-season horizons are retained as right-censored;
+completed seasons stay separate, and no absent metric is normalized to zero.
 
 The wrapper pins workbook inspection, then runs the private synthetic-valuation verifier before it
 starts any web process. The verifier must report the workbook trade count as `scenarioReadyTrades`,

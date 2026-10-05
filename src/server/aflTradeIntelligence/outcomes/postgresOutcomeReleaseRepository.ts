@@ -21,8 +21,16 @@ export interface AflOutcomeSqlTransaction {
   ): Promise<AflOutcomeSqlQueryResult<Row>>;
 }
 
+export interface AflOutcomeSqlTransactionOptions {
+  readonly isolationLevel?: 'read_committed' | 'repeatable_read' | 'serializable';
+  readonly accessMode?: 'read_write' | 'read_only';
+}
+
 export interface AflOutcomeSqlClient extends AflOutcomeSqlTransaction {
-  transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T>;
+  transaction<T>(
+    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>,
+    options?: AflOutcomeSqlTransactionOptions
+  ): Promise<T>;
 }
 
 interface RegistryHeadRow {

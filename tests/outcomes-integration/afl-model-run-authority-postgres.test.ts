@@ -6,7 +6,10 @@ import {
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeModelRunOperationalAuthorization } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
-import { PostgresAflTradeAdmittedModelRunAuthority } from '@/server/aflTradeIntelligence/modeling/postgresAdmittedModelRunAuthority';
+import {
+  loadAuthenticatedAflTradeCompletedPlayerModelRunChain,
+  PostgresAflTradeAdmittedModelRunAuthority,
+} from '@/server/aflTradeIntelligence/modeling/postgresAdmittedModelRunAuthority';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
@@ -32,6 +35,7 @@ function artifact(character: string, createdAt: string) {
     mediaType: 'application/json',
     byteLength: 1,
     createdAt,
+    storageUri: `artifact://sha256/${hash(character)}`,
   };
 }
 
@@ -449,10 +453,16 @@ describe('durable PostgreSQL model-run authority', () => {
       },
       startedAt,
       windows: {
-        train: { from: admittedAt, to: startedAt },
-        calibration: { from: admittedAt, to: startedAt },
-        validation: { from: admittedAt, to: startedAt },
-        finalTest: { from: admittedAt, to: startedAt },
+        train: { from: '2010-01-01T00:00:00.000Z', to: '2011-01-01T00:00:00.000Z' },
+        calibration: {
+          from: '2011-01-01T00:00:00.000Z',
+          to: '2012-01-01T00:00:00.000Z',
+        },
+        validation: {
+          from: '2012-01-01T00:00:00.000Z',
+          to: '2013-01-01T00:00:00.000Z',
+        },
+        finalTest: { from: '2013-01-01T00:00:00.000Z', to: '2014-01-01T00:00:00.000Z' },
         embargoDays: 0,
       },
       sourceCodeArtifact: artifact('1', admittedAt),
@@ -715,6 +725,11 @@ describe('durable PostgreSQL model-run authority', () => {
         canonicalizeAflTradeJson({ runId, content: runContent }),
       ]
     );
+    await expect(
+      sql.transaction((transaction) =>
+        loadAuthenticatedAflTradeCompletedPlayerModelRunChain(transaction, runId)
+      )
+    ).rejects.toThrow();
 
     await expect(
       outcomesPool.query(`UPDATE outcome_valuation_model_run SET status='cancelled'`)

@@ -27,7 +27,7 @@ function fixtureWorkbook() {
           [2021, null],
           ['2021 Carlton and GWS Trade for Draft Picks', null],
           ['Carlton', '#18 (#20 - Drafted Player - 3 games)'],
-          ['GWS', '#2022R3 (Carlton) (-)'],
+          ['GWS', '#2022R3 (Carlton) (#18 - Weddle - 60 games)'],
         ],
       },
       {
@@ -95,6 +95,25 @@ describe('AFL outcomes development workbook trade projection', () => {
           assetType: 'future_pick',
           games: null,
           pick: expect.objectContaining({ year: 2021, round: 2, originalClub: 'Carlton' }),
+        }),
+      ])
+    );
+    const futureTrade = projection.tradesByYear.get(2021)?.[0];
+    const futureDetail = futureTrade
+      ? projection.detailsById.get(futureTrade.tradeId)
+      : null;
+    expect(futureDetail?.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          assetType: 'future_pick',
+          draftedPlayer: 'Weddle',
+          games: 60,
+          pick: expect.objectContaining({
+            year: 2022,
+            round: 3,
+            originalClub: 'Carlton',
+            numberActual: 18,
+          }),
         }),
       ])
     );

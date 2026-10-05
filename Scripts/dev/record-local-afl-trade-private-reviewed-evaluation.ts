@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { Pool } from 'pg';
 import { z } from 'zod';
@@ -211,14 +210,15 @@ export async function runRecordLocalAflTradePrivateReviewedEvaluationCommand(
   }
 }
 
-const invokedPath = process.argv[1];
-if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).href) {
+const invokedAsCommand = process.env.STATLY_RUN_PRIVATE_REVIEWED_AUTHORITY_COMMAND === '1';
+if (invokedAsCommand) {
   runRecordLocalAflTradePrivateReviewedEvaluationCommand({
     argv: process.argv.slice(2),
     env: process.env,
-  }).catch(() => {
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Unknown private authority failure.';
     process.stderr.write(
-      'Private reviewed-evidence decision failed; no calculation, training, publication, production, or capture authority was assumed.\n'
+      `Private reviewed-evidence decision failed closed: ${message}\nNo calculation, training, publication, production, or capture authority was assumed.\n`
     );
     process.exitCode = 1;
   });
