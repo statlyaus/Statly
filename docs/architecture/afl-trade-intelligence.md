@@ -417,8 +417,12 @@ repository takes a binding to the registered artifact store, stores each evidenc
 `putIfAbsent` and reads it back in full before it opens the registration transaction. That
 transaction records each artifact's location, refuses evidence without a matching custody row, and
 refuses any cited artifact, including the rule's evidence cited by a spell, that still has no
-location, with the named `AflTradeArtifactUnlocatedError`. A failed write or read-back therefore
-leaves no location and no registration. A season (v3) spell cites no evidence bytes and is exempt.
+location, with the named `AflTradeArtifactUnlocatedError`. It also refuses while custody is
+unhealthy (`AflTradeCustodyUnhealthyError`, migration 0250): the environment's latest custody
+readback must have finished under 48 hours ago with zero failures. A readback run reads every located
+`raw_source` row and a sample of the other located classes back through the store and appends one
+`outcome_artifact_readback_run` row. A failed write or read-back therefore leaves no location and no
+registration. A season (v3) spell cites no evidence bytes and is exempt.
 `test_fixture` has no store, because a local store may only exist in `non_production`, so fixtures
 keep the read-and-compare path. Reviewers register through `npm run
 outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.

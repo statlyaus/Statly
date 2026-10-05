@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
+import { publishWaiverOutcome } from '@/server/waivers/waiverActivity';
 
 export interface WaiverSettings {
   system?: 'FAAB' | 'PRIORITY' | string;
@@ -877,21 +878,19 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     type: 'waiver-submitted' | 'waiver-successful' | 'waiver-failed';
     reason?: string;
   }): Promise<void> {
-    await this.firestore
-      .collection(`leagues/${input.leagueId}/activity`)
-      .doc()
-      .set({
-        type: input.type,
+    // Submitted claims are private until waivers run, so only outcomes are published.
+    if (input.type === 'waiver-submitted') return;
+    try {
+      await publishWaiverOutcome({ ...input, type: input.type });
+    } catch (error) {
+      // The activity feed must never fail waiver processing.
+      logger.warn('Failed to publish waiver activity', {
         leagueId: input.leagueId,
-        userId: input.claim.userId,
-        teamId: input.claim.teamId,
-        playerId: input.claim.playerId,
         claimId: input.claim.id,
-        timestamp: new Date(),
-        ...(input.claim.dropPlayerId ? { dropPlayerId: input.claim.dropPlayerId } : {}),
-        ...(typeof input.claim.bidAmount === 'number' ? { bidAmount: input.claim.bidAmount } : {}),
-        ...(input.reason ? { reason: input.reason } : {}),
+        type: input.type,
+        error: error instanceof Error ? error.message : String(error),
       });
+    }
   }
 
   async decrementPendingBidTotal(claim: WaiverClaim, isFAAB: boolean): Promise<void> {

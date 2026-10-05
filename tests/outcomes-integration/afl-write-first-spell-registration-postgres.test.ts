@@ -13,6 +13,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/artifactStoreLocation';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { registerLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactCustodyLocationBackfill';
+import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
 import { bindLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactStoreBinding';
 import {
   createAflTradeAcquisitionSpellRegistration,
@@ -111,6 +112,8 @@ beforeAll(async () => {
   );
   storeRoot = await mkdtemp(join(tmpdir(), 'statly-write-first-store-'));
   await registerLocalAflTradeArtifactStore(client, { storeId: STORE_ID, rootDirectory: storeRoot });
+  // Reviewed registration requires a clean custody readback (migration 0250); the store is empty.
+  await readBackLocalAflTradeArtifactCustody({ client, storeId: STORE_ID });
 }, 120_000);
 
 afterAll(async () => {
