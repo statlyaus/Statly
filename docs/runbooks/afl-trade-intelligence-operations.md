@@ -3493,16 +3493,20 @@ benchmarks and realized contribution therefore still require reviewed entry spel
 
 A v3 spell may supersede only a v3 spell for the same season; that is how a window grows during a
 season (`deriveAflTradeAppearanceMembershipSpells` takes the current v3 spells, skips unchanged windows
-and proposes the next version for changed ones). Retirement needs no supersession: a v3 spell is not
-current while a current reviewed v1/v2 spell for the same player and club has possible membership that
-contains its whole window, and the same-club overlap guard admits a reviewed spell over a current v3
-window only under that same containment (never the reverse), so one multi-season entry spell retires
-every covered season window at once. A reviewed spell that only partly overlaps a current v3 window is
-rejected as an overlap; supersede or narrow the v3 window first. A reviewed spell whose entry event
-version has a successor can never be current again, so the overlap guard ignores it (migration0244) and
-a v3 window may cover that player and club until a reviewed successor spell is registered. Inputs retained against a retired
-window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
-grading.
+and proposes the next version for changed ones). Since migration 0248 a reviewed spell no longer retires a
+season window: a v3 spell may sit inside any current v1, v2 or v4 stint for the same player and club
+whose possible membership contains its whole window, and both stay current. The v3 rule's recorded
+`retirement` field is content-addressed and unchanged, but no longer has effect. A reviewed spell that
+only partly overlaps a current v3 window is still rejected as an overlap; supersede or narrow the v3
+window first. Two reviewed spells, or two v3 spells, for one player and club still cannot overlap.
+
+HPN season input building and its finalization guard bind each player-stat row to exactly one current
+v3 spell, or to a legacy spell recorded before registration existed, and never to a reviewed spell
+(`outcome_hpn_acquisition_spell_source_current`, migration 0248). The per-row
+`outcome_hpn_acquisition_spell_is_current` that the postseason projection uses is unchanged. A
+retained input set with rows bound to a reviewed spell stops reading as current authority as soon as a
+season spell covers those rows; replay the season to replace it. Fixture registration does not
+establish genuine admission, PAV or grading.
 
 Migration 0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
 chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only
