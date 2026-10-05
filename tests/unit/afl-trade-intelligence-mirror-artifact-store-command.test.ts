@@ -78,6 +78,10 @@ if (mode === 'fail') { process.stderr.write('ERROR: permission denied on gs://bu
     try {
       await expect(runGcloudStorage(['rsync'], fake)).resolves.toBeUndefined();
       await expect(runGcloudStorage(['fail'], fake)).rejects.toThrow('permission denied');
+      // A command that cannot be spawned rejects instead of crashing the process.
+      await expect(runGcloudStorage(['rsync'], join(directory, 'missing'))).rejects.toThrow(
+        'ENOENT'
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

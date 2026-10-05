@@ -90,13 +90,16 @@ export function runGcloudStorage(args: readonly string[], command = 'gcloud'): P
     const child = spawn(command, ['storage', ...args, '--quiet'], {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
-    let tail = Buffer.alloc(0);
-    child.stderr.on('data', (chunk: Buffer) => {
-      tail = Buffer.concat([tail, chunk]);
-      if (tail.byteLength > STDERR_TAIL_BYTES)
-        tail = tail.subarray(tail.byteLength - STDERR_TAIL_BYTES);
-    });
+    // Registered first: a failed spawn (EMFILE, ENFILE, ENOENT) can leave stderr null and must
+    // reject the promise rather than crash the process.
     child.on('error', reject);
+    let tail = Buffer.alloc(0);
+    child.stderr?.on('data', (chunk: Buffer) => {
+      tail = Buffer.concat([tail, chunk]);
+      if (tail.byteLength > STDERR_TAIL_BYTES) {
+        tail = tail.subarray(tail.byteLength - STDERR_TAIL_BYTES);
+      }
+    });
     child.on('close', (code, signal) => {
       if (code === 0) resolvePromise();
       else
