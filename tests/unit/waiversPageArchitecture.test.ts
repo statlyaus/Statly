@@ -71,11 +71,15 @@ describe('league waivers page Firestore architecture', () => {
     expect(processSource).not.toContain('bidAmount: freshData.bidAmount || undefined');
     expect(processingServiceSource).not.toContain('dropPlayerId: input.claim.dropPlayerId ||');
     expect(processingServiceSource).not.toContain('bidAmount: input.claim.bidAmount ||');
-    expect(processingServiceSource).toContain(
-      '...(input.claim.dropPlayerId ? { dropPlayerId: input.claim.dropPlayerId } : {})'
+    const waiverActivitySource = readFileSync(
+      join(process.cwd(), 'src/server/waivers/waiverActivity.ts'),
+      'utf8'
     );
-    expect(processingServiceSource).toContain(
-      "...(typeof input.claim.bidAmount === 'number' ? { bidAmount: input.claim.bidAmount } : {})"
+    expect(waiverActivitySource).toContain(
+      '...(claim.dropPlayerId ? { dropPlayerId: claim.dropPlayerId } : {})'
+    );
+    expect(waiverActivitySource).toContain(
+      "...(typeof claim.bidAmount === 'number' ? { bidAmount: claim.bidAmount } : {})"
     );
     expect(processingServiceSource).toContain(
       '...(claim.dropPlayerId ? { dropPlayerId: claim.dropPlayerId } : {})'
