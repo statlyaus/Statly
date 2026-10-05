@@ -24,7 +24,11 @@ vi.mock('@/server/leagues/membership', () => ({
 
 import { prisma } from '@/lib/prisma';
 import { DraftApplicationService } from '@/server/draft/services/DraftApplicationService';
-import { PrismaWaiverClaimStore, type WaiverClaim } from '@/server/waivers/WaiverProcessingService';
+import {
+  PrismaWaiverClaimStore,
+  WaiverProcessingService,
+  type WaiverClaim,
+} from '@/server/waivers/WaiverProcessingService';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -232,6 +236,86 @@ describe('waiver FAAB under two writers', () => {
 
       expect(results, `round ${round}`).toEqual([{ ok: true }, { ok: true }]);
       expect((await priorityRow()).remainingFAAB, `round ${round}`).toBe(30);
+    }
+  });
+});
+
+describe('waiver processing under two runs', () => {
+  it('awards and debits each claim once when two runs overlap', async () => {
+    // FAAB settings are read from the league's Firestore settings projection.
+    const faabSettings = {
+      get: async () => ({ exists: true, data: () => ({ waiverSettings: FAAB }) }),
+    };
+    const faabFirestore = {
+      doc: (path: string) => (path.endsWith('/config/settings') ? faabSettings : firestoreDoc),
+      collection: () => ({ doc: () => firestoreDoc }),
+    };
+    const claimStore = new PrismaWaiverClaimStore(prisma, faabFirestore as never);
+    const service = () =>
+      new WaiverProcessingService(prisma, claimStore, { projectLeague: vi.fn() } as never);
+
+    // Both runs start together and the first holds the lease for its whole run, so the overlap does
+    // not depend on timing and a few rounds suffice.
+    for (let round = 0; round < 3; round += 1) {
+      await prisma.teamAction.deleteMany({ where: { leagueId: LEAGUE } });
+      await prisma.leagueRosterPlayer.deleteMany({ where: { leagueId: LEAGUE } });
+      await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });
+      await prisma.waiverPriority.createMany({
+        data: members.map((memberId, index) => ({
+          leagueId: LEAGUE,
+          memberId,
+          priority: index + 1,
+          remainingFAAB: 100,
+        })),
+      });
+      // Both members bid on the same free player; the higher bid wins.
+      for (const [index, bidAmount] of [30, 20].entries()) {
+        await claimStore.submitClaim({
+          leagueId: LEAGUE,
+          userId: users[index],
+          teamId: members[index],
+          playerId: players[2],
+          priority: 1,
+          bidAmount,
+          waiverSettings: FAAB,
+        });
+      }
+      await prisma.teamAction.updateMany({
+        where: { leagueId: LEAGUE },
+        data: { processingAt: new Date(Date.now() - 1000) },
+      });
+
+      await Promise.all([
+        service().processLeague({ leagueId: LEAGUE }),
+        service().processLeague({ leagueId: LEAGUE }),
+      ]);
+
+      expect(
+        await prisma.leagueRosterPlayer.findMany({
+          where: { leagueId: LEAGUE, playerId: players[2] },
+          select: { memberId: true },
+        }),
+        `round ${round}`
+      ).toEqual([{ memberId: members[0] }]);
+      expect(
+        (
+          await prisma.waiverPriority.findMany({
+            where: { leagueId: LEAGUE },
+            orderBy: { memberId: 'asc' },
+            select: { remainingFAAB: true, pendingBidTotal: true },
+          })
+        ).map((row) => [row.remainingFAAB, row.pendingBidTotal]),
+        `round ${round}`
+      ).toEqual([
+        [70, 0],
+        [100, 0],
+      ]);
+      expect(
+        await prisma.teamAction.count({
+          where: { leagueId: LEAGUE, status: 'PENDING', actionType: 'WAIVER_CLAIM' },
+        }),
+        `round ${round}`
+      ).toBe(0);
     }
   });
 });
