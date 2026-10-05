@@ -360,6 +360,33 @@ service runs from the deployed checkout with the genuine-database wrapper and wr
 for over 48 hours, check `systemctl status statly-custody-readback.service` or run the command by
 hand.
 
+### Evidence store mirror
+
+After a clean readback the store is copied to its versioned Cloud Storage mirror, and once a month a
+restore test reads one random located artifact back from the mirror:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:mirror -- --store-id <store-id> --mirror gs://<bucket>/<store-id>
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:mirror -- --store-id <store-id> --restore-test \
+  --receipt <absolute-receipt.json>
+```
+
+The sync refuses unless custody is healthy, runs `gcloud storage rsync --recursive` from the store
+root and never deletes, and records the bucket path as the store's `mirror_locator` the first time.
+A store keeps one mirror for life; the database refuses a second locator. The restore test copies the
+chosen envelope into a scratch directory, verifies it through the store's own envelope reader against
+the custody row, writes an `afl-trade-artifact-mirror-restore/v1` receipt, and exits non-zero unless
+the verdict is `exact`.
+
+For `statly-grading-1-artifacts` the mirror is `gs://statly-grading-evidence-mirror/statly-grading-1-artifacts`:
+a bucket in project `statly-grading` with object versioning, uniform access and public-access
+prevention. The VM's service account holds only object create and view on it, so the mirror cannot
+overwrite or delete an object it already holds. The VM needs the `devstorage.read_write` scope to
+write. The systemd units `statly-custody-readback.service` (followed by the mirror sync) and
+`statly-mirror-restore-test.timer` (monthly) run them; receipts go under `receipts/custody-mirror/`.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
