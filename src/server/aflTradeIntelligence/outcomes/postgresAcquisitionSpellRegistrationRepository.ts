@@ -7,6 +7,7 @@ import {
   requireAflTradeEvidenceLocated,
   storeAndReadBackAflTradeEvidence,
   type AflTradeEvidenceStoreBinding,
+  requireAflTradeCustodyHealthy,
 } from '../artifacts/artifactStoreLocation';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import {
@@ -298,6 +299,8 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
     cited: readonly AflTradeArtifactRef[]
   ): Promise<void> {
     if (execution.environment === 'test_fixture') return;
+    // Reviewed registration cites evidence bytes, so it needs a recent clean custody readback.
+    await requireAflTradeCustodyHealthy(transaction, execution.environment);
     if (written.length > 0) {
       await recordAflTradeEvidenceLocations(transaction, this.requireEvidenceStore(), written);
     }

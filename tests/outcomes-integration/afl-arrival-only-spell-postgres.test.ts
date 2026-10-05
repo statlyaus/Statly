@@ -34,7 +34,7 @@ beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
-  migration = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString());
+  migration = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
   const latest = await pool.query<{ migration_name: string }>(
     `SELECT migration_name FROM _prisma_migrations ORDER BY migration_name DESC LIMIT 1`
   );

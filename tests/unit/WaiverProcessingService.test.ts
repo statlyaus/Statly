@@ -584,12 +584,8 @@ describe('PrismaWaiverClaimStore', () => {
       })
     );
     expect(firestore.doc).toHaveBeenCalledWith('leagues/league-1/waiverPriorities/user-1');
-    expect(activityDoc.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'waiver-submitted',
-        claimId: 'action-1',
-      })
-    );
+    // A submitted claim and its bid stay private until waivers run: nothing is published.
+    expect(activityDoc.set).not.toHaveBeenCalled();
   });
 
   it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
@@ -644,7 +640,7 @@ describe('PrismaWaiverClaimStore', () => {
       skipDuplicates: true,
     });
     expect(waiverDoc.set).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'member-2' }));
-    expect(activityDoc.set).toHaveBeenCalledWith(expect.objectContaining({ claimId: 'action-1' }));
+    expect(activityDoc.set).not.toHaveBeenCalled();
   });
 
   it('updates canonical status and mirrors successful processing to Firestore', async () => {

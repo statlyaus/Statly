@@ -66,7 +66,7 @@ beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
-  migration = await deployOutcomesHistoryBefore(SEASON_SPELL_BINDING, scoped.toString());
+  migration = await deployOutcomesHistoryBefore(SEASON_SPELL_BINDING, scoped.toString(), pool);
 }, 300_000);
 afterAll(async () => {
   await migration?.cleanup();
