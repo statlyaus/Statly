@@ -331,7 +331,34 @@ The command stores each evidence file and reads it back before any database writ
 transaction it then records each location and the registration. It refuses evidence that has no
 custody row, and refuses with `AflTradeArtifactUnlocatedError` a spell whose rule cites evidence that
 was never located. A failure leaves no location and no registration, so the same input can be
-re-run once the cause is fixed.
+re-run once the cause is fixed. It also refuses with `AflTradeCustodyUnhealthyError`
+(`CUSTODY_UNHEALTHY`) while custody is unhealthy; run a custody readback first.
+
+### Custody readback
+
+Reviewed registration requires healthy custody (migration 0250): the environment's latest custody
+readback finished under 48 hours ago with zero failures (`outcome_artifact_custody_healthy`).
+Season-spell registration and HPN builds cite no evidence bytes and do not require it.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:readback -- --store-id <store-id> [--report <absolute-run.json>]
+```
+
+A run reads every located `raw_source` custody row and a random 5% of the other located classes
+(`--sample-fraction` changes the share; `raw_source` is always read in full) through the store's own
+envelope reader, which decodes the bytes and verifies their SHA-256 and length, and compares that
+identity with the custody row. It appends one `outcome_artifact_readback_run` row with the counts
+by class and the failing artifact ids, and exits non-zero when any row failed. Unlocated custody,
+whose bytes were recorded as lost, is outside the run. A failed row stays failed until its bytes are
+restored and a later run is clean; never edit or delete a run row.
+
+On `statly-grading-1` the systemd timer `statly-custody-readback.timer` runs it daily with
+`Persistent=true`, so a VM that was stopped at the scheduled time runs it on its next boot. The
+service runs from the deployed checkout with the genuine-database wrapper and writes its report under
+`receipts/custody-readback/`. Before a reviewer registration session on a VM that has been stopped
+for over 48 hours, check `systemctl status statly-custody-readback.service` or run the command by
+hand.
 
 ## Capturing source evidence
 

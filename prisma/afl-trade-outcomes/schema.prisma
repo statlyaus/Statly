@@ -325,8 +325,28 @@ model OutcomeArtifactStore {
   mirrorLocator String?                          @map("mirror_locator")
   createdAt     DateTime                         @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
   locations     OutcomeArtifactCustodyLocation[]
+  readbackRuns  OutcomeArtifactReadbackRun[]
 
   @@map("outcome_artifact_store")
+}
+
+/// One finished custody readback over a store. Append-only; written once when the run finishes.
+model OutcomeArtifactReadbackRun {
+  runId              String               @id @map("run_id")
+  environment        OutcomeEnvironment
+  storeId            String               @map("store_id")
+  startedAt          DateTime             @map("started_at") @outcomes.Timestamptz(3)
+  finishedAt         DateTime             @map("finished_at") @outcomes.Timestamptz(3)
+  rowsChecked        Int                  @map("rows_checked")
+  failures           Int
+  failingArtifactIds Json                 @map("failing_artifact_ids")
+  checkedByClass     Json                 @map("checked_by_class")
+  samplePolicy       Json                 @map("sample_policy")
+  recordedAt         DateTime             @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  store              OutcomeArtifactStore @relation(fields: [storeId], references: [storeId], onDelete: Restrict, map: "outcome_artifact_readback_run_store_fkey")
+
+  @@index([environment, finishedAt(sort: Desc)], map: "outcome_artifact_readback_run_latest_idx")
+  @@map("outcome_artifact_readback_run")
 }
 
 /// Where one custody row's bytes live. Append-only; a custody row without one has no known location.

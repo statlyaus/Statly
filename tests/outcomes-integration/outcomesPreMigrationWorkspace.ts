@@ -2,6 +2,7 @@ import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, symlink } from 'no
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Pool } from 'pg';
 import {
   OUTCOMES_TEMPLATE_SCHEMA_KEY,
   runOutcomesPrismaTestCommand,
@@ -19,11 +20,13 @@ function withoutTemplateAdoption(environment: NodeJS.ProcessEnv): NodeJS.Process
  * Deploys the outcomes migration history as it stood just before `migration` into `databaseUrl`
  * (already scoped to a disposable schema). A suite can then seed data under the old rules and apply
  * the migration itself to the deployed definitions, exactly as `prisma migrate deploy` will on the
- * grading database. Returns the migration's SQL and a cleanup for the temporary workspace.
+ * grading database. `pool` must be scoped to the same schema. Returns the migration's SQL and a
+ * cleanup for the temporary workspace.
  */
 export async function deployOutcomesHistoryBefore(
   migration: string,
-  databaseUrl: string
+  databaseUrl: string,
+  pool: Pool
 ): Promise<{ migrationSql: string; cleanup: () => Promise<void> }> {
   const root = await mkdtemp(join(tmpdir(), `statly-outcomes-pre-${migration.slice(0, 4)}-`));
   const prisma = join(root, 'prisma', 'afl-trade-outcomes');
@@ -51,6 +54,15 @@ export async function deployOutcomesHistoryBefore(
     // otherwise adopt the template's schema, which already includes this migration.
     dependencies: { workspaceRoot: root, environment: withoutTemplateAdoption(process.env) },
   });
+  // Current registration code requires custody health (migration 0250). A history before it lacks
+  // the health function, so this disposable schema gets an always-healthy stand-in; custody health
+  // has its own suite.
+  if (migration <= '0250_artifact_custody_readback') {
+    await pool.query(
+      `CREATE FUNCTION outcome_artifact_custody_healthy(target_environment "OutcomeEnvironment")
+       RETURNS BOOLEAN LANGUAGE sql STABLE AS $$ SELECT TRUE $$`
+    );
+  }
   return {
     migrationSql: await readFile(
       join(OUTCOMES_PRISMA, 'migrations', migration, 'migration.sql'),
