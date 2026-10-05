@@ -124,8 +124,9 @@ head, or incomplete replay requires another authoritative snapshot rather than a
 Waiver ownership is league-scoped and derived from canonical roster/player identity. A draft pick or
 roster mutation must update the same ownership boundary used to calculate availability. Firestore may
 hold a compatibility projection, but relational state remains authoritative and projections must be
-rebuildable from it. The waivers page reads a member's claims and FAAB balance from Prisma; only its
-activity feed still comes from Firestore.
+rebuildable from it. The waivers page reads a member's claims, FAAB balance and activity feed from Prisma.
+Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
+in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
 Claims validate membership, league settings, player availability, optional drop ownership, roster
 capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to

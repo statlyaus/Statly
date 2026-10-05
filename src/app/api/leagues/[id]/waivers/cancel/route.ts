@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
-import { logLeagueActivity } from '@/lib/activity';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
@@ -63,15 +62,7 @@ export const POST = withMetrics(
       });
 
       // audit: waiver-cancelled via shared helper
-      await logLeagueActivity(leagueId, 'waiver-cancelled', {
-        userId: claim.userId,
-        teamId: claim.teamId,
-        playerId: claim.playerId,
-        dropPlayerId: claim.dropPlayerId,
-        bidAmount: claim.bidAmount,
-        claimId,
-        cancelledBy: callerId,
-      });
+      // A cancelled claim was never public, so it is not published to the league's activity.
 
       logger.info('waiver cancelled', { leagueId, callerId, claimId });
       try {

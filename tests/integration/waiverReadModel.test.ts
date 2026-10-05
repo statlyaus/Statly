@@ -8,7 +8,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 
 import { prisma } from '@/lib/prisma';
-import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
+import { PrismaWaiverClaimStore, type WaiverClaim } from '@/server/waivers/WaiverProcessingService';
+import { loadWaiverOutcomes, publishWaiverOutcome } from '@/server/waivers/waiverActivity';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -147,5 +148,100 @@ describe('waivers page read model', () => {
     await expect(
       store().loadRemainingFaab(LEAGUE, member, { system: 'PRIORITY' })
     ).resolves.toBeUndefined();
+  });
+
+  it('publishes a processed claim once, readable, and lists it in the waiver feed', async () => {
+    await prisma.player.upsert({
+      where: { id: 'int-waiver-read-player' },
+      update: {},
+      create: { id: 'int-waiver-read-player', name: 'Jack Ginnivan', club: 'HAW', position: 'FWD' },
+    });
+    const won: WaiverClaim = {
+      id: 'read-feed-won',
+      leagueId: LEAGUE,
+      userId: users[0],
+      teamId: member,
+      playerId: 'int-waiver-read-player',
+      priority: 1,
+      status: 'PENDING',
+      createdAt: new Date(),
+      bidAmount: 12,
+    };
+
+    try {
+      await publishWaiverOutcome({ leagueId: LEAGUE, claim: won, type: 'waiver-successful' });
+      await publishWaiverOutcome({ leagueId: LEAGUE, claim: won, type: 'waiver-successful' });
+
+      const messages = await prisma.socialMessage.findMany({
+        where: { leagueId: LEAGUE, relatedEntityId: won.id },
+        select: { content: true, type: true },
+      });
+      expect(messages).toEqual([
+        { content: 'A claimed Jack Ginnivan off waivers for $12.', type: 'SYSTEM' },
+      ]);
+      await expect(loadWaiverOutcomes(LEAGUE, { limit: 10 })).resolves.toEqual([
+        expect.objectContaining({
+          type: 'waiver-successful',
+          teamId: member,
+          playerId: 'int-waiver-read-player',
+          bidAmount: 12,
+          claimId: won.id,
+        }),
+      ]);
+    } finally {
+      await prisma.player.deleteMany({ where: { id: 'int-waiver-read-player' } });
+    }
+  });
+
+  it('pages waiver outcomes newest first and leaves out other leagues and other events', async () => {
+    const [{ id: seasonId }, { id: otherSeasonId }] = await Promise.all(
+      [LEAGUE, OTHER_LEAGUE].map((leagueId) =>
+        prisma.leagueSeason.create({ data: { leagueId, label: '2026', year: 2026 } })
+      )
+    );
+    await prisma.league.update({ where: { id: LEAGUE }, data: { activeSeasonId: seasonId } });
+    await prisma.league.update({
+      where: { id: OTHER_LEAGUE },
+      data: { activeSeasonId: otherSeasonId },
+    });
+    const message = (id: string, leagueId: string, season: string, type: string, at: string) => ({
+      id,
+      leagueId,
+      seasonId: season,
+      type: 'SYSTEM' as const,
+      content: id,
+      relatedEntityType: type,
+      relatedEntityId: id,
+      contextJson: JSON.stringify({
+        type: type === 'WAIVER_FAILED' ? 'waiver-failed' : 'waiver-successful',
+        claimId: id,
+      }),
+      createdAt: new Date(at),
+    });
+    await prisma.socialMessage.createMany({
+      data: [
+        message('feed-1', LEAGUE, seasonId, 'WAIVER_SUCCESSFUL', '2026-10-05T01:00:00Z'),
+        message('feed-2', LEAGUE, seasonId, 'WAIVER_FAILED', '2026-10-05T02:00:00Z'),
+        message('feed-3', LEAGUE, seasonId, 'WAIVER_SUCCESSFUL', '2026-10-05T03:00:00Z'),
+        message('feed-draft', LEAGUE, seasonId, 'PLAYER_DRAFTED', '2026-10-05T04:00:00Z'),
+        message(
+          'feed-other',
+          OTHER_LEAGUE,
+          otherSeasonId,
+          'WAIVER_SUCCESSFUL',
+          '2026-10-05T05:00:00Z'
+        ),
+      ],
+    });
+
+    const firstPage = await loadWaiverOutcomes(LEAGUE, { limit: 2 });
+    expect(firstPage.map((item) => item.claimId)).toEqual(['feed-3', 'feed-2']);
+    const secondPage = await loadWaiverOutcomes(LEAGUE, {
+      limit: 2,
+      before: new Date(firstPage[1].timestamp),
+    });
+    expect(secondPage.map((item) => [item.claimId, item.type])).toEqual([
+      ['feed-1', 'waiver-successful'],
+    ]);
   });
 });
