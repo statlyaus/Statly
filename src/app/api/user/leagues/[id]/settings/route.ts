@@ -5,28 +5,39 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
 
 /**
  * PUT /api/user/leagues/[id]/settings
- * Update league-specific settings for a user
+ * Update league-specific settings for the authenticated user
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
-    const body = await request.json();
-    const { userId, settings } = body;
-
-    if (!userId || !leagueId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: userId, leagueId' },
-        { status: 400 }
-      );
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const body = await request.json();
+    const { settings } = body;
 
     if (!settings || typeof settings !== 'object') {
       return NextResponse.json({ error: 'Settings object is required' }, { status: 400 });
+    }
+
+    const profile = await userProfileService.getUserProfile(userId);
+
+    if (!profile) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    }
+
+    const membership = profile.leagueMemberships.find((m) => m.leagueId === leagueId);
+
+    if (!membership) {
+      return NextResponse.json({ error: 'User is not a member of this league' }, { status: 404 });
     }
 
     logger.info('API: Updating league settings', {
@@ -49,20 +60,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 /**
- * GET /api/user/leagues/[id]/settings?userId=xxx
- * Get league-specific settings for a user
+ * GET /api/user/leagues/[id]/settings
+ * Get league-specific settings for the authenticated user
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId || !leagueId) {
-      return NextResponse.json(
-        { error: 'Missing required parameters: userId, leagueId' },
-        { status: 400 }
-      );
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     logger.debug('API: Getting league settings', { userId, leagueId });

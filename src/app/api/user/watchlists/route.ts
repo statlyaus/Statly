@@ -5,21 +5,27 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
 
 /**
  * POST /api/user/watchlists
- * Create or update a watchlist
+ * Create or update a watchlist for the authenticated user
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, leagueId, watchlistId, name, playerIds, isDefault } = body;
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!userId || !name || !Array.isArray(playerIds)) {
+    const body = await request.json();
+    const { leagueId, watchlistId, name, playerIds, isDefault } = body;
+
+    if (!name || !Array.isArray(playerIds)) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, name, playerIds' },
+        { error: 'Missing required fields: name, playerIds' },
         { status: 400 }
       );
     }
@@ -48,18 +54,18 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/user/watchlists?userId=xxx
- * Get all watchlists for a user
+ * GET /api/user/watchlists?leagueId=xxx
+ * Get all watchlists for the authenticated user
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const leagueId = searchParams.get('leagueId');
-
+    const userId = await getAuthenticatedUserId(request);
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const leagueId = searchParams.get('leagueId');
 
     logger.debug('API: Getting user watchlists', { userId, leagueId });
 

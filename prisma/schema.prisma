@@ -71,6 +71,8 @@ model League {
   tradeThreads            LeagueTradeThread[]
   tradeCommands           LeagueTradeCommand[]
   tradeOutboxEvents       LeagueTradeOutboxEvent[]
+  /// Lease held by the one waiver processing run allowed per league; null when none is running.
+  waiverRunStartedAt      DateTime?
   createdAt               DateTime                 @default(now())
 
   @@index([ownerId])

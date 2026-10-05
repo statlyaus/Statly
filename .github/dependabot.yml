@@ -2,7 +2,9 @@ version: 2
 
 updates:
   # Security alerts alone leave advisories unactioned, so dependency updates are requested
-  # weekly and grouped to keep the review surface small.
+  # weekly and grouped to keep the review surface small. Major versions are ignored everywhere:
+  # each one is a deliberate ticket, not a pull request that sits failing in the queue. The ignore
+  # rule covers version updates only, so security updates still open for majors.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -12,6 +14,9 @@ updates:
       - dependencies
     commit-message:
       prefix: chore
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       development-minor-patch:
         dependency-type: development
@@ -34,6 +39,9 @@ updates:
       - dependencies
     commit-message:
       prefix: chore
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: npm
     directory: /etl
@@ -44,6 +52,9 @@ updates:
       - dependencies
     commit-message:
       prefix: chore
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
@@ -54,3 +65,6 @@ updates:
       - dependencies
     commit-message:
       prefix: chore
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

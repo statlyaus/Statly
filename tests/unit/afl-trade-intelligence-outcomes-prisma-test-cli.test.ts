@@ -126,4 +126,64 @@ describe('outcomes integration Prisma test CLI', () => {
       expect.objectContaining({ message: 'directory was not empty' }),
     ]);
   });
+
+  describe('template schema adoption', () => {
+    const databaseUrl =
+      'postgresql://statly_test:statly_test@127.0.0.1:49152/outcomes?schema=target';
+    function dependencies(adopted: boolean, templateSchema?: string) {
+      const execute = vi.fn(() => 'migration output');
+      const adoptTemplateSchema = vi.fn(() => adopted);
+      return {
+        execute,
+        adoptTemplateSchema,
+        value: {
+          createSafeWorkingDirectory: () => '/tmp/statly-outcomes-prisma-test',
+          environment: {
+            NODE_ENV: 'test' as const,
+            ...(templateSchema === undefined
+              ? {}
+              : { STATLY_OUTCOMES_TEMPLATE_SCHEMA: templateSchema }),
+          },
+          execute,
+          adoptTemplateSchema,
+          nodeExecutable: '/test/node',
+          removeSafeWorkingDirectory: vi.fn(),
+          workspaceRoot: '/workspace',
+          schemaEnvironmentFileExists: () => false,
+        },
+      };
+    }
+
+    it('adopts the template schema instead of running migrate deploy when the setup names one', () => {
+      const { execute, adoptTemplateSchema, value } = dependencies(true, 'outcomes_template');
+      expect(
+        runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl, dependencies: value })
+      ).toBe('');
+      expect(adoptTemplateSchema).toHaveBeenCalledWith(databaseUrl, 'outcomes_template');
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('runs the real deploy when adoption is declined', () => {
+      const { execute, value } = dependencies(false, 'outcomes_template');
+      expect(
+        runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl, dependencies: value })
+      ).toBe('migration output');
+      expect(execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('never adopts without a template or for any other command', () => {
+      const withoutTemplate = dependencies(true);
+      runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+        databaseUrl,
+        dependencies: withoutTemplate.value,
+      });
+      expect(withoutTemplate.adoptTemplateSchema).not.toHaveBeenCalled();
+      expect(withoutTemplate.execute).toHaveBeenCalledTimes(1);
+
+      const validate = dependencies(true, 'outcomes_template');
+      runOutcomesPrismaTestCommand(['validate'], { databaseUrl, dependencies: validate.value });
+      expect(validate.adoptTemplateSchema).not.toHaveBeenCalled();
+      expect(validate.execute).toHaveBeenCalledTimes(1);
+    });
+  });
 });

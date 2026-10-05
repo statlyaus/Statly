@@ -12,6 +12,8 @@ authority when a document and implementation disagree; fix the document in the s
   candidate findings, rejection reasons, provider evidence request, and minimum approval criteria.
 - [Runtime and data platform](architecture/data-platform.md) — current ownership boundaries and the
   accepted production target.
+- [Authorization model](architecture/authorization.md) — access tiers, participant and manager rules,
+  operator and scheduler credentials, and known divergences.
 - [Realtime delivery](architecture/realtime.md) — Socket.IO, Redis, BullMQ, reconnect, and authority
   boundaries.
 - [Hybrid repository and runtime ontology](architecture/hybrid-ontology.md) — symbolic authority,
@@ -44,7 +46,8 @@ authority when a document and implementation disagree; fix the document in the s
 - [Public AFL Draft & Trade Outcomes operations](runbooks/afl-trade-intelligence-operations.md) —
   workbook/fitzRoy capture, factual release operations, optional valuation scheduling, health,
   incidents, recovery, and model-change review.
-- [PostgreSQL cutover](runbooks/postgresql-cutover.md) — planned, not yet executed.
+- [PostgreSQL go-live checklist](runbooks/postgresql-cutover.md) — provisioning, secrets, schema,
+  deploy order, and smoke checks for the production fantasy database; not started.
 - [Player identity consolidation](runbooks/player-identity.md) — reviewed production data operation.
 
 ## Subsystem guides

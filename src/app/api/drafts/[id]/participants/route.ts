@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { getLiveDraftEngine } from '@/services/liveDraftEngine';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { z } from 'zod';
 
 // Validation schema
@@ -18,6 +19,12 @@ const UpdateParticipantSchema = z.object({
 // PUT /api/drafts/[id]/participants - Update participant status
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await params;
+
+  // Presence is self-reported, so the caller must be identified before anything is written.
+  const actorUserId = await getAuthenticatedUserId(request);
+  if (!actorUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   try {
     const body = await request.json();
@@ -32,6 +39,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { userId, isOnline } = validation.data;
+
+    // A caller may only report their own presence, never another participant's.
+    if (userId !== actorUserId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     logger.debug('Updating participant status via API', { draftId, userId, isOnline });
 

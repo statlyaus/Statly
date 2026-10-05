@@ -44,6 +44,7 @@ const databaseUrl =
   (() => {
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
+const outcomesDatabaseName = decodeURIComponent(new URL(databaseUrl).pathname.slice(1));
 const containerId =
   process.env.AFL_OUTCOMES_TEST_CONTAINER_ID ??
   (() => {
@@ -289,7 +290,7 @@ describe('local fitzRoy factual-release backup and restore', () => {
       '--username',
       'statly_test',
       '--dbname',
-      'statly_outcomes_test',
+      outcomesDatabaseName,
       '--format=custom',
       `--file=${archivePath}`,
       `--schema=${schemaName}`,
@@ -310,7 +311,7 @@ describe('local fitzRoy factual-release backup and restore', () => {
       '--username',
       'statly_test',
       '--dbname',
-      'statly_outcomes_test',
+      outcomesDatabaseName,
       '--exit-on-error',
       '--single-transaction',
       '--no-owner',
