@@ -35,20 +35,6 @@ const MAX_ACTIVITY_LIMIT = 100;
 
 type TimestampLike = { toDate(): Date } | Date | null | undefined;
 
-interface WaiverClaimDoc {
-  leagueId?: string;
-  userId?: string;
-  teamId?: string;
-  playerId?: string;
-  dropPlayerId?: string | null;
-  priority?: number;
-  status?: 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'CANCELLED';
-  processingAt?: TimestampLike;
-  processedAt?: TimestampLike;
-  createdAt?: TimestampLike;
-  bidAmount?: number | null;
-}
-
 interface ActivityDoc {
   type?: string;
   userId?: string;
@@ -368,12 +354,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     activityQuery = activityQuery.limit(activityLimit);
 
-    const [claimsSnap, prioritySnap, activitySnap, waiverSettings, roster, availablePlayersResult] =
+    // Claims and the FAAB balance come from Prisma. The member is looked up there too: the
+    // membership check can return a Firestore member id for leagues that exist only in Firestore.
+    const waiverStore = new PrismaWaiverClaimStore();
+    const member = await prisma.leagueMember.findFirst({
+      where: { leagueId, userId },
+      select: { id: true },
+    });
+    const [memberClaims, activitySnap, waiverSettings, roster, availablePlayersResult] =
       await Promise.all([
-        leagueRef.collection('waivers').where('userId', '==', userId).limit(100).get(),
-        leagueRef.collection('waiverPriorities').doc(userId).get(),
+        member ? waiverStore.loadMemberClaims(leagueId, member.id) : Promise.resolve([]),
         activityQuery.get(),
-        new PrismaWaiverClaimStore().loadWaiverSettings(leagueId),
+        waiverStore.loadWaiverSettings(leagueId),
         loadCurrentRoster(leagueId, userId),
         loadAvailablePlayers({
           leagueId,
@@ -384,27 +376,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }),
       ]);
 
-    const rawClaims = claimsSnap.docs
-      .map((doc) => {
-        const data = doc.data() as WaiverClaimDoc;
-        const createdAt = toIso(data.createdAt);
-
-        return {
-          id: doc.id,
-          userId: String(data.userId || userId),
-          teamId: String(data.teamId || roster?.id || ''),
-          playerId: String(data.playerId || ''),
-          ...(data.dropPlayerId ? { dropPlayerId: String(data.dropPlayerId) } : {}),
-          priority: Number(data.priority ?? 1),
-          status: data.status || 'PENDING',
-          createdAt,
-          processingAt: data.processingAt ? toIso(data.processingAt) : undefined,
-          processedAt: data.processedAt ? toIso(data.processedAt) : undefined,
-          ...(typeof data.bidAmount === 'number' ? { bidAmount: data.bidAmount } : {}),
-        };
-      })
-      .filter((claim) => claim.playerId)
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    const remainingFAAB = member
+      ? await waiverStore.loadRemainingFaab(leagueId, member.id, waiverSettings)
+      : undefined;
+    const rawClaims = memberClaims.map((claim) => ({
+      id: claim.id,
+      userId: claim.userId,
+      teamId: claim.teamId,
+      playerId: claim.playerId,
+      ...(claim.dropPlayerId ? { dropPlayerId: claim.dropPlayerId } : {}),
+      priority: claim.priority,
+      status: claim.status,
+      createdAt: claim.createdAt.toISOString(),
+      processingAt: claim.processingAt?.toISOString(),
+      processedAt: claim.processedAt?.toISOString(),
+      ...(typeof claim.bidAmount === 'number' ? { bidAmount: claim.bidAmount } : {}),
+    }));
 
     const rawActivity = activitySnap.docs.map((doc) => {
       const data = doc.data() as ActivityDoc;
@@ -469,9 +456,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       playersIndex[player.id] = player;
     }
 
-    const priorityData = prioritySnap.exists
-      ? (prioritySnap.data() as { remainingFAAB?: number })
-      : undefined;
     const lastActivity = activity[activity.length - 1];
 
     return NextResponse.json(
@@ -480,8 +464,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         roster,
         activity,
         selectedCategories,
-        remainingFAAB:
-          typeof priorityData?.remainingFAAB === 'number' ? priorityData.remainingFAAB : undefined,
+        remainingFAAB,
         initialSettings: { waiverSettings },
         availablePlayers: availablePlayersResult.items,
         playersIndex,
