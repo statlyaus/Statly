@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseMirrorArtifactStoreArguments } from '../../Scripts/mirror-artifact-store';
+import {
+  parseMirrorArtifactStoreArguments,
+  runGcloudStorage,
+} from '../../Scripts/mirror-artifact-store';
 
 const env = { AFL_OUTCOMES_DATABASE_URL: 'postgresql://user:secret@127.0.0.1:55436/outcomes' };
 
@@ -52,4 +55,31 @@ describe('mirror-artifact-store arguments', () => {
   ])('rejects %j', (argv, message) => {
     expect(() => parseMirrorArtifactStoreArguments(argv, env)).toThrow(message);
   });
+});
+
+describe('runGcloudStorage', () => {
+  it('streams very large output without failing and reports a failure with its stderr tail', async () => {
+    // A stand-in for gcloud: `storage <args> --quiet` reach node as script arguments.
+    const { mkdtemp, writeFile, chmod, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const directory = await mkdtemp(join(tmpdir(), 'statly-fake-gcloud-'));
+    const fake = join(directory, 'gcloud');
+    await writeFile(
+      fake,
+      `#!/usr/bin/env node
+const mode = process.argv[3];
+const line = 'Copying file://store/object.json to gs://bucket/object.json\\n'.repeat(2000);
+for (let i = 0; i < 1000; i += 1) { process.stdout.write(line); process.stderr.write(line); }
+if (mode === 'fail') { process.stderr.write('ERROR: permission denied on gs://bucket\\n'); process.exitCode = 1; }
+`
+    );
+    await chmod(fake, 0o755);
+    try {
+      await expect(runGcloudStorage(['rsync'], fake)).resolves.toBeUndefined();
+      await expect(runGcloudStorage(['fail'], fake)).rejects.toThrow('permission denied');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
