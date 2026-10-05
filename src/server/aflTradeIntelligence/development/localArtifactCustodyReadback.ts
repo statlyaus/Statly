@@ -8,8 +8,10 @@ import { createLocalAflTradeFileConditionalObjectStore } from './localFileCondit
 const LOCAL_STORE_ASSURANCE = 'local_non_production_filesystem';
 const FULL_CLASS = 'raw_source';
 
+// The repository key is exactly <assurance>/sha256/<aa>/<bb>/<sha256>, anchored at the end, so a
+// repository path that itself contains an assurance-like segment cannot cut the split short.
 const STORE_KEY_PATTERN =
-  /^(.+?)\/((?:local_non_production_filesystem|fixture_filesystem|durable_object_storage)\/sha256\/.+)$/u;
+  /^(.+)\/((?:local_non_production_filesystem|fixture_filesystem|durable_object_storage)\/sha256\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{64})$/u;
 
 /**
  * Splits a store location key into the repository directory under the store root and the key inside

@@ -21,12 +21,22 @@ describe('splitAflTradeStoreObjectKey', () => {
     });
   });
 
+  it('splits at the final repository-key layout when the path repeats an assurance segment', () => {
+    const path = 'capture/local_non_production_filesystem/sha256/archive';
+    expect(splitAflTradeStoreObjectKey(`${path}/${tail}`)).toEqual({
+      repositoryPath: path,
+      repositoryKey: tail,
+    });
+  });
+
   it.each([
     tail,
     `repo/sha256/aa/aa/${sha}`,
     `../escape/${tail}`,
     `repo/../escape/${tail}`,
     `repo//inner/${tail}`,
+    `repo/local_non_production_filesystem/sha256/aa/aa/${'a'.repeat(63)}`,
+    `repo/local_non_production_filesystem/sha256/aa/aa/${sha}/extra`,
   ])('refuses %s', (key) => {
     expect(splitAflTradeStoreObjectKey(key)).toBeNull();
   });
