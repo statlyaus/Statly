@@ -50,10 +50,17 @@ afterAll(async () => {
 });
 // Every candidate (row, spell) pair of an input set, evaluated three ways on one snapshot: the per-row
 // function, the 0236 set-based form the build and finalization use (registration currency once per
-// spell), and, for appearance-membership spells, the original 0233 registration currency.
-const compareSpellCurrency = async (inputSetId: string) => {
+// spell), and, for appearance-membership spells, the original 0233 registration currency. Since 0248
+// the set-based form never binds a reviewed spell; the per-row function is unchanged.
+// `retiredByReference` names v3 spells inside a current reviewed stint: the 0233 reference still
+// retires them, a rule migration 0248 removed, so their original currency is not compared.
+const compareSpellCurrency = async (
+  inputSetId: string,
+  retiredByReference: ReadonlySet<string> = new Set()
+) => {
   const result = await pool.query<{
     spell_version_id: string;
+    reviewed: boolean;
     per_row: boolean;
     set_based: boolean;
     deployed_registration: boolean;
@@ -81,6 +88,9 @@ const compareSpellCurrency = async (inputSetId: string) => {
               ) candidate
      )
      SELECT spell.spell_version_id,
+            COALESCE(spell.registration_canonical_json::JSONB->>'schemaVersion' IN
+              ('afl-trade-acquisition-registration/v1','afl-trade-acquisition-registration/v2',
+               'afl-trade-acquisition-registration/v4'),FALSE) AS reviewed,
             outcome_hpn_acquisition_spell_is_current(spell.spell_version_id,
               requested.provider_decoded_row_id,requested.normalization_run_id,
               requested.projected_field_map_id,requested.effective_date,clock_timestamp()) AS per_row,
@@ -101,8 +111,8 @@ const compareSpellCurrency = async (inputSetId: string) => {
     [inputSetId]
   );
   for (const pair of result.rows) {
-    expect(pair.set_based).toBe(pair.per_row);
-    if (pair.original_registration !== null) {
+    expect(pair.set_based).toBe(pair.reviewed ? false : pair.per_row);
+    if (pair.original_registration !== null && !retiredByReference.has(pair.spell_version_id)) {
       expect(pair.deployed_registration).toBe(pair.original_registration);
     }
   }
@@ -169,8 +179,9 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
     ])
   ).rejects.toThrow('limited to HPN season PAV attribution');
 
-  // Retirement: a reviewed entry spell covering the home player's window is admitted over the
-  // current appearance-membership spell and makes it non-current, with no manual supersession.
+  // A reviewed entry spell covering the home player's window is admitted over the current
+  // appearance-membership spell. Since 0248 it does not retire the window, and it never binds the
+  // season statistics, so the input bound to the window stays current authority.
   const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
     completeCaptureReceipts: true,
@@ -248,16 +259,25 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
   const homeWindow = spellFor.get('afl-player:local-rehearsal')!;
   const awayWindow = spellFor.get('afl-player:local-rehearsal-away')!;
   expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
-  expect(await currentness(homeWindow.spellVersionId)).toBe(false);
+  expect(await currentness(homeWindow.spellVersionId)).toBe(true);
   expect(await currentness(awayWindow.spellVersionId)).toBe(true);
-  // The retained input bound to the retired window now fails current-authority reads; the logical
-  // input scope is immutable, so a successor calculation belongs to a new scope, not this test.
-  await expect(repository.loadCurrentFinalizedSeasonInputSet(read, scope)).rejects.toThrow();
-  const retired = await compareSpellCurrency(built.inputSet.inputSetId);
-  const pairsFor = (rows: typeof retired, spellVersionId: string) =>
+  await expect(repository.loadCurrentFinalizedSeasonInputSet(read, scope)).resolves.toEqual(
+    built.inputSet
+  );
+  const covered = await compareSpellCurrency(
+    built.inputSet.inputSetId,
+    new Set([homeWindow.spellVersionId])
+  );
+  const pairsFor = (rows: typeof covered, spellVersionId: string) =>
     rows.filter((pair) => pair.spell_version_id === spellVersionId);
-  expect(pairsFor(retired, homeWindow.spellVersionId).every((pair) => !pair.per_row)).toBe(true);
-  expect(pairsFor(retired, awayWindow.spellVersionId).every((pair) => pair.per_row)).toBe(true);
+  expect(
+    pairsFor(covered, homeWindow.spellVersionId).every((pair) => pair.per_row && pair.set_based)
+  ).toBe(true);
+  expect(pairsFor(covered, reviewedSpell.spellVersionId).length).toBeGreaterThan(0);
+  expect(pairsFor(covered, reviewedSpell.spellVersionId).every((pair) => !pair.set_based)).toBe(
+    true
+  );
+  expect(pairsFor(covered, awayWindow.spellVersionId).every((pair) => pair.per_row)).toBe(true);
 
   // A withdrawn player-identity decision withdraws the away window's boundary appearance. The
   // provider-resolution review owner is covered elsewhere; seed the successor review directly.
@@ -291,62 +311,32 @@ it('builds, calculates and reloads season HPN PAV attributed through appearance-
   } finally {
     withdrawal.release();
   }
-  const withdrawn = await compareSpellCurrency(built.inputSet.inputSetId);
+  const withdrawn = await compareSpellCurrency(
+    built.inputSet.inputSetId,
+    new Set([homeWindow.spellVersionId])
+  );
   expect(pairsFor(withdrawn, awayWindow.spellVersionId).every((pair) => !pair.per_row)).toBe(true);
   expect(pairsFor(withdrawn, reviewedSpell.spellVersionId)).toEqual(
-    pairsFor(retired, reviewedSpell.spellVersionId)
+    pairsFor(covered, reviewedSpell.spellVersionId)
   );
 
-  // A reviewed spell occupies its membership while its entry event is current, so a successor
-  // appearance-membership window for the same player and club cannot overlap it.
+  // A successor appearance-membership window registers inside the current reviewed stint, and both
+  // stay current (migration 0248; before it the reviewed spell refused the overlap).
   const homeV3 = homeWindow.content;
   if (homeV3.schemaVersion !== 'afl-trade-acquisition-registration/v3')
     throw new Error('Expected an appearance-membership window.');
   const { schemaVersion: _schema, observedThrough: _observed, ...homeContent } = homeV3;
-  const successorWindow = async () =>
-    createAflTradeAppearanceMembershipSpell({
-      ...homeContent,
-      version: 2,
-      supersedesSpellVersionId: homeWindow.spellVersionId,
-      createdAt: await instant(),
-    });
-  const blocked = await successorWindow();
-  await expect(
-    spells.registerReviewedSpell(
-      blocked,
-      await approve('acquisition_spell_registration', blocked.spellVersionId, blocked),
-      scope
-    )
-  ).rejects.toThrow('cannot overlap');
-  // A superseded entry event makes the reviewed spell permanently non-current; it then releases
-  // its membership to the appearance-membership bridge.
-  const supersession = await pool.connect();
-  try {
-    await supersession.query('BEGIN');
-    await supersession.query(`SET LOCAL session_replication_role='replica'`);
-    await supersession.query(
-      `INSERT INTO outcome_event_version
-        (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,official_name,
-         status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
-       SELECT event_version_id||':successor',event_id,version+1,kind,acquisition_mechanism,
-              event_date,official_name,status,source_import_row_id,event_version_id,
-              date_trunc('milliseconds',clock_timestamp()),date_precision
-         FROM outcome_event_version WHERE event_version_id=$1`,
-      [promoted.entry.eventVersionId]
-    );
-    await supersession.query('COMMIT');
-  } catch (error) {
-    await supersession.query('ROLLBACK');
-    throw error;
-  } finally {
-    supersession.release();
-  }
-  expect(await currentness(reviewedSpell.spellVersionId)).toBe(false);
-  const released = await successorWindow();
+  const successor = createAflTradeAppearanceMembershipSpell({
+    ...homeContent,
+    version: 2,
+    supersedesSpellVersionId: homeWindow.spellVersionId,
+    createdAt: await instant(),
+  });
   await spells.registerReviewedSpell(
-    released,
-    await approve('acquisition_spell_registration', released.spellVersionId, released),
+    successor,
+    await approve('acquisition_spell_registration', successor.spellVersionId, successor),
     scope
   );
-  expect(await currentness(released.spellVersionId)).toBe(true);
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
+  expect(await currentness(successor.spellVersionId)).toBe(true);
 });
