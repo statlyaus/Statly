@@ -28,6 +28,19 @@ describe('league settings UI architecture', () => {
     expect(settingsSource).toContain('body: JSON.stringify(settings)');
   });
 
+  it('lets a commissioner set or clear the FAAB budget without losing the waiver rule', () => {
+    const settingsSource = settingsPanelsSource();
+
+    expect(settingsSource).toContain('FAAB budget');
+    expect(settingsSource).toContain("value={settings.waiver.faabBudget ?? ''}");
+    // An empty field switches FAAB off rather than defaulting to a budget.
+    expect(settingsSource).toContain(
+      "event.target.value === '' ? null : Number.parseInt(event.target.value, 10)"
+    );
+    // Changing either waiver field keeps the other one.
+    expect(settingsSource.match(/waiver: \{\n\s+\.\.\.current\.waiver,/g)).toHaveLength(2);
+  });
+
   it('renders the canonical fantasy settings groups instead of the old fake trade form', () => {
     const settingsSource = settingsPanelsSource();
     const utilsSource = panelUtilsSource();
@@ -109,7 +122,9 @@ describe('league settings UI architecture', () => {
       settingsSource.indexOf('function LeagueSettingsPanel')
     );
     expect(
-      settingsSource.slice(settingsSource.indexOf('function LeagueSettingsPanel')).includes('Team identity')
+      settingsSource
+        .slice(settingsSource.indexOf('function LeagueSettingsPanel'))
+        .includes('Team identity')
     ).toBe(false);
   });
 });
