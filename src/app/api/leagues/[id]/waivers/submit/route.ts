@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger, withTiming } from '@/lib/logger';
@@ -11,18 +10,12 @@ import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
   PrismaWaiverClaimStore,
   WaiverClaimStoreError,
-  type WaiverSettings as ProcessingWaiverSettings,
 } from '@/server/waivers/WaiverProcessingService';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { findWaiverPlayerAliasIds } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface WaiverSettings {
-  system?: 'FAAB' | 'PRIORITY';
-  minimumBid?: number;
-}
 
 export const POST = withMetrics(
   async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
@@ -67,6 +60,7 @@ export const POST = withMetrics(
         ...new Set([requestedPlayerId, canonicalPlayerId, ...transitionalAliasIds]),
       ];
 
+      // Prisma owns roster ownership; the Firestore ownership projection is never consulted here.
       const prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
         where: { leagueId, playerId: { in: playerAliasIds } },
         select: { playerId: true, memberId: true },
@@ -75,44 +69,9 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
-      // Ownership checks (doc read + roster scan) concurrently to reduce latency
-      const ownershipRefs = playerAliasIds.map((aliasId) =>
-        adminDb.doc(`leagues/${leagueId}/playerOwnerships/${aliasId}`)
+      const ws = await withTiming('waivers.settings.get', () =>
+        new PrismaWaiverClaimStore().loadWaiverSettings(leagueId)
       );
-      const [ownershipDocs, rosterScans] = await Promise.all([
-        Promise.all(
-          ownershipRefs.map((ref) => withTiming('waivers.ownership.get', () => ref.get()))
-        ),
-        Promise.all(
-          playerAliasIds.map((aliasId) =>
-            withTiming('waivers.roster.scan', () =>
-              adminDb
-                .collection(`leagues/${leagueId}/rosters`)
-                .where('playerIds', 'array-contains', aliasId)
-                .limit(1)
-                .get()
-            )
-          )
-        ),
-      ]);
-      if (
-        ownershipDocs.some((document) => document.exists) ||
-        rosterScans.some((scan) => !scan.empty)
-      ) {
-        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
-      }
-
-      // Read waiver settings
-      const settingsSnap = await withTiming('waivers.settings.get', () =>
-        adminDb.doc(`leagues/${leagueId}/config/settings`).get()
-      );
-      interface SettingsDoc {
-        waiverSettings?: WaiverSettings;
-      }
-      const rawSettings: unknown = settingsSnap.data();
-      const waiverSettings: SettingsDoc | undefined =
-        rawSettings && typeof rawSettings === 'object' ? (rawSettings as SettingsDoc) : undefined;
-      const ws: WaiverSettings | undefined = waiverSettings?.waiverSettings;
 
       const isFAAB = ws?.system === 'FAAB';
       let validatedBid: number | undefined = undefined;
@@ -125,20 +84,13 @@ export const POST = withMetrics(
         validatedBid = bidAmount;
       }
 
-      const freshOwnershipDocs = await Promise.all(
-        ownershipRefs.map((ref) => withTiming('waivers.ownership.recheck', () => ref.get()))
-      );
-      if (freshOwnershipDocs.some((document) => document.exists)) {
-        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
-      }
-
       const submittedClaim = await new PrismaWaiverClaimStore().submitClaim({
         leagueId,
         userId,
         teamId: String(teamId),
         playerId: canonicalPlayerId,
         priority: Number(priority) || 1,
-        waiverSettings: (ws ?? {}) as ProcessingWaiverSettings,
+        waiverSettings: ws,
         ...(dropPlayerId
           ? {
               dropPlayerId:

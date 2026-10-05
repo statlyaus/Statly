@@ -77,6 +77,8 @@ interface LeagueSettingsResponse {
   };
   waiver: {
     waiverRule: LeagueSettingsWaiverRule;
+    // FAAB budget per member; null means the league uses waiver priority order.
+    faabBudget: number | null;
   };
 }
 
@@ -173,6 +175,7 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
     },
     waiver: {
       waiverRule: league.waiverRule ?? 'weekly',
+      faabBudget: null,
     },
   };
 }
@@ -231,6 +234,7 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
     },
     waiver: {
       waiverRule: asWaiverRule(waiverSource.waiverRule, fallback.waiver.waiverRule),
+      faabBudget: typeof waiverSource.faabBudget === 'number' ? waiverSource.faabBudget : null,
     },
   };
 }
@@ -1240,6 +1244,7 @@ export function LeagueSettingsPanel({
                   setSettings((current) => ({
                     ...current,
                     waiver: {
+                      ...current.waiver,
                       waiverRule: event.target.value as LeagueSettingsWaiverRule,
                     },
                   }))
@@ -1249,6 +1254,31 @@ export function LeagueSettingsPanel({
                 <option value="weekly">Weekly</option>
                 <option value="rolling">Rolling</option>
               </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              FAAB budget
+              <input
+                type="number"
+                min={1}
+                step={1}
+                placeholder="Off"
+                value={settings.waiver.faabBudget ?? ''}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    waiver: {
+                      ...current.waiver,
+                      // Empty means FAAB off; the API rejects anything that is not a whole number of at least 1.
+                      faabBudget:
+                        event.target.value === '' ? null : Number.parseInt(event.target.value, 10),
+                    },
+                  }))
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              />
+              <span className="text-xs font-normal text-[color:var(--league-text-muted)]">
+                Leave blank to use waiver priority order.
+              </span>
             </label>
           </div>
         </section>

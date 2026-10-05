@@ -38,7 +38,7 @@ const prismaMocks = vi.hoisted(() => ({
   },
   waiverPriority: {
     findMany: vi.fn(),
-    create: vi.fn(),
+    createMany: vi.fn(),
     updateMany: vi.fn(),
   },
   pick: {
@@ -82,7 +82,6 @@ const firestoreMocks = vi.hoisted(() => {
 
   const emptyQuery = makeQuery([]);
   const ownershipDoc = { exists: false, data: () => undefined };
-  const settingsDoc = { exists: false, data: () => undefined };
 
   const collection = vi.fn((collectionPath: string) => {
     if (collectionPath === 'leagues') {
@@ -131,7 +130,7 @@ const firestoreMocks = vi.hoisted(() => {
 
   const doc = vi.fn((path: string) => ({
     path,
-    get: vi.fn().mockResolvedValue(path.endsWith('/config/settings') ? settingsDoc : ownershipDoc),
+    get: vi.fn().mockResolvedValue(ownershipDoc),
   }));
 
   return {
@@ -282,7 +281,10 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
       canManage: true,
     });
 
-    prismaMocks.league.findUnique.mockResolvedValue({ id: 'league-1' });
+    prismaMocks.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settings: { waiverRule: 'WEEKLY', faabBudget: null },
+    });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       userId: 'statly-dev-tester',
@@ -311,7 +313,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.$queryRaw.mockResolvedValue([]);
     prismaMocks.$executeRaw.mockResolvedValue(1);
     prismaMocks.waiverPriority.findMany.mockResolvedValue([]);
-    prismaMocks.waiverPriority.create.mockResolvedValue({});
+    prismaMocks.waiverPriority.createMany.mockResolvedValue({ count: 1 });
     prismaMocks.waiverPriority.updateMany.mockResolvedValue({ count: 1 });
     prismaMocks.pick.groupBy.mockResolvedValue([]);
     prismaMocks.$transaction.mockImplementation((work: (client: typeof prismaMocks) => unknown) =>
@@ -454,6 +456,35 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
         }),
       })
     );
+  });
+
+  it('accepts a claim Prisma allows even when the Firestore ownership projection says owned', async () => {
+    prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
+    // A stale projection: an ownership document and a roster that still list the player.
+    const defaultDoc = firestoreMocks.adminDb.doc.getMockImplementation();
+    firestoreMocks.adminDb.doc.mockImplementation((path: string) => ({
+      path,
+      get: vi.fn().mockResolvedValue({ exists: true, data: () => ({ memberId: 'member-2' }) }),
+    }));
+    firestoreMocks.emptyQuery.get.mockResolvedValue({
+      docs: [{ id: 'stale-roster', data: () => ({ playerIds: ['free-player'] }) }],
+      empty: false,
+    });
+
+    try {
+      const { POST } = await import('../../src/app/api/leagues/[id]/waivers/submit/route');
+      const response = await POST(
+        jsonRequest('/api/leagues/league-1/waivers/submit', {
+          teamId: 'member-1',
+          playerId: 'free-player',
+        }),
+        { params: Promise.resolve({ id: 'league-1' }) }
+      );
+
+      expect(response.status).toBe(201);
+    } finally {
+      firestoreMocks.adminDb.doc.mockImplementation(defaultDoc!);
+    }
   });
 
   it('submits a retired player alias against its canonical player', async () => {

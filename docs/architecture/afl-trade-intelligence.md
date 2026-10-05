@@ -1778,9 +1778,14 @@ current spell, while reviewed entry spells need a promoted incoming asset that m
 not yet have. A v3 spell binds a player, represented club and season to the first and last reviewed
 appearance facts and asserts nothing about entry, departure or trade custody, so metric, release,
 valuation dataset, player PAV observation and postseason consumers reject it. Its boundary and
-completeness facts count only while their player, match and club identity decisions stay current. It is
-a bridge: a current reviewed entry spell whose possible membership contains its whole window retires it
-automatically, player by player, and it must not be used where acquisition timing matters.
+completeness facts count only while their player, match and club identity decisions stay current. It
+must not be used where acquisition timing matters. Since migration 0248 season statistics bind season
+spells only: the HPN input build and its finalization guard never bind a reviewed (v1, v2 or v4) spell,
+and legacy spells recorded before registration existed keep their unchanged rule. A v3 spell may sit
+inside any current reviewed stint for the same player and club and is not retired by it, so reviewed
+spells prove arrivals and season spells prove who played for the club in a season. Retained input sets
+bound to reviewed spells stop reading as current authority once a season spell covers the same rows,
+and are replaced by replaying the season.
 Season HPN input building and finalization evaluate each candidate spell's registration currency once
 per input set rather than once per row (migration 0236), with the same currency rules.
 Finalization reads its content JSON once per statement rather than once per row (migration 0240),
@@ -1790,6 +1795,35 @@ Both evaluate identity-assignment continuity once per assignment case rather tha
 Its row-conservation and appearance-envelope checks cost time linear in the season whichever join
 plan PostgreSQL chooses (migration 0243), with the same checks and exceptions.
 The operations runbook records its storage and guard details.
+
+An arrival-only spell (acquisition registration v4, migration 0247) splits a reviewed entry spell's
+two claims. A v1 spell claims both how the player arrived and, through continuity evidence and
+`observedThrough`, that he was still at the club up to a date; the second claim needs fresh evidence
+every season. A v4 spell claims the arrival only: its entry is checked exactly as a v1 entry is (the
+promoted event and incoming player asset, a current entry event, exact entry evidence, a current
+review and an intact version chain), and it carries no `observedThrough`, continuity evidence or
+departure. Continuity in a season comes from that season's v3 spell, which may sit inside a current
+v4 stint for the same player and club and is not retired by it. A v4 spell may supersede a v1, v2 or
+v4 spell for the same player and club, which is how a reviewed spell whose evidence was lost is
+re-made. HPN season attribution never binds a v4 spell, and the postseason bounds helper refuses one,
+since its stint end comes from season spells rather than from the record. v1 and v2 spells kept
+excluding and retiring v3 spells until migration 0248 moved HPN binding onto season spells.
+
+The two claims are now held separately and joined only when read. A reviewed spell (v1, v2 or v4)
+claims an arrival; a season (v3) spell claims that the player played for a club in one season. A
+_stint_ is one arrival at a club plus the current season spells at that club that follow it, until the
+earliest of the player's first season spell at another club or a later reviewed arrival at the same
+club (delisted and redrafted). `outcome_acquisition_stint(player, club, arrival)` (migration 0249)
+returns the arrival, the ordered seasons, the closing season and what closed it, the end date (the
+last appearance of the last season inside a closed stint) and a status of `open`, `closed` or
+`no_appearances`. An open stint, including a retired player's, reads to the latest season spell
+registered. Every spell it reads must be current and not superseded, and it starts only at a current
+reviewed arrival for the same player and club. This is the unit of the realized-value rule: a traded
+player or a drafted pick is valued over the whole first stint at the receiving club, with no cap, and a
+later return to that club is a separate stint that is excluded. Because an arrival claims a point in
+time and no continuity, two current v4 arrivals for one player and club may coexist when their dates
+differ (migration 0249). Trade attribution does not read stints yet; that is Phase 4 of the grading
+pipeline.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
