@@ -1809,6 +1809,22 @@ re-made. HPN season attribution never binds a v4 spell, and the postseason bound
 since its stint end comes from season spells rather than from the record. v1 and v2 spells kept
 excluding and retiring v3 spells until migration 0248 moved HPN binding onto season spells.
 
+The two claims are now held separately and joined only when read. A reviewed spell (v1, v2 or v4)
+claims an arrival; a season (v3) spell claims that the player played for a club in one season. A
+_stint_ is one arrival at a club plus the current season spells at that club that follow it, until the
+earliest of the player's first season spell at another club or a later reviewed arrival at the same
+club (delisted and redrafted). `outcome_acquisition_stint(player, club, arrival)` (migration 0249)
+returns the arrival, the ordered seasons, the closing season and what closed it, the end date (the
+last appearance of the last season inside a closed stint) and a status of `open`, `closed` or
+`no_appearances`. An open stint, including a retired player's, reads to the latest season spell
+registered. Every spell it reads must be current and not superseded, and it starts only at a current
+reviewed arrival for the same player and club. This is the unit of the realized-value rule: a traded
+player or a drafted pick is valued over the whole first stint at the receiving club, with no cap, and a
+later return to that club is a separate stint that is excluded. Because an arrival claims a point in
+time and no continuity, two current v4 arrivals for one player and club may coexist when their dates
+differ (migration 0249). Trade attribution does not read stints yet; that is Phase 4 of the grading
+pipeline.
+
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
 conflicting evidence, and advances a canonical achievement head by compare-and-swap. Only the current
