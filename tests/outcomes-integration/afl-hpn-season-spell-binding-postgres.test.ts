@@ -5,8 +5,6 @@ import {
   createAflTradeAcquisitionSpellRegistration,
   createAflTradeAcquisitionSpellRegistrationRule,
   createAflTradeAppearanceMembershipSpell,
-  createAflTradeArrivalSpell,
-  createAflTradeArrivalSpellRule,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
@@ -17,7 +15,7 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0247_arrival_only_reviewed_spells';
+const MIGRATION = '0248_hpn_season_spell_binding';
 
 // The local fitzRoy rehearsal owners only run inside a schema with this disposable naming pattern.
 const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}`;
@@ -75,14 +73,29 @@ const spellVersions = async () =>
     )
   ).rows[0]!.versions;
 
-// A reviewed spell whose evidence was lost is re-made as an arrival: it proves how the player
-// arrived, and continuity comes from the season (v3) spells, which may then sit inside its stint.
-it('leaves reviewed spells unchanged and re-makes one as an arrival that admits season spells', async () => {
-  const { approve, proposals, scope, spells } = await buildAppearanceMembershipHpnInputFixture({
-    pool,
-    client,
-    instant,
-  });
+const sourceCurrent = async (inputSetId: string, spellVersionId: string) =>
+  (
+    await pool.query<{ current: boolean }>(
+      `SELECT bool_and(outcome_hpn_acquisition_spell_source_current($2,row.provider_decoded_row_id,
+          row.normalization_run_id,run.projected_field_map_id,match.effective_at::DATE,
+          outcome_acquisition_spell_registration_current($2,clock_timestamp()))) AS current
+         FROM outcome_hpn_pav_input_row row
+         JOIN outcome_hpn_pav_input_run run
+           ON run.input_set_id=row.input_set_id AND run.normalization_run_id=row.normalization_run_id
+         JOIN outcome_hpn_pav_input_match match
+           ON match.input_set_id=row.input_set_id
+          AND match.match_id=row.row_json#>>'{match,canonicalId}'
+        WHERE row.input_set_id=$1 AND row.row_kind='player_match_stats'
+          AND row.row_json#>>'{player,canonicalId}'='afl-player:local-rehearsal'`,
+      [inputSetId, spellVersionId]
+    )
+  ).rows[0]!.current;
+
+// Season statistics bind season (v3) spells only. A reviewed spell proves the arrival; it no longer
+// blocks or retires the season spells inside its stint, and it is never a binding candidate.
+it('binds season statistics to season spells inside a reviewed stint', async () => {
+  const { approve, built, proposals, repository, request, scope, spells } =
+    await buildAppearanceMembershipHpnInputFixture({ pool, client, instant });
   const homeWindow = proposals.find(
     (proposal) => proposal.content.playerId === 'afl-player:local-rehearsal'
   )!;
@@ -90,6 +103,12 @@ it('leaves reviewed spells unchanged and re-makes one as an arrival that admits 
   if (homeV3.schemaVersion !== 'afl-trade-acquisition-registration/v3')
     throw new Error('Expected an appearance-membership window.');
   const { schemaVersion: _schema, observedThrough: _observed, ...homeContent } = homeV3;
+  const read = {
+    ...scope,
+    seasonYear: 2026,
+    methodId: request.methodId,
+    inputSetId: built.inputSet.inputSetId,
+  };
   const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
     completeCaptureReceipts: true,
@@ -129,7 +148,7 @@ it('leaves reviewed spells unchanged and re-makes one as an arrival that admits 
     await bindTestEvidenceStore(pool)
   );
 
-  // Under the old rules: a reviewed (v1) spell checked only up to its own arrival day.
+  // Under the old rules: a reviewed (v1) spell whose open stint covers the home player's window.
   const entryRule = createAflTradeAcquisitionSpellRegistrationRule({
     ...scope,
     ruleVersion: 'synthetic-reviewed-entry-v1',
@@ -150,7 +169,7 @@ it('leaves reviewed spells unchanged and re-makes one as an arrival that admits 
     ruleId: entryRule.ruleId,
     version: 1,
     supersedesSpellVersionId: null,
-    observedThrough: promoted.entry.eventDate,
+    observedThrough: '2026-03-20',
     continuityEvidence: promoted.entry.evidence,
     createdAt: await instant(),
   });
@@ -166,113 +185,36 @@ it('leaves reviewed spells unchanged and re-makes one as an arrival that admits 
       supersedesSpellVersionId: homeWindow.spellVersionId,
       createdAt: await instant(),
     });
-  const pinTodaysRules = async () => {
-    // The v1 spell occupies its stint, retires the season window inside it and refuses a successor.
-    expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
-    expect(await currentness(homeWindow.spellVersionId)).toBe(false);
-    const blocked = await successorWindow();
-    await expect(
-      spells.registerReviewedSpell(
-        blocked,
-        await approve('acquisition_spell_registration', blocked.spellVersionId, blocked),
-        scope
-      )
-    ).rejects.toThrow('cannot overlap');
-  };
-  await pinTodaysRules();
+  // The reviewed spell retires the window, so the input bound to it is no longer current, the
+  // reviewed spell could bind the row instead, and no successor window may sit inside it.
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
+  expect(await currentness(homeWindow.spellVersionId)).toBe(false);
+  await expect(repository.loadCurrentFinalizedSeasonInputSet(read, scope)).rejects.toThrow();
+  expect(await sourceCurrent(built.inputSet.inputSetId, reviewedSpell.spellVersionId)).toBe(true);
+  const blocked = await successorWindow();
+  await expect(
+    spells.registerReviewedSpell(
+      blocked,
+      await approve('acquisition_spell_registration', blocked.spellVersionId, blocked),
+      scope
+    )
+  ).rejects.toThrow('cannot overlap');
   const versionsBefore = await spellVersions();
 
   // The migration edits the deployed definitions in place and writes no row.
   await pool.query(migration.migrationSql);
   expect(await spellVersions()).toBe(versionsBefore);
-  // Existing reviewed spells keep their meaning exactly.
-  await pinTodaysRules();
 
-  // The arrival supersedes the v1 spell with the same entry and no continuity claim.
-  const arrivalRule = createAflTradeArrivalSpellRule({
-    ...scope,
-    ruleVersion: 'synthetic-arrival-v4',
-    evidence: [promoted.sourceArtifact],
-    createdAt: await instant(),
-  });
-  await reviewedSpells.registerReviewedRule(
-    arrivalRule,
-    await approve('acquisition_spell_rule', arrivalRule.ruleId, arrivalRule),
-    scope
-  );
-  const arrival = createAflTradeArrivalSpell({
-    ...scope,
-    playerId: promoted.playerId,
-    clubId: promoted.clubId,
-    entry: promoted.entry,
-    ruleId: arrivalRule.ruleId,
-    version: 2,
-    supersedesSpellVersionId: reviewedSpell.spellVersionId,
-    createdAt: await instant(),
-  });
-  const arrivalApproval = await approve(
-    'acquisition_spell_registration',
-    arrival.spellVersionId,
-    arrival
-  );
-  await expect(
-    Promise.all([
-      reviewedSpells.registerReviewedSpell(arrival, arrivalApproval, scope),
-      reviewedSpells.registerReviewedSpell(arrival, arrivalApproval, scope),
-    ])
-  ).resolves.toEqual([arrival, arrival]);
-  await expect(reviewedSpells.loadCurrentExact(arrival.spellVersionId, scope)).resolves.toEqual(
-    arrival
-  );
-  expect(await currentness(arrival.spellVersionId)).toBe(true);
-  expect(await currentness(reviewedSpell.spellVersionId)).toBe(false);
-  const stored = await pool.query<{
-    spell_id: string;
-    end_date: string | null;
-    end_reason: string | null;
-  }>(
-    `SELECT spell_id,end_date,end_reason FROM outcome_acquisition_spell_version
-      WHERE spell_version_id=$1`,
-    [arrival.spellVersionId]
-  );
-  expect(stored.rows).toEqual([
-    { spell_id: reviewedSpell.spellVersionId, end_date: null, end_reason: null },
-  ]);
-
-  // An arrival does not retire the season window inside its stint.
+  // The reviewed spell keeps its meaning, and the window inside its stint is current again.
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
   expect(await currentness(homeWindow.spellVersionId)).toBe(true);
-
-  // A season spell registers inside the arrival's open stint, and both stay current.
-  const inside = await successorWindow();
-  await spells.registerReviewedSpell(
-    inside,
-    await approve('acquisition_spell_registration', inside.spellVersionId, inside),
-    scope
+  // A reviewed spell never binds season statistics; the season window does.
+  expect(await sourceCurrent(built.inputSet.inputSetId, reviewedSpell.spellVersionId)).toBe(false);
+  expect(await sourceCurrent(built.inputSet.inputSetId, homeWindow.spellVersionId)).toBe(true);
+  // So the input bound to the window reads as current authority again, unchanged.
+  await expect(repository.loadCurrentFinalizedSeasonInputSet(read, scope)).resolves.toEqual(
+    built.inputSet
   );
-  expect(await currentness(inside.spellVersionId)).toBe(true);
-  expect(await currentness(arrival.spellVersionId)).toBe(true);
-
-  // Season statistics bind season spells, never an arrival.
-  await expect(
-    pool.query(`INSERT INTO outcome_hpn_pav_calculation_player (spell_version_id) VALUES ($1)`, [
-      arrival.spellVersionId,
-    ])
-  ).rejects.toThrow('binds season spells, not arrival-only spells');
-
-  // Two reviewed spells for one player and club still cannot overlap.
-  const secondArrival = createAflTradeArrivalSpell({
-    ...arrival.content,
-    version: 1,
-    supersedesSpellVersionId: null,
-    createdAt: await instant(),
-  });
-  await expect(
-    reviewedSpells.registerReviewedSpell(
-      secondArrival,
-      await approve('acquisition_spell_registration', secondArrival.spellVersionId, secondArrival),
-      scope
-    )
-  ).rejects.toThrow('cannot overlap');
 
   // Two season spells for one player and club still cannot overlap.
   const duplicateWindow = createAflTradeAppearanceMembershipSpell({
@@ -292,5 +234,34 @@ it('leaves reviewed spells unchanged and re-makes one as an arrival that admits 
       scope
     )
   ).rejects.toThrow('cannot overlap');
-  expect(await spellVersions()).toBe(versionsBefore + 2);
+
+  // A successor season window registers inside the reviewed stint, and both stay current.
+  const inside = await successorWindow();
+  await spells.registerReviewedSpell(
+    inside,
+    await approve('acquisition_spell_registration', inside.spellVersionId, inside),
+    scope
+  );
+  expect(await currentness(inside.spellVersionId)).toBe(true);
+  expect(await currentness(reviewedSpell.spellVersionId)).toBe(true);
+  expect(await sourceCurrent(built.inputSet.inputSetId, inside.spellVersionId)).toBe(true);
+
+  // Two reviewed spells for one player and club still cannot overlap.
+  const { schemaVersion: _reviewedSchema, ...reviewedContent } = reviewedSpell.content;
+  const secondReviewed = createAflTradeAcquisitionSpellRegistration({
+    ...reviewedContent,
+    createdAt: await instant(),
+  });
+  await expect(
+    reviewedSpells.registerReviewedSpell(
+      secondReviewed,
+      await approve(
+        'acquisition_spell_registration',
+        secondReviewed.spellVersionId,
+        secondReviewed
+      ),
+      scope
+    )
+  ).rejects.toThrow('cannot overlap');
+  expect(await spellVersions()).toBe(versionsBefore + 1);
 }, 300_000);
