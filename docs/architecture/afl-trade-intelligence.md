@@ -1778,9 +1778,14 @@ current spell, while reviewed entry spells need a promoted incoming asset that m
 not yet have. A v3 spell binds a player, represented club and season to the first and last reviewed
 appearance facts and asserts nothing about entry, departure or trade custody, so metric, release,
 valuation dataset, player PAV observation and postseason consumers reject it. Its boundary and
-completeness facts count only while their player, match and club identity decisions stay current. It is
-a bridge: a current v1 or v2 reviewed entry spell whose possible membership contains its whole window retires it
-automatically, player by player, and it must not be used where acquisition timing matters.
+completeness facts count only while their player, match and club identity decisions stay current. It
+must not be used where acquisition timing matters. Since migration 0248 season statistics bind season
+spells only: the HPN input build and its finalization guard never bind a reviewed (v1, v2 or v4) spell,
+and legacy spells recorded before registration existed keep their unchanged rule. A v3 spell may sit
+inside any current reviewed stint for the same player and club and is not retired by it, so reviewed
+spells prove arrivals and season spells prove who played for the club in a season. Retained input sets
+bound to reviewed spells stop reading as current authority once a season spell covers the same rows,
+and are replaced by replaying the season.
 Season HPN input building and finalization evaluate each candidate spell's registration currency once
 per input set rather than once per row (migration 0236), with the same currency rules.
 Finalization reads its content JSON once per statement rather than once per row (migration 0240),
@@ -1801,9 +1806,8 @@ departure. Continuity in a season comes from that season's v3 spell, which may s
 v4 stint for the same player and club and is not retired by it. A v4 spell may supersede a v1, v2 or
 v4 spell for the same player and club, which is how a reviewed spell whose evidence was lost is
 re-made. HPN season attribution never binds a v4 spell, and the postseason bounds helper refuses one,
-since its stint end comes from season spells rather than from the record. v1 and v2 spells keep their
-existing rules: they still exclude v3 spells and retire those inside them until HPN binding moves onto
-season spells.
+since its stint end comes from season spells rather than from the record. v1 and v2 spells kept
+excluding and retiring v3 spells until migration 0248 moved HPN binding onto season spells.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
