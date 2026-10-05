@@ -6,6 +6,7 @@ import Button from '@/components/Button';
 import FormField from '@/components/FormField';
 import Alert from '@/components/ui/Alert';
 import { useConfirmation } from '@/components/ui/Modal';
+import { fetchApi } from '@/lib/api';
 import {
   COMMON_TIMEZONES,
   getBrowserTimeZone,
@@ -78,7 +79,8 @@ export default function DraftScheduleManager({
     setSuccess(null);
 
     try {
-      const response = await fetch(`/api/drafts/${draftId}/schedule`, {
+      // fetchApi parses the body and throws on a non-2xx response.
+      await fetchApi(`/api/drafts/${draftId}/schedule`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -90,12 +92,6 @@ export default function DraftScheduleManager({
           enableReminders: formData.enableReminders,
         }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update schedule');
-      }
 
       setSuccess('Draft schedule updated successfully!');
       setIsEditing(false);
@@ -120,15 +116,9 @@ export default function DraftScheduleManager({
         setSuccess(null);
 
         try {
-          const response = await fetch(`/api/drafts/${draftId}/schedule`, {
+          await fetchApi(`/api/drafts/${draftId}/schedule`, {
             method: 'DELETE',
           });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.error || 'Failed to cancel schedule');
-          }
 
           setSuccess('Draft schedule cancelled. Draft started immediately!');
           onScheduleUpdated?.();

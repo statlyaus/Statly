@@ -1,11 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { prisma } from '@/lib/prisma';
 import { DraftStatus } from '@prisma/client';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { updateDraftReminders } from '@/lib/reminders';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 
 interface UpdateScheduleRequest {
   scheduledTime: string;
@@ -17,6 +19,19 @@ interface UpdateScheduleRequest {
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: draftId } = await params;
+
+    // Scheduling a draft changes persisted state, so it requires a commissioner of the league that
+    // owns this draft rather than an anonymous caller.
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const access = await getDraftMembershipAccess(draftId, userId);
+    if (!access.canManage) {
+      return errorResponse('Commissioner access required', 403);
+    }
+
     const body: UpdateScheduleRequest = await request.json();
 
     // Validation
@@ -147,6 +162,18 @@ export async function DELETE(
 ) {
   try {
     const { id: draftId } = await params;
+
+    // Cancelling the schedule starts the draft immediately, so it needs the same commissioner gate
+    // as rescheduling it.
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const access = await getDraftMembershipAccess(draftId, userId);
+    if (!access.canManage) {
+      return errorResponse('Commissioner access required', 403);
+    }
 
     // Find the draft
     const draft = await prisma.draft.findUnique({
