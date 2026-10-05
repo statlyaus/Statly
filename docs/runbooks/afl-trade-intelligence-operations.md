@@ -432,6 +432,12 @@ Earlier rows are unchanged and still load. On `statly-grading-1` the three
 neither has custody. Their bytes are lost (#742 audit note). Exact replays of those decisions still
 succeed. A successor version of either decision must cite a retained record.
 
+Do not deploy migration 0253 to `statly-grading-1` until the model-qualification writer records the
+location of its qualification artifact. An automated Gate 3 decision cites that `derived_private`
+artifact as authority. On 2026-10-06 every one of the 111,607 `derived_private` custody rows on the
+genuine database was unlocated. Until the writer locates its artifact, the migration refuses every
+new automated model qualification.
+
 ### Custody readback
 
 Reviewed registration requires healthy custody (migration 0250): the environment's latest custody
