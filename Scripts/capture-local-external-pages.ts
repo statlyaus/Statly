@@ -31,12 +31,16 @@ import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability official-afl-completed-draft-session \
  *     --season 2019 [--season 2020 ...]
+ *
+ * Add --store-id <store-id> to write into the registered local store rooted at --artifact-root, so
+ * every captured page's custody row records its location.
  */
 
 export interface LocalExternalCaptureArguments {
   databaseUrl: string;
   userAgent: string;
   artifactRootDirectory: string;
+  storeId?: string;
   targets: LocalExternalCaptureTarget[];
 }
 
@@ -79,7 +83,14 @@ export function requireDurableArtifactRoot(
   return canonical;
 }
 
-const OPTION_NAMES = ['--artifact-root', '--capability', '--season', '--from-season', '--url'];
+const OPTION_NAMES = [
+  '--artifact-root',
+  '--store-id',
+  '--capability',
+  '--season',
+  '--from-season',
+  '--url',
+];
 
 type OptionValues = ReadonlyMap<string, readonly string[]>;
 
@@ -179,7 +190,17 @@ export function parseLocalExternalCaptureArguments(
       : capability === 'draftguru-trade-detail'
         ? detailTargets(values)
         : officialSessionTargets(values);
-  return { databaseUrl, userAgent, artifactRootDirectory, targets };
+  const storeId = single(values, '--store-id');
+  if (storeId !== undefined && !/^[a-z][a-z0-9-]{2,62}$/u.test(storeId)) {
+    usage('--store-id must be lowercase letters, digits and hyphens, starting with a letter.');
+  }
+  return {
+    databaseUrl,
+    userAgent,
+    artifactRootDirectory,
+    ...(storeId === undefined ? {} : { storeId }),
+    targets,
+  };
 }
 
 function summary(result: LocalExternalCaptureResult) {
@@ -211,6 +232,7 @@ export async function runLocalExternalCaptureCommand(input: {
       {
         sql: createPgAflOutcomeSqlClient(pool),
         artifactRootDirectory: parsed.artifactRootDirectory,
+        ...(parsed.storeId === undefined ? {} : { storeId: parsed.storeId }),
         userAgent: parsed.userAgent,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
       },

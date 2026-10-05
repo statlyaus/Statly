@@ -675,7 +675,10 @@ custody and admission adapters differ:
 - raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
   same adapter the local official-AFL and AFLCA captures use) under
   `<artifact-root>/draftguru-trade-raw` or `<artifact-root>/official-afl-session-raw`; this custody
-  cannot satisfy production or public-release storage; and
+  cannot satisfy production or public-release storage. With `--store-id <store-id>` the pages go into
+  the registered local store, whose root must be `--artifact-root`, and each page's custody row
+  records its location in the same transaction. Always pass it on `statly-grading-1`
+  (`statly-grading-1-artifacts`), so no new raw page is unlocated; and
 - provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
   admission semantics: one lease per provider at a time, then the provider's five-second cooldown
   and a request cooldown for the same source fetch equal to the reviewed cache period (86,400 s for

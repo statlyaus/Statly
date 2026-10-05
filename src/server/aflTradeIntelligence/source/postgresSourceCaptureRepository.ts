@@ -1,3 +1,5 @@
+import { recordAflTradeRepositoryLocations } from '../artifacts/artifactStoreLocation';
+import type { AflTradeArtifactStoreLocation } from '../artifacts/immutableArtifactRepository';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -78,7 +80,17 @@ function exactIso(value: string, name: string): string {
 }
 
 export class PostgresAflTradeSourceCaptureRepository {
-  constructor(private readonly client: AflOutcomeSqlClient) {}
+  /**
+   * `locate` names the registered store location of a captured artifact by its custody class, for
+   * a caller that captured into store-rooted repositories; each custody row then records its
+   * location in the same transaction. Without it nothing is located.
+   */
+  constructor(
+    private readonly client: AflOutcomeSqlClient,
+    private readonly options: {
+      locate?: (artifactClass: string) => AflTradeArtifactStoreLocation | undefined;
+    } = {}
+  ) {}
 
   async persist(
     unparsedSnapshot: AflTradeSourceSnapshotManifest,
@@ -206,6 +218,11 @@ export class PostgresAflTradeSourceCaptureRepository {
             'Artifact custody already binds different immutable evidence.'
           );
         }
+        await recordAflTradeRepositoryLocations(
+          transaction,
+          { storeLocation: this.options.locate?.(readback.artifactClass) },
+          [binding.artifact]
+        );
       }
 
       await transaction.query(

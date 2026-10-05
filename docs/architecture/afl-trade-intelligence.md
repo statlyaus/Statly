@@ -418,7 +418,14 @@ repository takes a binding to the registered artifact store, stores each evidenc
 transaction records each artifact's location, refuses evidence without a matching custody row, and
 refuses any cited artifact, including the rule's evidence cited by a spell, that still has no
 location, with the named `AflTradeArtifactUnlocatedError`. A failed write or read-back therefore
-leaves no location and no registration. A season (v3) spell cites no evidence bytes and is exempt.
+leaves no location and no registration. A season (v3) spell cites no evidence bytes and is exempt. A reviewed HPN
+nonparticipant cites a retained page, and outside `test_fixture` the HPN input build and its
+current-authority read refuse it with the same `AflTradeArtifactUnlocatedError` when that page has no
+location. A repository built from a registered store (`bindLocalAflTradeArtifactRepository`) carries
+its store location, and every custody writer that writes through one (source and external capture
+recording, private evaluation staging, postseason materialization, admitted-player preparation and
+projection release custody) records each artifact's location in the transaction that writes its
+custody row.
 `test_fixture` has no store, because a local store may only exist in `non_production`, so fixtures
 keep the read-and-compare path. Reviewers register through `npm run
 outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.
