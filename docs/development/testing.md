@@ -445,6 +445,10 @@ shared or production PostgreSQL database.
 ## Test layers
 
 - Unit tests cover pure domain rules, normalization, read-model projection, and component behavior.
+  `tests/setup/unit.setup.ts` disables network calls and keeps Prisma's native query engine out of the
+  unit tier: constructing a `PrismaClient` throws, and the shared `@/lib/prisma` client throws on first
+  use. A unit test that reaches Prisma injects a fake client or mocks `@/lib/prisma` itself. A real
+  engine loading inside a Vitest worker once aborted the whole unit run (#809).
 - Integration tests cover Prisma/service boundaries with an isolated database and Redis where needed.
   Full-scale draft persistence belongs here: the 12-team by 22-player, 264-pick contract exercises the
   real `DraftApplicationService` and Prisma boundary without browser, dev-server, Redis, or retry noise.
