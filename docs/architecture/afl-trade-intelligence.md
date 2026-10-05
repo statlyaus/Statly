@@ -1813,6 +1813,17 @@ re-made. HPN season attribution never binds a v4 spell, and the postseason bound
 since its stint end comes from season spells rather than from the record. v1 and v2 spells kept
 excluding and retiring v3 spells until migration 0248 moved HPN binding onto season spells.
 
+A promoted event binds its entry evidence to the exact source captures behind it, so a v1 spell whose
+capture bytes were lost could not be re-made: a re-fetched page is never byte-identical. A _source
+capture successor_ (migration 0252, `outcome_source_capture_successor`) records, for one lost capture,
+either a later approved capture of the same provider, dataset, competition, season and source URL
+whose bytes are located (`recaptured`), or an owner-approved `omitted` decision for a page that can no
+longer be confirmed (statlyaus/Statly#742: two Official AFL articles edited since review). Each carries
+its own review decision and is append-only, with one per lost capture. Only v4 entries read
+successors: `outcome_acquisition_arrival_event_current` is the promoted-event check with a cited
+artifact counted as the lost capture it succeeds, and an omitted capture excused from the citation
+set. v1, v2 and v3 entries keep the unchanged check.
+
 The two claims are now held separately and joined only when read. A reviewed spell (v1, v2 or v4)
 claims an arrival; a season (v3) spell claims that the player played for a club in one season. A
 _stint_ is one arrival at a club plus the current season spells at that club that follow it, until the

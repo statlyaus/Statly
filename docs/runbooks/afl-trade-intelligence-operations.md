@@ -334,6 +334,20 @@ was never located. A failure leaves no location and no registration, so the same
 re-run once the cause is fixed. It also refuses with `AflTradeCustodyUnhealthyError`
 (`CUSTODY_UNHEALTHY`) while custody is unhealthy; run a custody readback first.
 
+An arrival-only (v4) spell may cite a source capture successor instead of a lost entry capture
+(migration 0252). Successors live in `outcome_source_capture_successor`, one per lost capture:
+
+- `recaptured` names a later approved capture of the same provider, dataset, competition, anchor
+  season and `sourceUrl`, whose bytes are located; the v4 entry cites the new artifact.
+- `omitted` names a lost capture the owner has excused; the v4 entry leaves it out. The entry must
+  still cite at least one other capture of the promotion.
+
+Each successor is content-addressed (`afl-trade-source-capture-successor/v1`) and needs an approved
+review decision with subject type `source_capture_successor` whose evidence is exactly the record.
+Insertion refuses a capture whose bytes are located, a second successor for the same capture, a
+different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
+entries never read them.
+
 ### Custody readback
 
 Reviewed registration requires healthy custody (migration 0250): the environment's latest custody
