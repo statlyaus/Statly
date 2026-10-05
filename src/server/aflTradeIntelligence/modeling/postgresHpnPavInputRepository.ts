@@ -1,3 +1,4 @@
+import { requireAflTradeEvidenceLocated } from '../artifacts/artifactStoreLocation';
 import {
   assignmentContinuityCteSql,
   clubResolutionSql,
@@ -236,7 +237,7 @@ async function loadExcludedSourceRows(
       'RESOLUTION_NOT_CURRENT',
       'A reviewed nonparticipant decision is missing, superseded, or not exact current source authority.'
     );
-  return result.rows
+  const rows = result.rows
     .map((decision) => {
       const disposition = asObject(
         decision.evidence_json.disposition,
@@ -294,6 +295,15 @@ async function loadExcludedSourceRows(
     .sort((left, right) =>
       left.source.providerDecodedRowId.localeCompare(right.source.providerDecodedRowId)
     );
+  // A reviewed nonparticipant cites a retained page; outside test fixtures its bytes must have a
+  // recorded store location, as reviewed acquisition evidence must (ARTIFACT_UNLOCATED).
+  if (request.environment !== 'test_fixture') {
+    await requireAflTradeEvidenceLocated(
+      transaction,
+      rows.map((row) => row.review.evidenceArtifact.artifactId)
+    );
+  }
+  return rows;
 }
 
 function projectedBinding(
