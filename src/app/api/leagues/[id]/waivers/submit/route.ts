@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger, withTiming } from '@/lib/logger';
@@ -61,38 +60,12 @@ export const POST = withMetrics(
         ...new Set([requestedPlayerId, canonicalPlayerId, ...transitionalAliasIds]),
       ];
 
+      // Prisma owns roster ownership; the Firestore ownership projection is never consulted here.
       const prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
         where: { leagueId, playerId: { in: playerAliasIds } },
         select: { playerId: true, memberId: true },
       });
       if (prismaOwnership) {
-        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
-      }
-
-      // Ownership checks (doc read + roster scan) concurrently to reduce latency
-      const ownershipRefs = playerAliasIds.map((aliasId) =>
-        adminDb.doc(`leagues/${leagueId}/playerOwnerships/${aliasId}`)
-      );
-      const [ownershipDocs, rosterScans] = await Promise.all([
-        Promise.all(
-          ownershipRefs.map((ref) => withTiming('waivers.ownership.get', () => ref.get()))
-        ),
-        Promise.all(
-          playerAliasIds.map((aliasId) =>
-            withTiming('waivers.roster.scan', () =>
-              adminDb
-                .collection(`leagues/${leagueId}/rosters`)
-                .where('playerIds', 'array-contains', aliasId)
-                .limit(1)
-                .get()
-            )
-          )
-        ),
-      ]);
-      if (
-        ownershipDocs.some((document) => document.exists) ||
-        rosterScans.some((scan) => !scan.empty)
-      ) {
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
@@ -109,13 +82,6 @@ export const POST = withMetrics(
           return NextResponse.json({ error: 'Invalid bid amount' }, { status: 400 });
         }
         validatedBid = bidAmount;
-      }
-
-      const freshOwnershipDocs = await Promise.all(
-        ownershipRefs.map((ref) => withTiming('waivers.ownership.recheck', () => ref.get()))
-      );
-      if (freshOwnershipDocs.some((document) => document.exists)) {
-        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
       const submittedClaim = await new PrismaWaiverClaimStore().submitClaim({
