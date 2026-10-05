@@ -26,6 +26,7 @@ export interface WaiverClaim {
   status: 'PENDING' | 'SUCCESSFUL' | 'FAILED' | 'CANCELLED' | string;
   createdAt: Date;
   processingAt?: Date;
+  processedAt?: Date;
   bidAmount?: number;
   canonicalActionId?: string;
 }
@@ -36,6 +37,12 @@ export interface WaiverProcessingResult {
   /** Another run holds this league's lease, so this one processed nothing. */
   alreadyRunning?: true;
 }
+
+// Prisma's action statuses, in the vocabulary the waivers page and the Firestore projection use.
+const CLAIM_DISPLAY_STATUS: Record<string, WaiverClaim['status']> = {
+  PROCESSED: 'SUCCESSFUL',
+  REJECTED: 'FAILED',
+};
 
 // A run that dies keeps the lease only this long before the next run may take it over.
 const WAIVER_RUN_LEASE_MS = 15 * 60 * 1000;
@@ -563,6 +570,7 @@ interface CanonicalWaiverActionRow {
   details: unknown;
   status: string;
   processingAt?: Date | string | null;
+  processedAt?: Date | string | null;
   createdAt?: Date | string | null;
 }
 
@@ -659,6 +667,41 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     })) as CanonicalWaiverActionRow[];
 
     return this.mapActionsToClaims(leagueId, actions);
+  }
+
+  // A member's most recent claims, newest first, with statuses in the words the waivers page uses.
+  async loadMemberClaims(leagueId: string, memberId: string): Promise<WaiverClaim[]> {
+    const actions = (await this.db.teamAction.findMany({
+      where: { leagueId, memberId, actionType: 'WAIVER_CLAIM' },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        leagueId: true,
+        memberId: true,
+        details: true,
+        status: true,
+        processingAt: true,
+        processedAt: true,
+        createdAt: true,
+      },
+    })) as CanonicalWaiverActionRow[];
+
+    return (await this.mapActionsToClaims(leagueId, actions)).map((claim) => ({
+      ...claim,
+      status: CLAIM_DISPLAY_STATUS[claim.status] ?? claim.status,
+    }));
+  }
+
+  // The member's balance; a balance no claim has touched yet is the league budget, as debiting uses.
+  async loadRemainingFaab(
+    leagueId: string,
+    memberId: string,
+    waiverSettings: WaiverSettings
+  ): Promise<number | undefined> {
+    if (waiverSettings.system !== 'FAAB') return undefined;
+    const [priority] = await this.loadPriorityRows(this.db, leagueId, memberId);
+    return priority?.remainingFAAB ?? waiverSettings.faabBudget;
   }
 
   async loadClaim(leagueId: string, claimId: string): Promise<WaiverClaim | null> {
@@ -990,6 +1033,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
           status: action.status,
           createdAt: normalizeDate(action.createdAt),
           processingAt: action.processingAt ? normalizeDate(action.processingAt) : undefined,
+          ...(action.processedAt ? { processedAt: normalizeDate(action.processedAt) } : {}),
           ...(readOptionalString(details.dropPlayerId)
             ? { dropPlayerId: readOptionalString(details.dropPlayerId) }
             : {}),
