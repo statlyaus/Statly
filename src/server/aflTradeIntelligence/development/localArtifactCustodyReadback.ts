@@ -8,6 +8,28 @@ import { createLocalAflTradeFileConditionalObjectStore } from './localFileCondit
 const LOCAL_STORE_ASSURANCE = 'local_non_production_filesystem';
 const FULL_CLASS = 'raw_source';
 
+const STORE_KEY_PATTERN =
+  /^(.+?)\/((?:local_non_production_filesystem|fixture_filesystem|durable_object_storage)\/sha256\/.+)$/u;
+
+/**
+ * Splits a store location key into the repository directory under the store root and the key inside
+ * that repository. Repository directories may be nested (`fitzroy-historical/fitzroy-historical-raw`),
+ * so the split is at the repository's own `<assurance>/sha256/` layout, not at the first slash.
+ */
+export function splitAflTradeStoreObjectKey(
+  objectKey: string
+): { repositoryPath: string; repositoryKey: string } | null {
+  const match = STORE_KEY_PATTERN.exec(objectKey);
+  if (
+    !match?.[1] ||
+    !match[2] ||
+    match[1].split('/').some((part) => part === '' || part === '.' || part === '..')
+  ) {
+    return null;
+  }
+  return { repositoryPath: match[1], repositoryKey: match[2] };
+}
+
 export interface AflTradeArtifactReadbackRun {
   runId: string;
   environment: string;
@@ -68,8 +90,8 @@ export async function readBackLocalAflTradeArtifactCustody(input: {
       [input.storeId, FULL_CLASS, fraction]
     )
   ).rows;
-  // A location key is <repository>/<repository key>; each repository's objects live under its own
-  // directory in the store root.
+  // A location key is <repository path>/<repository key>; each repository's objects live under its
+  // own directory in the store root.
   const root = resolve(store.root_locator);
   const repositories = new Map<string, AflTradeConditionalObjectStore>();
   const repository = (id: string) => {
@@ -84,12 +106,12 @@ export async function readBackLocalAflTradeArtifactCustody(input: {
   const checkedByClass: Record<string, number> = {};
   for (const [index, row] of rows.entries()) {
     checkedByClass[row.artifact_class] = (checkedByClass[row.artifact_class] ?? 0) + 1;
-    const separator = row.object_key.indexOf('/');
+    const split = splitAflTradeStoreObjectKey(row.object_key);
     let exact = false;
-    if (separator > 0) {
+    if (split !== null) {
       try {
-        const identity = await repository(row.object_key.slice(0, separator)).headExact({
-          objectKey: row.object_key.slice(separator + 1),
+        const identity = await repository(split.repositoryPath).headExact({
+          objectKey: split.repositoryKey,
         });
         exact =
           identity !== null &&

@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { createLocalAflTradeFileConditionalObjectStore } from './localFileConditionalObjectStore';
+import { splitAflTradeStoreObjectKey } from './localArtifactCustodyReadback';
 
 const LOCAL_STORE_ASSURANCE = 'local_non_production_filesystem';
 const MIRROR_PATTERN = /^gs:\/\/[a-z0-9][a-z0-9._-]{1,61}[a-z0-9](\/[A-Za-z0-9._-]+)*$/u;
@@ -191,10 +192,9 @@ export async function restoreTestLocalAflTradeArtifactMirror(input: {
   if (row === undefined) {
     throw new Error(`Artifact store ${store.storeId} has no custody mirrored by its latest sync.`);
   }
-  const separator = row.object_key.indexOf('/');
-  if (separator <= 0) throw new Error(`Location key ${row.object_key} names no repository.`);
-  const repositoryId = row.object_key.slice(0, separator);
-  const repositoryKey = row.object_key.slice(separator + 1);
+  const split = splitAflTradeStoreObjectKey(row.object_key);
+  if (split === null) throw new Error(`Location key ${row.object_key} names no repository.`);
+  const { repositoryPath: repositoryId, repositoryKey } = split;
   // The local store keeps each object as an envelope named by the SHA-256 of its repository key.
   const envelope = `${createHash('sha256').update(repositoryKey).digest('hex')}.json`;
   const mirrorObject = `${store.mirrorLocator}/${repositoryId}/${envelope}`;
