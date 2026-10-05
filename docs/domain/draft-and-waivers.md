@@ -133,7 +133,8 @@ retry; failures do not partially assign the same player to multiple teams.
 Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each
 member's budget); otherwise a `ROLLING` league uses priority order. Commissioners set or clear the
 budget through the league settings API (`waiver.faabBudget`: a whole number of at least 1, or
-`null`). The minimum bid is 1 and the waiver period is 24 hours. Firestore holds no waiver settings.
+`null`). The minimum bid is 1 and the waiver period is 24 hours. The budget is locked once the league has any waiver
+claim, because members' balances are derived from it when a claim first touches them. Firestore holds no waiver settings.
 
 ### Concurrent writers
 
