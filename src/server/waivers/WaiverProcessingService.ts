@@ -618,27 +618,23 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     });
   }
 
+  // Prisma owns waiver settings: a FAAB budget means FAAB, otherwise a rolling league uses priority
+  // order. The minimum bid and waiver period keep their defaults.
   async loadWaiverSettings(leagueId: string): Promise<WaiverSettings> {
-    const [league, settingsSnap] = await Promise.all([
-      this.db.league.findUnique({
-        where: { id: leagueId },
-        select: { settings: { select: { waiverRule: true } } },
-      }),
-      this.firestore.doc(`leagues/${leagueId}/config/settings`).get(),
-    ]);
-    const projectedSettings = settingsSnap.data()?.waiverSettings;
-    const waiverSettings =
-      projectedSettings && typeof projectedSettings === 'object'
-        ? (projectedSettings as WaiverSettings)
-        : {};
+    const league = await this.db.league.findUnique({
+      where: { id: leagueId },
+      select: { settings: { select: { waiverRule: true, faabBudget: true } } },
+    });
+    const faabBudget = league?.settings.faabBudget ?? undefined;
 
     return {
       system:
-        waiverSettings.system ??
-        (league?.settings.waiverRule === 'ROLLING' ? 'PRIORITY' : undefined),
-      faabBudget: waiverSettings.faabBudget,
-      minimumBid: waiverSettings.minimumBid,
-      waiverPeriodHours: waiverSettings.waiverPeriodHours,
+        faabBudget !== undefined
+          ? 'FAAB'
+          : league?.settings.waiverRule === 'ROLLING'
+            ? 'PRIORITY'
+            : undefined,
+      faabBudget,
     };
   }
 

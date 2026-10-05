@@ -242,15 +242,12 @@ describe('waiver FAAB under two writers', () => {
 
 describe('waiver processing under two runs', () => {
   it('awards and debits each claim once when two runs overlap', async () => {
-    // FAAB settings are read from the league's Firestore settings projection.
-    const faabSettings = {
-      get: async () => ({ exists: true, data: () => ({ waiverSettings: FAAB }) }),
-    };
-    const faabFirestore = {
-      doc: (path: string) => (path.endsWith('/config/settings') ? faabSettings : firestoreDoc),
-      collection: () => ({ doc: () => firestoreDoc }),
-    };
-    const claimStore = new PrismaWaiverClaimStore(prisma, faabFirestore as never);
+    // The league is FAAB because Prisma says so; Firestore serves no waiver settings here.
+    await prisma.leagueSettings.update({
+      where: { id: SETTINGS },
+      data: { faabBudget: FAAB.faabBudget },
+    });
+    const claimStore = store();
     const service = () =>
       new WaiverProcessingService(prisma, claimStore, { projectLeague: vi.fn() } as never);
 

@@ -130,6 +130,11 @@ Claims validate membership, league settings, player availability, optional drop 
 capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
 
+Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each
+member's budget); otherwise a `ROLLING` league uses priority order. Commissioners set or clear the
+budget through the league settings API (`waiver.faabBudget`: a whole number of at least 1, or
+`null`). The minimum bid is 1 and the waiver period is 24 hours. Firestore holds no waiver settings.
+
 ### Concurrent writers
 
 PostgreSQL runs writers concurrently, so budget and pick state are written as guarded updates rather

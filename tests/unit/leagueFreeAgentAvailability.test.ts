@@ -82,7 +82,6 @@ const firestoreMocks = vi.hoisted(() => {
 
   const emptyQuery = makeQuery([]);
   const ownershipDoc = { exists: false, data: () => undefined };
-  const settingsDoc = { exists: false, data: () => undefined };
 
   const collection = vi.fn((collectionPath: string) => {
     if (collectionPath === 'leagues') {
@@ -131,7 +130,7 @@ const firestoreMocks = vi.hoisted(() => {
 
   const doc = vi.fn((path: string) => ({
     path,
-    get: vi.fn().mockResolvedValue(path.endsWith('/config/settings') ? settingsDoc : ownershipDoc),
+    get: vi.fn().mockResolvedValue(ownershipDoc),
   }));
 
   return {
@@ -282,7 +281,10 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
       canManage: true,
     });
 
-    prismaMocks.league.findUnique.mockResolvedValue({ id: 'league-1' });
+    prismaMocks.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settings: { waiverRule: 'WEEKLY', faabBudget: null },
+    });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       userId: 'statly-dev-tester',
