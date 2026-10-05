@@ -26,6 +26,9 @@ it has been deployed. Go-live remains blocked until the
 | Delayed/background work                                                           | BullMQ workers                                | Idempotent jobs with durable results written through domain services.      |
 | Web-vitals telemetry                                                              | Configured telemetry backend                  | Isolated from transactional league data.                                   |
 
+Waiver settings, including the FAAB budget, are part of Prisma's league settings; Firestore holds no
+waiver settings.
+
 Authentication is not authorization. A valid Firebase UID does not imply membership, commissioner
 rights, roster ownership, draft participation, or waiver eligibility.
 
