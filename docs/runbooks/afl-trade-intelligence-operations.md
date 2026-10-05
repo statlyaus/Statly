@@ -374,9 +374,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 ```
 
 The sync refuses unless custody is healthy, runs `gcloud storage rsync --recursive` from the store
-root and never deletes, and records the bucket path as the store's `mirror_locator` the first time.
-A store keeps one mirror for life; the database refuses a second locator. The restore test copies the
-chosen envelope into a scratch directory, verifies it through the store's own envelope reader against
+root, never deletes and never copies an envelope still being written (`.pending-*.json`), records the
+bucket path as the store's `mirror_locator` the first time, and then appends one
+`outcome_artifact_mirror_sync` row with its start and finish (migration 0251).
+A store keeps one mirror for life; the database refuses a second locator. The restore test samples only
+locations recorded before the latest finished sync started, so it never picks bytes not yet
+mirrored. It copies the chosen envelope into a scratch directory, verifies it through the store's own envelope reader against
 the custody row, writes an `afl-trade-artifact-mirror-restore/v1` receipt, and exits non-zero unless
 the verdict is `exact`.
 

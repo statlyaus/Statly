@@ -76,21 +76,60 @@ export async function mirrorLocalAflTradeArtifactStore(input: {
   if (health.rows[0]?.healthy !== true) {
     throw new Error('The store mirrors only after a clean custody readback under 48 hours old.');
   }
-  await input.runCloudStorage(['rsync', '--recursive', store.rootLocator, input.mirrorLocator]);
+  const startedAt = await databaseNow(input.client);
+  // Never copy an envelope the store is still writing (`.pending-*.json`, renamed on publish).
+  await input.runCloudStorage([
+    'rsync',
+    '--recursive',
+    '--exclude',
+    PENDING_ENVELOPE_PATTERN,
+    store.rootLocator,
+    input.mirrorLocator,
+  ]);
   let recordedLocator = false;
   if (store.mirrorLocator === null) {
-    await input.client.query(
+    const updated = await input.client.query(
       `UPDATE outcome_artifact_store SET mirror_locator=$2 WHERE store_id=$1 AND mirror_locator IS NULL`,
       [store.storeId, input.mirrorLocator]
     );
-    recordedLocator = true;
+    if (updated.rowCount === 1) {
+      recordedLocator = true;
+    } else if (
+      (await loadLocalStore(input.client, store.storeId)).mirrorLocator !== input.mirrorLocator
+    ) {
+      throw new Error(
+        `Artifact store ${store.storeId} recorded another mirror concurrently; a store keeps one mirror.`
+      );
+    }
   }
+  const finishedAt = await databaseNow(input.client);
+  await input.client.query(
+    `INSERT INTO outcome_artifact_mirror_sync (sync_id,store_id,mirror_locator,started_at,finished_at)
+     VALUES ($1,$2,$3,$4,$5)`,
+    [
+      `artifact-mirror-sync:${randomUUID()}`,
+      store.storeId,
+      input.mirrorLocator,
+      startedAt,
+      finishedAt,
+    ]
+  );
   return {
     storeId: store.storeId,
     mirrorLocator: input.mirrorLocator,
     recordedLocator,
-    syncedAt: new Date().toISOString(),
+    syncedAt: finishedAt,
   };
+}
+
+/** Matches the store's in-progress envelopes at any depth (`gcloud storage rsync --exclude`). */
+export const PENDING_ENVELOPE_PATTERN = String.raw`(^|.*/)\.pending-[^/]*\.json$`;
+
+async function databaseNow(client: AflOutcomeSqlClient): Promise<string> {
+  const result = await client.query<{ at: string }>(
+    `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
+  );
+  return result.rows[0]!.at;
 }
 
 export interface AflTradeMirrorRestoreReceipt {
@@ -121,6 +160,17 @@ export async function restoreTestLocalAflTradeArtifactMirror(input: {
   if (store.mirrorLocator === null) {
     throw new Error(`Artifact store ${store.storeId} has no recorded mirror.`);
   }
+  // Only locations recorded before the latest finished sync started are known to be mirrored.
+  const sync = (
+    await input.client.query<{ started_at: Date }>(
+      `SELECT started_at FROM outcome_artifact_mirror_sync
+        WHERE store_id=$1 AND mirror_locator=$2 ORDER BY finished_at DESC LIMIT 1`,
+      [store.storeId, store.mirrorLocator]
+    )
+  ).rows[0];
+  if (sync === undefined) {
+    throw new Error(`Artifact store ${store.storeId} has no finished mirror sync.`);
+  }
   const row = (
     await input.client.query<{
       artifact_id: string;
@@ -133,12 +183,14 @@ export async function restoreTestLocalAflTradeArtifactMirror(input: {
               custody.content_sha256,custody.byte_length::text AS byte_length,location.object_key
          FROM outcome_artifact_custody_location location
          JOIN outcome_artifact_custody custody USING (artifact_id)
-        WHERE location.store_id=$1
+        WHERE location.store_id=$1 AND location.located_at<=$2
         ORDER BY random() LIMIT 1`,
-      [store.storeId]
+      [store.storeId, sync.started_at]
     )
   ).rows[0];
-  if (row === undefined) throw new Error(`Artifact store ${store.storeId} has no located custody.`);
+  if (row === undefined) {
+    throw new Error(`Artifact store ${store.storeId} has no custody mirrored by its latest sync.`);
+  }
   const separator = row.object_key.indexOf('/');
   if (separator <= 0) throw new Error(`Location key ${row.object_key} names no repository.`);
   const repositoryId = row.object_key.slice(0, separator);

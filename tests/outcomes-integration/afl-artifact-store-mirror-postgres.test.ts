@@ -8,6 +8,7 @@ import { recordAflTradeEvidenceLocations } from '@/server/aflTradeIntelligence/a
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   mirrorLocalAflTradeArtifactStore,
+  PENDING_ENVELOPE_PATTERN,
   restoreTestLocalAflTradeArtifactMirror,
   type AflTradeCloudStorageCommand,
 } from '@/server/aflTradeIntelligence/development/artifactStoreMirror';
@@ -34,7 +35,8 @@ const fakeCloudStorage: AflTradeCloudStorageCommand = async (args) => {
   commands.push([...args]);
   const local = (path: string) => path.replace('gs://statly-test-mirror', bucketRoot);
   if (args[0] === 'rsync') {
-    await cp(args[2]!, local(args[3]!), { recursive: true, force: false, errorOnExist: false });
+    const [source, destination] = args.slice(-2);
+    await cp(source!, local(destination!), { recursive: true, force: false, errorOnExist: false });
   } else if (args[0] === 'cp') {
     await cp(local(args[1]!), args[2]!);
   } else {
@@ -107,6 +109,14 @@ it('mirrors only after a clean readback, records the mirror once and restores ex
   ).rejects.toThrow('clean custody readback');
   expect(commands).toEqual([]);
   expect(await mirrorLocator()).toBeNull();
+  // No finished sync yet: there is nothing to restore-test.
+  await expect(
+    restoreTestLocalAflTradeArtifactMirror({
+      client,
+      storeId: STORE_ID,
+      runCloudStorage: fakeCloudStorage,
+    })
+  ).rejects.toThrow('no recorded mirror');
 
   await readBackLocalAflTradeArtifactCustody({ client, storeId: STORE_ID });
   await expect(
@@ -117,7 +127,21 @@ it('mirrors only after a clean readback, records the mirror once and restores ex
       runCloudStorage: fakeCloudStorage,
     })
   ).resolves.toMatchObject({ storeId: STORE_ID, mirrorLocator: MIRROR, recordedLocator: true });
-  expect(commands).toEqual([['rsync', '--recursive', storeRoot, MIRROR]]);
+  expect(commands).toEqual([
+    ['rsync', '--recursive', '--exclude', PENDING_ENVELOPE_PATTERN, storeRoot, MIRROR],
+  ]);
+  const pending = new RegExp(PENDING_ENVELOPE_PATTERN, 'u');
+  expect(pending.test('mirror-raw/.pending-abc-123.json')).toBe(true);
+  expect(pending.test('.pending-abc.json')).toBe(true);
+  expect(pending.test(`mirror-raw/${'a'.repeat(64)}.json`)).toBe(false);
+  expect(
+    (
+      await pool.query<{ syncs: number }>(
+        'SELECT count(*)::integer AS syncs FROM outcome_artifact_mirror_sync WHERE store_id=$1',
+        [STORE_ID]
+      )
+    ).rows[0]!.syncs
+  ).toBe(1);
   expect(await mirrorLocator()).toBe(MIRROR);
   expect(await readdir(join(bucketRoot, 'mirror-test-store', 'mirror-raw'))).toHaveLength(2);
 
@@ -144,6 +168,48 @@ it('mirrors only after a clean readback, records the mirror once and restores ex
       [STORE_ID]
     )
   ).rejects.toThrow('mirror locator, once');
+
+  // An artifact located after the latest sync is not yet mirrored and is never sampled.
+  const late = await bindLocalAflTradeArtifactStore(client, {
+    storeId: STORE_ID,
+    repositoryId: 'mirror-raw',
+    artifactClass: 'raw_source',
+    maximumObjectBytes: 1024 * 1024,
+  });
+  const lateRef = createAflTradeCanonicalJsonArtifactRef(
+    { label: 'late' },
+    '2026-09-01T00:00:00.000Z'
+  );
+  await late.putIfAbsent(
+    lateRef,
+    new TextEncoder().encode(canonicalizeAflTradeJson({ label: 'late' }))
+  );
+  await pool.query(
+    `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+       environment,created_at,verified_at,custody_json)
+     VALUES ($1,$2,$3,$4,$5,'raw_source','non_production',$6,$6,'{}')`,
+    [
+      lateRef.artifactId,
+      lateRef.contentSha256,
+      lateRef.storageUri,
+      lateRef.mediaType,
+      lateRef.byteLength,
+      lateRef.createdAt,
+    ]
+  );
+  await client.transaction((transaction) =>
+    recordAflTradeEvidenceLocations(transaction, late, [lateRef])
+  );
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const sampled = await restoreTestLocalAflTradeArtifactMirror({
+      client,
+      storeId: STORE_ID,
+      runCloudStorage: fakeCloudStorage,
+    });
+    expect(sampled.artifactId).not.toBe(lateRef.artifactId);
+    expect(sampled.verdict).toBe('exact');
+  }
 
   // The restore test reads a random located artifact back from the mirror.
   const restored = await restoreTestLocalAflTradeArtifactMirror({
