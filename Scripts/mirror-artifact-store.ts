@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 
 import { Pool } from 'pg';
 
@@ -79,11 +78,41 @@ export function parseMirrorArtifactStoreArguments(
   return { mode: 'mirror', databaseUrl, storeId, mirrorLocator };
 }
 
-const gcloudStorage: AflTradeCloudStorageCommand = async (args) => {
-  await promisify(execFile)('gcloud', ['storage', ...args, '--quiet'], {
-    maxBuffer: 64 * 1024 * 1024,
+const STDERR_TAIL_BYTES = 64 * 1024;
+
+/**
+ * Runs one `gcloud storage` command without buffering its output. A store sync prints a line per
+ * object, hundreds of thousands of them, so stdout is discarded and only the last 64 KiB of stderr
+ * is kept for the failure message.
+ */
+export function runGcloudStorage(args: readonly string[], command = 'gcloud'): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, ['storage', ...args, '--quiet'], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    // Registered first: a failed spawn (EMFILE, ENFILE, ENOENT) can leave stderr null and must
+    // reject the promise rather than crash the process.
+    child.on('error', reject);
+    let tail = Buffer.alloc(0);
+    child.stderr?.on('data', (chunk: Buffer) => {
+      tail = Buffer.concat([tail, chunk]);
+      if (tail.byteLength > STDERR_TAIL_BYTES) {
+        tail = tail.subarray(tail.byteLength - STDERR_TAIL_BYTES);
+      }
+    });
+    child.on('close', (code, signal) => {
+      if (code === 0) resolvePromise();
+      else
+        reject(
+          new Error(
+            `gcloud storage ${args[0] ?? ''} failed (${signal ?? `exit ${code}`}): ${tail.toString('utf8').trim().slice(-2000)}`
+          )
+        );
+    });
   });
-};
+}
+
+const gcloudStorage: AflTradeCloudStorageCommand = (args) => runGcloudStorage(args);
 
 export async function runMirrorArtifactStoreCommand(input: {
   argv: readonly string[];
