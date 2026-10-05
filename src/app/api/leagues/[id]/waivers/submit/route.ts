@@ -11,18 +11,12 @@ import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
   PrismaWaiverClaimStore,
   WaiverClaimStoreError,
-  type WaiverSettings as ProcessingWaiverSettings,
 } from '@/server/waivers/WaiverProcessingService';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { findWaiverPlayerAliasIds } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface WaiverSettings {
-  system?: 'FAAB' | 'PRIORITY';
-  minimumBid?: number;
-}
 
 export const POST = withMetrics(
   async (req: NextRequest, context: { params: Promise<{ id: string }> }) => {
@@ -102,17 +96,9 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
-      // Read waiver settings
-      const settingsSnap = await withTiming('waivers.settings.get', () =>
-        adminDb.doc(`leagues/${leagueId}/config/settings`).get()
+      const ws = await withTiming('waivers.settings.get', () =>
+        new PrismaWaiverClaimStore().loadWaiverSettings(leagueId)
       );
-      interface SettingsDoc {
-        waiverSettings?: WaiverSettings;
-      }
-      const rawSettings: unknown = settingsSnap.data();
-      const waiverSettings: SettingsDoc | undefined =
-        rawSettings && typeof rawSettings === 'object' ? (rawSettings as SettingsDoc) : undefined;
-      const ws: WaiverSettings | undefined = waiverSettings?.waiverSettings;
 
       const isFAAB = ws?.system === 'FAAB';
       let validatedBid: number | undefined = undefined;
@@ -138,7 +124,7 @@ export const POST = withMetrics(
         teamId: String(teamId),
         playerId: canonicalPlayerId,
         priority: Number(priority) || 1,
-        waiverSettings: (ws ?? {}) as ProcessingWaiverSettings,
+        waiverSettings: ws,
         ...(dropPlayerId
           ? {
               dropPlayerId:

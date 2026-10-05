@@ -23,6 +23,7 @@ import {
   resolveCanonicalPlayerIds,
 } from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
+import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -367,12 +368,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     activityQuery = activityQuery.limit(activityLimit);
 
-    const [claimsSnap, prioritySnap, activitySnap, settingsSnap, roster, availablePlayersResult] =
+    const [claimsSnap, prioritySnap, activitySnap, waiverSettings, roster, availablePlayersResult] =
       await Promise.all([
         leagueRef.collection('waivers').where('userId', '==', userId).limit(100).get(),
         leagueRef.collection('waiverPriorities').doc(userId).get(),
         activityQuery.get(),
-        leagueRef.collection('config').doc('settings').get(),
+        new PrismaWaiverClaimStore().loadWaiverSettings(leagueId),
         loadCurrentRoster(leagueId, userId),
         loadAvailablePlayers({
           leagueId,
@@ -471,9 +472,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const priorityData = prioritySnap.exists
       ? (prioritySnap.data() as { remainingFAAB?: number })
       : undefined;
-    const settingsData = settingsSnap.exists
-      ? (settingsSnap.data() as { waiverSettings?: Record<string, unknown> })
-      : undefined;
     const lastActivity = activity[activity.length - 1];
 
     return NextResponse.json(
@@ -484,9 +482,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         selectedCategories,
         remainingFAAB:
           typeof priorityData?.remainingFAAB === 'number' ? priorityData.remainingFAAB : undefined,
-        initialSettings: settingsData?.waiverSettings
-          ? { waiverSettings: settingsData.waiverSettings }
-          : undefined,
+        initialSettings: { waiverSettings },
         availablePlayers: availablePlayersResult.items,
         playersIndex,
         nextPlayersCursor: availablePlayersResult.nextCursor,
