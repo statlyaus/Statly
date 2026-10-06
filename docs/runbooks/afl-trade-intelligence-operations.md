@@ -865,6 +865,11 @@ npm run outcomes:sources:capture-local-external -- \
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
 (2010-2018) are not enumerable here and are refused.
 
+To capture only some of a season's pages, add `--url` with each exact reviewed page, for example a
+night-two report when afl.com.au has edited the night-one report since review and v18 refuses it.
+`--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
+refused before anything is fetched. `--season` is still required.
+
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
 (`draftguru-national-year-page/v1`), which keeps national selections and counts every other pathway
