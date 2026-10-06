@@ -422,10 +422,22 @@ unhealthy (`AflTradeCustodyUnhealthyError`, migration 0250): the environment's l
 readback must have finished under 48 hours ago with zero failures. A readback run reads every located
 `raw_source` row and a sample of the other located classes back through the store and appends one
 `outcome_artifact_readback_run` row. A failed write or read-back therefore leaves no location and no
-registration. A season (v3) spell cites no evidence bytes and is exempt.
+registration. A season (v3) spell cites no evidence bytes and is exempt. A reviewed HPN
+nonparticipant cites a retained page, and outside `test_fixture` the HPN input build and its
+current-authority read refuse it with the same `AflTradeArtifactUnlocatedError` when that page has no
+location. A repository built from a registered store (`bindLocalAflTradeArtifactRepository`) carries
+its store location, and every custody writer that writes through one records each artifact's
+location in the transaction that writes its custody row.
 `test_fixture` has no store, because a local store may only exist in `non_production`, so fixtures
 keep the read-and-compare path. Reviewers register through `npm run
 outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.
+
+Evidence that no capture writer produces, such as an owner's approval record that a Gate decision
+cites, is stored with `npm run outcomes:artifacts:store-evidence`
+(`storeLocalAflTradeEvidence`). It follows the same order: the bytes are written to the registered
+store and read back, then one transaction records the custody row, with the repository's read-back
+receipt as its custody JSON, and the location. It checks custody health before writing. A retry
+reuses the reference already recorded for the bytes.
 
 External canonical-target registration v2 uses the existing provider-resolution repository and
 reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
@@ -1812,6 +1824,17 @@ v4 spell for the same player and club, which is how a reviewed spell whose evide
 re-made. HPN season attribution never binds a v4 spell, and the postseason bounds helper refuses one,
 since its stint end comes from season spells rather than from the record. v1 and v2 spells kept
 excluding and retiring v3 spells until migration 0248 moved HPN binding onto season spells.
+
+A promoted event binds its entry evidence to the exact source captures behind it, so a v1 spell whose
+capture bytes were lost could not be re-made: a re-fetched page is never byte-identical. A _source
+capture successor_ (migration 0252, `outcome_source_capture_successor`) records, for one lost capture,
+either a later approved capture of the same provider, dataset, competition, season and source URL
+whose bytes are located (`recaptured`), or an owner-approved `omitted` decision for a page that can no
+longer be confirmed (statlyaus/Statly#742: two Official AFL articles edited since review). Each carries
+its own review decision and is append-only, with one per lost capture. Only v4 entries read
+successors: `outcome_acquisition_arrival_event_current` is the promoted-event check with a cited
+artifact counted as the lost capture it succeeds, and an omitted capture excused from the citation
+set. v1, v2 and v3 entries keep the unchanged check.
 
 The two claims are now held separately and joined only when read. A reviewed spell (v1, v2 or v4)
 claims an arrival; a season (v3) spell claims that the player played for a club in one season. A

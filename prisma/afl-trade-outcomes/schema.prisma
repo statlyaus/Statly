@@ -267,6 +267,8 @@ model OutcomeFactualProjectionItemSet {
 }
 
 model OutcomeArtifactCustody {
+  lostCaptureSuccessor OutcomeSourceCaptureSuccessor? @relation("OutcomeSourceCaptureSuccessorLost")
+  capturedAsSuccessor OutcomeSourceCaptureSuccessor? @relation("OutcomeSourceCaptureSuccessorArtifact")
   artifactId                                   String                                               @id @map("artifact_id")
   contentSha256                                String                                               @map("content_sha256") @outcomes.Char(64)
   storageUri                                   String                                               @unique @map("storage_uri")
@@ -377,6 +379,25 @@ model OutcomeArtifactCustodyLocation {
   @@map("outcome_artifact_custody_location")
 }
 
+/// A reviewed successor for one lost source capture: a later capture of the same source, or an
+/// owner-approved omission. Cited only by arrival-only (v4) spell entries; append-only.
+model OutcomeSourceCaptureSuccessor {
+  successorId         String                  @id @map("successor_id")
+  lostArtifactId      String                  @unique @map("lost_artifact_id")
+  kind                String
+  successorCaptureId  String?                 @unique @map("successor_capture_id")
+  successorArtifactId String?                 @unique @map("successor_artifact_id")
+  recordJson          Json                    @map("record_json")
+  approvalDecisionId  String                  @map("approval_decision_id")
+  recordedAt          DateTime                @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  lostArtifact        OutcomeArtifactCustody  @relation("OutcomeSourceCaptureSuccessorLost", fields: [lostArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_source_capture_successor_lost_artifact_id_fkey")
+  successorCapture    OutcomeSourceCapture?   @relation(fields: [successorCaptureId], references: [captureId], onDelete: Restrict, map: "outcome_source_capture_successor_successor_capture_id_fkey")
+  successorArtifact   OutcomeArtifactCustody? @relation("OutcomeSourceCaptureSuccessorArtifact", fields: [successorArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_source_capture_successor_successor_artifact_id_fkey")
+  approvalDecision    OutcomeReviewDecision   @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, map: "outcome_source_capture_successor_approval_decision_id_fkey")
+
+  @@map("outcome_source_capture_successor")
+}
+
 model OutcomeGovernedEvidenceReference {
   referenceId              String                                            @id @map("reference_id")
   referenceSha256          String                                            @unique @map("reference_sha256") @outcomes.Char(64)
@@ -436,6 +457,7 @@ model OutcomeSourceCaptureAttempt {
 }
 
 model OutcomeSourceCapture {
+  successorFor OutcomeSourceCaptureSuccessor?
   captureId                          String                                             @id @map("capture_id")
   attemptId                          String                                             @unique @map("attempt_id")
   sourceSnapshotId                   String                                             @unique @map("source_snapshot_id")
@@ -3587,6 +3609,7 @@ model OutcomePickRealization {
 }
 
 model OutcomeReviewDecision {
+  sourceCaptureSuccessors OutcomeSourceCaptureSuccessor[]
   canonicalPlayerDepartures OutcomeCanonicalPlayerDeparture[]
   reviewedLineageRegistrations OutcomeReviewedPickLineageRegistration[]
   draftPickEnrichments OutcomeDraftPickEnrichment[]

@@ -60,6 +60,27 @@ export const LOCAL_FITZROY_REHEARSAL_HPN_VALUES = {
 } as const;
 
 const sha = (character: string) => character.repeat(64);
+const rehearsalEvidenceValue = (label: string) => ({ boundary: 'local-fitzroy-rehearsal', label });
+const rehearsalEvidence = (label: string) =>
+  `artifact:${sha256AflTradeCanonicalJson(rehearsalEvidenceValue(label))}`;
+
+/**
+ * The canonical JSON values whose SHA-256 digests are the synthetic Gate evidence ids this rehearsal
+ * cites. Outside test_fixture a Gate record may cite only retained evidence (migration 0253), so a
+ * caller that appends the rehearsal's non-production Gate records stores these bytes first.
+ */
+export const LOCAL_FITZROY_REHEARSAL_GATE_EVIDENCE = [
+  'rate-limit',
+  'afl-tables-full-season-custody',
+  'afl-tables-zero-provenance-review',
+  'footywire-full-season-custody',
+  'footywire-html-schema-fingerprint',
+  'fryzigg-complete-rds-custody',
+  'fryzigg-reconciliation-promotion-review',
+  'terms',
+  'owner-approval',
+  'source-governance-review',
+].map(rehearsalEvidenceValue);
 const encoded = (value: unknown) => new TextEncoder().encode(canonicalizeAflTradeJson(value));
 const digestBytes = (value: Uint8Array) => createHash('sha256').update(value).digest('hex');
 
@@ -169,7 +190,7 @@ function approvedSourceAuthority(
     notes: 'Source-independent non-production rehearsal field.',
   });
   const fieldNames = fields.map(({ name }) => name);
-  const rateLimitEvidenceId = `artifact:${sha('d')}`;
+  const rateLimitEvidenceId = rehearsalEvidence('rate-limit');
   let sourceRights = createApprovedAflTradeFitzRoySourcePolicies({
     fieldSets: {
       'afl-tables-player-stats': fieldNames.map(field),
@@ -178,21 +199,23 @@ function approvedSourceAuthority(
     },
     conditionEvidence: {
       'afl-tables-player-stats': {
-        'full-season-custody': `artifact:${sha('2')}`,
-        'zero-provenance-review': `artifact:${sha('3')}`,
+        'full-season-custody': rehearsalEvidence('afl-tables-full-season-custody'),
+        'zero-provenance-review': rehearsalEvidence('afl-tables-zero-provenance-review'),
       },
       'footywire-player-stats': {
-        'full-season-custody': `artifact:${sha('4')}`,
-        'html-schema-fingerprint': `artifact:${sha('5')}`,
+        'full-season-custody': rehearsalEvidence('footywire-full-season-custody'),
+        'html-schema-fingerprint': rehearsalEvidence('footywire-html-schema-fingerprint'),
       },
       'fryzigg-player-stats': {
-        'complete-rds-custody': `artifact:${sha('6')}`,
-        'reconciliation-promotion-review': `artifact:${sha('7')}`,
+        'complete-rds-custody': rehearsalEvidence('fryzigg-complete-rds-custody'),
+        'reconciliation-promotion-review': rehearsalEvidence(
+          'fryzigg-reconciliation-promotion-review'
+        ),
       },
     },
     evidence: {
-      terms: `artifact:${sha('e')}`,
-      authority: `artifact:${sha('f')}`,
+      terms: rehearsalEvidence('terms'),
+      authority: rehearsalEvidence('owner-approval'),
       rateLimit: rateLimitEvidenceId,
     },
     termsEffectiveAt: '2026-08-01T00:00:00.000Z',
@@ -236,9 +259,9 @@ function approvedSourceAuthority(
     reviewer: {
       id: 'local-rehearsal-reviewer',
       role: 'source-governance-reviewer',
-      evidenceId: `artifact:${sha('1')}`,
+      evidenceId: rehearsalEvidence('source-governance-review'),
     },
-    authorityEvidenceId: `artifact:${sha('f')}`,
+    authorityEvidenceId: rehearsalEvidence('owner-approval'),
     rateLimitEvidenceId,
   });
   const operations = [
@@ -398,7 +421,11 @@ function decodedTableExecutor(
             ? [
                 [
                   { kind: 'finite_number', value: '1001' },
-                  { kind: 'date', value: `${seasonYear}-03-20`, rawDays: String(Date.UTC(seasonYear, 2, 20) / 86_400_000) },
+                  {
+                    kind: 'date',
+                    value: `${seasonYear}-03-20`,
+                    rawDays: String(Date.UTC(seasonYear, 2, 20) / 86_400_000),
+                  },
                   { kind: 'text', value: 'Round 1' },
                   { kind: 'text', value: 'Carlton' },
                   { kind: 'integer', value: '12' },
@@ -548,7 +575,11 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
           parameters:
             provider === 'footywire'
               ? { season: seasonYear, checkExisting: generation === 'replacement' }
-              : { season: seasonYear, rescrape: generation === 'replacement', rescrapeStartSeason: seasonYear },
+              : {
+                  season: seasonYear,
+                  rescrape: generation === 'replacement',
+                  rescrapeStartSeason: seasonYear,
+                },
         } as const);
   const invocation = createAflTradeFitzRoyInvocation(captureRequest);
   const sourceBytes = Uint8Array.from([
@@ -572,7 +603,12 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: {
     throw new Error('The synthetic capture requires an explicit provider rate.');
   const rawArtifactRepository = durableRepository('raw_source');
   const metadataArtifactRepository = durableRepository('capture_metadata');
-  const diagnostics = captureDiagnostics(invocation, fields, options?.missingCompletionStatus, seasonYear);
+  const diagnostics = captureDiagnostics(
+    invocation,
+    fields,
+    options?.missingCompletionStatus,
+    seasonYear
+  );
   const diagnosticsBytes = encoded(diagnostics);
   const egressCondition = command.sourceRights.content.conditions.find(
     ({ conditionId }) => conditionId === 'provider-egress-control'

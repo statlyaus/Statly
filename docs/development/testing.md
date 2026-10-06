@@ -294,8 +294,9 @@ behaves differently from production; use local credential values instead. See th
 
 The CI workflow has five explicit ownership boundaries:
 
-- root jobs own documentation, root lint, application and test typechecks, unit/integration/browser tests, and the
-  production build;
+- root jobs own documentation, root lint, application and test typechecks, the production build, and
+  the `Unit tests`, `Integration tests`, and `Browser tests` jobs, each with its own disposable
+  PostgreSQL and Redis services;
 - `Draft worker E2E` owns the isolated Chromium, Socket.IO, and BullMQ lifecycle against its own Redis
   service and disposable PostgreSQL database;
 - `Functions` owns its independent install, flat-ESLint config, typecheck, compiled smoke test, and
@@ -310,6 +311,11 @@ is cancelled, and succeeds only when every dependency reports `success`. Reposit
 require this stable aggregate check (plus separately governed security checks) so adding a validation
 job to the gate does not require renaming the protected check. Individual jobs remain visible for
 diagnosis and keep stable names, but the gate is the merge decision.
+
+The three root test tiers are separate jobs, not steps in one job, so that a failure is re-run without
+repeating the tiers that passed. Only the browser job installs Playwright browsers. Re-run a failed CI
+run with `gh run rerun <run-id> --failed`, never a full re-run; see
+[Re-running CI](delivery.md#re-running-ci).
 
 The jobs remain explicit rather than using a workspace matrix: Functions and ETL have different
 runtime/setup requirements, so a shared abstraction would hide behavior without removing meaningful
@@ -520,3 +526,16 @@ When a broad check fails, determine whether the branch introduced it with a focu
 where practical, a clean `origin/main` baseline. Do not conceal a pre-existing failure or expand a
 documentation/delivery change into unrelated runtime repair. Record the command, failure, evidence, and
 residual risk in the pull request.
+
+Re-run only what failed, locally as in CI:
+
+```sh
+# Browser tests that failed in the previous local Playwright run
+npm run test:e2e:failed
+
+# Vitest has no last-failed flag: name the failing files, and optionally the failing test
+npm run test:unit -- tests/unit/<file>.test.ts -t "<test name>"
+npm run test:int -- tests/integration/<file>.test.ts
+```
+
+Run the full suite again only once the focused failures pass, as the pre-publication gate.

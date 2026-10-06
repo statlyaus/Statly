@@ -1,3 +1,4 @@
+import { recordAflTradeRepositoryLocations } from '../artifacts/artifactStoreLocation';
 import { createHash } from 'node:crypto';
 
 import {
@@ -257,6 +258,7 @@ async function registerExistingArtifactCustody(input: {
     ) {
       throw new TypeError('Local player artifact custody replay conflicts.');
     }
+    await recordAflTradeRepositoryLocations(transaction, input.repository, [input.reference]);
   });
 }
 

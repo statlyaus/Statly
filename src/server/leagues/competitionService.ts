@@ -2,7 +2,6 @@ import 'server-only';
 
 import type { Prisma } from '@prisma/client';
 
-import { logLeagueActivity } from '@/lib/activity';
 import { getRoundMatches } from '@/server/etl/etlRoundData';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -284,18 +283,6 @@ export async function publishCompetition({
     throw error;
   }
 
-  void logLeagueActivity(leagueId, 'competition-rules-published', {
-    actorMemberId,
-    fixtureVersion,
-    roundCount: schedule.length,
-  }).catch((error: unknown) => {
-    logger.warn('Failed to record competition publication activity', {
-      leagueId,
-      fixtureVersion,
-      error,
-    });
-  });
-
   return { ok: true, fixtureVersion, roundCount: schedule.length };
 }
 
@@ -478,19 +465,6 @@ export async function saveCompetitionFixture({
 
   if (!result.ok) return result;
 
-  void logLeagueActivity(leagueId, 'competition-fixture-edited', {
-    actorMemberId,
-    round,
-    fixtureId: result.fixture.id,
-  }).catch((error: unknown) => {
-    logger.warn('Failed to record competition fixture edit activity', {
-      leagueId,
-      round,
-      fixtureId: result.fixture.id,
-      error,
-    });
-  });
-
   return result;
 }
 
@@ -567,18 +541,6 @@ export async function deleteCompetitionFixture({
   });
 
   if (!result.ok) return result;
-  void logLeagueActivity(leagueId, 'competition-fixture-deleted', {
-    actorMemberId,
-    round,
-    matchupId,
-  }).catch((error: unknown) => {
-    logger.warn('Failed to record competition fixture deletion activity', {
-      leagueId,
-      round,
-      matchupId,
-      error,
-    });
-  });
   return result;
 }
 
@@ -657,18 +619,6 @@ export async function setCompetitionRoundFallbackDeadline({
   });
 
   if (!result.ok) return result;
-
-  void logLeagueActivity(leagueId, 'competition-deadline-overridden', {
-    actorMemberId,
-    round,
-    fallbackLockAt: fallbackLockAt.toISOString(),
-  }).catch((error: unknown) => {
-    logger.warn('Failed to record competition deadline override activity', {
-      leagueId,
-      round,
-      error,
-    });
-  });
 
   return result;
 }

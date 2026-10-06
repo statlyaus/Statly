@@ -396,7 +396,7 @@ export async function createRetainedExternalCaptureFixture(
     return fields;
   }
   const fields = buildFieldManifest();
-  const { content, rights, decisionKey, ledger, proposal, decision } =
+  const { content, rights, decisionKey, ledger, proposal, decision, evidenceId } =
     await registerSyntheticCaptureAuthority(sql, {
       provider,
       environment,
@@ -493,7 +493,7 @@ export async function createRetainedExternalCaptureFixture(
     upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
     cacheSeconds: 3600,
     maximumLeaseMs: 120000,
-    egressPolicyEvidenceId: scope.artifactId,
+    egressPolicyEvidenceId: evidenceId,
     rawRetentionDays: 365,
   };
   async function captureAndValidate() {
@@ -536,7 +536,7 @@ export async function createRetainedExternalCaptureFixture(
               expiresAtMs: Date.now() + 120000,
               providerCooldownMs: 5000,
               successRequestCooldownMs: 3600000,
-              egressPolicyEvidenceId: scope.artifactId,
+              egressPolicyEvidenceId: evidenceId,
             },
           }),
           complete: async () => {},

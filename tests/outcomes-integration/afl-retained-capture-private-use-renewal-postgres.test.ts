@@ -1,12 +1,17 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createAflTradeContentAddress as address } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeContentAddress as address,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createRetainedFitzRoyPrivateUseRenewal } from '@/server/aflTradeIntelligence/source/retainedFitzRoyPrivateUseRenewal';
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
+import { retainRehearsalGateEvidence } from '../testUtils/rehearsalSourceAuthority';
+import { retainTestGateEvidenceValues } from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
@@ -27,11 +32,16 @@ const original = {
   decision: fixture.command.capture.ledger.decisions[0]!,
 };
 let captureId: string;
+const renewalAuthorityEvidence = { renewal: 'synthetic-renewal-owner-approval' };
+const renewalReviewEvidence = { renewal: 'synthetic-agent-review' };
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
+  // Every non-production Gate record cites only retained evidence (migration 0253).
+  await retainRehearsalGateEvidence(client);
+  await retainTestGateEvidenceValues(client, [renewalAuthorityEvidence, renewalReviewEvidence]);
   const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
   await ledger.appendBatch({
     expectedRevision: (await ledger.load()).revision,
@@ -72,11 +82,11 @@ it.each([
       captureId: fault === 'another_capture' ? `source-capture:${'e'.repeat(64)}` : captureId,
       renewedAt,
       accountableOwner: 'synthetic-renewal-owner',
-      authorityEvidenceId: `artifact:${'a'.repeat(64)}`,
+      authorityEvidenceId: `artifact:${sha256AflTradeCanonicalJson(renewalAuthorityEvidence)}`,
       reviewer: {
         id: 'synthetic-agent-reviewer',
         role: 'source-control-review',
-        evidenceId: `artifact:${'b'.repeat(64)}`,
+        evidenceId: `artifact:${sha256AflTradeCanonicalJson(renewalReviewEvidence)}`,
       },
     });
     // Readdress adversarial documents through the normal append-only ledger. No guard is disabled.
@@ -201,11 +211,11 @@ it('permits only the explicitly renewed retained capture without rewriting its o
       captureId,
       renewedAt,
       accountableOwner: 'synthetic-renewal-owner',
-      authorityEvidenceId: `artifact:${'a'.repeat(64)}`,
+      authorityEvidenceId: `artifact:${sha256AflTradeCanonicalJson(renewalAuthorityEvidence)}`,
       reviewer: {
         id: 'synthetic-agent-reviewer',
         role: 'source-control-review',
-        evidenceId: `artifact:${'b'.repeat(64)}`,
+        evidenceId: `artifact:${sha256AflTradeCanonicalJson(renewalReviewEvidence)}`,
       },
     });
     const ledger = createPostgresAflTradeGateDecisionLedgerRepository(scoped);

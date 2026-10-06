@@ -334,6 +334,81 @@ was never located. A failure leaves no location and no registration, so the same
 re-run once the cause is fixed. It also refuses with `AflTradeCustodyUnhealthyError`
 (`CUSTODY_UNHEALTHY`) while custody is unhealthy; run a custody readback first.
 
+An arrival-only (v4) spell may cite a source capture successor instead of a lost entry capture
+(migration 0252). Successors live in `outcome_source_capture_successor`, one per lost capture:
+
+- `recaptured` names a later approved capture of the same provider, dataset, competition, anchor
+  season and `sourceUrl`, whose bytes are located; the v4 entry cites the new artifact.
+- `omitted` names a lost capture the owner has excused; the v4 entry leaves it out. The entry must
+  still cite at least one other capture of the promotion.
+
+Each successor is content-addressed (`afl-trade-source-capture-successor/v1`) and needs an approved
+review decision with subject type `source_capture_successor` whose evidence is exactly the record.
+Insertion refuses a capture whose bytes are located, a second successor for the same capture, a
+different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
+entries never read them.
+
+### Storing evidence before it is cited
+
+Store any file a record will cite as evidence, such as an owner's approval record for a Gate
+decision, with this command first. It prints the `artifact:` id to cite:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:store-evidence -- \
+  --store-id <store-id> --file <absolute-path> --media-type <type/subtype> \
+  [--repository-id <id>] [--artifact-class raw_source|capture_metadata]
+```
+
+The repository defaults to `governance-evidence` and the class to `raw_source`, so the nightly
+custody readback reads the file back in full. The command writes the file into the registered
+local non-production store and reads it back. In one transaction it then records the custody row
+and its location. It prints one JSON line: `artifactId`, `contentSha256`, `byteLength`,
+`mediaType`, `storeId`, `objectKey`, and `custody` (`recorded`, or `already_recorded` when the
+row existed).
+
+- It refuses with `AflTradeCustodyUnhealthyError` (`CUSTODY_UNHEALTHY`) while custody is unhealthy,
+  before writing anything. Run a custody readback first.
+- Running it again with the same file is a no-op that prints the same id. A run that stopped
+  after writing the bytes can be run again; it reuses the stored reference.
+- When the file's exact bytes match a custody row recorded as lost, the command locates that row
+  instead of creating one. It refuses when that row names a different media type.
+- On `statly-grading-1` the store id is `statly-grading-1-artifacts`. Build the database URL inside
+  the genuine-database wrapper, and never print it.
+
+Keep the original file. The id is the SHA-256 of its exact bytes, so a copy with different line
+endings or formatting is a different artifact.
+
+### Recording successors for lost source captures
+
+Record successors only through this command. A dry run is the default and writes nothing; add
+`--apply` to record:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:sources:register-capture-successor -- \
+  --lost-artifact <artifact:...> --successor-capture <source-capture:...> [--apply]
+```
+
+It approves under the delegated rule `owner-delegated-technical-reviewer:capture-successor-rule/v1`,
+and only on an exact factual match. A lost capture's bytes are gone, but its evidence batch keeps
+every claim its parser produced. The fresh capture's finalized batch must restate each of those
+claims verbatim; per-capture fields (the capture block, ordinals, source keys, evidence IDs) are not
+compared, and additional claims from a newer parser are reported but not relied on. On any missing
+or changed claim the command records nothing, prints the missing claims and exits with status 2:
+that capture goes to the owner. The recorded decision carries the delegated-reviewer identity and
+the match summary, never a claim of human review.
+
+An omission is never inferred. Record one only when the owner has excused that capture:
+
+```sh
+npm run outcomes:sources:register-capture-successor -- \
+  --lost-artifact <artifact:...> --omit --owner-decision <reference to the owner decision> [--apply]
+```
+
+Re-running a recorded successor is a no-op. A different successor for a capture that already has
+one is refused.
+
 ### Custody readback
 
 Reviewed registration requires healthy custody (migration 0250): the environment's latest custody
@@ -732,8 +807,11 @@ custody and admission adapters differ:
 - raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
   same adapter the local official-AFL and AFLCA captures use) under
   `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw` or
-  `<artifact-root>/official-afl-session-raw`; this custody
-  cannot satisfy production or public-release storage; and
+  `<artifact-root>/official-afl-session-raw`; this custody cannot satisfy production or
+  public-release storage. With `--store-id <store-id>` the pages go into the registered local store,
+  whose root must be `--artifact-root`, and each page's custody row records its location in the same
+  transaction. Always pass it on `statly-grading-1` (`statly-grading-1-artifacts`), so no new raw page
+  is unlocated; and
 - provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
   admission semantics: one lease per provider at a time, then the provider's five-second cooldown
   and a request cooldown for the same source fetch equal to the reviewed cache period (86,400 s for
