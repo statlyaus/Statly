@@ -409,6 +409,46 @@ npm run outcomes:sources:register-capture-successor -- \
 Re-running a recorded successor is a no-op. A different successor for a capture that already has
 one is refused.
 
+### Citing evidence in Gate decisions
+
+From migration 0253 the Gate ledger refuses a new `non_production` or `production` proposal or
+decision that cites an `artifact:` reference with no custody location. That covers an owner's
+approval record, a review, or any other retained file. The repository refuses with
+`AflTradeArtifactUnlocatedError` (`ARTIFACT_UNLOCATED`) and lists the artifact ids, and nothing is
+written. The repository check switches on only when migration 0253 is present, so deploying the code
+without the migration changes nothing. A direct SQL insert fails with `Gate proposal cites evidence with no custody location` or
+`Gate decision cites evidence with no custody location`. The checked fields are the proposal's
+`evidenceIds` and condition `verificationEvidenceIds`, and the decision's `authorityEvidenceIds`,
+condition-result `evidenceIds` and reviewer `evidenceId`.
+
+Before you record a decision, store each file it cites with `outcomes:artifacts:store-evidence`
+(see "Storing evidence before it is cited") and cite the `artifactId` it prints. Only then append
+the proposal and decision. A refused append has written nothing, so append the same records again
+once the evidence is located. Do not cite a different id to get past the refusal. `test_fixture` records and references
+with other prefixes, such as `external-evidence:`, are not checked.
+
+Earlier rows are unchanged and still load. On `statly-grading-1` the three
+`official-afl-completed-draft-session-issue579-private-{2019,2020,2021}-session-v18` decisions
+(2026-09-29) cite `artifact:3ce8547d…` (the owner's approval record) and `artifact:2db6a682…`, and
+neither has custody. Their bytes are lost (#742 audit note). Exact replays of those decisions still
+succeed. A successor version of either decision must cite a retained record.
+
+Do not run `migrate deploy` with migration 0253 on `statly-grading-1` until all three hold:
+
+1. #828 is deployed and the valuation commands run with `AFL_TRADE_LOCAL_ARTIFACT_ROOT` set to the
+   root of `statly-grading-1-artifacts`, so private artifacts, including the qualification an
+   automated Gate 3 decision cites, are recorded with a location. Without it the migration refuses
+   every new automated model qualification.
+2. Every script or input file that records a Gate decision on the VM cites stored evidence. That
+   includes the reviewed inputs for `outcomes:sources:record-approved` and
+   `outcomes:sources:record-approved-external`.
+3. Renewals and successors of current decisions name freshly stored evidence. The renewal and
+   successor builders copy their predecessor's evidence ids, and on 2026-10-06 all 36 current Gate
+   0A decisions cited unlocated evidence.
+
+The census behind these conditions (2026-10-06, all non-`test_fixture` Gate records): of the cited
+evidence ids, 1 was located, 20 had a custody row but no location, and 55 had no custody row.
+
 ### Custody readback
 
 Reviewed registration requires healthy custody (migration 0250): the environment's latest custody

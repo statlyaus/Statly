@@ -439,6 +439,17 @@ store and read back, then one transaction records the custody row, with the repo
 receipt as its custody JSON, and the location. It checks custody health before writing. A retry
 reuses the reference already recorded for the bytes.
 
+The Gate decision ledger applies the same write-first rule (migration 0253). Outside `test_fixture`,
+a new proposal or decision may cite an `artifact:` reference only once that artifact has a custody
+location. For a proposal that covers `evidenceIds` and each condition's `verificationEvidenceIds`. For
+a decision it covers `authorityEvidenceIds`, each condition result's `evidenceIds` and each reviewer's
+`evidenceId`. `postgresGateDecisionLedgerRepository` checks before it inserts and refuses with
+`AflTradeArtifactUnlocatedError`. Insert triggers on `outcome_gate_proposal` and
+`outcome_gate_decision` refuse the same rows for any writer that bypasses the repository. Other
+reference prefixes address database records and are not checked. The triggers fire on insert only,
+and both tables already reject updates, so earlier rows and their exact replays are unchanged,
+including the three 2026-09-29 v18 decisions whose cited approval record was never retained.
+
 External canonical-target registration v2 uses the existing provider-resolution repository and
 reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
 from a current retained capture completion, an exact governed target snapshot, supporting custody
