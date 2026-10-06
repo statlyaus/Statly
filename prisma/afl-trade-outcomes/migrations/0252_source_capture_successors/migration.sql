@@ -58,6 +58,11 @@ BEGIN
      OR (NEW.record_json->>'createdAt')::TIMESTAMPTZ>NEW.recorded_at THEN
     RAISE EXCEPTION 'Source capture successor record must be exact and content-addressed';
   END IF;
+  -- source_artifact_id is not unique: compare against the one approved capture, never an arbitrary row.
+  IF (SELECT count(*) FROM outcome_source_capture WHERE source_artifact_id=NEW.lost_artifact_id
+      AND status='approved')<>1 THEN
+    RAISE EXCEPTION 'A successor needs exactly one approved source capture of the lost artifact';
+  END IF;
   SELECT * INTO lost FROM outcome_source_capture WHERE source_artifact_id=NEW.lost_artifact_id
     AND status='approved';
   IF NOT FOUND OR EXISTS (SELECT 1 FROM outcome_artifact_custody_location
@@ -125,8 +130,11 @@ BEGIN
    RAISE EXCEPTION 'Expected exactly one header, cited-capture and covered-capture fragment in the promoted event function';
  END IF;
  definition:=replace(definition,header,'outcome_acquisition_arrival_event_current(binding jsonb');
+ -- A cited artifact must stand for a capture that is not omitted, so an entry can never cite only an
+ -- omitted page: with non-empty evidence it always cites at least one capture or successor.
  definition:=replace(definition,cited,
-   $new$capture.source_artifact_id=outcome_source_capture_cited_original(ref->>'artifactId',proposal_at,cutoff)$new$);
+   $new$capture.source_artifact_id=outcome_source_capture_cited_original(ref->>'artifactId',proposal_at,cutoff)
+     AND NOT outcome_source_capture_omitted(capture.source_artifact_id,proposal_at,cutoff)$new$);
  definition:=replace(definition,covered,$new$          WHERE outcome_source_capture_cited_original(ref->>'artifactId',proposal_at,cutoff)=capture.source_artifact_id)
           AND NOT outcome_source_capture_omitted(capture.source_artifact_id,proposal_at,cutoff))$new$);
  EXECUTE definition;

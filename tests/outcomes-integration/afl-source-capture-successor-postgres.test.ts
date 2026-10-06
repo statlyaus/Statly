@@ -390,6 +390,11 @@ it('admits arrival entries that cite approved successors of lost captures, and n
     omission,
     await approve('source_capture_successor', omission.successorId, omission.record)
   );
+  // An omitted page cannot itself be cited, alone or beside a real capture.
+  await expect(register(await arrivalFor(second, [secondSession]))).rejects.toThrow(refused);
+  await expect(
+    register(await arrivalFor(second, [sharedCapture.reference, secondSession]))
+  ).rejects.toThrow(refused);
   const secondArrival = await arrivalFor(second, [sharedCapture.reference]);
   await register(secondArrival);
   expect(await currentness(secondArrival.spellVersionId)).toBe(true);
@@ -406,6 +411,42 @@ it('admits arrival entries that cite approved successors of lost captures, and n
       await approve('source_capture_successor', locatedOriginal.successorId, locatedOriginal.record)
     )
   ).rejects.toThrow('whose bytes are lost');
+
+  // A lost artifact behind two approved captures has no single source to compare against.
+  const duplicateAttempt = `duplicate-attempt:${firstSession.artifactId}`;
+  await pool.query(
+    `INSERT INTO outcome_source_capture_attempt
+     (attempt_id,environment,provider,dataset,capability_id,status,started_at,completed_at,attempt_json)
+     SELECT $2,attempt.environment,attempt.provider,attempt.dataset,attempt.capability_id,'captured',
+            attempt.started_at,attempt.completed_at,'{}'
+       FROM outcome_source_capture capture JOIN outcome_source_capture_attempt attempt USING(attempt_id)
+      WHERE capture.source_artifact_id=$1`,
+    [firstSession.artifactId, duplicateAttempt]
+  );
+  await pool.query(
+    `INSERT INTO outcome_source_capture
+     (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,
+      access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json)
+     SELECT $2,$3,$4,source_artifact_id,environment,provider,dataset,dataset_version,access_mechanism,
+       capability_id,competition,anchor_season_year,effective_at,captured_at,'approved',manifest_json
+       FROM outcome_source_capture WHERE source_artifact_id=$1`,
+    [
+      firstSession.artifactId,
+      createAflTradeContentAddress('source-capture', { duplicate: firstSession.artifactId }),
+      duplicateAttempt,
+      `duplicate-snapshot:${firstSession.artifactId}`,
+    ]
+  );
+  const ambiguous = await successorRecord({
+    kind: 'omitted',
+    lostArtifactId: firstSession.artifactId,
+  });
+  await expect(
+    insertSuccessor(
+      ambiguous,
+      await approve('source_capture_successor', ambiguous.successorId, ambiguous.record)
+    )
+  ).rejects.toThrow('exactly one approved source capture');
 
   // Successors are append-only.
   await expect(
