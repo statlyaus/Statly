@@ -2,7 +2,11 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
-import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE,
+  createAflTradeByteArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   recordAflTradeEvidenceLocations,
   storeAndReadBackAflTradeEvidence,
@@ -57,45 +61,79 @@ export async function bindTestEvidenceStore(
 }
 
 /**
- * Retains a synthetic evidence record the way a non-production Gate decision must cite one: its
- * bytes are written to the registered store and read back, then its custody row and location are
- * recorded. Returns the `artifact:` id. The same label always yields the same artifact, and
- * retaining it again is a no-op.
+ * Retains synthetic evidence the way a non-production Gate record must cite it: the bytes are written
+ * to the registered store and read back, then the custody row and location are recorded. Returns the
+ * `artifact:` ids, in order. The same bytes always yield the same artifact, and retaining them again
+ * is a no-op.
  */
-export async function retainTestGateEvidence(
+export async function retainTestGateEvidenceBytes(
   target: Pool | AflOutcomeSqlClient,
-  label: string
-): Promise<string> {
+  items: readonly { bytes: Uint8Array; mediaType: string }[]
+): Promise<string[]> {
   const client = sqlClient(target);
   const store = await bindTestEvidenceStore(client);
-  const bytes = new TextEncoder().encode(`synthetic gate evidence: ${label}`);
-  const reference = createAflTradeByteArtifactRef(bytes, 'text/plain', TEST_EVIDENCE_CREATED_AT);
-  await storeAndReadBackAflTradeEvidence(store, [{ reference, bytes }]);
+  const evidence = items.map(({ bytes, mediaType }) => ({
+    reference: createAflTradeByteArtifactRef(bytes, mediaType, TEST_EVIDENCE_CREATED_AT),
+    bytes,
+  }));
+  await storeAndReadBackAflTradeEvidence(store, evidence);
   await client.transaction(async (transaction) => {
-    await transaction.query(
-      `INSERT INTO outcome_artifact_custody
-        (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
-         environment,custody_profile_id,created_at,verified_at,custody_json)
-       VALUES ($1,$2,$3,$4,$5,'raw_source','non_production',NULL,$6,$6,$7::jsonb)
-       ON CONFLICT (artifact_id) DO NOTHING`,
-      [
-        reference.artifactId,
-        reference.contentSha256,
-        `artifact://sha256/${reference.contentSha256}`,
-        reference.mediaType,
-        reference.byteLength,
-        TEST_EVIDENCE_CREATED_AT,
-        JSON.stringify({
-          content: {
-            repositoryAssurance: 'local_non_production_filesystem',
-            custodyEnvironment: 'non_production',
-            custodyProfileId: null,
-            custodyProfile: null,
-          },
-        }),
-      ]
+    for (const { reference } of evidence) {
+      await transaction.query(
+        `INSERT INTO outcome_artifact_custody
+          (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+           environment,custody_profile_id,created_at,verified_at,custody_json)
+         VALUES ($1,$2,$3,$4,$5,'raw_source','non_production',NULL,$6,$6,$7::jsonb)
+         ON CONFLICT (artifact_id) DO NOTHING`,
+        [
+          reference.artifactId,
+          reference.contentSha256,
+          `artifact://sha256/${reference.contentSha256}`,
+          reference.mediaType,
+          reference.byteLength,
+          TEST_EVIDENCE_CREATED_AT,
+          JSON.stringify({
+            content: {
+              repositoryAssurance: 'local_non_production_filesystem',
+              custodyEnvironment: 'non_production',
+              custodyProfileId: null,
+              custodyProfile: null,
+            },
+          }),
+        ]
+      );
+    }
+    await recordAflTradeEvidenceLocations(
+      transaction,
+      store,
+      evidence.map(({ reference }) => reference)
     );
-    await recordAflTradeEvidenceLocations(transaction, store, [reference]);
   });
-  return reference.artifactId;
+  return evidence.map(({ reference }) => reference.artifactId);
+}
+
+/**
+ * Retains each value's canonical JSON as Gate evidence. The id is `artifact:` plus the SHA-256 of
+ * that canonical JSON, so a fixture can derive it without the database.
+ */
+export async function retainTestGateEvidenceValues(
+  target: Pool | AflOutcomeSqlClient,
+  values: readonly unknown[]
+): Promise<string[]> {
+  return retainTestGateEvidenceBytes(
+    target,
+    values.map((value) => ({
+      bytes: new TextEncoder().encode(canonicalizeAflTradeJson(value)),
+      mediaType: AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE,
+    }))
+  );
+}
+
+/** Retains one synthetic evidence value; see {@link retainTestGateEvidenceValues}. */
+export async function retainTestGateEvidence(
+  target: Pool | AflOutcomeSqlClient,
+  value: unknown
+): Promise<string> {
+  const [artifactId] = await retainTestGateEvidenceValues(target, [value]);
+  return artifactId!;
 }
