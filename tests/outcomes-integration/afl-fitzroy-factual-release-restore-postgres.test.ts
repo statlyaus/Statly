@@ -33,6 +33,7 @@ import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/afl
 import { aflTradeFactualReleaseCandidateSchema } from '@/server/aflTradeIntelligence/outcomes/factualReleaseCandidateContracts';
 import { AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE } from '@/server/aflTradeIntelligence/outcomes/outcomeReadService';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { retainRehearsalGateEvidence } from '../testUtils/rehearsalSourceAuthority';
 import { PostgresAflTradeFactualReleaseCandidateWriter } from '@/server/aflTradeIntelligence/outcomes/postgresFactualReleaseCandidateRepository';
 import { createPostgresAflDraftTradeOutcomeReadService } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeProjectionReadRepository';
 import { createPostgresAflDraftTradeOutcomeReleaseRepository } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
@@ -272,6 +273,8 @@ afterAll(async () => {
 
 describe('local fitzRoy factual-release backup and restore', () => {
   it('restores the exact release authority and every local public surface after schema destruction', async () => {
+    // The rehearsal's Gate records cite only retained evidence (migration 0253).
+    await retainRehearsalGateEvidence(createPgAflOutcomeSqlClient(currentOutcomesPool()));
     await runLocalAflTradeFactualReleaseRehearsal(
       createPgAflOutcomeSqlClient(currentOutcomesPool())
     );

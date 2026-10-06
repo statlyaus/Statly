@@ -188,7 +188,13 @@ export function createLocalAflTradeFactualReleaseExportBytes(input: {
   const rows = input.publicItems.map((item) => {
     const value = (metric: 'games' | 'goals') =>
       item.checks.find((check) => check.metric === metric)?.observedValue ?? '';
-    return [item.player.displayName, item.clubName, item.year, value('games'), value('goals')] as const;
+    return [
+      item.player.displayName,
+      item.clubName,
+      item.year,
+      value('games'),
+      value('goals'),
+    ] as const;
   });
   const table = [
     ['releaseId', input.releaseId],
@@ -208,17 +214,42 @@ export function createLocalAflTradeFactualReleaseExportBytes(input: {
   };
 }
 
+type PublicationGate = Extract<
+  AflTradeGateCode,
+  'gate_4_publication_api_readiness' | 'gate_5_comprehension_accessibility'
+>;
+
+function publicationEvidenceValue(gate: PublicationGate, generation: Generation) {
+  return {
+    decisionKey: `local-fitzroy-${generation}-${gate}`,
+    authority: 'local-non-production-reviewer',
+  };
+}
+
+/**
+ * The canonical JSON values whose SHA-256 digests are the reviewer evidence the rehearsal's Gate 4
+ * and Gate 5 decisions cite. Outside test_fixture a Gate record may cite only retained evidence
+ * (migration 0253), so a caller running the rehearsal stores these bytes first.
+ */
+export const LOCAL_FITZROY_RELEASE_REHEARSAL_GATE_EVIDENCE = (
+  Object.keys(lifecycleTimes) as Generation[]
+).flatMap((generation) =>
+  (['gate_4_publication_api_readiness', 'gate_5_comprehension_accessibility'] as const).map(
+    (gate) => publicationEvidenceValue(gate, generation)
+  )
+);
+
 function createPublicationGateDecision(input: {
-  gate: Extract<AflTradeGateCode, 'gate_4_publication_api_readiness' | 'gate_5_comprehension_accessibility'>;
+  gate: PublicationGate;
   generation: Generation;
   decidedAt: string;
   affectedArtifacts: readonly AflTradeGovernedArtifactRef[];
 }) {
   const decisionKey = `local-fitzroy-${input.generation}-${input.gate}`;
-  const authorityEvidenceId = reference('artifact', {
-    decisionKey,
-    authority: 'local-non-production-reviewer',
-  });
+  const authorityEvidenceId = reference(
+    'artifact',
+    publicationEvidenceValue(input.gate, input.generation)
+  );
   const scope = {
     scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
     description: 'Disposable local fitzRoy factual-release rehearsal only.',
@@ -460,10 +491,7 @@ async function promotePrivateCaptureForRelease(
     decisionId: approvalDecisionId,
     subjectType: 'source_capture',
   };
-  const reviewDecisions = [
-    ...privateCandidate.content.members.reviewDecisions,
-    approvalMember,
-  ]
+  const reviewDecisions = [...privateCandidate.content.members.reviewDecisions, approvalMember]
     .sort((left, right) => left.decisionId.localeCompare(right.decisionId))
     .map((member, index) => ({ ...member, ordinal: index + 1 }));
   const members = {
@@ -676,7 +704,9 @@ async function ensureCandidateParents(
       );
       const prior = predecessor.rows[0];
       if ((generation === 'baseline') !== (prior === undefined)) {
-        throw new TypeError('The local acquisition-spell generation does not match its version chain.');
+        throw new TypeError(
+          'The local acquisition-spell generation does not match its version chain.'
+        );
       }
       await transaction.query(
         `INSERT INTO outcome_acquisition_spell_version
@@ -974,7 +1004,9 @@ async function sealProjectAndActivate(
   const gateRepository = createPostgresAflTradeGateDecisionLedgerRepository(client);
   let gateLedger = await gateRepository.load();
   for (const gate of [review, operation]) {
-    if (!gateLedger.ledger.decisions.some(({ decisionId }) => decisionId === gate.decision.decisionId)) {
+    if (
+      !gateLedger.ledger.decisions.some(({ decisionId }) => decisionId === gate.decision.decisionId)
+    ) {
       gateLedger = await gateRepository.appendDecision({
         expectedRevision: gateLedger.revision,
         proposal: gate.proposal,

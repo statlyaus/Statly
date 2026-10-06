@@ -151,6 +151,22 @@ Both generated evidence batches are persisted under provider `statly_local_fixtu
 `fixture://statly/` source references. They never claim Draftguru, Footywire or official-AFL
 provenance, and the live provider-ingestion boundary rejects `statly_local_fixture` entirely.
 
+### Waiver walk-through
+
+Waivers have no browser test yet, so check them by hand on the local full stack. With the fantasy
+`DATABASE_URL` pointing at a development database (the stack applies migrations at start-up), run
+`npm run dev:seed:waivers` once the stack is up. It refuses anything but a loopback database and the
+Firebase Auth emulator, and re-running it resets the scenario. It creates **Waiver Test League**: a
+completed two-team draft, a FAAB budget of $100 each, one open roster spot each, and two free players.
+Sign in as `admin@statly.dev` (commissioner) and `rival@statly.dev` in two browser profiles; both use
+the local development phrase (`STATLY_LOCAL_AUTH_PHRASE`, or the default in `src/lib/devAuth.ts`).
+
+1. As each manager, bid on Free Agent Alpha with different amounts.
+2. Run `npm run dev:seed:waivers -- --make-due`; claims otherwise become due only after 24 hours.
+3. As commissioner, process waivers. A second overlapping run is refused with 409.
+4. Expect the higher bid to own the player and be debited once, the lower claim to fail, both outcomes
+   in the league's Activity tab, and neither bid visible to the other manager before processing.
+
 ### Private workbook evaluation lane
 
 Use the separate workbook evaluation launcher when product testing needs the historical transaction
