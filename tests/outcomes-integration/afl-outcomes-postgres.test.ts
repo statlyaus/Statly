@@ -1322,6 +1322,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0249_acquisition_stint',
       '0250_artifact_custody_readback',
       '0251_artifact_mirror_sync',
+      '0252_source_capture_successors',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
