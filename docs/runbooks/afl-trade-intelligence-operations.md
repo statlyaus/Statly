@@ -1530,6 +1530,14 @@ caller-provided identifiers.
 
 ### Operating automatic local private valuation
 
+When the outcomes database has a registered local store, `AFL_TRADE_LOCAL_ARTIFACT_ROOT` must be
+that store's root. On `statly-grading-1` that is the root registered for `statly-grading-1-artifacts`
+(`SELECT root_locator FROM outcome_artifact_store`). The worker, the ad hoc
+valuation command and provisioning then write private evaluation artifacts through the store, so
+each custody row records its location. That includes the qualification an automated Gate 3
+decision cites, which migration 0253 requires to be located. Any other root is refused at
+startup. A database with no registered store keeps the plain local repository.
+
 The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback
 `statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and then polls
 durable dispatch work. The schedule is Monday 19:00 in `Australia/Melbourne`, calculated as a calendar
