@@ -1,3 +1,5 @@
+import { realpath } from 'node:fs/promises';
+
 import type { AflTradeArtifactRef } from '../artifacts/artifactReference';
 import type { AflTradeEvidenceStoreBinding } from '../artifacts/artifactStoreLocation';
 import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
@@ -94,4 +96,41 @@ export async function bindLocalAflTradeArtifactStore(
     loadExact: (reference, maximumBytes) => repository.loadExact(reference, maximumBytes),
     objectKeyFor: (reference) => location.objectKeyFor(reference),
   };
+}
+
+/**
+ * The private derived repository a local valuation composition writes through. When the schema has
+ * a registered local non-production store, `rootDirectory` must be that store's root and the
+ * repository is bound to it, so every custody row its artifacts get records where the bytes live;
+ * a different root is refused rather than writing custody that can never be located. A schema with
+ * no registered store (a disposable rehearsal) keeps the plain local repository.
+ */
+export async function openLocalAflTradePrivateDerivedRepository(
+  client: AflOutcomeSqlClient,
+  input: { rootDirectory: string; repositoryId: string; maximumObjectBytes: number }
+): Promise<AflTradeImmutableArtifactRepository> {
+  const stores = await client.query<{ store_id: string; root_locator: string }>(
+    `SELECT store_id, root_locator FROM outcome_artifact_store
+      WHERE environment='non_production' AND assurance=$1`,
+    [LOCAL_STORE_ASSURANCE]
+  );
+  const store = stores.rows[0];
+  if (store === undefined) {
+    return createLocalAflTradePrivateDerivedArtifactRepository(input);
+  }
+  const [storeRoot, requestedRoot] = await Promise.all([
+    realpath(store.root_locator),
+    realpath(input.rootDirectory),
+  ]);
+  if (storeRoot !== requestedRoot) {
+    throw new Error(
+      `The artifact root must be the root of registered store ${store.store_id} (${store.root_locator}), so private artifacts can be located.`
+    );
+  }
+  return bindLocalAflTradeArtifactRepository(client, {
+    storeId: store.store_id,
+    repositoryId: input.repositoryId,
+    artifactClass: 'derived_private',
+    maximumObjectBytes: input.maximumObjectBytes,
+  });
 }

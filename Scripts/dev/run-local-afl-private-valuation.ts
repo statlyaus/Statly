@@ -4,7 +4,10 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from '../../src/server/aflTradeIntelligence/development/localOutcomesRuntimeIdentity';
-import { createLocalAflTradePrivateValuationRuntime } from '../../src/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
+import {
+  createLocalAflTradePrivateValuationRuntime,
+  openLocalAflTradePrivateValuationArtifacts,
+} from '../../src/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const idSchema = z.string().trim().min(1).max(400);
@@ -33,7 +36,10 @@ function parseArguments(argv: readonly string[]) {
     repairOperationId:
       repairOperationId === undefined
         ? null
-        : z.string().regex(/^cohort-execution-repair:[a-f0-9]{64}$/).parse(repairOperationId),
+        : z
+            .string()
+            .regex(/^cohort-execution-repair:[a-f0-9]{64}$/)
+            .parse(repairOperationId),
   };
 }
 
@@ -42,7 +48,9 @@ function localConfiguration(environment: NodeJS.ProcessEnv) {
   const runtimeNonce = environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE?.trim();
   const artifactRoot = environment.AFL_TRADE_LOCAL_ARTIFACT_ROOT?.trim();
   if (!databaseUrl || !runtimeNonce || !artifactRoot || !/^[a-f0-9]{64}$/u.test(runtimeNonce)) {
-    throw new Error('The admitted local outcomes database, runtime nonce, and artifact root are required.');
+    throw new Error(
+      'The admitted local outcomes database, runtime nonce, and artifact root are required.'
+    );
   }
   const database = new URL(databaseUrl);
   if (
@@ -73,6 +81,7 @@ export async function runLocalAflPrivateValuationCommand(input: {
     const runtime = createLocalAflTradePrivateValuationRuntime({
       pool,
       artifactRoot: config.artifactRoot,
+      privateArtifacts: await openLocalAflTradePrivateValuationArtifacts(pool, config.artifactRoot),
       workerId: 'system:ad-hoc-valuation-command',
     });
     if (command.repairReason !== null && command.repairOperationId !== null) {
