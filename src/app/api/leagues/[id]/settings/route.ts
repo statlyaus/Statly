@@ -506,6 +506,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (scoringSettingsChanged && prismaLeague.settings.scoringSettingsLockedAt) {
         return NextResponse.json({ error: 'Scoring settings are locked' }, { status: 409 });
       }
+      // Balances are derived from the budget when a claim first touches them, so once any claim
+      // exists a new budget would leave members on different starting balances.
+      if (
+        faabBudget !== undefined &&
+        faabBudget !== prismaLeague.settings.faabBudget &&
+        (await prisma.teamAction.count({ where: { leagueId: id, actionType: 'WAIVER_CLAIM' } })) > 0
+      ) {
+        return NextResponse.json(
+          { error: 'FAAB budget is locked once waiver claims exist' },
+          { status: 409 }
+        );
+      }
 
       const timePerPickInput =
         draftInput.timePerPick ?? draftInput.pickSeconds ?? body.timePerPick ?? body.pickSeconds;
