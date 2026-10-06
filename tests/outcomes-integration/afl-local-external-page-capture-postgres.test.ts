@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { registerLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactCustodyLocationBackfill';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -371,9 +372,15 @@ describe('local Official AFL completed-session capture through the governed inge
 
   it('fetches nothing until every requested season has its recorded decision', async () => {
     const provider = stubOfficialAfl();
+    // Pages are written into the registered local store rooted at the capture root (#759).
+    await registerLocalAflTradeArtifactStore(sql, {
+      storeId: 'external-capture-store',
+      rootDirectory: artifactRoot,
+    });
     const options = {
       sql,
       artifactRootDirectory: artifactRoot,
+      storeId: 'external-capture-store',
       userAgent,
       fetchImpl: provider.fetchImpl,
     };
@@ -422,6 +429,25 @@ describe('local Official AFL completed-session capture through the governed inge
       );
     }
     expect(await readdir(join(artifactRoot, 'official-afl-session-raw'))).not.toHaveLength(0);
+    // Every captured page's custody row records where its bytes live in the store.
+    const located = await sql.query<{
+      artifact_id: string;
+      store_id: string | null;
+      object_key: string | null;
+    }>(
+      `SELECT capture.source_artifact_id AS artifact_id,location.store_id,location.object_key
+         FROM outcome_source_capture capture
+         LEFT JOIN outcome_artifact_custody_location location
+           ON location.artifact_id=capture.source_artifact_id
+        WHERE capture.provider='official_afl' AND capture.environment='non_production'`
+    );
+    expect(located.rows).toHaveLength(4);
+    for (const row of located.rows) {
+      expect(row.store_id).toBe('external-capture-store');
+      expect(row.object_key).toMatch(
+        /^official-afl-session-raw\/local_non_production_filesystem\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/[a-f0-9]{64}$/u
+      );
+    }
 
     // Each capture receipt names the v18 parser and the season's own recorded decision.
     const receipts = await sql.query<{ parser: string; decision_key: string }>(

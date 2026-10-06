@@ -24,6 +24,7 @@ import type {
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
+import { retainTestGateEvidenceValues } from './testEvidenceStore';
 import { aflTradeHpnPavFieldMapSchema } from '@/server/aflTradeIntelligence/modeling/hpnPavInputContracts';
 import {
   createAflTradeSourceFact,
@@ -38,6 +39,9 @@ import {
 
 type NumericalFixture = Awaited<ReturnType<typeof playerPavDatasetAdmissionFixture>>;
 const addressed = (prefix: string, value: unknown) => createAflTradeContentAddress(prefix, value);
+/** The review the non-production source authorities cite; retained before they are appended. */
+const SOURCE_REVIEW_EVIDENCE = { fixture: 'player-pav-source-review' };
+const sourceReviewEvidenceId = addressed('artifact', SOURCE_REVIEW_EVIDENCE);
 const xml = (value: unknown) =>
   String(value)
     .replaceAll('&', '&amp;')
@@ -115,6 +119,11 @@ export async function playerPavSourceAuthorityDocuments(
       decisionKey: `synthetic-pav-source:${document.run.captureId}`,
       environment: 'non_production' as const,
       affectedArtifacts: [{ kind: 'source_rights' as const, artifactId: rights.rightsArtifactId }],
+      conditions: base.gateLedger.proposals[0]!.content.conditions.map((condition) => ({
+        ...condition,
+        verificationEvidenceIds: [sourceReviewEvidenceId],
+      })),
+      evidenceIds: [sourceReviewEvidenceId],
       scope: {
         ...base.gateLedger.proposals[0]!.content.scope,
         scopeKey: `synthetic-pav-source:${document.run.captureId}`,
@@ -139,6 +148,15 @@ export async function playerPavSourceAuthorityDocuments(
       decisionKey: proposal.content.decisionKey,
       environment: 'non_production' as const,
       authorityKind: 'external_human_record' as const,
+      reviewers: base.gateLedger.decisions[0]!.content.reviewers.map((reviewer) => ({
+        ...reviewer,
+        evidenceId: sourceReviewEvidenceId,
+      })),
+      authorityEvidenceIds: [sourceReviewEvidenceId],
+      conditionResults: base.gateLedger.decisions[0]!.content.conditionResults.map((result) => ({
+        ...result,
+        evidenceIds: [sourceReviewEvidenceId],
+      })),
       scope: proposal.content.scope,
       affectedArtifacts: proposal.content.affectedArtifacts,
       rationale: 'Fabricated external-review record for isolated PostgreSQL test setup only.',
@@ -335,6 +353,8 @@ export async function seedPlayerPavSourceAuthorityFixture(
       };
     }),
   }));
+  // A non-production Gate record cites only retained evidence (migration 0253).
+  await retainTestGateEvidenceValues(sql, [SOURCE_REVIEW_EVIDENCE]);
   const ledger = createPostgresAflTradeGateDecisionLedgerRepository(sql);
   const currentLedger = await ledger.load();
   await ledger.appendBatch({

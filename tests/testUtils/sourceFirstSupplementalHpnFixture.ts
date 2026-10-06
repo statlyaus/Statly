@@ -17,6 +17,7 @@ import { PostgresAflTradeSourceCaptureRepository } from '@/server/aflTradeIntell
 import { PostgresAflTradePrivateValuationCaptureBindingRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationCaptureBindingRepository';
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import { PostgresAflTradePrivateValuationSourceAdmission } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationSourceAdmission';
+import { appendRehearsalSourceAuthority } from './rehearsalSourceAuthority';
 
 // Explicitly synthetic upstream capture/review authority, constructed through the
 // existing source owners. No factual, HPN, private-release or claim guard is replaced.
@@ -24,16 +25,7 @@ export async function stageSourceFirstSupplementalHpnFixture(client: AflOutcomeS
   const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture({ provider: 'afl_tables' });
   const source = fixture.command.capture;
   const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: source.sourceRights,
-        proposal: source.ledger.proposals[0]!,
-        decision: source.ledger.decisions[0]!,
-      },
-    ],
-  });
+  await appendRehearsalSourceAuthority(client, source);
   const fieldMap = fixture.command.fieldMap;
   const fieldMapSha256 = createAflTradeFitzRoyFieldMapSha256(fieldMap);
   await client.query(`INSERT INTO outcome_competition_season (competition,season_year)
