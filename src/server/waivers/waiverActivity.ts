@@ -40,7 +40,7 @@ export async function publishWaiverOutcome(input: {
     content:
       type === 'waiver-successful'
         ? `${team} claimed ${playerName} off waivers${bid}.`
-        : `${team}'s waiver claim for ${playerName} failed${reason ? `: ${reason}` : ''}.`,
+        : `Waiver claim by ${team} for ${playerName} failed${reason ? `: ${reason}` : ''}.`,
     context: {
       type,
       userId: claim.userId,
