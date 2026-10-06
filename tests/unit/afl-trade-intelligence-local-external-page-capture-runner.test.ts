@@ -17,6 +17,10 @@ import {
   createLocalDraftguruTradeCaptureTargets,
   loadRecordedLocalCaptureAuthority,
 } from '@/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import {
+  createDraftguruNationalYearCaptureCommand,
+  createLocalDraftguruNationalYearTargets,
+} from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import type { LocalNarrowCaptureAuthority } from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
 import {
   createLocalOfficialAflDraftSessionTargets,
@@ -26,6 +30,7 @@ import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntellige
 import { evaluateAflTradeGate0AAgainstDecision } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
 import {
   approveNarrowAuthority,
+  draftguruNationalYearAuthority,
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
@@ -280,6 +285,146 @@ describe('recorded Official AFL completed-session authority', () => {
   });
 });
 
+function recordedNational(season: number, clientVersion?: string): RecordedAuthority {
+  const authority = draftguruNationalYearAuthority({
+    season,
+    ...(clientVersion === undefined ? {} : { clientVersion }),
+    evidenceIds: officialEvidenceIds,
+    timing: {
+      termsEffectiveAt: '2026-09-10T00:00:00.000Z',
+      termsExpireAt: '2027-09-09T00:00:00.000Z',
+      rightsProposedAt: '2026-09-24T00:00:00.000Z',
+      proposalProposedAt: '2026-09-24T00:00:01.000Z',
+    },
+  });
+  return {
+    ...authority,
+    decision: approveNarrowAuthority(authority, {
+      decidedAt: '2026-09-24T01:00:00.000Z',
+      revalidateAt: '2027-09-01T00:00:00.000Z',
+    }),
+  };
+}
+
+describe('recorded Draftguru national-year authority', () => {
+  it('loads the per-season decision recorded under the issue579 key', async () => {
+    const record = recordedNational(2024);
+    expect(record.proposal.content.decisionKey).toBe(
+      'draftguru-national-year-page-issue579-private-2024'
+    );
+    const loaded = await loadRecordedLocalCaptureAuthority(
+      ledgerOf(record),
+      'draftguru-national-year-page',
+      2024,
+      evaluatedAt
+    );
+    expect(loaded.decisionId).toBe(record.decision.decisionId);
+  });
+
+  it('fails closed when only another season is recorded', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedNational(2024)),
+        'draftguru-national-year-page',
+        2023,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/draftguru-national-year-page-issue579-private-2023/);
+  });
+
+  it('refuses rights that name the general year-page parser', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedNational(2024, 'draftguru-event-year/v2')),
+        'draftguru-national-year-page',
+        2024,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/draftguru-national-year-page\/v1/);
+  });
+
+  it('refuses recorded rights with the trade-page one-day cache instead of the reviewed hour', async () => {
+    const record = recordedNational(2024);
+    const longer = {
+      ...record.sourceRights,
+      content: {
+        ...record.sourceRights.content,
+        automatedAccess: {
+          ...record.sourceRights.content.automatedAccess,
+          cache: { permitted: true, maximumSeconds: 86_400 },
+        },
+      },
+    };
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(record, longer),
+        'draftguru-national-year-page',
+        2024,
+        evaluatedAt
+      )
+    ).rejects.toMatchObject({ code: 'AUTHORITY_MISMATCH' });
+  });
+
+  it('builds a capture command that the scope rules and the recorded decision admit', () => {
+    const record = recordedNational(2022);
+    const [target] = createLocalDraftguruNationalYearTargets([2022]);
+    const command = createDraftguruNationalYearCaptureCommand(record, {
+      target: target!,
+      capturedAt: evaluatedAt,
+      maximumBytes: 1024,
+    });
+    expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+    expect(command.request).toMatchObject({
+      provider: 'draftguru',
+      capabilityId: 'draftguru-national-year-page',
+      draftPathway: 'national',
+      sourceUrl: 'https://www.draftguru.com.au/years/2022',
+      parserVersion: 'draftguru-national-year-page/v1',
+      effectiveAt: evaluatedAt,
+    });
+    expect(
+      evaluateAflTradeGate0AAgainstDecision(
+        record.decision,
+        record.sourceRights,
+        command.gateRequest
+      )
+    ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+  });
+
+  it('refuses an Official AFL authority', () => {
+    const [target] = createLocalDraftguruNationalYearTargets([2021]);
+    expect(() =>
+      createDraftguruNationalYearCaptureCommand(recordedOfficial(2021), {
+        target: target!,
+        capturedAt: evaluatedAt,
+        maximumBytes: 1024,
+      })
+    ).toThrow(/not a Draftguru national-year capability/);
+  });
+});
+
+describe('local Draftguru national-year targets', () => {
+  it('builds one exact year page per season in season order', () => {
+    expect(createLocalDraftguruNationalYearTargets([2024, 2022])).toEqual([
+      {
+        capabilityId: 'draftguru-national-year-page',
+        season: 2022,
+        sourceUrl: 'https://www.draftguru.com.au/years/2022',
+      },
+      {
+        capabilityId: 'draftguru-national-year-page',
+        season: 2024,
+        sourceUrl: 'https://www.draftguru.com.au/years/2024',
+      },
+    ]);
+  });
+
+  it('refuses no seasons and repeated seasons', () => {
+    expect(() => createLocalDraftguruNationalYearTargets([])).toThrow(/distinct seasons/);
+    expect(() => createLocalDraftguruNationalYearTargets([2022, 2022])).toThrow(/distinct seasons/);
+  });
+});
+
 describe('local Official AFL completed-session targets', () => {
   it('enumerates every reviewed completed-session page for 2019, 2020 and 2021', () => {
     expect(createLocalOfficialAflDraftSessionTargets([2021, 2019, 2020])).toEqual([
@@ -431,6 +576,36 @@ describe('local Draftguru capture command arguments', () => {
       '2021',
     ]);
     expect(parsed.targets.map(({ season }) => season)).toEqual([2019, 2020, 2021, 2021]);
+  });
+
+  it('parses national-year seasons into their exact year pages', () => {
+    const parsed = parse([
+      '--artifact-root',
+      durable,
+      '--capability',
+      'draftguru-national-year-page',
+      '--season',
+      '2023',
+      '--season',
+      '2022',
+    ]);
+    expect(parsed.targets.map(({ sourceUrl }) => sourceUrl)).toEqual([
+      'https://www.draftguru.com.au/years/2022',
+      'https://www.draftguru.com.au/years/2023',
+    ]);
+  });
+
+  it('refuses a URL for a national-year capture', () => {
+    expect(() =>
+      parse([
+        '--artifact-root',
+        durable,
+        '--capability',
+        'draftguru-national-year-page',
+        '--url',
+        'https://www.draftguru.com.au/years/2022',
+      ])
+    ).toThrow(/come from each --season/);
   });
 
   it('requires an artifact root', () => {

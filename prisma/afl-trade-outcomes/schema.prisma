@@ -267,6 +267,8 @@ model OutcomeFactualProjectionItemSet {
 }
 
 model OutcomeArtifactCustody {
+  lostCaptureSuccessor OutcomeSourceCaptureSuccessor? @relation("OutcomeSourceCaptureSuccessorLost")
+  capturedAsSuccessor OutcomeSourceCaptureSuccessor? @relation("OutcomeSourceCaptureSuccessorArtifact")
   artifactId                                   String                                               @id @map("artifact_id")
   contentSha256                                String                                               @map("content_sha256") @outcomes.Char(64)
   storageUri                                   String                                               @unique @map("storage_uri")
@@ -325,8 +327,43 @@ model OutcomeArtifactStore {
   mirrorLocator String?                          @map("mirror_locator")
   createdAt     DateTime                         @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
   locations     OutcomeArtifactCustodyLocation[]
+  readbackRuns  OutcomeArtifactReadbackRun[]
+  mirrorSyncs   OutcomeArtifactMirrorSync[]
 
   @@map("outcome_artifact_store")
+}
+
+/// One finished custody readback over a store. Append-only; written once when the run finishes.
+model OutcomeArtifactReadbackRun {
+  runId              String               @id @map("run_id")
+  environment        OutcomeEnvironment
+  storeId            String               @map("store_id")
+  startedAt          DateTime             @map("started_at") @outcomes.Timestamptz(3)
+  finishedAt         DateTime             @map("finished_at") @outcomes.Timestamptz(3)
+  rowsChecked        Int                  @map("rows_checked")
+  failures           Int
+  failingArtifactIds Json                 @map("failing_artifact_ids")
+  checkedByClass     Json                 @map("checked_by_class")
+  samplePolicy       Json                 @map("sample_policy")
+  recordedAt         DateTime             @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  store              OutcomeArtifactStore @relation(fields: [storeId], references: [storeId], onDelete: Restrict, map: "outcome_artifact_readback_run_store_fkey")
+
+  @@index([environment, finishedAt(sort: Desc)], map: "outcome_artifact_readback_run_latest_idx")
+  @@map("outcome_artifact_readback_run")
+}
+
+/// One finished evidence-store mirror sync. Append-only; written once the copy has succeeded.
+model OutcomeArtifactMirrorSync {
+  syncId        String               @id @map("sync_id")
+  storeId       String               @map("store_id")
+  mirrorLocator String               @map("mirror_locator")
+  startedAt     DateTime             @map("started_at") @outcomes.Timestamptz(3)
+  finishedAt    DateTime             @map("finished_at") @outcomes.Timestamptz(3)
+  recordedAt    DateTime             @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  store         OutcomeArtifactStore @relation(fields: [storeId], references: [storeId], onDelete: Restrict, map: "outcome_artifact_mirror_sync_store_fkey")
+
+  @@index([storeId, finishedAt(sort: Desc)], map: "outcome_artifact_mirror_sync_latest_idx")
+  @@map("outcome_artifact_mirror_sync")
 }
 
 /// Where one custody row's bytes live. Append-only; a custody row without one has no known location.
@@ -340,6 +377,25 @@ model OutcomeArtifactCustodyLocation {
 
   @@unique([storeId, objectKey], map: "outcome_artifact_custody_location_store_key")
   @@map("outcome_artifact_custody_location")
+}
+
+/// A reviewed successor for one lost source capture: a later capture of the same source, or an
+/// owner-approved omission. Cited only by arrival-only (v4) spell entries; append-only.
+model OutcomeSourceCaptureSuccessor {
+  successorId         String                  @id @map("successor_id")
+  lostArtifactId      String                  @unique @map("lost_artifact_id")
+  kind                String
+  successorCaptureId  String?                 @unique @map("successor_capture_id")
+  successorArtifactId String?                 @unique @map("successor_artifact_id")
+  recordJson          Json                    @map("record_json")
+  approvalDecisionId  String                  @map("approval_decision_id")
+  recordedAt          DateTime                @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  lostArtifact        OutcomeArtifactCustody  @relation("OutcomeSourceCaptureSuccessorLost", fields: [lostArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_source_capture_successor_lost_artifact_id_fkey")
+  successorCapture    OutcomeSourceCapture?   @relation(fields: [successorCaptureId], references: [captureId], onDelete: Restrict, map: "outcome_source_capture_successor_successor_capture_id_fkey")
+  successorArtifact   OutcomeArtifactCustody? @relation("OutcomeSourceCaptureSuccessorArtifact", fields: [successorArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_source_capture_successor_successor_artifact_id_fkey")
+  approvalDecision    OutcomeReviewDecision   @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict, map: "outcome_source_capture_successor_approval_decision_id_fkey")
+
+  @@map("outcome_source_capture_successor")
 }
 
 model OutcomeGovernedEvidenceReference {
@@ -401,6 +457,7 @@ model OutcomeSourceCaptureAttempt {
 }
 
 model OutcomeSourceCapture {
+  successorFor OutcomeSourceCaptureSuccessor?
   captureId                          String                                             @id @map("capture_id")
   attemptId                          String                                             @unique @map("attempt_id")
   sourceSnapshotId                   String                                             @unique @map("source_snapshot_id")
@@ -3552,6 +3609,7 @@ model OutcomePickRealization {
 }
 
 model OutcomeReviewDecision {
+  sourceCaptureSuccessors OutcomeSourceCaptureSuccessor[]
   canonicalPlayerDepartures OutcomeCanonicalPlayerDeparture[]
   reviewedLineageRegistrations OutcomeReviewedPickLineageRegistration[]
   draftPickEnrichments OutcomeDraftPickEnrichment[]

@@ -1,3 +1,4 @@
+import { requireAflTradeEvidenceLocated } from '../artifacts/artifactStoreLocation';
 import {
   assignmentContinuityCteSql,
   clubResolutionSql,
@@ -198,6 +199,23 @@ function rowSource(decoded: DecodedRow, map: AflTradeHpnPavInputFieldMap) {
   };
 }
 
+/** Reviewed nonparticipants decided from this instant must cite located evidence (#759). */
+export const NONPARTICIPANT_LOCATED_EVIDENCE_FROM = '2026-10-06T00:00:00.000Z';
+
+/**
+ * The evidence pages that must have a store location: those cited by reviews decided from
+ * {@link NONPARTICIPANT_LOCATED_EVIDENCE_FROM} on. Earlier reviews predate store locations.
+ */
+export function nonparticipantEvidenceRequiringLocation(
+  reviews: readonly { review: { decidedAt: string; evidenceArtifact: { artifactId: string } } }[]
+): string[] {
+  return reviews
+    .filter(
+      (row) => Date.parse(row.review.decidedAt) >= Date.parse(NONPARTICIPANT_LOCATED_EVIDENCE_FROM)
+    )
+    .map((row) => row.review.evidenceArtifact.artifactId);
+}
+
 async function loadExcludedSourceRows(
   transaction: AflOutcomeSqlTransaction,
   request: AflTradeHpnPavSeasonInputRequest,
@@ -236,7 +254,7 @@ async function loadExcludedSourceRows(
       'RESOLUTION_NOT_CURRENT',
       'A reviewed nonparticipant decision is missing, superseded, or not exact current source authority.'
     );
-  return result.rows
+  const rows = result.rows
     .map((decision) => {
       const disposition = asObject(
         decision.evidence_json.disposition,
@@ -294,6 +312,17 @@ async function loadExcludedSourceRows(
     .sort((left, right) =>
       left.source.providerDecodedRowId.localeCompare(right.source.providerDecodedRowId)
     );
+  // A reviewed nonparticipant cites a retained page; outside test fixtures, a review decided from
+  // NONPARTICIPANT_LOCATED_EVIDENCE_FROM on must cite bytes with a recorded store location, as
+  // reviewed acquisition evidence must (ARTIFACT_UNLOCATED). Earlier reviews predate store
+  // locations; the pages lost among them are recorded on #759.
+  if (request.environment !== 'test_fixture') {
+    await requireAflTradeEvidenceLocated(
+      transaction,
+      nonparticipantEvidenceRequiringLocation(rows)
+    );
+  }
+  return rows;
 }
 
 function projectedBinding(
@@ -629,8 +658,10 @@ async function bindAcquisitionSpells(
         effectiveDate: effectiveAt.slice(0, 10),
       };
     });
-  // A spell's registration currency is identical for every row it binds, so it is evaluated once
-  // per candidate spell; each row still passes its own source and field-map currency.
+  // outcome_hpn_acquisition_spell_source_current decides which spells may bind season statistics:
+  // season (v3) spells and legacy spells, never a reviewed spell (migration 0248). A spell's
+  // registration currency is identical for every row it binds, so it is evaluated once per
+  // candidate spell; each row still passes its own source and field-map currency.
   const result = await transaction.query<AcquisitionSpellRow>(
     `WITH requested AS MATERIALIZED (
        SELECT * FROM jsonb_to_recordset($1::jsonb) AS requested(
@@ -683,7 +714,7 @@ async function bindAcquisitionSpells(
     if (matches.length !== 1) {
       throw new AflTradeHpnPavInputError(
         'RESOLUTION_NOT_CURRENT',
-        'Every player-stat row requires exactly one current approved acquisition spell.'
+        'Every player-stat row requires exactly one current approved season spell.'
       );
     }
     const spell = matches[0]!;

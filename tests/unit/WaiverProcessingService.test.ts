@@ -534,9 +534,9 @@ describe('PrismaWaiverClaimStore', () => {
           ])
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([
-            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 0 },
+            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
           ]),
-        create: vi.fn().mockResolvedValue({}),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       pick: {
@@ -584,12 +584,8 @@ describe('PrismaWaiverClaimStore', () => {
       })
     );
     expect(firestore.doc).toHaveBeenCalledWith('leagues/league-1/waiverPriorities/user-1');
-    expect(activityDoc.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'waiver-submitted',
-        claimId: 'action-1',
-      })
-    );
+    // A submitted claim and its bid stay private until waivers run: nothing is published.
+    expect(activityDoc.set).not.toHaveBeenCalled();
   });
 
   it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
@@ -614,7 +610,7 @@ describe('PrismaWaiverClaimStore', () => {
             { memberId: 'member-2', priority: 1, remainingFAAB: null, pendingBidTotal: 0 },
             { memberId: 'member-1', priority: 2, remainingFAAB: null, pendingBidTotal: 0 },
           ]),
-        create: vi.fn().mockResolvedValue({}),
+        createMany: vi.fn().mockResolvedValue({ count: 2 }),
       },
       pick: {
         groupBy: vi.fn().mockResolvedValue([
@@ -636,14 +632,15 @@ describe('PrismaWaiverClaimStore', () => {
       waiverSettings: { system: 'PRIORITY' },
     });
 
-    expect(db.waiverPriority.create).toHaveBeenNthCalledWith(1, {
-      data: expect.objectContaining({ memberId: 'member-2', priority: 1, remainingFAAB: null }),
-    });
-    expect(db.waiverPriority.create).toHaveBeenNthCalledWith(2, {
-      data: expect.objectContaining({ memberId: 'member-1', priority: 2, remainingFAAB: null }),
+    expect(db.waiverPriority.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ memberId: 'member-2', priority: 1, remainingFAAB: null }),
+        expect.objectContaining({ memberId: 'member-1', priority: 2, remainingFAAB: null }),
+      ],
+      skipDuplicates: true,
     });
     expect(waiverDoc.set).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'member-2' }));
-    expect(activityDoc.set).toHaveBeenCalledWith(expect.objectContaining({ claimId: 'action-1' }));
+    expect(activityDoc.set).not.toHaveBeenCalled();
   });
 
   it('updates canonical status and mirrors successful processing to Firestore', async () => {

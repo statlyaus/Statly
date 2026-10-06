@@ -151,8 +151,7 @@ interface ParsedTradeSettingsUpdate {
 }
 
 type TradeSettingsParseResult =
-  | { ok: true; data: ParsedTradeSettingsUpdate }
-  | { ok: false; error: string };
+  { ok: true; data: ParsedTradeSettingsUpdate } | { ok: false; error: string };
 
 function parseTradeSettingsUpdate(tradeInput: Record<string, unknown>): TradeSettingsParseResult {
   const ranges = [
@@ -227,6 +226,7 @@ function toSettingsResponse(league: {
     draftType: string;
     pickOrder: string;
     waiverRule: string;
+    faabBudget: number | null;
     startAt: Date | null;
     timeZone: string;
     locked: boolean;
@@ -282,6 +282,7 @@ function toSettingsResponse(league: {
     },
     waiver: {
       waiverRule: league.settings.waiverRule.toLowerCase(),
+      faabBudget: league.settings.faabBudget,
     },
     trade: {
       tradeLimit: league.settings.tradeLimit,
@@ -418,6 +419,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!tradeSettingsResult.ok) {
       return NextResponse.json({ error: tradeSettingsResult.error }, { status: 400 });
     }
+    // A whole-number budget of at least 1 turns FAAB on; null turns it off; absent leaves it alone.
+    const faabBudget = waiverInput.faabBudget;
+    if (
+      faabBudget !== undefined &&
+      faabBudget !== null &&
+      !(typeof faabBudget === 'number' && Number.isInteger(faabBudget) && faabBudget >= 1)
+    ) {
+      return NextResponse.json(
+        { error: 'faabBudget must be a whole number of at least 1, or null' },
+        { status: 400 }
+      );
+    }
     const { tradeLimit, tradeReview, tradeDeadline, offerExpiryHours, reviewHours, vetoThreshold } =
       tradeSettingsResult.data;
     const draftDateInput = firstDefinedValue(
@@ -492,6 +505,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         categoriesInput !== undefined;
       if (scoringSettingsChanged && prismaLeague.settings.scoringSettingsLockedAt) {
         return NextResponse.json({ error: 'Scoring settings are locked' }, { status: 409 });
+      }
+      // Balances are derived from the budget when a claim first touches them, so once any claim
+      // exists a new budget would leave members on different starting balances.
+      if (
+        faabBudget !== undefined &&
+        faabBudget !== prismaLeague.settings.faabBudget &&
+        (await prisma.teamAction.count({ where: { leagueId: id, actionType: 'WAIVER_CLAIM' } })) > 0
+      ) {
+        return NextResponse.json(
+          { error: 'FAAB budget is locked once waiver claims exist' },
+          { status: 409 }
+        );
       }
 
       const timePerPickInput =
@@ -571,6 +596,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             draftType,
             pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM',
             waiverRule,
+            ...(faabBudget !== undefined ? { faabBudget: faabBudget as number | null } : {}),
             timeZone,
             allowAutoPick: autoPickRules.enabled,
             rosterSize: getRosterSizeFromPositionLimits(positionLimits),

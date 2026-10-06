@@ -18,7 +18,13 @@ function isInternalApiRequest(input: RequestInfo | URL): boolean {
   }
 }
 
-async function getAuthHeader(userId?: string): Promise<string | null> {
+/**
+ * Resolve the credential to send with an outgoing request.
+ *
+ * A signed-in browser session supplies a Firebase ID token. Local development without a signed-in
+ * user falls back to the development credential. Returns null when neither is available.
+ */
+export async function getAuthHeader(userId?: string): Promise<string | null> {
   const currentUser = auth?.currentUser;
   if (currentUser) {
     const token = await currentUser.getIdToken();

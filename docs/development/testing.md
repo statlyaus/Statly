@@ -151,6 +151,22 @@ Both generated evidence batches are persisted under provider `statly_local_fixtu
 `fixture://statly/` source references. They never claim Draftguru, Footywire or official-AFL
 provenance, and the live provider-ingestion boundary rejects `statly_local_fixture` entirely.
 
+### Waiver walk-through
+
+Waivers have no browser test yet, so check them by hand on the local full stack. With the fantasy
+`DATABASE_URL` pointing at a development database (the stack applies migrations at start-up), run
+`npm run dev:seed:waivers` once the stack is up. It refuses anything but a loopback database and the
+Firebase Auth emulator, and re-running it resets the scenario. It creates **Waiver Test League**: a
+completed two-team draft, a FAAB budget of $100 each, one open roster spot each, and two free players.
+Sign in as `admin@statly.dev` (commissioner) and `rival@statly.dev` in two browser profiles; both use
+the local development phrase (`STATLY_LOCAL_AUTH_PHRASE`, or the default in `src/lib/devAuth.ts`).
+
+1. As each manager, bid on Free Agent Alpha with different amounts.
+2. Run `npm run dev:seed:waivers -- --make-due`; claims otherwise become due only after 24 hours.
+3. As commissioner, process waivers. A second overlapping run is refused with 409.
+4. Expect the higher bid to own the player and be debited once, the lower claim to fail, both outcomes
+   in the league's Activity tab, and neither bid visible to the other manager before processing.
+
 ### Private workbook evaluation lane
 
 Use the separate workbook evaluation launcher when product testing needs the historical transaction
@@ -252,12 +268,51 @@ PGlite's PostgreSQL socket compatibility layer is for local development only and
 a one-connection `test_fixture` read pool. Migration triggers and concurrent repository behavior remain
 owned by the disposable real-PostgreSQL outcomes integration job described below.
 
+## Secured endpoint testing
+
+Some endpoints require a credential by design and fail closed when it is absent:
+
+- `/api/admin/*` requires the `x-admin-secret` header carrying `ADMIN_SECRET`.
+- `/api/cron/*` requires `Authorization: Bearer $CRON_SECRET` (`src/lib/cronAuth.ts`). An unset
+  `CRON_SECRET` denies every request outside `NODE_ENV=development`.
+- `/api/user/watchlists`, `/api/user/leagues`, and `/api/user/leagues/[id]/settings` derive the user
+  from a verified identity and ignore any client-supplied `userId`. In local development the scripted
+  identity is accepted when both `STATLY_ENABLE_DEV_AUTH` and `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH` are
+  `true` and the process is not running in production mode.
+
+Set local values in `.env.local`, which is ignored and never committed. Generate one value per
+secret so no two environments share a credential:
+
+```sh
+ADMIN_SECRET=<paste the output of: openssl rand -hex 32>
+CRON_SECRET=<paste a different output of: openssl rand -hex 32>
+```
+
+`Scripts/dev/curl-admin.sh` loads those values without printing them and forwards them as headers:
+
+```sh
+Scripts/dev/curl-admin.sh admin /api/admin/queue
+Scripts/dev/curl-admin.sh cron /api/cron/daily
+Scripts/dev/curl-admin.sh user /api/user/leagues
+```
+
+Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
+succeed. The admin and user contracts are enforced by
+`tests/unit/adminControlPlaneAuthorization.test.ts` and
+`tests/unit/userScopedRouteAuthorization.test.ts`, which run in the unit lane without Firebase,
+Redis, or a running server.
+
+Never weaken these checks to make local testing easier and never add a development bypass that
+behaves differently from production; use local credential values instead. See the
+[authorization model](../architecture/authorization.md) for the tier these endpoints belong to.
+
 ## CI architecture
 
 The CI workflow has five explicit ownership boundaries:
 
-- root jobs own documentation, root lint, application and test typechecks, unit/integration/browser tests, and the
-  production build;
+- root jobs own documentation, root lint, application and test typechecks, the production build, and
+  the `Unit tests`, `Integration tests`, and `Browser tests` jobs, each with its own disposable
+  PostgreSQL and Redis services;
 - `Draft worker E2E` owns the isolated Chromium, Socket.IO, and BullMQ lifecycle against its own Redis
   service and disposable PostgreSQL database;
 - `Functions` owns its independent install, flat-ESLint config, typecheck, compiled smoke test, and
@@ -272,6 +327,11 @@ is cancelled, and succeeds only when every dependency reports `success`. Reposit
 require this stable aggregate check (plus separately governed security checks) so adding a validation
 job to the gate does not require renaming the protected check. Individual jobs remain visible for
 diagnosis and keep stable names, but the gate is the merge decision.
+
+The three root test tiers are separate jobs, not steps in one job, so that a failure is re-run without
+repeating the tiers that passed. Only the browser job installs Playwright browsers. Re-run a failed CI
+run with `gh run rerun <run-id> --failed`, never a full re-run; see
+[Re-running CI](delivery.md#re-running-ci).
 
 The jobs remain explicit rather than using a workspace matrix: Functions and ETL have different
 runtime/setup requirements, so a shared abstraction would hide behavior without removing meaningful
@@ -356,13 +416,44 @@ own service container with the same setting, and additionally with `fsync`, `syn
 `full_page_writes` off, because the database is disposable and each suite replays about 250 migration
 transactions.
 
-The suite runs one file at a time, and the lock ceiling is not the reason. The outcomes SQL takes
-transaction advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and
-advisory locks are scoped to the database, not the schema. Fixtures are content-addressed, so two files
-in different schemas produce identical lock keys. A four-worker run (PR #763) failed seven tests this
-way: lock waits past the test budget, a try-lock raising `changed concurrently` for a row in another
-schema, and a cancelled statement landing on the wrong finalizer. Running files in parallel requires
-one database per file, so the advisory key spaces are disjoint.
+The suite runs two files at a time, each in its own database. Four saturated the 4-core runner: the
+heaviest files ran two to three times slower than alone and passed their timeouts. The outcomes SQL takes transaction
+advisory locks keyed by `hashtextextended(<text key>, 0)` with no schema component, and advisory locks
+are scoped to the database, not the schema. Fixtures are content-addressed, so two files in different
+schemas of one database produce identical lock keys. A four-worker run on one database (PR #763) failed
+seven tests this way: lock waits past the test budget, a try-lock raising `changed concurrently` for a
+row in another schema, and a cancelled statement landing on the wrong finalizer.
+
+`tests/testUtils/outcomesDatabasePerFile.setup.ts` runs before each file: it creates
+`statly_outcomes_test_<pid>_<n>` on the server named by `AFL_OUTCOMES_TEST_DATABASE_URL`, points that
+variable (and `AFL_OUTCOMES_DATABASE_URL` when it names the same database) at it, and drops it with
+`FORCE` after the file's own `afterAll` hooks. Each file still creates its own schema and runs
+`prisma migrate deploy` into it, exactly as before. Roles and role memberships are server-wide, and
+migrations and fixtures create fixed role names guarded only against an existing role, so two files
+creating one at the same moment fail with `unique_violation`. The global setup
+(`tests/testUtils/outcomesParallelDatabases.globalSetup.ts`) therefore migrates the template database
+described below once, which creates the migration roles, creates the fixture-only roles before any file
+starts, and drops the template and leftover per-file databases before and after the run. Code that names the database (`pg_dump`/`pg_restore`
+arguments, disposable-database guards) reads it from the URL or accepts the `statly_outcomes_test_<pid>_<n>`
+form. A role setting a file needs is scoped with `ALTER ROLE ... IN DATABASE`, never server-wide.
+
+Replaying the full migration history was about half of the job's time: 89 `migrate deploy` calls of
+about 8 seconds each, and CPU-bound, so more workers did not help. The global setup therefore migrates
+one template database (`statly_outcomes_template`, schema `outcomes_template`) and each per-file
+database is a `CREATE DATABASE ... TEMPLATE` clone. A file's first `migrate deploy` into an absent or
+untouched empty schema (no objects, no schema grants, no default privileges) adopts the clone's
+migrated schema instead of replaying: `tests/testUtils/adoptOutcomesTemplateSchema.mjs` renames it to
+the requested name, rewrites each function's stored `search_path`, and re-creates the few functions
+whose migrations embedded the schema name in their body (0135 and 0139 build `%I.<table>%ROWTYPE`).
+Everything else refers to the schema by OID. Any other deploy, including a file's second schema, runs
+the real command.
+
+The global setup proves adoption on every run before enabling it: it deploys into one fresh database,
+adopts into a template clone under the same schema name, and compares every routine definition and
+privilege, relation, column, constraint, index, trigger, view, policy, type, sequence value, row count
+and recorded migration. Any difference prints a `::warning::` with the differing items and the files
+replay migrations as before, so a new migration that embeds the schema name another way slows the job
+down rather than producing a wrong schema.
 
 Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
 native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
@@ -447,3 +538,16 @@ When a broad check fails, determine whether the branch introduced it with a focu
 where practical, a clean `origin/main` baseline. Do not conceal a pre-existing failure or expand a
 documentation/delivery change into unrelated runtime repair. Record the command, failure, evidence, and
 residual risk in the pull request.
+
+Re-run only what failed, locally as in CI:
+
+```sh
+# Browser tests that failed in the previous local Playwright run
+npm run test:e2e:failed
+
+# Vitest has no last-failed flag: name the failing files, and optionally the failing test
+npm run test:unit -- tests/unit/<file>.test.ts -t "<test name>"
+npm run test:int -- tests/integration/<file>.test.ts
+```
+
+Run the full suite again only once the focused failures pass, as the pre-publication gate.

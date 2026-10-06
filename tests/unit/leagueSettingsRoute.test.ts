@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   transaction: vi.fn(),
   convergeDraftSetup: vi.fn(),
+  countActions: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/lib/prisma', () => ({
       update: mocks.updateLeague,
     },
     leagueSettings: { update: mocks.updateSettings },
+    teamAction: { count: mocks.countActions },
     $transaction: mocks.transaction,
   },
 }));
@@ -55,6 +57,7 @@ const league = {
     draftType: 'SNAKE',
     pickOrder: 'RANDOM',
     waiverRule: 'WEEKLY',
+    faabBudget: null,
     startAt: new Date('2026-08-15T09:00:00.000Z'),
     timeZone: 'Australia/Melbourne',
     locked: false,
@@ -83,6 +86,7 @@ describe('league settings route draft scheduling', () => {
     mocks.updateSettings.mockResolvedValue(league.settings);
     mocks.transaction.mockResolvedValue([]);
     mocks.convergeDraftSetup.mockResolvedValue(undefined);
+    mocks.countActions.mockResolvedValue(0);
   });
 
   it('clears a scheduled draft when the request explicitly sends null', async () => {
@@ -102,6 +106,59 @@ describe('league settings route draft scheduling', () => {
     });
   });
 
+  it.each([100, null])('saves a FAAB budget of %s', async (faabBudget) => {
+    const response = await PUT(settingsRequest({ waiver: { faabBudget } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      where: { id: 'settings-1' },
+      data: expect.objectContaining({ faabBudget }),
+    });
+  });
+
+  it('refuses to change the FAAB budget once a waiver claim exists', async () => {
+    mocks.countActions.mockResolvedValue(1);
+
+    const response = await PUT(settingsRequest({ waiver: { faabBudget: 200 } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'FAAB budget is locked once waiver claims exist',
+    });
+    expect(mocks.countActions).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', actionType: 'WAIVER_CLAIM' },
+    });
+    expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('saves an unchanged FAAB budget without checking for claims', async () => {
+    mocks.countActions.mockResolvedValue(1);
+
+    const response = await PUT(settingsRequest({ waiver: { faabBudget: null } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.countActions).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 1.5, '100'])(
+    'rejects a FAAB budget of %s without writing settings',
+    async (faabBudget) => {
+      const response = await PUT(settingsRequest({ waiver: { faabBudget } }), {
+        params: Promise.resolve({ id: 'league-1' }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(mocks.findLeague).not.toHaveBeenCalled();
+      expect(mocks.updateSettings).not.toHaveBeenCalled();
+    }
+  );
+
   it('rejects malformed draft dates without writing settings', async () => {
     const response = await PUT(
       new NextRequest('http://localhost/api/leagues/league-1/settings', {
@@ -118,3 +175,11 @@ describe('league settings route draft scheduling', () => {
     expect(mocks.updateSettings).not.toHaveBeenCalled();
   });
 });
+
+function settingsRequest(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/leagues/league-1/settings', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+  });
+}

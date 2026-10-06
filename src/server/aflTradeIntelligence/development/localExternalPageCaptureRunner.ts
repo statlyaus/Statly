@@ -9,6 +9,7 @@ import {
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   captureDraftguruSource,
+  parseDraftguruNationalYearSelections,
   parseDraftguruTradeDetail,
   parseDraftguruTradeIndexEvidence,
 } from '../source/draftguruSourceAdapter';
@@ -37,8 +38,16 @@ import {
   createDraftguruTradeCaptureCommand,
   type DraftguruTradeAuthority,
 } from './localDraftguruTradeCaptureCommand';
+import {
+  createDraftguruNationalYearCaptureCommand,
+  DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
+  DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+  draftguruNationalYearDecisionKey,
+  type LocalDraftguruNationalYearTarget,
+} from './localDraftguruNationalYearCapture';
 import { createLocalFileCaptureAdmissionStore } from './localFileCaptureAdmissionStore';
 import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
+import { bindLocalAflTradeArtifactRepository } from './localArtifactStoreBinding';
 import {
   LocalExternalCaptureError,
   type LocalNarrowCaptureAuthority,
@@ -68,6 +77,14 @@ export const LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY = {
   rawRetentionDays: 365,
 } as const;
 
+/** The national-year rights record a one-hour cache, unlike the one-day trade-page cache. */
+export const LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY = {
+  upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
+  cacheSeconds: 3_600,
+  maximumLeaseMs: 120_000,
+  rawRetentionDays: 365,
+} as const;
+
 export const LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY = {
   upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
   cacheSeconds: 3_600,
@@ -81,10 +98,14 @@ const MAXIMUM_ADMISSION_ATTEMPTS = 5;
 const DRAFTGURU_TRADE_INDEX_URL = 'https://www.draftguru.com.au/trades';
 
 export type LocalExternalCaptureCapability =
-  DraftguruTradeCapability | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY;
+  | DraftguruTradeCapability
+  | typeof DRAFTGURU_NATIONAL_YEAR_CAPABILITY
+  | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY;
 
 type CapturePolicy =
-  typeof LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY | typeof LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY;
+  | typeof LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY
+  | typeof LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY
+  | typeof LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY;
 
 /** What the runner requires of each capability's recorded authority, and where it keeps raw bytes. */
 const CAPABILITY_PROFILES: Record<
@@ -110,6 +131,13 @@ const CAPABILITY_PROFILES: Record<
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
     decisionKey: () => draftguruTradeDecisionKey('draftguru-trade-detail'),
+  },
+  [DRAFTGURU_NATIONAL_YEAR_CAPABILITY]: {
+    provider: 'draftguru',
+    parserVersion: DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+    policy: LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY,
+    rawRepositoryId: 'draftguru-national-raw',
+    decisionKey: draftguruNationalYearDecisionKey,
   },
   [OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY]: {
     provider: 'official_afl',
@@ -225,7 +253,9 @@ export interface LocalDraftguruTradeCaptureTarget {
 }
 
 export type LocalExternalCaptureTarget =
-  LocalDraftguruTradeCaptureTarget | LocalOfficialAflDraftSessionTarget;
+  | LocalDraftguruTradeCaptureTarget
+  | LocalDraftguruNationalYearTarget
+  | LocalOfficialAflDraftSessionTarget;
 
 /** Index: the whole `/trades` page bounded to seasons. Detail: one page per exact trade URL. */
 export function createLocalDraftguruTradeCaptureTargets(
@@ -273,10 +303,39 @@ export type LocalExternalCaptureResult = LocalExternalCaptureTarget &
 export interface LocalExternalCaptureOptions {
   sql: AflOutcomeSqlClient;
   artifactRootDirectory: string;
+  /**
+   * The registered local store to write raw pages into. Its root must be `artifactRootDirectory`;
+   * each page's custody row then records its location. Without it pages are written unlocated.
+   */
+  storeId?: string;
   userAgent: string;
   fetchImpl?: typeof fetch;
   now?: () => string;
   sleep?: (ms: number) => Promise<void>;
+}
+
+/** A raw-page repository in the registered store, which must be rooted at the capture root. */
+async function bindStoreRepository(
+  sql: AflOutcomeSqlClient,
+  storeId: string,
+  root: string,
+  repositoryId: string
+) {
+  const store = await sql.query<{ root_locator: string }>(
+    `SELECT root_locator FROM outcome_artifact_store WHERE store_id=$1`,
+    [storeId]
+  );
+  if (store.rows[0] === undefined || resolve(store.rows[0].root_locator) !== root) {
+    throw new TypeError(
+      `Artifact store ${storeId} must be registered with root ${root} to capture into it.`
+    );
+  }
+  return bindLocalAflTradeArtifactRepository(sql, {
+    storeId,
+    repositoryId,
+    artifactClass: 'raw_source',
+    maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+  });
 }
 
 function identifiedFetch(fetchImpl: typeof fetch, userAgent: string): typeof fetch {
@@ -294,6 +353,13 @@ function createCommand(
 ): AflTradeExternalProviderIngestionCommand {
   if (target.capabilityId === OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY) {
     return createOfficialAflDraftSessionCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+    });
+  }
+  if (target.capabilityId === DRAFTGURU_NATIONAL_YEAR_CAPABILITY) {
+    return createDraftguruNationalYearCaptureCommand(recorded.authority, {
       target,
       capturedAt,
       maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
@@ -330,6 +396,8 @@ function parsePage(
         draftYear: target.season,
         effectiveAt: command.request.effectiveAt,
       });
+    case DRAFTGURU_NATIONAL_YEAR_CAPABILITY:
+      return parseDraftguruNationalYearSelections(html, { capture, draftYear: target.season });
     case OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY:
       return parseOfficialAflDraftSession(html, { capture, anchorSeasonYear: target.season });
   }
@@ -382,18 +450,24 @@ export async function runLocalExternalCapture(
       await loadRecordedLocalCaptureAuthority(ledger, capabilityId, season, now())
     );
   }
-  const rawArtifacts = createLocalAflTradeNonProductionArtifactRepository({
-    rootDirectory: root,
-    repositoryId: profile.rawRepositoryId,
-    artifactClass: 'raw_source',
-    maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
-  });
+  const rawArtifacts =
+    options.storeId === undefined
+      ? createLocalAflTradeNonProductionArtifactRepository({
+          rootDirectory: root,
+          repositoryId: profile.rawRepositoryId,
+          artifactClass: 'raw_source',
+          maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+        })
+      : await bindStoreRepository(options.sql, options.storeId, root, profile.rawRepositoryId);
   const admission = createAflTradeExternalCaptureAdmission({
     redis: createLocalFileCaptureAdmissionStore({ directory: join(root, 'capture-admission') }),
     createToken: randomUUID,
   });
   const fetchImpl = identifiedFetch(options.fetchImpl ?? fetch, options.userAgent);
-  const captureRegistry = new PostgresAflTradeExternalCaptureRegistry(options.sql);
+  const captureRegistry = new PostgresAflTradeExternalCaptureRegistry(
+    options.sql,
+    rawArtifacts.storeLocation === undefined ? {} : { storeLocation: rawArtifacts.storeLocation }
+  );
   const staging = new PostgresAflTradeExternalEvidenceRepository(options.sql);
 
   async function captureOne(target: LocalExternalCaptureTarget) {

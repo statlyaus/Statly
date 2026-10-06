@@ -19,7 +19,6 @@ import {
   prepareLocalAflTradeFitzRoyMatchEvidence,
 } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsal';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
@@ -42,7 +41,8 @@ import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
 import { registerSourceFirstHpnPlayerMapFixture } from '../testUtils/sourceFirstHpnPlayerMapFixture';
 import { registerSourceFirstHpnResultsMapFixture } from '../testUtils/sourceFirstHpnResultsMapFixture';
-import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -54,15 +54,22 @@ const pool = new Pool({
   max: 4,
 });
 const client = createPgAflOutcomeSqlClient(pool);
+// The postseason chain below accepts reviewed (v1/v2) spells only, and since migration 0248 season
+// statistics bind season spells only, so this suite runs on the history before 0248: it keeps the
+// retained postseason chain covered until trade attribution moves onto arrival stints (Phase 4), then
+// applies 0248 and pins what changes.
+const SEASON_SPELL_BINDING = '0248_hpn_season_spell_binding';
 let artifactRoot: string;
+let migration: Awaited<ReturnType<typeof deployOutcomesHistoryBefore>>;
 beforeAll(async () => {
   artifactRoot = await mkdtemp(join(tmpdir(), 'postseason-measured-'));
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
-  runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
-});
+  migration = await deployOutcomesHistoryBefore(SEASON_SPELL_BINDING, scoped.toString(), pool);
+}, 300_000);
 afterAll(async () => {
+  await migration?.cleanup();
   await rm(artifactRoot, { recursive: true, force: true });
   await pool.end();
   try {
@@ -83,7 +90,6 @@ const instant = async () => {
 // Synthetic upstream bytes and reviews; all source, identity, factual, projection,
 // promotion, spell and HPN owners execute without replacing database guards.
 it('builds and reloads a source-first HPN input with a registered spell and rejects withdrawn current authority', async () => {
-  const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
   const sources = [];
   const primaryRuns: string[] = [];
   for (const provider of ['footywire', 'afl_tables'] as const) {
@@ -91,17 +97,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
       const options = { provider, profile: 'hpn_player_stats' as const, hpnPlayerSide };
       const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
       const source = fixture.command.capture;
-      if (hpnPlayerSide === 'home')
-        await ledger.appendBatch({
-          expectedRevision: (await ledger.load()).revision,
-          records: [
-            {
-              sourceRights: source.sourceRights,
-              proposal: source.ledger.proposals[0]!,
-              decision: source.ledger.decisions[0]!,
-            },
-          ],
-        });
+      if (hpnPlayerSide === 'home') await appendRehearsalSourceAuthority(client, source);
       const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
       const factual = await prepareLocalAflTradeFitzRoyFactualReleaseCandidate(client, {
         provider,
@@ -127,16 +123,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     provider: 'afl_tables',
     profile: 'match_only',
   }).command.capture;
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: resultSource.sourceRights,
-        proposal: resultSource.ledger.proposals[0]!,
-        decision: resultSource.ledger.decisions[0]!,
-      },
-    ],
-  });
+  await appendRehearsalSourceAuthority(client, resultSource);
   const results = await prepareLocalAflTradeFitzRoyMatchEvidence(client);
   const resultMap = await registerSourceFirstHpnResultsMapFixture(client, results);
   sources.push({
@@ -650,4 +637,39 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
       scope
     )
   ).resolves.toEqual(finalized.calculation);
-});
+
+  // Migration 0248: the still-current reviewed away spell stops being a binding candidate for season
+  // statistics, while the retained input set and calculation stay readable as retained records.
+  const awayBinding = async () =>
+    (
+      await pool.query<{ current: boolean }>(
+        `SELECT bool_and(outcome_hpn_acquisition_spell_source_current($2,row.provider_decoded_row_id,
+            row.normalization_run_id,run.projected_field_map_id,match.effective_at::DATE,
+            outcome_acquisition_spell_registration_current($2,clock_timestamp()))) AS current
+           FROM outcome_hpn_pav_input_row row
+           JOIN outcome_hpn_pav_input_run run
+             ON run.input_set_id=row.input_set_id AND run.normalization_run_id=row.normalization_run_id
+           JOIN outcome_hpn_pav_input_match match
+             ON match.input_set_id=row.input_set_id
+            AND match.match_id=row.row_json#>>'{match,canonicalId}'
+          WHERE row.input_set_id=$1 AND row.row_kind='player_match_stats'
+            AND row.row_json#>>'{player,canonicalId}'='afl-player:local-rehearsal-away'`,
+        [built.inputSet.inputSetId, awaySpell.spellVersionId]
+      )
+    ).rows[0]!.current;
+  expect(await awayBinding()).toBe(true);
+  await pool.query(migration.migrationSql);
+  expect(await awayBinding()).toBe(false);
+  await expect(repository.loadFinalizedSeasonInputSet(read, scope)).resolves.toEqual(
+    built.inputSet
+  );
+  await expect(
+    calculations.loadFinalizedCalculation(
+      {
+        calculationId: finalized.calculation.calculationId,
+        environment: scope.environment,
+      },
+      scope
+    )
+  ).resolves.toEqual(finalized.calculation);
+}, 120_000);

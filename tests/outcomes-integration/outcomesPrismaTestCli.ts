@@ -24,6 +24,12 @@ const FORWARDED_ENVIRONMENT_KEYS = [
   'TMPDIR',
 ] as const;
 
+/**
+ * Set by tests/testUtils/outcomesDatabasePerFile.setup.ts when the file's database was cloned from
+ * the migrated template. Names the template schema a first `migrate deploy` may adopt.
+ */
+export const OUTCOMES_TEMPLATE_SCHEMA_KEY = 'STATLY_OUTCOMES_TEMPLATE_SCHEMA';
+
 export interface OutcomesPrismaTestCommand {
   command: string;
   args: readonly string[];
@@ -36,6 +42,7 @@ interface OutcomesPrismaTestCommandDependencies {
   environment?: NodeJS.ProcessEnv;
   execute?: (command: OutcomesPrismaTestCommand) => string;
   nodeExecutable?: string;
+  adoptTemplateSchema?: (databaseUrl: string, templateSchema: string) => boolean;
   removeSafeWorkingDirectory?: (workingDirectory: string) => void;
   schemaEnvironmentFileExists?: (path: string) => boolean;
   workspaceRoot?: string;
@@ -53,6 +60,23 @@ function createSafeWorkingDirectory(): string {
 
 function removeSafeWorkingDirectory(workingDirectory: string): void {
   rmdirSync(workingDirectory);
+}
+
+function adoptTemplateSchema(databaseUrl: string, templateSchema: string): boolean {
+  const output = execFileSync(
+    process.execPath,
+    [
+      join(DEFAULT_WORKSPACE_ROOT, 'tests', 'testUtils', 'adoptOutcomesTemplateSchema.mjs'),
+      databaseUrl,
+      templateSchema,
+    ],
+    {
+      encoding: 'utf8',
+      env: { NODE_ENV: 'test', PATH: process.env.PATH },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
+  return output.trim() === 'adopted';
 }
 
 function execute(command: OutcomesPrismaTestCommand): string {
@@ -82,7 +106,33 @@ function createChildEnvironment(
   return childEnvironment;
 }
 
+/**
+ * A first deploy into an untouched schema of a template-cloned database adopts the template's
+ * migrated schema instead of replaying every migration. Anything else runs the real command.
+ */
+function adoptedTemplateSchema(
+  args: readonly string[],
+  options: RunOutcomesPrismaTestCommandOptions,
+  dependencies: OutcomesPrismaTestCommandDependencies
+): boolean {
+  const templateSchema = (dependencies.environment ?? process.env)[OUTCOMES_TEMPLATE_SCHEMA_KEY];
+  const isDeploy = args.length === 2 && args[0] === 'migrate' && args[1] === 'deploy';
+  if (!templateSchema || !isDeploy) return false;
+  return (dependencies.adoptTemplateSchema ?? adoptTemplateSchema)(
+    options.databaseUrl,
+    templateSchema
+  );
+}
+
 export function runOutcomesPrismaTestCommand(
+  args: readonly string[],
+  options: RunOutcomesPrismaTestCommandOptions
+): string {
+  if (adoptedTemplateSchema(args, options, options.dependencies ?? {})) return '';
+  return runPrismaCommand(args, options);
+}
+
+function runPrismaCommand(
   args: readonly string[],
   options: RunOutcomesPrismaTestCommandOptions
 ): string {

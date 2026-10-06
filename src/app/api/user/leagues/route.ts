@@ -5,21 +5,27 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { userProfileService } from '@/services/userProfileService';
 import { logger } from '@/lib/logger';
 
 /**
- * POST /api/user/leagues/join
- * Join a league with specific settings
+ * POST /api/user/leagues
+ * Join a league with specific settings as the authenticated user
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, leagueId, memberName, leagueSettings, inviteCode } = body;
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!userId || !leagueId || !memberName) {
+    const body = await request.json();
+    const { leagueId, memberName, leagueSettings, inviteCode } = body;
+
+    if (!leagueId || !memberName) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, leagueId, memberName' },
+        { error: 'Missing required fields: leagueId, memberName' },
         { status: 400 }
       );
     }
@@ -42,17 +48,17 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/user/leagues?userId=xxx
- * Get user's league memberships with optional filters
+ * GET /api/user/leagues?status=&format=&role=
+ * Get the authenticated user's league memberships with optional filters
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
+    const userId = await getAuthenticatedUserId(request);
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
 
     // Parse query parameters for filtering with proper type casting
     const filters: {

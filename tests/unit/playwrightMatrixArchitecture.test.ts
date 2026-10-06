@@ -75,7 +75,7 @@ describe('Playwright browser matrix', () => {
 
   it('isolates the standard browser matrix from required draft-worker coverage in CI', () => {
     const workflow = read('.github/workflows/ci.yml');
-    const testsJob = workflowJob(workflow, 'tests', 'draft-worker-e2e');
+    const testsJob = workflowJob(workflow, 'browser-tests', 'draft-worker-e2e');
     const workerJob = workflowJob(workflow, 'draft-worker-e2e', 'build');
     const gateJob = workflow.slice(workflow.indexOf('\n  ci-gate:'));
 

@@ -1,3 +1,5 @@
+import { recordAflTradeRepositoryLocations } from '../artifacts/artifactStoreLocation';
+import type { AflTradeArtifactStoreLocation } from '../artifacts/immutableArtifactRepository';
 import { z } from 'zod';
 
 import {
@@ -31,7 +33,9 @@ const primitiveInputSchema = z
     ]),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
-    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft']).nullable(),
+    draftPathway: z
+      .enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft'])
+      .nullable(),
     dataset: z.string().trim().min(1).max(160),
     datasetVersion: z.string().trim().min(1).max(160),
     accessMechanism: z.string().trim().min(1).max(160),
@@ -233,7 +237,14 @@ function parseInput(input: PersistAflTradeExternalCaptureInput) {
 }
 
 export class PostgresAflTradeExternalCaptureRegistry implements AflTradeExternalCaptureRegistry {
-  constructor(private readonly client: AflOutcomeSqlClient) {}
+  /**
+   * `storeLocation` is the registered store the caller captured the raw pages into; each page's
+   * custody row then records its location in the same transaction.
+   */
+  constructor(
+    private readonly client: AflOutcomeSqlClient,
+    private readonly options: { storeLocation?: AflTradeArtifactStoreLocation } = {}
+  ) {}
 
   async persistNotModified(input: {
     environment: PersistAflTradeExternalCaptureInput['environment'];
@@ -497,6 +508,7 @@ export class PostgresAflTradeExternalCaptureRegistry implements AflTradeExternal
          ON CONFLICT (artifact_id) DO NOTHING`,
         custodyParameters
       );
+      await recordAflTradeRepositoryLocations(transaction, this.options, [input.artifact]);
       const custody = await transaction.query<{
         content_sha256: string;
         storage_uri: string;

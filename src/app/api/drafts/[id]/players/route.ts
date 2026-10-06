@@ -1,7 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { prisma } from '@/lib/prisma';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 import {
   buildAvailableDraftPlayer,
   calculateStatlyZScores,
@@ -26,6 +28,16 @@ const VALID_POSITIONS = ['DEF', 'MID', 'FWD', 'RUC'] as const;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const access = await getDraftMembershipAccess(id, userId);
+    if (!access.isMember) {
+      return errorResponse('Draft access required', 403);
+    }
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);

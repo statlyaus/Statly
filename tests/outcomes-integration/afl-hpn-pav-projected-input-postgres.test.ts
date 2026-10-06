@@ -2654,6 +2654,23 @@ describe.sequential(
                   verified_at: report.createdAt,
                 }
               );
+              // Reviewed nonparticipant evidence must have a recorded store location. Only the
+              // location is pinned here; storing and reading bytes back has its own suites.
+              await transaction.query(
+                `INSERT INTO outcome_artifact_store (store_id,environment,assurance,root_locator)
+                 VALUES ('nonparticipant-fixture-store','non_production',
+                   'local_non_production_filesystem','/nonparticipant-fixture-store')
+                 ON CONFLICT DO NOTHING`
+              );
+              await transaction.query(
+                `INSERT INTO outcome_artifact_custody_location (artifact_id,store_id,object_key)
+                 SELECT $1,store_id,$2 FROM outcome_artifact_store
+                  WHERE environment='non_production' AND assurance='local_non_production_filesystem'`,
+                [
+                  report.artifactId,
+                  `nonparticipant-reports/local_non_production_filesystem/sha256/${report.contentSha256}`,
+                ]
+              );
               const evidence = {
                 schemaVersion: 'afl-trade-hpn-source-nonparticipant-review/v1',
                 environment: 'non_production',

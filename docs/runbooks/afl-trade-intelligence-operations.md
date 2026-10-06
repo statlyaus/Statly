@@ -331,7 +331,139 @@ The command stores each evidence file and reads it back before any database writ
 transaction it then records each location and the registration. It refuses evidence that has no
 custody row, and refuses with `AflTradeArtifactUnlocatedError` a spell whose rule cites evidence that
 was never located. A failure leaves no location and no registration, so the same input can be
-re-run once the cause is fixed.
+re-run once the cause is fixed. It also refuses with `AflTradeCustodyUnhealthyError`
+(`CUSTODY_UNHEALTHY`) while custody is unhealthy; run a custody readback first.
+
+An arrival-only (v4) spell may cite a source capture successor instead of a lost entry capture
+(migration 0252). Successors live in `outcome_source_capture_successor`, one per lost capture:
+
+- `recaptured` names a later approved capture of the same provider, dataset, competition, anchor
+  season and `sourceUrl`, whose bytes are located; the v4 entry cites the new artifact.
+- `omitted` names a lost capture the owner has excused; the v4 entry leaves it out. The entry must
+  still cite at least one other capture of the promotion.
+
+Each successor is content-addressed (`afl-trade-source-capture-successor/v1`) and needs an approved
+review decision with subject type `source_capture_successor` whose evidence is exactly the record.
+Insertion refuses a capture whose bytes are located, a second successor for the same capture, a
+different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
+entries never read them.
+
+### Storing evidence before it is cited
+
+Store any file a record will cite as evidence, such as an owner's approval record for a Gate
+decision, with this command first. It prints the `artifact:` id to cite:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:store-evidence -- \
+  --store-id <store-id> --file <absolute-path> --media-type <type/subtype> \
+  [--repository-id <id>] [--artifact-class raw_source|capture_metadata]
+```
+
+The repository defaults to `governance-evidence` and the class to `raw_source`, so the nightly
+custody readback reads the file back in full. The command writes the file into the registered
+local non-production store and reads it back. In one transaction it then records the custody row
+and its location. It prints one JSON line: `artifactId`, `contentSha256`, `byteLength`,
+`mediaType`, `storeId`, `objectKey`, and `custody` (`recorded`, or `already_recorded` when the
+row existed).
+
+- It refuses with `AflTradeCustodyUnhealthyError` (`CUSTODY_UNHEALTHY`) while custody is unhealthy,
+  before writing anything. Run a custody readback first.
+- Running it again with the same file is a no-op that prints the same id. A run that stopped
+  after writing the bytes can be run again; it reuses the stored reference.
+- When the file's exact bytes match a custody row recorded as lost, the command locates that row
+  instead of creating one. It refuses when that row names a different media type.
+- On `statly-grading-1` the store id is `statly-grading-1-artifacts`. Build the database URL inside
+  the genuine-database wrapper, and never print it.
+
+Keep the original file. The id is the SHA-256 of its exact bytes, so a copy with different line
+endings or formatting is a different artifact.
+
+### Recording successors for lost source captures
+
+Record successors only through this command. A dry run is the default and writes nothing; add
+`--apply` to record:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:sources:register-capture-successor -- \
+  --lost-artifact <artifact:...> --successor-capture <source-capture:...> [--apply]
+```
+
+It approves under the delegated rule `owner-delegated-technical-reviewer:capture-successor-rule/v1`,
+and only on an exact factual match. A lost capture's bytes are gone, but its evidence batch keeps
+every claim its parser produced. The fresh capture's finalized batch must restate each of those
+claims verbatim; per-capture fields (the capture block, ordinals, source keys, evidence IDs) are not
+compared, and additional claims from a newer parser are reported but not relied on. On any missing
+or changed claim the command records nothing, prints the missing claims and exits with status 2:
+that capture goes to the owner. The recorded decision carries the delegated-reviewer identity and
+the match summary, never a claim of human review.
+
+An omission is never inferred. Record one only when the owner has excused that capture:
+
+```sh
+npm run outcomes:sources:register-capture-successor -- \
+  --lost-artifact <artifact:...> --omit --owner-decision <reference to the owner decision> [--apply]
+```
+
+Re-running a recorded successor is a no-op. A different successor for a capture that already has
+one is refused.
+
+### Custody readback
+
+Reviewed registration requires healthy custody (migration 0250): the environment's latest custody
+readback finished under 48 hours ago with zero failures (`outcome_artifact_custody_healthy`).
+Season-spell registration and HPN builds cite no evidence bytes and do not require it.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:readback -- --store-id <store-id> [--report <absolute-run.json>]
+```
+
+A run reads every located `raw_source` custody row and a random 5% of the other located classes
+(`--sample-fraction` changes the share; `raw_source` is always read in full) through the store's own
+envelope reader, which decodes the bytes and verifies their SHA-256 and length, and compares that
+identity with the custody row. It appends one `outcome_artifact_readback_run` row with the counts
+by class and the failing artifact ids, and exits non-zero when any row failed. Unlocated custody,
+whose bytes were recorded as lost, is outside the run. A failed row stays failed until its bytes are
+restored and a later run is clean; never edit or delete a run row.
+
+On `statly-grading-1` the systemd timer `statly-custody-readback.timer` runs it daily with
+`Persistent=true`, so a VM that was stopped at the scheduled time runs it on its next boot. The
+service runs from the deployed checkout with the genuine-database wrapper and writes its report under
+`receipts/custody-readback/`. Before a reviewer registration session on a VM that has been stopped
+for over 48 hours, check `systemctl status statly-custody-readback.service` or run the command by
+hand.
+
+### Evidence store mirror
+
+After a clean readback the store is copied to its versioned Cloud Storage mirror, and once a month a
+restore test reads one random located artifact back from the mirror:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:mirror -- --store-id <store-id> --mirror gs://<bucket>/<store-id>
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:mirror -- --store-id <store-id> --restore-test \
+  --receipt <absolute-receipt.json>
+```
+
+The sync refuses unless custody is healthy, runs `gcloud storage rsync --recursive` from the store
+root, never deletes and never copies an envelope still being written (`.pending-*.json`), records the
+bucket path as the store's `mirror_locator` the first time, and then appends one
+`outcome_artifact_mirror_sync` row with its start and finish (migration 0251).
+A store keeps one mirror for life; the database refuses a second locator. The restore test samples only
+locations recorded before the latest finished sync started, so it never picks bytes not yet
+mirrored. It copies the chosen envelope into a scratch directory, verifies it through the store's own envelope reader against
+the custody row, writes an `afl-trade-artifact-mirror-restore/v1` receipt, and exits non-zero unless
+the verdict is `exact`.
+
+For `statly-grading-1-artifacts` the mirror is `gs://statly-grading-evidence-mirror/statly-grading-1-artifacts`:
+a bucket in project `statly-grading` with object versioning, uniform access and public-access
+prevention. The VM's service account holds only object create and view on it, so the mirror cannot
+overwrite or delete an object it already holds. The VM needs the `devstorage.read_write` scope to
+write. The systemd units `statly-custody-readback.service` (followed by the mirror sync) and
+`statly-mirror-restore-test.timer` (monthly) run them; receipts go under `receipts/custody-mirror/`.
 
 ## Capturing source evidence
 
@@ -663,8 +795,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
 
 ### Capturing reviewed provider pages locally
 
-The owner's machine can capture `draftguru-trade-index`, `draftguru-trade-detail` and
-`official-afl-completed-draft-session` pages under the recorded issue-579 narrow decisions without
+The owner's machine can capture `draftguru-trade-index`, `draftguru-trade-detail`,
+`draftguru-national-year-page` and `official-afl-completed-draft-session` pages under the recorded issue-579 narrow decisions without
 S3, KMS or Redis. One command, `npm run outcomes:sources:capture-local-external`, serves every
 capability; only its target and URL builder differ per capability. It uses the same governed
 boundary as `outcomes:sources:ingest-external` (`ingestAuthorizedAflTradeExternalPage`): Gate 0A
@@ -674,12 +806,16 @@ custody and admission adapters differ:
 
 - raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
   same adapter the local official-AFL and AFLCA captures use) under
-  `<artifact-root>/draftguru-trade-raw` or `<artifact-root>/official-afl-session-raw`; this custody
-  cannot satisfy production or public-release storage; and
+  `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw` or
+  `<artifact-root>/official-afl-session-raw`; this custody cannot satisfy production or
+  public-release storage. With `--store-id <store-id>` the pages go into the registered local store,
+  whose root must be `--artifact-root`, and each page's custody row records its location in the same
+  transaction. Always pass it on `statly-grading-1` (`statly-grading-1-artifacts`), so no new raw page
+  is unlocated; and
 - provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
   admission semantics: one lease per provider at a time, then the provider's five-second cooldown
   and a request cooldown for the same source fetch equal to the reviewed cache period (86,400 s for
-  Draftguru, 3,600 s for Official AFL). Separate runs on the same machine share this pacing. As in the
+  Draftguru trade pages, 3,600 s for Draftguru national-year pages and Official AFL). Separate runs on the same machine share this pacing. As in the
   deployed path, the request cooldown is keyed by the request without its capture and effective
   instants, so a new run cannot refetch the same page inside the reviewed cache period.
 
@@ -688,7 +824,10 @@ Prerequisites:
 1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
    command loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
-     `draftguru-trade-detail-issue-579-private-non_production`; and
+     `draftguru-trade-detail-issue-579-private-non_production`;
+   - one `draftguru-national-year-page-issue579-private-<season>` decision per captured season, for
+     example `draftguru-national-year-page-issue579-private-2024`. The runner never uses a combined
+     key such as `-2018-combined-v2`; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v18`. The key names the
@@ -696,9 +835,10 @@ Prerequisites:
      falls back to an earlier season key or parser. Every season in a run must have its decision
      before any page is fetched.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v1` or `official-afl-completed-draft-session/v18`), seasons inside one
-   range, 1 request per 5 seconds with burst 1, 365-day raw retention, the reviewed cache (86,400 s
-   for Draftguru, 3,600 s for Official AFL) and exactly one `provider-egress-control` evidence
+   `draftguru-trade-parser/v1`, `draftguru-national-year-page/v1` or
+   `official-afl-completed-draft-session/v18`), seasons inside one range, 1 request per 5 seconds
+   with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
+   3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
    parser, pacing, cache or retention fails closed; the runner does not adapt.
 3. `AFL_OUTCOMES_DATABASE_URL` names the loopback PostgreSQL outcomes database, and
@@ -723,7 +863,23 @@ npm run outcomes:sources:capture-local-external -- \
 ```
 
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
-(2010-2018) are not enumerable here and are refused. Capture one named Draftguru trade page, for
+(2010-2018) are not enumerable here and are refused.
+
+Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
+`https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
+(`draftguru-national-year-page/v1`), which keeps national selections and counts every other pathway
+as excluded. It is never the general `draftguru-event-year` year-page parser:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability draftguru-national-year-page \
+  --season 2022 --season 2023 --season 2024
+```
+
+Capture one named Draftguru trade page, for
 example the 2020 Jeremy Cameron trade (the season comes from the URL and must fall inside the
 authority's range):
 
@@ -3493,16 +3649,20 @@ benchmarks and realized contribution therefore still require reviewed entry spel
 
 A v3 spell may supersede only a v3 spell for the same season; that is how a window grows during a
 season (`deriveAflTradeAppearanceMembershipSpells` takes the current v3 spells, skips unchanged windows
-and proposes the next version for changed ones). Retirement needs no supersession: a v3 spell is not
-current while a current reviewed v1/v2 spell for the same player and club has possible membership that
-contains its whole window, and the same-club overlap guard admits a reviewed spell over a current v3
-window only under that same containment (never the reverse), so one multi-season entry spell retires
-every covered season window at once. A reviewed spell that only partly overlaps a current v3 window is
-rejected as an overlap; supersede or narrow the v3 window first. A reviewed spell whose entry event
-version has a successor can never be current again, so the overlap guard ignores it (migration0244) and
-a v3 window may cover that player and club until a reviewed successor spell is registered. Inputs retained against a retired
-window fail current-authority reads. Fixture registration does not establish genuine admission, PAV or
-grading.
+and proposes the next version for changed ones). Since migration 0248 a reviewed spell no longer retires a
+season window: a v3 spell may sit inside any current v1, v2 or v4 stint for the same player and club
+whose possible membership contains its whole window, and both stay current. The v3 rule's recorded
+`retirement` field is content-addressed and unchanged, but no longer has effect. A reviewed spell that
+only partly overlaps a current v3 window is still rejected as an overlap; supersede or narrow the v3
+window first. Two reviewed spells, or two v3 spells, for one player and club still cannot overlap.
+
+HPN season input building and its finalization guard bind each player-stat row to exactly one current
+v3 spell, or to a legacy spell recorded before registration existed, and never to a reviewed spell
+(`outcome_hpn_acquisition_spell_source_current`, migration 0248). The per-row
+`outcome_hpn_acquisition_spell_is_current` that the postseason projection uses is unchanged. A
+retained input set with rows bound to a reviewed spell stops reading as current authority as soon as a
+season spell covers those rows; replay the season to replace it. Fixture registration does not
+establish genuine admission, PAV or grading.
 
 Migration 0234 lets a retained source-first capture be governed by the latest general Gate 0A in its
 chain when the capture's own decision or its 0136 renewal is no longer the latest. It applies only

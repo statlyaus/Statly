@@ -71,6 +71,8 @@ model League {
   tradeThreads            LeagueTradeThread[]
   tradeCommands           LeagueTradeCommand[]
   tradeOutboxEvents       LeagueTradeOutboxEvent[]
+  /// Lease held by the one waiver processing run allowed per league; null when none is running.
+  waiverRunStartedAt      DateTime?
   createdAt               DateTime                 @default(now())
 
   @@index([ownerId])
@@ -189,6 +191,8 @@ model LeagueSettings {
   draftType               DraftType
   pickOrder               PickOrder                   @default(RANDOM)
   waiverRule              WaiverRule                  @default(WEEKLY)
+  /// FAAB budget per member; null means the league does not use FAAB.
+  faabBudget              Int?
   startAt                 DateTime?
   timeZone                String                      @default("UTC")
   locked                  Boolean                     @default(false)

@@ -28,6 +28,12 @@ export const POST = withMetrics(
       }
 
       const result = await new WaiverProcessingService().processLeague({ leagueId });
+      if (result.alreadyRunning) {
+        return NextResponse.json(
+          { error: 'Waiver processing is already running' },
+          { status: 409 }
+        );
+      }
 
       logger.info('waivers processed', { leagueId, processed: result.processed });
 

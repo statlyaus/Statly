@@ -86,6 +86,17 @@ and the stable checks emitted by the repository workflows and configured securit
 single-collaborator repository, so it does not require an impossible self-approval; deterministic gates
 and review conversations remain mandatory.
 
+Branches based on anything other than `main` receive no code CI, because the workflow triggers on
+`pull_request` for `main` only. That is safe rather than a gap, and the reason is worth recording so it
+is not "fixed" later: a stacked pull request's commits reach `main` only through its parent, merging the
+child moves the parent's head, and the ruleset's strict required checks then demand a fresh `CI Gate` for
+that head. The suites run against the combined code before it can merge.
+
+Do not widen the trigger to close the apparent gap. It duplicates the outcomes suite on every stacked
+pull request and buys earlier feedback only, not correctness. When a stacked pull request needs its own
+verification before that point, dispatch `CI` for its branch with `workflow_dispatch`; that is how the
+run for the lock-order branch was produced.
+
 Native GitHub auto-merge is the only automatic merger. Enable squash auto-merge only when:
 
 - the acceptance criteria and documentation are complete;
@@ -96,6 +107,27 @@ Native GitHub auto-merge is the only automatic merger. Enable squash auto-merge 
 - the pull-request description matches the final result.
 
 Auto-merge waits for branch protection; it is not permission to bypass it.
+
+## Re-running CI
+
+Re-run only the jobs that failed. A full re-run repeats every passing job, including the outcomes suite,
+for no new information.
+
+```sh
+gh run list --repo statlyaus/Statly --branch <branch> --workflow CI --limit 1
+gh run rerun <run-id> --repo statlyaus/Statly --failed
+```
+
+In the web UI this is **Re-run jobs**, then **Re-run failed jobs**, never **Re-run all jobs**. GitHub
+re-runs the failed jobs and their dependants, so `CI Gate` is evaluated again against the earlier
+successes. To repeat one job that passed, use `gh run rerun --job <job-id>`.
+
+A re-run uses the same commit, so it only answers a flaky or infrastructure failure. Do not push an
+empty commit or dispatch a new run to retry a flake: both start every job again. When the failure is
+real, fix it and push; the new commit needs a full run anyway. When `main` has moved and the ruleset
+needs the branch updated, `gh pr update-branch` starts a full run as well, so do that instead of a
+re-run, not as well as one. A flake that needs a re-run more than once is a defect: record it as an
+issue instead of retrying until it passes.
 
 ## Repository settings
 
