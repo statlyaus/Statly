@@ -31,6 +31,7 @@
     "dev:outcomes:review-official-2026": "tsx Scripts/dev/review-local-official-afl-2026.ts",
     "dev:outcomes:seed": "tsx Scripts/dev/seed-local-afl-trade-outcomes.ts",
     "dev:seed:local": "tsx Scripts/dev/seed-local-stack.ts",
+    "dev:seed:waivers": "tsx Scripts/dev/seed-waiver-scenario.ts",
     "dev:seed:in-season": "tsx -r dotenv/config Scripts/dev/seed-local-in-season-league.ts",
     "players:sync-positions": "tsx -r dotenv/config Scripts/dev/sync-player-positions.ts",
     "dev:smoke:local": "tsx Scripts/dev/smoke-local-stack.ts",
