@@ -111,7 +111,9 @@ describe('dependency and runtime hygiene', () => {
       'typecheck',
       'functions',
       'etl',
-      'tests',
+      'unit-tests',
+      'integration-tests',
+      'browser-tests',
       'build',
     ]) {
       expect(gate).toContain(`      - ${job}`);
