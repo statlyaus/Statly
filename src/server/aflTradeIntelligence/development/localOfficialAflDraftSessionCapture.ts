@@ -30,9 +30,14 @@ export interface LocalOfficialAflDraftSessionTarget {
   effectiveAt: string;
 }
 
-/** Every exact reviewed completed-session page for each requested season, in session order. */
+/**
+ * Every exact reviewed completed-session page for each requested season, in session order. With
+ * `urls`, only those pages: each must be a reviewed page of a requested season, so a URL can narrow
+ * the enumeration but never widen it.
+ */
 export function createLocalOfficialAflDraftSessionTargets(
-  seasons: readonly number[]
+  seasons: readonly number[],
+  urls?: readonly string[]
 ): LocalOfficialAflDraftSessionTarget[] {
   if (seasons.length === 0 || new Set(seasons).size !== seasons.length) {
     throw new LocalExternalCaptureError(
@@ -40,6 +45,25 @@ export function createLocalOfficialAflDraftSessionTargets(
       'Completed-session capture requires one or more distinct seasons.'
     );
   }
+  const targets = enumerateSeasonTargets(seasons);
+  if (urls === undefined) return targets;
+  if (urls.length === 0 || new Set(urls).size !== urls.length) {
+    throw new LocalExternalCaptureError(
+      'INVALID_TARGET',
+      'Completed-session URLs must be one or more distinct reviewed pages.'
+    );
+  }
+  const unreviewed = urls.filter((url) => !targets.some(({ sourceUrl }) => sourceUrl === url));
+  if (unreviewed.length > 0) {
+    throw new LocalExternalCaptureError(
+      'INVALID_TARGET',
+      `Not a reviewed completed-session page of the requested seasons: ${unreviewed.join(', ')}`
+    );
+  }
+  return targets.filter(({ sourceUrl }) => urls.includes(sourceUrl));
+}
+
+function enumerateSeasonTargets(seasons: readonly number[]): LocalOfficialAflDraftSessionTarget[] {
   return [...seasons]
     .sort((left, right) => left - right)
     .flatMap((season) => {

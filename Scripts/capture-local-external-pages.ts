@@ -34,7 +34,7 @@ import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/
  *     --season 2022 [--season 2023 ...]
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability official-afl-completed-draft-session \
- *     --season 2019 [--season 2020 ...]
+ *     --season 2019 [--season 2020 ...] [--url <reviewed page of those seasons> ...]
  *
  * Add --store-id <store-id> to write into the registered local store rooted at --artifact-root, so
  * every captured page's custody row records its location.
@@ -172,12 +172,11 @@ function nationalYearTargets(values: OptionValues): LocalExternalCaptureTarget[]
 }
 
 function officialSessionTargets(values: OptionValues): LocalExternalCaptureTarget[] {
-  if (values.has('--url') || values.has('--from-season')) {
-    usage('Completed-session pages come from each --season.');
-  }
+  if (values.has('--from-season')) usage('Completed-session pages come from each --season.');
   if (!values.has('--season')) usage('Completed-session capture requires --season.');
   return createLocalOfficialAflDraftSessionTargets(
-    (values.get('--season') ?? []).map((value) => season(value, '--season'))
+    (values.get('--season') ?? []).map((value) => season(value, '--season')),
+    values.get('--url')
   );
 }
 
