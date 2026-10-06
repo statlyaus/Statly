@@ -121,3 +121,30 @@ export async function recordAflTradeRepositoryLocations(
   if (repository.storeLocation === undefined || references.length === 0) return;
   await recordAflTradeEvidenceLocations(transaction, repository.storeLocation, references);
 }
+
+/** Reviewed registration while the environment's latest custody readback is stale or failed. */
+export class AflTradeCustodyUnhealthyError extends Error {
+  readonly code = 'CUSTODY_UNHEALTHY' as const;
+
+  constructor(readonly environment: string) {
+    super(
+      `Evidence custody in ${environment} is not healthy: the latest readback is older than 48 hours, failed or absent.`
+    );
+    this.name = 'AflTradeCustodyUnhealthyError';
+  }
+}
+
+/**
+ * Refuses with {@link AflTradeCustodyUnhealthyError} unless the environment's latest custody
+ * readback finished under 48 hours ago with zero failures (`outcome_artifact_custody_healthy`).
+ */
+export async function requireAflTradeCustodyHealthy(
+  transaction: AflOutcomeSqlTransaction,
+  environment: string
+): Promise<void> {
+  const result = await transaction.query<{ healthy: boolean }>(
+    `SELECT outcome_artifact_custody_healthy($1::"OutcomeEnvironment") AS healthy`,
+    [environment]
+  );
+  if (result.rows[0]?.healthy !== true) throw new AflTradeCustodyUnhealthyError(environment);
+}

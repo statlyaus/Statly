@@ -3,6 +3,11 @@ import {
   createDraftguruTradeAuthorityProposal,
   type DraftguruTradeAuthorityProposalInput,
 } from '@/server/aflTradeIntelligence/development/localDraftguruTradeAuthorityProposal';
+import {
+  DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
+  DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+  draftguruNationalYearDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import type { LocalNarrowCaptureAuthority } from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
 import { officialAflDraftSessionDecisionKey } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import {
@@ -21,43 +26,62 @@ export const OFFICIAL_AFL_DRAFT_SESSION_FIELDS = [
   'draft_session.sessionOrdinal',
 ] as const;
 
-/**
- * The shape of the owner's recorded per-season Official AFL completed-session authority: the narrow
- * issue-579 operations, 1 request per 5 s with burst 1, a 3,600 s cache and 365-day raw retention.
- */
-export function officialAflDraftSessionAuthority(input: {
-  season: number;
-  clientVersion?: string;
-  /** A successor proposal carries the next version under the same decision key. */
-  version?: number;
+/** The genuine recorded field boundary for Draftguru national-year selections. */
+export const DRAFTGURU_NATIONAL_YEAR_FIELDS = [
+  'draft_selection.draftType',
+  'draft_selection.draftYear',
+  'draft_selection.player.nativeId',
+  'draft_selection.player.recordedName',
+  'draft_selection.selectedByClub.nativeId',
+  'draft_selection.selectedByClub.recordedName',
+  'draft_selection.selectionNumber',
+] as const;
+
+interface NarrowAuthorityTiming {
   evidenceIds: DraftguruTradeAuthorityProposalInput['evidenceIds'];
   timing: DraftguruTradeAuthorityProposalInput['timing'];
-}): LocalNarrowCaptureAuthority {
+}
+
+/**
+ * One per-season narrow issue-579 authority: the narrow operations, 1 request per 5 s with burst 1,
+ * a 3,600 s cache and 365-day raw retention, around the given provider, capability and fields.
+ */
+function narrowSeasonAuthority(
+  input: NarrowAuthorityTiming & {
+    season: number;
+    version?: number;
+    decisionKey: string;
+    provider: 'draftguru' | 'official_afl';
+    dataset: string;
+    capabilityId: string;
+    clientVersion: string;
+    fields: readonly string[];
+  }
+): LocalNarrowCaptureAuthority {
   const template = createDraftguruTradeAuthorityProposal({
     capabilityId: 'draftguru-trade-index',
     seasons: [input.season],
     evidenceIds: input.evidenceIds,
     timing: input.timing,
   });
-  const decisionKey = officialAflDraftSessionDecisionKey(input.season);
   const base = template.sourceRights.content;
   const rightsContent = {
     ...base,
-    registerId: `${decisionKey}-synthetic`,
-    provider: 'official_afl',
-    dataset: `Official AFL ${input.season} completed national draft sessions`,
+    registerId: `${input.decisionKey}-synthetic`,
+    provider: input.provider,
+    dataset: input.dataset,
     datasetVersion: 'reviewed-synthetic/v1',
     acquisition: {
       kind: 'provider_web' as const,
       clientName: 'Statly private acquisition review',
-      clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
-      capabilityId: 'official-afl-completed-draft-session',
+      clientVersion: input.clientVersion,
+      capabilityId: input.capabilityId,
     },
     automatedAccess: {
       ...base.automatedAccess,
       cache: { permitted: true, maximumSeconds: 3_600 },
     },
-    fields: OFFICIAL_AFL_DRAFT_SESSION_FIELDS.map((sourceField) => ({
+    fields: input.fields.map((sourceField) => ({
       ...base.fields[0]!,
       sourceField,
       normalizedField: sourceField,
@@ -70,11 +94,11 @@ export function officialAflDraftSessionAuthority(input: {
   const templateProposal = template.proposal.content;
   const proposalContent = {
     ...templateProposal,
-    decisionKey,
+    decisionKey: input.decisionKey,
     version: input.version ?? 1,
     scope: {
       ...templateProposal.scope,
-      scopeKey: decisionKey,
+      scopeKey: input.decisionKey,
       dimensions: templateProposal.scope.dimensions.map((dimension) =>
         dimension.name === 'source_rights_artifact'
           ? { ...dimension, values: [sourceRights.rightsArtifactId] }
@@ -90,6 +114,41 @@ export function officialAflDraftSessionAuthority(input: {
     content: proposalContent,
   });
   return { sourceRights, proposal };
+}
+
+/** The shape of the owner's recorded per-season Official AFL completed-session authority. */
+export function officialAflDraftSessionAuthority(
+  input: NarrowAuthorityTiming & {
+    season: number;
+    clientVersion?: string;
+    /** A successor proposal carries the next version under the same decision key. */
+    version?: number;
+  }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: officialAflDraftSessionDecisionKey(input.season),
+    provider: 'official_afl',
+    dataset: `Official AFL ${input.season} completed national draft sessions`,
+    capabilityId: 'official-afl-completed-draft-session',
+    clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+    fields: OFFICIAL_AFL_DRAFT_SESSION_FIELDS,
+  });
+}
+
+/** The shape of the owner's recorded per-season Draftguru national-year authority. */
+export function draftguruNationalYearAuthority(
+  input: NarrowAuthorityTiming & { season: number; clientVersion?: string }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: draftguruNationalYearDecisionKey(input.season),
+    provider: 'draftguru',
+    dataset: `Draftguru ${input.season} national draft selections`,
+    capabilityId: DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
+    clientVersion: input.clientVersion ?? DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+    fields: DRAFTGURU_NATIONAL_YEAR_FIELDS,
+  });
 }
 
 /** Stands in for the owner's recorded approval of one exact narrow proposal. */

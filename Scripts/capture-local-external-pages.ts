@@ -13,6 +13,7 @@ import {
   type LocalExternalCaptureResult,
   type LocalExternalCaptureTarget,
 } from '../src/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import { createLocalDraftguruNationalYearTargets } from '../src/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import { createLocalOfficialAflDraftSessionTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 
@@ -28,6 +29,9 @@ import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability draftguru-trade-index \
  *     --season 2020 [--from-season 2011]
+ *   npm run outcomes:sources:capture-local-external -- \
+ *     --artifact-root <durable-absolute-dir> --capability draftguru-national-year-page \
+ *     --season 2022 [--season 2023 ...]
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability official-afl-completed-draft-session \
  *     --season 2019 [--season 2020 ...]
@@ -157,6 +161,16 @@ function detailTargets(values: OptionValues): LocalExternalCaptureTarget[] {
   });
 }
 
+function nationalYearTargets(values: OptionValues): LocalExternalCaptureTarget[] {
+  if (values.has('--url') || values.has('--from-season')) {
+    usage('National-year pages come from each --season.');
+  }
+  if (!values.has('--season')) usage('National-year capture requires --season.');
+  return createLocalDraftguruNationalYearTargets(
+    (values.get('--season') ?? []).map((value) => season(value, '--season'))
+  );
+}
+
 function officialSessionTargets(values: OptionValues): LocalExternalCaptureTarget[] {
   if (values.has('--url') || values.has('--from-season')) {
     usage('Completed-session pages come from each --season.');
@@ -181,7 +195,7 @@ export function parseLocalExternalCaptureArguments(
   const capability = single(values, '--capability');
   if (!isLocalExternalCaptureCapability(capability)) {
     usage(
-      '--capability must be draftguru-trade-index, draftguru-trade-detail or official-afl-completed-draft-session.'
+      '--capability must be draftguru-trade-index, draftguru-trade-detail, draftguru-national-year-page or official-afl-completed-draft-session.'
     );
   }
   const targets =
@@ -189,7 +203,9 @@ export function parseLocalExternalCaptureArguments(
       ? indexTargets(values)
       : capability === 'draftguru-trade-detail'
         ? detailTargets(values)
-        : officialSessionTargets(values);
+        : capability === 'draftguru-national-year-page'
+          ? nationalYearTargets(values)
+          : officialSessionTargets(values);
   const storeId = single(values, '--store-id');
   if (storeId !== undefined && !/^[a-z][a-z0-9-]{2,62}$/u.test(storeId)) {
     usage('--store-id must be lowercase letters, digits and hyphens, starting with a letter.');
