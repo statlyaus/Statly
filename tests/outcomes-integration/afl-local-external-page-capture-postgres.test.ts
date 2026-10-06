@@ -7,12 +7,7 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import {
-  canonicalizeAflTradeJson,
-  createAflTradeContentAddress,
-} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import { verifyAflTradeArtifactReadback } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createDraftguruTradeAuthorityProposal,
   type DraftguruTradeCapability,
@@ -22,6 +17,8 @@ import {
   createLocalDraftguruTradeCaptureTargets,
   runLocalExternalCapture,
 } from '@/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
+import { storeLocalAflTradeEvidence } from '@/server/aflTradeIntelligence/development/localEvidenceStorage';
 import { createLocalOfficialAflDraftSessionTargets } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
@@ -50,6 +47,7 @@ const sql = createPgAflOutcomeSqlClient(outcomesPool);
 const userAgent = 'Statly private evaluation test (contact: owner@example.com)';
 const cameronUrl = 'https://www.draftguru.com.au/trades/2020-jeremy-cameron';
 let artifactRoot: string;
+const CAPTURE_STORE_ID = 'external-capture-store';
 
 const instant = (offsetMinutes: number) =>
   new Date(Date.now() + offsetMinutes * 60_000).toISOString();
@@ -92,34 +90,17 @@ function stubDraftguru() {
   return { calls, fetchImpl };
 }
 
-async function retainEvidenceDocument(name: string, at: string): Promise<string> {
-  const repository = createLocalAflTradeNonProductionArtifactRepository({
-    rootDirectory: artifactRoot,
+/** Stores an owner's evidence document the way the store-evidence command does: write first. */
+async function retainEvidenceDocument(name: string): Promise<string> {
+  const stored = await storeLocalAflTradeEvidence(sql, {
+    storeId: CAPTURE_STORE_ID,
     repositoryId: 'owner-evidence',
     artifactClass: 'capture_metadata',
+    bytes: new TextEncoder().encode(`# ${name}\n\nSynthetic reviewed evidence.\n`),
+    mediaType: 'text/markdown',
     maximumObjectBytes: 1024 * 1024,
   });
-  const bytes = new TextEncoder().encode(`# ${name}\n\nSynthetic reviewed evidence.\n`);
-  const reference = createAflTradeByteArtifactRef(bytes, 'text/markdown', at);
-  await repository.putIfAbsent(reference, bytes);
-  const readback = await verifyAflTradeArtifactReadback(repository, reference, at, 1024 * 1024);
-  await sql.query(
-    `INSERT INTO outcome_artifact_custody
-      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,environment,
-       created_at,verified_at,custody_json)
-     VALUES ($1,$2,$3,$4,$5,'capture_metadata','non_production',$6,$7,$8::jsonb)`,
-    [
-      reference.artifactId,
-      reference.contentSha256,
-      reference.storageUri,
-      reference.mediaType,
-      reference.byteLength,
-      at,
-      readback.content.verifiedAt,
-      canonicalizeAflTradeJson(readback),
-    ]
-  );
-  return reference.artifactId;
+  return stored.reference.artifactId;
 }
 
 /** Stands in for the owner's recorded decision, written through the real Gate ledger owner. */
@@ -190,6 +171,13 @@ beforeAll(async () => {
      VALUES ('AFLM',2019),('AFLM',2020),('AFLM',2021) ON CONFLICT DO NOTHING`
   );
   artifactRoot = await mkdtemp(join(tmpdir(), 'statly-local-external-capture-'));
+  // One registered store holds the captured pages and the owner evidence their decisions cite, and a
+  // clean readback lets that evidence be stored (#759).
+  await registerLocalAflTradeArtifactStore(sql, {
+    storeId: CAPTURE_STORE_ID,
+    rootDirectory: artifactRoot,
+  });
+  await readBackLocalAflTradeArtifactCustody({ client: sql, storeId: CAPTURE_STORE_ID });
 }, 120_000);
 
 afterAll(async () => {
@@ -219,10 +207,10 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
 
   it('captures the 2020 Cameron trade page, holds its repeat for the cache period, and paces the index', async () => {
     const evidenceIds = {
-      productOwnerAuthorization: await retainEvidenceDocument('authorization', instant(-130)),
-      boundedCapturePlan: await retainEvidenceDocument('capture plan', instant(-130)),
-      publicAccessReview: await retainEvidenceDocument('access review', instant(-130)),
-      fieldBoundaryReview: await retainEvidenceDocument('field review', instant(-130)),
+      productOwnerAuthorization: await retainEvidenceDocument('authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('capture plan'),
+      publicAccessReview: await retainEvidenceDocument('access review'),
+      fieldBoundaryReview: await retainEvidenceDocument('field review'),
     };
     await recordOwnerDecision('draftguru-trade-detail', evidenceIds);
     await recordOwnerDecision('draftguru-trade-index', evidenceIds);
@@ -374,13 +362,13 @@ describe('local Official AFL completed-session capture through the governed inge
     const provider = stubOfficialAfl();
     // Pages are written into the registered local store rooted at the capture root (#759).
     await registerLocalAflTradeArtifactStore(sql, {
-      storeId: 'external-capture-store',
+      storeId: CAPTURE_STORE_ID,
       rootDirectory: artifactRoot,
     });
     const options = {
       sql,
       artifactRootDirectory: artifactRoot,
-      storeId: 'external-capture-store',
+      storeId: CAPTURE_STORE_ID,
       userAgent,
       fetchImpl: provider.fetchImpl,
     };
@@ -388,13 +376,10 @@ describe('local Official AFL completed-session capture through the governed inge
       code: 'AUTHORITY_MISMATCH',
     });
     const evidenceIds = {
-      productOwnerAuthorization: await retainEvidenceDocument(
-        'session authorization',
-        instant(-130)
-      ),
-      boundedCapturePlan: await retainEvidenceDocument('session capture plan', instant(-130)),
-      publicAccessReview: await retainEvidenceDocument('session access review', instant(-130)),
-      fieldBoundaryReview: await retainEvidenceDocument('session field review', instant(-130)),
+      productOwnerAuthorization: await retainEvidenceDocument('session authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('session capture plan'),
+      publicAccessReview: await retainEvidenceDocument('session access review'),
+      fieldBoundaryReview: await retainEvidenceDocument('session field review'),
     };
     await recordOfficialDecision(2019, evidenceIds);
     await recordOfficialDecision(2020, evidenceIds);
@@ -443,7 +428,7 @@ describe('local Official AFL completed-session capture through the governed inge
     );
     expect(located.rows).toHaveLength(4);
     for (const row of located.rows) {
-      expect(row.store_id).toBe('external-capture-store');
+      expect(row.store_id).toBe(CAPTURE_STORE_ID);
       expect(row.object_key).toMatch(
         /^official-afl-session-raw\/local_non_production_filesystem\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/[a-f0-9]{64}$/u
       );
@@ -500,13 +485,10 @@ describe('local Draftguru national-year capture through the governed ingestion b
     expect(calls).toEqual([]);
 
     const evidenceIds = {
-      productOwnerAuthorization: await retainEvidenceDocument(
-        'national authorization',
-        instant(-130)
-      ),
-      boundedCapturePlan: await retainEvidenceDocument('national capture plan', instant(-130)),
-      publicAccessReview: await retainEvidenceDocument('national access review', instant(-130)),
-      fieldBoundaryReview: await retainEvidenceDocument('national field review', instant(-130)),
+      productOwnerAuthorization: await retainEvidenceDocument('national authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('national capture plan'),
+      publicAccessReview: await retainEvidenceDocument('national access review'),
+      fieldBoundaryReview: await retainEvidenceDocument('national field review'),
     };
     await recordOfficialDecision(2020, evidenceIds, draftguruNationalYearAuthority);
     const [result] = await runLocalExternalCapture(options, targets);

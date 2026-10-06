@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { LOCAL_FITZROY_REHEARSAL_GATE_EVIDENCE } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
+import { LOCAL_FITZROY_RELEASE_REHEARSAL_GATE_EVIDENCE } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualReleaseRehearsal';
 import { LOCAL_FIVE_SEASON_AFL_TABLES_GATE_EVIDENCE } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import type {
   AflTradeGateDecisionProposal,
@@ -11,7 +12,7 @@ import type { AflTradeSourceRightsProposal } from '@/server/aflTradeIntelligence
 import { retainTestGateEvidenceValues } from './testEvidenceStore';
 
 /**
- * Retains the synthetic evidence the local fitzRoy rehearsal and five-season AFL Tables authorities
+ * Retains the synthetic evidence the local fitzRoy rehearsals and five-season AFL Tables authorities
  * cite, so their non-production Gate records can be appended (migration 0253).
  */
 export async function retainRehearsalGateEvidence(
@@ -20,6 +21,7 @@ export async function retainRehearsalGateEvidence(
   await retainTestGateEvidenceValues(target, [
     ...LOCAL_FITZROY_REHEARSAL_GATE_EVIDENCE,
     ...LOCAL_FIVE_SEASON_AFL_TABLES_GATE_EVIDENCE,
+    ...LOCAL_FITZROY_RELEASE_REHEARSAL_GATE_EVIDENCE,
   ]);
 }
 

@@ -10,7 +10,7 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
+import type { AflTradeImmutableArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { createLocalAflTradePrivateValuationQualificationRegistrar } from '@/server/aflTradeIntelligence/development/localPrivateValuationQualification';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import {
@@ -23,6 +23,10 @@ import { createGovernedValuationModelQualificationPolicy } from '@/server/aflTra
 import { PostgresGovernedValuationModelQualificationRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationModelQualificationRepository';
 import { seedGovernedQualificationComponentRuns } from '../testUtils/governedQualificationComponentRunsFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import {
+  bindTestStoreRepository,
+  retainTestGateEvidenceBytes,
+} from '../testUtils/testEvidenceStore';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('Disposable AFL_OUTCOMES_TEST_DATABASE_URL required.');
@@ -30,20 +34,16 @@ const schemaName = `afl_local_qualification_${process.pid}_${Date.now()}`;
 const admin = new Pool({ connectionString: databaseUrl });
 const pool = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schemaName}` });
 const artifactRoot = mkdtempSync(join(tmpdir(), 'statly-qualification-artifacts-'));
-const artifacts = createLocalAflTradePrivateDerivedArtifactRepository({
-  rootDirectory: artifactRoot,
-  repositoryId: 'synthetic-qualification-test',
-  maximumObjectBytes: 1024 * 1024,
-});
+// Store-bound in beforeAll, so the registrar's staging writer records each artifact's location and
+// the automated Gate 3 records may cite them (migration 0253).
+let artifacts: AflTradeImmutableArtifactRepository;
 const client = createPgAflOutcomeSqlClient(pool);
 const retainedAt = '2026-08-21T08:00:00.000Z';
 
 async function retain(document: unknown, createdAt = retainedAt) {
   const reference = createAflTradeCanonicalJsonArtifactRef(document, createdAt);
-  await artifacts.putIfAbsent(
-    reference,
-    new TextEncoder().encode(canonicalizeAflTradeJson(document))
-  );
+  const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(document));
+  await artifacts.putIfAbsent(reference, bytes);
   await pool.query(
     `INSERT INTO outcome_artifact_custody
     (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
@@ -59,6 +59,9 @@ async function retain(document: unknown, createdAt = retainedAt) {
       reference.createdAt,
     ]
   );
+  // The same bytes go to the registered store and are located, so the automated Gate 3 records
+  // may cite them (migration 0253). The derived_private custody row above is inserted first.
+  await retainTestGateEvidenceBytes(pool, [{ bytes, mediaType: reference.mediaType }]);
   return reference;
 }
 
@@ -67,6 +70,12 @@ beforeAll(async () => {
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
+  artifacts = await bindTestStoreRepository(pool, {
+    rootDirectory: artifactRoot,
+    repositoryId: 'synthetic-qualification-test',
+    artifactClass: 'derived_private',
+    maximumObjectBytes: 1024 * 1024,
+  });
 });
 afterAll(async () => {
   await pool.end();

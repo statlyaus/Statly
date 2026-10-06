@@ -15,7 +15,6 @@ import {
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { aflTradeModelRunManifestV3Schema } from '@/server/aflTradeIntelligence/artifacts/modelRunManifest';
-import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { createLocalAflTradePrivateValuationRuntime } from '@/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 import {
   AFL_TRADE_HPN_PAV_FINALIZED_CALCULATION_SCHEMA_VERSION,
@@ -52,6 +51,7 @@ import {
   createPostgresAflTradePrivateCurrentValuationCohortCoordinator,
   type AflTradePrivateCurrentValuationInputBundleSelector,
 } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortPreparation';
+import { bindTestStoreRepository } from '../testUtils/testEvidenceStore';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
 import { createPostgresGovernedPrivateEvaluationWorkspace } from '@/server/aflTradeIntelligence/valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
@@ -387,9 +387,12 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       hpnMethodId: hpnCalculation.content.methodId,
       ...modelPairTargets,
     });
-    const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
+    // Store-bound, so staging records where each artifact lives and the automated Gate 3 records
+    // may cite them (migration 0253).
+    const artifactRepository = await bindTestStoreRepository(outcomesPool, {
       rootDirectory: artifactRootDirectory,
       repositoryId: 'governed-private-evaluation',
+      artifactClass: 'derived_private',
       maximumObjectBytes: 16 * 1024 * 1024,
     });
     const retainPhysical = async (document: unknown, createdAt: string) => {

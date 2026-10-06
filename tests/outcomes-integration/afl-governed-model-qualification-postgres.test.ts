@@ -26,6 +26,7 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationModelQualificationRepository';
 
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import { retainTestGateEvidenceBytes } from '../testUtils/testEvidenceStore';
 import { governedNativePlayerPavComponentFixture } from '../testUtils/governedNativePlayerPavComponentFixture';
 import { seedGovernedQualificationComponentRuns } from '../testUtils/governedQualificationComponentRunsFixture';
 import { nativePavModelRunSqlFixture } from '../testUtils/nativePavModelRunSqlFixture';
@@ -72,6 +73,9 @@ async function retain(document: unknown, createdAt = retainedAt) {
       canonicalizeAflTradeJson({ assurance: 'disposable_model_qualification_test' }),
     ]
   );
+  // The same bytes go to the registered store and are located, so a Gate record may cite them
+  // (migration 0253). The derived_private custody row above is kept: it is inserted first.
+  await retainTestGateEvidenceBytes(pool, [{ bytes, mediaType: reference.mediaType }]);
   return reference;
 }
 
