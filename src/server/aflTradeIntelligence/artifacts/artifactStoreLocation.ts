@@ -1,5 +1,9 @@
 import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleaseRepository';
 import { doesAflTradeArtifactRefMatchBytes, type AflTradeArtifactRef } from './artifactReference';
+import type {
+  AflTradeArtifactStoreLocation,
+  AflTradeImmutableArtifactRepository,
+} from './immutableArtifactRepository';
 
 /**
  * One repository inside a registered artifact store. Reviewed registration writes evidence bytes
@@ -54,7 +58,7 @@ export async function storeAndReadBackAflTradeEvidence(
  */
 export async function recordAflTradeEvidenceLocations(
   transaction: AflOutcomeSqlTransaction,
-  store: AflTradeEvidenceStoreBinding,
+  store: AflTradeArtifactStoreLocation,
   references: readonly AflTradeArtifactRef[]
 ): Promise<void> {
   for (const reference of references) {
@@ -103,6 +107,19 @@ export async function requireAflTradeEvidenceLocated(
   if (result.rows.length > 0) {
     throw new AflTradeArtifactUnlocatedError(result.rows.map((row) => row.artifact_id));
   }
+}
+
+/**
+ * Records where a store-rooted repository keeps each artifact, in the transaction that wrote the
+ * artifacts' custody rows. A repository outside any registered store records nothing.
+ */
+export async function recordAflTradeRepositoryLocations(
+  transaction: AflOutcomeSqlTransaction,
+  repository: Pick<AflTradeImmutableArtifactRepository, 'storeLocation'>,
+  references: readonly AflTradeArtifactRef[]
+): Promise<void> {
+  if (repository.storeLocation === undefined || references.length === 0) return;
+  await recordAflTradeEvidenceLocations(transaction, repository.storeLocation, references);
 }
 
 /** Reviewed registration while the environment's latest custody readback is stale or failed. */
