@@ -13,6 +13,7 @@ import {
   createSourceCaptureSuccessorRecord,
   describeSourceCaptureSuccessorDecision,
 } from '@/server/aflTradeIntelligence/source/sourceCaptureSuccessor';
+import { parseRegisterCaptureSuccessorArguments } from '../../Scripts/register-capture-successor';
 
 const digest = (value: string) => sha256AflTradeCanonicalJson({ fixture: value });
 
@@ -168,5 +169,63 @@ describe('source capture successor record', () => {
         ownerDecisionRef: 'statlyaus/Statly#742 (2026-10-05)',
       })
     ).toContain('statlyaus/Statly#742');
+  });
+});
+
+describe('register-capture-successor arguments', () => {
+  const env = { AFL_OUTCOMES_DATABASE_URL: 'postgresql://archive:x@127.0.0.1:55436/outcomes' };
+  const lost = `artifact:${'a'.repeat(64)}`;
+  const fresh = `source-capture:${'b'.repeat(64)}`;
+
+  it('parses a recaptured dry run and an applied omission', () => {
+    expect(
+      parseRegisterCaptureSuccessorArguments(
+        ['--lost-artifact', lost, '--successor-capture', fresh],
+        env
+      )
+    ).toMatchObject({
+      request: { kind: 'recaptured', lostArtifactId: lost, successorCaptureId: fresh },
+      apply: false,
+    });
+    expect(
+      parseRegisterCaptureSuccessorArguments(
+        ['--omit', '--lost-artifact', lost, '--owner-decision', ' #742 option (b) ', '--apply'],
+        env
+      )
+    ).toMatchObject({
+      request: { kind: 'omitted', lostArtifactId: lost, ownerDecisionRef: '#742 option (b)' },
+      apply: true,
+    });
+  });
+
+  it('refuses malformed, mixed and repeated options', () => {
+    const parse = (argv: string[]) => () => parseRegisterCaptureSuccessorArguments(argv, env);
+    expect(parse(['--lost-artifact', 'artifact:x', '--successor-capture', fresh])).toThrow(
+      /--lost-artifact/
+    );
+    expect(parse(['--lost-artifact', lost])).toThrow(/--successor-capture must be/);
+    expect(parse(['--lost-artifact', lost, '--omit'])).toThrow(/--owner-decision naming/);
+    expect(
+      parse([
+        '--lost-artifact',
+        lost,
+        '--omit',
+        '--owner-decision',
+        'x1',
+        '--successor-capture',
+        fresh,
+      ])
+    ).toThrow(/takes no --successor-capture/);
+    expect(
+      parse(['--lost-artifact', lost, '--successor-capture', fresh, '--owner-decision', 'abc'])
+    ).toThrow(/only for --omit/);
+    expect(parse(['--lost-artifact', lost, '--apply', '--apply'])).toThrow(/once/);
+    expect(parse(['--lost-artifact', lost, '--bogus', 'x'])).toThrow(/Unexpected argument/);
+    expect(() =>
+      parseRegisterCaptureSuccessorArguments(
+        ['--lost-artifact', lost, '--successor-capture', fresh],
+        { AFL_OUTCOMES_DATABASE_URL: 'postgresql://archive:x@10.0.0.4:5432/outcomes' }
+      )
+    ).toThrow(/loopback/);
   });
 });

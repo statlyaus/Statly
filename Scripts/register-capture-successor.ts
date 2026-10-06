@@ -31,10 +31,11 @@ function usage(message: string): never {
   );
 }
 
-export function parseRegisterCaptureSuccessorArguments(
-  argv: readonly string[],
-  env: Readonly<Record<string, string | undefined>>
-): { databaseUrl: string; request: SourceCaptureSuccessorRequest; apply: boolean } {
+/** Splits the arguments into valued options and flags, each given at most once. */
+function readOptions(argv: readonly string[]): {
+  values: Map<string, string>;
+  flags: Set<string>;
+} {
   const values = new Map<string, string>();
   const flags = new Set<string>();
   for (let index = 0; index < argv.length; index += 1) {
@@ -52,29 +53,42 @@ export function parseRegisterCaptureSuccessorArguments(
     values.set(name, value);
     index += 1;
   }
+  return { values, flags };
+}
+
+function omittedRequest(lostArtifactId: string, values: Map<string, string>) {
+  if (values.has('--successor-capture')) usage('--omit takes no --successor-capture.');
+  const ownerDecisionRef = values.get('--owner-decision')?.trim();
+  if (ownerDecisionRef === undefined || ownerDecisionRef.length < 3) {
+    usage('--omit requires --owner-decision naming the owner decision that allows it.');
+  }
+  return { kind: 'omitted' as const, lostArtifactId, ownerDecisionRef };
+}
+
+function recapturedRequest(lostArtifactId: string, values: Map<string, string>) {
+  if (values.has('--owner-decision')) usage('--owner-decision is only for --omit.');
+  const successorCaptureId = values.get('--successor-capture');
+  if (
+    successorCaptureId === undefined ||
+    !/^source-capture:[0-9a-f]{64}$/u.test(successorCaptureId)
+  ) {
+    usage('--successor-capture must be a source capture ID, or use --omit.');
+  }
+  return { kind: 'recaptured' as const, lostArtifactId, successorCaptureId };
+}
+
+export function parseRegisterCaptureSuccessorArguments(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>
+): { databaseUrl: string; request: SourceCaptureSuccessorRequest; apply: boolean } {
+  const { values, flags } = readOptions(argv);
   const lostArtifactId = values.get('--lost-artifact');
   if (lostArtifactId === undefined || !/^artifact:[0-9a-f]{64}$/u.test(lostArtifactId)) {
     usage('--lost-artifact must be an artifact ID.');
   }
-  const successorCaptureId = values.get('--successor-capture');
-  const ownerDecisionRef = values.get('--owner-decision');
-  let request: SourceCaptureSuccessorRequest;
-  if (flags.has('--omit')) {
-    if (successorCaptureId !== undefined) usage('--omit takes no --successor-capture.');
-    if (ownerDecisionRef === undefined || ownerDecisionRef.trim().length < 3) {
-      usage('--omit requires --owner-decision naming the owner decision that allows it.');
-    }
-    request = { kind: 'omitted', lostArtifactId, ownerDecisionRef: ownerDecisionRef.trim() };
-  } else {
-    if (ownerDecisionRef !== undefined) usage('--owner-decision is only for --omit.');
-    if (
-      successorCaptureId === undefined ||
-      !/^source-capture:[0-9a-f]{64}$/u.test(successorCaptureId)
-    ) {
-      usage('--successor-capture must be a source capture ID, or use --omit.');
-    }
-    request = { kind: 'recaptured', lostArtifactId, successorCaptureId };
-  }
+  const request: SourceCaptureSuccessorRequest = flags.has('--omit')
+    ? omittedRequest(lostArtifactId, values)
+    : recapturedRequest(lostArtifactId, values);
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),
     request,
