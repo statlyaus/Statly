@@ -379,6 +379,36 @@ row existed).
 Keep the original file. The id is the SHA-256 of its exact bytes, so a copy with different line
 endings or formatting is a different artifact.
 
+### Recording successors for lost source captures
+
+Record successors only through this command. A dry run is the default and writes nothing; add
+`--apply` to record:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:sources:register-capture-successor -- \
+  --lost-artifact <artifact:...> --successor-capture <source-capture:...> [--apply]
+```
+
+It approves under the delegated rule `owner-delegated-technical-reviewer:capture-successor-rule/v1`,
+and only on an exact factual match. A lost capture's bytes are gone, but its evidence batch keeps
+every claim its parser produced. The fresh capture's finalized batch must restate each of those
+claims verbatim; per-capture fields (the capture block, ordinals, source keys, evidence IDs) are not
+compared, and additional claims from a newer parser are reported but not relied on. On any missing
+or changed claim the command records nothing, prints the missing claims and exits with status 2:
+that capture goes to the owner. The recorded decision carries the delegated-reviewer identity and
+the match summary, never a claim of human review.
+
+An omission is never inferred. Record one only when the owner has excused that capture:
+
+```sh
+npm run outcomes:sources:register-capture-successor -- \
+  --lost-artifact <artifact:...> --omit --owner-decision <reference to the owner decision> [--apply]
+```
+
+Re-running a recorded successor is a no-op. A different successor for a capture that already has
+one is refused.
+
 ### Custody readback
 
 Reviewed registration requires healthy custody (migration 0250): the environment's latest custody
