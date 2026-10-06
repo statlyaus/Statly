@@ -199,6 +199,23 @@ function rowSource(decoded: DecodedRow, map: AflTradeHpnPavInputFieldMap) {
   };
 }
 
+/** Reviewed nonparticipants decided from this instant must cite located evidence (#759). */
+export const NONPARTICIPANT_LOCATED_EVIDENCE_FROM = '2026-10-06T00:00:00.000Z';
+
+/**
+ * The evidence pages that must have a store location: those cited by reviews decided from
+ * {@link NONPARTICIPANT_LOCATED_EVIDENCE_FROM} on. Earlier reviews predate store locations.
+ */
+export function nonparticipantEvidenceRequiringLocation(
+  reviews: readonly { review: { decidedAt: string; evidenceArtifact: { artifactId: string } } }[]
+): string[] {
+  return reviews
+    .filter(
+      (row) => Date.parse(row.review.decidedAt) >= Date.parse(NONPARTICIPANT_LOCATED_EVIDENCE_FROM)
+    )
+    .map((row) => row.review.evidenceArtifact.artifactId);
+}
+
 async function loadExcludedSourceRows(
   transaction: AflOutcomeSqlTransaction,
   request: AflTradeHpnPavSeasonInputRequest,
@@ -295,12 +312,14 @@ async function loadExcludedSourceRows(
     .sort((left, right) =>
       left.source.providerDecodedRowId.localeCompare(right.source.providerDecodedRowId)
     );
-  // A reviewed nonparticipant cites a retained page; outside test fixtures its bytes must have a
-  // recorded store location, as reviewed acquisition evidence must (ARTIFACT_UNLOCATED).
+  // A reviewed nonparticipant cites a retained page; outside test fixtures, a review decided from
+  // NONPARTICIPANT_LOCATED_EVIDENCE_FROM on must cite bytes with a recorded store location, as
+  // reviewed acquisition evidence must (ARTIFACT_UNLOCATED). Earlier reviews predate store
+  // locations; the pages lost among them are recorded on #759.
   if (request.environment !== 'test_fixture') {
     await requireAflTradeEvidenceLocated(
       transaction,
-      rows.map((row) => row.review.evidenceArtifact.artifactId)
+      nonparticipantEvidenceRequiringLocation(rows)
     );
   }
   return rows;
