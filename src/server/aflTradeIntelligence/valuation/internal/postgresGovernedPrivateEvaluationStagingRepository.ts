@@ -6,6 +6,7 @@ import {
   type AflTradeArtifactRef,
 } from '../../artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '../../artifacts/contentAddress';
+import { recordAflTradeRepositoryLocations } from '../../artifacts/artifactStoreLocation';
 import type { AflTradeImmutableArtifactRepository } from '../../artifacts/immutableArtifactRepository';
 import type {
   AflOutcomeSqlClient,
@@ -84,14 +85,13 @@ async function retainExact(
 
 async function registerCustody(
   transaction: AflOutcomeSqlTransaction,
+  repository: Pick<AflTradeImmutableArtifactRepository, 'storeLocation'>,
   reference: AflTradeArtifactRef,
   verifiedAt: string,
   custody: {
     readonly environment: 'test_fixture' | 'non_production';
     readonly repositoryAssurance:
-      | 'fixture_memory'
-      | 'fixture_filesystem'
-      | 'local_non_production_filesystem';
+      'fixture_memory' | 'fixture_filesystem' | 'local_non_production_filesystem';
   }
 ): Promise<void> {
   await transaction.query(
@@ -136,6 +136,7 @@ async function registerCustody(
   ) {
     throw new TypeError('Private evaluation artifact custody replay conflicts.');
   }
+  await recordAflTradeRepositoryLocations(transaction, repository, [reference]);
 }
 
 async function insertIntent(
@@ -286,8 +287,7 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
   ) {
     throw new TypeError('Private evaluation staging requires bounded private fixture custody.');
   }
-  const automatedCalculationEnabled =
-    dependencies.enableAutomatedPrivateCalculation === true;
+  const automatedCalculationEnabled = dependencies.enableAutomatedPrivateCalculation === true;
   const custody = {
     environment:
       dependencies.artifactRepository.assurance === 'local_non_production_filesystem'
@@ -307,7 +307,13 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
       });
       await dependencies.client.transaction(async (transaction) => {
         const verifiedAt = await loadTrustedTime(transaction);
-        await registerCustody(transaction, reference, verifiedAt, custody);
+        await registerCustody(
+          transaction,
+          dependencies.artifactRepository,
+          reference,
+          verifiedAt,
+          custody
+        );
       });
       return reference;
     },
@@ -321,10 +327,10 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
       const intentArtifact = aflTradeArtifactRefSchema.parse(input.intentArtifact);
       const constructing = intent.content.action.kind === 'construct_and_activate';
       const automated = intent.content.schemaVersion === 'private-evaluation-transition-intent/v2';
-      const automatedAuthority = intent.content.schemaVersion ===
-        'private-evaluation-transition-intent/v2'
-        ? intent.content.constructionAuthority
-        : null;
+      const automatedAuthority =
+        intent.content.schemaVersion === 'private-evaluation-transition-intent/v2'
+          ? intent.content.constructionAuthority
+          : null;
       if (
         automated &&
         (!automatedCalculationEnabled ||
@@ -339,8 +345,7 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
         constructing !== (materialization !== undefined) ||
         (materialization !== undefined &&
           (!verifyGovernedPrivateEvaluationGeneration(materialization) ||
-            materialization.generation.content.transitionIntentId !==
-              intent.transitionIntentId ||
+            materialization.generation.content.transitionIntentId !== intent.transitionIntentId ||
             !same(materialization.generation.content.selector, intent.content.selector))) ||
         (automated &&
           (materialization?.generation.content.schemaVersion !==
@@ -348,10 +353,7 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
             materialization.projectionManifest.content.schemaVersion !==
               'governed-private-evaluation-projection-manifest/v2' ||
             !('constructionAuthority' in materialization.generation.content) ||
-            !same(
-              materialization.generation.content.constructionAuthority,
-              automatedAuthority
-            )))
+            !same(materialization.generation.content.constructionAuthority, automatedAuthority)))
       ) {
         throw new TypeError('Construction staging requires one complete verified generation.');
       }
@@ -363,8 +365,7 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
         bytes: canonicalBytes(intent),
       };
       const retained: readonly (
-        | typeof intentRetained
-        | GovernedPrivateEvaluationRetainedArtifact
+        typeof intentRetained | GovernedPrivateEvaluationRetainedArtifact
       )[] = [intentRetained, ...(input.materialization?.artifacts ?? [])];
       for (const artifact of retained) {
         await retainExact(
@@ -374,13 +375,18 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
         );
       }
       return dependencies.client.transaction(async (transaction) => {
-        await transaction.query(
-          `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
-          [intent.transitionIntentId]
-        );
+        await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+          intent.transitionIntentId,
+        ]);
         const verifiedAt = await loadTrustedTime(transaction);
         for (const artifact of retained) {
-          await registerCustody(transaction, artifact.reference, verifiedAt, custody);
+          await registerCustody(
+            transaction,
+            dependencies.artifactRepository,
+            artifact.reference,
+            verifiedAt,
+            custody
+          );
         }
         await insertIntent(transaction, intent, intentArtifact);
         if (input.materialization !== undefined) {
