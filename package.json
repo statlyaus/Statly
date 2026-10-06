@@ -76,6 +76,7 @@
     "outcomes:artifacts:mirror": "tsx Scripts/mirror-artifact-store.ts",
     "outcomes:artifacts:store-evidence": "tsx Scripts/store-artifact-evidence.ts",
     "outcomes:spells:register-reviewed": "tsx Scripts/register-reviewed-acquisition-spell.ts",
+    "outcomes:sources:register-capture-successor": "tsx Scripts/register-capture-successor.ts",
     "outcomes:sources:discover-external-history": "tsx Scripts/discover-external-draft-trade-history.ts",
     "outcomes:sources:run-external-history": "tsx Scripts/run-external-draft-trade-history.ts",
     "outcomes:sources:complete-external-history": "tsx Scripts/complete-external-draft-trade-history.ts",
