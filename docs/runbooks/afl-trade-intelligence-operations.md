@@ -360,6 +360,36 @@ service runs from the deployed checkout with the genuine-database wrapper and wr
 for over 48 hours, check `systemctl status statly-custody-readback.service` or run the command by
 hand.
 
+### Evidence store mirror
+
+After a clean readback the store is copied to its versioned Cloud Storage mirror, and once a month a
+restore test reads one random located artifact back from the mirror:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:mirror -- --store-id <store-id> --mirror gs://<bucket>/<store-id>
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:mirror -- --store-id <store-id> --restore-test \
+  --receipt <absolute-receipt.json>
+```
+
+The sync refuses unless custody is healthy, runs `gcloud storage rsync --recursive` from the store
+root, never deletes and never copies an envelope still being written (`.pending-*.json`), records the
+bucket path as the store's `mirror_locator` the first time, and then appends one
+`outcome_artifact_mirror_sync` row with its start and finish (migration 0251).
+A store keeps one mirror for life; the database refuses a second locator. The restore test samples only
+locations recorded before the latest finished sync started, so it never picks bytes not yet
+mirrored. It copies the chosen envelope into a scratch directory, verifies it through the store's own envelope reader against
+the custody row, writes an `afl-trade-artifact-mirror-restore/v1` receipt, and exits non-zero unless
+the verdict is `exact`.
+
+For `statly-grading-1-artifacts` the mirror is `gs://statly-grading-evidence-mirror/statly-grading-1-artifacts`:
+a bucket in project `statly-grading` with object versioning, uniform access and public-access
+prevention. The VM's service account holds only object create and view on it, so the mirror cannot
+overwrite or delete an object it already holds. The VM needs the `devstorage.read_write` scope to
+write. The systemd units `statly-custody-readback.service` (followed by the mirror sync) and
+`statly-mirror-restore-test.timer` (monthly) run them; receipts go under `receipts/custody-mirror/`.
+
 ## Capturing source evidence
 
 Production acquisition is provider-native. The site, API, workers and calculation jobs must not open a
@@ -690,8 +720,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
 
 ### Capturing reviewed provider pages locally
 
-The owner's machine can capture `draftguru-trade-index`, `draftguru-trade-detail` and
-`official-afl-completed-draft-session` pages under the recorded issue-579 narrow decisions without
+The owner's machine can capture `draftguru-trade-index`, `draftguru-trade-detail`,
+`draftguru-national-year-page` and `official-afl-completed-draft-session` pages under the recorded issue-579 narrow decisions without
 S3, KMS or Redis. One command, `npm run outcomes:sources:capture-local-external`, serves every
 capability; only its target and URL builder differ per capability. It uses the same governed
 boundary as `outcomes:sources:ingest-external` (`ingestAuthorizedAflTradeExternalPage`): Gate 0A
@@ -701,12 +731,16 @@ custody and admission adapters differ:
 
 - raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
   same adapter the local official-AFL and AFLCA captures use) under
-  `<artifact-root>/draftguru-trade-raw` or `<artifact-root>/official-afl-session-raw`; this custody
-  cannot satisfy production or public-release storage; and
+  `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw` or
+  `<artifact-root>/official-afl-session-raw`; this custody cannot satisfy production or
+  public-release storage. With `--store-id <store-id>` the pages go into the registered local store,
+  whose root must be `--artifact-root`, and each page's custody row records its location in the same
+  transaction. Always pass it on `statly-grading-1` (`statly-grading-1-artifacts`), so no new raw page
+  is unlocated; and
 - provider admission is a file-backed lease under `<artifact-root>/capture-admission` with the Redis
   admission semantics: one lease per provider at a time, then the provider's five-second cooldown
   and a request cooldown for the same source fetch equal to the reviewed cache period (86,400 s for
-  Draftguru, 3,600 s for Official AFL). Separate runs on the same machine share this pacing. As in the
+  Draftguru trade pages, 3,600 s for Draftguru national-year pages and Official AFL). Separate runs on the same machine share this pacing. As in the
   deployed path, the request cooldown is keyed by the request without its capture and effective
   instants, so a new run cannot refetch the same page inside the reviewed cache period.
 
@@ -715,7 +749,10 @@ Prerequisites:
 1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
    command loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
-     `draftguru-trade-detail-issue-579-private-non_production`; and
+     `draftguru-trade-detail-issue-579-private-non_production`;
+   - one `draftguru-national-year-page-issue579-private-<season>` decision per captured season, for
+     example `draftguru-national-year-page-issue579-private-2024`. The runner never uses a combined
+     key such as `-2018-combined-v2`; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v18`. The key names the
@@ -723,9 +760,10 @@ Prerequisites:
      falls back to an earlier season key or parser. Every season in a run must have its decision
      before any page is fetched.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v1` or `official-afl-completed-draft-session/v18`), seasons inside one
-   range, 1 request per 5 seconds with burst 1, 365-day raw retention, the reviewed cache (86,400 s
-   for Draftguru, 3,600 s for Official AFL) and exactly one `provider-egress-control` evidence
+   `draftguru-trade-parser/v1`, `draftguru-national-year-page/v1` or
+   `official-afl-completed-draft-session/v18`), seasons inside one range, 1 request per 5 seconds
+   with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
+   3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
    parser, pacing, cache or retention fails closed; the runner does not adapt.
 3. `AFL_OUTCOMES_DATABASE_URL` names the loopback PostgreSQL outcomes database, and
@@ -750,7 +788,23 @@ npm run outcomes:sources:capture-local-external -- \
 ```
 
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
-(2010-2018) are not enumerable here and are refused. Capture one named Draftguru trade page, for
+(2010-2018) are not enumerable here and are refused.
+
+Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
+`https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
+(`draftguru-national-year-page/v1`), which keeps national selections and counts every other pathway
+as excluded. It is never the general `draftguru-event-year` year-page parser:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability draftguru-national-year-page \
+  --season 2022 --season 2023 --season 2024
+```
+
+Capture one named Draftguru trade page, for
 example the 2020 Jeremy Cameron trade (the season comes from the URL and must fall inside the
 authority's range):
 

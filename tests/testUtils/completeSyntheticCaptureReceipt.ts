@@ -105,7 +105,7 @@ export async function completeSyntheticCaptureReceipt(
       upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
       cacheSeconds: 3600,
       rawRetentionDays: 365,
-      egressPolicyEvidenceId: input.artifact.artifactId,
+      egressPolicyEvidenceId: authority.evidenceId,
     },
     outcome: {
       status: 'captured',

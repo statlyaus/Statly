@@ -41,7 +41,19 @@ export class AflTradeArtifactCustodyError extends Error {
   }
 }
 
+/** Where a repository built from a registered artifact store keeps each artifact's bytes. */
+export interface AflTradeArtifactStoreLocation {
+  readonly storeId: string;
+  /** The store-relative key of the bytes; it ends in the artifact's own SHA-256 path. */
+  objectKeyFor(reference: AflTradeArtifactRef): string;
+}
+
 export interface AflTradeImmutableArtifactRepository {
+  /**
+   * Present when the repository is rooted in a registered artifact store; every custody row written
+   * for its artifacts then records this location in the same transaction.
+   */
+  readonly storeLocation?: AflTradeArtifactStoreLocation;
   readonly assurance:
     | 'fixture_memory'
     | 'fixture_filesystem'
