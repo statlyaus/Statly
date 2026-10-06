@@ -427,6 +427,13 @@ registration. A season (v3) spell cites no evidence bytes and is exempt.
 keep the read-and-compare path. Reviewers register through `npm run
 outcomes:spells:register-reviewed`, which binds the store before it reads any evidence file.
 
+Evidence that no capture writer produces, such as an owner's approval record that a Gate decision
+cites, is stored with `npm run outcomes:artifacts:store-evidence`
+(`storeLocalAflTradeEvidence`). It follows the same order: the bytes are written to the registered
+store and read back, then one transaction records the custody row, with the repository's read-back
+receipt as its custody JSON, and the location. It checks custody health before writing. A retry
+reuses the reference already recorded for the bytes.
+
 External canonical-target registration v2 uses the existing provider-resolution repository and
 reviewed canonical-target SQL owner. Migration 0145 accepts a complete native-identity work item
 from a current retained capture completion, an exact governed target snapshot, supporting custody
