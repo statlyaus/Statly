@@ -415,7 +415,8 @@ From migration 0253 the Gate ledger refuses a new `non_production` or `productio
 decision that cites an `artifact:` reference with no custody location. That covers an owner's
 approval record, a review, or any other retained file. The repository refuses with
 `AflTradeArtifactUnlocatedError` (`ARTIFACT_UNLOCATED`) and lists the artifact ids, and nothing is
-written. A direct SQL insert fails with `Gate proposal cites evidence with no custody location` or
+written. The repository check switches on only when migration 0253 is present, so deploying the code
+without the migration changes nothing. A direct SQL insert fails with `Gate proposal cites evidence with no custody location` or
 `Gate decision cites evidence with no custody location`. The checked fields are the proposal's
 `evidenceIds` and condition `verificationEvidenceIds`, and the decision's `authorityEvidenceIds`,
 condition-result `evidenceIds` and reviewer `evidenceId`.

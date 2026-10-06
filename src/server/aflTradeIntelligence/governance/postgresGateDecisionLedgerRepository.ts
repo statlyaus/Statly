@@ -343,7 +343,7 @@ async function insertSourceRights(
 /**
  * Write-first: a new non-test_fixture record may cite an `artifact:` reference only once its bytes
  * have a custody location, or it refuses with ARTIFACT_UNLOCATED before anything is written.
- * Migration 0253 enforces the same rule on every insert.
+ * It applies once migration 0253 is deployed, which enforces the same rule on every insert.
  */
 async function requireCitedEvidenceLocated(
   transaction: AflOutcomeSqlTransaction,
@@ -366,10 +366,15 @@ async function requireCitedEvidenceLocated(
       ...decision.content.reviewers.map(({ evidenceId }) => evidenceId)
     );
   }
-  await requireAflTradeEvidenceLocated(
-    transaction,
-    cited.filter((id) => id.startsWith('artifact:'))
+  const artifactIds = cited.filter((id) => id.startsWith('artifact:'));
+  if (artifactIds.length === 0) return;
+  // The rule switches on with migration 0253, so deploying this code does not refuse appends on a
+  // database whose deploy conditions are not yet met; the migration's own triggers enforce it there.
+  const enforced = await transaction.query<{ present: boolean }>(
+    `SELECT to_regproc('outcome_gate_unlocated_artifact_ids') IS NOT NULL AS present`
   );
+  if (enforced.rows[0]?.present !== true) return;
+  await requireAflTradeEvidenceLocated(transaction, artifactIds);
 }
 
 async function insertProposal(

@@ -256,8 +256,9 @@ beforeAll(async () => {
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   migration = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
-  // Before the migration the ledger takes evidence it never kept, as on 2026-09-29.
-  await insertDirectly(legacy);
+  // Before the migration the ledger, repository included, takes evidence it never kept, as on
+  // 2026-09-29: deploying the code alone changes nothing.
+  await append(legacy);
   await pool.query(migration.migrationSql);
   store = await bindTestEvidenceStore(pool);
 }, 300_000);
