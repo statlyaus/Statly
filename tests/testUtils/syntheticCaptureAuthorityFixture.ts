@@ -6,6 +6,7 @@ import {
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
+import { retainTestGateEvidence } from './testEvidenceStore';
 
 /** Synthetic upstream approval only; writes through the existing Gate ledger owner. */
 export async function registerSyntheticCaptureAuthority(
@@ -40,6 +41,11 @@ export async function registerSyntheticCaptureAuthority(
     nullableTerms,
   } = input;
   const decisionKey = input.key ?? 'synthetic-retained-' + provider + '-' + at;
+  // A non-production Gate record may cite only evidence whose bytes are retained (migration 0253).
+  const evidenceId =
+    environment === 'test_fixture'
+      ? scope.artifactId
+      : await retainTestGateEvidence(sql, `capture-authority:${decisionKey}`);
   const operations = [
     'bounded_evaluation_capture',
     'raw_evidence_retention',
@@ -122,10 +128,10 @@ export async function registerSyntheticCaptureAuthority(
           conditionId: 'provider-egress-control',
           description: 'Synthetic admission/network',
           appliesToOperations: ['bounded_evaluation_capture'],
-          verificationEvidenceIds: [scope.artifactId],
+          verificationEvidenceIds: [evidenceId],
         },
       ],
-      rightsEvidenceIds: [scope.artifactId],
+      rightsEvidenceIds: [evidenceId],
       termsEffectiveAt: nullableTerms ? null : at,
       termsExpireAt: nullableTerms ? null : expires,
       withdrawalDuties: {
@@ -178,10 +184,10 @@ export async function registerSyntheticCaptureAuthority(
         conditionId: 'provider-egress-control',
         description: 'Synthetic network',
         required: true,
-        verificationEvidenceIds: [scope.artifactId],
+        verificationEvidenceIds: [evidenceId],
       },
     ],
-    evidenceIds: [scope.artifactId],
+    evidenceIds: [evidenceId],
     affectedArtifacts: [{ kind: 'source_rights', artifactId: rights.rightsArtifactId }],
     proposedAt: at,
     proposedBy: 'synthetic-owner',
@@ -205,12 +211,12 @@ export async function registerSyntheticCaptureAuthority(
     accountableOwner: 'synthetic-owner',
     decidedBy: 'synthetic-owner',
     reviewers: [],
-    authorityEvidenceIds: [scope.artifactId],
+    authorityEvidenceIds: [evidenceId],
     conditionResults: [
       {
         conditionId: 'provider-egress-control',
         status: 'satisfied',
-        evidenceIds: [scope.artifactId],
+        evidenceIds: [evidenceId],
         explanation: 'Synthetic network admission',
       },
     ],
@@ -234,5 +240,5 @@ export async function registerSyntheticCaptureAuthority(
     proposal,
     decision,
   });
-  return { content, rights, decisionKey, ledger, operations, proposal, decision };
+  return { content, rights, decisionKey, ledger, operations, proposal, decision, evidenceId };
 }
