@@ -12,6 +12,7 @@ import { recordAflTradeEvidenceLocations } from '@/server/aflTradeIntelligence/a
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { registerLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactCustodyLocationBackfill';
 import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
+import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { bindLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactStoreBinding';
 import { createAflTradeAcquisitionSpellRegistrationRule } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
@@ -104,6 +105,45 @@ it('reads located custody back, records each run, and gates reviewed registratio
     await retained('meta-b', 'capture_metadata'),
     await retained('meta-c', 'capture_metadata'),
   ];
+  // A repository nested one directory deeper under the store root, as the fitzRoy and external
+  // capture runs write (`fitzroy-historical/fitzroy-historical-raw/...`).
+  const nestedRef = createAflTradeCanonicalJsonArtifactRef(
+    { label: 'nested-raw' },
+    '2026-09-01T00:00:00.000Z'
+  );
+  await createLocalAflTradeNonProductionArtifactRepository({
+    rootDirectory: join(storeRoot, 'nested-capture'),
+    repositoryId: 'nested-raw',
+    artifactClass: 'raw_source',
+    maximumObjectBytes: 1024 * 1024,
+  }).putIfAbsent(
+    nestedRef,
+    new TextEncoder().encode(canonicalizeAflTradeJson({ label: 'nested-raw' }))
+  );
+  await pool.query(
+    `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+       environment,created_at,verified_at,custody_json)
+     VALUES ($1,$2,$3,$4,$5,'raw_source','non_production',$6,$6,'{}')`,
+    [
+      nestedRef.artifactId,
+      nestedRef.contentSha256,
+      nestedRef.storageUri,
+      nestedRef.mediaType,
+      nestedRef.byteLength,
+      nestedRef.createdAt,
+    ]
+  );
+  const nestedSha = nestedRef.contentSha256;
+  await pool.query(
+    `INSERT INTO outcome_artifact_custody_location (artifact_id,store_id,object_key) VALUES ($1,$2,$3)`,
+    [
+      nestedRef.artifactId,
+      STORE_ID,
+      `nested-capture/nested-raw/local_non_production_filesystem/sha256/${nestedSha.slice(0, 2)}/${nestedSha.slice(2, 4)}/${nestedSha}`,
+    ]
+  );
+
   // Unlocated custody (bytes recorded as lost) is outside the run.
   const lost = createAflTradeCanonicalJsonArtifactRef(
     { label: 'lost' },
@@ -133,10 +173,10 @@ it('reads located custody back, records each run, and gates reviewed registratio
   expect(full).toMatchObject({
     environment: 'non_production',
     storeId: STORE_ID,
-    rowsChecked: 5,
+    rowsChecked: 6,
     failures: 0,
     failingArtifactIds: [],
-    checkedByClass: { raw_source: 2, capture_metadata: 3 },
+    checkedByClass: { raw_source: 3, capture_metadata: 3 },
     samplePolicy: { fullClasses: ['raw_source'], otherClassFraction: 1 },
   });
   expect(await healthy()).toBe(true);
@@ -147,7 +187,7 @@ it('reads located custody back, records each run, and gates reviewed registratio
     storeId: STORE_ID,
     otherClassFraction: 0,
   });
-  expect(rawOnly).toMatchObject({ rowsChecked: 2, failures: 0, checkedByClass: { raw_source: 2 } });
+  expect(rawOnly).toMatchObject({ rowsChecked: 3, failures: 0, checkedByClass: { raw_source: 3 } });
 
   // A changed byte fails the run and makes custody unhealthy.
   const original = await readFile(raw[1]!.path);
@@ -162,7 +202,7 @@ it('reads located custody back, records each run, and gates reviewed registratio
     otherClassFraction: 1,
   });
   expect(failed).toMatchObject({
-    rowsChecked: 5,
+    rowsChecked: 6,
     failures: 1,
     failingArtifactIds: [raw[1]!.ref.artifactId],
   });

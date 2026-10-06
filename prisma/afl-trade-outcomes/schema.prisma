@@ -328,6 +328,7 @@ model OutcomeArtifactStore {
   createdAt     DateTime                         @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
   locations     OutcomeArtifactCustodyLocation[]
   readbackRuns  OutcomeArtifactReadbackRun[]
+  mirrorSyncs   OutcomeArtifactMirrorSync[]
 
   @@map("outcome_artifact_store")
 }
@@ -349,6 +350,20 @@ model OutcomeArtifactReadbackRun {
 
   @@index([environment, finishedAt(sort: Desc)], map: "outcome_artifact_readback_run_latest_idx")
   @@map("outcome_artifact_readback_run")
+}
+
+/// One finished evidence-store mirror sync. Append-only; written once the copy has succeeded.
+model OutcomeArtifactMirrorSync {
+  syncId        String               @id @map("sync_id")
+  storeId       String               @map("store_id")
+  mirrorLocator String               @map("mirror_locator")
+  startedAt     DateTime             @map("started_at") @outcomes.Timestamptz(3)
+  finishedAt    DateTime             @map("finished_at") @outcomes.Timestamptz(3)
+  recordedAt    DateTime             @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  store         OutcomeArtifactStore @relation(fields: [storeId], references: [storeId], onDelete: Restrict, map: "outcome_artifact_mirror_sync_store_fkey")
+
+  @@index([storeId, finishedAt(sort: Desc)], map: "outcome_artifact_mirror_sync_latest_idx")
+  @@map("outcome_artifact_mirror_sync")
 }
 
 /// Where one custody row's bytes live. Append-only; a custody row without one has no known location.
