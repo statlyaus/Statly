@@ -865,6 +865,11 @@ npm run outcomes:sources:capture-local-external -- \
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
 (2010-2018) are not enumerable here and are refused.
 
+To capture only some of a season's pages, add `--url` with each exact reviewed page, for example a
+night-two report when afl.com.au has edited the night-one report since review and v18 refuses it.
+`--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
+refused before anything is fetched. `--season` is still required.
+
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
 (`draftguru-national-year-page/v1`), which keeps national selections and counts every other pathway
@@ -1529,6 +1534,14 @@ missing or mismatched ancestry as unavailable authority; never rebuild terminal 
 caller-provided identifiers.
 
 ### Operating automatic local private valuation
+
+When the outcomes database has a registered local store, `AFL_TRADE_LOCAL_ARTIFACT_ROOT` must be
+that store's root. On `statly-grading-1` that is the root registered for `statly-grading-1-artifacts`
+(`SELECT root_locator FROM outcome_artifact_store`). The worker, the ad hoc
+valuation command and provisioning then write private evaluation artifacts through the store, so
+each custody row records its location. That includes the qualification an automated Gate 3
+decision cites, which migration 0253 requires to be located. Any other root is refused at
+startup. A database with no registered store keeps the plain local repository.
 
 The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback
 `statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and then polls
