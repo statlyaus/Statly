@@ -40,32 +40,11 @@ beforeAll(async () => {
   const history = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
   cleanup = history.cleanup;
   // Seeded under the deployed rules, then the migration edits the deployed definitions in place.
+  // The fixture creates its own synthetic player and clubs: nothing in this schema predates it.
   promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
     completeCaptureReceipts: true,
     draftSessions: true,
-    existingDraftTargets: [
-      {
-        playerId: 'afl-player:local-rehearsal',
-        playerName: 'Player One',
-        clubId: 'afl-club:local-rehearsal',
-        clubName: 'Carlton',
-      },
-      {
-        playerId: 'afl-player:local-rehearsal-away',
-        playerName: 'Player Two',
-        clubId: 'afl-club:local-rehearsal-away',
-        clubName: 'Fremantle',
-      },
-    ],
-    existingTargets: {
-      playerId: 'afl-player:local-rehearsal',
-      playerName: 'Player One',
-      fromClubId: 'afl-club:local-rehearsal-away',
-      fromClubName: 'Fremantle',
-      toClubId: 'afl-club:local-rehearsal',
-      toClubName: 'Carlton',
-    },
   });
   await pool.query(history.migrationSql);
 }, 300_000);
