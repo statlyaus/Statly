@@ -35,6 +35,12 @@ let promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotio
 
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
+  // The promotion fixture commits non-production governance evidence as this role; without schema
+  // usage its types resolve to nothing. The rehearsal fixture grants it in the suites that seed
+  // through it first.
+  await admin.query(
+    `GRANT USAGE ON SCHEMA "${schemaName}" TO afl_trade_nonproduction_governance_registry_writer`
+  );
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   const history = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
