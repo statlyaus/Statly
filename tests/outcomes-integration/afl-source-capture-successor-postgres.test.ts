@@ -35,16 +35,20 @@ let promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotio
 
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
-  // The promotion fixture commits non-production governance evidence as this role; without schema
-  // usage its types resolve to nothing. The rehearsal fixture grants it in the suites that seed
-  // through it first.
-  await admin.query(
-    `GRANT USAGE ON SCHEMA "${schemaName}" TO afl_trade_nonproduction_governance_registry_writer`
-  );
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   const history = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
   cleanup = history.cleanup;
+  // The promotion fixture commits non-production governance evidence as this role. Suites that seed
+  // through the fitzRoy rehearsal fixture first get these grants from it (ensureRole); this one
+  // grants the same after the history exists.
+  await admin.query(
+    `GRANT USAGE ON SCHEMA "${schemaName}" TO afl_trade_nonproduction_governance_registry_writer`
+  );
+  await admin.query(
+    `GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA "${schemaName}"
+       TO afl_trade_nonproduction_governance_registry_writer`
+  );
   // Seeded under the deployed rules, then the migration edits the deployed definitions in place.
   // The fixture creates its own synthetic player and clubs: nothing in this schema predates it.
   promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
