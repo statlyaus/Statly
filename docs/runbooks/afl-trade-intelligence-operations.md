@@ -434,11 +434,10 @@ succeed. A successor version of either decision must cite a retained record.
 
 Do not run `migrate deploy` with migration 0253 on `statly-grading-1` until all three hold:
 
-1. The valuation compositions (`localPrivateValuationRuntime`, `localPrivateValuationConstruction`
-   and `privateLocalWorkbookReads`) build their `derived_private` repository with
-   `bindLocalAflTradeArtifactRepository` on `statly-grading-1-artifacts`. An automated Gate 3
-   decision cites the qualification artifact, and those compositions still record it unlocated, so
-   the migration would refuse every new automated model qualification.
+1. #828 is deployed and the valuation commands run with `AFL_TRADE_LOCAL_ARTIFACT_ROOT` set to the
+   root of `statly-grading-1-artifacts`, so private artifacts, including the qualification an
+   automated Gate 3 decision cites, are recorded with a location. Without it the migration refuses
+   every new automated model qualification.
 2. Every script or input file that records a Gate decision on the VM cites stored evidence. That
    includes the reviewed inputs for `outcomes:sources:record-approved` and
    `outcomes:sources:record-approved-external`.
