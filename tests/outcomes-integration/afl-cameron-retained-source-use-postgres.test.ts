@@ -3,11 +3,19 @@ import { createHash } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
 
-import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createRetainedFitzRoyDerivedUseSuccessor } from '@/server/aflTradeIntelligence/source/retainedFitzRoyDerivedUseSuccessor';
+import { retainRehearsalGateEvidence } from '../testUtils/rehearsalSourceAuthority';
+import {
+  retainTestGateEvidenceBytes,
+  retainTestGateEvidenceValues,
+} from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
@@ -17,6 +25,7 @@ afterAll(async () => admin.end());
 
 const sha = (character: string) => character.repeat(64);
 const effectiveAt = '2026-09-20T00:00:00.000Z';
+const sourceReviewEvidence = { review: 'cameron-2020-source-control-review' };
 const ownerApprovalBytes = Buffer.from(
   JSON.stringify({
     decision: 'approved',
@@ -143,7 +152,7 @@ function successorFixture() {
     reviewer: {
       id: 'source-reviewer',
       role: 'source-control-review',
-      evidenceId: `artifact:${sha('d')}`,
+      evidenceId: `artifact:${sha256AflTradeCanonicalJson(sourceReviewEvidence)}`,
     },
   });
   return {
@@ -214,6 +223,12 @@ it('permits the seeded capture and exact field set, and fails closed on every ot
     );
     await insertRights(client, capabilityId, sourceRights);
     await insertRights(client, capabilityId, successor.sourceRights);
+    // Every non-production Gate record cites only retained evidence (migration 0253).
+    await retainRehearsalGateEvidence(client);
+    await retainTestGateEvidenceValues(client, [sourceReviewEvidence]);
+    await retainTestGateEvidenceBytes(client, [
+      { bytes: ownerApprovalBytes, mediaType: 'application/json' },
+    ]);
     const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
     await ledger.appendBatch({
       expectedRevision: (await ledger.load()).revision,
