@@ -1,7 +1,6 @@
 // Main entry point for Firebase Functions
 export {
   onTradeUpdate,
-  processWaivers,
   onTeamRosterUpdate,
   onUserWatchlistUpdate,
   onPlayerOwnershipWrite,
