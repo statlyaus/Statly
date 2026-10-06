@@ -676,3 +676,22 @@ export function createLocalAflTradePrivateDerivedArtifactRepository(options: {
     assurance: 'local_non_production_filesystem',
   });
 }
+
+/**
+ * The immutable reference a local non-production repository recorded for one artifact's bytes, or
+ * null when it holds none. A retry reuses it, because the repository refuses the same bytes under a
+ * reference that differs in any field, including its creation time.
+ */
+export async function loadLocalAflTradeNonProductionStoredReference(options: {
+  rootDirectory: string;
+  repositoryId: string;
+  contentSha256: string;
+}): Promise<AflTradeArtifactRef | null> {
+  const sha = options.contentSha256;
+  const head = await createLocalAflTradeFileConditionalObjectStore({
+    rootDirectory: resolve(options.rootDirectory, options.repositoryId),
+  }).headExact({
+    objectKey: `local_non_production_filesystem/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}`,
+  });
+  return head === null ? null : localReferenceFromIdentity(head);
+}

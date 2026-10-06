@@ -348,6 +348,37 @@ Insertion refuses a capture whose bytes are located, a second successor for the 
 different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
 entries never read them.
 
+### Storing evidence before it is cited
+
+Store any file a record will cite as evidence, such as an owner's approval record for a Gate
+decision, with this command first. It prints the `artifact:` id to cite:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:artifacts:store-evidence -- \
+  --store-id <store-id> --file <absolute-path> --media-type <type/subtype> \
+  [--repository-id <id>] [--artifact-class raw_source|capture_metadata]
+```
+
+The repository defaults to `governance-evidence` and the class to `raw_source`, so the nightly
+custody readback reads the file back in full. The command writes the file into the registered
+local non-production store and reads it back. In one transaction it then records the custody row
+and its location. It prints one JSON line: `artifactId`, `contentSha256`, `byteLength`,
+`mediaType`, `storeId`, `objectKey`, and `custody` (`recorded`, or `already_recorded` when the
+row existed).
+
+- It refuses with `AflTradeCustodyUnhealthyError` (`CUSTODY_UNHEALTHY`) while custody is unhealthy,
+  before writing anything. Run a custody readback first.
+- Running it again with the same file is a no-op that prints the same id. A run that stopped
+  after writing the bytes can be run again; it reuses the stored reference.
+- When the file's exact bytes match a custody row recorded as lost, the command locates that row
+  instead of creating one. It refuses when that row names a different media type.
+- On `statly-grading-1` the store id is `statly-grading-1-artifacts`. Build the database URL inside
+  the genuine-database wrapper, and never print it.
+
+Keep the original file. The id is the SHA-256 of its exact bytes, so a copy with different line
+endings or formatting is a different artifact.
+
 ### Custody readback
 
 Reviewed registration requires healthy custody (migration 0250): the environment's latest custody

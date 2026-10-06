@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const activityMocks = vi.hoisted(() => ({
-  logLeagueActivity: vi.fn().mockResolvedValue(undefined),
-}));
-
 const txMocks = vi.hoisted(() => ({
   leagueMatchup: { updateMany: vi.fn() },
   leagueCompetitionAudit: { create: vi.fn() },
@@ -14,7 +10,6 @@ const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn((work: (tx: typeof txMocks) => Promise<unknown>) => work(txMocks)),
 }));
 
-vi.mock('@/lib/activity', () => activityMocks);
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
 
