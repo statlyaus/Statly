@@ -432,11 +432,22 @@ Earlier rows are unchanged and still load. On `statly-grading-1` the three
 neither has custody. Their bytes are lost (#742 audit note). Exact replays of those decisions still
 succeed. A successor version of either decision must cite a retained record.
 
-Do not deploy migration 0253 to `statly-grading-1` until the model-qualification writer records the
-location of its qualification artifact. An automated Gate 3 decision cites that `derived_private`
-artifact as authority. On 2026-10-06 every one of the 111,607 `derived_private` custody rows on the
-genuine database was unlocated. Until the writer locates its artifact, the migration refuses every
-new automated model qualification.
+Do not run `migrate deploy` with migration 0253 on `statly-grading-1` until all three hold:
+
+1. The valuation compositions (`localPrivateValuationRuntime`, `localPrivateValuationConstruction`
+   and `privateLocalWorkbookReads`) build their `derived_private` repository with
+   `bindLocalAflTradeArtifactRepository` on `statly-grading-1-artifacts`. An automated Gate 3
+   decision cites the qualification artifact, and those compositions still record it unlocated, so
+   the migration would refuse every new automated model qualification.
+2. Every script or input file that records a Gate decision on the VM cites stored evidence. That
+   includes the reviewed inputs for `outcomes:sources:record-approved` and
+   `outcomes:sources:record-approved-external`.
+3. Renewals and successors of current decisions name freshly stored evidence. The renewal and
+   successor builders copy their predecessor's evidence ids, and on 2026-10-06 all 36 current Gate
+   0A decisions cited unlocated evidence.
+
+The census behind these conditions (2026-10-06, all non-`test_fixture` Gate records): of the cited
+evidence ids, 1 was located, 20 had a custody row but no location, and 55 had no custody row.
 
 ### Custody readback
 
