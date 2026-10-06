@@ -148,7 +148,9 @@ COMMITTED; draft transactions run at Serializable and retry serialization failur
 unique key is re-read outside the aborted transaction: it is replayed as idempotent only when the slot
 holds the player that call sent, and refused otherwise. Two first claims in a league can both create
 priority rows; the second keeps the first's rows, but the two members can end up sharing a priority
-number, because priority is not unique. That is accepted. Only one waiver processing run per league proceeds at a
+number, because priority is not unique. That is accepted. Waivers run automatically once a day, at 6 am Melbourne time: a Netlify scheduled function calls
+`/api/cron/waivers` hourly, and only the run in the 6 am Melbourne hour processes leagues with due
+claims, so the time holds through daylight saving. Only one waiver processing run per league proceeds at a
 time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refused as already running
 (HTTP 409) rather than debiting and awarding the same claims again. A run that dies releases the
 lease implicitly after 15 minutes. `tests/integration/postgresConcurrency.test.ts`
