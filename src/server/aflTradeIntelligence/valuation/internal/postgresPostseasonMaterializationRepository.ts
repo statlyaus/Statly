@@ -7,6 +7,7 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '../../artifacts/contentAddress';
+import { recordAflTradeRepositoryLocations } from '../../artifacts/artifactStoreLocation';
 import type { AflTradeImmutableArtifactRepository } from '../../artifacts/immutableArtifactRepository';
 import type { AflTradeHpnPavMethodAuthority } from '../../modeling/hpnPavCalculationService';
 import { materializeAflTradePostseasonObservation } from '../../modeling/postgresPostseasonObservationMaterialization';
@@ -206,6 +207,7 @@ export class PostgresPostseasonMaterializationRepository {
           }),
         ]
       );
+      await recordAflTradeRepositoryLocations(tx, this.dependencies.artifacts, [reference]);
       await tx.query(
         `INSERT INTO outcome_private_evaluation_materialization_manifest
         (materialization_manifest_id,content_sha256,valuation_scope_key,trade_id,artifact_id,created_at,content_canonical_json,manifest_canonical_json,manifest_json)

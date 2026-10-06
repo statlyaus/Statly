@@ -47,6 +47,7 @@ import {
 } from './localDraftguruNationalYearCapture';
 import { createLocalFileCaptureAdmissionStore } from './localFileCaptureAdmissionStore';
 import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
+import { bindLocalAflTradeArtifactRepository } from './localArtifactStoreBinding';
 import {
   LocalExternalCaptureError,
   type LocalNarrowCaptureAuthority,
@@ -302,10 +303,39 @@ export type LocalExternalCaptureResult = LocalExternalCaptureTarget &
 export interface LocalExternalCaptureOptions {
   sql: AflOutcomeSqlClient;
   artifactRootDirectory: string;
+  /**
+   * The registered local store to write raw pages into. Its root must be `artifactRootDirectory`;
+   * each page's custody row then records its location. Without it pages are written unlocated.
+   */
+  storeId?: string;
   userAgent: string;
   fetchImpl?: typeof fetch;
   now?: () => string;
   sleep?: (ms: number) => Promise<void>;
+}
+
+/** A raw-page repository in the registered store, which must be rooted at the capture root. */
+async function bindStoreRepository(
+  sql: AflOutcomeSqlClient,
+  storeId: string,
+  root: string,
+  repositoryId: string
+) {
+  const store = await sql.query<{ root_locator: string }>(
+    `SELECT root_locator FROM outcome_artifact_store WHERE store_id=$1`,
+    [storeId]
+  );
+  if (store.rows[0] === undefined || resolve(store.rows[0].root_locator) !== root) {
+    throw new TypeError(
+      `Artifact store ${storeId} must be registered with root ${root} to capture into it.`
+    );
+  }
+  return bindLocalAflTradeArtifactRepository(sql, {
+    storeId,
+    repositoryId,
+    artifactClass: 'raw_source',
+    maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+  });
 }
 
 function identifiedFetch(fetchImpl: typeof fetch, userAgent: string): typeof fetch {
@@ -420,18 +450,24 @@ export async function runLocalExternalCapture(
       await loadRecordedLocalCaptureAuthority(ledger, capabilityId, season, now())
     );
   }
-  const rawArtifacts = createLocalAflTradeNonProductionArtifactRepository({
-    rootDirectory: root,
-    repositoryId: profile.rawRepositoryId,
-    artifactClass: 'raw_source',
-    maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
-  });
+  const rawArtifacts =
+    options.storeId === undefined
+      ? createLocalAflTradeNonProductionArtifactRepository({
+          rootDirectory: root,
+          repositoryId: profile.rawRepositoryId,
+          artifactClass: 'raw_source',
+          maximumObjectBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+        })
+      : await bindStoreRepository(options.sql, options.storeId, root, profile.rawRepositoryId);
   const admission = createAflTradeExternalCaptureAdmission({
     redis: createLocalFileCaptureAdmissionStore({ directory: join(root, 'capture-admission') }),
     createToken: randomUUID,
   });
   const fetchImpl = identifiedFetch(options.fetchImpl ?? fetch, options.userAgent);
-  const captureRegistry = new PostgresAflTradeExternalCaptureRegistry(options.sql);
+  const captureRegistry = new PostgresAflTradeExternalCaptureRegistry(
+    options.sql,
+    rawArtifacts.storeLocation === undefined ? {} : { storeLocation: rawArtifacts.storeLocation }
+  );
   const staging = new PostgresAflTradeExternalEvidenceRepository(options.sql);
 
   async function captureOne(target: LocalExternalCaptureTarget) {
