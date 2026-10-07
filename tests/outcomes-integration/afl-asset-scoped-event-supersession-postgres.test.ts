@@ -27,9 +27,10 @@ const pool = new Pool({
 });
 const client = createPgAflOutcomeSqlClient(pool);
 const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
-const OTHER_PLAYER = 'synthetic-event-supersession-other';
-const RELISTED_PLAYERS = ['synthetic-event-supersession-kept-a', 'synthetic-event-supersession-kept-b'];
-const ADDED_PLAYER = 'synthetic-event-supersession-added';
+// Later versions carry copies of the fixture's own drafted players' assets, whose identity decisions
+// are real, and a player-less 'other' asset where a version must add nothing anyone cites.
+let OTHER_PLAYER = '';
+let RELISTED_PLAYERS: string[] = [];
 let cleanup: () => Promise<void> = async () => undefined;
 let migrationSql = '';
 let promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>;
@@ -66,12 +67,11 @@ beforeAll(async () => {
     },
     await bindTestEvidenceStore(pool)
   );
-  for (const player of [OTHER_PLAYER, ...RELISTED_PLAYERS, ADDED_PLAYER]) {
-    await pool.query(
-      "INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')",
-      [player, `Synthetic ${player}`]
-    );
-  }
+  const drafted = promoted.draftEntries.map((entry) => entry.player_id);
+  if (drafted.length < 2 || drafted.includes(promoted.playerId))
+    throw new Error('Expected two drafted players distinct from the traded one.');
+  OTHER_PLAYER = drafted[0]!;
+  RELISTED_PLAYERS = [drafted[0]!, drafted[1]!];
 }, 300_000);
 
 afterAll(async () => {
@@ -130,8 +130,11 @@ const functionBody = async (signature: string) =>
     ])
   ).rows[0]!.body;
 
+let rowOrdinal = 0;
+
 /** A copy of a version's source import row under a new id, so every row-level constraint holds. */
-async function copyImportRow(templateVersionId: string, rowId: string, suffix: string, ordinal: number) {
+async function copyImportRow(templateVersionId: string, rowId: string, suffix: string) {
+  const ordinal = ++rowOrdinal;
   await pool.query(
     `INSERT INTO outcome_import_row
        (import_row_id,import_run_id,source_locator,source_ordinal,record_kind,row_sha256,parse_status,raw_payload,recorded_at)
@@ -145,32 +148,56 @@ async function copyImportRow(templateVersionId: string, rowId: string, suffix: s
 }
 
 /**
- * An approved player asset on a version, copied from the promotion-time asset so every column the
- * schema requires is present; only identity, version, key, source row and the player change.
+ * An approved asset on a version, copied from the player's own promoted asset so its identity
+ * decision and every column the schema requires carry over; only identity, version, key and source
+ * row change. A null player copies the traded asset as a player-less 'other' asset.
  */
-async function addAsset(eventVersionId: string, player: string, suffix: string, ordinal: number) {
+async function addAsset(eventVersionId: string, player: string | null, suffix: string) {
   const rowId = `${eventVersionId}:asset-row-${suffix}`;
-  await copyImportRow(promoted.entry.eventVersionId, rowId, suffix, ordinal);
+  await copyImportRow(promoted.entry.eventVersionId, rowId, suffix);
   await pool.query(
     `INSERT INTO outcome_event_asset
      SELECT * FROM jsonb_populate_record(NULL::outcome_event_asset,
        (SELECT to_jsonb(asset) || jsonb_build_object(
-          'asset_version_id','event-asset-version:synthetic-supersession-'||$4::text,'event_version_id',$2::text,
-          'player_id',$3::text,'asset_key','player-'||$4::text,'source_import_row_id',$1::text,
-          'external_identity_decision_id',NULL)
-          FROM outcome_event_asset asset WHERE asset.asset_version_id=$5))`,
-    [rowId, eventVersionId, player, suffix, promoted.entry.assetVersionId]
+          'asset_version_id','event-asset-version:synthetic-supersession-'||$3::text,'event_version_id',$2::text,
+          'asset_key',CASE WHEN $4::text IS NULL THEN 'other-' ELSE 'player-' END||$3::text,'source_import_row_id',$1::text)
+          || CASE WHEN $4::text IS NULL THEN jsonb_build_object('kind','other','player_id',NULL,
+               'player_identity_id',NULL,'external_identity_decision_id',NULL) ELSE '{}'::jsonb END
+          FROM outcome_event_asset asset
+          WHERE asset.asset_version_id=COALESCE($5,$6)))`,
+    [
+      rowId,
+      eventVersionId,
+      suffix,
+      player,
+      player === null ? null : await assetOf(player),
+      promoted.entry.assetVersionId,
+    ]
   );
+}
+
+async function assetOf(player: string) {
+  return (
+    await pool.query<{ asset_version_id: string }>(
+      `SELECT asset_version_id FROM outcome_event_asset
+        WHERE player_id=$1 AND status='approved' ORDER BY asset_version_id LIMIT 1`,
+      [player]
+    )
+  ).rows[0]!.asset_version_id;
 }
 
 /**
  * A later version of the promoted event carrying the given players' assets, the way a follow-up
  * promotion (a few players) or a correction (most of the night) re-versions a draft night.
  */
-async function supersedeEvent(previousVersionId: string, players: string[], suffix: string) {
+async function supersedeEvent(
+  previousVersionId: string,
+  players: (string | null)[],
+  suffix: string
+) {
   const eventVersionId = `event-version:synthetic-supersession-${suffix}`;
   const eventRow = `${eventVersionId}:event-row`;
-  await copyImportRow(previousVersionId, eventRow, suffix, 0);
+  await copyImportRow(previousVersionId, eventRow, suffix);
   await pool.query(
     `INSERT INTO outcome_event_version
        (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,official_name,status,
@@ -181,7 +208,7 @@ async function supersedeEvent(previousVersionId: string, players: string[], suff
     [eventVersionId, eventRow, previousVersionId]
   );
   for (const [index, player] of players.entries()) {
-    await addAsset(eventVersionId, player, `${suffix}-${index}`, index + 1);
+    await addAsset(eventVersionId, player, `${suffix}-${index}`);
   }
   return eventVersionId;
 }
@@ -282,10 +309,10 @@ it('a further version that re-versions the player makes the spell stale, two hop
 it('a re-listing that omits a player retires that player; an addition does not', async () => {
   // The third version becomes a three-player night.
   for (const [index, player] of RELISTED_PLAYERS.entries()) {
-    await addAsset(thirdVersionId, player, `kept-${index}`, index + 10);
+    await addAsset(thirdVersionId, player, `kept-${index}`);
   }
   // An addition carries none of the night's other players, so nobody on the night is retired.
-  await supersedeEvent(thirdVersionId, [ADDED_PLAYER], 'addition');
+  await supersedeEvent(thirdVersionId, [null], 'addition');
   expect(await supersededFor(thirdVersionId, promoted.playerId, null)).toBe(false);
   expect(await supersededFor(thirdVersionId, RELISTED_PLAYERS[0]!, null)).toBe(false);
   // A correction re-lists two of the three players and omits the third: all of the omitted player's
@@ -316,7 +343,7 @@ it('a draft selection on a later version supersedes its selection number, not it
           'selection_number',$1::int,'pick_id',NULL,'source_import_row_id',$2::text||':asset-row')
           FROM outcome_draft_selection selection
           WHERE selection.event_version_id=$3 ORDER BY selection.selection_number LIMIT 1))`,
-    [selectionNumber, secondVersionId, promoted.entry.eventVersionId]
+    [selectionNumber, secondVersionId, promoted.draftEntries[0]!.entry.eventVersionId]
   );
   expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber)).toBe(true);
   expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber + 1)).toBe(false);
