@@ -581,11 +581,6 @@ export function parseDraftguruYearSelections(
 }
 
 /** The national-year parser versions a capture may name; v2 also reads each row's access category. */
-const NATIONAL_YEAR_PARSER_VERSIONS = new Set([
-  'draftguru-national-year-page/v1',
-  'draftguru-national-year-page/v2',
-]);
-
 /**
  * The year page's second category cell: blank for an open selection, `Academy` or `Academy (<name>)`
  * for an academy nomination, `Father-Son(<father>)` for a father-son nomination. Anything else is
@@ -758,9 +753,6 @@ export function parseDraftguruNationalYearSelections(
     excludedByPathway: Record<string, number>;
   };
 } {
-  if (!NATIONAL_YEAR_PARSER_VERSIONS.has(input.capture.parserVersion)) {
-    throw new TypeError(`${input.capture.parserVersion} is not a reviewed national-year parser.`);
-  }
   const $ = load(html);
   const tables = $('table.big-pick-movements');
   const summary = {

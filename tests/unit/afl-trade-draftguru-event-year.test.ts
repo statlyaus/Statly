@@ -135,10 +135,10 @@ describe('Draftguru event year provenance', () => {
       );
     });
 
-    it('refuses a parser version it was not reviewed for', () => {
-      expect(() => parseNational(html, 'draftguru-national-year-parser/v1')).toThrow(
-        /not a reviewed national-year parser/
-      );
+    it('reads access only under parser v2, so other callers keep their own field boundary', () => {
+      const result = parseNational(html, 'official-afl-completed-draft-session/v1');
+      expect(result.evidence.length).toBeGreaterThan(0);
+      expect(categories(result).every((category) => category === undefined)).toBe(true);
     });
   });
 
