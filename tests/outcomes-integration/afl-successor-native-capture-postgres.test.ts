@@ -221,16 +221,18 @@ it('an arrival entry may cite a capture that is also the recorded successor of a
 
   // Under 0252 the cited capture stands only for the lost one, which this candidate never captured.
   expect(await arrivalCurrent([native])).toBe(false);
-  const arrival = createAflTradeArrivalSpell({
-    ...scope,
-    playerId: promoted.playerId,
-    clubId: promoted.clubId,
-    entry: promoted.entry,
-    ruleId: rule.ruleId,
-    version: 1,
-    supersedesSpellVersionId: null,
-    createdAt: await instant(),
-  });
+  const arrivalSpell = async () =>
+    createAflTradeArrivalSpell({
+      ...scope,
+      playerId: promoted.playerId,
+      clubId: promoted.clubId,
+      entry: promoted.entry,
+      ruleId: rule.ruleId,
+      version: 1,
+      supersedesSpellVersionId: null,
+      createdAt: await instant(),
+    });
+  const arrival = await arrivalSpell();
   await bindTestEvidenceStore(pool);
   await expect(
     spells.registerReviewedSpell(
@@ -257,7 +259,7 @@ it('an arrival entry may cite a capture that is also the recorded successor of a
   expect(await arrivalCurrent([native])).toBe(true);
   expect(await arrivalCurrent([lost])).toBe(false);
   expect(await arrivalCurrent([native, lost])).toBe(false);
-  const registered = createAflTradeArrivalSpell({ ...arrival, createdAt: await instant() });
+  const registered = await arrivalSpell();
   await bindTestEvidenceStore(pool);
   await spells.registerReviewedSpell(
     registered,
