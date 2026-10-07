@@ -136,7 +136,7 @@ async function copyImportRow(templateVersionId: string, rowId: string, suffix: s
     `INSERT INTO outcome_import_row
        (import_row_id,import_run_id,source_locator,source_ordinal,record_kind,row_sha256,parse_status,raw_payload,recorded_at)
      SELECT $1,import_row.import_run_id,import_row.source_locator||'#'||$2,import_row.source_ordinal*1000+$3,
-            import_row.record_kind,md5($1),import_row.parse_status,import_row.raw_payload,clock_timestamp()
+            import_row.record_kind,encode(sha256(convert_to($1,'UTF8')),'hex'),import_row.parse_status,import_row.raw_payload,clock_timestamp()
        FROM outcome_event_version version
        JOIN outcome_import_row import_row ON import_row.import_row_id=version.source_import_row_id
       WHERE version.event_version_id=$4`,

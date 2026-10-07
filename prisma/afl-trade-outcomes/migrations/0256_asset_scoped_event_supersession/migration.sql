@@ -138,3 +138,9 @@ BEGIN
 END $migration$;
 
 DROP FUNCTION pg_temp.replace_supersession_clause(REGPROCEDURE, TEXT, TEXT);
+
+-- The historical-cohort bind function runs the promoted-event check as the private valuation
+-- scheduler owner, which could read the event version chain but not the columns the predicate now
+-- reads (0153 granted it two asset columns). The predicate's columns only.
+GRANT SELECT (event_version_id, player_id) ON outcome_event_asset TO afl_trade_private_valuation_scheduler_owner;
+GRANT SELECT (event_version_id, player_id, selection_number) ON outcome_draft_selection TO afl_trade_private_valuation_scheduler_owner;
