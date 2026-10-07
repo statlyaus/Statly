@@ -4029,8 +4029,13 @@ The remaining work proceeds through these independently verifiable gates:
    (parser v2) states each selection's access (open, academy or father-son, the nominations reached
    through a matched bid), and each stated not-used national pick carries `nominationBasis`: whether
    the receiving club took a nominated player in that draft (`club_took_nominated_player`, with the
-   count), took none (`club_took_no_nominated_player`), or the draft has no v2 page
-   (`no_access_evidence`). How a not-used pick is valued from that fact is a separate owner rule.
+   count), took none (`club_took_no_nominated_player`), or the draft lacks complete access evidence
+   (`no_access_evidence`, with no count, because unknown is not zero). Only `draftguru` evidence
+   captured at `draftguru-national-year-page/v2` counts, and a draft is covered only when every
+   canonical selection in it carries exactly one stated category, so a partial or disputed page never
+   yields a negative. The outcome cites the receiving club's year-page rows it read. Categories match
+   the reviewed forms exactly (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`); any other
+   text quarantines the row. How a not-used pick is valued from that fact is a separate owner rule.
 
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate

@@ -1,3 +1,4 @@
+import { DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION } from '../source/externalDraftTradeEvidenceContracts';
 import { sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type { AflTradeExternalProviderIngestionCommand } from '../source/externalDraftTradeProviderIngestion';
 import {
@@ -15,7 +16,7 @@ export const DRAFTGURU_NATIONAL_YEAR_CAPABILITY = 'draftguru-national-year-page'
 export const DRAFTGURU_NATIONAL_YEAR_V1_PARSER_VERSION = 'draftguru-national-year-page/v1';
 
 /** v2 adds each selection's access category (open, academy or father-son) from the year page. */
-export const DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION = 'draftguru-national-year-page/v2';
+export const DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION = DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION;
 
 /** The recorded v1 field boundary for Draftguru national-year selections. */
 export const DRAFTGURU_NATIONAL_YEAR_V1_FIELDS = [

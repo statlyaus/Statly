@@ -10,6 +10,7 @@ import type { AnyNode } from 'domhandler';
 
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION,
   createAflTradeExternalEvidenceEnvelope,
   type AflTradeExternalEvidenceContent,
   type AflTradeExternalEvidenceEnvelope,
@@ -580,16 +581,16 @@ export function parseDraftguruYearSelections(
   return parseDraftguruYearSelectionRows(html, input);
 }
 
-/** The national-year parser versions a capture may name; v2 also reads each row's access category. */
 /**
- * The year page's second category cell: blank for an open selection, `Academy` or `Academy (<name>)`
- * for an academy nomination, `Father-Son(<father>)` for a father-son nomination. Anything else is
- * unreviewed and returns null.
+ * The year page's second category cell, matched against the exact reviewed forms only: blank for an
+ * open selection, `Academy` or `Academy (NG)` for an academy nomination, and `Father-Son(<father>)`
+ * for a father-son nomination. Any other text, including a new academy label or a father-son cell
+ * without a name, is unreviewed and returns null, so the row is quarantined rather than counted.
  */
 function accessCategoryOf(text: string): 'open' | 'academy' | 'father_son' | null {
   if (text === '') return 'open';
-  if (/^Academy\b/.test(text)) return 'academy';
-  if (/^Father-Son\b/.test(text)) return 'father_son';
+  if (text === 'Academy' || text === 'Academy (NG)') return 'academy';
+  if (/^Father-Son ?\([A-Z][A-Za-z'’.-]*(?: [A-Za-z'’.-]+)+\)$/.test(text)) return 'father_son';
   return null;
 }
 
@@ -808,7 +809,8 @@ export function parseDraftguruNationalYearSelections(
   if (issues.length) return { evidence: [], issues, scopeSummary: summary };
   const result = parseDraftguruYearSelectionRows($.html(), {
     ...input,
-    readAccessCategory: input.capture.parserVersion === 'draftguru-national-year-page/v2',
+    readAccessCategory:
+      input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION,
   });
   if (!summary.includedRows)
     result.issues.push({

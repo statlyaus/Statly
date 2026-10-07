@@ -152,19 +152,15 @@ const pickOutcomeSchema = z
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
-  .refine(
-    (record) =>
-      (record.nominationBasis === undefined) ===
-        (record.receivingClubNominatedSelections === undefined) &&
-      (record.nominationBasis === undefined ||
-        (record.disposition === 'not_used' && record.outcomeStatus === 'stated')) &&
-      (record.nominationBasis !== 'club_took_nominated_player' ||
-        (record.receivingClubNominatedSelections ?? 0) > 0) &&
-      (record.nominationBasis === undefined ||
-        record.nominationBasis === 'club_took_nominated_player' ||
-        record.receivingClubNominatedSelections === 0),
-    'A nomination basis belongs only to a stated not-used pick, and its count must match it.'
-  )
+  .refine((record) => {
+    const { nominationBasis: basis, receivingClubNominatedSelections: count } = record;
+    if (basis === undefined) return count === undefined;
+    if (record.disposition !== 'not_used' || record.outcomeStatus !== 'stated') return false;
+    // Without complete access evidence the count is unknown, never zero.
+    if (basis === 'no_access_evidence') return count === undefined;
+    if (basis === 'club_took_nominated_player') return count !== undefined && count > 0;
+    return count === 0;
+  }, 'A nomination basis belongs only to a stated not-used pick, and its count must match it.')
   .refine(
     (record) =>
       record.selectionId === null ||
@@ -569,12 +565,29 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         selection.clubId === transfer.toClubId &&
         selection.playerId !== null &&
         selection.playerId === outcome.playerId);
+    // A nomination basis may also cite the receiving club's selections in the pick's draft: the
+    // year-page rows its count was read from.
+    const asset = transfer?.asset.kind === 'pick_entitlement' ? transfer.asset : null;
+    const nominationEvidenceIds =
+      outcome.nominationBasis !== undefined && transfer && asset
+        ? content.draftSelections
+            .filter(
+              (candidate) =>
+                candidate.draftYear === asset.draftYear &&
+                candidate.draftType === asset.draftType &&
+                candidate.clubId === transfer.toClubId
+            )
+            .flatMap(({ evidenceIds }) => evidenceIds)
+        : [];
+    const citable = new Set([
+      ...(transfer?.evidenceIds ?? []),
+      ...(selection?.evidenceIds ?? []),
+      ...nominationEvidenceIds,
+    ]);
     if (
       !transfer ||
-      transfer.asset.kind !== 'pick_entitlement' ||
-      !outcome.evidenceIds.every((evidenceId) =>
-        [...transfer.evidenceIds, ...(selection?.evidenceIds ?? [])].includes(evidenceId)
-      ) ||
+      !asset ||
+      !outcome.evidenceIds.every((evidenceId) => citable.has(evidenceId)) ||
       !selectedPlayerMatches
     ) {
       context.addIssue({

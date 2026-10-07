@@ -121,6 +121,23 @@ describe('Draftguru event year provenance', () => {
       );
     });
 
+    it.each(['Academy Scholarship', 'Academy (Northern)', 'Father-Son', 'Father-Son Unknown'])(
+      'quarantines the near-miss category %s instead of reading it as a nomination',
+      (label) => {
+        const body = html.replace(
+          /<td class="category">\s*Academy\s*</,
+          `<td class="category">${label}<`
+        );
+        expect(body).not.toBe(html);
+        expect(parseNational(body).issues).toContainEqual(
+          expect.objectContaining({
+            code: 'unsupported_row',
+            detail: expect.stringContaining(label),
+          })
+        );
+      }
+    );
+
     it('quarantines an unreviewed category instead of guessing', () => {
       const body = html.replace(
         /<td class="category">\s*Academy/,

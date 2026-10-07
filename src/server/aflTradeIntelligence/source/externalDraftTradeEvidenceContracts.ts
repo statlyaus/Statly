@@ -61,6 +61,12 @@ const sourceUrlSchema = z
     });
   });
 
+/**
+ * The Draftguru national-year parser that reads each selection's access category. Reconciliation
+ * counts `accessCategory` as access coverage only on evidence captured at this version.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION = 'draftguru-national-year-page/v2';
+
 const sourceCaptureSchema = z
   .object({
     captureId: aflTradeContentAddressedIdSchema('source-capture'),
