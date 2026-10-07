@@ -3163,6 +3163,19 @@ the complete authorized operation may be retried. PostgreSQL tests cover repeate
 same-occurrence corrections, invalidation and two-connection contention. These tests use synthetic
 upstream records, not genuine season-wide reconciliation.
 
+Event supersession is scoped to the cited asset from migration 0256. A reviewed spell, a draft
+selection and a special-entitlement custody edge each cite one asset of one event version. Six
+checks (the promoted-event and arrival-event functions behind reviewed spells, the version-chain
+trigger's overlap check, and the three special-entitlement authenticators) once treated the whole
+version as stale once any later version superseded it; the 2020 Jeremy Cameron trade promotion
+re-versioned three whole draft nights for two or three players each and so broke 68 reviewed spells
+on untouched assets. `outcome_event_version_superseded_for(event_version, player, selection_number)`
+now answers whether a later version in the chain re-versions that player, or that player or
+selection number for a draft selection, and each check uses it. A re-version of the cited asset
+itself still makes the citation stale; a cited asset with neither a player nor a selection number
+keeps the whole-event rule. Postseason observation, valuation cohort inputs and the
+special-correction dependency trigger reason about whole events and are unchanged.
+
 Factual observation contracts preserve that same distinction. An occurrence-only player carries
 `playerIdentityId: null` and `assignment: null`, while the exact decoded identity candidate,
 represented-club affiliation and match remain mandatory. Migration 0132 applies the existing
