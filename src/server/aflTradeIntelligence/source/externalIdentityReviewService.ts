@@ -4,6 +4,7 @@ import { aflTradeContentAddressedIdSchema } from '../artifacts/contentAddress';
 import {
   aflTradeExternalIdentityReviewDecisionSchema,
   createAflTradeExternalIdentityReviewDecision,
+  doesAflTradeExternalIdentityDecisionCoverWorkItem,
   type AflTradeExternalIdentityReviewDecision,
   type AflTradeExternalIdentityReviewPackage,
 } from './externalIdentityReviewContracts';
@@ -98,10 +99,7 @@ function decisionMatchesItem(
   decision: AflTradeExternalIdentityReviewDecision,
   item: AflTradeExternalIdentityReviewPackage['content']['items'][number]
 ): boolean {
-  return (
-    decision.content.workItemId === item.workItemId &&
-    decision.content.workItemSha256 === item.workItemSha256
-  );
+  return doesAflTradeExternalIdentityDecisionCoverWorkItem(decision, item.workItem);
 }
 
 export async function loadAflTradeExternalIdentityReviewQueue(
