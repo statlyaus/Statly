@@ -338,6 +338,10 @@ it('a draft selection on a later version supersedes its selection number, not it
   // selection copied under a new number; only identity, version, number, pick and source row change.
   const player = RELISTED_PLAYERS[1]!;
   const selectionNumber = 9001;
+  // A selection citation is judged by selections alone: no later version carries a selection yet,
+  // and the third re-versions the traded player's asset, which retires his asset citation only.
+  expect(await supersededFor(secondVersionId, promoted.playerId, selectionNumber)).toBe(false);
+  expect(await supersededFor(secondVersionId, promoted.playerId, null)).toBe(true);
   const selectionOnlyId = await supersedeEvent(halfVersionId, [], 'selection-only');
   await pool.query(
     `INSERT INTO outcome_draft_selection
@@ -355,10 +359,6 @@ it('a draft selection on a later version supersedes its selection number, not it
   expect(await supersededFor(halfVersionId, player, selectionNumber + 1)).toBe(true);
   // An asset citation is judged by assets alone: a selection-only successor retires none.
   expect(await supersededFor(halfVersionId, player, null)).toBe(false);
-  // A selection citation is judged by selections alone: the third version re-versions the traded
-  // player's asset and carries no selection, so it retires no selection of the second version.
-  expect(await supersededFor(secondVersionId, promoted.playerId, selectionNumber)).toBe(false);
-  expect(await supersededFor(secondVersionId, promoted.playerId, null)).toBe(true);
 });
 
 it.each([
