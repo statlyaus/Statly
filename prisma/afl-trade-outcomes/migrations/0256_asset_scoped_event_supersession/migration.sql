@@ -88,8 +88,9 @@ CREATE FUNCTION outcome_event_version_superseded_for(
    OR EXISTS (SELECT 1 FROM successors
               JOIN outcome_draft_selection selection
                 ON selection.event_version_id=successors.event_version_id
-              WHERE (target_player IS NOT NULL AND selection.player_id=target_player)
-                 OR (target_selection IS NOT NULL AND selection.selection_number=target_selection))
+              WHERE target_selection IS NOT NULL
+                AND ((target_player IS NOT NULL AND selection.player_id=target_player)
+                     OR selection.selection_number=target_selection))
    -- A re-listing retires whatever it omits.
    OR ((target_player IS NOT NULL OR target_selection IS NOT NULL) AND EXISTS (SELECT 1 FROM relistings))
 $$;

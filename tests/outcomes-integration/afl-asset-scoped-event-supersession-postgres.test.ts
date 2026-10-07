@@ -217,6 +217,7 @@ let reviewedSpellId = '';
 let arrivalSpellId = '';
 let secondVersionId = '';
 let thirdVersionId = '';
+let halfVersionId = '';
 
 it('a later version that adds another player breaks a reviewed spell under the deployed rules', async () => {
   const entryRule = createAflTradeAcquisitionSpellRegistrationRule({
@@ -324,18 +325,20 @@ it('a re-listing that omits a player retires that player; an addition does not',
   expect(await supersededFor(correctionId, promoted.playerId, null)).toBe(false);
   expect(await supersededFor(correctionId, RELISTED_PLAYERS[1]!, null)).toBe(false);
   // A two-asset event (a trade shape) corrected to drop one player re-lists the one other player.
-  const halfId = await supersedeEvent(correctionId, [RELISTED_PLAYERS[1]!], 'half');
+  halfVersionId = await supersedeEvent(correctionId, [RELISTED_PLAYERS[1]!], 'half');
   expect(await supersededFor(correctionId, RELISTED_PLAYERS[0]!, null)).toBe(true);
   expect(await supersededFor(correctionId, RELISTED_PLAYERS[1]!, null)).toBe(true);
-  expect(await supersededFor(halfId, RELISTED_PLAYERS[0]!, null)).toBe(false);
+  expect(await supersededFor(halfVersionId, RELISTED_PLAYERS[0]!, null)).toBe(false);
   // A single-asset origin has no other assets: only carrying the player retires it.
-  expect(await supersededFor(halfId, RELISTED_PLAYERS[1]!, null)).toBe(false);
+  expect(await supersededFor(halfVersionId, RELISTED_PLAYERS[1]!, null)).toBe(false);
 });
 
 it('a draft selection on a later version supersedes its selection number, not its neighbours', async () => {
-  // A selection copied from the promotion-time night onto the second version under a new number;
-  // only identity, version, number, pick and source row change.
+  // A selection-only successor of the single-asset half version: the kept player's own draft-night
+  // selection copied under a new number; only identity, version, number, pick and source row change.
+  const player = RELISTED_PLAYERS[1]!;
   const selectionNumber = 9001;
+  const selectionOnlyId = await supersedeEvent(halfVersionId, [], 'selection-only');
   await pool.query(
     `INSERT INTO outcome_draft_selection
      SELECT * FROM jsonb_populate_record(NULL::outcome_draft_selection,
@@ -343,18 +346,19 @@ it('a draft selection on a later version supersedes its selection number, not it
           'selection_id','synthetic-supersession-selection:'||$1::text,'event_version_id',$2::text,
           'selection_number',$1::int,'pick_id',NULL,'source_import_row_id',$2::text||':event-row')
           FROM outcome_draft_selection selection
-          WHERE selection.event_version_id=$3 ORDER BY selection.selection_number LIMIT 1))`,
-    [selectionNumber, secondVersionId, promoted.draftEntries[0]!.entry.eventVersionId]
+          WHERE selection.player_id=$3 ORDER BY selection.selection_number LIMIT 1))`,
+    [selectionNumber, selectionOnlyId, player]
   );
-  expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber)).toBe(true);
-  expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber + 1)).toBe(false);
+  // A selection citation is retired by its number, or by its player's later selection.
+  expect(await supersededFor(halfVersionId, null, selectionNumber)).toBe(true);
+  expect(await supersededFor(halfVersionId, null, selectionNumber + 1)).toBe(false);
+  expect(await supersededFor(halfVersionId, player, selectionNumber + 1)).toBe(true);
+  // An asset citation is judged by assets alone: a selection-only successor retires none.
+  expect(await supersededFor(halfVersionId, player, null)).toBe(false);
   // A selection citation is judged by selections alone: the third version re-versions the traded
   // player's asset and carries no selection, so it retires no selection of the second version.
   expect(await supersededFor(secondVersionId, promoted.playerId, selectionNumber)).toBe(false);
   expect(await supersededFor(secondVersionId, promoted.playerId, null)).toBe(true);
-  // The third version carries no selection, so the second is not superseded for that number.
-  expect(await supersededFor(secondVersionId, null, selectionNumber)).toBe(false);
-  expect(await supersededFor(thirdVersionId, null, selectionNumber)).toBe(false);
 });
 
 it.each([
