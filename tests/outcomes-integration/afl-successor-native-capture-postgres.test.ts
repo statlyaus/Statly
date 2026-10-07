@@ -138,7 +138,7 @@ async function lostTwinOf(nativeArtifactId: string) {
      (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,
       access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json)
      SELECT $2,$3,$4,$5,environment,provider,dataset,dataset_version,access_mechanism,capability_id,
-       competition,anchor_season_year,effective_at,captured_at-interval '1 day','approved',manifest_json
+       competition,anchor_season_year,effective_at-interval '1 day',captured_at-interval '1 day','approved',manifest_json
        FROM outcome_source_capture WHERE source_artifact_id=$1`,
     [
       nativeArtifactId,
