@@ -2335,6 +2335,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     playerId,
     clubId: targets.toClubId,
     identityDecisionId,
+    // The player's identity review as persisted, so a suite can supersede it through the repository.
+    identityReview: {
+      reviewPackage,
+      workItem,
+      decision: identityDecision,
+      authorityEvidenceId,
+      principalRef,
+    },
     approvalDecisionId,
     entry: {
       promotionId: receipt.promotionId,

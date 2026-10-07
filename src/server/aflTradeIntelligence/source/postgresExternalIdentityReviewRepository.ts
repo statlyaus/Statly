@@ -15,6 +15,7 @@ import {
   aflTradeExternalIdentityReviewDecisionSchema,
   aflTradeExternalIdentityReviewPackageSchema,
   createAflTradeExternalCanonicalIdentityTargetSnapshot,
+  doesAflTradeExternalIdentityDecisionCoverWorkItem,
   type AflTradeExternalIdentityReviewDecision,
   type AflTradeExternalIdentityReviewPackage,
 } from './externalIdentityReviewContracts';
@@ -434,7 +435,8 @@ export class PostgresAflTradeExternalIdentityReviewRepository {
     const seen = new Set<string>();
     reviewPackage.content.items.forEach(({ subjectId, workItem }) => {
       const decision = bySubject.get(subjectId);
-      if (!decision || decision.content.workItemId !== workItem.workItemId) return;
+      if (!decision || !doesAflTradeExternalIdentityDecisionCoverWorkItem(decision, workItem))
+        return;
       const target = decision.content.canonicalTarget;
       if (target === null) return;
       workItem.content.observations.forEach(({ sourceIdentity }) => {

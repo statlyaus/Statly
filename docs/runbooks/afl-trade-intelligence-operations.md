@@ -348,6 +348,13 @@ Insertion refuses a capture whose bytes are located, a second successor for the 
 different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
 entries never read them.
 
+A reviewed spell stays current across a later identity review of the same player (migration 0254).
+The promoted asset keeps the identity decision it was promoted under; when that decision has been
+superseded by approved decisions of the same subject with the same canonical target, the check
+follows the chain to the current head. A review that changes the player, or a rejected or withdrawn
+head, still makes the spell non-current. Re-reviewing identities therefore never needs spells to be
+re-made; changing a player does.
+
 ### Storing evidence before it is cited
 
 Store any file a record will cite as evidence, such as an owner's approval record for a Gate
@@ -733,8 +740,13 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `npm run outcomes:sources:record-external-identity-resolution -- --completion <completion-id> --subject <subject-id> --decision approved --canonical-id <approved-player-or-club-id> --reviewer <principal-ref> --authority-evidence <reviewer-authority-evidence-id> --rationale <text>`.
    Rejection and withdrawal omit `--canonical-id`. The command derives the exact work item, current
    revision, predecessor and approved canonical-record snapshot from PostgreSQL; operators cannot
-   submit those chain fields. A later completion may reuse a current decision only when its exact
-   observation work item is unchanged. New spellings, seasons or evidence require a successor review.
+   submit those chain fields. A later completion reuses a subject's current decision when its work
+   item is unchanged, or when the decision is approved and the later work item only adds seasons or
+   evidence rows with no spelling the reviewed work item lacked
+   (`doesAflTradeExternalIdentityDecisionCoverWorkItem`). A new spelling requires a successor
+   review. Do not record a successor to re-confirm the same canonical target: it moves the head
+   away from the decision that promoted assets and selections cite, and they stop validating
+   (statlyaus/Statly#742, 2026-10-06).
 
    If a canonical target is absent, retain an explicit external canonical-target registration v2
    review before calling `PostgresAflTradeProviderResolutionRepository.registerCanonicalTarget`.

@@ -3163,6 +3163,20 @@ the complete authorized operation may be retried. PostgreSQL tests cover repeate
 same-occurrence corrections, invalidation and two-connection contention. These tests use synthetic
 upstream records, not genuine season-wide reconciliation.
 
+External identity decisions follow the same principle from migration 0254. A promoted asset or draft
+selection records the external identity decision that resolved its player, and seven checks (the
+promoted-event and arrival-event functions behind reviewed spells, the canonical-identity trigger on
+asset inserts, both release-membership validators and both special-entitlement lifecycle
+authenticators) once required that decision to still be the subject's current head. A later review
+of the same subject supersedes it, so a re-confirmation that changed no player broke every spell on
+225 assets on 2026-10-06. `outcome_external_identity_current_decision(origin)` now follows
+`supersedes_decision_id` forward through approved, same-subject, same-canonical-target decisions to
+the current approved head, and each check accepts the recorded decision when that chain exists. A hop
+that changes the target, a rejected or withdrawn hop or head, or a decision with no typed row
+(fixture provenance) yields no chain, and the check runs against the recorded decision exactly as
+before. The promotion-time resolution row and the reviewer-authority check stay bound to the recorded
+decision; a later same-player review may be under another authority.
+
 Event supersession is scoped to the cited asset from migration 0256. A reviewed spell, a draft
 selection and a special-entitlement custody edge each cite one asset of one event version. Six
 checks (the promoted-event and arrival-event functions behind reviewed spells, the version-chain
@@ -3170,11 +3184,17 @@ trigger's overlap check, and the three special-entitlement authenticators) once 
 version as stale once any later version superseded it; the 2020 Jeremy Cameron trade promotion
 re-versioned three whole draft nights for two or three players each and so broke 68 reviewed spells
 on untouched assets. `outcome_event_version_superseded_for(event_version, player, selection_number)`
-now answers whether a later version in the chain re-versions that player, or that player or
-selection number for a draft selection, and each check uses it. A re-version of the cited asset
-itself still makes the citation stale; a cited asset with neither a player nor a selection number
-keeps the whole-event rule. Postseason observation, valuation cohort inputs and the
-special-correction dependency trigger reason about whole events and are unchanged.
+now answers whether a later version in the chain re-versions that player (or that player or
+selection number for a draft selection), or re-lists the night without it: a successor carrying at
+least half of the origin version's other players, or other selection numbers, with the cited one
+excluded from the count, is a correction of that version and retires what it omits, while one
+carrying fewer only adds. The schema records no asset removal and corrections are candidate markers
+that the Cameron candidate itself carries, so coverage is the only signal; the Cameron versions carry
+2 of 43, 3 of 58 and 3 of 44 and stay additive, and a two-asset trade corrected to drop one player
+re-lists its one other player and retires it. A re-version of the cited asset itself still makes the
+citation stale; a cited asset with neither a player nor a selection number keeps the whole-event
+rule. Postseason observation, valuation cohort inputs and the special-correction dependency trigger
+reason about whole events and are unchanged.
 
 Factual observation contracts preserve that same distinction. An occurrence-only player carries
 `playerIdentityId: null` and `assignment: null`, while the exact decoded identity candidate,
