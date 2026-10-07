@@ -685,6 +685,68 @@ type PickDispositionEvidence = Evidence & {
   content: { claim: Extract<Claim, { kind: 'pick_disposition' }> };
 };
 
+type NominationFacts = Pick<
+  CanonicalPickOutcome,
+  'nominationBasis' | 'receivingClubNominatedSelections'
+>;
+
+/**
+ * Counts a club's selections in one draft that a year page (parser v2) states were reached through
+ * academy or father-son access. Returns null when no v2 year page covers that draft.
+ */
+function createNominatedSelectionCounter(
+  evidence: readonly Evidence[],
+  draftSelections: readonly CanonicalDraftSelection[]
+): (draftYear: number, draftType: string, clubId: string) => number | null {
+  const accessByEvidence = new Map<string, 'open' | 'academy' | 'father_son'>();
+  const accessDrafts = new Set<string>();
+  for (const row of evidence) {
+    const claim = row.content.claim;
+    if (claim.kind !== 'draft_selection' || claim.accessCategory === undefined) continue;
+    accessByEvidence.set(row.evidenceId, claim.accessCategory);
+    accessDrafts.add(`${claim.draftYear}|${claim.draftType}`);
+  }
+  const nominated = (evidenceId: string) => {
+    const access = accessByEvidence.get(evidenceId);
+    return access === 'academy' || access === 'father_son';
+  };
+  return (draftYear, draftType, clubId) =>
+    accessDrafts.has(`${draftYear}|${draftType}`)
+      ? draftSelections.filter(
+          (selection) =>
+            selection.draftYear === draftYear &&
+            selection.draftType === draftType &&
+            selection.clubId === clubId &&
+            selection.evidenceIds.some(nominated)
+        ).length
+      : null;
+}
+
+/**
+ * A "not used" pick in a draft after the anchor season is pending. Otherwise it is stated, and a
+ * national pick also records whether the receiving club took a nominated player in that draft: the
+ * only sourceable fact about a pick spent matching a bid or passed.
+ */
+function classifyNotUsedPick(
+  asset: { draftYear: number; draftType: string },
+  anchorSeasonYear: number,
+  countNominated: () => number | null
+): { status: CanonicalPickOutcome['outcomeStatus']; nomination: NominationFacts } {
+  if (asset.draftYear > anchorSeasonYear) return { status: 'pending', nomination: {} };
+  if (asset.draftType !== 'national') return { status: 'stated', nomination: {} };
+  const count = countNominated();
+  const nominationBasis =
+    count === null
+      ? 'no_access_evidence'
+      : count > 0
+        ? 'club_took_nominated_player'
+        : 'club_took_no_nominated_player';
+  return {
+    status: 'stated',
+    nomination: { nominationBasis, receivingClubNominatedSelections: count ?? 0 },
+  };
+}
+
 /**
  * Binds each `pick_disposition` claim to its directed transfer and, for a selected pick, to the one
  * selection of the stated player by the receiving club in the pick's draft year. The disposition's
@@ -704,26 +766,10 @@ function reconcilePickDispositions(input: {
       row.content.claim.kind === 'pick_disposition'
   );
   const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
-  // Year-page (v2) access categories by evidence id, and the drafts they cover.
-  const accessByEvidence = new Map<string, 'open' | 'academy' | 'father_son'>();
-  const accessDrafts = new Set<string>();
-  for (const row of input.evidence) {
-    const claim = row.content.claim;
-    if (claim.kind !== 'draft_selection' || claim.accessCategory === undefined) continue;
-    accessByEvidence.set(row.evidenceId, claim.accessCategory);
-    accessDrafts.add(`${claim.draftYear}|${claim.draftType}`);
-  }
-  const nominatedSelections = (draftYear: number, draftType: string, clubId: string) =>
-    input.draftSelections.filter(
-      (selection) =>
-        selection.draftYear === draftYear &&
-        selection.draftType === draftType &&
-        selection.clubId === clubId &&
-        selection.evidenceIds.some((evidenceId) => {
-          const access = accessByEvidence.get(evidenceId);
-          return access === 'academy' || access === 'father_son';
-        })
-    ).length;
+  const nominatedSelections = createNominatedSelectionCounter(
+    input.evidence,
+    input.draftSelections
+  );
   const outcomes: CanonicalPickOutcome[] = [];
   for (const row of dispositions) {
     const claim = row.content.claim;
@@ -760,10 +806,7 @@ function reconcilePickDispositions(input: {
       outcomeStatus: CanonicalPickOutcome['outcomeStatus'],
       selection: CanonicalDraftSelection | null,
       playerId: string | null,
-      nomination: Pick<
-        CanonicalPickOutcome,
-        'nominationBasis' | 'receivingClubNominatedSelections'
-      > = {}
+      nomination: NominationFacts = {}
     ) =>
       outcomes.push({
         outcomeId: createAflTradeContentAddress('external-pick-outcome', {
@@ -791,26 +834,10 @@ function reconcilePickDispositions(input: {
       continue;
     }
     if (claim.disposition === 'not_used') {
-      if (asset.draftYear > input.anchorSeasonYear) {
-        record('pending', null, null);
-        continue;
-      }
-      if (asset.draftType !== 'national') {
-        record('stated', null, null);
-        continue;
-      }
-      const count = accessDrafts.has(`${asset.draftYear}|${asset.draftType}`)
-        ? nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
-        : null;
-      record('stated', null, null, {
-        nominationBasis:
-          count === null
-            ? 'no_access_evidence'
-            : count > 0
-              ? 'club_took_nominated_player'
-              : 'club_took_no_nominated_player',
-        receivingClubNominatedSelections: count ?? 0,
-      });
+      const outcome = classifyNotUsedPick(asset, input.anchorSeasonYear, () =>
+        nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
+      );
+      record(outcome.status, null, null, outcome.nomination);
       continue;
     }
     const playerId = claim.player
