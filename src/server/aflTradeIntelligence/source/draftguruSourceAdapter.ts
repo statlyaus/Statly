@@ -221,10 +221,13 @@ function parseSideDisposition(
     .filter((cell): cell is Cheerio<AnyNode> => cell !== null);
   const pick = side.find(
     (cell) =>
-      cell.hasClass('actual-asset') && (cell.hasClass('pick-name') || cell.hasClass('future-pick-name'))
+      cell.hasClass('actual-asset') &&
+      (cell.hasClass('pick-name') || cell.hasClass('future-pick-name'))
   );
   if (!pick) return null;
-  const player = side.find((cell) => cell.hasClass('player-name') && !cell.hasClass('actual-asset'));
+  const player = side.find(
+    (cell) => cell.hasClass('player-name') && !cell.hasClass('actual-asset')
+  );
   if (player) {
     const recordedName = normalizeText(player.text());
     if (!recordedName) return { unsupported: 'empty player cell' };
@@ -236,7 +239,9 @@ function parseSideDisposition(
       },
     };
   }
-  const description = normalizeText(side.find((cell) => cell.hasClass('pick-description'))?.text() ?? '');
+  const description = normalizeText(
+    side.find((cell) => cell.hasClass('pick-description'))?.text() ?? ''
+  );
   const disposition = DISPOSITION_TEXT[description.toLowerCase()];
   return disposition ? { disposition } : { unsupported: description || 'no disposition cell' };
 }
@@ -389,7 +394,8 @@ export function parseDraftguruTradeDetail(
     }
     if (got) {
       const disposition =
-        recordsDispositions && (got.asset.kind === 'current_pick' || got.asset.kind === 'future_pick')
+        recordsDispositions &&
+        (got.asset.kind === 'current_pick' || got.asset.kind === 'future_pick')
           ? parseSideDisposition(cells, 5)
           : null;
       occurrences.push({

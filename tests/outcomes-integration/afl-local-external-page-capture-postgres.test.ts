@@ -24,6 +24,7 @@ import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/afl
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 import { OFFICIAL_AFL_COMPLETED_SESSION_PAGES } from '../testUtils/officialAflCompletedSessionPages';
 import {
   approveNarrowAuthority,
@@ -110,6 +111,10 @@ async function recordOwnerDecision(
 ) {
   const { sourceRights, proposal } = createDraftguruTradeAuthorityProposal({
     capabilityId,
+    // The local runner captures trade detail with v2, which records each received pick's outcome.
+    ...(capabilityId === 'draftguru-trade-detail'
+      ? { parserVersion: DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION }
+      : {}),
     seasons: Array.from({ length: 15 }, (_, index) => 2011 + index),
     evidenceIds,
     timing: {
