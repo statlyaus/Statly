@@ -1,5 +1,6 @@
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import { aflTradeGateDecisionProposalSchema } from '../governance/gateDecisionTypes';
+import { DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION } from '../source/draftguruSourceAdapter';
 import {
   aflTradeSourceRightsProposalSchema,
   type AflTradeSourceRightsProposal,
@@ -51,6 +52,25 @@ export const DRAFTGURU_TRADE_DETAIL_FIELDS = [
   'transaction_party.nativePartyId',
 ] as const;
 
+/**
+ * Received-pick outcomes that `draftguru-trade-parser/v2` adds: the stated player, "traded on" or
+ * "not used". The receiving club's native id is always null on these pages, so it is not a field.
+ */
+export const DRAFTGURU_TRADE_DISPOSITION_FIELDS = [
+  'pick_disposition.disposition',
+  'pick_disposition.nativeEventId',
+  'pick_disposition.nativeTransferId',
+  'pick_disposition.player.nativeId',
+  'pick_disposition.player.recordedName',
+  'pick_disposition.receivingClub.recordedName',
+] as const;
+
+/** The trade-detail field boundary under `draftguru-trade-parser/v2`. */
+export const DRAFTGURU_TRADE_DETAIL_V2_FIELDS = [
+  ...DRAFTGURU_TRADE_DETAIL_FIELDS,
+  ...DRAFTGURU_TRADE_DISPOSITION_FIELDS,
+] as const;
+
 export type DraftguruTradeCapability = 'draftguru-trade-index' | 'draftguru-trade-detail';
 
 /** Each capability's reviewed parser version; capture requests must name it exactly. */
@@ -62,6 +82,8 @@ export const DRAFTGURU_TRADE_PARSER_VERSIONS = {
 export interface DraftguruTradeAuthorityProposalInput {
   readonly capabilityId: DraftguruTradeCapability;
   readonly seasons: readonly number[];
+  /** Defaults to the capability's reviewed v1 parser; trade detail also accepts v2. */
+  readonly parserVersion?: string;
   readonly evidenceIds: Readonly<{
     productOwnerAuthorization: string;
     boundedCapturePlan: string;
@@ -94,17 +116,28 @@ export function createDraftguruTradeAuthorityProposal(
 }> {
   const { from, to } = contiguousSeasons(input.seasons);
   const seasons = Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+  const parserVersion = input.parserVersion ?? DRAFTGURU_TRADE_PARSER_VERSIONS[input.capabilityId];
+  const dispositions = parserVersion === DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION;
+  if (
+    parserVersion !== DRAFTGURU_TRADE_PARSER_VERSIONS[input.capabilityId] &&
+    !(dispositions && input.capabilityId === 'draftguru-trade-detail')
+  ) {
+    throw new TypeError(`${parserVersion} is not a reviewed parser for ${input.capabilityId}.`);
+  }
   const fields =
     input.capabilityId === 'draftguru-trade-index'
       ? DRAFTGURU_TRADE_INDEX_FIELDS
-      : DRAFTGURU_TRADE_DETAIL_FIELDS;
+      : dispositions
+        ? DRAFTGURU_TRADE_DETAIL_V2_FIELDS
+        : DRAFTGURU_TRADE_DETAIL_FIELDS;
   const dataset =
     input.capabilityId === 'draftguru-trade-index'
       ? 'Draftguru AFL trade index'
       : 'Draftguru AFL trade detail';
   const date = input.timing.termsEffectiveAt.slice(0, 10);
   const issue = 579;
-  const decisionKey = `${input.capabilityId}-issue-${issue}-private-non_production`;
+  // v2 is a separate decision, so the v1 decision and its captures stay valid as recorded.
+  const decisionKey = `${input.capabilityId}-issue-${issue}-private-non_production${dispositions ? '-parser-v2' : ''}`;
 
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
@@ -122,7 +155,7 @@ export function createDraftguruTradeAuthorityProposal(
     acquisition: {
       kind: 'provider_web' as const,
       clientName: 'Statly governed Draftguru HTML client',
-      clientVersion: DRAFTGURU_TRADE_PARSER_VERSIONS[input.capabilityId],
+      clientVersion: parserVersion,
       capabilityId: input.capabilityId,
     },
     operations: {

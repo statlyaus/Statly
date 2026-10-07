@@ -231,6 +231,31 @@ const draftSelectionClaimSchema = z
   })
   .strict();
 
+/**
+ * What the source states became of one received pick: used by the receiving club on the named
+ * player, traded on, or not used. It binds to the directed transfer with the same native ids and
+ * is a provider statement, never an inference from pick numbers.
+ */
+const pickDispositionClaimSchema = z
+  .object({
+    kind: z.literal('pick_disposition'),
+    nativeEventId: boundedText,
+    nativeTransferId: boundedText,
+    receivingClub: recordedEntitySchema,
+    disposition: z.enum(['selected', 'traded_on', 'not_used']),
+    player: recordedEntitySchema.optional(),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    if ((claim.disposition === 'selected') !== (claim.player !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['player'],
+        message: 'A pick disposition names a player exactly when the pick was selected.',
+      });
+    }
+  });
+
 const pickCustodyClaimSchema = z
   .object({
     kind: z.literal('pick_custody'),
@@ -592,6 +617,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   transactionClaimSchema,
   transactionPartyClaimSchema,
   directedTransferClaimSchema,
+  pickDispositionClaimSchema,
   draftSelectionClaimSchema,
   pickCustodyClaimSchema,
   playerDraftDetailClaimSchema,
@@ -617,6 +643,7 @@ const allowedKindsByProvider = {
     'transaction',
     'transaction_party',
     'directed_transfer',
+    'pick_disposition',
     'draft_selection',
     'pick_custody',
   ]),
@@ -625,6 +652,7 @@ const allowedKindsByProvider = {
     'transaction',
     'transaction_party',
     'directed_transfer',
+    'pick_disposition',
     'draft_selection',
   ]),
   footywire: new Set(['draft_selection']),
