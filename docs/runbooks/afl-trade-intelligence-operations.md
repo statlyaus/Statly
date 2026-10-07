@@ -876,7 +876,12 @@ Prerequisites:
 1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
    command loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
-     `draftguru-trade-detail-issue-579-private-non_production`;
+     `draftguru-trade-detail-issue-579-private-non_production-parser-v2`. Trade detail is captured
+     with `draftguru-trade-parser/v2`, which also records each received pick's stated outcome
+     (`pick_disposition`: the player it was used on, "traded on" or "not used"; never games,
+     points or estimates). The v2 decision's source rights must name `DRAFTGURU_TRADE_DETAIL_V2_FIELDS`.
+     The v1 decision and the captures recorded under it stay valid; the runner no longer makes new
+     v1 trade-detail captures;
    - one `draftguru-national-year-page-issue579-private-<season>` decision per captured season, for
      example `draftguru-national-year-page-issue579-private-2024`. The runner never uses a combined
      key such as `-2018-combined-v2`; and

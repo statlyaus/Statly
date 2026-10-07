@@ -3993,6 +3993,19 @@ The remaining work proceeds through these independently verifiable gates:
    joins; conserve every source row and issue; promote reviewed transactions, directed assets, draft
    selections, pick entitlements, and stable pick lineage. A future pick remains unresolved until its
    exact selection and player are authenticated.
+
+   **Provider-stated pick outcomes** (`pick_disposition`, Draftguru trade parser v2) are kept apart
+   from governed lineage. For each received pick, Draftguru states the player the receiving club used
+   it on, "traded on", or "not used". A candidate records these as `pickOutcomes`: a `selected`
+   outcome names the receiving club's one undisputed selection of the stated player in the pick's
+   draft, a "not used" pick whose draft lies after the candidate's anchor season is `pending`, and
+   anything that does not match is `unresolved` with a blocking issue. Each disposition's evidence
+   rides on its transfer, so the candidate's child tables conserve it. Outcomes are single-source
+   and may feed only `provisional` grades (owner decision D, statlyaus/Statly#789); governed lineage
+   still requires a proven custody chain. A pick's endpoint is never inferred from pick numbers:
+   measured against Draftguru's stated outcomes, same-club number matching misattributed about one
+   pick in eight, because bid matching and compensation picks renumber the draft.
+
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate
    the pointer atomically, and verify trades, drafts, outcomes, clubs, years, APIs, and exports resolve

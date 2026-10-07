@@ -33,6 +33,7 @@ export interface DraftguruParseIssue {
     | 'unsupported_row'
     | 'unpaired_asset'
     | 'ambiguous_asset'
+    | 'unsupported_disposition'
     | 'player_projection_incomplete';
   sourceKey: string;
   detail: string;
@@ -191,6 +192,58 @@ interface AssetOccurrence {
   direction: 'gave' | 'got';
   asset: ParsedAsset;
   sourceKey: string;
+  disposition?: ParsedDisposition | { unsupported: string };
+}
+
+/** Parser version whose recorded rights admit the received-pick disposition fields. */
+export const DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION = 'draftguru-trade-parser/v2';
+
+type ParsedDisposition =
+  | { disposition: 'selected'; player: { nativeId: string | null; recordedName: string } }
+  | { disposition: 'traded_on' | 'not_used' };
+
+const DISPOSITION_TEXT: Readonly<Record<string, 'traded_on' | 'not_used'>> = {
+  'pick traded on to another club': 'traded_on',
+  'pick not used': 'not_used',
+};
+
+/**
+ * The source's stated outcome for the pick in one side of a movement row: the player-name cell when
+ * the receiving club used it, otherwise the pick-description text. Games, points, expected value and
+ * estimates are never read. Returns null when the side holds no pick.
+ */
+function parseSideDisposition(
+  cells: Array<Cheerio<AnyNode> | null>,
+  start: number
+): ParsedDisposition | { unsupported: string } | null {
+  const side = cells
+    .slice(start, start + 5)
+    .filter((cell): cell is Cheerio<AnyNode> => cell !== null);
+  const pick = side.find(
+    (cell) =>
+      cell.hasClass('actual-asset') &&
+      (cell.hasClass('pick-name') || cell.hasClass('future-pick-name'))
+  );
+  if (!pick) return null;
+  const player = side.find(
+    (cell) => cell.hasClass('player-name') && !cell.hasClass('actual-asset')
+  );
+  if (player) {
+    const recordedName = normalizeText(player.text());
+    if (!recordedName) return { unsupported: 'empty player cell' };
+    return {
+      disposition: 'selected',
+      player: {
+        nativeId: sourceNativeId(player.find('a').attr('href'), '/players/'),
+        recordedName,
+      },
+    };
+  }
+  const description = normalizeText(
+    side.find((cell) => cell.hasClass('pick-description'))?.text() ?? ''
+  );
+  const disposition = DISPOSITION_TEXT[description.toLowerCase()];
+  return disposition ? { disposition } : { unsupported: description || 'no disposition cell' };
 }
 
 function parseSideAsset(
@@ -301,6 +354,9 @@ export function parseDraftguruTradeDetail(
   const partyNames: string[] = [];
   const occurrences: AssetOccurrence[] = [];
   const issues: DraftguruParseIssue[] = [];
+  // Only a v2 capture's recorded rights admit the disposition fields, so v1 replays stay exact.
+  const recordsDispositions =
+    input.capture.parserVersion === DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION;
   let currentClub: string | null = null;
   table.find('tr').each((rowIndex, row) => {
     const wrapped = $(row);
@@ -337,11 +393,17 @@ export function parseDraftguruTradeDetail(
       });
     }
     if (got) {
+      const disposition =
+        recordsDispositions &&
+        (got.asset.kind === 'current_pick' || got.asset.kind === 'future_pick')
+          ? parseSideDisposition(cells, 5)
+          : null;
       occurrences.push({
         ...got,
         clubName: currentClub,
         direction: 'got',
         sourceKey: `${eventId}:row-${rowIndex + 1}:got`,
+        ...(disposition ? { disposition } : {}),
       });
     }
   });
@@ -411,6 +473,25 @@ export function parseDraftguruTradeDetail(
           fromClub: { nativeId: null, recordedName: giver.clubName },
           toClub: { nativeId: null, recordedName: receiver.clubName },
           asset: giver.asset,
+        })
+      );
+      const stated = receiver.disposition;
+      if (stated === undefined) return;
+      if ('unsupported' in stated) {
+        issues.push({
+          code: 'unsupported_disposition',
+          sourceKey: receiver.sourceKey,
+          detail: `Received-pick outcome was not recognised: ${stated.unsupported}`,
+        });
+        return;
+      }
+      evidence.push(
+        create(`${eventId}:disposition:${fingerprint}`, {
+          kind: 'pick_disposition',
+          nativeEventId: eventId,
+          nativeTransferId: fingerprint,
+          receivingClub: { nativeId: null, recordedName: receiver.clubName },
+          ...stated,
         })
       );
     });

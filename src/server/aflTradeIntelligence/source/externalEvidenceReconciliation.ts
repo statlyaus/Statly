@@ -257,7 +257,8 @@ interface ReconciliationIssue {
     | 'selection_conflict'
     | 'pick_identity_conflict'
     | 'transaction_incomplete'
-    | 'lineage_unresolved';
+    | 'lineage_unresolved'
+    | 'pick_outcome_unresolved';
   severity: 'blocking';
   subjectKey: string;
   detail: string;
@@ -333,6 +334,22 @@ interface CanonicalPickCustody {
   evidenceIds: string[];
 }
 
+/**
+ * The provider's stated outcome for one received pick. It is single-source evidence kept apart from
+ * governed lineage, which needs a proven custody chain: a `selected` outcome names the selection by
+ * the stated player and the receiving club, never by pick number. `pending` is a pick whose draft
+ * lies after the candidate's anchor season.
+ */
+interface CanonicalPickOutcome {
+  outcomeId: string;
+  transferId: string;
+  disposition: 'selected' | 'traded_on' | 'not_used';
+  outcomeStatus: 'stated' | 'pending' | 'unresolved';
+  selectionId: string | null;
+  playerId: string | null;
+  evidenceIds: string[];
+}
+
 interface CanonicalPickLineage {
   lineageId: string;
   pickId: string;
@@ -357,6 +374,7 @@ export interface AflTradeExternalReconciliationContent {
   draftSelections: CanonicalDraftSelection[];
   pickCustody: CanonicalPickCustody[];
   pickLineage: CanonicalPickLineage[];
+  pickOutcomes?: CanonicalPickOutcome[];
   issues: ReconciliationIssue[];
   reconciledAt: string;
   publicationEligible: false;
@@ -652,6 +670,131 @@ function reconcileDirectedTransfer(input: {
     status,
     evidenceIds: [input.row.evidenceId],
   };
+}
+
+type PickDispositionEvidence = Evidence & {
+  content: { claim: Extract<Claim, { kind: 'pick_disposition' }> };
+};
+
+/**
+ * Binds each `pick_disposition` claim to its directed transfer and, for a selected pick, to the one
+ * selection of the stated player by the receiving club in the pick's draft year. The disposition's
+ * evidence id joins its transfer's evidence, so the candidate's child tables conserve it.
+ */
+function reconcilePickDispositions(input: {
+  evidence: readonly Evidence[];
+  transfers: CanonicalTransfer[];
+  draftSelections: readonly CanonicalDraftSelection[];
+  anchorSeasonYear: number;
+  resolve: IdentityResolver;
+  issues: ReconciliationIssue[];
+}): CanonicalPickOutcome[] {
+  const dispositions = input.evidence.filter(
+    (row): row is PickDispositionEvidence =>
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'pick_disposition'
+  );
+  const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
+  const outcomes: CanonicalPickOutcome[] = [];
+  for (const row of dispositions) {
+    const claim = row.content.claim;
+    const transferId = createAflTradeContentAddress('external-transfer', {
+      transactionId: createAflTradeContentAddress('external-transaction', {
+        provider: row.content.provider,
+        nativeEventId: claim.nativeEventId,
+      }),
+      nativeTransferId: claim.nativeTransferId,
+    });
+    const transfer = transfersById.get(transferId);
+    const unresolved = (detail: string, evidenceIds: readonly string[] = [row.evidenceId]) =>
+      input.issues.push({
+        code: 'pick_outcome_unresolved',
+        severity: 'blocking',
+        subjectKey: `pick-outcome:${claim.nativeEventId}:${claim.nativeTransferId}`,
+        detail,
+        evidenceIds: sortedUnique(evidenceIds),
+      });
+    if (!transfer || transfer.asset.kind !== 'pick_entitlement') {
+      unresolved('The stated pick outcome has no matching pick transfer in this candidate.');
+      continue;
+    }
+    transfer.evidenceIds = sortedUnique([...transfer.evidenceIds, row.evidenceId]);
+    const asset = transfer.asset;
+    const receivingClubId = input.resolve(
+      row.content.provider,
+      'club',
+      claim.receivingClub,
+      `pick-outcome:${claim.nativeTransferId}:receiving-club`,
+      row.evidenceId
+    );
+    const record = (
+      outcomeStatus: CanonicalPickOutcome['outcomeStatus'],
+      selection: CanonicalDraftSelection | null,
+      playerId: string | null
+    ) =>
+      outcomes.push({
+        outcomeId: createAflTradeContentAddress('external-pick-outcome', {
+          transferId,
+          evidenceId: row.evidenceId,
+        }),
+        transferId,
+        disposition: claim.disposition,
+        outcomeStatus,
+        selectionId: selection?.selectionId ?? null,
+        playerId,
+        evidenceIds: sortedUnique([row.evidenceId, ...(selection?.evidenceIds ?? [])]),
+      });
+    if (receivingClubId === null || receivingClubId !== transfer.toClubId) {
+      unresolved('The stated receiving club does not resolve to the transfer’s receiving club.', [
+        row.evidenceId,
+        ...transfer.evidenceIds,
+      ]);
+      record('unresolved', null, null);
+      continue;
+    }
+    if (claim.disposition !== 'selected') {
+      record(
+        claim.disposition === 'not_used' && asset.draftYear > input.anchorSeasonYear
+          ? 'pending'
+          : 'stated',
+        null,
+        null
+      );
+      continue;
+    }
+    const playerId = claim.player
+      ? input.resolve(
+          row.content.provider,
+          'player',
+          claim.player,
+          `pick-outcome:${claim.nativeTransferId}:player`,
+          row.evidenceId
+        )
+      : null;
+    const matches = input.draftSelections.filter(
+      (selection) =>
+        playerId !== null &&
+        selection.playerId === playerId &&
+        selection.clubId === receivingClubId &&
+        selection.draftYear === asset.draftYear &&
+        selection.draftType === asset.draftType &&
+        // The slot's own custody may be unresolved; the outcome needs only player, club and draft,
+        // which a disputed selection does not settle.
+        selection.status !== 'disputed'
+    );
+    if (matches.length !== 1) {
+      unresolved(
+        matches.length === 0
+          ? 'No undisputed selection of the stated player by the receiving club in the pick’s draft.'
+          : 'More than one selection of the stated player by the receiving club in the pick’s draft.',
+        [row.evidenceId, ...matches.flatMap(({ evidenceIds }) => evidenceIds)]
+      );
+      record('unresolved', null, playerId);
+      continue;
+    }
+    record('stated', matches[0]!, playerId);
+  }
+  return outcomes.sort((left, right) => left.outcomeId.localeCompare(right.outcomeId));
 }
 
 export function reconcileAflTradeExternalEvidence(input: {
@@ -1332,6 +1475,15 @@ export function reconcileAflTradeExternalEvidence(input: {
     });
   });
 
+  const pickOutcomes = reconcilePickDispositions({
+    evidence,
+    transfers,
+    draftSelections,
+    anchorSeasonYear,
+    resolve,
+    issues,
+  });
+
   const content: AflTradeExternalReconciliationContent = {
     schemaVersion:
       sourceAuthority === undefined
@@ -1350,6 +1502,8 @@ export function reconcileAflTradeExternalEvidence(input: {
     draftSelections,
     pickCustody: pickCustody.sort((left, right) => left.custodyId.localeCompare(right.custodyId)),
     pickLineage: pickLineage.sort((left, right) => left.lineageId.localeCompare(right.lineageId)),
+    // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
+    ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     issues: issues
       .map((issue) => ({ ...issue, evidenceIds: sortedUnique(issue.evidenceIds) }))
       .sort(

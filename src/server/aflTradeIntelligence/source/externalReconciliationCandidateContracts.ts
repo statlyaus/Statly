@@ -136,6 +136,29 @@ const lineageSchema = z
     'Non-player outcomes require no selection; selected outcomes require a selection.'
   );
 
+/** A provider-stated received-pick outcome; single-source and separate from governed lineage. */
+const pickOutcomeSchema = z
+  .object({
+    outcomeId: aflTradeContentAddressedIdSchema('external-pick-outcome'),
+    transferId: aflTradeContentAddressedIdSchema('external-transfer'),
+    disposition: z.enum(['selected', 'traded_on', 'not_used']),
+    outcomeStatus: z.enum(['stated', 'pending', 'unresolved']),
+    selectionId: aflTradeContentAddressedIdSchema('external-draft-selection').nullable(),
+    playerId: z.string().trim().min(1).max(240).nullable(),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine(
+    (record) =>
+      record.selectionId === null ||
+      (record.disposition === 'selected' && record.outcomeStatus === 'stated'),
+    'Only a stated selected outcome names a selection.'
+  )
+  .refine(
+    (record) => record.outcomeStatus !== 'pending' || record.disposition === 'not_used',
+    'Only a not-used pick can be pending.'
+  );
+
 const issueSchema = z
   .object({
     code: z.enum([
@@ -145,6 +168,7 @@ const issueSchema = z
       'pick_identity_conflict',
       'transaction_incomplete',
       'lineage_unresolved',
+      'pick_outcome_unresolved',
     ]),
     severity: z.literal('blocking'),
     subjectKey: z.string().trim().min(1).max(1_000),
@@ -258,6 +282,7 @@ const contentFieldsSchema = z
     draftSelections: z.array(selectionSchema),
     pickCustody: z.array(custodySchema),
     pickLineage: z.array(lineageSchema),
+    pickOutcomes: z.array(pickOutcomeSchema).min(1).optional(),
     issues: z.array(issueSchema),
     reconciledAt: instantSchema,
     publicationEligible: z.literal(false),
@@ -451,6 +476,7 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     ['draftSelections', content.draftSelections.map(({ selectionId }) => selectionId)],
     ['pickCustody', content.pickCustody.map(({ custodyId }) => custodyId)],
     ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
+    ['pickOutcomes', (content.pickOutcomes ?? []).map(({ outcomeId }) => outcomeId)],
   ] as const;
   const relevantSeasonYears = new Set([
     ...content.transactions.map(({ seasonYear }) => seasonYear),
@@ -509,6 +535,50 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         code: 'custom',
         path: ['transactions', index],
         message: 'Incomplete transactions must remain unresolved with an exact blocking issue.',
+      });
+    }
+  });
+  (content.pickOutcomes ?? []).forEach((outcome, index) => {
+    const transfer = content.transfers.find(({ transferId }) => transferId === outcome.transferId);
+    const selection = content.draftSelections.find(
+      ({ selectionId }) => selectionId === outcome.selectionId
+    );
+    const selectedPlayerMatches =
+      outcome.selectionId === null ||
+      (selection !== undefined &&
+        transfer?.asset.kind === 'pick_entitlement' &&
+        selection.draftYear === transfer.asset.draftYear &&
+        selection.draftType === transfer.asset.draftType &&
+        selection.clubId === transfer.toClubId &&
+        selection.playerId !== null &&
+        selection.playerId === outcome.playerId);
+    if (
+      !transfer ||
+      transfer.asset.kind !== 'pick_entitlement' ||
+      !outcome.evidenceIds.every((evidenceId) =>
+        [...transfer.evidenceIds, ...(selection?.evidenceIds ?? [])].includes(evidenceId)
+      ) ||
+      !selectedPlayerMatches
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index],
+        message:
+          'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
+      });
+    }
+    if (
+      outcome.outcomeStatus === 'unresolved' &&
+      !content.issues.some(
+        ({ code, evidenceIds }) =>
+          code === 'pick_outcome_unresolved' &&
+          outcome.evidenceIds.some((evidenceId) => evidenceIds.includes(evidenceId))
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'outcomeStatus'],
+        message: 'An unresolved pick outcome requires its blocking issue.',
       });
     }
   });
@@ -587,6 +657,29 @@ export function parseAflTradeExternalReconciliationCandidate(
   input: unknown
 ): AflTradeExternalReconciliationCandidateRecord {
   return aflTradeExternalReconciliationCandidateSchema.parse(input);
+}
+
+/**
+ * The stated pick outcomes a derived candidate can keep: those whose transfer is still a pick
+ * transfer in it and whose named selection, if any, it still holds. Returns no key when none remain,
+ * so the derived candidate's id matches one built without dispositions.
+ */
+export function retainAflTradePickOutcomes(
+  pickOutcomes: CandidateContent['pickOutcomes'],
+  kept: Pick<CandidateContent, 'transfers' | 'draftSelections'>
+): Pick<CandidateContent, 'pickOutcomes'> {
+  const pickTransfers = new Set(
+    kept.transfers
+      .filter(({ asset }) => asset.kind === 'pick_entitlement')
+      .map(({ transferId }) => transferId)
+  );
+  const selections = new Set(kept.draftSelections.map(({ selectionId }) => selectionId));
+  const retained = (pickOutcomes ?? []).filter(
+    (outcome) =>
+      pickTransfers.has(outcome.transferId) &&
+      (outcome.selectionId === null || selections.has(outcome.selectionId))
+  );
+  return retained.length === 0 ? {} : { pickOutcomes: retained };
 }
 
 export function createAflTradeExternalReconciliationCandidate(
