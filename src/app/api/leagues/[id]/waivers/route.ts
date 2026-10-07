@@ -28,6 +28,9 @@ import { loadWaiverOutcomes } from '@/server/waivers/waiverActivity';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Claims, balances and activity change with every claim, so a browser must never reuse a response.
+const NO_STORE = { 'Cache-Control': 'no-store' };
+
 const DEFAULT_PLAYERS_LIMIT = 100;
 const MAX_PLAYERS_LIMIT = 200;
 const DEFAULT_ACTIVITY_LIMIT = 50;
@@ -321,7 +324,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           activityNextCursor: null,
           activityHasMore: false,
         },
-        { status: 200 }
+        { status: 200, headers: NO_STORE }
       );
     }
 
@@ -428,7 +431,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         activityNextCursor: lastActivity?.timestamp ?? null,
         activityHasMore: activity.length === activityLimit,
       },
-      { status: 200 }
+      { status: 200, headers: NO_STORE }
     );
   } catch (error) {
     logger.error('Failed to load league waivers', {

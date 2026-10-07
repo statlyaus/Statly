@@ -3,7 +3,10 @@ import { pathToFileURL } from 'node:url';
 import { Pool } from 'pg';
 
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from '../../src/server/aflTradeIntelligence/development/localOutcomesRuntimeIdentity';
-import { createLocalAflTradePrivateValuationRuntime } from '../../src/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
+import {
+  createLocalAflTradePrivateValuationRuntime,
+  openLocalAflTradePrivateValuationArtifacts,
+} from '../../src/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const POLL_MILLISECONDS = 30_000;
@@ -13,7 +16,9 @@ function localConfiguration(environment: NodeJS.ProcessEnv) {
   const runtimeNonce = environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE?.trim();
   const artifactRoot = environment.AFL_TRADE_LOCAL_ARTIFACT_ROOT?.trim();
   if (!databaseUrl || !runtimeNonce || !artifactRoot || !/^[a-f0-9]{64}$/u.test(runtimeNonce)) {
-    throw new Error('The admitted local outcomes database, runtime nonce, and artifact root are required.');
+    throw new Error(
+      'The admitted local outcomes database, runtime nonce, and artifact root are required.'
+    );
   }
   const database = new URL(databaseUrl);
   if (
@@ -66,10 +71,18 @@ export async function runLocalAflPrivateValuationWorker(input: {
       pool,
       config.runtimeNonce
     );
-    const runtime = (input.createRuntime ?? createLocalAflTradePrivateValuationRuntime)({
-      pool,
-      artifactRoot: config.artifactRoot,
-    });
+    const runtime =
+      input.createRuntime === undefined
+        ? createLocalAflTradePrivateValuationRuntime({
+            pool,
+            artifactRoot: config.artifactRoot,
+            // Located custody for staged artifacts, including Gate 3 qualifications (#759).
+            privateArtifacts: await openLocalAflTradePrivateValuationArtifacts(
+              pool,
+              config.artifactRoot
+            ),
+          })
+        : input.createRuntime({ pool, artifactRoot: config.artifactRoot });
     await runtime.enqueueStartupCatchUp((input.now ?? (() => new Date().toISOString()))());
     while (!input.signal.aborted) {
       let dispatched = 0;
@@ -113,9 +126,11 @@ if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).
   const controller = new AbortController();
   process.once('SIGINT', () => controller.abort());
   process.once('SIGTERM', () => controller.abort());
-  runLocalAflPrivateValuationWorker({ env: process.env, signal: controller.signal }).catch((error) => {
-    const message = error instanceof Error ? error.message : 'Unknown valuation worker failure.';
-    process.stderr.write(`Local private valuation worker failed closed: ${message}\n`);
-    process.exitCode = 1;
-  });
+  runLocalAflPrivateValuationWorker({ env: process.env, signal: controller.signal }).catch(
+    (error) => {
+      const message = error instanceof Error ? error.message : 'Unknown valuation worker failure.';
+      process.stderr.write(`Local private valuation worker failed closed: ${message}\n`);
+      process.exitCode = 1;
+    }
+  );
 }

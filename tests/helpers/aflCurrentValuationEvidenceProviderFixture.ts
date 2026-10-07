@@ -8,6 +8,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import { retainRehearsalGateEvidence } from '../testUtils/rehearsalSourceAuthority';
 import {
   createAflTradeFitzRoyInvocation,
   type AflTradeFitzRoyCaptureDiagnostics,
@@ -269,6 +270,8 @@ export async function createGovernedCurrentValuationEvidenceSourceFixture(input:
     createLocalAflTradeOfficialAfl2026Authority(),
     createLocalAflTradeAflTablesResultsAuthority(2026),
   ];
+  // These non-production Gate records cite only retained evidence (migration 0253).
+  await retainRehearsalGateEvidence(input.client);
   const gate = await gateRepository.load();
   await gateRepository.appendBatch({
     expectedRevision: gate.revision,

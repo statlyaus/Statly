@@ -188,8 +188,28 @@ describe('waivers page read model', () => {
           claimId: won.id,
         }),
       ]);
+
+      // A claim that drops a player says which one.
+      await prisma.player.create({
+        data: { id: 'int-waiver-read-dropped', name: 'Will Day', club: 'HAW', position: 'DEF' },
+      });
+      await publishWaiverOutcome({
+        leagueId: LEAGUE,
+        claim: { ...won, id: 'read-feed-drop', dropPlayerId: 'int-waiver-read-dropped' },
+        type: 'waiver-successful',
+      });
+      await expect(
+        prisma.socialMessage.findFirst({
+          where: { leagueId: LEAGUE, relatedEntityId: 'read-feed-drop' },
+          select: { content: true },
+        })
+      ).resolves.toEqual({
+        content: 'A claimed Jack Ginnivan off waivers for $12, dropping Will Day.',
+      });
     } finally {
-      await prisma.player.deleteMany({ where: { id: 'int-waiver-read-player' } });
+      await prisma.player.deleteMany({
+        where: { id: { in: ['int-waiver-read-player', 'int-waiver-read-dropped'] } },
+      });
     }
   });
 

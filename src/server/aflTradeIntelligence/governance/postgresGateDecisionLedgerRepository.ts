@@ -1,3 +1,4 @@
+import { requireAflTradeEvidenceLocated } from '../artifacts/artifactStoreLocation';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -339,6 +340,43 @@ async function insertSourceRights(
   );
 }
 
+/**
+ * Write-first: a new non-test_fixture record may cite an `artifact:` reference only once its bytes
+ * have a custody location, or it refuses with ARTIFACT_UNLOCATED before anything is written.
+ * It applies once migration 0253 is deployed, which enforces the same rule on every insert.
+ */
+async function requireCitedEvidenceLocated(
+  transaction: AflOutcomeSqlTransaction,
+  proposal: AflTradeGateDecisionProposal,
+  decision: AflTradeGateDecisionRecord
+): Promise<void> {
+  const cited: string[] = [];
+  if (proposal.content.environment !== 'test_fixture') {
+    cited.push(
+      ...proposal.content.evidenceIds,
+      ...proposal.content.conditions.flatMap(
+        ({ verificationEvidenceIds }) => verificationEvidenceIds
+      )
+    );
+  }
+  if (decision.content.environment !== 'test_fixture') {
+    cited.push(
+      ...decision.content.authorityEvidenceIds,
+      ...decision.content.conditionResults.flatMap(({ evidenceIds }) => evidenceIds),
+      ...decision.content.reviewers.map(({ evidenceId }) => evidenceId)
+    );
+  }
+  const artifactIds = cited.filter((id) => id.startsWith('artifact:'));
+  if (artifactIds.length === 0) return;
+  // The rule switches on with migration 0253, so deploying this code does not refuse appends on a
+  // database whose deploy conditions are not yet met; the migration's own triggers enforce it there.
+  const enforced = await transaction.query<{ present: boolean }>(
+    `SELECT to_regproc('outcome_gate_unlocated_artifact_ids') IS NOT NULL AS present`
+  );
+  if (enforced.rows[0]?.present !== true) return;
+  await requireAflTradeEvidenceLocated(transaction, artifactIds);
+}
+
 async function insertProposal(
   transaction: AflOutcomeSqlTransaction,
   proposal: AflTradeGateDecisionProposal
@@ -416,12 +454,8 @@ export async function appendNewAflTradeGateDecisionsWithinTransaction(
   for (const [index, record] of records.entries()) {
     const proposal = record.proposal.content;
     const decision = record.decision.content;
-    const proposalModelRuns = proposal.affectedArtifacts.filter(
-      ({ kind }) => kind === 'model_run'
-    );
-    const decisionModelRuns = decision.affectedArtifacts.filter(
-      ({ kind }) => kind === 'model_run'
-    );
+    const proposalModelRuns = proposal.affectedArtifacts.filter(({ kind }) => kind === 'model_run');
+    const decisionModelRuns = decision.affectedArtifacts.filter(({ kind }) => kind === 'model_run');
     const proposalQualifications = proposal.affectedArtifacts.filter(
       ({ kind }) => kind === 'model_qualification'
     );
@@ -475,6 +509,7 @@ export async function appendNewAflTradeGateDecisionsWithinTransaction(
         { cause }
       );
     }
+    await requireCitedEvidenceLocated(transaction, record.proposal, record.decision);
     await insertProposal(transaction, record.proposal);
     await insertDecision(transaction, record.decision);
   }
@@ -575,6 +610,7 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
             { cause }
           );
         }
+        await requireCitedEvidenceLocated(transaction, record.proposal, record.decision);
         if (!rightsExist[index]) await insertSourceRights(transaction, record.sourceRights);
         await insertProposal(transaction, record.proposal);
         await insertDecision(transaction, record.decision);
@@ -635,6 +671,7 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
           { cause }
         );
       }
+      await requireCitedEvidenceLocated(transaction, input.proposal, input.decision);
       if (!rightsExists) await insertSourceRights(transaction, input.sourceRights);
       await insertProposal(transaction, input.proposal);
       await insertDecision(transaction, input.decision);
@@ -697,6 +734,7 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
           { cause }
         );
       }
+      await requireCitedEvidenceLocated(transaction, input.proposal, input.decision);
       await insertProposal(transaction, input.proposal);
       await insertDecision(transaction, input.decision);
       const revision = stored.revision + 1;

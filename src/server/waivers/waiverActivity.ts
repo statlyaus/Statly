@@ -22,16 +22,20 @@ export async function publishWaiverOutcome(input: {
   reason?: string;
 }): Promise<void> {
   const { leagueId, claim, type, reason } = input;
-  const [member, player] = await Promise.all([
+  const [member, player, dropped] = await Promise.all([
     prisma.leagueMember.findFirst({
       where: { id: claim.teamId, leagueId },
       select: { teamName: true },
     }),
     prisma.player.findUnique({ where: { id: claim.playerId }, select: { name: true } }),
+    claim.dropPlayerId
+      ? prisma.player.findUnique({ where: { id: claim.dropPlayerId }, select: { name: true } })
+      : null,
   ]);
   const team = member?.teamName ?? 'A team';
   const playerName = player?.name ?? 'a player';
   const bid = typeof claim.bidAmount === 'number' ? ` for $${claim.bidAmount}` : '';
+  const drop = dropped?.name ? `, dropping ${dropped.name}` : '';
 
   await publishLeagueSystemMessage({
     leagueId,
@@ -39,7 +43,7 @@ export async function publishWaiverOutcome(input: {
     relatedEntityId: claim.id,
     content:
       type === 'waiver-successful'
-        ? `${team} claimed ${playerName} off waivers${bid}.`
+        ? `${team} claimed ${playerName} off waivers${bid}${drop}.`
         : `Waiver claim by ${team} for ${playerName} failed${reason ? `: ${reason}` : ''}.`,
     context: {
       type,
