@@ -56,6 +56,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     fixtureNamespace?: string;
     nativePlayerId?: string;
     promoterThroughSeason?: number;
+    /** Ends both reviewer authorities' terms at this instant (ISO); they run open-ended by default. */
+    authorityValidThrough?: string;
     draftSessions?: boolean;
     sessionProposalV5?: boolean;
     mixedDraftSessionProofs?: boolean;
@@ -839,7 +841,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         (authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,
          competition,valid_from_season,valid_through_season,valid_from,valid_through)
        VALUES ($1,$2,'afl_trade_external_identity_reviewer','public-afl-draft-trade-outcomes',
-               $3,'external_identity_resolution','AFLM',$4,$5,$6,NULL)`,
+               $3,'external_identity_resolution','AFLM',$4,$5,$6,$7)`,
         [
           referenceId,
           input.principalRef,
@@ -847,6 +849,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           input.validFromSeason,
           input.validThroughSeason,
           capturedAt,
+          options.authorityValidThrough ?? null,
         ]
       );
       if (environment === 'non_production') {
@@ -968,8 +971,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
        valid_from_season,valid_through_season,valid_from,valid_through)
      VALUES ($1,$2,'afl_trade_canonical_promoter','public-afl-draft-trade-outcomes','multi_source',
              'external_candidate_promotion','AFLM',$3,$4,
-             '2026-01-01T00:00:00.000Z',NULL)`,
-        [authorityId, principalRef, seasonYear, options.promoterThroughSeason ?? seasonYear]
+             '2026-01-01T00:00:00.000Z',$5)`,
+        [
+          authorityId,
+          principalRef,
+          seasonYear,
+          options.promoterThroughSeason ?? seasonYear,
+          options.authorityValidThrough ?? null,
+        ]
       );
     }
     const repository = new PostgresAflTradeExternalCanonicalPromotionReviewRepository(
