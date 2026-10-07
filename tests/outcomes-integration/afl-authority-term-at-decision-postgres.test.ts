@@ -184,7 +184,7 @@ it.each(EVENT_SIGNATURES)(
     );
     expect(body).not.toContain('authority.valid_from<=cutoff');
     expect(body).toContain(
-      'EXTRACT(YEAR FROM event.event_date)::INTEGER BETWEEN authority.valid_from_season AND authority.valid_through_season'
+      'root.season_year BETWEEN authority.valid_from_season AND authority.valid_through_season'
     );
     // The promoter's scope keeps the candidate anchor: exactly one anchor-season clause remains.
     expect(
