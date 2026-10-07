@@ -3181,6 +3181,19 @@ that changes the target, a rejected or withdrawn hop or head, or a decision with
 before. The promotion-time resolution row and the reviewer-authority check stay bound to the recorded
 decision; a later same-player review may be under another authority.
 
+A reviewer's authority is judged when the reviewer decided, not when the decision is read (migration
+0258). Every authority has a term and a season scope. The promoted-event, arrival-event and
+departure-before-identity checks once tested the term against the read-time cutoff, so a decision
+made under a valid authority stopped counting when the term ended: the per-season identity-reviewer
+and promoter authorities behind the 2018 to 2024 decisions carried 30-day terms, and every reviewed
+spell would have gone non-current on 2026-10-10. The five clauses now test the term against the
+decision's own `decided_at`; an authority that was not valid when the reviewer decided still fails,
+and an expired authority still refuses new decisions at insert time. The identity reviewer's season
+scope is tested against the event's season (`outcome_event.season_year`, which a year-only trade
+has where it has no date) rather than the promotion candidate's anchor, because a candidate may span
+several drafts and a 2020 draftee's identity is reviewed under a 2020 authority; the promoter's scope
+keeps the candidate anchor.
+
 Event supersession is scoped to the cited asset from migration 0256. A reviewed spell, a draft
 selection and a special-entitlement custody edge each cite one asset of one event version. Six
 checks (the promoted-event and arrival-event functions behind reviewed spells, the version-chain
