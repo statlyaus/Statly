@@ -695,42 +695,77 @@ type NominatedSelectionCount = { count: number; evidenceIds: string[] };
 
 /**
  * Counts a club's selections in one draft that a Draftguru national-year page read at parser v2
- * states were reached through academy or father-son access, with the access evidence it read.
- * Returns null unless that access evidence covers the whole draft: every canonical selection in it
- * must carry exactly one stated access category. A partial or disputed page proves nothing about a
- * club whose selections it does not show.
+ * states were reached through academy or father-son access, with the evidence it read. Returns null
+ * unless the draft's membership is proven independently of that page: the reviewed official AFL
+ * completed-session claims must list selections 1 to N with no gap, the candidate's selections in
+ * the draft must be exactly those numbers, and each must carry exactly one stated category. A
+ * partial or disputed year page therefore proves nothing about a club whose rows it omits.
  */
 function createNominatedSelectionCounter(
   evidence: readonly Evidence[],
   draftSelections: readonly CanonicalDraftSelection[]
 ): (draftYear: number, draftType: string, clubId: string) => NominatedSelectionCount | null {
   const accessByEvidence = new Map<string, 'open' | 'academy' | 'father_son'>();
+  const sessionNumbers = new Map<string, Set<number>>();
+  const sessionEvidence = new Set<string>();
   for (const row of evidence) {
     const claim = row.content.claim;
-    if (
-      row.content.provider !== 'draftguru' ||
-      row.content.capture.parserVersion !== DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
-      claim.kind !== 'draft_selection' ||
-      claim.accessCategory === undefined
-    ) {
+    if (row.content.provider === 'official_afl' && claim.kind === 'draft_session') {
+      const key = `${claim.draftYear}|${claim.draftType}`;
+      const numbers = sessionNumbers.get(key) ?? new Set<number>();
+      claim.selectionNumbers.forEach((number) => numbers.add(number));
+      sessionNumbers.set(key, numbers);
+      sessionEvidence.add(row.evidenceId);
       continue;
     }
-    accessByEvidence.set(row.evidenceId, claim.accessCategory);
+    if (
+      row.content.provider === 'draftguru' &&
+      row.content.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION &&
+      claim.kind === 'draft_selection' &&
+      claim.accessCategory !== undefined
+    ) {
+      accessByEvidence.set(row.evidenceId, claim.accessCategory);
+    }
   }
   const accessOf = (selection: CanonicalDraftSelection) => {
-    const evidenceIds = selection.evidenceIds.filter((id) => accessByEvidence.has(id));
-    const categories = new Set(evidenceIds.map((id) => accessByEvidence.get(id)!));
-    return { evidenceIds, category: categories.size === 1 ? [...categories][0]! : null };
+    const categories = new Set(
+      selection.evidenceIds.flatMap((id) => accessByEvidence.get(id) ?? [])
+    );
+    return categories.size === 1 ? [...categories][0]! : null;
+  };
+  const membershipProven = (draftYear: number, draftType: string, inDraft: number[]) => {
+    const official = [...(sessionNumbers.get(`${draftYear}|${draftType}`) ?? [])].sort(
+      (left, right) => left - right
+    );
+    return (
+      official.length > 0 &&
+      official.every((number, index) => number === index + 1) &&
+      inDraft.length === official.length &&
+      inDraft.every((number, index) => number === official[index])
+    );
   };
   return (draftYear, draftType, clubId) => {
     const inDraft = draftSelections
       .filter((selection) => selection.draftYear === draftYear && selection.draftType === draftType)
-      .map((selection) => ({ selection, access: accessOf(selection) }));
-    if (inDraft.length === 0 || inDraft.some(({ access }) => access.category === null)) return null;
-    const clubs = inDraft.filter(({ selection }) => selection.clubId === clubId);
+      .sort((left, right) => left.selectionNumber - right.selectionNumber);
+    if (
+      !membershipProven(
+        draftYear,
+        draftType,
+        inDraft.map(({ selectionNumber }) => selectionNumber)
+      ) ||
+      inDraft.some((selection) => accessOf(selection) === null)
+    ) {
+      return null;
+    }
+    const clubs = inDraft.filter((selection) => selection.clubId === clubId);
     return {
-      count: clubs.filter(({ access }) => access.category !== 'open').length,
-      evidenceIds: sortedUnique(clubs.flatMap(({ access }) => access.evidenceIds)),
+      count: clubs.filter((selection) => accessOf(selection) !== 'open').length,
+      evidenceIds: sortedUnique(
+        clubs.flatMap(({ evidenceIds }) =>
+          evidenceIds.filter((id) => accessByEvidence.has(id) || sessionEvidence.has(id))
+        )
+      ),
     };
   };
 }

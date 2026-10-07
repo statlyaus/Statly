@@ -4031,9 +4031,11 @@ The remaining work proceeds through these independently verifiable gates:
    the receiving club took a nominated player in that draft (`club_took_nominated_player`, with the
    count), took none (`club_took_no_nominated_player`), or the draft lacks complete access evidence
    (`no_access_evidence`, with no count, because unknown is not zero). Only `draftguru` evidence
-   captured at `draftguru-national-year-page/v2` counts, and a draft is covered only when every
-   canonical selection in it carries exactly one stated category, so a partial or disputed page never
-   yields a negative. The outcome cites the receiving club's year-page rows it read. Categories match
+   captured at `draftguru-national-year-page/v2` counts. A draft is covered only when its membership
+   is proven independently of that page: the reviewed official AFL completed-session claims list
+   selections 1 to N with no gap, the candidate's selections in the draft are exactly those numbers,
+   and each carries exactly one stated category. A partial or disputed page therefore never yields a
+   negative. The outcome cites the receiving club's year-page and official session rows it read. Categories match
    the reviewed forms exactly (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`); any other
    text quarantines the row. How a not-used pick is valued from that fact is a separate owner rule.
 
