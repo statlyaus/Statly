@@ -16,17 +16,20 @@
 -- the old citation stale, so a correction that changes who was drafted, or moves a player, is never
 -- hidden; a version that adds unrelated assets no longer invalidates everything else on the night.
 --
--- Known gap, left open for the owner to decide: a later version that deliberately omits an
--- asset without re-versioning it leaves that asset's citations current. The schema records no
--- removal: outcome_event_asset is append-only, no code path changes an asset's status (every asset on
--- the grading database is approved), and a correction is a candidate marker, not a property of the
--- event version. The marker cannot serve as the guard either: the Cameron candidate itself carries
--- reviewedCorrection, reviewedSessionCorrection, reviewedStatusCorrection and
--- reviewedSpecialCorrection, and its versions re-list players from the origin version while omitting
--- the rest, so any rule that retires the omitted players on a correction or on a partial re-listing
--- retires the 148 this migration exists to keep. Measured on 2026-10-07: three superseding event
--- versions exist, all from that promotion. Removing an asset needs an explicit reviewed withdrawal
--- signal on the asset; until one exists, a removal is expressed by re-versioning the asset.
+-- A correction that removes an asset does not re-version it; it re-lists the night without it. The
+-- schema records no removal: outcome_event_asset is append-only, no code path changes an asset's
+-- status, and a correction is a candidate marker, not a property of the event version. The marker
+-- cannot be the guard either: the Cameron candidate itself carries reviewedCorrection,
+-- reviewedSessionCorrection, reviewedStatusCorrection and reviewedSpecialCorrection, and its versions
+-- re-list 2 of 44, 3 of 59 and 3 of 45 origin players while omitting the rest. So the predicate
+-- distinguishes a re-listing from an addition by coverage: a successor that carries at least half of
+-- the origin version's other players (by asset) or other selection numbers, the cited one excluded
+-- from the count, is a re-listing of that version and retires the cited asset or selection it omits.
+-- A successor that carries fewer is additive and retires only what it carries. The cited asset is
+-- excluded so a two-asset trade event corrected to drop one player (1 of 1 other) is a re-listing,
+-- while the Cameron versions (2 of 43, 3 of 58, 3 of 44) stay additive; a single-asset origin has no
+-- other assets and keeps the carry rule alone. Measured on 2026-10-07: three superseding event
+-- versions exist on the grading database, all additive under this rule.
 --
 -- The version-chain trigger drops spells on superseded events from its overlap check; it takes the
 -- same predicate so a spell that is still current keeps blocking overlaps. Postseason observation,
@@ -45,6 +48,33 @@ CREATE FUNCTION outcome_event_version_superseded_for(
   FROM successors
   JOIN outcome_event_version version ON version.supersedes_version_id=successors.event_version_id
   WHERE successors.hops<64
+ ),
+ -- The origin's other players and other selection numbers: the cited asset or selection excluded.
+ origin_players AS (
+  SELECT DISTINCT asset.player_id FROM outcome_event_asset asset
+  WHERE asset.event_version_id=origin_version AND asset.player_id IS NOT NULL
+    AND asset.player_id IS DISTINCT FROM target_player
+ ),
+ origin_selections AS (
+  SELECT selection.selection_number FROM outcome_draft_selection selection
+  WHERE selection.event_version_id=origin_version
+    AND selection.selection_number IS DISTINCT FROM target_selection
+    AND selection.player_id IS DISTINCT FROM target_player
+ ),
+ -- A successor carrying at least half of the origin's other players (for a cited player) or other
+ -- selection numbers (for a cited selection number) re-lists the origin; one carrying fewer adds to it.
+ relistings AS (
+  SELECT successors.event_version_id FROM successors
+  WHERE (target_player IS NOT NULL AND (SELECT count(*) FROM origin_players)>0
+         AND 2*(SELECT count(DISTINCT origin_players.player_id) FROM origin_players
+                JOIN outcome_event_asset asset ON asset.player_id=origin_players.player_id
+                 AND asset.event_version_id=successors.event_version_id)
+             >= (SELECT count(*) FROM origin_players))
+     OR (target_selection IS NOT NULL AND (SELECT count(*) FROM origin_selections)>0
+         AND 2*(SELECT count(DISTINCT origin_selections.selection_number) FROM origin_selections
+                JOIN outcome_draft_selection selection ON selection.selection_number=origin_selections.selection_number
+                 AND selection.event_version_id=successors.event_version_id)
+             >= (SELECT count(*) FROM origin_selections))
  )
  SELECT (target_player IS NULL AND target_selection IS NULL AND EXISTS (SELECT 1 FROM successors))
    OR EXISTS (SELECT 1 FROM successors
@@ -55,6 +85,8 @@ CREATE FUNCTION outcome_event_version_superseded_for(
                 ON selection.event_version_id=successors.event_version_id
               WHERE (target_player IS NOT NULL AND selection.player_id=target_player)
                  OR (target_selection IS NOT NULL AND selection.selection_number=target_selection))
+   -- A re-listing retires whatever it omits.
+   OR ((target_player IS NOT NULL OR target_selection IS NOT NULL) AND EXISTS (SELECT 1 FROM relistings))
 $$;
 
 -- Replaces `old` with `new` in one deployed function. Each fragment must occur exactly once.
