@@ -311,13 +311,14 @@ it('a re-listing that omits a player retires that player; an addition does not',
   for (const [index, player] of RELISTED_PLAYERS.entries()) {
     await addAsset(thirdVersionId, player, `kept-${index}`);
   }
-  // An addition carries none of the night's other players, so nobody on the night is retired.
-  await supersedeEvent(thirdVersionId, [null], 'addition');
+  // A version has one successor, so the shapes form a chain. An addition carries none of the night's
+  // other players: nobody on the night is retired.
+  const additionId = await supersedeEvent(thirdVersionId, [null], 'addition');
   expect(await supersededFor(thirdVersionId, promoted.playerId, null)).toBe(false);
   expect(await supersededFor(thirdVersionId, RELISTED_PLAYERS[0]!, null)).toBe(false);
   // A correction re-lists two of the three players and omits the third: all of the omitted player's
-  // other players, so it is retired along with the carried ones.
-  const correctionId = await supersedeEvent(thirdVersionId, RELISTED_PLAYERS, 'correction');
+  // other players, so it is retired along with the carried ones, two hops down.
+  const correctionId = await supersedeEvent(additionId, RELISTED_PLAYERS, 'correction');
   expect(await supersededFor(thirdVersionId, promoted.playerId, null)).toBe(true);
   expect(await supersededFor(thirdVersionId, RELISTED_PLAYERS[0]!, null)).toBe(true);
   expect(await supersededFor(correctionId, promoted.playerId, null)).toBe(false);
@@ -340,7 +341,7 @@ it('a draft selection on a later version supersedes its selection number, not it
      SELECT * FROM jsonb_populate_record(NULL::outcome_draft_selection,
        (SELECT to_jsonb(selection) || jsonb_build_object(
           'selection_id','synthetic-supersession-selection:'||$1::text,'event_version_id',$2::text,
-          'selection_number',$1::int,'pick_id',NULL,'source_import_row_id',$2::text||':asset-row')
+          'selection_number',$1::int,'pick_id',NULL,'source_import_row_id',$2::text||':event-row')
           FROM outcome_draft_selection selection
           WHERE selection.event_version_id=$3 ORDER BY selection.selection_number LIMIT 1))`,
     [selectionNumber, secondVersionId, promoted.draftEntries[0]!.entry.eventVersionId]
