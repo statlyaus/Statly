@@ -60,7 +60,10 @@ function cameronTradeHtml(): string {
     '<td class="player-name actual-asset"><a href="/players/jeremy-cameron">Jeremy Cameron</a></td>'
   );
   const pick = side('<td class="pick-name actual-asset">Pick 13</td>');
-  return `<!doctype html><h2 class="heading">2020 Jeremy Cameron Trade</h2><table class="individual-trade"><tr class="club-header"><td>Greater Western Sydney</td></tr><tr class="movement">${player}${empty}</tr><tr class="movement">${empty}${pick}</tr><tr class="club-header"><td>Geelong</td></tr><tr class="movement">${pick}${empty}</tr><tr class="movement">${empty}${player}</tr></table>`;
+  // Trade parser v2 reads the received pick's stated outcome: GWS used pick 13 on Tanner Bruhn.
+  const receivedPick =
+    '<td class="pick-name actual-asset">Pick 13</td><td class="player-name"><a href="/players/tanner_bruhn/1">Tanner Bruhn</a></td><td colspan="3"></td>';
+  return `<!doctype html><h2 class="heading">2020 Jeremy Cameron Trade</h2><table class="individual-trade"><tr class="club-header"><td>Greater Western Sydney</td></tr><tr class="movement">${player}${empty}</tr><tr class="movement">${empty}${receivedPick}</tr><tr class="club-header"><td>Geelong</td></tr><tr class="movement">${pick}${empty}</tr><tr class="movement">${empty}${player}</tr></table>`;
 }
 
 const indexHtml = `<!doctype html><a href="/trades/2020-jeremy-cameron">Cameron</a><a href="/trades/2020-jaeger-o'meara">O'Meara</a><a href="/trades/2019-out-of-range">Earlier</a>`;
@@ -237,6 +240,15 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
     });
     if (staged?.status !== 'staged') throw new Error('Expected a staged capture.');
     expect(staged.evidenceCount).toBeGreaterThan(0);
+    // Parser v2 stages the received pick's stated outcome, which 0255 admits as a claim kind.
+    const dispositions = await sql.query<{ disposition: string; player: string }>(
+      `SELECT evidence_json#>>'{content,claim,disposition}' AS disposition,
+              evidence_json#>>'{content,claim,player,recordedName}' AS player
+         FROM outcome_external_evidence_row
+        WHERE batch_id=$1 AND claim_kind='pick_disposition'`,
+      [staged.batchId]
+    );
+    expect(dispositions.rows).toEqual([{ disposition: 'selected', player: 'Tanner Bruhn' }]);
     expect(provider.calls).toHaveLength(1);
     expect(provider.calls[0]).toMatchObject({ url: cameronUrl, userAgent, ifNoneMatch: null });
 
