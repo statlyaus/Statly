@@ -22,8 +22,9 @@
 -- The identity reviewer's season scope is also tested against the event's season instead of the
 -- promotion candidate's anchor season. A candidate may span several drafts (the 2020 Jeremy Cameron
 -- trade promotion anchors 2021 and carries 2020 and 2021 draftees), and the identity of a 2020
--- draftee is correctly reviewed under a 2020 authority. The promoter's scope keeps the candidate
--- anchor: the promotion is the candidate's. Every edit is an asserted in-place replacement, as 0247,
+-- draftee is correctly reviewed under a 2020 authority. The event's season is outcome_event.season_year
+-- (root), which every event carries; a year-only trade has no event_date. The promoter's scope keeps
+-- the candidate anchor: the promotion is the candidate's. Every edit is an asserted in-place replacement, as 0247,
 -- 0248, 0252, 0254, 0256 and 0257 do; the two term clauses in each event function are told apart
 -- by their indentation, which pg_get_functiondef preserves.
 
@@ -55,7 +56,7 @@ BEGIN
      E'\n            AND authority.valid_from<=generic.decided_at AND (authority.valid_through IS NULL OR authority.valid_through>generic.decided_at)\n');
    PERFORM pg_temp.replace_authority_clause(fn::regprocedure,
      E'\n            AND candidate.anchor_season_year BETWEEN authority.valid_from_season AND authority.valid_through_season\n',
-     E'\n            AND EXTRACT(YEAR FROM event.event_date)::INTEGER BETWEEN authority.valid_from_season AND authority.valid_through_season\n');
+     E'\n            AND root.season_year BETWEEN authority.valid_from_season AND authority.valid_through_season\n');
  END LOOP;
 
  -- The promoter's authority behind a departure approval, judged when that approval was decided.
