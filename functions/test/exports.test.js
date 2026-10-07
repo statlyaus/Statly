@@ -7,7 +7,6 @@ const expectedExports = [
   'onTeamRosterUpdate',
   'onTradeUpdate',
   'onUserWatchlistUpdate',
-  'processWaivers',
   'reconcilePendingBidTotals',
 ];
 

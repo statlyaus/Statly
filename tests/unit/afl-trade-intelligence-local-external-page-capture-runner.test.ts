@@ -21,7 +21,10 @@ import {
   createDraftguruNationalYearCaptureCommand,
   createLocalDraftguruNationalYearTargets,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
-import type { LocalNarrowCaptureAuthority } from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
+import {
+  LocalExternalCaptureError,
+  type LocalNarrowCaptureAuthority,
+} from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
 import {
   createLocalOfficialAflDraftSessionTargets,
   createOfficialAflDraftSessionCaptureCommand,
@@ -462,6 +465,40 @@ describe('local Official AFL completed-session targets', () => {
   it.each([[[]], [[2020, 2020]], [[2015]], [[2031]]])('rejects seasons %j', (seasons) => {
     expect(() => createLocalOfficialAflDraftSessionTargets(seasons)).toThrow();
   });
+
+  it('narrows a season to the named reviewed pages', () => {
+    const nightTwo =
+      'https://www.afl.com.au/news/689491/matt-johnson-wa-product-lands-at-fremantle-after-nervous-wait';
+    expect(createLocalOfficialAflDraftSessionTargets([2021], [nightTwo])).toEqual([
+      {
+        capabilityId: 'official-afl-completed-draft-session',
+        season: 2021,
+        sourceUrl: nightTwo,
+        effectiveAt: '2021-11-25T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it.each([
+    [[]],
+    [['https://www.afl.com.au/news/1/not-reviewed']],
+    // A reviewed page of a season that was not requested.
+    [
+      [
+        'https://www.afl.com.au/news/528411/every-pick-every-player-check-out-who-your-club-drafted',
+      ],
+    ],
+    [
+      [
+        'https://www.afl.com.au/news/689491/matt-johnson-wa-product-lands-at-fremantle-after-nervous-wait',
+        'https://www.afl.com.au/news/689491/matt-johnson-wa-product-lands-at-fremantle-after-nervous-wait',
+      ],
+    ],
+  ])('refuses URLs %j', (urls) => {
+    expect(() => createLocalOfficialAflDraftSessionTargets([2021], urls)).toThrow(
+      LocalExternalCaptureError
+    );
+  });
 });
 
 describe('local Draftguru capture targets', () => {
@@ -576,6 +613,22 @@ describe('local Draftguru capture command arguments', () => {
       '2021',
     ]);
     expect(parsed.targets.map(({ season }) => season)).toEqual([2019, 2020, 2021, 2021]);
+  });
+
+  it('parses completed-session URLs as a filter on their seasons', () => {
+    const nightTwo =
+      'https://www.afl.com.au/news/870364/giants-nab-versatile-tall-with-pick-22-eagles-add-exciting-ruckman/amp';
+    const parsed = parse([
+      '--artifact-root',
+      durable,
+      '--capability',
+      'official-afl-completed-draft-session',
+      '--season',
+      '2022',
+      '--url',
+      nightTwo,
+    ]);
+    expect(parsed.targets.map(({ sourceUrl }) => sourceUrl)).toEqual([nightTwo]);
   });
 
   it('parses national-year seasons into their exact year pages', () => {

@@ -148,11 +148,19 @@ COMMITTED; draft transactions run at Serializable and retry serialization failur
 unique key is re-read outside the aborted transaction: it is replayed as idempotent only when the slot
 holds the player that call sent, and refused otherwise. Two first claims in a league can both create
 priority rows; the second keeps the first's rows, but the two members can end up sharing a priority
-number, because priority is not unique. That is accepted. Only one waiver processing run per league proceeds at a
+number, because priority is not unique. That is accepted. Waivers run automatically once a day, at 6 am Melbourne time: a Netlify scheduled function calls
+`/api/cron/waivers` hourly, and only the run in the 6 am Melbourne hour processes leagues with due
+claims, so the time holds through daylight saving. Only one waiver processing run per league proceeds at a
 time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refused as already running
 (HTTP 409) rather than debiting and awarding the same claims again. A run that dies releases the
-lease implicitly after 15 minutes. `tests/integration/postgresConcurrency.test.ts`
-exercises each of these races against PostgreSQL.
+lease implicitly after 15 minutes. Each claim settles in one transaction: it is taken only while still
+`PENDING`, then the roster check, the FAAB debit, the roster change, the pending-bid release and the
+priority advance commit together. The roster check comes before the debit, so a claim that cannot be
+awarded is never charged. A run that dies part way leaves the claim untouched for the next run to
+settle once, and an unexpected error ends the run rather than settling later claims ahead of it.
+Firestore projections and activity are written after the commit and cannot change an outcome.
+`tests/integration/postgresConcurrency.test.ts` exercises each of these races, and a run that dies
+after the debit, against PostgreSQL.
 
 ## Reliability verification
 

@@ -54,6 +54,9 @@ Cloud Run services use the Cloud SQL connector.
       used only by migrations) set in Netlify's environment for production.
 - [ ] The same values, plus `REDIS_URL` and the server-only Firebase credentials, in Google Secret
       Manager and mounted into each Cloud Run service.
+- [ ] `CRON_SECRET` set in Netlify. The scheduled functions in `netlify/functions/` (daily jobs,
+      trades every 5 minutes, waivers hourly with a 6 am Melbourne run) call `/api/cron/*` with it,
+      and those routes refuse every call without it.
 - [ ] Nothing printed in build logs, committed, or placed in a `NEXT_PUBLIC_` variable.
 
 ## 4. Create the schema
@@ -73,6 +76,9 @@ Deploy in this order, each against the production database:
 2. Draft room (Socket.IO) on Cloud Run, with production Redis.
 3. BullMQ workers on Cloud Run, one instance first.
 4. The stats import on Cloud Run, failing closed on Footywire through fitzRoy as it does today.
+5. Firebase functions, deployed so that `processWaivers` is deleted from the project. It processed
+   the Firestore copy of waivers and was removed from the code; a deploy that leaves it running keeps
+   a second, stale waiver run alive.
 
 ## 6. Smoke checks
 
@@ -80,7 +86,9 @@ Deploy in this order, each against the production database:
 - [ ] Sign in, create a league, invite a second account, and join it.
 - [ ] Run a short draft to completion: a manual pick, a queued auto-pick, a reconnect mid-draft, and
       the completed rosters projected.
-- [ ] Submit a waiver claim with FAAB and confirm the reserved budget.
+- [ ] Submit a waiver claim with FAAB and confirm the reserved budget, then call `/api/cron/waivers`
+      with `CRON_SECRET` during the 6 am Melbourne hour, or wait for it, and confirm the claim is
+      processed.
 - [ ] Propose and accept a trade.
 - [ ] Firestore compatibility projections rebuild from relational state.
 

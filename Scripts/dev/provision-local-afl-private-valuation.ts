@@ -16,7 +16,10 @@ import {
   installLocalAflTradeOutcomesRuntimeIdentity,
   requireLocalAflTradeOutcomesRuntimeNonce,
 } from '../../src/server/aflTradeIntelligence/development/localOutcomesRuntimeIdentity';
-import { createLocalAflTradePrivateValuationRuntime } from '../../src/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
+import {
+  createLocalAflTradePrivateValuationRuntime,
+  openLocalAflTradePrivateValuationArtifacts,
+} from '../../src/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
 
 const root = resolve(import.meta.dirname, '../..');
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
@@ -126,6 +129,7 @@ async function runAgainst(input: {
     const runtime = createLocalAflTradePrivateValuationRuntime({
       pool,
       artifactRoot: input.artifactRoot,
+      privateArtifacts: await openLocalAflTradePrivateValuationArtifacts(pool, input.artifactRoot),
       workerId: 'system:provision-and-dispatch-acceptance',
       construction: composition.construction,
     });
