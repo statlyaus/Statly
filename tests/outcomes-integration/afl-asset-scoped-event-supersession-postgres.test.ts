@@ -348,6 +348,10 @@ it('a draft selection on a later version supersedes its selection number, not it
   );
   expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber)).toBe(true);
   expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber + 1)).toBe(false);
+  // A selection citation is judged by selections alone: the third version re-versions the traded
+  // player's asset and carries no selection, so it retires no selection of the second version.
+  expect(await supersededFor(secondVersionId, promoted.playerId, selectionNumber)).toBe(false);
+  expect(await supersededFor(secondVersionId, promoted.playerId, null)).toBe(true);
   // The third version carries no selection, so the second is not superseded for that number.
   expect(await supersededFor(secondVersionId, null, selectionNumber)).toBe(false);
   expect(await supersededFor(thirdVersionId, null, selectionNumber)).toBe(false);

@@ -15,6 +15,9 @@
 -- nor a selection number keeps the old whole-event rule. A re-version of the asset itself still makes
 -- the old citation stale, so a correction that changes who was drafted, or moves a player, is never
 -- hidden; a version that adds unrelated assets no longer invalidates everything else on the night.
+-- A selection citation carries a selection number: it is judged by later selections alone, so a
+-- later version that re-versions the player's asset without re-listing the selection does not
+-- retire it.
 --
 -- A correction that removes an asset does not re-version it; it re-lists the night without it. The
 -- schema records no removal: outcome_event_asset is append-only, no code path changes an asset's
@@ -65,7 +68,7 @@ CREATE FUNCTION outcome_event_version_superseded_for(
  -- selection numbers (for a cited selection number) re-lists the origin; one carrying fewer adds to it.
  relistings AS (
   SELECT successors.event_version_id FROM successors
-  WHERE (target_player IS NOT NULL AND (SELECT count(*) FROM origin_players)>0
+  WHERE (target_player IS NOT NULL AND target_selection IS NULL AND (SELECT count(*) FROM origin_players)>0
          AND 2*(SELECT count(DISTINCT origin_players.player_id) FROM origin_players
                 JOIN outcome_event_asset asset ON asset.player_id=origin_players.player_id
                  AND asset.event_version_id=successors.event_version_id)
@@ -77,9 +80,11 @@ CREATE FUNCTION outcome_event_version_superseded_for(
              >= (SELECT count(*) FROM origin_selections))
  )
  SELECT (target_player IS NULL AND target_selection IS NULL AND EXISTS (SELECT 1 FROM successors))
+   -- An asset citation (a player and no selection number) is judged by assets; a selection citation
+   -- (a selection number, with or without its player) only by selections.
    OR EXISTS (SELECT 1 FROM successors
               JOIN outcome_event_asset asset ON asset.event_version_id=successors.event_version_id
-              WHERE target_player IS NOT NULL AND asset.player_id=target_player)
+              WHERE target_player IS NOT NULL AND target_selection IS NULL AND asset.player_id=target_player)
    OR EXISTS (SELECT 1 FROM successors
               JOIN outcome_draft_selection selection
                 ON selection.event_version_id=successors.event_version_id
