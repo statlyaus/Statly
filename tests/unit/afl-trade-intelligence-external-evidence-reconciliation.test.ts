@@ -1854,6 +1854,61 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
     ]);
   });
 
+  describe('not-used picks and the receiving club’s nominated selections', () => {
+    const withAccess = (accessCategory: 'open' | 'academy' | 'father_son') =>
+      draftguruClaims.map((claim) =>
+        claim.kind === 'draft_selection' ? { ...claim, accessCategory } : claim
+      );
+    const notUsed = disposition({ disposition: 'not_used', player: undefined });
+    const reconcileClaims = (claims: AflTradeExternalEvidenceContent['claim'][], suffix: string) =>
+      parseAflTradeExternalReconciliationCandidate(
+        reconcileAflTradeExternalEvidence({
+          environment: 'test_fixture',
+          competition: 'AFLM',
+          anchorSeasonYear: 2025,
+          sourceBatches: [batch('draftguru', suffix, claims)],
+          identityResolutions: resolutions,
+          reconciledAt: '2026-08-09T05:00:00.000Z',
+        })
+      );
+
+    it('records that the receiving club took a nominated player in that draft', () => {
+      const candidate = reconcileClaims([...withAccess('academy'), notUsed], 'a');
+      expect(candidate.content.pickOutcomes).toEqual([
+        expect.objectContaining({
+          disposition: 'not_used',
+          nominationBasis: 'club_took_nominated_player',
+          receivingClubNominatedSelections: 1,
+        }),
+      ]);
+    });
+
+    it('records that the receiving club took no nominated player when the year page says so', () => {
+      const candidate = reconcileClaims([...withAccess('open'), notUsed], 'b');
+      expect(candidate.content.pickOutcomes).toEqual([
+        expect.objectContaining({
+          nominationBasis: 'club_took_no_nominated_player',
+          receivingClubNominatedSelections: 0,
+        }),
+      ]);
+    });
+
+    it('says the draft has no access evidence when no v2 year page covers it', () => {
+      const candidate = reconcileClaims([...draftguruClaims, notUsed], 'c');
+      expect(candidate.content.pickOutcomes).toEqual([
+        expect.objectContaining({
+          nominationBasis: 'no_access_evidence',
+          receivingClubNominatedSelections: 0,
+        }),
+      ]);
+    });
+
+    it('carries no nomination basis on selected or traded-on picks', () => {
+      const candidate = reconcileClaims([...withAccess('academy'), disposition({})], 'd');
+      expect(candidate.content.pickOutcomes![0]).not.toHaveProperty('nominationBasis');
+    });
+  });
+
   it('keeps a not-used future pick pending until its draft is inside the candidate', () => {
     const futureClaims = futureDraftguru.content.evidence.map(({ content }) => content.claim);
     const candidate = reconcileAflTradeExternalEvidence({

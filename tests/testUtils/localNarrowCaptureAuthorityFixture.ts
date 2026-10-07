@@ -5,6 +5,7 @@ import {
 } from '@/server/aflTradeIntelligence/development/localDraftguruTradeAuthorityProposal';
 import {
   DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
+  DRAFTGURU_NATIONAL_YEAR_FIELDS as PRODUCTION_DRAFTGURU_NATIONAL_YEAR_FIELDS,
   DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
   draftguruNationalYearDecisionKey,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
@@ -26,16 +27,8 @@ export const OFFICIAL_AFL_DRAFT_SESSION_FIELDS = [
   'draft_session.sessionOrdinal',
 ] as const;
 
-/** The genuine recorded field boundary for Draftguru national-year selections. */
-export const DRAFTGURU_NATIONAL_YEAR_FIELDS = [
-  'draft_selection.draftType',
-  'draft_selection.draftYear',
-  'draft_selection.player.nativeId',
-  'draft_selection.player.recordedName',
-  'draft_selection.selectedByClub.nativeId',
-  'draft_selection.selectedByClub.recordedName',
-  'draft_selection.selectionNumber',
-] as const;
+/** The genuine recorded field boundary for Draftguru national-year selections (parser v2). */
+export const DRAFTGURU_NATIONAL_YEAR_FIELDS = PRODUCTION_DRAFTGURU_NATIONAL_YEAR_FIELDS;
 
 interface NarrowAuthorityTiming {
   evidenceIds: DraftguruTradeAuthorityProposalInput['evidenceIds'];

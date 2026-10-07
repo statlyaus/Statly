@@ -347,6 +347,15 @@ interface CanonicalPickOutcome {
   outcomeStatus: 'stated' | 'pending' | 'unresolved';
   selectionId: string | null;
   playerId: string | null;
+  /**
+   * For a stated "not used" national pick whose draft is held: whether the receiving club took an
+   * academy or father-son nominated player in that draft, as the Draftguru national-year page (v2)
+   * records each selection's access. A nominated player is reached through a matched bid, which is how
+   * a received pick can be spent without the club using it. A fact about the draft, not a valuation.
+   */
+  nominationBasis?:
+    'club_took_nominated_player' | 'club_took_no_nominated_player' | 'no_access_evidence';
+  receivingClubNominatedSelections?: number;
   evidenceIds: string[];
 }
 
@@ -695,6 +704,26 @@ function reconcilePickDispositions(input: {
       row.content.claim.kind === 'pick_disposition'
   );
   const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
+  // Year-page (v2) access categories by evidence id, and the drafts they cover.
+  const accessByEvidence = new Map<string, 'open' | 'academy' | 'father_son'>();
+  const accessDrafts = new Set<string>();
+  for (const row of input.evidence) {
+    const claim = row.content.claim;
+    if (claim.kind !== 'draft_selection' || claim.accessCategory === undefined) continue;
+    accessByEvidence.set(row.evidenceId, claim.accessCategory);
+    accessDrafts.add(`${claim.draftYear}|${claim.draftType}`);
+  }
+  const nominatedSelections = (draftYear: number, draftType: string, clubId: string) =>
+    input.draftSelections.filter(
+      (selection) =>
+        selection.draftYear === draftYear &&
+        selection.draftType === draftType &&
+        selection.clubId === clubId &&
+        selection.evidenceIds.some((evidenceId) => {
+          const access = accessByEvidence.get(evidenceId);
+          return access === 'academy' || access === 'father_son';
+        })
+    ).length;
   const outcomes: CanonicalPickOutcome[] = [];
   for (const row of dispositions) {
     const claim = row.content.claim;
@@ -730,7 +759,11 @@ function reconcilePickDispositions(input: {
     const record = (
       outcomeStatus: CanonicalPickOutcome['outcomeStatus'],
       selection: CanonicalDraftSelection | null,
-      playerId: string | null
+      playerId: string | null,
+      nomination: Pick<
+        CanonicalPickOutcome,
+        'nominationBasis' | 'receivingClubNominatedSelections'
+      > = {}
     ) =>
       outcomes.push({
         outcomeId: createAflTradeContentAddress('external-pick-outcome', {
@@ -742,6 +775,7 @@ function reconcilePickDispositions(input: {
         outcomeStatus,
         selectionId: selection?.selectionId ?? null,
         playerId,
+        ...nomination,
         evidenceIds: sortedUnique([row.evidenceId, ...(selection?.evidenceIds ?? [])]),
       });
     if (receivingClubId === null || receivingClubId !== transfer.toClubId) {
@@ -752,14 +786,31 @@ function reconcilePickDispositions(input: {
       record('unresolved', null, null);
       continue;
     }
-    if (claim.disposition !== 'selected') {
-      record(
-        claim.disposition === 'not_used' && asset.draftYear > input.anchorSeasonYear
-          ? 'pending'
-          : 'stated',
-        null,
-        null
-      );
+    if (claim.disposition === 'traded_on') {
+      record('stated', null, null);
+      continue;
+    }
+    if (claim.disposition === 'not_used') {
+      if (asset.draftYear > input.anchorSeasonYear) {
+        record('pending', null, null);
+        continue;
+      }
+      if (asset.draftType !== 'national') {
+        record('stated', null, null);
+        continue;
+      }
+      const count = accessDrafts.has(`${asset.draftYear}|${asset.draftType}`)
+        ? nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
+        : null;
+      record('stated', null, null, {
+        nominationBasis:
+          count === null
+            ? 'no_access_evidence'
+            : count > 0
+              ? 'club_took_nominated_player'
+              : 'club_took_no_nominated_player',
+        receivingClubNominatedSelections: count ?? 0,
+      });
       continue;
     }
     const playerId = claim.player

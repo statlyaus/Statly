@@ -145,9 +145,26 @@ const pickOutcomeSchema = z
     outcomeStatus: z.enum(['stated', 'pending', 'unresolved']),
     selectionId: aflTradeContentAddressedIdSchema('external-draft-selection').nullable(),
     playerId: z.string().trim().min(1).max(240).nullable(),
+    nominationBasis: z
+      .enum(['club_took_nominated_player', 'club_took_no_nominated_player', 'no_access_evidence'])
+      .optional(),
+    receivingClubNominatedSelections: z.number().int().nonnegative().max(90).optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
+  .refine(
+    (record) =>
+      (record.nominationBasis === undefined) ===
+        (record.receivingClubNominatedSelections === undefined) &&
+      (record.nominationBasis === undefined ||
+        (record.disposition === 'not_used' && record.outcomeStatus === 'stated')) &&
+      (record.nominationBasis !== 'club_took_nominated_player' ||
+        (record.receivingClubNominatedSelections ?? 0) > 0) &&
+      (record.nominationBasis === undefined ||
+        record.nominationBasis === 'club_took_nominated_player' ||
+        record.receivingClubNominatedSelections === 0),
+    'A nomination basis belongs only to a stated not-used pick, and its count must match it.'
+  )
   .refine(
     (record) =>
       record.selectionId === null ||

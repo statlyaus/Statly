@@ -580,9 +580,27 @@ export function parseDraftguruYearSelections(
   return parseDraftguruYearSelectionRows(html, input);
 }
 
+/** The national-year parser versions a capture may name; v2 also reads each row's access category. */
+const NATIONAL_YEAR_PARSER_VERSIONS = new Set([
+  'draftguru-national-year-page/v1',
+  'draftguru-national-year-page/v2',
+]);
+
+/**
+ * The year page's second category cell: blank for an open selection, `Academy` or `Academy (<name>)`
+ * for an academy nomination, `Father-Son(<father>)` for a father-son nomination. Anything else is
+ * unreviewed and returns null.
+ */
+function accessCategoryOf(text: string): 'open' | 'academy' | 'father_son' | null {
+  if (text === '') return 'open';
+  if (/^Academy\b/.test(text)) return 'academy';
+  if (/^Father-Son\b/.test(text)) return 'father_son';
+  return null;
+}
+
 function parseDraftguruYearSelectionRows(
   html: string,
-  input: { capture: SourceCapture; draftYear: number }
+  input: { capture: SourceCapture; draftYear: number; readAccessCategory?: boolean }
 ): DraftguruTradeParseResult & {
   scopeSummary: {
     observedRows: number;
@@ -643,6 +661,19 @@ function parseDraftguruYearSelectionRows(
     const clubCell = wrapped.find('td.club').first();
     const playerName = normalizeText(playerCell.text());
     const clubName = normalizeText(clubCell.text());
+    const categoryCells = wrapped.find('td.category');
+    const accessCategory = input.readAccessCategory
+      ? accessCategoryOf(normalizeText(categoryCells.eq(1).text()))
+      : undefined;
+    if (input.readAccessCategory && (categoryCells.length !== 2 || accessCategory === null)) {
+      scopeSummary.invalidRows++;
+      issues.push({
+        code: 'unsupported_row',
+        sourceKey: `year-row:${rowIndex + 1}`,
+        detail: `Unreviewed access category: ${normalizeText(categoryCells.eq(1).text())}`,
+      });
+      return;
+    }
     if (
       !draftType ||
       numberCells.length !== 1 ||
@@ -701,6 +732,7 @@ function parseDraftguruYearSelectionRows(
             nativeId: sourceNativeId(clubCell.find('a').attr('href'), '/clubs/'),
             recordedName: clubName,
           },
+          ...(accessCategory ? { accessCategory } : {}),
         },
         publicationEligible: false,
       })
@@ -726,6 +758,9 @@ export function parseDraftguruNationalYearSelections(
     excludedByPathway: Record<string, number>;
   };
 } {
+  if (!NATIONAL_YEAR_PARSER_VERSIONS.has(input.capture.parserVersion)) {
+    throw new TypeError(`${input.capture.parserVersion} is not a reviewed national-year parser.`);
+  }
   const $ = load(html);
   const tables = $('table.big-pick-movements');
   const summary = {
@@ -779,7 +814,10 @@ export function parseDraftguruNationalYearSelections(
     $(row).remove();
   });
   if (issues.length) return { evidence: [], issues, scopeSummary: summary };
-  const result = parseDraftguruYearSelectionRows($.html(), input);
+  const result = parseDraftguruYearSelectionRows($.html(), {
+    ...input,
+    readAccessCategory: input.capture.parserVersion === 'draftguru-national-year-page/v2',
+  });
   if (!summary.includedRows)
     result.issues.push({
       code: 'unsupported_row',

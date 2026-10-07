@@ -77,7 +77,7 @@ describe('Draftguru event year provenance', () => {
 
   it('preserves national-only delegation and its 59 complete evidence records', () => {
     const result = parseDraftguruNationalYearSelections(html, {
-      capture: { ...capture, parserVersion: 'draftguru-national-year-parser/v1' },
+      capture: { ...capture, parserVersion: 'draftguru-national-year-page/v1' },
       draftYear: 2020,
     });
     expect(result.issues).toEqual([]);
@@ -91,6 +91,55 @@ describe('Draftguru event year provenance', () => {
         )
         .map((row) => row.content.claim)
     );
+  });
+
+  describe('national-year parser v2 access categories', () => {
+    const parseNational = (body = html, parserVersion = 'draftguru-national-year-page/v2') =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: { ...capture, parserVersion },
+        draftYear: 2020,
+      });
+    const categories = (result: ReturnType<typeof parseNational>) =>
+      result.evidence.map(({ content }) =>
+        content.claim.kind === 'draft_selection' ? content.claim.accessCategory : 'not-a-selection'
+      );
+
+    it('records each national selection as open, academy or father-son', () => {
+      const result = parseNational();
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      const counts = categories(result).reduce<Record<string, number>>(
+        (total, value) => ({ ...total, [String(value)]: (total[String(value)] ?? 0) + 1 }),
+        {}
+      );
+      expect(counts).toEqual({ open: 48, academy: 10, father_son: 1 });
+    });
+
+    it('keeps v1 claims exactly as recorded, with no access category', () => {
+      expect(categories(parseNational(html, 'draftguru-national-year-page/v1'))).toEqual(
+        Array.from({ length: 59 }, () => undefined)
+      );
+    });
+
+    it('quarantines an unreviewed category instead of guessing', () => {
+      const body = html.replace(
+        /<td class="category">\s*Academy/,
+        '<td class="category">Rookie Elevation'
+      );
+      const result = parseNational(body);
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('Rookie Elevation'),
+        })
+      );
+    });
+
+    it('refuses a parser version it was not reviewed for', () => {
+      expect(() => parseNational(html, 'draftguru-national-year-parser/v1')).toThrow(
+        /not a reviewed national-year parser/
+      );
+    });
   });
 
   it.each([
