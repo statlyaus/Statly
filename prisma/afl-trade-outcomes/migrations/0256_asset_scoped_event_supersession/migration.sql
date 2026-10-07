@@ -16,6 +16,18 @@
 -- the old citation stale, so a correction that changes who was drafted, or moves a player, is never
 -- hidden; a version that adds unrelated assets no longer invalidates everything else on the night.
 --
+-- Known gap, left open for the owner to decide: a later version that deliberately omits an
+-- asset without re-versioning it leaves that asset's citations current. The schema records no
+-- removal: outcome_event_asset is append-only, no code path changes an asset's status (every asset on
+-- the grading database is approved), and a correction is a candidate marker, not a property of the
+-- event version. The marker cannot serve as the guard either: the Cameron candidate itself carries
+-- reviewedCorrection, reviewedSessionCorrection, reviewedStatusCorrection and
+-- reviewedSpecialCorrection, and its versions re-list players from the origin version while omitting
+-- the rest, so any rule that retires the omitted players on a correction or on a partial re-listing
+-- retires the 148 this migration exists to keep. Measured on 2026-10-07: three superseding event
+-- versions exist, all from that promotion. Removing an asset needs an explicit reviewed withdrawal
+-- signal on the asset; until one exists, a removal is expressed by re-versioning the asset.
+--
 -- The version-chain trigger drops spells on superseded events from its overlap check; it takes the
 -- same predicate so a spell that is still current keeps blocking overlaps. Postseason observation,
 -- valuation cohort inputs and the special-correction dependency trigger reason about whole events

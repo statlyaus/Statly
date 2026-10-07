@@ -178,6 +178,7 @@ async function supersedeEvent(previousVersionId: string, player: string, suffix:
 let reviewedSpellId = '';
 let arrivalSpellId = '';
 let secondVersionId = '';
+let thirdVersionId = '';
 
 it('a later version that adds another player breaks a reviewed spell under the deployed rules', async () => {
   const entryRule = createAflTradeAcquisitionSpellRegistrationRule({
@@ -260,11 +261,32 @@ it('an arrival-only spell registers against the promotion-time event version', a
 });
 
 it('a further version that re-versions the player makes the spell stale, two hops down', async () => {
-  const thirdVersionId = await supersedeEvent(secondVersionId, promoted.playerId, 'third');
+  thirdVersionId = await supersedeEvent(secondVersionId, promoted.playerId, 'third');
   expect(await supersededFor(promoted.entry.eventVersionId, promoted.playerId, null)).toBe(true);
   expect(await supersededFor(secondVersionId, promoted.playerId, null)).toBe(true);
   expect(await supersededFor(thirdVersionId, promoted.playerId, null)).toBe(false);
   expect(await currentness(arrivalSpellId)).toBe(false);
+});
+
+it('a draft selection on a later version supersedes its selection number, not its neighbours', async () => {
+  // A selection copied from the promotion-time night onto the second version under a new number;
+  // only identity, version, number, pick and source row change.
+  const selectionNumber = 9001;
+  await pool.query(
+    `INSERT INTO outcome_draft_selection
+     SELECT * FROM jsonb_populate_record(NULL::outcome_draft_selection,
+       (SELECT to_jsonb(selection) || jsonb_build_object(
+          'selection_id','synthetic-supersession-selection:'||$1::text,'event_version_id',$2::text,
+          'selection_number',$1::int,'pick_id',NULL,'source_import_row_id',$2::text||':asset-row')
+          FROM outcome_draft_selection selection
+          WHERE selection.event_version_id=$3 ORDER BY selection.selection_number LIMIT 1))`,
+    [selectionNumber, secondVersionId, promoted.entry.eventVersionId]
+  );
+  expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber)).toBe(true);
+  expect(await supersededFor(promoted.entry.eventVersionId, null, selectionNumber + 1)).toBe(false);
+  // The third version carries no selection, so the second is not superseded for that number.
+  expect(await supersededFor(secondVersionId, null, selectionNumber)).toBe(false);
+  expect(await supersededFor(thirdVersionId, null, selectionNumber)).toBe(false);
 });
 
 it.each([
