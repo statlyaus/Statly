@@ -3163,6 +3163,20 @@ the complete authorized operation may be retried. PostgreSQL tests cover repeate
 same-occurrence corrections, invalidation and two-connection contention. These tests use synthetic
 upstream records, not genuine season-wide reconciliation.
 
+External identity decisions follow the same principle from migration 0254. A promoted asset or draft
+selection records the external identity decision that resolved its player, and seven checks (the
+promoted-event and arrival-event functions behind reviewed spells, the canonical-identity trigger on
+asset inserts, both release-membership validators and both special-entitlement lifecycle
+authenticators) once required that decision to still be the subject's current head. A later review
+of the same subject supersedes it, so a re-confirmation that changed no player broke every spell on
+225 assets on 2026-10-06. `outcome_external_identity_current_decision(origin)` now follows
+`supersedes_decision_id` forward through approved, same-subject, same-canonical-target decisions to
+the current approved head, and each check accepts the recorded decision when that chain exists. A hop
+that changes the target, a rejected or withdrawn hop or head, or a decision with no typed row
+(fixture provenance) yields no chain, and the check runs against the recorded decision exactly as
+before. The promotion-time resolution row and the reviewer-authority check stay bound to the recorded
+decision; a later same-player review may be under another authority.
+
 Factual observation contracts preserve that same distinction. An occurrence-only player carries
 `playerIdentityId: null` and `assignment: null`, while the exact decoded identity candidate,
 represented-club affiliation and match remain mandatory. Migration 0132 applies the existing

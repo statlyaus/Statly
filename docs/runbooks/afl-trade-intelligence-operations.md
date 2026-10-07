@@ -348,6 +348,13 @@ Insertion refuses a capture whose bytes are located, a second successor for the 
 different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
 entries never read them.
 
+A reviewed spell stays current across a later identity review of the same player (migration 0254).
+The promoted asset keeps the identity decision it was promoted under; when that decision has been
+superseded by approved decisions of the same subject with the same canonical target, the check
+follows the chain to the current head. A review that changes the player, or a rejected or withdrawn
+head, still makes the spell non-current. Re-reviewing identities therefore never needs spells to be
+re-made; changing a player does.
+
 ### Storing evidence before it is cited
 
 Store any file a record will cite as evidence, such as an owner's approval record for a Gate
