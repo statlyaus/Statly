@@ -1845,7 +1845,11 @@ longer be confirmed (statlyaus/Statly#742: two Official AFL articles edited sinc
 its own review decision and is append-only, with one per lost capture. Only v4 entries read
 successors: `outcome_acquisition_arrival_event_current` is the promoted-event check with a cited
 artifact counted as the lost capture it succeeds, and an omitted capture excused from the citation
-set. v1, v2 and v3 entries keep the unchanged check.
+set. A recaptured successor is also a capture in its own right, and a later candidate may bind it
+natively (the 2020 Cameron trade promotion captured the 2020 Official AFL draft page that the
+successor pass then recorded as the successor of the lost 2020 capture), so from migration 0257 a
+cited artifact matches a candidate capture of itself or of the lost capture it succeeds. v1, v2 and
+v3 entries keep the unchanged check.
 
 The two claims are now held separately and joined only when read. A reviewed spell (v1, v2 or v4)
 claims an arrival; a season (v3) spell claims that the player played for a club in one season. A
