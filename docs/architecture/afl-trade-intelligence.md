@@ -4099,7 +4099,9 @@ The remaining work proceeds through these independently verifiable gates:
    `afl-trade-realized-grade-rule/v1`, unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
-   `realized-trade-grade-batch:` content address.
+   `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
+   transfers, or a transfer whose club is unknown, the same on both sides, or not a valid batch id) is
+   listed as ungraded with its reason, never dropped.
    - **Legs.** Each transfer leg has one realized value at its receiving club, which counts as received
      for that club and given up by the sender. A leg is `valued` (player first stint, selected pick's
      first stint, traded-on pick's share of its onward return, or a not-used pick worth 0), `excluded`
