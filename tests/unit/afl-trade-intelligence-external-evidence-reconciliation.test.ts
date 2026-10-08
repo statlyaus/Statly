@@ -1933,6 +1933,22 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
       expect(outcome.evidenceIds).toHaveLength(3);
     });
 
+    it('counts access categories from a v3 year page the same as v2', () => {
+      expect(
+        basisOf(
+          reconcileDraft({
+            page: yearPage('academy'),
+            parserVersion: 'draftguru-national-year-page/v3',
+          })
+        )
+      ).toEqual(
+        expect.objectContaining({
+          nominationBasis: 'club_took_nominated_player',
+          receivingClubNominatedSelections: 1,
+        })
+      );
+    });
+
     it('records no nominated player when every row in the proven draft says so', () => {
       expect(basisOf(reconcileDraft({ page: yearPage('open') }))).toEqual(
         expect.objectContaining({
@@ -1950,7 +1966,7 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
       ],
       ['no official session covers the draft', { page: yearPage('open'), session: null }],
       [
-        'the access categories are not from a v2 Draftguru year page',
+        'the access categories are not from a v2 or v3 Draftguru year page',
         { page: yearPage('academy'), parserVersion: 'draftguru-national-year-page/v1' },
       ],
     ])('leaves the count unknown when %s', (_label, input) => {

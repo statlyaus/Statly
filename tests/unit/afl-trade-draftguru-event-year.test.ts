@@ -159,6 +159,78 @@ describe('Draftguru event year provenance', () => {
     });
   });
 
+  describe('national-year parser v3 club-qualified academy forms', () => {
+    const V3 = 'draftguru-national-year-page/v3';
+    const parseNational = (body = html, parserVersion = V3) =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: { ...capture, parserVersion },
+        draftYear: 2020,
+      });
+    // Pick 1 is Jamarra Ugle-Hagan, selected by the Western Bulldogs.
+    const firstAcademyCell = /<td class="category">Academy \(NG\)\n<\/td>/;
+    const withPickOneCell = (label: string) => {
+      const body = html.replace(firstAcademyCell, `<td class="category">${label}</td>`);
+      expect(body).not.toBe(html);
+      return body;
+    };
+    const pickOne = (result: ReturnType<typeof parseNational>) =>
+      result.evidence.find(
+        ({ content }) =>
+          content.claim.kind === 'draft_selection' && content.claim.selectionNumber === 1
+      )?.content.claim;
+
+    it('emits exactly the v2 claims on a page with only the plain forms', () => {
+      const v2 = parseNational(html, 'draftguru-national-year-page/v2');
+      const v3 = parseNational();
+      expect(v3.issues).toEqual([]);
+      expect(v3.evidence.map(({ content }) => content.claim)).toEqual(
+        v2.evidence.map(({ content }) => content.claim)
+      );
+    });
+
+    it.each([
+      ['Academy(Western Bulldogs)', 'academy'],
+      ['Academy (NG)(Western Bulldogs)', 'academy'],
+      ['Academy(Brisbane - Not Matched)', 'open'],
+      ['Academy (NG)(St Kilda - Not Matched)', 'open'],
+    ])('reads %s on a Western Bulldogs selection as %s', (label, expected) => {
+      const result = parseNational(withPickOneCell(label));
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(pickOne(result)).toMatchObject({ accessCategory: expected });
+    });
+
+    it.each([
+      // Another club's academy, matched: the selecting club cannot have matched it.
+      'Academy(Brisbane)',
+      'Academy (NG)(St Kilda)',
+      // The selecting club declining its own academy bid is contradictory.
+      'Academy(Western Bulldogs - Not Matched)',
+      'Academy(Brisbane - Matched)',
+      'Academy()',
+      'Academy(western bulldogs)',
+      'Academy (NG) (Western Bulldogs)',
+    ])('quarantines %s on a Western Bulldogs selection', (label) => {
+      expect(parseNational(withPickOneCell(label)).issues).toContainEqual(
+        expect.objectContaining({ code: 'unsupported_row', detail: expect.stringContaining(label) })
+      );
+    });
+
+    it('keeps v2 refusing the club-qualified forms', () => {
+      expect(
+        parseNational(
+          withPickOneCell('Academy(Western Bulldogs)'),
+          'draftguru-national-year-page/v2'
+        ).issues
+      ).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('Academy(Western Bulldogs)'),
+        })
+      );
+    });
+  });
+
   it.each([
     [2020, 'https://example.com/years/2020'],
     [2020, 'https://www.draftguru.com.au/years/2021'],

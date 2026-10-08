@@ -528,9 +528,9 @@ describe('local Draftguru national-year capture through the governed ingestion b
     );
     expect(receipts.rows).toEqual([
       {
-        parser: 'draftguru-national-year-page/v2',
+        parser: 'draftguru-national-year-page/v3',
         pathway: 'national',
-        decision_key: 'draftguru-national-year-page-issue579-private-2020-parser-v2',
+        decision_key: 'draftguru-national-year-page-issue579-private-2020-parser-v3',
       },
     ]);
   }, 90_000);
