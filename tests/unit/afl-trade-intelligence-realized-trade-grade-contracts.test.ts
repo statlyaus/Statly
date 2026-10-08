@@ -177,7 +177,8 @@ function content(): AflTradeRealizedTradeGradeBatchContent {
     },
     gradedAt: '2026-10-08T13:00:00.000Z',
     trades,
-    summary: { complete: 1, provisional: 4, blocked: 1 },
+    ungraded: [],
+    summary: { complete: 1, provisional: 4, blocked: 1, ungraded: 0 },
     publicationEligible: false,
     publicationProhibited: true,
     limitation:
@@ -197,6 +198,7 @@ function withLeg(value: Content, id: string, index: number, change: (leg: Leg) =
     complete: value.trades.filter((row) => row.state === 'complete').length,
     provisional: value.trades.filter((row) => row.state === 'provisional').length,
     blocked: value.trades.filter((row) => row.state === 'blocked').length,
+    ungraded: value.ungraded.length,
   };
   return value;
 }
@@ -260,6 +262,54 @@ describe('realized trade grade batch contract', () => {
     ]);
   });
 
+  // St Kilda spends pick 20 on a nominee (tx-6), so Hawthorn's traded-on pick in tx-5 has no weight.
+  const unallocated = () => {
+    const value = withLeg(content(), 'tx-6', 0, (leg) => ({
+      transferId: leg.transferId,
+      assetKind: 'pick',
+      sendingClubId: leg.sendingClubId,
+      receivingClubId: leg.receivingClubId,
+      state: 'excluded',
+      basis: 'pick_not_used_nominee_excluded',
+      reasons: ['not_used_nominee_excluded', SINGLE],
+      atTrade: leg.atTrade,
+    }));
+    return withLeg(value, 'tx-5', 0, (leg) => ({
+      transferId: leg.transferId,
+      assetKind: 'pick',
+      sendingClubId: leg.sendingClubId,
+      receivingClubId: leg.receivingClubId,
+      state: 'excluded',
+      basis: 'pick_traded_on_return_unallocated',
+      onwardTransactionId: 'tx-6',
+      reasons: [SINGLE, 'traded_on_return_unallocated'],
+      atTrade: leg.atTrade,
+    }));
+  };
+
+  it('excludes a traded-on pick its onward club spent on a nominee', () => {
+    const tx5 = tradeOf(
+      createAflTradeRealizedTradeGradeBatch(unallocated()).content as Content,
+      'tx-5'
+    );
+    expect(tx5).toMatchObject({
+      state: 'provisional',
+      clubs: [
+        { clubId: 'hawthorn', received: 0, givenUp: 0, net: 0 },
+        { clubId: 'melbourne', received: 0, givenUp: 0, net: 0 },
+      ],
+    });
+  });
+
+  it('names untradeable rows instead of dropping them', () => {
+    const value = content();
+    value.ungraded = [{ transactionId: 'tx-0', reason: 'no_transfers' }];
+    value.summary = { ...value.summary, ungraded: 1 };
+    expect(createAflTradeRealizedTradeGradeBatch(value).content.ungraded).toEqual([
+      { transactionId: 'tx-0', reason: 'no_transfers' },
+    ]);
+  });
+
   it.each<[string, () => Content, RegExp]>([
     [
       'club totals that differ from the legs',
@@ -294,7 +344,7 @@ describe('realized trade grade batch contract', () => {
       () => {
         const value = content();
         tradeOf(value, 'tx-2').state = 'complete';
-        value.summary = { complete: 2, provisional: 3, blocked: 1 };
+        value.summary = { complete: 2, provisional: 3, blocked: 1, ungraded: 0 };
         return value;
       },
       /state must be provisional/,
@@ -528,10 +578,44 @@ describe('realized trade grade batch contract', () => {
       /Only a traded-on pick/,
     ],
     [
+      'an unallocated traded-on pick whose onward trade excludes nothing',
+      () => {
+        const value = unallocated();
+        const tx5 = tradeOf(value, 'tx-5');
+        (tx5.legs[0] as { onwardTransactionId: string }).onwardTransactionId = 'tx-4';
+        return value;
+      },
+      /where it is excluded/,
+    ],
+    [
+      'an unallocated traded-on pick without its reason',
+      () => withLeg(unallocated(), 'tx-5', 0, (leg) => ({ ...leg, reasons: [SINGLE] })),
+      /unallocated traded-on pick/,
+    ],
+    [
+      'a trade both graded and ungraded',
+      () => {
+        const value = content();
+        value.ungraded = [{ transactionId: 'tx-1', reason: 'no_transfers' }];
+        value.summary = { ...value.summary, ungraded: 1 };
+        return value;
+      },
+      /either graded or ungraded/,
+    ],
+    [
+      'a summary that miscounts ungraded trades',
+      () => {
+        const value = content();
+        value.ungraded = [{ transactionId: 'tx-0', reason: 'club_unresolved' }];
+        return value;
+      },
+      /count the trades by state/,
+    ],
+    [
       'a summary that miscounts',
       () => {
         const value = content();
-        value.summary = { complete: 2, provisional: 3, blocked: 1 };
+        value.summary = { complete: 2, provisional: 3, blocked: 1, ungraded: 0 };
         return value;
       },
       /count the trades by state/,

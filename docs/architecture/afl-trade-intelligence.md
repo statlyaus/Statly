@@ -4094,6 +4094,34 @@ The remaining work proceeds through these independently verifiable gates:
    own schema, added beside the v3 benchmark and never overwriting it. It needs its own
    owner decision. Earlier batches stay reproducible by the version they name.
 
+   **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
+   private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
+   `afl-trade-realized-grade-rule/v1`, unit `career_pav`, `non_production`, never publishable). A batch
+   pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
+   season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
+   `realized-trade-grade-batch:` content address.
+   - **Legs.** Each transfer leg has one realized value at its receiving club, which counts as received
+     for that club and given up by the sender. A leg is `valued` (player first stint, selected pick's
+     first stint, traded-on pick's share of its onward return, or a not-used pick worth 0), `excluded`
+     (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
+     nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
+     valued and any season with no PAV calculation. A traded-on leg names its onward trade, the
+     allocation (`sole_asset`, `relative_value` or `equal_split`), its share and the return. The batch
+     checks that return, weight total and asset count against the onward trade it contains.
+   - **At-trade view.** Each leg reports a player's trade-season PAV or a pick's HPN projection, which
+     must equal the benchmark formula for its slot. Neither ever enters a total.
+   - **States.** A trade is `blocked` if any leg carries a blocking reason (pending, unresolved or
+     no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
+     head, or an unlinked or blocked onward trade). It is `provisional` if any leg carries a provisional
+     reason (open stint, unreviewed arrival, missing or unofficial PAV seasons, excluded nominee pick,
+     equal-split tiebreak, provisional onward trade, no appearances after the trade, or a single-source
+     pick outcome). Otherwise it is `complete`. Club totals are null when blocked, and are otherwise the
+     exact received and given-up sums of the valued legs, so equal legs always seal to the same batch.
+   - **Single source.** Every valued or excluded pick leg carries `single_source_pick_outcome`, because
+     pick outcomes come only from Draftguru. In the MVP only a trade of players alone can be `complete`.
+   - **No letter grade.** The grade is the per-club net in `career_pav`. The Statly grade policy converts
+     probability distributions and does not apply. Asset letter grades stay prohibited.
+
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate
    the pointer atomically, and verify trades, drafts, outcomes, clubs, years, APIs, and exports resolve

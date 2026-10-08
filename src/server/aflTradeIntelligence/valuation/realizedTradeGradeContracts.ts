@@ -14,7 +14,7 @@ import {
 /**
  * The MVP realized trade grade (statlyaus/Statly#789; rules in docs/architecture/afl-trade-intelligence.md,
  * "Valuing a not-used pick", "Traded-on picks and bundled trades", "Pick projection" and "Realized trade
- * grade (MVP)"). Each transfer leg carries one realized value in whole-first-stint HPN PAV at its receiving
+ * grade (MVP) contract"). Each transfer leg carries one realized value in whole-first-stint HPN PAV at its receiving
  * club: received for that club and given up by the sending club. A club's net is received minus given up.
  * The at-trade view is reported beside each leg and never enters a total. The unit is `career_pav`, which
  * the docs forbid composing with Statly model units, so this contract is separate from the draw-based
@@ -53,6 +53,7 @@ export const AFL_TRADE_REALIZED_GRADE_PROVISIONAL_REASONS = [
   'single_source_pick_outcome',
   'stint_open',
   'traded_on_return_provisional',
+  'traded_on_return_unallocated',
 ] as const;
 
 const blockingReasons = new Set<string>(AFL_TRADE_REALIZED_GRADE_BLOCKING_REASONS);
@@ -189,6 +190,16 @@ export const aflTradeRealizedTradeGradeLegSchema = z
         basis: z.literal('pick_not_used_nominee_excluded'),
       })
       .strict(),
+    // Traded on in a bundle where it is excluded (spent on a nominee, or unallocated further down the
+    // chain): it has no realized weight to share the bundle's return by, so it is excluded too.
+    z
+      .object({
+        ...legBase,
+        state: z.literal('excluded'),
+        basis: z.literal('pick_traded_on_return_unallocated'),
+        onwardTransactionId: aflTradePublicIdSchema,
+      })
+      .strict(),
     z.object({ ...legBase, state: z.literal('blocked'), basis: z.literal('unavailable') }).strict(),
   ])
   .superRefine((leg, context) => {
@@ -209,8 +220,10 @@ export const aflTradeRealizedTradeGradeLegSchema = z
       issue('A pick outcome is single-source, so a valued or excluded pick leg is provisional.');
     if (leg.assetKind === 'player' && has('single_source_pick_outcome'))
       issue('Only a pick leg rests on a pick outcome.');
-    if ((leg.state === 'excluded') !== has('not_used_nominee_excluded'))
-      issue('A leg is excluded exactly when its club took a nominee with the not-used pick.');
+    if ((leg.basis === 'pick_not_used_nominee_excluded') !== has('not_used_nominee_excluded'))
+      issue('A not-used pick is excluded exactly when its club took a nominee with it.');
+    if ((leg.basis === 'pick_traded_on_return_unallocated') !== has('traded_on_return_unallocated'))
+      issue('An unallocated traded-on pick, and only that, is stated as a reason.');
     const stintOpen = 'stint' in leg && leg.stint.status === 'open';
     if (stintOpen !== has('stint_open'))
       issue('An open stint, and only an open stint, is stated as a reason.');
@@ -357,12 +370,24 @@ const batchContentSchema = z
       })
       .strict(),
     gradedAt: aflTradeIsoDateTimeSchema,
-    trades: z.array(aflTradeRealizedTradeGradeSchema).min(1).max(5_000),
+    trades: z.array(aflTradeRealizedTradeGradeSchema).max(5_000),
+    /** Trades the candidate holds that cannot be represented as legs: named, never dropped. */
+    ungraded: z
+      .array(
+        z
+          .object({
+            transactionId: aflTradePublicIdSchema,
+            reason: z.enum(['club_unresolved', 'no_transfers']),
+          })
+          .strict()
+      )
+      .max(5_000),
     summary: z
       .object({
         complete: z.number().int().min(0),
         provisional: z.number().int().min(0),
         blocked: z.number().int().min(0),
+        ungraded: z.number().int().min(0),
       })
       .strict(),
     publicationEligible: z.literal(false),
@@ -377,12 +402,19 @@ const batchContentSchema = z
       context.addIssue({ code: 'custom', path: [path], message });
     if (!isCanonical(content.trades.map(({ transactionId }) => transactionId)))
       issue('trades', 'Trades must be unique and ordered by transaction.');
+    const ungradedIds = content.ungraded.map(({ transactionId }) => transactionId);
+    if (!isCanonical(ungradedIds)) issue('ungraded', 'Ungraded trades must be unique and ordered.');
+    if (content.trades.some(({ transactionId }) => ungradedIds.includes(transactionId)))
+      issue('ungraded', 'A trade is either graded or ungraded.');
+    if (content.trades.length + content.ungraded.length === 0)
+      issue('trades', 'A batch grades or names at least one trade.');
     const count = (state: AflTradeRealizedTradeGrade['state']) =>
       content.trades.filter((trade) => trade.state === state).length;
     if (
       content.summary.complete !== count('complete') ||
       content.summary.provisional !== count('provisional') ||
-      content.summary.blocked !== count('blocked')
+      content.summary.blocked !== count('blocked') ||
+      content.summary.ungraded !== content.ungraded.length
     )
       issue('summary', 'The summary must count the trades by state.');
     const seasons = new Map(
@@ -412,6 +444,19 @@ const batchContentSchema = z
             );
         } else if (has('pav_season_not_official') || has('pav_seasons_missing')) {
           issue('trades', 'Only a leg with a stint carries PAV season reasons.');
+        }
+        if ('onwardTransactionId' in leg) {
+          const onwardTrade = trades.get(leg.onwardTransactionId);
+          const excludedThere = onwardTrade?.legs.some(
+            (onwardLeg) =>
+              onwardLeg.sendingClubId === leg.receivingClubId && onwardLeg.state === 'excluded'
+          );
+          if (!onwardTrade || onwardTrade === trade || !excludedThere)
+            issue(
+              'trades',
+              'An unallocated traded-on pick names the onward trade where it is excluded.'
+            );
+          continue;
         }
         if (!('onward' in leg)) continue;
         const onwardTrade = trades.get(leg.onward.transactionId);
