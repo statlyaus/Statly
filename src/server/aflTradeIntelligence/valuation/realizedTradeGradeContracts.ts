@@ -72,7 +72,8 @@ const reasonsSchema = z
   .array(aflTradeRealizedGradeReasonSchema)
   .max(30)
   .refine(isCanonical, 'Reasons must be unique and sorted.');
-const seasonsSchema = z.array(seasonSchema).max(40).refine(isCanonical, 'Seasons must be sorted.');
+// Bounded by the season range itself, so no stint the candidate allows can exceed it.
+const seasonsSchema = z.array(seasonSchema).max(304).refine(isCanonical, 'Seasons must be sorted.');
 
 const atTradeSchema = z.discriminatedUnion('kind', [
   z
