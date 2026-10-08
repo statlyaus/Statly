@@ -89,7 +89,10 @@ let before: boolean[] = [];
 
 it('under the deployed rules each check tests the retained sources inside its join', async () => {
   before = await answers();
-  expect(before.filter((_, index) => index % 2 === 1)).toEqual([false, false]);
+  // [promoted, promoted unknown, arrival, arrival unknown]: the fixture's binding is a current arrival,
+  // so the answers compared after the migration are not trivially all false.
+  expect(before[2]).toBe(true);
+  expect([before[1], before[3]]).toEqual([false, false]);
   for (const signature of SIGNATURES) {
     const body = await functionBody(signature);
     expect(body).toContain(
