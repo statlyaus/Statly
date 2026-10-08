@@ -4042,7 +4042,22 @@ The remaining work proceeds through these independently verifiable gates:
    (`Academy(<club>)`, `Academy (NG)(<club>)`): an academy nomination only when the named club is the
    selecting club, and, with ` - Not Matched`, an open selection only when the named academy club is
    another club (it declined to match the bid). On a page with only the plain forms v3 emits exactly
-   what v2 emits. How a not-used pick is valued from that fact is a separate owner rule.
+   what v2 emits.
+
+   **Valuing a not-used pick (owner decision, 2026-10-08, statlyaus/Statly#789).** In the MVP grade,
+   a stated not-used pick is valued by its `nominationBasis`:
+   - `club_took_no_nominated_player`: **0 realized value**. Nothing was drafted with the pick, and the
+     club took no nominee it could have funded. This is a modelling rule, not a measured fact, and the
+     grade states it.
+   - `club_took_nominated_player`: **excluded** from the trade's realized total, and the trade is
+     `provisional`. The pick may have funded a matched bid, but the nominee is already the `selected`
+     outcome of the pick actually used for him, and one matched bid consumes several picks. Crediting
+     each consumed pick with the nominee's first-stint value would count him once per pick.
+   - `no_access_evidence`: **blocking**. Unknown is not zero.
+
+   A not-used pick is never credited with any player's value. The rule applies to realized value only.
+   The at-trade view is unchanged, and the MVP has no pick slot projection (and so no Draft Value Index
+   input). Both arrive with the Phase 3 projection fit.
 
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate
