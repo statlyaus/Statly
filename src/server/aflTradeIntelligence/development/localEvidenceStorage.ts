@@ -106,7 +106,7 @@ export async function storeLocalAflTradeEvidence(
   await requireAflTradeCustodyHealthy(client, 'non_production');
   const reference = await referenceForRetry(client, input);
   await storeAndReadBackAflTradeEvidence(store, [{ reference, bytes: input.bytes }]);
-  // The custody row records the same read-back receipt every local repository writer records.
+  // The custody row records the read-back receipt the evidence writers record.
   const readback = await verifyAflTradeArtifactReadback(
     {
       assurance: 'local_non_production_filesystem',

@@ -70,6 +70,12 @@ describe('grade-realized-trades arguments', () => {
       loopback,
       /distinct seasons/,
     ],
+    [
+      'a descending season range',
+      [...base.slice(0, 5), '2026-2021', ...base.slice(6), '--dry-run'],
+      loopback,
+      /ascending season range/,
+    ],
     ['an unknown flag', [...base, '--dry-run', '--force'], loopback, /Unexpected argument --force/],
     [
       'a flag given twice',

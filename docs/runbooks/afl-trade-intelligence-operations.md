@@ -3060,17 +3060,21 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   --store-id <store-id> --out <absolute-path.json> [--dry-run]
 ```
 
-- `--out` must not exist yet. The batch is never overwritten.
+- `--out` must not exist yet. The batch is never overwritten. It is written only after the batch is
+  stored, so a refused store leaves no batch file. If writing `--out` then fails, the error names the
+  stored `artifactId`, which is the batch's only copy.
 - The command refuses, and stores nothing, when:
   - the candidate is not finalized `non_production`;
   - a season has no finalized current PAV calculation, or its calculation was finalized after the run
     started;
   - a season has no season spells;
-  - a PAV row is duplicated or not bound to a current season spell.
+  - a PAV row is duplicated or not bound to a current season spell;
+  - the candidate holds no trades.
 - A trade the batch cannot represent (no transfers, or an unusable club) is listed as `ungraded`.
   Read the printed `summary` before citing a batch.
-- The batch names its PAV calculations, benchmark and spell cutoff, so a later run with newer PAV or
-  spells is a different batch. Cite batches by `artifactId` and `batchId`, never "the latest".
+- The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
+  cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
+  by `artifactId` and `batchId`, never "the latest".
 - It is private and `non_production`. Nothing here is publishable.
 
 ## Building pick values and complete trade assessments

@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { access, writeFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -53,6 +53,8 @@ export interface GradeRealizedTradesArguments {
 /** `2021-2026` or `2021,2022`: distinct seasons, ascending. */
 function parseSeasons(name: string, value: string): number[] {
   const range = /^(\d{4})-(\d{4})$/.exec(value);
+  if (range && Number(range[1]) > Number(range[2]))
+    throw new TypeError(`${name} must be an ascending season range like 2021-2026.`);
   const seasons = range
     ? Array.from(
         { length: Number(range[2]) - Number(range[1]) + 1 },
@@ -126,6 +128,35 @@ export function storeRealizedTradeGradeBatch(
   });
 }
 
+/** Refuses an existing `--out` before any work, since the batch file is never overwritten. */
+async function requireOutAbsent(out: string): Promise<void> {
+  const exists = await access(out).then(
+    () => true,
+    () => false
+  );
+  if (exists) throw new Error(`--out ${out} already exists; a batch is never overwritten.`);
+}
+
+/**
+ * Writes `--out` after the batch is stored, so a refused store never leaves a batch file that has
+ * no custody. A failure here names the stored artifact, which is then the batch's only copy.
+ */
+async function writeBatchFile(
+  out: string,
+  bytes: Uint8Array,
+  stored: AflTradeStoredEvidence | null
+): Promise<void> {
+  try {
+    await writeFile(out, bytes, { flag: 'wx' });
+  } catch (error) {
+    if (stored === null) throw error;
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `The batch was stored as ${stored.reference.artifactId}, but --out was not written: ${reason}`
+    );
+  }
+}
+
 export interface GradeRealizedTradesResult {
   batchId: string;
   summary: Record<string, number>;
@@ -139,6 +170,7 @@ export async function runGradeRealizedTradesCommand(input: {
   writeOutput?: (line: string) => void;
 }): Promise<GradeRealizedTradesResult> {
   const parsed = parseGradeRealizedTradesArguments(input.argv, input.env);
+  await requireOutAbsent(parsed.out);
   const pool = new Pool({ connectionString: parsed.databaseUrl, max: 2 });
   try {
     const client = createPgAflOutcomeSqlClient(pool);
@@ -156,10 +188,10 @@ export async function runGradeRealizedTradesCommand(input: {
     const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(batch));
     if (bytes.byteLength > MAXIMUM_BATCH_BYTES)
       throw new RangeError(`The batch exceeds ${MAXIMUM_BATCH_BYTES} bytes.`);
-    await writeFile(parsed.out, bytes, { flag: 'wx' });
     const stored = parsed.dryRun
       ? null
       : await storeRealizedTradeGradeBatch(client, parsed.storeId!, bytes);
+    await writeBatchFile(parsed.out, bytes, stored);
     const result = {
       batchId: batch.batchId,
       summary: batch.content.summary,
@@ -186,7 +218,7 @@ if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).
   runGradeRealizedTradesCommand({ argv: process.argv.slice(2), env: process.env }).catch(
     (error: unknown) => {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown error';
-      process.stderr.write(`Realized grading stopped; nothing was stored. ${message}\n`);
+      process.stderr.write(`Realized grading stopped. ${message}\n`);
       process.exitCode = 1;
     }
   );
