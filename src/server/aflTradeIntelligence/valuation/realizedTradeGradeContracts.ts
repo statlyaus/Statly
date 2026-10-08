@@ -14,7 +14,7 @@ import {
 /**
  * The MVP realized trade grade (statlyaus/Statly#789; rules in docs/architecture/afl-trade-intelligence.md,
  * "Valuing a not-used pick", "Traded-on picks and bundled trades", "Pick projection" and "Realized trade
- * grade (MVP)"). Each transfer leg carries one realized value in whole-first-stint HPN PAV at its receiving
+ * grade (MVP) contract"). Each transfer leg carries one realized value in whole-first-stint HPN PAV at its receiving
  * club: received for that club and given up by the sending club. A club's net is received minus given up.
  * The at-trade view is reported beside each leg and never enters a total. The unit is `career_pav`, which
  * the docs forbid composing with Statly model units, so this contract is separate from the draw-based
