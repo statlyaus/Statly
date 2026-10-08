@@ -4007,6 +4007,12 @@ is exact-URL only. Gate field authorization remains unchanged: every emitted fie
 explicit reviewed mapping and archive request. Verify and retain governance, capture, identity and
 promotion results for the authorized target; parser eligibility is not source permission.
 
+Parser v19 (see "Capturing source evidence") changed only the shared 2020–2023 report routing. The
+thirteen per-season parsers under `src/server/aflTradeIntelligence/source/` (2010 list and session,
+2011–2019 sessions, 2011 and 2012 mini drafts) still read only `.article__date > time`, so a live
+recapture of any 2010–2019 page refuses until they are changed under a later parser version. Their
+existing captures stay valid.
+
 Migration0204 requires session boundary and member-identity approvals to retain the exact source
 observation, entity and season. A same-name approval from another season cannot substitute for it.
 The identity loader preserves distinct subjects when collecting resolutions. Existing candidates
