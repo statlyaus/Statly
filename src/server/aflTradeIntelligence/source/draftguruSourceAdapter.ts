@@ -10,8 +10,9 @@ import type { AnyNode } from 'domhandler';
 
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
-  DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
   createAflTradeExternalEvidenceEnvelope,
+  isDraftguruNationalYearAccessParserVersion,
   type AflTradeExternalEvidenceContent,
   type AflTradeExternalEvidenceEnvelope,
 } from './externalDraftTradeEvidenceContracts';
@@ -586,12 +587,29 @@ export function parseDraftguruYearSelections(
  * open selection, `Academy` or `Academy (NG)` for an academy nomination, and `Father-Son(<father>)`
  * for a father-son nomination. Any other text, including a new academy label or a father-son cell
  * without a name, is unreviewed and returns null, so the row is quarantined rather than counted.
+ *
+ * With `qualified` (parser v3), the 2019 club-qualified forms are also reviewed. `Academy(<club>)` or
+ * `Academy (NG)(<club>)` is an academy nomination only when the named club is the selecting club. With
+ * ` - Not Matched`, the named academy club declined to match the bid, so the selecting club used an
+ * ordinary pick: that is an open selection, and the named club must differ from the selecting club.
+ * Any other combination is unreviewed and returns null.
  */
-function accessCategoryOf(text: string): 'open' | 'academy' | 'father_son' | null {
+function accessCategoryOf(
+  text: string,
+  selectingClub: string,
+  qualified: boolean
+): 'open' | 'academy' | 'father_son' | null {
   if (text === '') return 'open';
   if (text === 'Academy' || text === 'Academy (NG)') return 'academy';
   if (/^Father-Son ?\([A-Z][A-Za-z'’.-]*(?: [A-Za-z'’.-]+)+\)$/.test(text)) return 'father_son';
-  return null;
+  if (!qualified) return null;
+  const match = /^Academy(?: \(NG\))?\(([A-Z][A-Za-z'’. -]*?[A-Za-z])( - Not Matched)?\)$/.exec(
+    text
+  );
+  if (!match || !selectingClub) return null;
+  const namedClub = match[1]!;
+  if (match[2]) return namedClub !== selectingClub ? 'open' : null;
+  return namedClub === selectingClub ? 'academy' : null;
 }
 
 function parseDraftguruYearSelectionRows(
@@ -659,7 +677,11 @@ function parseDraftguruYearSelectionRows(
     const clubName = normalizeText(clubCell.text());
     const categoryCells = wrapped.find('td.category');
     const accessCategory = input.readAccessCategory
-      ? accessCategoryOf(normalizeText(categoryCells.eq(1).text()))
+      ? accessCategoryOf(
+          normalizeText(categoryCells.eq(1).text()),
+          clubName,
+          input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+        )
       : undefined;
     if (input.readAccessCategory && (categoryCells.length !== 2 || accessCategory === null)) {
       scopeSummary.invalidRows++;
@@ -809,8 +831,7 @@ export function parseDraftguruNationalYearSelections(
   if (issues.length) return { evidence: [], issues, scopeSummary: summary };
   const result = parseDraftguruYearSelectionRows($.html(), {
     ...input,
-    readAccessCategory:
-      input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION,
+    readAccessCategory: isDraftguruNationalYearAccessParserVersion(input.capture.parserVersion),
   });
   if (!summary.includedRows)
     result.issues.push({

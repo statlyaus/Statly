@@ -11,7 +11,7 @@ import {
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
 import {
-  DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION,
+  isDraftguruNationalYearAccessParserVersion,
   parseAflTradeExternalEvidenceBatch,
   type AflTradeExternalEvidenceBatch,
   type AflTradeExternalEvidenceContent,
@@ -720,7 +720,7 @@ function createNominatedSelectionCounter(
     }
     if (
       row.content.provider === 'draftguru' &&
-      row.content.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION &&
+      isDraftguruNationalYearAccessParserVersion(row.content.capture.parserVersion) &&
       claim.kind === 'draft_selection' &&
       claim.accessCategory !== undefined
     ) {

@@ -318,7 +318,7 @@ describe('recorded Draftguru national-year authority', () => {
   it('loads the per-season decision recorded under the issue579 key', async () => {
     const record = recordedNational(2024);
     expect(record.proposal.content.decisionKey).toBe(
-      'draftguru-national-year-page-issue579-private-2024-parser-v2'
+      'draftguru-national-year-page-issue579-private-2024-parser-v3'
     );
     const loaded = await loadRecordedLocalCaptureAuthority(
       ledgerOf(record),
@@ -348,7 +348,18 @@ describe('recorded Draftguru national-year authority', () => {
         2024,
         evaluatedAt
       )
-    ).rejects.toThrow(/draftguru-national-year-page\/v2/);
+    ).rejects.toThrow(/draftguru-national-year-page\/v3/);
+  });
+
+  it('refuses a recorded v2 decision for new captures under v3', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedNational(2019, 'draftguru-national-year-page/v2')),
+        'draftguru-national-year-page',
+        2019,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/draftguru-national-year-page-issue579-private-2019-parser-v3/);
   });
 
   it('refuses recorded rights with the trade-page one-day cache instead of the reviewed hour', async () => {
@@ -387,7 +398,7 @@ describe('recorded Draftguru national-year authority', () => {
       capabilityId: 'draftguru-national-year-page',
       draftPathway: 'national',
       sourceUrl: 'https://www.draftguru.com.au/years/2022',
-      parserVersion: 'draftguru-national-year-page/v2',
+      parserVersion: 'draftguru-national-year-page/v3',
       effectiveAt: evaluatedAt,
     });
     expect(

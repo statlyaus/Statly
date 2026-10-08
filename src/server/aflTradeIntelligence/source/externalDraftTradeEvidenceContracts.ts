@@ -62,10 +62,26 @@ const sourceUrlSchema = z
   });
 
 /**
- * The Draftguru national-year parser that reads each selection's access category. Reconciliation
- * counts `accessCategory` as access coverage only on evidence captured at this version.
+ * The Draftguru national-year parser that reads each selection's access category from the plain forms
+ * (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`).
  */
 export const DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION = 'draftguru-national-year-page/v2';
+
+/**
+ * v3 also reads the club-qualified academy forms the 2019 page uses (`Academy(<club>)`,
+ * `Academy (NG)(<club>)`, each optionally ending ` - Not Matched`). On a page with only the plain
+ * forms it emits exactly what v2 emits.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION =
+  'draftguru-national-year-page/v3';
+
+/** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
+export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
+  return (
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+  );
+}
 
 const sourceCaptureSchema = z
   .object({
