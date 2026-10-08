@@ -4092,9 +4092,9 @@ The remaining work proceeds through these independently verifiable gates:
    reference benchmark (`hpnPickValueBenchmark.ts`, schema `hpn-dpvc-v3-pick-value-benchmark/v1`): a
    public reference formula, not a captured dataset, so no Gate 0A capture applies. Its source page is
    retained as an immutable evidence artifact, and the content-addressed `hpn-pick-benchmark:` record
-   that cites it is the pinned projection version, registered as "Registering the HPN reference
-   benchmark" in the operations runbook describes, under the standing owner approval for the
-   attributed HPN formula. It covers national-draft selections 1 to 90 only, with no extrapolation;
+   that cites it is the pinned projection version. It is registered under the standing owner approval
+   for the attributed HPN formula, following "Registering the HPN reference benchmark" in the
+   operations runbook. It covers national-draft selections 1 to 90 only, with no extrapolation;
    other picks have no projection. A curve fitted only
    from Statly's 2021-2026 PAV is unsound, because draftees have at most a few seasons. HPN's fit uses
    completed careers. Its limits are stated with every use: the fit predates academies, bid matching and
@@ -4150,6 +4150,19 @@ The remaining work proceeds through these independently verifiable gates:
      one, is `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
      `traded_on_return_blocked`. A player's at-trade view is his PAV at the sending club in the trade
      season.
+   - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
+     repeatable-read transaction, one query per table: the finalized non-production candidate (its
+     content address re-checked), the current HPN PAV calculation per requested season from
+     `outcome_hpn_pav_calculation_head`, those calculations' player rows (`total_pav` per player and
+     club), and approved spell versions recorded by the cutoff that nothing recorded by the cutoff
+     supersedes. v3 (`afl-trade-acquisition-registration/v3`) spells are the season appearances. v4 spells
+     are the reviewed arrivals, and on statly-grading-1 these are draft-night arrivals only, so no traded
+     player has one yet. "Current" here is approval plus no successor, not the per-row registration
+     currency check, which is about 3 s a row. On statly-grading-1 (2026-10-08) the governed check,
+     `outcome_acquisition_spell_registration_current`, agreed with this proxy on all 247 v4 arrivals
+     (247/247, 15 min). Phase 4 adds set-based currency. A season without a finalized current
+     calculation is refused, never guessed. Migration 0259 is not a grader dependency: the reader never
+     calls the functions it rewrites.
    - **No letter grade.** The grade is the per-club net in `career_pav`. The Statly grade policy converts
      probability distributions and does not apply. Asset letter grades stay prohibited.
 
