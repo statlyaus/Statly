@@ -4074,17 +4074,24 @@ The remaining work proceeds through these independently verifiable gates:
    realized grade or the bundle allocation, so a change of projection never changes a grade. The MVP
    uses the HPN Draft Pick Value Chart v3.0 (https://www.hpnfooty.com/?page_id=22741): pick value =
    −30.36 × ln(pick number) + 146.95, in career PAV, fitted on the 1993-2006 drafts excluding father-son
-   picks (R² 0.73). Pick 1 is about 147, pick 10 about 77 and pick 30 about 44. It is captured and pinned
-   under its own Gate 0A decision and cited as projection version `hpn-dpvc-v3.0`. A curve fitted only
+   picks (R² 0.73). Pick 1 is about 147, pick 10 about 77 and pick 30 about 44. It is the existing HPN
+   reference benchmark (`hpnPickValueBenchmark.ts`, schema `hpn-dpvc-v3-pick-value-benchmark/v1`): a
+   public reference formula, not a captured dataset, so no Gate 0A capture applies. Its source page is
+   retained as an immutable evidence artifact, and the content-addressed `hpn-pick-benchmark:` record
+   that cites it is the pinned projection version, registered as "Registering the HPN reference
+   benchmark" in the operations runbook describes, under the standing owner approval for the
+   attributed HPN formula. It covers national-draft selections 1 to 90 only, with no extrapolation;
+   other picks have no projection. A curve fitted only
    from Statly's 2021-2026 PAV is unsound, because draftees have at most a few seasons. HPN's fit uses
    completed careers. Its limits are stated with every use: the fit predates academies, bid matching and
    compensation picks, it is an average per slot, and it excludes father-son picks. Every grade batch
-   records the projection version it used.
+   records the benchmark record it used. Displaying these values publicly needs a separate
+   `public_derived_output` decision and HPN's permission.
 
    **Planned: recalibrated projection.** Once PAV for 2011-2020 is backfilled, drafts from about
    2011 to 2015 have ten or more seasons. Then HPN's curve can be recalibrated on modern drafts,
-   including the effect of academies and bid matching. The result is a new projection version (for
-   example `hpn-dpvc-v3.0+statly-recal-v1`) added beside v3.0, never overwriting it. It needs its own
+   including the effect of academies and bid matching. The result is a new projection version with its
+   own schema, added beside the v3 benchmark and never overwriting it. It needs its own
    owner decision. Earlier batches stay reproducible by the version they name.
 
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
