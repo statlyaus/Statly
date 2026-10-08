@@ -4061,20 +4061,31 @@ The remaining work proceeds through these independently verifiable gates:
    club received and then traded on is worth what the club got back for it. When it was the only asset
    the club gave in the onward trade, it is worth that trade's whole realized return. If a returned pick
    was itself traded on, its value follows the chain the same way. When the club gave a bundle, the
-   bundle's realized return is allocated across the assets given in proportion to each one's at-trade
-   value: players at their trade-season PAV, picks at the pick projection below. This is the
-   relative-value allocation accountants use for a lump-sum purchase of several assets (IFRS 3,
-   ASC 805). Grades along a chain overlap and are not additive, so a separate tree view reports what the
-   club finally landed and gave up.
+   bundle's realized return is allocated across the assets given in proportion to each one's realized
+   value: what each given asset became for the club that received it, in the same whole-first-stint
+   PAV the grade uses. No single-season figure is used anywhere. This is the relative-value allocation
+   accountants use for a lump-sum purchase of several assets (IFRS 3, ASC 805), measured on realized
+   value. When every given asset's realized value is 0, the return is split equally and labelled
+   `equal_split_tiebreak`. Grades along a chain overlap and are not additive, so a separate tree view
+   reports what the club finally landed and gave up.
 
    **Pick projection (owner decision, 2026-10-08, replacing the 2026-10-06 "no projection in the MVP"
-   rule).** The MVP has a pick projection. It is the at-trade view of a pick and the allocation weight
-   for bundles. It is never subtracted from the realized grade. A curve fitted from Statly's own
-   2021-2026 PAV is still unsound (survivorship, recent draftees with little history, one-season units).
-   The projection therefore comes from a published pick-value curve, captured under its own Gate 0A
-   decision. The candidates are HPN's PAV-based pick value chart, which is on the grade's own scale, and
-   the AFL's Draft Value Index points table, used as relative weights only. The owner chooses the
-   source. Until it is recorded, bundled allocations stay blocked.
+   rule).** The MVP has a pick projection. It is the at-trade view of a pick only. It never feeds the
+   realized grade or the bundle allocation, so a change of projection never changes a grade. The MVP
+   uses the HPN Draft Pick Value Chart v3.0 (https://www.hpnfooty.com/?page_id=22741): pick value =
+   −30.36 × ln(pick number) + 146.95, in career PAV, fitted on the 1993-2006 drafts excluding father-son
+   picks (R² 0.73). Pick 1 is about 147, pick 10 about 77 and pick 30 about 44. It is captured and pinned
+   under its own Gate 0A decision and cited as projection version `hpn-dpvc-v3.0`. A curve fitted only
+   from Statly's 2021-2026 PAV is unsound, because draftees have at most a few seasons. HPN's fit uses
+   completed careers. Its limits are stated with every use: the fit predates academies, bid matching and
+   compensation picks, it is an average per slot, and it excludes father-son picks. Every grade batch
+   records the projection version it used.
+
+   **Planned: recalibrated projection.** Once PAV for 2011-2020 is backfilled, drafts from about
+   2011 to 2015 have ten or more seasons. Then HPN's curve can be recalibrated on modern drafts,
+   including the effect of academies and bid matching. The result is a new projection version (for
+   example `hpn-dpvc-v3.0+statly-recal-v1`) added beside v3.0, never overwriting it. It needs its own
+   owner decision. Earlier batches stay reproducible by the version they name.
 
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate
