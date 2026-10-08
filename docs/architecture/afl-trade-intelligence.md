@@ -4056,8 +4056,25 @@ The remaining work proceeds through these independently verifiable gates:
    - `no_access_evidence`: **blocking**. Unknown is not zero.
 
    A not-used pick is never credited with any player's value. The rule applies to realized value only.
-   The at-trade view is unchanged, and the MVP has no pick slot projection (and so no Draft Value Index
-   input). Both arrive with the Phase 3 projection fit.
+
+   **Traded-on picks and bundled trades (owner decision, 2026-10-08, statlyaus/Statly#789).** A pick a
+   club received and then traded on is worth what the club got back for it. When it was the only asset
+   the club gave in the onward trade, it is worth that trade's whole realized return. If a returned pick
+   was itself traded on, its value follows the chain the same way. When the club gave a bundle, the
+   bundle's realized return is allocated across the assets given in proportion to each one's at-trade
+   value: players at their trade-season PAV, picks at the pick projection below. This is the
+   relative-value allocation accountants use for a lump-sum purchase of several assets (IFRS 3,
+   ASC 805). Grades along a chain overlap and are not additive, so a separate tree view reports what the
+   club finally landed and gave up.
+
+   **Pick projection (owner decision, 2026-10-08, replacing the 2026-10-06 "no projection in the MVP"
+   rule).** The MVP has a pick projection. It is the at-trade view of a pick and the allocation weight
+   for bundles. It is never subtracted from the realized grade. A curve fitted from Statly's own
+   2021-2026 PAV is still unsound (survivorship, recent draftees with little history, one-season units).
+   The projection therefore comes from a published pick-value curve, captured under its own Gate 0A
+   decision. The candidates are HPN's PAV-based pick value chart, which is on the grade's own scale, and
+   the AFL's Draft Value Index points table, used as relative weights only. The owner chooses the
+   source. Until it is recorded, bundled allocations stay blocked.
 
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate
