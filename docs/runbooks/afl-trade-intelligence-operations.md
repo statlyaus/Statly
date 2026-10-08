@@ -882,9 +882,12 @@ Prerequisites:
      points or estimates). The v2 decision's source rights must name `DRAFTGURU_TRADE_DETAIL_V2_FIELDS`.
      The v1 decision and the captures recorded under it stay valid; the runner no longer makes new
      v1 trade-detail captures;
-   - one `draftguru-national-year-page-issue579-private-<season>` decision per captured season, for
-     example `draftguru-national-year-page-issue579-private-2024`. The runner never uses a combined
-     key such as `-2018-combined-v2`; and
+   - one `draftguru-national-year-page-issue579-private-<season>-parser-v2` decision per captured
+     season, for example `draftguru-national-year-page-issue579-private-2024-parser-v2`. Parser
+     `draftguru-national-year-page/v2` also records each selection's `accessCategory` (open,
+     academy or father-son), so its rights must name `DRAFTGURU_NATIONAL_YEAR_FIELDS`. The v1
+     per-season decisions and their captures stay valid. The runner never uses a combined key such
+     as `-2018-combined-v2`; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v18`. The key names the
@@ -892,7 +895,7 @@ Prerequisites:
      falls back to an earlier season key or parser. Every season in a run must have its decision
      before any page is fetched.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v1`, `draftguru-national-year-page/v1` or
+   `draftguru-trade-parser/v2`, `draftguru-national-year-page/v2` or
    `official-afl-completed-draft-session/v18`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
@@ -929,8 +932,9 @@ refused before anything is fetched. `--season` is still required.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v1`), which keeps national selections and counts every other pathway
-as excluded. It is never the general `draftguru-event-year` year-page parser:
+(`draftguru-national-year-page/v2`), which keeps national selections and counts every other pathway
+as excluded, and records each selection's access category from the page's category cell. An
+unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \

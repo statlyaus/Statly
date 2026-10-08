@@ -61,6 +61,12 @@ const sourceUrlSchema = z
     });
   });
 
+/**
+ * The Draftguru national-year parser that reads each selection's access category. Reconciliation
+ * counts `accessCategory` as access coverage only on evidence captured at this version.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION = 'draftguru-national-year-page/v2';
+
 const sourceCaptureSchema = z
   .object({
     captureId: aflTradeContentAddressedIdSchema('source-capture'),
@@ -228,6 +234,12 @@ const draftSelectionClaimSchema = z
     roundNumber: positiveOrdinalSchema.nullable(),
     player: recordedEntitySchema,
     selectedByClub: recordedEntitySchema,
+    /**
+     * How the selecting club accessed the player, as the Draftguru national-year page (parser v2)
+     * states it: an open selection, or an academy or father-son nomination (both reached through a
+     * matched bid in the national draft). Absent for sources and parsers that do not record it.
+     */
+    accessCategory: z.enum(['open', 'academy', 'father_son']).optional(),
   })
   .strict();
 

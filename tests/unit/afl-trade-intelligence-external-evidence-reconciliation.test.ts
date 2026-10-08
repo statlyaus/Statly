@@ -1854,6 +1854,117 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
     ]);
   });
 
+  describe('not-used picks and the receiving club’s nominated selections', () => {
+    type Access = 'open' | 'academy' | 'father_son';
+    const YEAR_PAGE_V2 = 'draftguru-national-year-page/v2';
+    const tradeClaims = draftguruClaims.filter((claim) => claim.kind !== 'draft_selection');
+    const notUsed = disposition({ disposition: 'not_used', player: undefined });
+    const harryKyle = draftguruClaims.find((claim) => claim.kind === 'draft_selection')!;
+    // A complete synthetic 2025 national draft: GWS takes 1 to 13, the Bulldogs take 14.
+    const yearPage = (bulldogsAccess: Access, omit: number[] = []) =>
+      Array.from({ length: 14 }, (_, index) => index + 1)
+        .filter((number) => !omit.includes(number))
+        .map((number) =>
+          number === 14
+            ? { ...harryKyle, accessCategory: bulldogsAccess }
+            : {
+                kind: 'draft_selection' as const,
+                draftYear: 2025,
+                draftType: 'national' as const,
+                selectionNumber: number,
+                roundNumber: 1,
+                player: { nativeId: null, recordedName: `Synthetic Player ${number}` },
+                selectedByClub: { nativeId: null, recordedName: 'GWS' },
+                accessCategory: 'open' as const,
+              }
+        );
+    const officialSession = (selectionNumbers: number[]) =>
+      batch('official_afl', '6', [
+        {
+          kind: 'draft_session',
+          draftYear: 2025,
+          draftType: 'national',
+          sessionOrdinal: 1,
+          eventDate: '2025-11-20',
+          officialName: 'Synthetic completed national draft',
+          selectionNumbers,
+        },
+      ]);
+    const allFourteen = Array.from({ length: 14 }, (_, index) => index + 1);
+    const reconcileDraft = ({
+      page,
+      parserVersion = YEAR_PAGE_V2,
+      session = officialSession(allFourteen),
+      outcome = notUsed,
+    }: {
+      page: AflTradeExternalEvidenceContent['claim'][];
+      parserVersion?: string;
+      session?: ReturnType<typeof officialSession> | null;
+      outcome?: AflTradeExternalEvidenceContent['claim'];
+    }) =>
+      parseAflTradeExternalReconciliationCandidate(
+        reconcileAflTradeExternalEvidence({
+          environment: 'test_fixture',
+          competition: 'AFLM',
+          anchorSeasonYear: 2025,
+          sourceBatches: [
+            batch('draftguru', 'a', [...tradeClaims, outcome]),
+            batch('draftguru', 'b', page, undefined, { parserVersion }),
+            ...(session ? [session] : []),
+          ],
+          identityResolutions: resolutions,
+          reconciledAt: '2026-08-09T05:00:00.000Z',
+        })
+      );
+    const basisOf = (candidate: ReturnType<typeof reconcileDraft>) =>
+      candidate.content.pickOutcomes![0]!;
+
+    it('records a nominated player when the official session proves the whole draft', () => {
+      const candidate = reconcileDraft({ page: yearPage('academy') });
+      const outcome = basisOf(candidate);
+      expect(outcome).toEqual(
+        expect.objectContaining({
+          disposition: 'not_used',
+          nominationBasis: 'club_took_nominated_player',
+          receivingClubNominatedSelections: 1,
+        })
+      );
+      // The disposition row, the Bulldogs' year-page row and the official session row.
+      expect(outcome.evidenceIds).toHaveLength(3);
+    });
+
+    it('records no nominated player when every row in the proven draft says so', () => {
+      expect(basisOf(reconcileDraft({ page: yearPage('open') }))).toEqual(
+        expect.objectContaining({
+          nominationBasis: 'club_took_no_nominated_player',
+          receivingClubNominatedSelections: 0,
+        })
+      );
+    });
+
+    it.each([
+      ['the year page omits a row the official session lists', { page: yearPage('open', [3]) }],
+      [
+        'the official session does not start at selection 1',
+        { page: yearPage('open'), session: officialSession(allFourteen.slice(1)) },
+      ],
+      ['no official session covers the draft', { page: yearPage('open'), session: null }],
+      [
+        'the access categories are not from a v2 Draftguru year page',
+        { page: yearPage('academy'), parserVersion: 'draftguru-national-year-page/v1' },
+      ],
+    ])('leaves the count unknown when %s', (_label, input) => {
+      const outcome = basisOf(reconcileDraft(input));
+      expect(outcome).toEqual(expect.objectContaining({ nominationBasis: 'no_access_evidence' }));
+      expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
+    });
+
+    it('carries no nomination basis on selected or traded-on picks', () => {
+      const candidate = reconcileDraft({ page: yearPage('academy'), outcome: disposition({}) });
+      expect(basisOf(candidate)).not.toHaveProperty('nominationBasis');
+    });
+  });
+
   it('keeps a not-used future pick pending until its draft is inside the candidate', () => {
     const futureClaims = futureDraftguru.content.evidence.map(({ content }) => content.claim);
     const candidate = reconcileAflTradeExternalEvidence({

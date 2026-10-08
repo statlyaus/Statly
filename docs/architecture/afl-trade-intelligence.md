@@ -4023,6 +4023,22 @@ The remaining work proceeds through these independently verifiable gates:
    measured against Draftguru's stated outcomes, same-club number matching misattributed about one
    pick in eight, because bid matching and compensation picks renumber the draft.
 
+   **"Not used" picks and nominated players.** A received pick is "not used" only on draft night:
+   it was spent matching a bid or it was passed. No AFL publication records which picks a matched bid
+   consumed, so the candidate records the sourceable fact instead. The Draftguru national-year page
+   (parser v2) states each selection's access (open, academy or father-son, the nominations reached
+   through a matched bid), and each stated not-used national pick carries `nominationBasis`: whether
+   the receiving club took a nominated player in that draft (`club_took_nominated_player`, with the
+   count), took none (`club_took_no_nominated_player`), or the draft lacks complete access evidence
+   (`no_access_evidence`, with no count, because unknown is not zero). Only `draftguru` evidence
+   captured at `draftguru-national-year-page/v2` counts. A draft is covered only when its membership
+   is proven independently of that page: the reviewed official AFL completed-session claims list
+   selections 1 to N with no gap, the candidate's selections in the draft are exactly those numbers,
+   and each carries exactly one stated category. A partial or disputed page therefore never yields a
+   negative. The outcome cites the receiving club's year-page and official session rows it read. Categories match
+   the reviewed forms exactly (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`); any other
+   text quarantines the row. How a not-used pick is valued from that fact is a separate owner rule.
+
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate
    the pointer atomically, and verify trades, drafts, outcomes, clubs, years, APIs, and exports resolve
