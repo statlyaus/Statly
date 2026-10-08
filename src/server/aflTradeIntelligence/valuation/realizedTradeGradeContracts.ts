@@ -156,109 +156,150 @@ const legBase = {
   atTrade: atTradeSchema,
 };
 
-export const aflTradeRealizedTradeGradeLegSchema = z
-  .union([
-    z
-      .object({
-        ...legBase,
-        state: z.literal('valued'),
-        basis: z.enum(['pick_selected_first_stint', 'player_first_stint']),
-        realizedValue: valueSchema,
-        stint: stintSchema,
-      })
-      .strict(),
-    z
-      .object({
-        ...legBase,
-        state: z.literal('valued'),
-        basis: z.literal('pick_traded_on_return'),
-        realizedValue: valueSchema,
-        onward: onwardSchema,
-      })
-      .strict(),
-    z
-      .object({
-        ...legBase,
-        state: z.literal('valued'),
-        basis: z.literal('pick_not_used_no_nominee'),
-        realizedValue: z.literal(0),
-      })
-      .strict(),
-    z
-      .object({
-        ...legBase,
-        state: z.literal('excluded'),
-        basis: z.literal('pick_not_used_nominee_excluded'),
-      })
-      .strict(),
-    // Traded on in a bundle where it is excluded (spent on a nominee, or unallocated further down the
-    // chain): it has no realized weight to share the bundle's return by, so it is excluded too.
-    z
-      .object({
-        ...legBase,
-        state: z.literal('excluded'),
-        basis: z.literal('pick_traded_on_return_unallocated'),
-        onwardTransactionId: aflTradePublicIdSchema,
-      })
-      .strict(),
-    z.object({ ...legBase, state: z.literal('blocked'), basis: z.literal('unavailable') }).strict(),
-  ])
-  .superRefine((leg, context) => {
-    const issue = (message: string) => context.addIssue({ code: 'custom', message });
-    const has = (reason: AflTradeRealizedGradeReason) => leg.reasons.includes(reason);
-    if (leg.sendingClubId === leg.receivingClubId) issue('A leg must move between distinct clubs.');
-    if ((leg.state === 'blocked') !== leg.reasons.some((reason) => blockingReasons.has(reason)))
-      issue('A leg is blocked exactly when it carries a blocking reason.');
-    if (
+const legUnionSchema = z.union([
+  z
+    .object({
+      ...legBase,
+      state: z.literal('valued'),
+      basis: z.enum(['pick_selected_first_stint', 'player_first_stint']),
+      realizedValue: valueSchema,
+      stint: stintSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...legBase,
+      state: z.literal('valued'),
+      basis: z.literal('pick_traded_on_return'),
+      realizedValue: valueSchema,
+      onward: onwardSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...legBase,
+      state: z.literal('valued'),
+      basis: z.literal('pick_not_used_no_nominee'),
+      realizedValue: z.literal(0),
+    })
+    .strict(),
+  z
+    .object({
+      ...legBase,
+      state: z.literal('excluded'),
+      basis: z.literal('pick_not_used_nominee_excluded'),
+    })
+    .strict(),
+  // Traded on in a bundle where it is excluded (spent on a nominee, or unallocated further down the
+  // chain): it has no realized weight to share the bundle's return by, so it is excluded too.
+  z
+    .object({
+      ...legBase,
+      state: z.literal('excluded'),
+      basis: z.literal('pick_traded_on_return_unallocated'),
+      onwardTransactionId: aflTradePublicIdSchema,
+    })
+    .strict(),
+  z.object({ ...legBase, state: z.literal('blocked'), basis: z.literal('unavailable') }).strict(),
+]);
+
+type ParsedLeg = z.infer<typeof legUnionSchema>;
+type LegRule = (leg: ParsedLeg, has: (reason: AflTradeRealizedGradeReason) => boolean) => boolean;
+
+/** Each rule returns true when the leg breaks it. */
+const legRules: ReadonlyArray<readonly [LegRule, string]> = [
+  [(leg) => leg.sendingClubId === leg.receivingClubId, 'A leg must move between distinct clubs.'],
+  [
+    (leg) =>
+      (leg.state === 'blocked') !== leg.reasons.some((reason) => blockingReasons.has(reason)),
+    'A leg is blocked exactly when it carries a blocking reason.',
+  ],
+  [
+    (leg) =>
       leg.assetKind === 'player' &&
       leg.basis !== 'player_first_stint' &&
-      leg.basis !== 'unavailable'
-    )
-      issue('A player leg is valued on the player first-stint basis or blocked.');
-    if (leg.assetKind === 'pick' && leg.basis === 'player_first_stint')
-      issue('A pick leg is never valued on the player basis.');
-    if (leg.assetKind === 'pick' && leg.state !== 'blocked' && !has('single_source_pick_outcome'))
-      issue('A pick outcome is single-source, so a valued or excluded pick leg is provisional.');
-    if (leg.assetKind === 'player' && has('single_source_pick_outcome'))
-      issue('Only a pick leg rests on a pick outcome.');
-    if ((leg.basis === 'pick_not_used_nominee_excluded') !== has('not_used_nominee_excluded'))
-      issue('A not-used pick is excluded exactly when its club took a nominee with it.');
-    if ((leg.basis === 'pick_traded_on_return_unallocated') !== has('traded_on_return_unallocated'))
-      issue('An unallocated traded-on pick, and only that, is stated as a reason.');
-    const stintOpen = 'stint' in leg && leg.stint.status === 'open';
-    if (stintOpen !== has('stint_open'))
-      issue('An open stint, and only an open stint, is stated as a reason.');
-    if ('stint' in leg && leg.stint.seasonsMissingPav.length > 0 !== has('pav_seasons_missing'))
-      issue('Missing PAV seasons, and only missing PAV seasons, are stated as a reason.');
-    if (
+      leg.basis !== 'unavailable',
+    'A player leg is valued on the player first-stint basis or blocked.',
+  ],
+  [
+    (leg) => leg.assetKind === 'pick' && leg.basis === 'player_first_stint',
+    'A pick leg is never valued on the player basis.',
+  ],
+  [
+    (leg, has) =>
+      leg.assetKind === 'pick' && leg.state !== 'blocked' && !has('single_source_pick_outcome'),
+    'A pick outcome is single-source, so a valued or excluded pick leg is provisional.',
+  ],
+  [
+    (leg, has) => leg.assetKind === 'player' && has('single_source_pick_outcome'),
+    'Only a pick leg rests on a pick outcome.',
+  ],
+  [
+    (leg, has) =>
+      (leg.basis === 'pick_not_used_nominee_excluded') !== has('not_used_nominee_excluded'),
+    'A not-used pick is excluded exactly when its club took a nominee with it.',
+  ],
+  [
+    (leg, has) =>
+      (leg.basis === 'pick_traded_on_return_unallocated') !== has('traded_on_return_unallocated'),
+    'An unallocated traded-on pick, and only that, is stated as a reason.',
+  ],
+  [
+    (leg, has) => ('stint' in leg && leg.stint.status === 'open') !== has('stint_open'),
+    'An open stint, and only an open stint, is stated as a reason.',
+  ],
+  [
+    (leg, has) =>
+      'stint' in leg && leg.stint.seasonsMissingPav.length > 0 !== has('pav_seasons_missing'),
+    'Missing PAV seasons, and only missing PAV seasons, are stated as a reason.',
+  ],
+  [
+    (leg) =>
       'stint' in leg &&
-      leg.stint.seasonsValued.some((season) => leg.stint.seasonsMissingPav.includes(season))
-    )
-      issue('A stint season is either valued or missing, not both.');
-    const onward = 'onward' in leg ? leg.onward : null;
-    if (!onward && (has('equal_split_tiebreak') || has('traded_on_return_provisional')))
-      issue('Only a traded-on pick carries onward-trade reasons.');
-    if (onward) {
-      if ((onward.allocation === 'equal_split') !== has('equal_split_tiebreak'))
-        issue('An equal split, and only an equal split, is stated as a reason.');
-      if (leg.state === 'valued' && leg.realizedValue !== onward.share * onward.returnValue)
-        issue('A traded-on pick is worth its share of the onward return.');
-    }
-    if (leg.atTrade.kind === 'pick_projection') {
-      if (
-        leg.assetKind !== 'pick' ||
-        leg.atTrade.value !== hpnDpv3ValueForPick(leg.atTrade.selectionNumber)
-      )
-        issue('A pick projection must be the HPN DPVC v3 value of its selection, on a pick leg.');
-    }
-    if (leg.atTrade.kind === 'player_trade_season_pav' && leg.assetKind !== 'player')
-      issue('A trade-season PAV view belongs to a player leg.');
-    if (
+      leg.stint.seasonsValued.some((season) => leg.stint.seasonsMissingPav.includes(season)),
+    'A stint season is either valued or missing, not both.',
+  ],
+  [
+    (leg, has) =>
+      !('onward' in leg) && (has('equal_split_tiebreak') || has('traded_on_return_provisional')),
+    'Only a traded-on pick carries onward-trade reasons.',
+  ],
+  [
+    (leg, has) =>
+      'onward' in leg && (leg.onward.allocation === 'equal_split') !== has('equal_split_tiebreak'),
+    'An equal split, and only an equal split, is stated as a reason.',
+  ],
+  [
+    (leg) =>
+      'onward' in leg &&
+      leg.state === 'valued' &&
+      leg.realizedValue !== leg.onward.share * leg.onward.returnValue,
+    'A traded-on pick is worth its share of the onward return.',
+  ],
+  [
+    (leg) =>
+      leg.atTrade.kind === 'pick_projection' &&
+      (leg.assetKind !== 'pick' ||
+        leg.atTrade.value !== hpnDpv3ValueForPick(leg.atTrade.selectionNumber)),
+    'A pick projection must be the HPN DPVC v3 value of its selection, on a pick leg.',
+  ],
+  [
+    (leg) => leg.atTrade.kind === 'player_trade_season_pav' && leg.assetKind !== 'player',
+    'A trade-season PAV view belongs to a player leg.',
+  ],
+  [
+    (leg) =>
       leg.atTrade.kind === 'unavailable' &&
-      (leg.atTrade.reason === 'trade_season_pav_missing') !== (leg.assetKind === 'player')
-    )
-      issue('A missing trade-season PAV is a player view; the other unavailable views are picks.');
-  });
+      (leg.atTrade.reason === 'trade_season_pav_missing') !== (leg.assetKind === 'player'),
+    'A missing trade-season PAV is a player view; the other unavailable views are picks.',
+  ],
+];
+
+export const aflTradeRealizedTradeGradeLegSchema = legUnionSchema.superRefine((leg, context) => {
+  const has = (reason: AflTradeRealizedGradeReason) => leg.reasons.includes(reason);
+  for (const [broken, message] of legRules)
+    if (broken(leg, has)) context.addIssue({ code: 'custom', message });
+});
 
 export type AflTradeRealizedTradeGradeLeg = z.infer<typeof aflTradeRealizedTradeGradeLegSchema>;
 
@@ -341,7 +382,7 @@ export const aflTradeRealizedTradeGradeSchema = z
 
 export type AflTradeRealizedTradeGrade = z.infer<typeof aflTradeRealizedTradeGradeSchema>;
 
-const batchContentSchema = z
+const batchContentFieldsSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION),
     ruleVersion: z.literal(AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION),
@@ -397,99 +438,128 @@ const batchContentSchema = z
       'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.'
     ),
   })
-  .strict()
-  .superRefine((content, context) => {
-    const issue = (path: string, message: string) =>
-      context.addIssue({ code: 'custom', path: [path], message });
-    if (!isCanonical(content.trades.map(({ transactionId }) => transactionId)))
-      issue('trades', 'Trades must be unique and ordered by transaction.');
-    const ungradedIds = content.ungraded.map(({ transactionId }) => transactionId);
-    if (!isCanonical(ungradedIds)) issue('ungraded', 'Ungraded trades must be unique and ordered.');
-    if (content.trades.some(({ transactionId }) => ungradedIds.includes(transactionId)))
-      issue('ungraded', 'A trade is either graded or ungraded.');
-    if (content.trades.length + content.ungraded.length === 0)
-      issue('trades', 'A batch grades or names at least one trade.');
-    const count = (state: AflTradeRealizedTradeGrade['state']) =>
-      content.trades.filter((trade) => trade.state === state).length;
-    if (
-      content.summary.complete !== count('complete') ||
-      content.summary.provisional !== count('provisional') ||
-      content.summary.blocked !== count('blocked') ||
-      content.summary.ungraded !== content.ungraded.length
-    )
-      issue('summary', 'The summary must count the trades by state.');
-    const seasons = new Map(
-      content.inputs.pavCalculations.map((row) => [row.season, row.official])
-    );
-    const trades = new Map(content.trades.map((trade) => [trade.transactionId, trade]));
-    for (const trade of content.trades) {
-      for (const leg of trade.legs) {
-        const has = (reason: AflTradeRealizedGradeReason) => leg.reasons.includes(reason);
-        if (
-          leg.atTrade.kind === 'pick_projection' &&
-          leg.atTrade.benchmarkId !== content.inputs.pickProjectionBenchmarkId
-        )
-          issue('trades', 'Every pick projection must cite the batch’s pinned benchmark.');
-        if ('stint' in leg) {
-          if (leg.stint.seasonsValued.some((season) => !seasons.has(season)))
-            issue('trades', 'Every valued stint season must have a pinned PAV calculation.');
-          if (leg.stint.seasonsMissingPav.some((season) => seasons.has(season)))
-            issue('trades', 'A season with a pinned PAV calculation is not missing.');
-          const unofficial = leg.stint.seasonsValued.some(
-            (season) => seasons.get(season) === false
-          );
-          if (unofficial !== has('pav_season_not_official'))
-            issue(
-              'trades',
-              'A stint valued on an unofficial season, and only that, is stated as a reason.'
-            );
-        } else if (has('pav_season_not_official') || has('pav_seasons_missing')) {
-          issue('trades', 'Only a leg with a stint carries PAV season reasons.');
-        }
-        if ('onwardTransactionId' in leg) {
-          const onwardTrade = trades.get(leg.onwardTransactionId);
-          const excludedThere = onwardTrade?.legs.some(
-            (onwardLeg) =>
-              onwardLeg.sendingClubId === leg.receivingClubId && onwardLeg.state === 'excluded'
-          );
-          if (!onwardTrade || onwardTrade === trade || !excludedThere)
-            issue(
-              'trades',
-              'An unallocated traded-on pick names the onward trade where it is excluded.'
-            );
-          continue;
-        }
-        if (!('onward' in leg)) continue;
-        const onwardTrade = trades.get(leg.onward.transactionId);
-        const onwardClub = onwardTrade?.clubs.find((club) => club.clubId === leg.receivingClubId);
-        if (!onwardTrade || onwardTrade.state === 'blocked' || onwardTrade === trade)
-          issue('trades', 'A valued traded-on pick names another graded trade in the batch.');
-        else if (onwardClub?.received !== leg.onward.returnValue)
-          issue(
-            'trades',
-            'A traded-on pick’s return is what its club received in the onward trade.'
-          );
-        else if (
-          leg.onward.givenAssetCount !==
-          onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === leg.receivingClubId)
-            .length
-        )
-          issue('trades', 'The onward asset count is every asset its club gave in that trade.');
-        else if (
-          leg.onward.allocation === 'relative_value' &&
-          leg.onward.weightTotal !== onwardClub.givenUp
-        )
-          issue(
-            'trades',
-            'Relative-value weights total what its club gave up in the onward trade.'
-          );
-        else if (leg.onward.allocation === 'equal_split' && onwardClub.givenUp !== 0)
-          issue('trades', 'An equal split applies only when everything its club gave was worth 0.');
-        else if ((onwardTrade.state === 'provisional') !== has('traded_on_return_provisional'))
-          issue('trades', 'A traded-on pick is provisional exactly when its onward trade is.');
-      }
+  .strict();
+
+type BatchContent = z.infer<typeof batchContentFieldsSchema>;
+type Issue = readonly [path: string, message: string];
+
+function batchShapeIssues(content: BatchContent): Issue[] {
+  const issues: Issue[] = [];
+  const ungradedIds = content.ungraded.map(({ transactionId }) => transactionId);
+  const count = (state: AflTradeRealizedTradeGrade['state']) =>
+    content.trades.filter((trade) => trade.state === state).length;
+  if (!isCanonical(content.trades.map(({ transactionId }) => transactionId)))
+    issues.push(['trades', 'Trades must be unique and ordered by transaction.']);
+  if (!isCanonical(ungradedIds))
+    issues.push(['ungraded', 'Ungraded trades must be unique and ordered.']);
+  if (content.trades.some(({ transactionId }) => ungradedIds.includes(transactionId)))
+    issues.push(['ungraded', 'A trade is either graded or ungraded.']);
+  if (content.trades.length + content.ungraded.length === 0)
+    issues.push(['trades', 'A batch grades or names at least one trade.']);
+  const summary = content.summary;
+  if (
+    summary.complete !== count('complete') ||
+    summary.provisional !== count('provisional') ||
+    summary.blocked !== count('blocked') ||
+    summary.ungraded !== content.ungraded.length
+  )
+    issues.push(['summary', 'The summary must count the trades by state.']);
+  return issues;
+}
+
+/** A leg's PAV seasons must be the batch's pinned calculations, and its reasons must say so. */
+function legSeasonIssues(
+  leg: AflTradeRealizedTradeGradeLeg,
+  official: ReadonlyMap<number, boolean>
+): string[] {
+  const has = (reason: AflTradeRealizedGradeReason) => leg.reasons.includes(reason);
+  if (!('stint' in leg))
+    return has('pav_season_not_official') || has('pav_seasons_missing')
+      ? ['Only a leg with a stint carries PAV season reasons.']
+      : [];
+  const issues: string[] = [];
+  if (leg.stint.seasonsValued.some((season) => !official.has(season)))
+    issues.push('Every valued stint season must have a pinned PAV calculation.');
+  if (leg.stint.seasonsMissingPav.some((season) => official.has(season)))
+    issues.push('A season with a pinned PAV calculation is not missing.');
+  const unofficial = leg.stint.seasonsValued.some((season) => official.get(season) === false);
+  if (unofficial !== has('pav_season_not_official'))
+    issues.push('A stint valued on an unofficial season, and only that, is stated as a reason.');
+  return issues;
+}
+
+/** An unallocated traded-on pick must name an onward trade in which its club's leg is excluded. */
+function unallocatedIssue(
+  leg: Extract<AflTradeRealizedTradeGradeLeg, { basis: 'pick_traded_on_return_unallocated' }>,
+  trade: AflTradeRealizedTradeGrade,
+  trades: ReadonlyMap<string, AflTradeRealizedTradeGrade>
+): string | null {
+  const onwardTrade = trades.get(leg.onwardTransactionId);
+  const excludedThere = onwardTrade?.legs.some(
+    (onwardLeg) => onwardLeg.sendingClubId === leg.receivingClubId && onwardLeg.state === 'excluded'
+  );
+  return !onwardTrade || onwardTrade === trade || !excludedThere
+    ? 'An unallocated traded-on pick names the onward trade where it is excluded.'
+    : null;
+}
+
+/** A valued traded-on pick's return, asset count, weights and state must match its onward trade. */
+function onwardIssue(
+  leg: Extract<AflTradeRealizedTradeGradeLeg, { basis: 'pick_traded_on_return' }>,
+  trade: AflTradeRealizedTradeGrade,
+  trades: ReadonlyMap<string, AflTradeRealizedTradeGrade>
+): string | null {
+  const onwardTrade = trades.get(leg.onward.transactionId);
+  if (!onwardTrade || onwardTrade.state === 'blocked' || onwardTrade === trade)
+    return 'A valued traded-on pick names another graded trade in the batch.';
+  const onwardClub = onwardTrade.clubs.find((club) => club.clubId === leg.receivingClubId);
+  const given = onwardTrade.legs.filter(
+    (onwardLeg) => onwardLeg.sendingClubId === leg.receivingClubId
+  );
+  if (onwardClub?.received !== leg.onward.returnValue)
+    return 'A traded-on pick’s return is what its club received in the onward trade.';
+  if (leg.onward.givenAssetCount !== given.length)
+    return 'The onward asset count is every asset its club gave in that trade.';
+  if (leg.onward.allocation === 'relative_value' && leg.onward.weightTotal !== onwardClub.givenUp)
+    return 'Relative-value weights total what its club gave up in the onward trade.';
+  if (leg.onward.allocation === 'equal_split' && onwardClub.givenUp !== 0)
+    return 'An equal split applies only when everything its club gave was worth 0.';
+  if (
+    (onwardTrade.state === 'provisional') !==
+    leg.reasons.includes('traded_on_return_provisional')
+  )
+    return 'A traded-on pick is provisional exactly when its onward trade is.';
+  return null;
+}
+
+function batchIssues(content: BatchContent): Issue[] {
+  const issues = batchShapeIssues(content);
+  const official = new Map(content.inputs.pavCalculations.map((row) => [row.season, row.official]));
+  const trades = new Map(content.trades.map((trade) => [trade.transactionId, trade]));
+  for (const trade of content.trades) {
+    for (const leg of trade.legs) {
+      if (
+        leg.atTrade.kind === 'pick_projection' &&
+        leg.atTrade.benchmarkId !== content.inputs.pickProjectionBenchmarkId
+      )
+        issues.push(['trades', 'Every pick projection must cite the batch’s pinned benchmark.']);
+      for (const message of legSeasonIssues(leg, official)) issues.push(['trades', message]);
+      const linkIssue =
+        leg.basis === 'pick_traded_on_return_unallocated'
+          ? unallocatedIssue(leg, trade, trades)
+          : leg.basis === 'pick_traded_on_return'
+            ? onwardIssue(leg, trade, trades)
+            : null;
+      if (linkIssue) issues.push(['trades', linkIssue]);
     }
-  });
+  }
+  return issues;
+}
+
+const batchContentSchema = batchContentFieldsSchema.superRefine((content, context) => {
+  for (const [path, message] of batchIssues(content))
+    context.addIssue({ code: 'custom', path: [path], message });
+});
 
 export const aflTradeRealizedTradeGradeBatchSchema = z
   .object({
