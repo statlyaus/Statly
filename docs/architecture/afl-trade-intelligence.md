@@ -1865,8 +1865,10 @@ reviewed arrival for the same player and club. This is the unit of the realized-
 player or a drafted pick is valued over the whole first stint at the receiving club, with no cap, and a
 later return to that club is a separate stint that is excluded. Because an arrival claims a point in
 time and no continuity, two current v4 arrivals for one player and club may coexist when their dates
-differ (migration 0249). Trade attribution does not read stints yet; that is Phase 4 of the grading
-pipeline.
+differ (migration 0249). The MVP realized trade grader (`valuation/realizedTradeGrade.ts`) reads first
+stints from season spells and reviewed arrivals in memory, as "Realized trade grade (MVP) contract"
+describes. Phase 4 of the grading pipeline replaces that with set-based stint attribution in the
+database.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
 private inputs. A versioned achievement policy records every selected input, preserves unresolved and
@@ -4121,6 +4123,21 @@ The remaining work proceeds through these independently verifiable gates:
      exact received and given-up sums of the valued legs, so equal legs always seal to the same batch.
    - **Single source.** Every valued or excluded pick leg carries `single_source_pick_outcome`, because
      pick outcomes come only from Draftguru. In the MVP only a trade of players alone can be `complete`.
+   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
+     spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
+     starts the season after the trade (or after the draft, for a selected pick). It ends at the first
+     season covered by spells in which the player appears for another club; that season still counts at
+     this club if he played for it. Once the move's own arrival is reviewed, it also ends before a later
+     reviewed arrival at the same club, which is a delisted-and-redrafted second stint. Seasons the spells do not cover (2020) cannot show a
+     departure, so the stint runs through them and they are listed as missing PAV. A season with spells
+     but no PAV row for the club is worth 0. A stint none of whose seasons has a pinned PAV calculation
+     has no known value and blocks the leg (`hpn_pav_head_missing`), as does a selected pick whose draft
+     year is before the trade. A candidate with no trades at all is refused. A move without a reviewed arrival in the trade or draft
+     season or the season after is `arrival_unreviewed`. A traded-on pick links to the one later trade in
+     which its receiving club gave the same `pickId` away, never to an earlier one. No link, or more than
+     one, is `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
+     `traded_on_return_blocked`. A player's at-trade view is his PAV at the sending club in the trade
+     season.
    - **No letter grade.** The grade is the per-club net in `career_pav`. The Statly grade policy converts
      probability distributions and does not apply. Asset letter grades stay prohibited.
 
