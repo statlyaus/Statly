@@ -31,6 +31,14 @@ beforeAll(async () => {
   const history = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
   cleanup = history.cleanup;
   migrationSql = history.migrationSql;
+  // The fixture records non-production governed evidence through its isolated registry role.
+  await admin.query(
+    `GRANT USAGE ON SCHEMA "${schemaName}" TO afl_trade_nonproduction_governance_registry_writer`
+  );
+  await admin.query(
+    `GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA "${schemaName}"
+       TO afl_trade_nonproduction_governance_registry_writer`
+  );
   promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
     completeCaptureReceipts: true,
