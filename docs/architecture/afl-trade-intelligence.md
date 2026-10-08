@@ -3197,6 +3197,18 @@ has where it has no date) rather than the promotion candidate's anchor, because 
 several drafts and a 2020 draftee's identity is reviewed under a 2020 authority; the promoter's scope
 keeps the candidate anchor.
 
+The promoted-event and arrival-event checks test the promotion candidate's retained sources once, not
+once per joined row (migration 0259). The retained-sources check
+(`outcome_external_candidate_retained_sources_current`) re-validates every retained source of a
+candidate, and it sat inside the checks' large join. After 0258 tied the promoter's authority to
+`review.decided_at`, the planner drove that join from the review decisions and evaluated the check on
+every finalized candidate for every review row. In the reviewed subset promotion suite that was 83
+loops of 5 candidates, 18 to 19 s per spell currency check, and three cases timed out at 120 s on CI
+and on `main`. Declaring the function's cost did not change the plan. The check now runs once, beside
+the `EXISTS`, for the candidate of the promotion the binding names. Results are unchanged:
+`promotion_id` is the primary key, so that candidate was the only one the check could ever apply to,
+and the function returns false for an unknown candidate. The three cases now take about 30 s each.
+
 Event supersession is scoped to the cited asset from migration 0256. A reviewed spell, a draft
 selection and a special-entitlement custody edge each cite one asset of one event version. Six
 checks (the promoted-event and arrival-event functions behind reviewed spells, the version-chain
