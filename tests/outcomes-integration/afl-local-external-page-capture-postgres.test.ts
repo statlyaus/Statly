@@ -401,7 +401,7 @@ describe('local Official AFL completed-session capture through the governed inge
     await recordOfficialDecision(2019, evidenceIds);
     await recordOfficialDecision(2020, evidenceIds);
     await expect(runLocalExternalCapture(options, sessionTargets())).rejects.toThrow(
-      /official-afl-completed-draft-session-issue579-private-2021-session-v18/
+      /official-afl-completed-draft-session-issue579-private-2021-session-v19/
     );
     expect(provider.calls).toEqual([]);
 
@@ -451,7 +451,7 @@ describe('local Official AFL completed-session capture through the governed inge
       );
     }
 
-    // Each capture receipt names the v18 parser and the season's own recorded decision.
+    // Each capture receipt names the v19 parser and the season's own recorded decision.
     const receipts = await sql.query<{ parser: string; decision_key: string }>(
       `SELECT manifest_json->>'parserVersion' AS parser,
               manifest_json#>>'{executionReceipt,content,gate0aReceipt,content,request,decisionKey}'
@@ -462,20 +462,20 @@ describe('local Official AFL completed-session capture through the governed inge
     );
     expect(receipts.rows).toEqual([
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2019-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2019-session-v19',
       },
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2020-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2020-session-v19',
       },
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v19',
       },
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v19',
       },
     ]);
   }, 90_000);

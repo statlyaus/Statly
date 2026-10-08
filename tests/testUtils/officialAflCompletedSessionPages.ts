@@ -1,6 +1,8 @@
 /**
  * Synthetic pages with the exact structure of the reviewed 2019-2021 Official AFL completed-session
- * articles, so local capture tests can stub afl.com.au without live network access.
+ * articles, so local capture tests can stub afl.com.au without live network access. The 2020 and
+ * 2021 pages use the live `article__byline-date` wrapper; 2019 keeps `article__date`, the only
+ * wrapper its dedicated parser reads.
  */
 const clubs2019: Array<[string, number[]]> = [
   ['ADELAIDE', [6, 24, 28, 42, 48]],
@@ -48,7 +50,7 @@ function page2019(): string {
 function page2020(): string {
   const selection = (n: number) =>
     `<p><strong>${n}${n === 28 ? ':' : '.'} Synthetic Club: ${n === 19 ? 'Finlay</strong><strong>Macrae' : [21, 22, 27].includes(n) ? '</strong><strong>Synthetic Player' : 'Synthetic Player'}${n === 44 ? '<br>' : ''}</strong><br>DOB: unknown<br>Predicted draft range: 1–3</p>`;
-  return `<div class="article__date"><time datetime="2020-12-09T12:30:00Z"></time></div><div class="article-body"><p>JAMARRA Ugle-Hagan is the No.1 selection in the 2020 NAB AFL Draft.</p><p>Take a look at every pick in a draft full of twists and turns, trades and loads of Academy bids.</p>${Array.from({ length: 59 }, (_, i) => selection(i + 1)).join('')}</div>`;
+  return `<div class="article__byline-date"><time datetime="2020-12-09T12:30:00Z"></time></div><div class="article-body"><p>JAMARRA Ugle-Hagan is the No.1 selection in the 2020 NAB AFL Draft.</p><p>Take a look at every pick in a draft full of twists and turns, trades and loads of Academy bids.</p>${Array.from({ length: 59 }, (_, i) => selection(i + 1)).join('')}</div>`;
 }
 
 const rows = (first: number, last: number) =>
@@ -56,8 +58,8 @@ const rows = (first: number, last: number) =>
 
 function page2021(night: 1 | 2): string {
   return night === 1
-    ? `<div class="article__date"><time datetime="2021-11-24T10:36:00Z"></time></div><div class="article-body"><p>The No.1 pick in Wednesday night's NAB AFL Draft. With the final selection of the first round, No.20, Brisbane added Kai Lohmann.</p><h4>2021 NAB AFL Draft - First Round</h4>${rows(1, 20)}</div>`
-    : `<div class="article__date"><time datetime="2021-11-25T11:45:00Z"></time></div><div class="article-body"><p>NIGHT two of the NAB AFL Draft started with Fremantle snapping up West Australian slider Matthew Johnson and ended with Taj Woewodin becoming a Melbourne father-son selection. There were surprises as 65 players found their way on to AFL lists.</p><p><strong>NAB AFL DRAFT NIGHT TWO</strong></p>${rows(21, 65)}</div>`;
+    ? `<div class="article__byline-date"><time datetime="2021-11-24T10:36:00Z"></time></div><div class="article-body"><p>The No.1 pick in Wednesday night's NAB AFL Draft. With the final selection of the first round, No.20, Brisbane added Kai Lohmann.</p><h4>2021 NAB AFL Draft - First Round</h4>${rows(1, 20)}</div>`
+    : `<div class="article__byline-date"><time datetime="2021-11-25T11:45:00Z"></time></div><div class="article-body"><p>NIGHT two of the NAB AFL Draft started with Fremantle snapping up West Australian slider Matthew Johnson and ended with Taj Woewodin becoming a Melbourne father-son selection. There were surprises as 65 players found their way on to AFL lists.</p><p><strong>NAB AFL DRAFT NIGHT TWO</strong></p>${rows(21, 65)}</div>`;
 }
 
 export const OFFICIAL_AFL_COMPLETED_SESSION_PAGES: Readonly<Record<string, () => string>> = {

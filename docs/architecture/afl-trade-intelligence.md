@@ -1841,7 +1841,8 @@ capture bytes were lost could not be re-made: a re-fetched page is never byte-id
 capture successor_ (migration 0252, `outcome_source_capture_successor`) records, for one lost capture,
 either a later approved capture of the same provider, dataset, competition, season and source URL
 whose bytes are located (`recaptured`), or an owner-approved `omitted` decision for a page that can no
-longer be confirmed (statlyaus/Statly#742: two Official AFL articles edited since review). Each carries
+longer be confirmed (statlyaus/Statly#742: two Official AFL articles judged edited since review; the
+cause was later found to be a site-wide date-wrapper rename, which parser v19 reads). Each carries
 its own review decision and is append-only, with one per lost capture. Only v4 entries read
 successors: `outcome_acquisition_arrival_event_current` is the promoted-event check with a cited
 artifact counted as the lost capture it succeeds, and an omitted capture excused from the citation
