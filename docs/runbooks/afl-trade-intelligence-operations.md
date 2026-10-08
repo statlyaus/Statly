@@ -890,13 +890,16 @@ Prerequisites:
      as `-2018-combined-v2`; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
-     `official-afl-completed-draft-session-issue579-private-2020-session-v18`. The key names the
+     `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
      current parser version, so a parser change needs a newly recorded decision; the runner never
      falls back to an earlier season key or parser. Every season in a run must have its decision
-     before any page is fetched.
+     before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
+     date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
+     values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
+     and still requires exactly one. The v18 decisions and their captures stay valid.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v2`, `draftguru-national-year-page/v2` or
-   `official-afl-completed-draft-session/v18`), seasons inside one range, 1 request per 5 seconds
+   `official-afl-completed-draft-session/v19`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
@@ -925,8 +928,8 @@ npm run outcomes:sources:capture-local-external -- \
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
 (2010-2018) are not enumerable here and are refused.
 
-To capture only some of a season's pages, add `--url` with each exact reviewed page, for example a
-night-two report when afl.com.au has edited the night-one report since review and v18 refuses it.
+To capture only some of a season's pages, add `--url` with each exact reviewed page, for example to
+recapture one night without fetching the other again.
 `--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
 refused before anything is fetched. `--season` is still required.
 

@@ -14,7 +14,7 @@ export const OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY = 'official-afl-completed-dra
 
 /**
  * The owner records one narrow decision per season and parser version for this capability, for
- * example `official-afl-completed-draft-session-issue579-private-2020-session-v18`. A new parser
+ * example `official-afl-completed-draft-session-issue579-private-2020-session-v19`. A new parser
  * version therefore needs its own recorded decision; the runner never falls back to an earlier one.
  */
 export function officialAflDraftSessionDecisionKey(season: number): string {

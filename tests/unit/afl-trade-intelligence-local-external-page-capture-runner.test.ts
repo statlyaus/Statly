@@ -212,7 +212,7 @@ describe('recorded Official AFL completed-session authority', () => {
   it('loads the per-season decision recorded under the issue579 parser-version key', async () => {
     const record = recordedOfficial(2020);
     expect(record.proposal.content.decisionKey).toBe(
-      'official-afl-completed-draft-session-issue579-private-2020-session-v18'
+      'official-afl-completed-draft-session-issue579-private-2020-session-v19'
     );
     const loaded = await loadRecordedLocalCaptureAuthority(
       ledgerOf(record),
@@ -232,18 +232,18 @@ describe('recorded Official AFL completed-session authority', () => {
         2021,
         evaluatedAt
       )
-    ).rejects.toThrow(/official-afl-completed-draft-session-issue579-private-2021-session-v18/);
+    ).rejects.toThrow(/official-afl-completed-draft-session-issue579-private-2021-session-v19/);
   });
 
   it('refuses a recorded decision for an earlier parser version', async () => {
     await expect(
       loadRecordedLocalCaptureAuthority(
-        ledgerOf(recordedOfficial(2020, 'official-afl-completed-draft-session/v5')),
+        ledgerOf(recordedOfficial(2020, 'official-afl-completed-draft-session/v18')),
         'official-afl-completed-draft-session',
         2020,
         evaluatedAt
       )
-    ).rejects.toThrow(/official-afl-completed-draft-session\/v18/);
+    ).rejects.toThrow(/official-afl-completed-draft-session\/v19/);
   });
 
   it('refuses recorded rights with the Draftguru one-day cache instead of the reviewed hour', async () => {
@@ -280,7 +280,7 @@ describe('recorded Official AFL completed-session authority', () => {
       expect(command.request).toMatchObject({
         provider: 'official_afl',
         draftPathway: 'national',
-        parserVersion: 'official-afl-completed-draft-session/v18',
+        parserVersion: 'official-afl-completed-draft-session/v19',
       });
       expect(
         evaluateAflTradeGate0AAgainstDecision(
