@@ -1329,6 +1329,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0256_asset_scoped_event_supersession',
       '0257_successor_native_capture',
       '0258_authority_term_at_decision',
+      '0259_retained_sources_checked_once',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
