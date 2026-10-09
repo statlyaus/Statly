@@ -17,7 +17,11 @@ import { createAflTradeDurableObjectArtifactRepository } from '../artifacts/dura
 import { createAflTradeS3ConditionalObjectStore } from '../artifacts/s3ConditionalObjectStore';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
-import { parseOfficialAflIndicativeDraftOrder } from '../source/draftCorroborationAdapter';
+import {
+  OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+  parseOfficialAflDraftOrderTable,
+  parseOfficialAflIndicativeDraftOrder,
+} from '../source/draftCorroborationAdapter';
 import {
   captureDraftguruSource,
   parseDraftguruPlayerTradeDetail,
@@ -191,7 +195,11 @@ export function createAflTradeExternalIngestionRuntime(
           case 'footywire-draft-results':
             return parseFootywireDraftSelections(html, { capture });
           case 'official-afl-indicative-draft-order':
-            return parseOfficialAflIndicativeDraftOrder(html, {
+            return (
+              command.request.parserVersion === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
+                ? parseOfficialAflDraftOrderTable
+                : parseOfficialAflIndicativeDraftOrder
+            )(html, {
               capture,
               draftYear: command.request.anchorSeasonYear,
               observedAt: command.request.effectiveAt,
