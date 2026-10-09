@@ -389,7 +389,14 @@ export function useEnhancedInjuryData(
 
       // Check if response is ok and has content
       if (!injuryResponse.ok) {
-        throw new Error(`HTTP ${injuryResponse.status}: ${injuryResponse.statusText}`);
+        let message = `HTTP ${injuryResponse.status}: ${injuryResponse.statusText}`;
+        try {
+          const body = (await injuryResponse.json()) as { error?: unknown };
+          if (typeof body.error === 'string' && body.error) message = body.error;
+        } catch {
+          // keep the status message
+        }
+        throw new Error(message);
       }
 
       // Get response text first to check if it's valid JSON
@@ -446,6 +453,9 @@ export function useEnhancedInjuryData(
       setLastUpdated(injuryData.lastUpdated || new Date().toISOString());
     } catch (err) {
       console.error('Failed to fetch enhanced injury data:', err);
+      // Drop any earlier list so a failed refresh cannot pass stale rows off as current.
+      setInjuries([]);
+      setLegacyInjuries([]);
       setError(err instanceof Error ? err.message : 'Failed to fetch injury data');
     } finally {
       setLoading(false);
