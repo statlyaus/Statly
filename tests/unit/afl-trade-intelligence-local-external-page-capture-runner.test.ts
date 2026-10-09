@@ -29,11 +29,19 @@ import {
   createLocalOfficialAflDraftSessionTargets,
   createOfficialAflDraftSessionCaptureCommand,
 } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
+import {
+  createLocalOfficialAflDraftOrderTargets,
+  createOfficialAflDraftOrderCaptureCommand,
+} from '@/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
+import { parseOfficialAflDraftOrderTable } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
+import { requireAflTradeExternalEvidenceFieldAuthority } from '@/server/aflTradeIntelligence/source/externalDraftTradeFieldManifest';
+import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { validateAflTradeExternalCaptureScope } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { evaluateAflTradeGate0AAgainstDecision } from '@/server/aflTradeIntelligence/source/gate0aEvaluation';
 import {
   approveNarrowAuthority,
   draftguruNationalYearAuthority,
+  officialAflDraftOrderAuthority,
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
@@ -725,5 +733,197 @@ describe('local Draftguru capture command arguments', () => {
   it('refuses temporary artifact roots', () => {
     expect(() => requireDurableArtifactRoot(durable)).toThrow(/durable/);
     expect(() => requireDurableArtifactRoot(durable, [])).not.toThrow();
+  });
+});
+
+function recordedOrder(season: number, clientVersion?: string): RecordedAuthority {
+  const authority = officialAflDraftOrderAuthority({
+    season,
+    ...(clientVersion === undefined ? {} : { clientVersion }),
+    evidenceIds: officialEvidenceIds,
+    timing: {
+      termsEffectiveAt: '2026-09-10T00:00:00.000Z',
+      termsExpireAt: '2027-09-09T00:00:00.000Z',
+      rightsProposedAt: '2026-09-24T00:00:00.000Z',
+      proposalProposedAt: '2026-09-24T00:00:01.000Z',
+    },
+  });
+  return {
+    ...authority,
+    decision: approveNarrowAuthority(authority, {
+      decidedAt: '2026-09-24T01:00:00.000Z',
+      revalidateAt: '2027-09-01T00:00:00.000Z',
+    }),
+  };
+}
+
+const archive2023 =
+  'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-order';
+
+describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
+  it('loads the per-season decision recorded under the issue579 order-v2 key', async () => {
+    const record = recordedOrder(2022);
+    expect(record.decision.content.decisionKey).toBe(
+      'official-afl-indicative-draft-order-issue579-private-2022-order-v2'
+    );
+    const loaded = await loadRecordedLocalCaptureAuthority(
+      ledgerOf(record),
+      'official-afl-indicative-draft-order',
+      2022,
+      evaluatedAt
+    );
+    expect(loaded.decisionId).toBe(record.decision.decisionId);
+  });
+
+  it('refuses a recorded decision for the v1 paragraph parser', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedOrder(2022, 'official-afl-order-parser/v1')),
+        'official-afl-indicative-draft-order',
+        2022,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/official-afl-draft-order-parser\/v2/);
+  });
+
+  it('builds a command the scope rules and the recorded decision admit, for an article and an archive snapshot', () => {
+    for (const season of [2022, 2023]) {
+      const record = recordedOrder(season);
+      for (const target of createLocalOfficialAflDraftOrderTargets([season])) {
+        const command = createOfficialAflDraftOrderCaptureCommand(record, {
+          target,
+          capturedAt: evaluatedAt,
+          maximumBytes: 1024,
+        });
+        expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+        expect(command.request).toMatchObject({
+          provider: 'official_afl',
+          draftPathway: 'national',
+          capabilityId: 'official-afl-indicative-draft-order',
+          parserVersion: 'official-afl-draft-order-parser/v2',
+          effectiveAt: target.effectiveAt,
+        });
+        expect(
+          evaluateAflTradeGate0AAgainstDecision(
+            record.decision,
+            record.sourceRights,
+            command.gateRequest
+          )
+        ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+      }
+    }
+  });
+
+  it('names every leaf parser v2 emits in the recorded field boundary', () => {
+    const record = recordedOrder(2022);
+    const [target] = createLocalOfficialAflDraftOrderTargets([2022]);
+    const command = createOfficialAflDraftOrderCaptureCommand(record, {
+      target: target!,
+      capturedAt: evaluatedAt,
+      maximumBytes: 1024,
+    });
+    const html = `<html><body><h4>Final Draft Order as of November 19, 2022</h4>
+      <table><tbody><tr><th colspan="2"><h4>ROUND ONE</h4></th></tr></tbody><tbody>
+      <tr><td>1</td><td>Greater Western Sydney (received from North Melbourne in a trade)</td></tr>
+      <tr><td>2</td><td>North Melbourne</td></tr>
+      <tr><td>3</td><td>Brisbane (Dan McStay compensation pick)</td></tr></tbody></table>
+      <h4>2023 DRAFT SELECTIONS TRADED</h4></body></html>`;
+    const { evidence } = parseOfficialAflDraftOrderTable(html, {
+      capture: {
+        captureId: `source-capture:${digest('1')}`,
+        artifactId: `artifact:${digest('2')}`,
+        contentSha256: digest('2'),
+        mediaType: 'text/html',
+        sourceUrl: target!.sourceUrl,
+        capturedAt: evaluatedAt,
+        effectiveAt: target!.effectiveAt,
+        parserVersion: command.request.parserVersion,
+        fieldManifestSha256: command.request.fieldManifestSha256,
+      },
+      draftYear: 2022,
+      observedAt: target!.effectiveAt,
+    });
+    expect(evidence).toHaveLength(3);
+    const receipt = createAflTradeGate0AReceipt(
+      { proposals: [record.proposal], decisions: [record.decision] },
+      record.sourceRights,
+      command.gateRequest,
+      evaluatedAt
+    );
+    expect(() =>
+      requireAflTradeExternalEvidenceFieldAuthority({
+        evidence,
+        sourceRights: record.sourceRights,
+        gate0aReceipt: receipt,
+      })
+    ).not.toThrow();
+  });
+});
+
+describe('local Official AFL pre-draft order targets', () => {
+  it('enumerates one reviewed order page per season, 2019 to 2024, in season order', () => {
+    const targets = createLocalOfficialAflDraftOrderTargets([2024, 2019, 2022, 2023, 2020, 2021]);
+    expect(targets.map(({ season }) => season)).toEqual([2019, 2020, 2021, 2022, 2023, 2024]);
+    expect(targets.map(({ sourceUrl }) => new URL(sourceUrl).hostname)).toEqual([
+      'www.afl.com.au',
+      'www.afl.com.au',
+      'www.afl.com.au',
+      'www.afl.com.au',
+      'web.archive.org',
+      'web.archive.org',
+    ]);
+    expect(targets[4]).toEqual({
+      capabilityId: 'official-afl-indicative-draft-order',
+      season: 2023,
+      sourceUrl: archive2023,
+      effectiveAt: '2023-11-16T00:00:00.000Z',
+    });
+  });
+
+  it.each([[[]], [[2022, 2022]], [[2018]], [[2025]]])('rejects seasons %j', (seasons) => {
+    expect(() => createLocalOfficialAflDraftOrderTargets(seasons)).toThrow(
+      LocalExternalCaptureError
+    );
+  });
+
+  it.each([
+    [[]],
+    [['https://www.afl.com.au/news/1/not-reviewed']],
+    // A reviewed page of a season that was not requested.
+    [[archive2023]],
+    [[archive2023.replace('230530', '230531')]],
+  ])('refuses URLs %j for 2022', (urls) => {
+    expect(() => createLocalOfficialAflDraftOrderTargets([2022], urls)).toThrow(
+      LocalExternalCaptureError
+    );
+  });
+});
+
+describe('local capture arguments for pre-draft order pages', () => {
+  const durableRoot = process.cwd();
+  const env = {
+    AFL_OUTCOMES_DATABASE_URL: 'postgresql://statly:secret@127.0.0.1:5432/outcomes',
+    AFL_TRADE_EXTERNAL_USER_AGENT: 'Statly private evaluation (contact: owner@example.test)',
+  };
+  it('parses order seasons into their reviewed pages and narrows with --url', () => {
+    const parsed = parseLocalExternalCaptureArguments(
+      [
+        '--artifact-root',
+        durableRoot,
+        '--capability',
+        'official-afl-indicative-draft-order',
+        '--season',
+        '2023',
+        '--season',
+        '2024',
+        '--url',
+        archive2023,
+      ],
+      env,
+      []
+    );
+    expect(parsed.targets).toEqual([
+      expect.objectContaining({ season: 2023, sourceUrl: archive2023 }),
+    ]);
   });
 });

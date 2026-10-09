@@ -13,6 +13,8 @@ import {
 } from './officialAflCompensationPdfFacts';
 import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010SourceScope';
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
+import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from './draftCorroborationAdapter';
+import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
 import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import { reviewedOfficialAflDraft2011EffectiveYear } from './officialAflDraft2011SessionFacts';
@@ -162,14 +164,23 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'official-afl-indicative-draft-order') {
+    // Parser v2 reads only the exact reviewed pre-draft order pages, two of which are approved
+    // Internet Archive snapshots; v1 keeps the general afl.com.au article path.
+    const reviewedOrder = reviewedOfficialAflDraftOrderPage(request.sourceUrl);
+    const reviewedPage =
+      request.parserVersion === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
+        ? reviewedOrder !== null &&
+          reviewedOrder.season === request.anchorSeasonYear &&
+          request.effectiveAt === `${reviewedOrder.asOf}T00:00:00.000Z`
+        : url.hostname === 'www.afl.com.au' &&
+          /^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) &&
+          !url.search &&
+          !url.hash;
     if (
       request.provider !== 'official_afl' ||
       request.draftPathway !== 'national' ||
       request.discoveryFromSeasonYear != null ||
-      url.hostname !== 'www.afl.com.au' ||
-      !/^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) ||
-      url.search ||
-      url.hash ||
+      !reviewedPage ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
     )
       invalid();

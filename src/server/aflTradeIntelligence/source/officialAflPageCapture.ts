@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import type { AflTradeExternalPageCapture } from './externalDraftTradeIngestion';
 import { GWS_MINI_GRANT_URL } from './officialAflIssuingAwardAdapter';
 import { OFFICIAL_AFL_MINI_2011_SOURCES } from './officialAflMiniDraft2011SessionFacts';
+import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
 
 async function readBounded(response: Response, maximumBytes: number): Promise<Uint8Array> {
   if (!response.body) throw new Error('External source response body is absent.');
@@ -50,6 +51,8 @@ export async function captureOfficialAflPage(input: {
   if (
     !reviewedPdf &&
     !isReviewedOfficialAflPlayerContinuitySource(input.url) &&
+    // The reviewed pre-draft orders include two approved Internet Archive snapshots (issue 853).
+    reviewedOfficialAflDraftOrderPage(input.url) === null &&
     (url.protocol !== 'https:' ||
       (url.hostname !== 'www.afl.com.au' &&
         url.href !== GWS_MINI_GRANT_URL &&

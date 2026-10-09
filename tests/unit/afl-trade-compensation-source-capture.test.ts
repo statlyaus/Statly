@@ -70,3 +70,30 @@ describe('compensation reference capture paths', () => {
     await expect(capture(pdf, fetchImpl, 8)).rejects.toThrow('byte limit');
   });
 });
+
+describe('reviewed pre-draft order archive snapshots (issue 853)', () => {
+  const archive =
+    'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-order';
+
+  it('fetches the exact approved snapshot as HTML without following redirects', async () => {
+    const bytes = new TextEncoder().encode('<table>fixture</table>');
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(bytes, { headers: { 'content-type': 'text/html;charset=utf-8' } })
+      );
+    const result = await capture(archive, fetchImpl);
+    expect(result.status).toBe('captured');
+    expect(fetchImpl).toHaveBeenCalledWith(archive, expect.objectContaining({ redirect: 'error' }));
+  });
+
+  it.each([
+    archive.replace('230530', '230531'),
+    archive.replace('id_/', '/'),
+    'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-tracker',
+  ])('refuses any other archive.org URL before fetch: %s', async (url) => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(capture(url, fetchImpl)).rejects.toThrow('outside the approved article path');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
