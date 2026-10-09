@@ -900,10 +900,19 @@ Prerequisites:
      before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
      date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
      values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
-     and still requires exactly one. The v18 decisions and their captures stay valid.
+     and still requires exactly one. The v18 decisions and their captures stay valid; and
+   - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v2` decision per
+     captured season, 2019 to 2024, for example
+     `official-afl-indicative-draft-order-issue579-private-2022-order-v2`. Parser
+     `official-afl-draft-order-parser/v2` reads the reviewed pre-draft order table as `pick_custody`
+     claims (issue 853), so the rights must name exactly `OFFICIAL_AFL_DRAFT_ORDER_FIELDS` from
+     `development/localOfficialAflDraftOrderCapture.ts`: the seven non-null leaves of that claim. The
+     2023 and 2024 pages are the two owner-approved Internet Archive snapshots named in the source
+     policy; the rights record still names `official_afl` as the provider, because the content is the
+     AFL's and the archive is only its custodian.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v2`, `draftguru-national-year-page/v3` or
-   `official-afl-completed-draft-session/v19`), seasons inside one range, 1 request per 5 seconds
+   `draftguru-trade-parser/v2`, `draftguru-national-year-page/v3`,
+   `official-afl-completed-draft-session/v19` or `official-afl-draft-order-parser/v2`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
@@ -936,6 +945,29 @@ To capture only some of a season's pages, add `--url` with each exact reviewed p
 recapture one night without fetching the other again.
 `--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
 refused before anything is fetched. `--season` is still required.
+
+Capture the Official AFL pre-draft orders for 2019 to 2024 (issue 853). Each `--season` is the one
+reviewed order page as it stood after that season's last pick-swap deadline; 2023 and 2024 fetch the
+approved Internet Archive snapshots (raw `id_` form, no redirect). Every claim is observed at the
+page's stated as-of date:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability official-afl-indicative-draft-order \
+  --season 2019 --season 2020 --season 2021 --season 2022 --season 2023 --season 2024
+```
+
+Expect a nonzero `issueCount` on every page: each compensation, assistance, concession or priority
+pick is a `special_pick_origin` issue (34 across the six pages) and keeps no original club, and one
+2020 note ends in an abbreviation (`unsupported_order_annotation`). Those slots are still custody
+observations of their holder; they never link a traded-on pick. After capture, the order's club
+spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need current
+`official_afl` club resolutions before reconciliation can use the rows; an unresolved name leaves
+that row `unresolved`. Then rebuild the plan, completion and candidate as usual and run the realized
+grade; the `traded_on_return_unlinked` count on #853 is the measure.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
