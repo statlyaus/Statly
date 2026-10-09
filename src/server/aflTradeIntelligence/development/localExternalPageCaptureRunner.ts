@@ -25,6 +25,10 @@ import {
 } from '../source/externalDraftTradeProviderIngestion';
 import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
 import {
+  OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+  parseOfficialAflDraftOrderTable,
+} from '../source/draftCorroborationAdapter';
+import {
   OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   parseOfficialAflDraftSession,
 } from '../source/officialAflDraftSessionAdapter';
@@ -59,6 +63,12 @@ import {
   officialAflDraftSessionDecisionKey,
   type LocalOfficialAflDraftSessionTarget,
 } from './localOfficialAflDraftSessionCapture';
+import {
+  createOfficialAflDraftOrderCaptureCommand,
+  OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
+  officialAflDraftOrderDecisionKey,
+  type LocalOfficialAflDraftOrderTarget,
+} from './localOfficialAflDraftOrderCapture';
 
 export { LocalExternalCaptureError } from './localNarrowCaptureAuthority';
 
@@ -101,7 +111,8 @@ const DRAFTGURU_TRADE_INDEX_URL = 'https://www.draftguru.com.au/trades';
 export type LocalExternalCaptureCapability =
   | DraftguruTradeCapability
   | typeof DRAFTGURU_NATIONAL_YEAR_CAPABILITY
-  | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY;
+  | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY
+  | typeof OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY;
 
 type CapturePolicy =
   | typeof LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY
@@ -148,6 +159,13 @@ const CAPABILITY_PROFILES: Record<
     policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
     rawRepositoryId: 'official-afl-session-raw',
     decisionKey: officialAflDraftSessionDecisionKey,
+  },
+  [OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY]: {
+    provider: 'official_afl',
+    parserVersion: OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+    policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
+    rawRepositoryId: 'official-afl-order-raw',
+    decisionKey: officialAflDraftOrderDecisionKey,
   },
 };
 
@@ -261,7 +279,8 @@ export interface LocalDraftguruTradeCaptureTarget {
 export type LocalExternalCaptureTarget =
   | LocalDraftguruTradeCaptureTarget
   | LocalDraftguruNationalYearTarget
-  | LocalOfficialAflDraftSessionTarget;
+  | LocalOfficialAflDraftSessionTarget
+  | LocalOfficialAflDraftOrderTarget;
 
 /** Index: the whole `/trades` page bounded to seasons. Detail: one page per exact trade URL. */
 export function createLocalDraftguruTradeCaptureTargets(
@@ -357,6 +376,13 @@ function createCommand(
   target: LocalExternalCaptureTarget,
   capturedAt: string
 ): AflTradeExternalProviderIngestionCommand {
+  if (target.capabilityId === OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY) {
+    return createOfficialAflDraftOrderCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+    });
+  }
   if (target.capabilityId === OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY) {
     return createOfficialAflDraftSessionCaptureCommand(recorded.authority, {
       target,
@@ -406,6 +432,12 @@ function parsePage(
       return parseDraftguruNationalYearSelections(html, { capture, draftYear: target.season });
     case OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY:
       return parseOfficialAflDraftSession(html, { capture, anchorSeasonYear: target.season });
+    case OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY:
+      return parseOfficialAflDraftOrderTable(html, {
+        capture,
+        draftYear: target.season,
+        observedAt: command.request.effectiveAt,
+      });
   }
 }
 

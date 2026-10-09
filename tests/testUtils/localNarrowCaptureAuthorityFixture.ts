@@ -10,11 +10,17 @@ import {
   draftguruNationalYearDecisionKey,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import type { LocalNarrowCaptureAuthority } from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
+import {
+  OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
+  OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
+  officialAflDraftOrderDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
 import { officialAflDraftSessionDecisionKey } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import {
   aflTradeGateDecisionProposalSchema,
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
+import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
@@ -126,6 +132,21 @@ export function officialAflDraftSessionAuthority(
     capabilityId: 'official-afl-completed-draft-session',
     clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
     fields: OFFICIAL_AFL_DRAFT_SESSION_FIELDS,
+  });
+}
+
+/** The shape of the owner's recorded per-season Official AFL pre-draft order authority (issue 853). */
+export function officialAflDraftOrderAuthority(
+  input: NarrowAuthorityTiming & { season: number; clientVersion?: string; version?: number }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: officialAflDraftOrderDecisionKey(input.season),
+    provider: 'official_afl',
+    dataset: `Official AFL ${input.season} pre-draft national order`,
+    capabilityId: OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
+    clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+    fields: OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
   });
 }
 

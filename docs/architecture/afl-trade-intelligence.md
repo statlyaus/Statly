@@ -4150,19 +4150,48 @@ The remaining work proceeds through these independently verifiable gates:
      one, is `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
      `traded_on_return_blocked`. A player's at-trade view is his PAV at the sending club in the trade
      season.
+   - **Pick custody from the pre-draft order (issue 853).** A pick traded as a future pick is keyed
+     by year, round and original club; once the order is published Draftguru records the same pick
+     only as `Pick N`, so the onward trade never shared the first trade's `pickId` and the leg stayed
+     `traded_on_return_unlinked` (139 picks behind 190 blocked trades in the first batch). The bridge
+     is the Official AFL pre-draft order, which annotates each slot with its origin.
+     `source/draftCorroborationAdapter.ts` reads the reviewed order tables as parser
+     `official-afl-draft-order-parser/v2` under the existing `official-afl-indicative-draft-order`
+     capability: every `ROUND <n>` row is one `pick_custody` claim with the slot, the round, the holder
+     and the original club as of the page's stated date. The original club is the holder when the
+     slot is unannotated, the `tied to`/`held by` club when named, otherwise the last club the chain
+     says the pick was received `from`; a compensation, assistance, concession or priority pick has
+     no original club (`special_pick_origin`), and so does a note whose last link is not a recorded
+     club (`unsupported_order_annotation`). A page must name the next year's traded selections and
+     its slots must run 1..N, or nothing is emitted. The reviewed pages
+     (`source/officialAflDraftOrderSourceScope.ts`) are one article per season for 2019-2022 and,
+     for 2023 and 2024, the two owner-approved Internet Archive snapshots of the live order page,
+     which the capture and ingestion URL gates admit by exact match only. Post-night-one order pages
+     carry no origin and are not captured.
+     Reconciliation (`source/externalEvidenceReconciliation.ts`) then joins a `Pick N` transfer to a
+     custody row with that slot number. With earlier observations of the slot, the sequence of holders
+     decides, as before. With only the pre-draft observation, which cannot show earlier holders, the
+     candidate's own transfers must: the sender is the original club or was delivered the slot (by
+     number, or as the future pick that became it), and the receiver is the order's holder or has
+     traded that slot number with it. An earlier observation is never read this way once a later one
+     exists; a non-unique match keeps the slot-based fallback id and stays unlinked. Nothing is
+     inferred from the pick number alone: of 209 `Pick N` receipts, 31 do not sit at the AFL slot of
+     that number.
    - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
      repeatable-read transaction, one query per table: the finalized non-production candidate (its
      content address re-checked), the current HPN PAV calculation per requested season from
      `outcome_hpn_pav_calculation_head`, those calculations' player rows (`total_pav` per player and
      club), and approved spell versions recorded by the cutoff that nothing recorded by the cutoff
-     supersedes. v3 (`afl-trade-acquisition-registration/v3`) spells are the season appearances. v4 spells
-     are the reviewed arrivals, and on statly-grading-1 these are draft-night arrivals only, so no traded
-     player has one yet. "Current" here is approval plus no successor, not the per-row registration
-     currency check, which is about 3 s a row. On statly-grading-1 (2026-10-08) the governed check,
+     supersedes. v3 (`afl-trade-acquisition-registration/v3`) spells are the season appearances. v4
+     spells are the reviewed arrivals, and on statly-grading-1 these are draft-night arrivals only,
+     so no traded player has one yet. "Current" here is approval plus no successor, not the per-row
+     registration currency check, which takes about 0.6 s a row (about 3.6 s before 0259). On
+     statly-grading-1 (2026-10-08) the governed check,
      `outcome_acquisition_spell_registration_current`, agreed with this proxy on all 247 v4 arrivals
-     (247/247, 15 min). Phase 4 adds set-based currency. A season without a finalized current
-     calculation is refused, never guessed. Migration 0259 is not a grader dependency: the reader never
-     calls the functions it rewrites.
+     (247/247, 15 min). After 0259 the same check took 2.5 min, still 247/247 (2026-10-09). Phase 4
+     adds set-based currency. A season without a finalized current calculation is refused, never
+     guessed. Migration 0259 is not a grader dependency: the reader never calls the functions it
+     rewrites.
    - **No letter grade.** The grade is the per-club net in `career_pav`. The Statly grade policy converts
      probability distributions and does not apply. Asset letter grades stay prohibited.
 

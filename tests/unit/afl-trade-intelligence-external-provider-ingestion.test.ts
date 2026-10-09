@@ -16,6 +16,7 @@ import { requireAflTradeExternalEvidenceFieldAuthority } from '@/server/aflTrade
 import {
   ingestAuthorizedAflTradeExternalPage,
   type AflTradeExternalProviderIngestionDependencies,
+  validateAflTradeExternalCaptureScope,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { PostgresAflTradeExternalCaptureRegistry } from '@/server/aflTradeIntelligence/source/postgresExternalCaptureRegistry';
@@ -657,5 +658,59 @@ describe('authorized external provider ingestion', () => {
       expect.anything(),
       expect.objectContaining({ outcome: 'failed' })
     );
+  });
+});
+
+describe('pre-draft order scope (issue 853)', () => {
+  const archive =
+    'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-order';
+  const order = (overrides: Partial<typeof request>) => ({
+    ...request,
+    provider: 'official_afl' as const,
+    draftPathway: 'national' as const,
+    capabilityId: 'official-afl-indicative-draft-order',
+    anchorSeasonYear: 2023,
+    effectiveAt: '2023-11-16T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('admits a reviewed archive snapshot under parser v2 at its stated as-of date', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v2' })
+      )
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['another archive timestamp', archive.replace('230530', '230531'), '2023-11-16T00:00:00.000Z'],
+    [
+      'an unreviewed afl.com.au article',
+      'https://www.afl.com.au/news/1/not-reviewed',
+      '2023-11-16T00:00:00.000Z',
+    ],
+    ['a reviewed page at another as-of instant', archive, '2023-11-17T00:00:00.000Z'],
+  ])('refuses %s under parser v2', (_label, sourceUrl, effectiveAt) => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl, effectiveAt, parserVersion: 'official-afl-draft-order-parser/v2' })
+      )
+    ).toThrow(/do not exactly match/);
+  });
+
+  it('keeps the general article path for the v1 paragraph parser and refuses archive.org there', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({
+          sourceUrl: 'https://www.afl.com.au/news/1542355/example/amp',
+          parserVersion: 'official-afl-order-parser/v1',
+        })
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl: archive, parserVersion: 'official-afl-order-parser/v1' })
+      )
+    ).toThrow(/do not exactly match/);
   });
 });
