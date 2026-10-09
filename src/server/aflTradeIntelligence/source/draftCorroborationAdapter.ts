@@ -21,7 +21,6 @@ export interface DraftCorroborationIssue {
     | 'invalid_page'
     | 'invalid_order_row'
     | 'unsupported_order_annotation'
-    | 'special_pick_origin'
     | 'missing_player_detail'
     | 'partial_draft_detail'
     | 'unsupported_draft_type';
@@ -167,8 +166,13 @@ export function parseOfficialAflIndicativeDraftOrder(
       };
 }
 
-/** Parser for the reviewed pre-draft order tables (issue 853); v1 above reads the 2026 paragraph form. */
-export const OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION = 'official-afl-draft-order-parser/v2';
+/**
+ * Parser for the reviewed pre-draft order tables (issue 853); v1 above reads the 2026 paragraph form.
+ * v3: a special pick's missing original club is a claim fact, not a parse issue, and a club name may
+ * follow an article ("received from the Western Bulldogs"). v2 recorded the former as an issue,
+ * which kept every order page out of a retained plan.
+ */
+export const OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION = 'official-afl-draft-order-parser/v3';
 
 // Longest first, so "North Melbourne" never reads as "Melbourne". Names are recorded as written.
 const CLUB_NAMES = [
@@ -206,7 +210,8 @@ const ROUND_NUMBERS: Record<string, number> = {
   EIGHT: 8,
 };
 // A compensation, assistance, concession or priority pick has no ladder slot of an original club,
-// so naming one would collide with that club's own pick in the round.
+// so naming one would collide with that club's own pick in the round. Its claim says so by carrying
+// no original club; that is a fact of the page, not a parse issue.
 const SPECIAL_ORIGIN = /compensation|assistance package|concession|priority pick/i;
 
 /**
@@ -218,7 +223,7 @@ function lastClub(annotation: string, prefix: string): string | null | undefined
   const occurrences = [...annotation.matchAll(new RegExp(`\\b${prefix}\\s+`, 'g'))];
   const last = occurrences.at(-1);
   if (!last) return undefined;
-  const club = new RegExp(`^(${CLUB_PATTERN})\\b`).exec(
+  const club = new RegExp(`^(?:the\\s+)?(${CLUB_PATTERN})\\b`, 'i').exec(
     annotation.slice(last.index + last[0].length)
   );
   return club ? normalizeText(club[1]!) : null;
@@ -234,7 +239,7 @@ function originalClubFromAnnotation(
   annotation: string | null
 ): { originalClub: string | null; issue: DraftCorroborationIssue['code'] | null } {
   if (annotation === null) return { originalClub: holder, issue: null };
-  if (SPECIAL_ORIGIN.test(annotation)) return { originalClub: null, issue: 'special_pick_origin' };
+  if (SPECIAL_ORIGIN.test(annotation)) return { originalClub: null, issue: null };
   const explicit = lastClub(annotation, '(?:tied\\s+to|held\\s+by)');
   const club = explicit === undefined ? lastClub(annotation, 'from') : explicit;
   return club
