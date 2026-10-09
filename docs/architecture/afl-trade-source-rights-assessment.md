@@ -174,6 +174,14 @@ reviewed Gate 0A allowlist entry under the request limits above. 2025 is expecte
 unresolved until a reviewable official 2025 page exists, since its draft coverage is narrative or
 renders client-side.
 
+For 2023 and 2024 the AFL published the pre-draft order only on its live `/draft/draft-order` page,
+since overwritten. On 2026-10-09 the owner also approved exactly two Internet Archive snapshots of
+that page as the pre-draft order evidence: `web.archive.org/web/20231119230530/` ("Draft Order as of
+November 16, 2023") and `web.archive.org/web/20241119043700/` (modified 2024-11-12, after the
+November 8 pick-swap deadline). The Internet Archive is the custodian of those bytes, not the
+author; the content remains Official AFL and carries that provider's restrictions. No other
+archive.org use is approved.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five
