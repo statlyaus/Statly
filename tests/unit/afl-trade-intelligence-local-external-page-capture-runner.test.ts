@@ -761,10 +761,10 @@ const archive2023 =
   'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-order';
 
 describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
-  it('loads the per-season decision recorded under the issue579 order-v2 key', async () => {
+  it('loads the per-season decision recorded under the issue579 order-v3 key', async () => {
     const record = recordedOrder(2022);
     expect(record.decision.content.decisionKey).toBe(
-      'official-afl-indicative-draft-order-issue579-private-2022-order-v2'
+      'official-afl-indicative-draft-order-issue579-private-2022-order-v3'
     );
     const loaded = await loadRecordedLocalCaptureAuthority(
       ledgerOf(record),
@@ -783,7 +783,7 @@ describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
         2022,
         evaluatedAt
       )
-    ).rejects.toThrow(/official-afl-draft-order-parser\/v2/);
+    ).rejects.toThrow(/official-afl-draft-order-parser\/v3/);
   });
 
   it('builds a command the scope rules and the recorded decision admit, for an article and an archive snapshot', () => {
@@ -800,7 +800,7 @@ describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
           provider: 'official_afl',
           draftPathway: 'national',
           capabilityId: 'official-afl-indicative-draft-order',
-          parserVersion: 'official-afl-draft-order-parser/v2',
+          parserVersion: 'official-afl-draft-order-parser/v3',
           effectiveAt: target.effectiveAt,
         });
         expect(

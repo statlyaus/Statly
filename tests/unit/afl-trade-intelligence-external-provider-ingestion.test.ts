@@ -674,10 +674,10 @@ describe('pre-draft order scope (issue 853)', () => {
     ...overrides,
   });
 
-  it('admits a reviewed archive snapshot under parser v2 at its stated as-of date', () => {
+  it('admits a reviewed archive snapshot under parser v3 at its stated as-of date', () => {
     expect(() =>
       validateAflTradeExternalCaptureScope(
-        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v2' })
+        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v3' })
       )
     ).not.toThrow();
   });
@@ -690,10 +690,10 @@ describe('pre-draft order scope (issue 853)', () => {
       '2023-11-16T00:00:00.000Z',
     ],
     ['a reviewed page at another as-of instant', archive, '2023-11-17T00:00:00.000Z'],
-  ])('refuses %s under parser v2', (_label, sourceUrl, effectiveAt) => {
+  ])('refuses %s under parser v3', (_label, sourceUrl, effectiveAt) => {
     expect(() =>
       validateAflTradeExternalCaptureScope(
-        order({ sourceUrl, effectiveAt, parserVersion: 'official-afl-draft-order-parser/v2' })
+        order({ sourceUrl, effectiveAt, parserVersion: 'official-afl-draft-order-parser/v3' })
       )
     ).toThrow(/do not exactly match/);
   });
