@@ -633,48 +633,48 @@ function indexSlotTransfers(transfers: readonly ResolvedDirectedTransfer[]): Slo
   return { holdings, components };
 }
 
-function matchesCurrentPickCustody(input: {
+interface CurrentPickCustodyMatchInput {
   custody: CanonicalPickCustody;
   pickCustody: readonly CanonicalPickCustody[];
   slotTransfers: SlotTransferIndex;
   currentPick: Extract<DirectedTransferClaim['asset'], { kind: 'current_pick' }>;
   eventClaim: Extract<Claim, { kind: 'transaction' }> | null;
   occurredOn: string | null;
-  fromClubId: string | null;
-  toClubId: string | null;
-}): boolean {
+  fromClubId: string;
+  toClubId: string;
+}
+
+/** The slot and transfer describe the same draft, pick number and round, observed no earlier than the trade. */
+function custodyDescribesCurrentPick(input: CurrentPickCustodyMatchInput): boolean {
+  const { custody, currentPick } = input;
+  return (
+    input.eventClaim !== null &&
+    isUsableCustody(custody) &&
+    custody.draftYear === currentPick.draftYear &&
+    custody.draftType === currentPick.draftType &&
+    (input.occurredOn === null || custody.observedAt.slice(0, 10) >= input.occurredOn) &&
+    (currentPick.recordedRoundNumber === undefined ||
+      custody.roundNumber === null ||
+      custody.roundNumber === currentPick.recordedRoundNumber)
+  );
+}
+
+/**
+ * A single order observation cannot show the slot's earlier holders. The candidate's own transfers
+ * can: the sender must be the original club or have been delivered this slot (by number, or as the
+ * future pick that became it), and the receiver must be the order's holder or have traded the slot
+ * number with it. Only the slot's latest observation is read this way. Nothing else is inferred.
+ */
+function slotTransfersCorroborate(input: CurrentPickCustodyMatchInput): boolean {
   const { custody, currentPick } = input;
   if (
-    !input.eventClaim ||
-    !isUsableCustody(custody) ||
-    input.fromClubId === null ||
-    input.toClubId === null ||
-    custody.draftYear !== currentPick.draftYear ||
-    custody.draftType !== currentPick.draftType ||
-    (input.occurredOn !== null && custody.observedAt.slice(0, 10) < input.occurredOn) ||
-    (currentPick.recordedRoundNumber !== undefined &&
-      custody.roundNumber !== null &&
-      custody.roundNumber !== currentPick.recordedRoundNumber)
+    custody.recordedPickNumber === null ||
+    custody.originalClubId === null ||
+    custody.currentClubId === null ||
+    currentPick.recordedPickNumber !== custody.recordedPickNumber
   ) {
     return false;
   }
-  const priorCustody = latestPriorCustody(input.pickCustody, custody);
-  if (priorCustody) {
-    return (
-      custody.currentClubId === input.toClubId &&
-      priorCustody.currentClubId === input.fromClubId &&
-      (input.occurredOn === null || priorCustody.observedAt.slice(0, 10) <= input.occurredOn)
-    );
-  }
-  if (custody.currentClubId === input.toClubId && custody.originalClubId === input.fromClubId) {
-    return true;
-  }
-  // A single order observation cannot show the slot's earlier holders. The candidate's own
-  // transfers can: the sender must have been delivered this slot (by number, or as the future pick
-  // that became it), and the receiver must be the order's holder or have traded the slot number
-  // with it. Only the slot's latest observation is read this way; an earlier one is superseded by
-  // the sequence above. Nothing else is inferred.
-  if (custody.recordedPickNumber === null || custody.originalClubId === null) return false;
   const superseded = input.pickCustody.some(
     (later) =>
       isUsableCustody(later) &&
@@ -683,7 +683,6 @@ function matchesCurrentPickCustody(input: {
   );
   if (superseded) return false;
   const key = slotKey(custody.draftYear, custody.draftType, custody.recordedPickNumber);
-  if (currentPick.recordedPickNumber !== custody.recordedPickNumber) return false;
   const senderHeld =
     custody.originalClubId === input.fromClubId ||
     input.slotTransfers.holdings.has(`${key}|${input.fromClubId}`) ||
@@ -699,9 +698,25 @@ function matchesCurrentPickCustody(input: {
   if (!senderHeld) return false;
   if (custody.currentClubId === input.toClubId) return true;
   const labels = input.slotTransfers.components.get(key);
-  const holderLabel =
-    custody.currentClubId === null ? undefined : labels?.get(custody.currentClubId);
+  const holderLabel = labels?.get(custody.currentClubId);
   return holderLabel !== undefined && labels?.get(input.toClubId) === holderLabel;
+}
+
+function matchesCurrentPickCustody(input: CurrentPickCustodyMatchInput): boolean {
+  if (!custodyDescribesCurrentPick(input)) return false;
+  const { custody } = input;
+  const priorCustody = latestPriorCustody(input.pickCustody, custody);
+  if (priorCustody) {
+    return (
+      custody.currentClubId === input.toClubId &&
+      priorCustody.currentClubId === input.fromClubId &&
+      (input.occurredOn === null || priorCustody.observedAt.slice(0, 10) <= input.occurredOn)
+    );
+  }
+  return (
+    (custody.currentClubId === input.toClubId && custody.originalClubId === input.fromClubId) ||
+    slotTransfersCorroborate(input)
+  );
 }
 
 function currentPickTransferAsset(input: {
@@ -719,18 +734,22 @@ function currentPickTransferAsset(input: {
   const eventClaims = input.transactionClaimsByNativeEventId.get(input.claim.nativeEventId) ?? [];
   const eventClaim = eventClaims.length === 1 ? eventClaims[0].content.claim : null;
   const occurredOn = eventClaim?.occurredOn ?? null;
-  const custodyMatches = input.pickCustody.filter((custody) =>
-    matchesCurrentPickCustody({
-      custody,
-      pickCustody: input.pickCustody,
-      slotTransfers: input.slotTransfers,
-      currentPick,
-      eventClaim,
-      occurredOn,
-      fromClubId: input.fromClubId,
-      toClubId: input.toClubId,
-    })
-  );
+  const { fromClubId, toClubId } = input;
+  const custodyMatches =
+    fromClubId === null || toClubId === null
+      ? []
+      : input.pickCustody.filter((custody) =>
+          matchesCurrentPickCustody({
+            custody,
+            pickCustody: input.pickCustody,
+            slotTransfers: input.slotTransfers,
+            currentPick,
+            eventClaim,
+            occurredOn,
+            fromClubId,
+            toClubId,
+          })
+        );
   const exactCustody = custodyMatches.length === 1 ? custodyMatches[0] : null;
   return {
     kind: 'pick_entitlement',
