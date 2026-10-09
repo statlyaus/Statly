@@ -156,6 +156,24 @@ Source qualification must authenticate both records against the current factual 
 training or public output. Method-document custody, numerical admission and release activation remain
 separate gates. Factual inclusion does not itself prove a model, grade, or production deployment.
 
+### Pick custody evidence for issue 853
+
+On 2026-10-09 the Statly product owner approved Official AFL final national draft order pages and
+Official AFL draft-night trade coverage, 2019–2025, as pick custody evidence within the issue 579
+scope. Official AFL is already an approved provider for that scope; this adds the use, not a provider.
+The use is linking a traded-on pick to the onward trade that moved it, for realized trade grading
+(issue 789). Draftguru does not carry this evidence: its retained trade and year pages record a
+current pick only as `Pick N` and a future pick only as year, round and original club, with no
+custody chain or onward pointer. Footywire has no rights decision for draft order and is not used.
+
+The published final order predates draft night, and live pick trades change slot ownership after
+it. Custody is therefore the final order plus the draft-night trades, checked against the selecting
+club in the retained official session pages; a slot whose order owner and selecting club disagree
+must be explained by a reviewed draft-night trade, never assumed. Each page still needs its own
+reviewed Gate 0A allowlist entry under the request limits above. 2025 is expected to stay
+unresolved until a reviewable official 2025 page exists, since its draft coverage is narrative or
+renders client-side.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five
