@@ -4155,14 +4155,16 @@ The remaining work proceeds through these independently verifiable gates:
      content address re-checked), the current HPN PAV calculation per requested season from
      `outcome_hpn_pav_calculation_head`, those calculations' player rows (`total_pav` per player and
      club), and approved spell versions recorded by the cutoff that nothing recorded by the cutoff
-     supersedes. v3 (`afl-trade-acquisition-registration/v3`) spells are the season appearances. v4 spells
-     are the reviewed arrivals, and on statly-grading-1 these are draft-night arrivals only, so no traded
-     player has one yet. "Current" here is approval plus no successor, not the per-row registration
-     currency check, which is about 3 s a row. On statly-grading-1 (2026-10-08) the governed check,
+     supersedes. v3 (`afl-trade-acquisition-registration/v3`) spells are the season appearances. v4
+     spells are the reviewed arrivals, and on statly-grading-1 these are draft-night arrivals only,
+     so no traded player has one yet. "Current" here is approval plus no successor, not the per-row
+     registration currency check, which takes about 0.6 s a row (about 3.6 s before 0259). On
+     statly-grading-1 (2026-10-08) the governed check,
      `outcome_acquisition_spell_registration_current`, agreed with this proxy on all 247 v4 arrivals
-     (247/247, 15 min). Phase 4 adds set-based currency. A season without a finalized current
-     calculation is refused, never guessed. Migration 0259 is not a grader dependency: the reader never
-     calls the functions it rewrites.
+     (247/247, 15 min). After 0259 the same check took 2.5 min, still 247/247 (2026-10-09). Phase 4
+     adds set-based currency. A season without a finalized current calculation is refused, never
+     guessed. Migration 0259 is not a grader dependency: the reader never calls the functions it
+     rewrites.
    - **No letter grade.** The grade is the per-club net in `career_pav`. The Statly grade policy converts
      probability distributions and does not apply. Asset letter grades stay prohibited.
 
