@@ -2046,3 +2046,224 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
     expect('pickOutcomes' in candidate.content).toBe(false);
   });
 });
+
+describe('pre-draft order custody joined to numbered pick trades (issue 853)', () => {
+  const trade = (
+    eventId: string,
+    from: string,
+    to: string,
+    asset: Extract<AflTradeExternalEvidenceContent['claim'], { kind: 'directed_transfer' }>['asset']
+  ): AflTradeExternalEvidenceContent['claim'][] => [
+    {
+      kind: 'transaction',
+      nativeEventId: eventId,
+      seasonYear: 2025,
+      // Draftguru records no transaction instant.
+      occurredOn: null,
+      transactionType: 'trade',
+      title: `${from} to ${to}`,
+    },
+    {
+      kind: 'transaction_party',
+      nativeEventId: eventId,
+      nativePartyId: from.toLowerCase(),
+      club: { nativeId: null, recordedName: from },
+    },
+    {
+      kind: 'transaction_party',
+      nativeEventId: eventId,
+      nativePartyId: to.toLowerCase(),
+      club: { nativeId: null, recordedName: to },
+    },
+    {
+      kind: 'directed_transfer',
+      nativeEventId: eventId,
+      nativeTransferId: `${eventId}:asset`,
+      fromClub: { nativeId: null, recordedName: from },
+      toClub: { nativeId: null, recordedName: to },
+      asset,
+    },
+  ];
+  const pick = (recordedPickNumber: number) =>
+    ({
+      kind: 'current_pick',
+      draftYear: 2025,
+      draftType: 'national',
+      recordedPickNumber,
+      recordedLabel: `Pick ${recordedPickNumber}`,
+    }) as const;
+  const future = (originalClub: string) =>
+    ({
+      kind: 'future_pick',
+      draftYear: 2025,
+      draftType: 'national',
+      roundNumber: 1,
+      originalClub: { nativeId: null, recordedName: originalClub },
+    }) as const;
+  // One pre-draft order observation: slot 14 is held by `holder`, originally `original`'s pick.
+  const order = (slot: number, holder: string, original: string, suffix = 'd') =>
+    batch('official_afl', suffix, [
+      {
+        kind: 'pick_custody',
+        observedAt: '2025-11-15T00:00:00.000Z',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: slot,
+        originalClub: { nativeId: null, recordedName: original },
+        currentClub: { nativeId: null, recordedName: holder },
+      },
+    ]);
+  const clubs = ['GWS', 'Western Bulldogs', 'Richmond', 'Carlton', 'Essendon'];
+  const clubResolutions = clubs.flatMap((club) => [
+    resolution('draftguru', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
+    resolution('official_afl', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
+  ]);
+  const reconcile = (
+    claims: AflTradeExternalEvidenceContent['claim'][],
+    orders: ReturnType<typeof batch>[]
+  ) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [batch('draftguru', 'a', claims), ...orders],
+      identityResolutions: clubResolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+  const pickIds = (candidate: ReturnType<typeof reconcile>) =>
+    candidate.content.transfers.map(({ asset, status }) =>
+      asset.kind === 'pick_entitlement' ? { pickId: asset.pickId, status } : null
+    );
+
+  it('links a pick traded on as "Pick N" to the future pick that became it', () => {
+    // Carlton -> GWS as Carlton's 2025 first-round pick; GWS -> Bulldogs as "Pick 14"; the order
+    // shows the Bulldogs holding slot 14, originally Carlton's.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    const [futureLeg, numberedLeg] = pickIds(candidate);
+    expect(futureLeg?.status).toBe('single_source');
+    expect(numberedLeg?.status).toBe('single_source');
+    expect(numberedLeg?.pickId).toBe(futureLeg?.pickId);
+    expect(numberedLeg?.pickId).toBe(candidate.content.pickCustody[0]!.pickId);
+  });
+
+  it('links two "Pick N" hops when the order holder is two trades downstream', () => {
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', pick(14)),
+        ...trade('e2', 'GWS', 'Richmond', pick(14)),
+        ...trade('e3', 'Richmond', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    const ids = pickIds(candidate);
+    expect(ids.map((leg) => leg?.status)).toEqual([
+      'single_source',
+      'single_source',
+      'single_source',
+    ]);
+    expect(new Set(ids.map((leg) => leg?.pickId)).size).toBe(1);
+  });
+
+  it('links a draft-night trade away from the order holder', () => {
+    // The order (observed before the draft) shows GWS holding its own slot 14; GWS trades it on
+    // the night. Draftguru records no date, so the observation is not refused as premature.
+    const candidate = reconcile(
+      [...trade('e1', 'GWS', 'Western Bulldogs', pick(14))],
+      [order(14, 'GWS', 'GWS')]
+    );
+    expect(pickIds(candidate)).toEqual([
+      { pickId: candidate.content.pickCustody[0]!.pickId, status: 'single_source' },
+    ]);
+  });
+
+  it('leaves a sender with no evidence of holding the slot unlinked', () => {
+    // The order says slot 14 was Carlton's; nothing shows Carlton's pick ever reaching GWS.
+    const candidate = reconcile(
+      [...trade('e1', 'GWS', 'Western Bulldogs', pick(14))],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    expect(pickIds(candidate)).toEqual([expect.objectContaining({ status: 'unresolved' })]);
+    expect(pickIds(candidate)[0]?.pickId).not.toBe(candidate.content.pickCustody[0]!.pickId);
+  });
+
+  it('leaves a pick whose recorded number misses the slot unlinked', () => {
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(15)),
+      ],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+
+  it('leaves a receiver unconnected to the order holder unlinked', () => {
+    // Essendon holds slot 14 in the order and never traded "Pick 14" with anyone in the candidate.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'Essendon', 'Carlton')]
+    );
+    expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+
+  it('does not read an earlier observation this way once a later one exists', () => {
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [
+        batch('official_afl', 'd', [
+          {
+            kind: 'pick_custody',
+            observedAt: '2025-10-20T00:00:00.000Z',
+            draftYear: 2025,
+            draftType: 'national',
+            roundNumber: 1,
+            recordedPickNumber: 14,
+            originalClub: { nativeId: null, recordedName: 'Carlton' },
+            currentClub: { nativeId: null, recordedName: 'GWS' },
+          },
+          {
+            kind: 'pick_custody',
+            observedAt: '2025-11-15T00:00:00.000Z',
+            draftYear: 2025,
+            draftType: 'national',
+            roundNumber: 1,
+            recordedPickNumber: 14,
+            originalClub: { nativeId: null, recordedName: 'Carlton' },
+            currentClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+          },
+        ]),
+      ]
+    );
+    // The sequence of observations resolves the numbered hop on its own; exactly one match.
+    expect(pickIds(candidate)[1]).toEqual({
+      pickId: candidate.content.pickCustody[0]!.pickId,
+      status: 'single_source',
+    });
+  });
+
+  it('leaves the pick unlinked when the trade has duplicate transaction evidence', () => {
+    const duplicated = [
+      ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+      ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+    ];
+    const [transaction] = trade('e2', 'GWS', 'Western Bulldogs', pick(14));
+    const candidate = reconcile(
+      [...duplicated, transaction!],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+});
