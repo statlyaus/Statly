@@ -3036,6 +3036,47 @@ a model or supply Gate 3 model-validity evidence. Do not claim a real model, num
 valuation publication until an executor has produced an immutable run and the later independent gates
 have approved its exact artifacts.
 
+## Grading trades on realized value (MVP)
+
+`outcomes:grading:realized` grades every trade in one reconciliation candidate on realized first-stint
+value (statlyaus/Statly#789). The rules are in the architecture doc's "Realized trade grade (MVP) contract"
+section. The command reads the candidate, the current HPN PAV calculation per season, and the current
+season spells and reviewed arrivals in one read-only transaction. It seals the private batch, writes it
+to `--out`, and stores it in the registered store as `derived_private` (repository
+`realized-trade-grades`): the bytes are written and read back in full, then one transaction records the
+custody row and its location. The batch is a calculation output, not a source, so it is not
+`raw_source`. Nothing else is written. `--dry-run` grades and writes `--out` but stores nothing.
+
+The nightly custody readback reads every `raw_source` row in full but only samples other classes (5% a
+run by default), so it does not check every stored batch each night. To check every stored batch, run
+`npm run outcomes:artifacts:readback -- --store-id <store-id> --sample-fraction 1`, which reads every
+located row of the store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:realized -- \
+  --candidate <external-reconciliation:...> --method <hpn-pav-method:...> \
+  --seasons 2021-2026 --official-seasons 2021-2025 --benchmark <hpn-pick-benchmark:...> \
+  --store-id <store-id> --out <absolute-path.json> [--dry-run]
+```
+
+- `--out` must not exist yet. The batch is never overwritten. It is written only after the batch is
+  stored, so a refused store leaves no batch file. If writing `--out` then fails, the error names the
+  stored `artifactId`, which is the batch's only copy.
+- The command refuses, and stores nothing, when:
+  - the candidate is not finalized `non_production`;
+  - a season has no finalized current PAV calculation, or its calculation was finalized after the run
+    started;
+  - a season has no season spells;
+  - a PAV row is duplicated or not bound to a current season spell;
+  - the candidate holds no trades.
+- A trade the batch cannot represent (no transfers, or an unusable club) is listed as `ungraded`.
+  Read the printed `summary` before citing a batch.
+- The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
+  cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
+  by `artifactId` and `batchId`, never "the latest".
+- It is private and `non_production`. Nothing here is publishable.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark

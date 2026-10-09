@@ -76,15 +76,15 @@ export async function bindLocalAflTradeArtifactRepository(
 }
 
 /**
- * Binds reviewed-registration evidence to one repository of the registered local non-production
- * store (see {@link bindLocalAflTradeArtifactRepository}).
+ * Binds evidence to one repository of the registered local non-production store (see
+ * {@link bindLocalAflTradeArtifactRepository}). Every class uses the same on-disk layout.
  */
 export async function bindLocalAflTradeArtifactStore(
   client: AflOutcomeSqlClient,
   input: {
     storeId: string;
     repositoryId: string;
-    artifactClass: 'raw_source' | 'capture_metadata';
+    artifactClass: 'raw_source' | 'capture_metadata' | 'derived_private';
     maximumObjectBytes: number;
   }
 ): Promise<AflTradeEvidenceStoreBinding> {

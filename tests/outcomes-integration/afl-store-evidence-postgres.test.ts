@@ -7,7 +7,10 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { registerLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactCustodyLocationBackfill';
-import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
+import {
+  createLocalAflTradeNonProductionArtifactRepository,
+  createLocalAflTradePrivateDerivedArtifactRepository,
+} from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
 import { storeLocalAflTradeEvidence } from '@/server/aflTradeIntelligence/development/localEvidenceStorage';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
@@ -172,6 +175,65 @@ it('reuses the stored reference when a run stopped after writing the bytes', asy
   const stored = await store(bytes);
   expect(stored).toMatchObject({ custody: 'recorded' });
   expect(stored.reference).toEqual(reference);
+});
+
+it('stores private derived output under its class, located and read back cleanly', async () => {
+  const bytes = text('{"batchId":"realized-trade-grade-batch:fixture"}');
+  const stored = await storeLocalAflTradeEvidence(client, {
+    storeId: STORE_ID,
+    repositoryId: 'realized-trade-grades',
+    artifactClass: 'derived_private',
+    bytes,
+    mediaType: 'application/json',
+    maximumObjectBytes: MAXIMUM_BYTES,
+  });
+  const sha = stored.reference.contentSha256;
+  expect(stored).toMatchObject({
+    custody: 'recorded',
+    objectKey: `realized-trade-grades/local_non_production_filesystem/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}`,
+  });
+  const custody = await pool.query<{ artifact_class: string; custody_json: { content: unknown } }>(
+    `SELECT artifact_class::text AS artifact_class, custody_json FROM outcome_artifact_custody
+      WHERE artifact_id=$1`,
+    [stored.reference.artifactId]
+  );
+  expect(custody.rows[0]!.artifact_class).toBe('derived_private');
+  expect(custody.rows[0]!.custody_json.content).toMatchObject({
+    artifactClass: 'derived_private',
+    status: 'passed',
+  });
+  // The private derived repository reads the same object, so its own writers agree on the layout.
+  const loaded = await createLocalAflTradePrivateDerivedArtifactRepository({
+    rootDirectory: root,
+    repositoryId: 'realized-trade-grades',
+    maximumObjectBytes: MAXIMUM_BYTES,
+  }).loadExact(stored.reference, MAXIMUM_BYTES);
+  expect(loaded?.reference).toEqual(stored.reference);
+  // The nightly readback samples derived_private; reading every sampled class checks it.
+  const run = await readBackLocalAflTradeArtifactCustody({
+    client,
+    storeId: STORE_ID,
+    otherClassFraction: 1,
+  });
+  expect(run.failures).toBe(0);
+  expect(run.checkedByClass.derived_private).toBe(1);
+});
+
+it('refuses bytes whose existing custody row names another class', async () => {
+  const bytes = text('{"approval":"stored as a source"}');
+  const stored = await store(bytes);
+  const before = await rowCounts();
+  await expect(
+    storeLocalAflTradeEvidence(client, {
+      storeId: STORE_ID,
+      repositoryId: 'governance-evidence',
+      artifactClass: 'derived_private',
+      bytes,
+      mediaType: 'application/json',
+      maximumObjectBytes: MAXIMUM_BYTES,
+    })
+  ).rejects.toThrow(`Evidence ${stored.reference.artifactId} differs from its custody row.`);
+  expect(await rowCounts()).toEqual(before);
 });
 
 it('refuses an unregistered store and an invalid media type before writing', async () => {
