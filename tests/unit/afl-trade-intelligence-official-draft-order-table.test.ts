@@ -74,6 +74,7 @@ describe('parseOfficialAflDraftOrderTable', () => {
             [6, 'Carlton (Example Player compensation pick)'],
             [7, 'West Coast (received from Carlton, Carl received from Syd in a pick swap)'],
             [8, 'Essendon (received from GWS* as part of a trade)'],
+            [9, 'Hawthorn (originally received from the Western Bulldogs in 2021)'],
           ],
         ],
       ])
@@ -87,9 +88,10 @@ describe('parseOfficialAflDraftOrderTable', () => {
       { pick: 6, round: 2, holder: 'Carlton', original: null },
       { pick: 7, round: 2, holder: 'West Coast', original: null },
       { pick: 8, round: 2, holder: 'Essendon', original: 'GWS' },
+      { pick: 9, round: 2, holder: 'Hawthorn', original: 'Western Bulldogs' },
     ]);
+    // A special pick's missing original club is a claim fact; only the unreadable note is an issue.
     expect(issues.map(({ code, sourceKey }) => [code, sourceKey])).toEqual([
-      ['special_pick_origin', '2022:national:6'],
       ['unsupported_order_annotation', '2022:national:7'],
     ]);
   });
@@ -108,7 +110,7 @@ describe('parseOfficialAflDraftOrderTable', () => {
       { pick: 2, round: 1, holder: 'Melbourne', original: 'Melbourne' },
       { pick: 3, round: 1, holder: 'Carlton', original: 'Adelaide' },
     ]);
-    expect(issues.map(({ code }) => code)).toEqual(['special_pick_origin']);
+    expect(issues).toEqual([]);
   });
 
   it('records the parser version, provider and observation time on every claim', () => {

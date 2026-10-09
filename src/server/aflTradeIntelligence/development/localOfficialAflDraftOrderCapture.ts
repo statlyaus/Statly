@@ -8,11 +8,11 @@ import {
   type LocalNarrowCaptureAuthority,
 } from './localNarrowCaptureAuthority';
 
-/** The governed capability id; parser v2 reads the reviewed pre-draft order tables under it. */
+/** The governed capability id; parser v3 reads the reviewed pre-draft order tables under it. */
 export const OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY = 'official-afl-indicative-draft-order';
 
 /**
- * The field boundary parser v2 emits: every non-null leaf of a `pick_custody` claim. The recorded
+ * The field boundary parser v3 emits: every non-null leaf of a `pick_custody` claim. The recorded
  * rights must name exactly these; staging refuses a capture that emits any other leaf.
  */
 export const OFFICIAL_AFL_DRAFT_ORDER_FIELDS = [
@@ -27,7 +27,7 @@ export const OFFICIAL_AFL_DRAFT_ORDER_FIELDS = [
 
 /**
  * The owner records one narrow decision per season and parser version, for example
- * `official-afl-indicative-draft-order-issue579-private-2022-order-v2`. The runner never falls back
+ * `official-afl-indicative-draft-order-issue579-private-2022-order-v3`. The runner never falls back
  * to another season or parser version.
  */
 export function officialAflDraftOrderDecisionKey(season: number): string {

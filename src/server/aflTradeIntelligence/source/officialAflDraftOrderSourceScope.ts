@@ -1,7 +1,7 @@
 /**
  * The exact reviewed Official AFL pre-draft national order pages for issue 853 (owner decision
  * 2026-10-09, recorded in the source policy): the order as it stood after each season's last
- * pick-swap deadline, which `official-afl-draft-order-parser/v2` reads as pick custody. 2023 and
+ * pick-swap deadline, which `official-afl-draft-order-parser/v3` reads as pick custody. 2023 and
  * 2024 were published only on the live `/draft/draft-order` page, since overwritten; the owner
  * approved exactly these two Internet Archive snapshots of it, served raw (`id_`). Inclusion grants
  * no further rights, and no other archive.org URL is reviewed.
