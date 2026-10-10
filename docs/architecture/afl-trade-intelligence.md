@@ -4145,9 +4145,12 @@ The remaining work proceeds through these independently verifiable gates:
      but no PAV row for the club is worth 0. A stint none of whose seasons has a pinned PAV calculation
      has no known value and blocks the leg (`hpn_pav_head_missing`), as does a selected pick whose draft
      year is before the trade. A candidate with no trades at all is refused. A move without a reviewed arrival in the trade or draft
-     season or the season after is `arrival_unreviewed`. A traded-on pick links to the one later trade in
-     which its receiving club gave the same `pickId` away, never to an earlier one. No link, or more than
-     one, is `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
+     season or the season after is `arrival_unreviewed`. A traded-on pick follows the trail its `pickId`'s
+     transfers form: when exactly one ordering chains every transfer club to club with consecutive trades
+     in time order, the onward trade is the next transfer on that trail (issue 867: a pick that leaves the
+     same club twice in one undated season). Otherwise it links to the one later trade in which its
+     receiving club gave the same `pickId` away, never to an earlier one. No link, or more than one, is
+     `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
      `traded_on_return_blocked`. A player's at-trade view is his PAV at the sending club in the trade
      season.
    - **Pick custody from the pre-draft order (issue 853).** A pick traded as a future pick is keyed

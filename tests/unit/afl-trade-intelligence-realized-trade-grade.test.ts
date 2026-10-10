@@ -586,6 +586,63 @@ describe('MVP realized trade grader', () => {
         onward: { transactionId: 'tx-3' },
       });
     });
+    // Issue 867: Brisbane's 2022 third-round pick went Brisbane → Geelong → Hawthorn → Collingwood →
+    // Geelong in 2021 and back to Brisbane in 2022. Two transfers leave Geelong, and undated same-season
+    // trades cannot be ordered, but only one ordering chains all five transfers.
+    const loop = (): Candidate => ({
+      transactions: [
+        trade('tx-1', 2021),
+        trade('tx-2', 2021),
+        trade('tx-3', 2021),
+        trade('tx-4', 2021),
+        trade('tx-5', 2022),
+      ],
+      transfers: [
+        pick('tr-1', 'tx-1', 'brisbane', 'geelong', 'pick-L', 2022, 50),
+        pick('tr-2', 'tx-2', 'geelong', 'hawthorn', 'pick-L', 2022, 50),
+        pick('tr-3', 'tx-3', 'hawthorn', 'collingwood', 'pick-L', 2022, 50),
+        pick('tr-4', 'tx-4', 'collingwood', 'geelong', 'pick-L', 2022, 50),
+        pick('tr-5', 'tx-5', 'geelong', 'brisbane', 'pick-L', 2022, 50),
+      ],
+      pickOutcomes: [
+        outcome('tr-1', { disposition: 'traded_on' }),
+        outcome('tr-2', { disposition: 'traded_on' }),
+        outcome('tr-3', { disposition: 'traded_on' }),
+        outcome('tr-4', { disposition: 'traded_on' }),
+        outcome('tr-5', {
+          disposition: 'not_used',
+          nominationBasis: 'club_took_no_nominated_player',
+          receivingClubNominatedSelections: 0,
+        }),
+      ],
+    });
+
+    it('follows a pick that leaves one club twice along its only complete trail', () => {
+      const batch = gradeAflTradesOnRealizedValue(inputs(loop()));
+      for (const transferId of ['tr-1', 'tr-2', 'tr-3', 'tr-4'])
+        expect(legOf(batch, transferId).reasons).not.toContain('traded_on_return_unlinked');
+      expect(legOf(batch, 'tr-1')).toMatchObject({ onward: { transactionId: 'tx-2' } });
+      expect(legOf(batch, 'tr-4')).toMatchObject({ onward: { transactionId: 'tx-5' } });
+    });
+
+    it('keeps a pick unlinked when more than one trail covers its transfers', () => {
+      // Out of Geelong to Hawthorn and to Carlton, each handing it straight back: either order works.
+      const ambiguous: Candidate = {
+        transactions: ['tx-1', 'tx-2', 'tx-3', 'tx-4', 'tx-5'].map((id) => trade(id, 2021)),
+        transfers: [
+          pick('tr-1', 'tx-1', 'brisbane', 'geelong', 'pick-M', 2022, 50),
+          pick('tr-2', 'tx-2', 'geelong', 'hawthorn', 'pick-M', 2022, 50),
+          pick('tr-3', 'tx-3', 'hawthorn', 'geelong', 'pick-M', 2022, 50),
+          pick('tr-4', 'tx-4', 'geelong', 'carlton', 'pick-M', 2022, 50),
+          pick('tr-5', 'tx-5', 'carlton', 'geelong', 'pick-M', 2022, 50),
+        ],
+        pickOutcomes: ['tr-1', 'tr-2', 'tr-3', 'tr-4', 'tr-5'].map((id) =>
+          outcome(id, { disposition: 'traded_on' })
+        ),
+      };
+      const batch = gradeAflTradesOnRealizedValue(inputs(ambiguous));
+      expect(legOf(batch, 'tr-1').reasons).toEqual(['traded_on_return_unlinked']);
+    });
   });
 
   describe('edge cases', () => {

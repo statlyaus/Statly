@@ -233,6 +233,39 @@ export function gradeAflTradesOnRealizedValue(
         ...(transfersByPick.get(transfer.asset.pickId) ?? []),
         transfer,
       ]);
+  // A pick's transfers form a directed trail, each handing it from sender to receiver. When exactly one
+  // ordering uses every transfer once, chains club to club, and keeps consecutive trades in time order,
+  // a transfer's onward hop is the next edge (none after the last). `undefined`: the trail is not unique.
+  const trails = new Map<string, Map<string, Transfer[]> | undefined>();
+  function onwardByTrail(pickId: string, transfer: Transfer): Transfer[] | undefined {
+    if (!trails.has(pickId)) {
+      const edges = transfersByPick.get(pickId) ?? [];
+      const found: Transfer[][] = [];
+      const walk = (trail: Transfer[], used: Set<string>) => {
+        if (found.length > 1) return;
+        if (trail.length === edges.length) return void found.push([...trail]);
+        const last = trail.at(-1)!;
+        for (const next of edges)
+          if (
+            !used.has(next.transferId) &&
+            next.fromClubId === last.toClubId &&
+            notBefore(transactions.get(next.transactionId)!, transactions.get(last.transactionId)!)
+          ) {
+            used.add(next.transferId);
+            walk([...trail, next], used);
+            used.delete(next.transferId);
+          }
+      };
+      for (const first of edges) walk([first], new Set([first.transferId]));
+      trails.set(
+        pickId,
+        found.length === 1
+          ? new Map(found[0]!.map((edge, at) => [edge.transferId, found[0]!.slice(at + 1, at + 2)]))
+          : undefined
+      );
+    }
+    return trails.get(pickId)?.get(transfer.transferId);
+  }
   const outcomes = new Map<string, PickOutcome>(
     (inputs.candidate.pickOutcomes ?? []).map((outcome) => [outcome.transferId, outcome])
   );
@@ -326,15 +359,18 @@ export function gradeAflTradesOnRealizedValue(
         };
       return blocked(base, ['not_used_no_access_evidence']);
     }
-    // Traded on: follow the pick into the one later trade where its club gave it away.
-    const onwardTransfers = (transfersByPick.get(asset.pickId) ?? []).filter((candidate) => {
-      const onwardTransaction = transactions.get(candidate.transactionId)!;
-      return (
-        candidate.fromClubId === receiving &&
-        candidate.transactionId !== transfer.transactionId &&
-        notBefore(onwardTransaction, transaction)
-      );
-    });
+    // Traded on: follow the pick along its unique trail, else into the one later trade where its club
+    // gave it away.
+    const onwardTransfers =
+      onwardByTrail(asset.pickId, transfer) ??
+      (transfersByPick.get(asset.pickId) ?? []).filter((candidate) => {
+        const onwardTransaction = transactions.get(candidate.transactionId)!;
+        return (
+          candidate.fromClubId === receiving &&
+          candidate.transactionId !== transfer.transactionId &&
+          notBefore(onwardTransaction, transaction)
+        );
+      });
     if (onwardTransfers.length !== 1) return blocked(base, ['traded_on_return_unlinked']);
     const onwardTransfer = onwardTransfers[0]!;
     if (stack.includes(onwardTransfer.transactionId))
