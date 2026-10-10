@@ -2114,7 +2114,16 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
         currentClub: { nativeId: null, recordedName: holder },
       },
     ]);
-  const clubs = ['GWS', 'Western Bulldogs', 'Richmond', 'Carlton', 'Essendon'];
+  const clubs = [
+    'GWS',
+    'Western Bulldogs',
+    'Richmond',
+    'Carlton',
+    'Essendon',
+    'Melbourne',
+    'Footscray',
+    'Brisbane',
+  ];
   const clubResolutions = clubs.flatMap((club) => [
     resolution('draftguru', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
     resolution('official_afl', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
@@ -2252,6 +2261,41 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
       pickId: candidate.content.pickCustody[0]!.pickId,
       status: 'single_source',
     });
+  });
+
+  it('re-keys every "Pick N" hop of a chain when only the later hop is corroborated', () => {
+    // 2024 slot 54 on the grading VM: the order shows Essendon holding Footscray's pick. Nothing
+    // delivers the slot to Melbourne, so only Essendon -> Brisbane is corroborated on its own;
+    // re-keying it alone left Melbourne -> Essendon on the number key and orphaned its traded-on link.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Melbourne', 'Essendon', pick(54)),
+        ...trade('e2', 'Essendon', 'Brisbane', pick(54)),
+      ],
+      [order(54, 'Essendon', 'Footscray')]
+    );
+    const custodyPickId = candidate.content.pickCustody[0]!.pickId;
+    expect(pickIds(candidate)).toEqual([
+      { pickId: custodyPickId, status: 'single_source' },
+      { pickId: custodyPickId, status: 'single_source' },
+    ]);
+  });
+
+  it('keeps a chain on its number key when its hops would map to two custody picks', () => {
+    // Two order rows for slot 14 name different original clubs. Carlton -> GWS matches only the
+    // first; GWS -> Bulldogs matches both. Neither hop moves, so the chain stays linked.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', pick(14)),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'GWS', 'Carlton', 'd'), order(14, 'Western Bulldogs', 'GWS', 'e')]
+    );
+    const [first, second] = pickIds(candidate);
+    const custodyPickIds = candidate.content.pickCustody.map((custody) => custody.pickId);
+    expect(new Set(custodyPickIds).size).toBe(2);
+    expect(first?.pickId).toBe(second?.pickId);
+    expect(custodyPickIds).not.toContain(first?.pickId);
   });
 
   it('leaves the pick unlinked when the trade has duplicate transaction evidence', () => {
