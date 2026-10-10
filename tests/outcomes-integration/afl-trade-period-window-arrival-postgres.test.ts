@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, expect, it } from 'vitest';
 import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createAflTradeArrivalSpell,
@@ -11,33 +11,43 @@ import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisit
 import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
 import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 
-const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
+const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
 const MIGRATION = '0261_trade_period_window_arrivals';
-// The local fitzRoy rehearsal owners only run inside a schema with this disposable naming pattern.
-const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}`;
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
-const pool = new Pool({
-  connectionString: databaseUrl,
-  options: `-c search_path=${schemaName}`,
-  max: 4,
-});
-const client = createPgAflOutcomeSqlClient(pool);
 const scope = { environment: 'non_production' as const, competition: 'AFLM' as const };
 // The fixture's synthetic trade season is 2024; this is a reviewed trade-period window inside it.
 const tradePeriodWindow = { earliestDate: '2024-10-07', latestDate: '2024-10-16' };
-let cleanup: () => Promise<void> = async () => undefined;
-let migrationSql = '';
-let yearOnly: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>;
 
-beforeAll(async () => {
+type Promoted = Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>;
+
+/**
+ * One disposable schema per promotion. The synthetic promotion fixture content-addresses its
+ * artifacts, captures and canonical rows, so two promotions in one schema collide on primary keys;
+ * each test builds its own schema with the history deployed just before the migration.
+ */
+interface Workspace {
+  pool: Pool;
+  client: ReturnType<typeof createPgAflOutcomeSqlClient>;
+  migrationSql: string;
+  dispose: () => Promise<void>;
+}
+const workspaces: Workspace[] = [];
+let ordinal = 0;
+
+async function workspace(): Promise<Workspace> {
+  // The local fitzRoy rehearsal owners only run inside a schema with this disposable naming pattern.
+  const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}_${ordinal++}`;
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    options: `-c search_path=${schemaName}`,
+    max: 4,
+  });
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   const history = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
-  cleanup = history.cleanup;
-  migrationSql = history.migrationSql;
   await admin.query(
     `GRANT USAGE ON SCHEMA "${schemaName}" TO afl_trade_nonproduction_governance_registry_writer`
   );
@@ -45,65 +55,65 @@ beforeAll(async () => {
     `GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA "${schemaName}"
        TO afl_trade_nonproduction_governance_registry_writer`
   );
-  // A year-only trade promoted under the deployed rules: no day, no window.
-  yearOnly = await createSyntheticAcquisitionPlayerPromotion(pool, {
-    environment: 'non_production',
-    completeCaptureReceipts: true,
-    draftSessions: true,
-    sessionProposalV5: true,
-    partialTransactionDates: true,
-  });
-}, 300_000);
+  const built: Workspace = {
+    pool,
+    client: createPgAflOutcomeSqlClient(pool),
+    migrationSql: history.migrationSql,
+    dispose: async () => {
+      await history.cleanup();
+      await pool.end();
+      await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    },
+  };
+  workspaces.push(built);
+  return built;
+}
 
 afterAll(async () => {
-  await cleanup();
-  await pool.end();
   try {
-    await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    for (const built of workspaces) await built.dispose();
   } finally {
     await admin.end();
   }
 });
 
-const instant = async () => {
+const instant = async (ws: Workspace) => {
   await new Promise((resolve) => setTimeout(resolve, 3));
   return (
-    await pool.query<{ at: string }>(
+    await ws.pool.query<{ at: string }>(
       `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
     )
   ).rows[0]!.at;
 };
 
-const approve = async (type: string, subject: string, content: unknown) => {
+const approve = async (ws: Workspace, type: string, subject: string, content: unknown) => {
   const id = `synthetic-trade-window-review:${subject}`;
-  await pool.query(
+  await ws.pool.query(
     `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
      VALUES($1,$2,$3,'approved','Synthetic trade-period window arrival',$4::jsonb,'synthetic-reviewer',$5)`,
-    [id, type, subject, canonicalizeAflTradeJson(content), await instant()]
+    [id, type, subject, canonicalizeAflTradeJson(content), await instant(ws)]
   );
   return id;
 };
 
-const currentness = async (spellVersionId: string) =>
+const currentness = async (ws: Workspace, spellVersionId: string) =>
   (
-    await pool.query<{ current: boolean }>(
+    await ws.pool.query<{ current: boolean }>(
       'SELECT outcome_acquisition_spell_registration_current($1,clock_timestamp()) AS current',
       [spellVersionId]
     )
   ).rows[0]!.current;
 
-const spellVersions = async () =>
+const spellVersions = async (ws: Workspace) =>
   (
-    await pool.query<{ versions: number }>(
+    await ws.pool.query<{ versions: number }>(
       'SELECT count(*)::integer AS versions FROM outcome_acquisition_spell_version'
     )
   ).rows[0]!.versions;
 
-const repositoryFor = async (
-  promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>
-) =>
+const repositoryFor = async (ws: Workspace, promoted: Promoted) =>
   new PostgresAflTradeAcquisitionSpellRegistrationRepository(
-    client,
+    ws.client,
     {
       read: async (reference) => {
         const artifact = promoted.retainedArtifacts.get(reference.artifactId);
@@ -111,31 +121,30 @@ const repositoryFor = async (
         return artifact.bytes;
       },
     },
-    await bindTestEvidenceStore(pool)
+    await bindTestEvidenceStore(ws.pool)
   );
 
 const registerArrivalRule = async (
+  ws: Workspace,
   spells: PostgresAflTradeAcquisitionSpellRegistrationRepository,
-  promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>,
+  promoted: Promoted,
   ruleVersion: string
 ) => {
   const rule = createAflTradeArrivalSpellRule({
     ...scope,
     ruleVersion,
     evidence: [promoted.sourceArtifact],
-    createdAt: await instant(),
+    createdAt: await instant(ws),
   });
   await spells.registerReviewedRule(
     rule,
-    await approve('acquisition_spell_rule', rule.ruleId, rule),
+    await approve(ws, 'acquisition_spell_rule', rule.ruleId, rule),
     scope
   );
   return rule;
 };
 
-const windowEntryFor = (
-  promoted: Awaited<ReturnType<typeof createSyntheticAcquisitionPlayerPromotion>>
-) => ({
+const windowEntryFor = (promoted: Promoted) => ({
   promotionId: promoted.entry.promotionId,
   eventVersionId: promoted.entry.eventVersionId,
   assetVersionId: promoted.entry.assetVersionId,
@@ -148,8 +157,17 @@ const windowEntryFor = (
 // precision (statlyaus/Statly#869). A traded player's arrival then cites that window exactly and
 // starts at its earliest day; a year-only trade and an exact-day trade keep their meaning.
 it('refuses a windowed arrival against a year-only trade before and after the migration', async () => {
-  const spells = await repositoryFor(yearOnly);
-  const rule = await registerArrivalRule(spells, yearOnly, 'synthetic-arrival-trade-window-v4');
+  const ws = await workspace();
+  // A year-only trade promoted under the deployed rules: no day, no window.
+  const yearOnly = await createSyntheticAcquisitionPlayerPromotion(ws.pool, {
+    environment: 'non_production',
+    completeCaptureReceipts: true,
+    draftSessions: true,
+    sessionProposalV5: true,
+    partialTransactionDates: true,
+  });
+  const spells = await repositoryFor(ws, yearOnly);
+  const rule = await registerArrivalRule(ws, spells, yearOnly, 'synthetic-arrival-trade-window-v4');
   const arrival = createAflTradeArrivalSpell({
     ...scope,
     playerId: yearOnly.playerId,
@@ -158,24 +176,31 @@ it('refuses a windowed arrival against a year-only trade before and after the mi
     ruleId: rule.ruleId,
     version: 1,
     supersedesSpellVersionId: null,
-    createdAt: await instant(),
+    createdAt: await instant(ws),
   });
-  const approval = await approve('acquisition_spell_registration', arrival.spellVersionId, arrival);
-  const versionsBefore = await spellVersions();
+  const approval = await approve(
+    ws,
+    'acquisition_spell_registration',
+    arrival.spellVersionId,
+    arrival
+  );
+  const versionsBefore = await spellVersions(ws);
   // The promoted event has no precision, so a window does not match it under the deployed rules.
   await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow();
-  expect(await spellVersions()).toBe(versionsBefore);
+  expect(await spellVersions(ws)).toBe(versionsBefore);
 
   // The migration edits definitions in place and writes no row.
-  await pool.query(migrationSql);
-  expect(await spellVersions()).toBe(versionsBefore);
+  await ws.pool.query(ws.migrationSql);
+  expect(await spellVersions(ws)).toBe(versionsBefore);
   // Still no match: the window is not the event's precision, and it is not the 0212 full year.
   await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow();
-  expect(await spellVersions()).toBe(versionsBefore);
+  expect(await spellVersions(ws)).toBe(versionsBefore);
 }, 300_000);
 
 it('promotes an undated trade with its reviewed window and registers the arrival inside it', async () => {
-  const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const promoted = await createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     environment: 'non_production',
     completeCaptureReceipts: true,
     draftSessions: true,
@@ -192,7 +217,7 @@ it('promotes an undated trade with its reviewed window and registers the arrival
       datePrecision: { precision: 'window', eventDate: null, ...tradePeriodWindow },
     }),
   ]);
-  const event = await pool.query<{
+  const event = await ws.pool.query<{
     event_date: string | null;
     date_precision: unknown;
     season_year: number;
@@ -209,14 +234,19 @@ it('promotes an undated trade with its reviewed window and registers the arrival
       season_year: 2024,
     },
   ]);
-  const bounds = await pool.query<{ bounds: string | null }>(
+  const bounds = await ws.pool.query<{ bounds: string | null }>(
     'SELECT outcome_event_evidenced_date_bounds($1)::text AS bounds',
     [promoted.entry.eventVersionId]
   );
   expect(bounds.rows).toEqual([{ bounds: '[2024-10-07,2024-10-17)' }]);
 
-  const spells = await repositoryFor(promoted);
-  const rule = await registerArrivalRule(spells, promoted, 'synthetic-arrival-trade-window-v4-b');
+  const spells = await repositoryFor(ws, promoted);
+  const rule = await registerArrivalRule(
+    ws,
+    spells,
+    promoted,
+    'synthetic-arrival-trade-window-v4-b'
+  );
   const arrival = createAflTradeArrivalSpell({
     ...scope,
     playerId: promoted.playerId,
@@ -225,17 +255,22 @@ it('promotes an undated trade with its reviewed window and registers the arrival
     ruleId: rule.ruleId,
     version: 1,
     supersedesSpellVersionId: null,
-    createdAt: await instant(),
+    createdAt: await instant(ws),
   });
-  const approval = await approve('acquisition_spell_registration', arrival.spellVersionId, arrival);
+  const approval = await approve(
+    ws,
+    'acquisition_spell_registration',
+    arrival.spellVersionId,
+    arrival
+  );
   await expect(
     Promise.all([
       spells.registerReviewedSpell(arrival, approval, scope),
       spells.registerReviewedSpell(arrival, approval, scope),
     ])
   ).resolves.toEqual([arrival, arrival]);
-  expect(await currentness(arrival.spellVersionId)).toBe(true);
-  const stored = await pool.query<{
+  expect(await currentness(ws, arrival.spellVersionId)).toBe(true);
+  const stored = await ws.pool.query<{
     start_date: string;
     end_date: string | null;
     end_reason: string | null;
@@ -253,15 +288,15 @@ it('promotes an undated trade with its reviewed window and registers the arrival
   const dayArrival = createAflTradeArrivalSpell({
     ...arrival.content,
     entry: { ...dayEntry, eventDate: tradePeriodWindow.earliestDate },
-    createdAt: await instant(),
+    createdAt: await instant(ws),
   });
-  const versionsBefore = await spellVersions();
+  const versionsBefore = await spellVersions(ws);
   await expect(
     spells.registerReviewedSpell(
       dayArrival,
-      await approve('acquisition_spell_registration', dayArrival.spellVersionId, dayArrival),
+      await approve(ws, 'acquisition_spell_registration', dayArrival.spellVersionId, dayArrival),
       scope
     )
   ).rejects.toThrow();
-  expect(await spellVersions()).toBe(versionsBefore);
+  expect(await spellVersions(ws)).toBe(versionsBefore);
 }, 300_000);
