@@ -4156,13 +4156,18 @@ The remaining work proceeds through these independently verifiable gates:
      `traded_on_return_unlinked` (139 picks behind 190 blocked trades in the first batch). The bridge
      is the Official AFL pre-draft order, which annotates each slot with its origin.
      `source/draftCorroborationAdapter.ts` reads the reviewed order tables as parser
-     `official-afl-draft-order-parser/v2` under the existing `official-afl-indicative-draft-order`
+     `official-afl-draft-order-parser/v3` under the existing `official-afl-indicative-draft-order`
      capability: every `ROUND <n>` row is one `pick_custody` claim with the slot, the round, the holder
      and the original club as of the page's stated date. The original club is the holder when the
      slot is unannotated, the `tied to`/`held by` club when named, otherwise the last club the chain
-     says the pick was received `from`; a compensation, assistance, concession or priority pick has
-     no original club (`special_pick_origin`), and so does a note whose last link is not a recorded
-     club (`unsupported_order_annotation`). A page must name the next year's traded selections and
+     says the pick was received `from`; a club name may follow an article ("from the Western
+     Bulldogs"). A compensation, assistance, concession or priority pick has no original club: that is
+     a fact the claim carries, not a parse issue (v2 recorded it as one, which kept every order page
+     out of a retained plan, since retention requires an issue-free batch). Migration 0260 adds the
+     capability to the retained plan target's capability check, which until then refused its target
+     rows (`23514`). A note whose last link is
+     not a recorded club is `unsupported_order_annotation` and keeps no original club. A page must
+     name the next year's traded selections and
      its slots must run 1..N, or nothing is emitted. The reviewed pages
      (`source/officialAflDraftOrderSourceScope.ts`) are one article per season for 2019-2022 and,
      for 2023 and 2024, the two owner-approved Internet Archive snapshots of the live order page,
