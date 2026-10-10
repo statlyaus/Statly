@@ -196,7 +196,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const sourceBytes = new TextEncoder().encode(
     options.lifecycle
       ? `<p>${targets.playerName} joined ${targets.toClubName} on ${seasonYear}-10-15, moved to ${targets.fromClubName} on ${seasonYear}-10-20, and returned to ${targets.toClubName} on ${seasonYear}-10-25.</p>`
-      : `<p>${targets.playerName} joined ${targets.toClubName}${tradeDate === null ? ` during ${seasonYear}` : ` on ${tradeDate}`}.</p>`
+      : `<p>${targets.playerName} joined ${targets.toClubName}${tradeDate === null ? ` during ${seasonYear}` : ` on ${tradeDate}`}.${options.fixtureNamespace ? ` (${fixtureNamespace})` : ''}</p>`
   );
   const sourceArtifact = createAflTradeByteArtifactRef(
     sourceBytes,
