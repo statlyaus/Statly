@@ -921,6 +921,8 @@ Prerequisites:
      The reviewed pages are enumerated in `source/officialAflTradePeriodSourceScope.ts`; each
      entry records the window the reviewer read, the capture is effective from its first day, and
      the parser must reproduce it. The window is a traded arrival's date precision, never a day.
+     Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
+     refuses the capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v2`, `draftguru-national-year-page/v3`,
    `official-afl-completed-draft-session/v19` or `official-afl-draft-order-parser/v3`), seasons inside one range, 1 request per 5 seconds
