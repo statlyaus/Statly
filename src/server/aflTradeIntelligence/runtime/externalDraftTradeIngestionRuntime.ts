@@ -22,6 +22,7 @@ import {
   parseOfficialAflDraftOrderTable,
   parseOfficialAflIndicativeDraftOrder,
 } from '../source/draftCorroborationAdapter';
+import { parseOfficialAflTradePeriodDates } from '../source/officialAflTradePeriodAdapter';
 import {
   captureDraftguruSource,
   parseDraftguruPlayerTradeDetail,
@@ -203,6 +204,11 @@ export function createAflTradeExternalIngestionRuntime(
               capture,
               draftYear: command.request.anchorSeasonYear,
               observedAt: command.request.effectiveAt,
+            });
+          case 'official-afl-trade-period-dates':
+            return parseOfficialAflTradePeriodDates(html, {
+              capture,
+              seasonYear: command.request.anchorSeasonYear,
             });
           case 'official-afl-compensation-lifecycle':
             return parseOfficialAflCompensationArticle(html, {
