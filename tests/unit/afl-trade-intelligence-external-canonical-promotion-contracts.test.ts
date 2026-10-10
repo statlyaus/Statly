@@ -724,3 +724,98 @@ it('authenticates reviewed window promotion and rejects substituted bounds or pr
     ).toThrow('exactly match');
   }
 });
+
+// A trade the source does not date may carry the season's reviewed trade-period window (#869).
+describe('trade-period window coverage', () => {
+  const tradeWindow = {
+    precision: 'window' as const,
+    eventDate: null,
+    earliestDate: '2025-10-06',
+    latestDate: '2025-10-15',
+  };
+  const draftEvents = () =>
+    proposal().content.draftEventCoverage.map(({ draftYear, draftType, eventDate, officialName }) => ({
+      draftYear,
+      draftType,
+      eventDate,
+      officialName,
+    }));
+
+  it('carries a reviewed window through to the coverage of an undated transaction', () => {
+    const source = candidate({ undated: true });
+    const derived = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: source,
+      proposedAt: proposal().content.proposedAt,
+      draftEvents: draftEvents(),
+      transactionDates: [{ transactionId, occurredOn: null, datePrecision: tradeWindow }],
+    });
+    expect(derived.content.schemaVersion).toBe(
+      'afl-trade-external-canonical-promotion-proposal/v4'
+    );
+    expect(derived.content.transactionDateCoverage).toEqual([
+      { transactionId, seasonYear: 2025, occurredOn: null, datePrecision: tradeWindow },
+    ]);
+    expect(
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: source, proposal: derived })
+    ).toMatchObject({ transactionCount: 1 });
+    const yearOnly = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: source,
+      proposedAt: proposal().content.proposedAt,
+      draftEvents: draftEvents(),
+      transactionDates: [{ transactionId, occurredOn: null }],
+    });
+    expect(yearOnly.proposalId).not.toBe(derived.proposalId);
+  });
+
+  it('never attaches a window to a transaction whose source states a day', () => {
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate: candidate(),
+        proposedAt: proposal().content.proposedAt,
+        draftEvents: draftEvents(),
+        transactionDates: [{ transactionId, occurredOn: '2025-10-15', datePrecision: tradeWindow }],
+      })
+    ).toThrow(/window applies only|conflicts with exact source evidence/);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...proposal().content,
+        transactionDateCoverage: [
+          { transactionId, seasonYear: 2025, occurredOn: '2025-10-15', datePrecision: tradeWindow },
+        ],
+      })
+    ).toThrow();
+  });
+
+  it('rejects a window outside the transaction season or after the proposal', () => {
+    const base = {
+      ...proposal(undefined, candidate({ undated: true })).content,
+      schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v4' as const,
+    };
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...base,
+        transactionDateCoverage: [
+          {
+            transactionId,
+            seasonYear: 2025,
+            occurredOn: null,
+            datePrecision: { ...tradeWindow, earliestDate: '2024-10-06', latestDate: '2024-10-15' },
+          },
+        ],
+      })
+    ).toThrow(/within its transaction season/);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionProposal({
+        ...base,
+        transactionDateCoverage: [
+          {
+            transactionId,
+            seasonYear: 2026,
+            occurredOn: null,
+            datePrecision: { ...tradeWindow, earliestDate: '2026-10-05', latestDate: '2026-10-14' },
+          },
+        ],
+      })
+    ).toThrow(/not postdate the proposal/);
+  });
+});

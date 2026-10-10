@@ -1331,6 +1331,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0258_authority_term_at_decision',
       '0259_retained_sources_checked_once',
       '0260_retained_draft_order_capability',
+      '0261_trade_period_window_arrivals',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

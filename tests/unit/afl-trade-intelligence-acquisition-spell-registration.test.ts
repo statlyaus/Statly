@@ -6,6 +6,8 @@ import {
   aflTradeAcquisitionSpellRegistrationSchema,
   createAflTradeWindowAcquisitionSpellRegistration,
   createAflTradeWindowAcquisitionSpellRegistrationRule,
+  createAflTradeArrivalSpell,
+  createAflTradeArrivalSpellRule,
   deriveAflTradeAcquisitionMembershipBounds,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 
@@ -180,4 +182,68 @@ it('rejects overlapping windows, false precision, future bounds and altered cont
   expect(() =>
     aflTradeAcquisitionSpellRegistrationSchema.parse({ ...first, content: changed.content })
   ).toThrow();
+});
+
+// A traded player's arrival (#869): the source states no day, so the entry carries the season's
+// reviewed trade-period window exactly as the promoted trade event does. Draftee arrivals keep an
+// exact day; the two never share a content address.
+describe('arrival-only spells inside a trade-period window', () => {
+  const arrivalRuleId = createAflTradeArrivalSpellRule({
+    ...ruleInput,
+    ruleVersion: 'synthetic-arrival-trade-v4',
+  }).ruleId;
+  const tradeWindow = {
+    precision: 'window' as const,
+    eventDate: null,
+    earliestDate: '2024-10-07',
+    latestDate: '2024-10-16',
+  };
+  function arrivalInput() {
+    return {
+      environment: 'non_production' as const,
+      competition: 'AFLM' as const,
+      playerId: 'player:one',
+      clubId: 'club:one',
+      entry: { ...entry, eventDate: null, datePrecision: tradeWindow },
+      ruleId: arrivalRuleId,
+      version: 1,
+      supersedesSpellVersionId: null,
+      createdAt: '2026-09-10T00:00:02.000Z',
+    };
+  }
+
+  it('keeps the window as the entry precision and no day', () => {
+    const record = createAflTradeArrivalSpell(arrivalInput());
+    expect(record.content.entry).toEqual({ ...entry, eventDate: null, datePrecision: tradeWindow });
+    expect(aflTradeAcquisitionSpellRegistrationSchema.parse(record)).toEqual(record);
+    const dated = createAflTradeArrivalSpell({ ...arrivalInput(), entry });
+    expect(dated.spellVersionId).not.toBe(record.spellVersionId);
+    expect(() => deriveAflTradeAcquisitionMembershipBounds(record)).toThrow('no recorded end');
+  });
+
+  it('refuses a window without precision, a window after creation and a window across years', () => {
+    expect(() =>
+      createAflTradeArrivalSpell({ ...arrivalInput(), entry: { ...entry, eventDate: null } } as never)
+    ).toThrow();
+    expect(() =>
+      createAflTradeArrivalSpell({
+        ...arrivalInput(),
+        entry: {
+          ...entry,
+          eventDate: null,
+          datePrecision: { ...tradeWindow, earliestDate: '2026-10-01', latestDate: '2026-10-15' },
+        },
+      })
+    ).toThrow('chronology');
+    expect(() =>
+      createAflTradeArrivalSpell({
+        ...arrivalInput(),
+        entry: {
+          ...entry,
+          eventDate: null,
+          datePrecision: { ...tradeWindow, latestDate: '2025-01-02' },
+        },
+      })
+    ).toThrow();
+  });
 });

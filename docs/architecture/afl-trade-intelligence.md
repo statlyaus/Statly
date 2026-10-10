@@ -1836,6 +1836,18 @@ re-made. HPN season attribution never binds a v4 spell, and the postseason bound
 since its stint end comes from season spells rather than from the record. v1 and v2 spells kept
 excluding and retiring v3 spells until migration 0248 moved HPN binding onto season spells.
 
+A traded player's arrival has no source day: Draftguru records a trade's year only. Migration 0261
+(statlyaus/Statly#869) lets an undated trade carry its season's reviewed trade-period window as
+explicit precision, the device draft sessions already use (migration 0195): the promotion's
+transaction-date coverage accepts `occurredOn: null` plus a `datePrecision` window, the promoted
+`trade` event stores it in `date_precision` with `event_date` NULL, and
+`outcome_event_evidenced_date_bounds` proves a trade window from the finalized promotion's
+transaction member and coverage. A v4 arrival entry may then be a window (as a v2 `windowEvent` is);
+it is current only against an event of exactly that precision, and the spell starts at the window's
+earliest day, so the grader's season rule places an October arrival in the following season. A
+year-only trade, an exact-day trade and every draftee arrival are unchanged; a window is reviewed
+precision from a stated source, never a substituted day.
+
 A promoted event binds its entry evidence to the exact source captures behind it, so a v1 spell whose
 capture bytes were lost could not be re-made: a re-fetched page is never byte-identical. A _source
 capture successor_ (migration 0252, `outcome_source_capture_successor`) records, for one lost capture,
