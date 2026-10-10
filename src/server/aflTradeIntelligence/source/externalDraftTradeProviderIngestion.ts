@@ -15,6 +15,8 @@ import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010Source
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
 import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from './draftCorroborationAdapter';
 import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
+import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from './officialAflTradePeriodAdapter';
+import { reviewedOfficialAflTradePeriodPage } from './officialAflTradePeriodSourceScope';
 import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import { reviewedOfficialAflDraft2011EffectiveYear } from './officialAflDraft2011SessionFacts';
@@ -186,6 +188,22 @@ export function validateAflTradeExternalCaptureScope(
       invalid();
     return;
   }
+  if (request.capabilityId === 'official-afl-trade-period-dates') {
+    // Parser v1 reads only the exact reviewed trade-period announcements (issue 869), effective
+    // from the opening day each page states.
+    const reviewed = reviewedOfficialAflTradePeriodPage(request.sourceUrl);
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION ||
+      reviewed === null ||
+      reviewed.season !== request.anchorSeasonYear ||
+      request.effectiveAt !== `${reviewed.earliestDate}T00:00:00.000Z`
+    )
+      invalid();
+    return;
+  }
   if (request.capabilityId === 'official-afl-player-continuity') {
     if (
       request.provider !== 'official_afl' ||
@@ -313,6 +331,7 @@ export function validateAflTradeExternalCaptureScope(
 
 const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
   'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  'official-afl-trade-period-dates': OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
   'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
   'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
   'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,
