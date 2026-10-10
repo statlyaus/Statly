@@ -185,6 +185,16 @@ it('promotes an undated trade with its reviewed window and registers the arrival
     fixtureNamespace: 'trade-window',
     providerEventId: '2024-trade-window-alpha',
     nativePlayerId: 'trade-window-player',
+    // The year-only promotion above already inserted the synthetic player and clubs; a second
+    // promotion in the same schema reuses those canonical rows instead of inserting them again.
+    existingTargets: {
+      playerId: yearOnly.playerId,
+      playerName: 'Synthetic Player',
+      fromClubId: 'club-gws',
+      fromClubName: 'GWS',
+      toClubId: yearOnly.clubId,
+      toClubName: 'Western Bulldogs',
+    },
   });
   expect(promoted.proposal.content.transactionDateCoverage).toEqual([
     expect.objectContaining({
