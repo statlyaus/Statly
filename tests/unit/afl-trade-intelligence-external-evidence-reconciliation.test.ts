@@ -2101,14 +2101,14 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
       originalClub: { nativeId: null, recordedName: originalClub },
     }) as const;
   // One pre-draft order observation: slot 14 is held by `holder`, originally `original`'s pick.
-  const order = (slot: number, holder: string, original: string, suffix = 'd') =>
+  const order = (slot: number, holder: string, original: string, suffix = 'd', roundNumber = 1) =>
     batch('official_afl', suffix, [
       {
         kind: 'pick_custody',
         observedAt: '2025-11-15T00:00:00.000Z',
         draftYear: 2025,
         draftType: 'national',
-        roundNumber: 1,
+        roundNumber,
         recordedPickNumber: slot,
         originalClub: { nativeId: null, recordedName: original },
         currentClub: { nativeId: null, recordedName: holder },
@@ -2123,6 +2123,7 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
     'Melbourne',
     'Footscray',
     'Brisbane',
+    'Port Adelaide',
   ];
   const clubResolutions = clubs.flatMap((club) => [
     resolution('draftguru', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
@@ -2296,6 +2297,72 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
     expect(new Set(custodyPickIds).size).toBe(2);
     expect(first?.pickId).toBe(second?.pickId);
     expect(custodyPickIds).not.toContain(first?.pickId);
+  });
+
+  it('joins only the transfer whose pick number is the slot when the sender is the original club', () => {
+    // 2019 on the grading VM: Port Adelaide -> Brisbane traded "Pick 22", "Pick 29" and "Pick 71";
+    // the order shows Brisbane holding slot 29, originally Port Adelaide's. Holder and original club
+    // alone joined all three to slot 29.
+    const transferOf = (recordedPickNumber: number) => {
+      const transfer = trade('e1', 'Port Adelaide', 'Brisbane', pick(recordedPickNumber)).at(-1)!;
+      return { ...transfer, nativeTransferId: `e1:${recordedPickNumber}` };
+    };
+    const candidate = reconcile(
+      [...trade('e1', 'Port Adelaide', 'Brisbane', pick(22)), transferOf(29), transferOf(71)],
+      [order(29, 'Brisbane', 'Port Adelaide')]
+    );
+    const custodyPickId = candidate.content.pickCustody[0]!.pickId;
+    const byLabel = new Map(
+      candidate.content.transfers.map((transfer) => [
+        transfer.asset.kind === 'pick_entitlement' ? transfer.asset.recordedLabel : null,
+        transfer,
+      ])
+    );
+    expect(candidate.content.transfers).toHaveLength(3);
+    const linked = byLabel.get('Pick 29')!;
+    expect(linked).toMatchObject({ status: 'single_source' });
+    expect(linked.asset).toMatchObject({ pickId: custodyPickId });
+    for (const label of ['Pick 22', 'Pick 71']) {
+      const unlinked = byLabel.get(label)!;
+      expect(unlinked).toMatchObject({ status: 'unresolved' });
+      expect(unlinked.asset).not.toMatchObject({ pickId: custodyPickId });
+    }
+    expect(
+      new Set(
+        candidate.content.transfers.map((transfer) =>
+          transfer.asset.kind === 'pick_entitlement' ? transfer.asset.pickId : null
+        )
+      ).size
+    ).toBe(3);
+  });
+
+  it('leaves a shifted pick unlinked when two slots share its original club and holder', () => {
+    // Slots 15 and 40 are Carlton's first- and second-round picks held by GWS; "Pick 14" could
+    // have shifted to either.
+    const candidate = reconcile(
+      [...trade('e1', 'Carlton', 'GWS', pick(14))],
+      [order(15, 'GWS', 'Carlton', 'd', 1), order(40, 'GWS', 'Carlton', 'e', 2)]
+    );
+    expect(candidate.content.pickCustody.map((custody) => custody.status)).toEqual([
+      'single_source',
+      'single_source',
+    ]);
+    const custodyPickIds = candidate.content.pickCustody.map((custody) => custody.pickId);
+    expect(pickIds(candidate)).toEqual([expect.objectContaining({ status: 'unresolved' })]);
+    expect(custodyPickIds).not.toContain(pickIds(candidate)[0]?.pickId);
+  });
+
+  it('joins the same-numbered slot when another slot shares its original club and holder', () => {
+    // A second slot for the pair is not a shifted candidate, so it cannot make "Pick 14" ambiguous.
+    const candidate = reconcile(
+      [...trade('e1', 'Carlton', 'GWS', pick(14))],
+      [order(14, 'GWS', 'Carlton', 'd', 1), order(40, 'GWS', 'Carlton', 'e', 2)]
+    );
+    const slot14 = candidate.content.pickCustody.find(
+      (custody) => custody.recordedPickNumber === 14
+    )!;
+    expect(slot14.status).toBe('single_source');
+    expect(pickIds(candidate)).toEqual([{ pickId: slot14.pickId, status: 'single_source' }]);
   });
 
   it('leaves the pick unlinked when the trade has duplicate transaction evidence', () => {

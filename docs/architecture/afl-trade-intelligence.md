@@ -4174,7 +4174,9 @@ The remaining work proceeds through these independently verifiable gates:
      which the capture and ingestion URL gates admit by exact match only. Post-night-one order pages
      carry no origin and are not captured.
      Reconciliation (`source/externalEvidenceReconciliation.ts`) then joins a `Pick N` transfer to a
-     custody row with that slot number. With earlier observations of the slot, the sequence of holders
+     custody row with that slot number. A numbered pick joins a slot with the same number, or a
+     differently numbered slot (a pick that shifted before draft night) only when both the transfer
+     and the slot are unique for that sender-and-receiver pair in that draft. With earlier observations of the slot, the sequence of holders
      decides, as before. With only the pre-draft observation, which cannot show earlier holders, the
      candidate's own transfers must: the sender is the original club or was delivered the slot (by
      number, or as the future pick that became it), and the receiver is the order's holder or has
