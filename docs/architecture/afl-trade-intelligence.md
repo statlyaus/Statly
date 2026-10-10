@@ -4163,7 +4163,9 @@ The remaining work proceeds through these independently verifiable gates:
      says the pick was received `from`; a club name may follow an article ("from the Western
      Bulldogs"). A compensation, assistance, concession or priority pick has no original club: that is
      a fact the claim carries, not a parse issue (v2 recorded it as one, which kept every order page
-     out of a retained plan, since retention requires an issue-free batch). A note whose last link is
+     out of a retained plan, since retention requires an issue-free batch). Migration 0260 adds the
+     capability to the retained plan target's capability check, which until then refused its target
+     rows (`23514`). A note whose last link is
      not a recorded club is `unsupported_order_annotation` and keeps no original club. A page must
      name the next year's traded selections and
      its slots must run 1..N, or nothing is emitted. The reviewed pages

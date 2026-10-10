@@ -969,7 +969,8 @@ no original club; they are custody observations of their holder only and never l
 pick. After capture, the order's club
 spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need current
 `official_afl` club resolutions before reconciliation can use the rows; an unresolved name leaves
-that row `unresolved`. Then rebuild the plan, completion and candidate as usual and run the realized
+that row `unresolved`. Then, on an outcomes database at migration 0260 or later (earlier ones refuse
+this capability in a retained plan), rebuild the plan, completion and candidate as usual and run the realized
 grade; the `traded_on_return_unlinked` count on #853 is the measure.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
@@ -3649,6 +3650,9 @@ Migration0172 allows issuing references in retained completions only. Include th
 exact candidate source set before canonical custody; source capture alone does not extend a prior
 completion. Register current issuing-year capture/reviewer coverage before invoking the award owner.
 Retained article bytes and parser verification alone are not registered capture or award evidence.
+Migration 0260 likewise admits Official AFL pre-draft order captures
+(`official-afl-indicative-draft-order`, issue 853) to retained plans; before it, `retained-plan`
+apply failed the target capability check (`23514`).
 
 ### Compensation lifecycle references
 
