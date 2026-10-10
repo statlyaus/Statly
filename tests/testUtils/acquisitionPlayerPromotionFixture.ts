@@ -2045,6 +2045,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         capturedAt,
       ]
     );
+    // A successful capture needs a captured attempt in the same environment (migration 0002).
+    const windowAttemptId = `trade-period-attempt-${seasonYear}-${fixtureNamespace}`;
+    await outcomesPool.query(
+      `INSERT INTO outcome_source_capture_attempt
+        (attempt_id,environment,provider,dataset,capability_id,status,started_at,completed_at,attempt_json)
+        VALUES($1,'${environment}','official_afl','trade-period-dates','official-afl-trade-period-dates','captured',$2,$2,'{}'::jsonb)`,
+      [windowAttemptId, capturedAt]
+    );
     await outcomesPool.query(
       `INSERT INTO outcome_source_capture
         (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,
@@ -2053,7 +2061,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           'official-afl-trade-period-dates','AFLM',$6,$7,$5,'approved',$8::jsonb)`,
       [
         windowCaptureId,
-        `trade-period-attempt-${seasonYear}`,
+        windowAttemptId,
         windowArtifact.artifactId.replace('artifact:', 'source-snapshot:'),
         windowArtifact.artifactId,
         capturedAt,
