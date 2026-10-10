@@ -4179,7 +4179,14 @@ The remaining work proceeds through these independently verifiable gates:
      candidate's own transfers must: the sender is the original club or was delivered the slot (by
      number, or as the future pick that became it), and the receiver is the order's holder or has
      traded that slot number with it. An earlier observation is never read this way once a later one
-     exists; a non-unique match keeps the slot-based fallback id and stays unlinked. Nothing is
+     exists. This join re-keys a slot chain, never a single transfer: the `Pick N` transfers that
+     shared a number key and whose clubs traded that number among themselves all take the custody
+     `pickId` when any of them is joined, because re-keying one hop alone orphans the grader's
+     traded-on link to the next (batch two on statly-grading-1 lost 31 legs that way). If any
+     transfer in the chain matches two custody rows, or the chain would map to two custody picks,
+     the whole chain keeps the slot-based fallback id and stays unlinked. A slot observed more than
+     once keeps the per-transfer rule, so a premature or interrupted observation still leaves its
+     hop unresolved. Nothing is
      inferred from the pick number alone: of 209 `Pick N` receipts, 31 do not sit at the AFL slot of
      that number.
    - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
