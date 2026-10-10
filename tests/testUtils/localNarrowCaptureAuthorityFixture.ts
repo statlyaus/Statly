@@ -21,6 +21,12 @@ import {
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
+import {
+  OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY,
+  OFFICIAL_AFL_TRADE_PERIOD_FIELDS,
+  officialAflTradePeriodDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localOfficialAflTradePeriodCapture';
+import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflTradePeriodAdapter';
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
@@ -147,6 +153,21 @@ export function officialAflDraftOrderAuthority(
     capabilityId: OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
     clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
     fields: OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
+  });
+}
+
+/** The shape of the owner's recorded per-season Official AFL trade-period authority (issue 869). */
+export function officialAflTradePeriodAuthority(
+  input: NarrowAuthorityTiming & { season: number; clientVersion?: string; version?: number }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: officialAflTradePeriodDecisionKey(input.season),
+    provider: 'official_afl',
+    dataset: `Official AFL ${input.season} trade-period dates`,
+    capabilityId: OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY,
+    clientVersion: input.clientVersion ?? OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
+    fields: OFFICIAL_AFL_TRADE_PERIOD_FIELDS,
   });
 }
 

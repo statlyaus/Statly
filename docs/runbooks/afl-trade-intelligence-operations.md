@@ -911,7 +911,16 @@ Prerequisites:
      policy; the rights record still names `official_afl` as the provider, because the content is the
      AFL's and the archive is only its custodian. The `-order-v2` decisions and captures of
      2026-10-09 stay recorded but are never retained: v2 recorded each special pick as a parse issue,
-     and a retained plan admits only issue-free batches.
+     and a retained plan admits only issue-free batches; and
+   - one `official-afl-trade-period-dates-issue869-private-<season>-period-v1` decision per
+     captured season, for example `official-afl-trade-period-dates-issue869-private-2023-period-v1`
+     (statlyaus/Statly#869). Parser `official-afl-trade-period-parser/v1` reads the AFL's
+     announcement of that season's trade-period dates as one `trade_period_window` claim, so the
+     rights must name exactly `OFFICIAL_AFL_TRADE_PERIOD_FIELDS` from
+     `development/localOfficialAflTradePeriodCapture.ts`: the four non-null leaves of that claim.
+     The reviewed pages are enumerated in `source/officialAflTradePeriodSourceScope.ts`; each
+     entry records the window the reviewer read, the capture is effective from its first day, and
+     the parser must reproduce it. The window is a traded arrival's date precision, never a day.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v2`, `draftguru-national-year-page/v3`,
    `official-afl-completed-draft-session/v19` or `official-afl-draft-order-parser/v3`), seasons inside one range, 1 request per 5 seconds
@@ -972,6 +981,31 @@ spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need
 that row `unresolved`. Then, on an outcomes database at migration 0260 or later (earlier ones refuse
 this capability in a retained plan), rebuild the plan, completion and candidate as usual and run the realized
 grade; the `traded_on_return_unlinked` count on #853 is the measure.
+
+Capture the Official AFL trade-period announcements (statlyaus/Statly#869) once the owner has
+recorded the per-season `-period-v1` decisions. Each `--season` is the exact reviewed announcement
+of that season's dates; the parser emits one `trade_period_window` claim per page and nothing when
+the page does not state both the opening and the deadline day of the men's trade period:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability official-afl-trade-period-dates \
+  --season 2020 --season 2022 --season 2023 --season 2024 --season 2025
+```
+
+Expect `issueCount` 0 and one claim per page whose window equals the reviewed entry. The reviewed
+announcements are the AFL's own key-dates articles: 2020 (`news/498142`, 4 to 12 November), 2022
+(`news/811821`, 3 to 12 October), 2023 (`news/1004881`, 9 to 18 October), 2024 (`news/1110249`, 7 to
+16 October) and 2025 (`news/1291626`, 6 to 15 October). **2019 and 2021 have no reviewed page**: no
+afl.com.au announcement of those seasons' dates was found (2026-10-10), and the Internet Archive
+holds no 2019 or 2021 snapshot of `afl.com.au/trade/key-dates`. Club pages state them (Melbourne
+FC `news/41172` for 2019, 7 to 16 October; Sydney Swans `news/1023286` for 2021, 4 to 13 October)
+but are not the AFL's; adding either, or any other substitute, is an owner decision recorded in the
+source policy before the scope file changes. A reviewed window is consumed by the promotion review
+command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser

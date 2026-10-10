@@ -371,6 +371,20 @@ const draftSessionWindowClaimSchema = z
     'Draft session window must belong to its draft year.'
   );
 
+// A season's men's trade period as the AFL announced it (statlyaus/Statly#869): explicit window
+// precision for trades whose source states no day. Never a substituted day.
+const tradePeriodWindowClaimSchema = z
+  .object({
+    kind: z.literal('trade_period_window'),
+    seasonYear: yearSchema,
+    datePrecision: draftSessionDateWindowSchema,
+  })
+  .strict()
+  .refine(
+    (claim) => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.seasonYear,
+    'Trade period window must belong to its season.'
+  );
+
 // Prospective capacity is distinct from an observed completed total.
 const draftSelectionCapacityClaimSchema = z
   .object({
@@ -629,6 +643,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSessionClaimSchema,
   draftSessionDateClaimSchema,
   draftSessionWindowClaimSchema,
+  tradePeriodWindowClaimSchema,
   draftSessionCompletionClaimSchema,
   draftSelectionCapacityClaimSchema,
   draftCompletedListTotalClaimSchema,
@@ -695,6 +710,7 @@ const allowedKindsByProvider = {
     'draft_session',
     'draft_session_date',
     'draft_session_window',
+    'trade_period_window',
     'draft_selection_capacity',
     'draft_completed_list_total',
     'draft_rookie_list_additions',
