@@ -784,6 +784,9 @@ supersede production Gate authority, and production execution cannot reuse non-p
    The transaction-date file must exactly cover every candidate transaction. A source-recorded date
    must be repeated exactly. For an undated transaction, supply an independently supported day or
    explicit `occurredOn: null` to retain year-only factual precision. Do not invent a completion day.
+   A null day may carry the season's reviewed trade-period window as `datePrecision`
+   (`{ precision: "window", eventDate: null, earliestDate, latestDate }`, migration 0261); the window
+   must lie inside the transaction season and comes from a reviewed source, never from the operator.
    A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not

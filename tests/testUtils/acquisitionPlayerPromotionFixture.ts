@@ -62,6 +62,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     sessionProposalV5?: boolean;
     mixedDraftSessionProofs?: boolean;
     partialTransactionDates?: boolean;
+    /** The season's reviewed trade-period window for the undated trade (#869); needs partial dates. */
+    tradePeriodWindow?: { earliestDate: string; latestDate: string };
     combinedDraftSessions?: boolean;
     official2017CombinedDraft?: boolean;
     officialCombinedDraftYear?: 2016 | 2017;
@@ -88,6 +90,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     options.environment === 'non_production'
   )
     throw new Error('Synthetic capture envelope overrides are limited to test_fixture.');
+  if (options.tradePeriodWindow && !options.partialTransactionDates)
+    throw new Error('A trade-period window applies only to a trade with no source day.');
   if (options.partialTransactionDates && (!options.sessionProposalV5 || options.lifecycle))
     throw new Error(
       'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
@@ -136,6 +140,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       : 'promotion-fixture');
   if (providerEventId.trim().length === 0) throw new Error('Provider event ID is required.');
   const tradeDate = options.partialTransactionDates ? null : `${seasonYear}-10-15`;
+  const tradeWindow = options.tradePeriodWindow
+    ? {
+        precision: 'window' as const,
+        eventDate: null,
+        earliestDate: options.tradePeriodWindow.earliestDate,
+        latestDate: options.tradePeriodWindow.latestDate,
+      }
+    : null;
   const nativePlayerId =
     options.nativePlayerId ??
     (reviewedOfficialCombinedDraft ? `official-${seasonYear}-player` : 'synthetic-player');
@@ -184,7 +196,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const sourceBytes = new TextEncoder().encode(
     options.lifecycle
       ? `<p>${targets.playerName} joined ${targets.toClubName} on ${seasonYear}-10-15, moved to ${targets.fromClubName} on ${seasonYear}-10-20, and returned to ${targets.toClubName} on ${seasonYear}-10-25.</p>`
-      : `<p>${targets.playerName} joined ${targets.toClubName}${tradeDate === null ? ` during ${seasonYear}` : ` on ${tradeDate}`}.</p>`
+      : `<p>${targets.playerName} joined ${targets.toClubName}${tradeDate === null ? ` during ${seasonYear}` : ` on ${tradeDate}`}.${options.fixtureNamespace ? ` (${fixtureNamespace})` : ''}</p>`
   );
   const sourceArtifact = createAflTradeByteArtifactRef(
     sourceBytes,
@@ -2219,6 +2231,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     ? createAflTradeExternalCanonicalPromotionProposal({
         ...proposalInput,
         schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5',
+        // Only a year-only (v5) trade may carry the season's reviewed trade-period window (#869).
+        transactionDateCoverage: proposalInput.transactionDateCoverage.map((coverage) =>
+          coverage.occurredOn === null && tradeWindow
+            ? { ...coverage, datePrecision: tradeWindow }
+            : coverage
+        ),
         draftEventCoverage: draftEventCoverage.map((coverage) => ({
           ...coverage,
           proofKind:
@@ -2360,6 +2378,19 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       get eventDate(): string {
         if (tradeDate === null) throw new Error('Year-only trade has no exact-day spell entry.');
         return tradeDate;
+      },
+      evidence: [sourceArtifact],
+    },
+    // The same incoming asset bound to the season's reviewed trade-period window (#869), for an
+    // arrival-only spell whose source states no day.
+    windowEntry: {
+      promotionId: receipt.promotionId,
+      eventVersionId: assets.rows[0]!.event_version_id,
+      assetVersionId: assets.rows[0]!.asset_version_id,
+      eventDate: null,
+      get datePrecision() {
+        if (tradeWindow === null) throw new Error('This trade carries no reviewed window.');
+        return tradeWindow;
       },
       evidence: [sourceArtifact],
     },

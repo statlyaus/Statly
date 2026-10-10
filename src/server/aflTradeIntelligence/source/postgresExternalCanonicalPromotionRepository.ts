@@ -676,9 +676,28 @@ async function ensureEventRoot(
   }
 }
 
+type ReviewedTransactionDate = AflTradeExternalCanonicalPromotionProposal['content']['transactionDateCoverage'][number];
+type PromotedTransactionRecord = TransactionRecord & {
+  datePrecision?: Extract<ReviewedTransactionDate, { datePrecision?: unknown }>['datePrecision'];
+};
+
+/** The candidate transaction with its reviewed day, or its reviewed trade-period window when undated. */
+function reviewedTransactionRecord(
+  source: TransactionRecord,
+  coverage: ReviewedTransactionDate
+): PromotedTransactionRecord {
+  return {
+    ...source,
+    occurredOn: coverage.occurredOn,
+    ...('datePrecision' in coverage && coverage.datePrecision !== undefined
+      ? { datePrecision: coverage.datePrecision }
+      : {}),
+  };
+}
+
 function plannedTradeVersion(
   promotionId: string,
-  record: TransactionRecord,
+  record: PromotedTransactionRecord,
   predecessor: { eventVersionId: string; version: number } | null
 ) {
   const version = (predecessor?.version ?? 0) + 1;
@@ -902,7 +921,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         );
         if (!coverage)
           throw new TypeError('Correction preview requires reviewed transaction coverage.');
-        const record = { ...source, occurredOn: coverage.occurredOn };
+        const record = reviewedTransactionRecord(source, coverage);
         const version = plannedTradeVersion(
           request.promotionId,
           record,
@@ -1177,20 +1196,20 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       const content = candidate.content;
       const reviewedTransactionDateById = new Map(
-        approval.proposal.content.transactionDateCoverage.map(({ transactionId, occurredOn }) => [
-          transactionId,
-          occurredOn,
+        approval.proposal.content.transactionDateCoverage.map((coverage) => [
+          coverage.transactionId,
+          coverage,
         ])
       );
       const promotedTransactions = content.transactions.map((record) => {
-        const occurredOn = reviewedTransactionDateById.get(record.transactionId);
-        if (occurredOn === undefined) {
+        const coverage = reviewedTransactionDateById.get(record.transactionId);
+        if (coverage === undefined) {
           throw new AflTradeExternalCanonicalPromotionError(
             'CANDIDATE_UNAVAILABLE',
             `Transaction ${record.transactionId} has no reviewed occurrence date.`
           );
         }
-        return { ...record, occurredOn };
+        return reviewedTransactionRecord(record, coverage);
       });
       const identityDecisionByPlayer = await requireReferenceRows(
         transaction,
@@ -1490,9 +1509,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           await transaction.query(
             `INSERT INTO outcome_event_version
             (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
-             official_name,status,source_import_row_id,supersedes_version_id,recorded_at)
+             official_name,status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
            VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
-                   'approved'::"OutcomeRecordStatus",$8,$9,$10)`,
+                   'approved'::"OutcomeRecordStatus",$8,$9,$10,$11::jsonb)`,
             [
               eventVersionId,
               record.transactionId,
@@ -1504,6 +1523,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               row.importRowId,
               predecessor?.eventVersionId ?? null,
               approval.promotedAt,
+              // A reviewed trade-period window is stored as the event's precision, like a draft
+              // session window; a year-only trade keeps NULL precision.
+              record.datePrecision === undefined ? null : JSON.stringify(record.datePrecision),
             ]
           );
           for (const [ordinal, clubId] of [...record.parties].sort().entries()) {

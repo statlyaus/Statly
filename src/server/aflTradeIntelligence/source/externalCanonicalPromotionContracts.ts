@@ -76,18 +76,42 @@ const draftEventCoverageSchema = z
     }
   });
 
-const reviewedTransactionDateSchema = z
+/**
+ * A reviewed transaction date: the source day repeated exactly, or `occurredOn: null` for a
+ * transaction the source does not date. A null day may carry the season's reviewed trade-period
+ * window as `datePrecision`; the window is explicit precision, never a substituted day.
+ */
+const reviewedTransactionDateFields = z
   .object({
     transactionId: transactionIdSchema,
     occurredOn: z.iso.date().nullable(),
+    datePrecision: draftSessionDateWindowSchema.optional(),
   })
   .strict();
 
-const transactionDateCoverageSchema = reviewedTransactionDateSchema
-  .extend({
-    seasonYear: z.number().int().min(1897).max(2200),
-  })
-  .strict();
+function requireWindowOnlyWithoutDay(
+  value: { occurredOn: string | null; datePrecision?: unknown },
+  context: z.RefinementCtx
+) {
+  if (value.datePrecision !== undefined && value.occurredOn !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['datePrecision'],
+      message: 'A trade-period window applies only to a transaction with no source day.',
+    });
+  }
+}
+
+const reviewedTransactionDateSchema = reviewedTransactionDateFields.superRefine(
+  requireWindowOnlyWithoutDay
+);
+
+const transactionDateCoverageFields = reviewedTransactionDateFields.safeExtend({
+  seasonYear: z.number().int().min(1897).max(2200),
+});
+const transactionDateCoverageSchema = transactionDateCoverageFields.superRefine(
+  requireWindowOnlyWithoutDay
+);
 
 const proposalBaseSchema = z
   .object({
@@ -99,7 +123,12 @@ const proposalBaseSchema = z
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     draftEventCoverage: z.array(draftEventCoverageSchema).max(100),
     transactionDateCoverage: z
-      .array(transactionDateCoverageSchema.extend({ occurredOn: z.iso.date() }))
+      .array(
+        transactionDateCoverageFields.safeExtend({
+          occurredOn: z.iso.date(),
+          datePrecision: z.never().optional(),
+        })
+      )
       .max(10_000),
     proposedAt: instantSchema,
     publicationEligible: z.literal(false),
@@ -360,13 +389,25 @@ const proposalContentSchema = proposalFieldsSchema.superRefine((proposal, contex
   const proposedOn = new Date(proposal.proposedAt).toLocaleDateString('en-CA', {
     timeZone: 'Australia/Melbourne',
   });
-  proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear }, index) => {
+  proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear, datePrecision }, index) => {
     if (occurredOn === null) {
       if (seasonYear > Number(proposedOn.slice(0, 4))) {
         context.addIssue({
           code: 'custom',
           path: ['transactionDateCoverage', index],
           message: 'Transaction occurrence year cannot postdate the promotion proposal.',
+        });
+      }
+      if (
+        datePrecision !== undefined &&
+        (Number(datePrecision.earliestDate.slice(0, 4)) !== seasonYear ||
+          datePrecision.latestDate > proposedOn)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transactionDateCoverage', index, 'datePrecision'],
+          message:
+            'A trade-period window must lie within its transaction season and not postdate the proposal.',
         });
       }
       return;
@@ -504,7 +545,7 @@ function deriveTransactionDateCoverage(
     .max(10_000)
     .parse(transactionDates ?? []);
   const suppliedDateByTransaction = new Map(
-    suppliedTransactionDates.map((value) => [value.transactionId, value.occurredOn])
+    suppliedTransactionDates.map((value) => [value.transactionId, value])
   );
   if (suppliedDateByTransaction.size !== suppliedTransactionDates.length) {
     throw new TypeError('Reviewed transaction-date keys must be unique.');
@@ -515,11 +556,11 @@ function deriveTransactionDateCoverage(
       if (
         transaction.occurredOn !== null &&
         supplied !== undefined &&
-        supplied !== transaction.occurredOn
+        (supplied.occurredOn !== transaction.occurredOn || supplied.datePrecision !== undefined)
       ) {
         throw new TypeError('Reviewed transaction date conflicts with exact source evidence.');
       }
-      const occurredOn = transaction.occurredOn ?? supplied;
+      const occurredOn = transaction.occurredOn ?? supplied?.occurredOn;
       if (occurredOn === undefined) {
         throw new TypeError('Every promoted transaction requires one reviewed transaction date.');
       }
@@ -527,6 +568,9 @@ function deriveTransactionDateCoverage(
         transactionId: transaction.transactionId,
         seasonYear: transaction.seasonYear,
         occurredOn,
+        ...(occurredOn === null && supplied?.datePrecision !== undefined
+          ? { datePrecision: supplied.datePrecision }
+          : {}),
       };
     })
     .sort((left, right) => left.transactionId.localeCompare(right.transactionId));
