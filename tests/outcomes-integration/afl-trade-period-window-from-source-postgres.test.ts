@@ -46,8 +46,11 @@ afterAll(async () => {
   }
 });
 
-const promote = (namespace: string, claim: boolean) =>
-  createSyntheticAcquisitionPlayerPromotion(pool, {
+// The fixture inserts its synthetic player and clubs once; every later promotion in this schema
+// reuses those canonical rows, as the pilot cohort test does, instead of inserting them again.
+let canonical: { playerId: string; clubId: string } | undefined;
+const promote = async (namespace: string, claim: boolean) => {
+  const promoted = await createSyntheticAcquisitionPlayerPromotion(pool, {
     environment: 'non_production',
     completeCaptureReceipts: true,
     draftSessions: true,
@@ -58,7 +61,22 @@ const promote = (namespace: string, claim: boolean) =>
     fixtureNamespace: namespace,
     providerEventId: `2024-${namespace}-alpha`,
     nativePlayerId: `${namespace}-player`,
+    ...(canonical
+      ? {
+          existingTargets: {
+            playerId: canonical.playerId,
+            playerName: 'Synthetic Player',
+            fromClubId: 'club-gws',
+            fromClubName: 'GWS',
+            toClubId: canonical.clubId,
+            toClubName: 'Western Bulldogs',
+          },
+        }
+      : {}),
   });
+  canonical ??= { playerId: promoted.playerId, clubId: promoted.clubId };
+  return promoted;
+};
 
 // A transaction's window must be the one an approved Official AFL capture states for its season
 // (statlyaus/Statly#869). Before the migration any well-formed window is accepted; after it, the
@@ -77,8 +95,11 @@ it('refuses a window no approved capture states and admits the one a capture doe
   );
   await pool.query(migrationSql);
   expect(
-    (await pool.query<{ n: number }>('SELECT count(*)::integer AS n FROM outcome_external_canonical_promotion'))
-      .rows[0]!.n
+    (
+      await pool.query<{ n: number }>(
+        'SELECT count(*)::integer AS n FROM outcome_external_canonical_promotion'
+      )
+    ).rows[0]!.n
   ).toBe(before.rows[0]!.n);
 
   // Without a capture stating the window, the review decision is refused.
