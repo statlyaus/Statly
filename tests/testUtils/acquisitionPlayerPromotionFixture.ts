@@ -2223,7 +2223,6 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       transactionId: transaction.transactionId,
       seasonYear,
       occurredOn: transaction.occurredOn!,
-      ...(transaction.occurredOn === null && tradeWindow ? { datePrecision: tradeWindow } : {}),
     })),
     proposedAt: reviewedAt,
     publicationEligible: false as const,
@@ -2232,6 +2231,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     ? createAflTradeExternalCanonicalPromotionProposal({
         ...proposalInput,
         schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5',
+        // Only a year-only (v5) trade may carry the season's reviewed trade-period window (#869).
+        transactionDateCoverage: proposalInput.transactionDateCoverage.map((coverage) =>
+          coverage.occurredOn === null && tradeWindow
+            ? { ...coverage, datePrecision: tradeWindow }
+            : coverage
+        ),
         draftEventCoverage: draftEventCoverage.map((coverage) => ({
           ...coverage,
           proofKind:

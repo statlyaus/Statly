@@ -776,12 +776,14 @@ describe('trade-period window coverage', () => {
         transactionDates: [{ transactionId, occurredOn: '2025-10-15', datePrecision: tradeWindow }],
       })
     ).toThrow(/window applies only|conflicts with exact source evidence/);
+    // A day and a window together is not a member of the coverage type; the runtime parser refuses
+    // it too, so the input is cast to reach the schema.
     expect(() =>
       createAflTradeExternalCanonicalPromotionProposal({
         ...proposal().content,
         transactionDateCoverage: [
           { transactionId, seasonYear: 2025, occurredOn: '2025-10-15', datePrecision: tradeWindow },
-        ],
+        ] as never,
       })
     ).toThrow();
   });
