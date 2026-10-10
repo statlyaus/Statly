@@ -565,11 +565,24 @@ function slotKey(draftYear: number, draftType: string, pick: number): string {
  * observation is a single pre-draft order. `holdings` records every club a transfer delivered the
  * slot to, as the slot number or as the future pick that became it; `components` groups the clubs
  * that traded the slot number among themselves, so a club two trades from the order's holder still
- * counts as holding that slot.
+ * counts as holding that slot. `numberedPairs` counts the numbered current-pick transfers from one
+ * club to another in a draft, and `custodyPairs` the usable custody rows with one original club and
+ * holder in a draft, so a differently numbered slot is joined only when both sides are unique.
  */
 interface SlotTransferIndex {
   holdings: ReadonlySet<string>;
   components: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  numberedPairs: ReadonlyMap<string, number>;
+  custodyPairs: ReadonlyMap<string, number>;
+}
+
+function clubPairKey(
+  draftYear: number,
+  draftType: string,
+  firstClubId: string,
+  secondClubId: string
+): string {
+  return `${draftYear}|${draftType}|${firstClubId}|${secondClubId}`;
 }
 
 function futureHoldingKey(
@@ -582,9 +595,30 @@ function futureHoldingKey(
   return `future|${draftYear}|${draftType}|${roundNumber ?? 'unknown'}|${originalClubId}|${clubId}`;
 }
 
-function indexSlotTransfers(transfers: readonly ResolvedDirectedTransfer[]): SlotTransferIndex {
+function indexSlotTransfers(
+  transfers: readonly ResolvedDirectedTransfer[],
+  pickCustody: readonly CanonicalPickCustody[]
+): SlotTransferIndex {
   const holdings = new Set<string>();
   const neighbours = new Map<string, Map<string, Set<string>>>();
+  const numberedPairs = new Map<string, number>();
+  const custodyPairs = new Map<string, number>();
+  for (const custody of pickCustody) {
+    if (
+      !isUsableCustody(custody) ||
+      custody.originalClubId === null ||
+      custody.currentClubId === null
+    ) {
+      continue;
+    }
+    const pair = clubPairKey(
+      custody.draftYear,
+      custody.draftType,
+      custody.originalClubId,
+      custody.currentClubId
+    );
+    custodyPairs.set(pair, (custodyPairs.get(pair) ?? 0) + 1);
+  }
   for (const { row, fromClubId, toClubId, futureOriginalClubId } of transfers) {
     const asset = row.content.claim.asset;
     if (fromClubId === null || toClubId === null) continue;
@@ -603,6 +637,8 @@ function indexSlotTransfers(transfers: readonly ResolvedDirectedTransfer[]): Slo
       continue;
     }
     if (asset.kind !== 'current_pick' || asset.recordedPickNumber === null) continue;
+    const pair = clubPairKey(asset.draftYear, asset.draftType, fromClubId, toClubId);
+    numberedPairs.set(pair, (numberedPairs.get(pair) ?? 0) + 1);
     const key = slotKey(asset.draftYear, asset.draftType, asset.recordedPickNumber);
     holdings.add(`${key}|${toClubId}`);
     const graph = neighbours.get(key) ?? new Map<string, Set<string>>();
@@ -630,7 +666,7 @@ function indexSlotTransfers(transfers: readonly ResolvedDirectedTransfer[]): Slo
     });
     components.set(key, labels);
   });
-  return { holdings, components };
+  return { holdings, components, numberedPairs, custodyPairs };
 }
 
 interface CurrentPickCustodyMatchInput {
@@ -702,6 +738,37 @@ function slotTransfersCorroborate(input: CurrentPickCustodyMatchInput): boolean 
   return holderLabel !== undefined && labels?.get(input.toClubId) === holderLabel;
 }
 
+/**
+ * A pick can shift slot before draft night (#519), so a differently numbered slot still joins when
+ * the transfer is the candidate's only numbered transfer from the sender to the receiver in that
+ * draft and the slot is the only usable custody row with that original club and holder.
+ */
+function uniqueShiftedSlot(input: CurrentPickCustodyMatchInput): boolean {
+  const { custody, currentPick } = input;
+  if (
+    custody.recordedPickNumber === null ||
+    currentPick.recordedPickNumber === null ||
+    custody.originalClubId === null ||
+    custody.currentClubId === null
+  ) {
+    return false;
+  }
+  const { numberedPairs, custodyPairs } = input.slotTransfers;
+  return (
+    numberedPairs.get(
+      clubPairKey(currentPick.draftYear, currentPick.draftType, input.fromClubId, input.toClubId)
+    ) === 1 &&
+    custodyPairs.get(
+      clubPairKey(
+        custody.draftYear,
+        custody.draftType,
+        custody.originalClubId,
+        custody.currentClubId
+      )
+    ) === 1
+  );
+}
+
 function matchesCurrentPickCustody(input: CurrentPickCustodyMatchInput): boolean {
   if (!custodyDescribesCurrentPick(input)) return false;
   const { custody } = input;
@@ -714,7 +781,11 @@ function matchesCurrentPickCustody(input: CurrentPickCustodyMatchInput): boolean
     );
   }
   return (
-    (custody.currentClubId === input.toClubId && custody.originalClubId === input.fromClubId) ||
+    (custody.currentClubId === input.toClubId &&
+      custody.originalClubId === input.fromClubId &&
+      ((custody.recordedPickNumber !== null &&
+        input.currentPick.recordedPickNumber === custody.recordedPickNumber) ||
+        uniqueShiftedSlot(input))) ||
     slotTransfersCorroborate(input)
   );
 }
@@ -1373,7 +1444,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     transfers: resolvedTransfers,
     transactionClaimsByNativeEventId,
     pickCustody,
-    slotTransfers: indexSlotTransfers(resolvedTransfers),
+    slotTransfers: indexSlotTransfers(resolvedTransfers, pickCustody),
   });
   const transfers: CanonicalTransfer[] = resolvedTransfers.map((transfer) =>
     reconcileDirectedTransfer({ transfer, resolve, pickCustody, slotChainCustody })
