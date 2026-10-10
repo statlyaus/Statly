@@ -1996,7 +1996,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     // The season's trade-period window as an approved Official AFL capture states it (#869): the
     // review command reads the window from this row, never from the operator's file.
     const windowBytes = new TextEncoder().encode(
-      `Synthetic trade period ${seasonYear}: ${tradeWindow.earliestDate} to ${tradeWindow.latestDate}.`
+      `Synthetic trade period ${seasonYear}: ${tradeWindow.earliestDate} to ${tradeWindow.latestDate}.${options.fixtureNamespace ? ` (${fixtureNamespace})` : ''}`
     );
     const windowArtifact = createAflTradeByteArtifactRef(windowBytes, 'text/html', capturedAt);
     retainedArtifacts.set(windowArtifact.artifactId, {
