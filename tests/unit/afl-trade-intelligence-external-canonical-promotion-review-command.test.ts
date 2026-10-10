@@ -9,6 +9,7 @@ function dependencies() {
   const repository = {
     loadCandidate: vi.fn(async () => ({ candidateId })),
     loadCurrentDecision: vi.fn(async () => null),
+    loadReviewedTradePeriodWindows: vi.fn(async () => []),
     persistDecision: vi.fn(),
   };
   return {
