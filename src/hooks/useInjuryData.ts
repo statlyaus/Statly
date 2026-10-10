@@ -16,7 +16,7 @@ interface InjuryResponse {
   success: boolean;
   data: InjuryData[];
   count: number;
-  lastUpdated: string;
+  lastUpdated: string | null;
   teamFilter: string | null;
   error?: string;
   note?: string;
@@ -55,15 +55,14 @@ export function useInjuryData(options: UseInjuryDataOptions = {}) {
           `Loaded ${result.count} injury records${result.teamFilter ? ` for ${result.teamFilter}` : ''}`
         );
       } else {
+        // The route fails closed; never show rows from a failed response.
+        setData([]);
         setError(result.error || 'Failed to fetch injury data');
-        // Still set data if we have fallback data
-        if (result.data) {
-          setData(result.data);
-          setLastUpdated(result.lastUpdated);
-        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      // Drop any earlier list so a failed refresh cannot pass stale rows off as current.
+      setData([]);
       setError(errorMessage);
       console.error('Error fetching injury data:', err);
     } finally {

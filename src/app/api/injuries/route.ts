@@ -1,5 +1,4 @@
 import * as cheerio from 'cheerio';
-import { mockInjuryData } from '../../../data/mockInjuryData';
 
 // UI-facing injury type shape
 type InjuryData = {
@@ -383,106 +382,83 @@ async function scrapeFootywireInjuries(): Promise<NormalizedInjuryData[]> {
   }
 }
 
-// Convert mock data to normalized format
-// function convertMockDataToNormalized(): NormalizedInjuryData[] {
-//   return mockInjuryData.map((injury) =>
-//     normalizeInjuryData({
-//       name: injury.name,
-//       team: injury.team,
-//       injury: injury.injury,
-//       status: injury.status,
-//     })
-//   );
-// }
+// The scrape is the only injury source. When it fails, return an explicit error and no data:
+// a fabricated list served as success is indistinguishable from real injuries to the user.
+function injuriesUnavailable(source: string, error: string, teamFilter: string | null): Response {
+  return Response.json(
+    {
+      success: false,
+      data: [],
+      source,
+      count: 0,
+      lastUpdated: null,
+      schema_version: '2.0',
+      teamFilter,
+      error,
+    },
+    { status: 502 }
+  );
+}
 
 export async function GET(request: Request) {
+  let teamFilter: string | null = null;
   try {
     console.log('Injury API: Starting request');
     const url = new URL(request.url);
     const teamFilterParam = url.searchParams.get('team');
-    const teamFilter = teamFilterParam ? teamFilterParam.trim() : null;
+    teamFilter = teamFilterParam ? teamFilterParam.trim() : null;
 
-    // Try to fetch real data from Footywire first
+    let realInjuries: NormalizedInjuryData[];
     try {
       console.log('Injury API: Attempting to scrape Footywire');
-      const realInjuries = await scrapeFootywireInjuries();
+      realInjuries = await scrapeFootywireInjuries();
       console.log(`Injury API: Scraped ${realInjuries.length} injuries from Footywire`);
-
-      if (realInjuries.length > 0) {
-        // Transform to UI shape, filter, de-dupe, and sanity-check counts
-        const uiData = transformAndFilter(realInjuries, teamFilter);
-        // If implausible size, fall back to structured mock for safety
-        if (uiData.length > 300) {
-          console.warn(
-            'Injury API: Scrape returned implausible size, falling back to structured mock',
-            uiData.length
-          );
-          const mock = buildUiFromMock(teamFilter);
-          return Response.json({
-            success: true,
-            data: mock,
-            source: 'mock_fallback_scrape_too_large',
-            count: mock.length,
-            lastUpdated: new Date().toISOString(),
-            schema_version: '2.0',
-            teamFilter,
-          });
-        }
-
-        return Response.json({
-          success: true,
-          data: uiData,
-          source: 'footywire',
-          count: uiData.length,
-          lastUpdated: new Date().toISOString(),
-          schema_version: '2.0',
-          teamFilter,
-        });
-      }
     } catch (scrapingError) {
-      // If scraping fails, fall back to normalized mock data
       console.error('Injury API: Footywire scraping failed:', scrapingError);
+      return injuriesUnavailable(
+        'footywire_scrape_failed',
+        'Injury list unavailable: the Footywire scrape failed',
+        teamFilter
+      );
     }
 
-    // Fallback to mock data (already shaped for UI)
-    const mock = buildUiFromMock(teamFilter);
+    // Footywire always lists some injuries; an empty parse means the page layout changed.
+    if (realInjuries.length === 0) {
+      console.error('Injury API: Footywire scrape parsed no injuries');
+      return injuriesUnavailable(
+        'footywire_scrape_empty',
+        'Injury list unavailable: the Footywire scrape parsed no injuries',
+        teamFilter
+      );
+    }
+
+    // Transform to UI shape, filter, de-dupe, and sanity-check counts
+    const uiData = transformAndFilter(realInjuries, teamFilter);
+    if (uiData.length > 300) {
+      console.error('Injury API: Scrape returned implausible size', uiData.length);
+      return injuriesUnavailable(
+        'footywire_scrape_implausible_size',
+        'Injury list unavailable: the Footywire scrape returned an implausible number of rows',
+        teamFilter
+      );
+    }
+
     return Response.json({
       success: true,
-      data: mock,
-      source: 'mock_fallback',
-      count: mock.length,
+      data: uiData,
+      source: 'footywire',
+      count: uiData.length,
       lastUpdated: new Date().toISOString(),
       schema_version: '2.0',
       teamFilter,
     });
   } catch (error) {
     console.error('Injury API: Critical error occurred:', error);
-
-    // Always ensure we return valid JSON, even in error cases
-    try {
-      const mock = buildUiFromMock(null);
-      return Response.json({
-        success: true,
-        data: mock,
-        source: 'mock_error',
-        count: mock.length,
-        lastUpdated: new Date().toISOString(),
-        schema_version: '2.0',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    } catch (mockError) {
-      // Last resort - return empty but valid JSON
-      console.error('Injury API: Mock data conversion also failed:', mockError);
-      return Response.json({
-        success: false,
-        data: [],
-        source: 'error',
-        count: 0,
-        lastUpdated: new Date().toISOString(),
-        schema_version: '2.0',
-        error: 'Failed to load any injury data',
-      });
-    }
+    return injuriesUnavailable(
+      'error',
+      'Injury list unavailable: unexpected server error',
+      teamFilter
+    );
   }
 }
 
@@ -546,21 +522,4 @@ function transformAndFilter(list: NormalizedInjuryData[], teamFilter: string | n
     out.push(ui);
   }
   return out;
-}
-
-function buildUiFromMock(teamFilter: string | null): InjuryData[] {
-  const items = teamFilter
-    ? mockInjuryData.filter((m) => m.team.toLowerCase() === teamFilter.toLowerCase())
-    : mockInjuryData;
-  // Ensure shape aligns with InjuryData exactly
-  return items.map((m) => ({
-    id: m.id,
-    name: m.name,
-    team: m.team,
-    position: m.position || undefined,
-    injury: m.injury,
-    status: m.status,
-    expectedReturn: m.expectedReturn,
-    details: m.details || undefined,
-  }));
 }
