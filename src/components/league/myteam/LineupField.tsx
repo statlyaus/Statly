@@ -11,9 +11,18 @@ import { findAssignment, positionSuitsSlot, type MyTeamSquadPlayer } from './myT
 
 export interface FieldPlayer extends MyTeamSquadPlayer {
   bye?: boolean;
-  injury?: string | null;
-  /** False for a Test listing: the label still shows, but the player is not flagged as out. */
-  injuryBlocksSelection: boolean;
+  /** A Test listing does not block selection: the label still shows, but only as a warning. */
+  injury: { label: string; blocksSelection: boolean } | null;
+}
+
+function injuryState(
+  player: FieldPlayer | undefined
+): { text: string; tone: 'bad' | 'warn' } | null {
+  if (!player?.injury) return null;
+  const { label, blocksSelection } = player.injury;
+  return blocksSelection
+    ? { text: `injured (${label})`, tone: 'bad' }
+    : { text: `listed (${label})`, tone: 'warn' };
 }
 
 export type FieldTarget = 'here' | 'swap' | null;
@@ -80,12 +89,11 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
     const target = props.spotTarget(spot);
     const selected = spot.id === props.selectedSpotId;
     const outOfPosition = player ? !positionSuitsSlot(player.position, spot.slot) : false;
+    const injury = injuryState(player);
     const state = [
       locked ? 'locked' : null,
       player?.bye ? 'bye' : null,
-      player?.injury
-        ? `${player.injuryBlocksSelection ? 'injured' : 'listed'} (${player.injury})`
-        : null,
+      injury?.text,
       outOfPosition ? 'out of position' : null,
       target === 'swap' ? `tap to swap with ${player?.name ?? 'this player'}` : null,
       target === 'here' ? 'tap to move here' : null,
@@ -100,11 +108,7 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
       target,
       selected,
       flagged:
-        player?.injuryBlocksSelection || outOfPosition
-          ? 'bad'
-          : player?.bye || player?.injury
-            ? 'warn'
-            : null,
+        injury?.tone === 'bad' || outOfPosition ? 'bad' : player?.bye || injury ? 'warn' : null,
       disabled: !editable || (locked && !target),
       onClick: () => props.onSpot(spot),
     };
@@ -114,12 +118,11 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
     const locked = props.isLocked(player.playerId);
     const target = props.benchTarget(player);
     const selected = player.playerId === props.selectedBenchId;
+    const injury = injuryState(player);
     const state = [
       locked ? 'locked' : null,
       player.bye ? 'bye' : null,
-      player.injury
-        ? `${player.injuryBlocksSelection ? 'injured' : 'listed'} (${player.injury})`
-        : null,
+      injury?.text,
       target ? 'tap to put in the lineup' : null,
       selected ? 'selected' : null,
     ].filter(Boolean);
@@ -131,7 +134,7 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
       locked,
       target,
       selected,
-      flagged: player.injuryBlocksSelection ? 'bad' : player.bye || player.injury ? 'warn' : null,
+      flagged: injury?.tone === 'bad' ? 'bad' : player.bye || injury ? 'warn' : null,
       disabled: !editable || (locked && !target),
       onClick: () => props.onBench(player),
     };

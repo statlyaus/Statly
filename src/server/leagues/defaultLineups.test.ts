@@ -15,9 +15,9 @@ vi.mock('@/server/leagues/lineupService', () => ({
   loadRoundPlayerFixtures: mocks.loadRoundPlayerFixtures,
 }));
 
-import type { CurrentInjuries } from '@/server/injuries/injuryListReadModel';
+import type { InjuryListing } from '@/server/injuries/injuryListReadModel';
 
-import { buildInjuryLookup, ensureDefaultLineups, toAutoFillPlayers } from './defaultLineups';
+import { ensureDefaultLineups, toAutoFillPlayers } from './defaultLineups';
 
 type RosterRow = { memberId: string; playerId: string; position: string; club?: string };
 type InjuryEntry = { playerId: string; status: string; injuryRaw: string; returnRaw: string };
@@ -25,15 +25,11 @@ type InjuryEntry = { playerId: string; status: string; injuryRaw: string; return
 const NOW = new Date('2026-07-18T00:00:00.000Z');
 
 function injurySnapshot(entries: InjuryEntry[], confirmedAt = NOW) {
-  return { id: 'snapshot-1', confirmedAt, fetchedAt: confirmedAt, entries };
+  return { id: 'snapshot-1', confirmedAt, entries };
 }
 
-function currentInjuries(entries: InjuryEntry[]): CurrentInjuries {
-  return {
-    ok: true,
-    snapshot: { id: 'snapshot-1', confirmedAt: NOW, fetchedAt: NOW },
-    byPlayerId: new Map(entries.map(({ playerId, ...injury }) => [playerId, injury as never])),
-  };
+function lookup(listings: Record<string, InjuryListing>) {
+  return (player: { playerId: string }) => listings[player.playerId] ?? null;
 }
 
 function buildClient({
@@ -45,7 +41,14 @@ function buildClient({
   injurySnapshot = null as ReturnType<typeof injurySnapshot> | null,
 } = {}) {
   return {
-    injuryListSnapshot: { findFirst: vi.fn().mockResolvedValue(injurySnapshot) },
+    injuryListSnapshot: {
+      findFirst: vi
+        .fn()
+        .mockResolvedValue(
+          injurySnapshot && { id: injurySnapshot.id, confirmedAt: injurySnapshot.confirmedAt }
+        ),
+    },
+    injuryListEntry: { findMany: vi.fn().mockResolvedValue(injurySnapshot?.entries ?? []) },
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
@@ -229,10 +232,7 @@ describe('ensureDefaultLineups', () => {
     expect(createdPlayers(client).players.create).toEqual([
       { playerId: 'test-def', slot: 'DEF', slotIndex: 0 },
     ]);
-    expect(mocks.warn).not.toHaveBeenCalledWith(
-      'Default lineups: injury list unavailable',
-      expect.anything()
-    );
+    expect(mocks.warn).not.toHaveBeenCalledWith('Injury list unavailable', expect.anything());
 
     const staleClient = buildClient({
       lineupSlots: { DEF: 1, MID: 0, RUC: 0, FWD: 0, UTIL: 0 },
@@ -253,47 +253,41 @@ describe('ensureDefaultLineups', () => {
     expect(createdPlayers(staleClient).players.create).toEqual([
       { playerId: 'hurt-def', slot: 'DEF', slotIndex: 0 },
     ]);
-    expect(mocks.warn).toHaveBeenCalledWith('Default lineups: injury list unavailable', {
+    expect(mocks.warn).toHaveBeenCalledTimes(1);
+    expect(mocks.warn).toHaveBeenCalledWith('Injury list unavailable', {
       leagueId: 'league-1',
+      scope: 'default lineups',
       reason: 'stale',
     });
   });
 });
 
-describe('buildInjuryLookup', () => {
+describe('toAutoFillPlayers', () => {
   const roster = [
     { playerId: 'test-player', name: 'Test Player', position: 'MID' },
     { playerId: 'season-player', name: 'Season Player', position: 'MID' },
     { playerId: 'fit-player', name: 'Fit Player', position: 'MID' },
   ];
 
-  function availability(injuries: CurrentInjuries) {
+  function availability(injuryFor: (player: { playerId: string }) => InjuryListing | null) {
     return toAutoFillPlayers({
       roster,
       fixturesByPlayerId: new Map(),
-      injuryFor: buildInjuryLookup(injuries),
+      injuryFor,
       scores: new Map(),
       now: NOW,
     }).map((player) => [player.playerId, player.available]);
   }
 
-  it('labels a Test listing but leaves the player available, and benches a season listing', () => {
-    const injuries = currentInjuries([
-      { playerId: 'test-player', status: 'TEST', injuryRaw: 'Knee', returnRaw: 'Test' },
-      { playerId: 'season-player', status: 'SEASON', injuryRaw: 'ACL', returnRaw: 'Season' },
-    ]);
-    const injuryFor = buildInjuryLookup(injuries);
-
-    expect(injuryFor({ playerId: 'test-player' })).toEqual({
-      label: 'Knee (Test)',
-      blocksSelection: false,
-    });
-    expect(injuryFor({ playerId: 'season-player' })).toEqual({
-      label: 'ACL (Season)',
-      blocksSelection: true,
-    });
-    expect(injuryFor({ playerId: 'fit-player' })).toBeNull();
-    expect(availability(injuries)).toEqual([
+  it('leaves a non-blocking (Test) listing available and benches a blocking one', () => {
+    expect(
+      availability(
+        lookup({
+          'test-player': { label: 'Knee (Test)', blocksSelection: false },
+          'season-player': { label: 'ACL (Season)', blocksSelection: true },
+        })
+      )
+    ).toEqual([
       ['test-player', true],
       ['season-player', false],
       ['fit-player', true],
@@ -301,14 +295,11 @@ describe('buildInjuryLookup', () => {
   });
 
   it('counts everyone as available without a current list', () => {
-    expect(availability({ ok: false, reason: 'none' })).toEqual([
+    expect(availability(() => null)).toEqual([
       ['test-player', true],
       ['season-player', true],
       ['fit-player', true],
     ]);
-    expect(buildInjuryLookup({ ok: false, reason: 'stale' })({ playerId: 'season-player' })).toBe(
-      null
-    );
   });
 
   it('matches by player id only, never by a shared name', () => {
@@ -318,16 +309,9 @@ describe('buildInjuryLookup', () => {
         { playerId: 'namesake-id', name: 'Josh Kelly', position: 'MID' },
       ],
       fixturesByPlayerId: new Map(),
-      injuryFor: buildInjuryLookup(
-        currentInjuries([
-          {
-            playerId: 'listed-id',
-            status: 'WEEKS',
-            injuryRaw: 'Hamstring',
-            returnRaw: '2-3 weeks',
-          },
-        ])
-      ),
+      injuryFor: lookup({
+        'listed-id': { label: 'Hamstring (2-3 weeks)', blocksSelection: true },
+      }),
       scores: new Map(),
       now: NOW,
     });

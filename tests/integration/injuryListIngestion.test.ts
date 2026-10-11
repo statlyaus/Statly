@@ -1,7 +1,8 @@
 /**
- * The Footywire injury list as append-only Prisma snapshots: a new list creates one snapshot with
- * its entries, a repeat only confirms it, and a rejected run writes nothing. Footywire is never
- * contacted; fetchImpl serves the trimmed live fixture and variants built from it.
+ * The Footywire injury list as append-only Prisma snapshots: a new list, or the same rows linked to
+ * different players, creates one snapshot with its entries; a repeat only confirms it; a rejected
+ * run writes nothing. Footywire is never contacted; fetchImpl serves the trimmed live fixture and
+ * variants built from it.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,6 +14,7 @@ import {
   ingestFootywireInjuryList,
   InjuryListIngestionRejected,
 } from '@/server/injuries/injuryListIngestion';
+import { clubTable, injuryListPage, playerRow } from '@/server/injuries/__fixtures__/footywireHtml';
 
 const FIXTURE_HTML = readFileSync(
   path.resolve(process.cwd(), 'src/server/injuries/__fixtures__/footywire-injury-list.html'),
@@ -52,12 +54,15 @@ const CHANGED_HTML = BASE_HTML.replace(
 );
 
 function oversizedHtml(rowCount: number): string {
-  const rows = Array.from(
-    { length: rowCount },
-    (_, index) =>
-      `<tr class="darkcolor"><td><a href="/afl/footy/pp-brisbane-lions--${PREFIX.toLowerCase()}-${index}">${PREFIX} Row ${index}</a></td><td>Knee</td><td>Season</td></tr>`
-  ).join('\n');
-  return `<table><tr><td class="tbtitle">Brisbane Lions (${rowCount} Players)</td></tr><tr><td><table>${rows}</table></td></tr></table>`;
+  const rows = Array.from({ length: rowCount }, (_, index) =>
+    playerRow(
+      `/afl/footy/pp-brisbane-lions--${PREFIX.toLowerCase()}-${index}`,
+      `${PREFIX} Row ${index}`,
+      'Knee',
+      'Season'
+    )
+  );
+  return injuryListPage(clubTable(`Brisbane Lions (${rowCount} Players)`, rows));
 }
 
 function serving(html: string): typeof fetch {
@@ -87,6 +92,7 @@ const players = [
 const fixtureSnapshots = {
   entries: { some: { playerName: { startsWith: PREFIX } } },
 };
+const fixtureEntries = { playerName: { startsWith: PREFIX } };
 
 async function removeFixtures() {
   // Entries cascade with their snapshot.
@@ -94,14 +100,19 @@ async function removeFixtures() {
   await prisma.player.deleteMany({ where: { id: { startsWith: PLAYER_ID_PREFIX } } });
 }
 
+// A time no other file uses, so any snapshot a rejected run created or confirmed is this run's.
+const REJECTED_AT = new Date('2026-10-11T03:17:29.000Z');
+
 async function expectNothingWritten(fetchImpl: typeof fetch, reason: string) {
-  const snapshotsBefore = await prisma.injuryListSnapshot.count();
-  const entriesBefore = await prisma.injuryListEntry.count();
-  const run = ingestFootywireInjuryList({ prisma, fetchImpl, now: T0 });
+  const run = ingestFootywireInjuryList({ prisma, fetchImpl, now: REJECTED_AT });
   await expect(run).rejects.toBeInstanceOf(InjuryListIngestionRejected);
   await expect(run).rejects.toMatchObject({ reason });
-  expect(await prisma.injuryListSnapshot.count()).toBe(snapshotsBefore);
-  expect(await prisma.injuryListEntry.count()).toBe(entriesBefore);
+  expect(
+    await prisma.injuryListSnapshot.count({
+      where: { OR: [fixtureSnapshots, { fetchedAt: REJECTED_AT }, { confirmedAt: REJECTED_AT }] },
+    })
+  ).toBe(0);
+  expect(await prisma.injuryListEntry.count({ where: fixtureEntries })).toBe(0);
 }
 
 describe('ingestFootywireInjuryList', () => {
@@ -125,7 +136,7 @@ describe('ingestFootywireInjuryList', () => {
       now: T0,
     });
 
-    const counts = { rowCount: 8, matchedCount: 4, unmatchedCount: 3, ambiguousCount: 1 };
+    const counts = { rows: 8, matched: 4, unmatched: 3, ambiguous: 1 };
     expect(result).toEqual({ outcome: 'created', snapshotId: expect.any(String), counts });
 
     const snapshot = await prisma.injuryListSnapshot.findUniqueOrThrow({
@@ -136,10 +147,8 @@ describe('ingestFootywireInjuryList', () => {
       source: 'footywire',
       sourceUrl: 'https://www.footywire.com/afl/footy/injury_list',
       contentSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
-      aflSeason: T0.getFullYear(),
       fetchedAt: T0,
       confirmedAt: T0,
-      ...counts,
     });
 
     const byName = new Map(snapshot.entries.map((entry) => [entry.playerName, entry]));
@@ -183,7 +192,7 @@ describe('ingestFootywireInjuryList', () => {
       now: hoursAfter(6),
     });
 
-    expect(second).toEqual({ ...first, outcome: 'unchanged', relinked: 0 });
+    expect(second).toEqual({ ...first, outcome: 'unchanged' });
     const snapshots = await prisma.injuryListSnapshot.findMany({
       where: fixtureSnapshots,
       include: { _count: { select: { entries: true } } },
@@ -216,7 +225,7 @@ describe('ingestFootywireInjuryList', () => {
 
     expect(changed.outcome).toBe('created');
     expect(changed.snapshotId).not.toBe(original.snapshotId);
-    expect(reverted).toEqual({ ...original, outcome: 'unchanged', relinked: 0 });
+    expect(reverted).toEqual({ ...original, outcome: 'unchanged' });
 
     const latest = await prisma.injuryListSnapshot.findFirstOrThrow({
       where: { source: 'footywire', ...fixtureSnapshots },
@@ -224,12 +233,10 @@ describe('ingestFootywireInjuryList', () => {
     });
     expect(latest).toMatchObject({ id: original.snapshotId, confirmedAt: hoursAfter(12) });
     expect(await prisma.injuryListSnapshot.count({ where: fixtureSnapshots })).toBe(2);
-    expect(
-      await prisma.injuryListEntry.count({ where: { playerName: { startsWith: PREFIX } } })
-    ).toBe(16);
+    expect(await prisma.injuryListEntry.count({ where: fixtureEntries })).toBe(16);
   });
 
-  it('re-links a row to a player imported after the snapshot was created', async () => {
+  it('creates a new snapshot when a row links to a player imported since', async () => {
     const lateId = `${PLAYER_ID_PREFIX}reece-torrent`;
     const first = await ingestFootywireInjuryList({
       prisma,
@@ -246,23 +253,38 @@ describe('ingestFootywireInjuryList', () => {
         now: hoursAfter(6),
       });
 
-      const counts = { rowCount: 8, matchedCount: 5, unmatchedCount: 2, ambiguousCount: 1 };
       expect(second).toEqual({
-        outcome: 'unchanged',
-        snapshotId: first.snapshotId,
-        counts,
-        relinked: 1,
+        outcome: 'created',
+        snapshotId: expect.any(String),
+        counts: { rows: 8, matched: 5, unmatched: 2, ambiguous: 1 },
       });
-      const snapshots = await prisma.injuryListSnapshot.findMany({ where: fixtureSnapshots });
-      expect(snapshots).toHaveLength(1);
-      expect(snapshots[0]).toMatchObject({ ...counts, fetchedAt: T0, confirmedAt: hoursAfter(6) });
-      expect(
-        await prisma.injuryListEntry.findFirstOrThrow({
-          where: { snapshotId: first.snapshotId, playerName: name('Reece Torrent') },
-        })
-      ).toMatchObject({ playerId: lateId, matchStatus: 'MATCHED' });
+      expect(second.snapshotId).not.toBe(first.snapshotId);
+      expect(await prisma.injuryListSnapshot.count({ where: fixtureSnapshots })).toBe(2);
+
+      // The first snapshot is left as it was: append-only, never re-linked in place.
+      const reeceIn = (snapshotId: string) =>
+        prisma.injuryListEntry.findFirstOrThrow({
+          where: { snapshotId, playerName: name('Reece Torrent') },
+        });
+      expect(await reeceIn(first.snapshotId)).toMatchObject({
+        playerId: null,
+        matchStatus: 'UNMATCHED',
+      });
+      const latest = await prisma.injuryListSnapshot.findFirstOrThrow({
+        where: { source: 'footywire', ...fixtureSnapshots },
+        orderBy: { confirmedAt: 'desc' },
+      });
+      expect(latest).toMatchObject({
+        id: second.snapshotId,
+        fetchedAt: hoursAfter(6),
+        confirmedAt: hoursAfter(6),
+      });
+      expect(await reeceIn(second.snapshotId)).toMatchObject({
+        playerId: lateId,
+        matchStatus: 'MATCHED',
+      });
     } finally {
-      // Later cases expect the original roster.
+      // Later cases expect the original roster. Entries linked to the player keep their rows.
       await prisma.player.deleteMany({ where: { id: lateId } });
     }
   });
@@ -272,17 +294,15 @@ describe('ingestFootywireInjuryList', () => {
   });
 
   it('writes nothing when the page has no club tables', async () => {
-    await expectNothingWritten(serving('<html><body>Maintenance</body></html>'), 'parse_failed');
+    await expectNothingWritten(serving(injuryListPage('Maintenance')), 'parse_failed');
   });
 
   it('writes nothing when every club table is empty', async () => {
-    const emptyClubs = ['Brisbane Lions', 'Fremantle']
-      .map(
-        (club) =>
-          `<table><tr><td class="tbtitle">${club} (0 Players)</td></tr><tr><td><table></table></td></tr></table>`
-      )
-      .join('');
-    await expectNothingWritten(serving(`<html><body>${emptyClubs}</body></html>`), 'parse_failed');
+    const emptyClubs = injuryListPage(
+      clubTable('Brisbane Lions (0 Players)', []),
+      clubTable('Fremantle (0 Players)', [])
+    );
+    await expectNothingWritten(serving(emptyClubs), 'parse_failed');
   });
 
   it('writes nothing when the list has more than 600 rows', async () => {

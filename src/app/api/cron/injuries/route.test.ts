@@ -20,7 +20,9 @@ const { GET, POST } = await import('./route');
 const { InjuryListIngestionRejected } = await import('@/server/injuries/injuryListIngestion');
 
 const URL_BASE = 'http://localhost/api/cron/injuries';
-const COUNTS = { rowCount: 8, matchedCount: 6, unmatchedCount: 1, ambiguousCount: 1 };
+const COUNTS = { rows: 8, matched: 6, unmatched: 1, ambiguous: 1 };
+// In season: the fetch runs 1 January to 7 October, Melbourne time.
+const IN_SEASON = new Date('2026-06-15T02:00:00Z');
 
 function authorized() {
   vi.stubEnv('NODE_ENV', 'production');
@@ -30,6 +32,8 @@ function authorized() {
 
 describe('/api/cron/injuries', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(IN_SEASON);
     ingestFootywireInjuryListMock.mockResolvedValue({
       outcome: 'created',
       snapshotId: 'snapshot-1',
@@ -38,6 +42,7 @@ describe('/api/cron/injuries', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     ingestFootywireInjuryListMock.mockReset();
     loggerMock.info.mockReset();
@@ -83,6 +88,21 @@ describe('/api/cron/injuries', () => {
     });
     expect(typeof body.checkedAt).toBe('string');
     expect(ingestFootywireInjuryListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the fetch out of season and writes nothing', async () => {
+    vi.setSystemTime(new Date('2026-11-20T00:00:00Z'));
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      skipped: 'off-season',
+      checkedAt: '2026-11-20T00:00:00.000Z',
+    });
+    expect(ingestFootywireInjuryListMock).not.toHaveBeenCalled();
   });
 
   it('answers 500 with the reason when ingestion is rejected', async () => {

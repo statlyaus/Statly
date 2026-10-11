@@ -10,11 +10,7 @@ import {
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
-import {
-  injuryBlocksSelection,
-  loadCurrentInjuries,
-  type CurrentInjuries,
-} from '@/server/injuries/injuryListReadModel';
+import { loadInjuryLookup, type InjuryListing } from '@/server/injuries/injuryListReadModel';
 import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
 import {
   loadLineupRoundSummaries,
@@ -33,17 +29,11 @@ import {
 type SourcePlayer = Awaited<ReturnType<typeof getPlayers>>[number];
 type DefaultLineupClient = Pick<
   typeof prisma,
-  'league' | 'leagueLineup' | 'leagueRosterPlayer' | 'injuryListSnapshot'
+  'league' | 'leagueLineup' | 'leagueRosterPlayer' | 'injuryListSnapshot' | 'injuryListEntry'
 >;
 
 /** On-field groups in team-sheet order, then interchange. */
 const FIELD_SLOT_ORDER = ['DEF', 'MID', 'RUC', 'FWD', 'UTIL'] as const;
-
-export interface InjuryListing {
-  /** What the list says, e.g. "Knee (Test)", shown even when the player can still be picked. */
-  label: string;
-  blocksSelection: boolean;
-}
 
 export function parseLeagueCategories(value: string | null | undefined): FantasyCategoryKey[] {
   if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
@@ -69,25 +59,6 @@ export function buildLineupSpots(
     slotIndex,
   }));
   return [...field, ...interchange];
-}
-
-/**
- * Looks up a listed injury by player id only. A name match could bench a namesake, so a player the
- * list does not name by id counts as fit. Without a current list everyone counts as fit.
- */
-export function buildInjuryLookup(injuries: CurrentInjuries) {
-  const byPlayerId = new Map<string, InjuryListing>();
-  if (injuries.ok) {
-    for (const [playerId, injury] of injuries.byPlayerId) {
-      const parts = [injury.injuryRaw.trim(), injury.returnRaw.trim()];
-      byPlayerId.set(playerId, {
-        label: parts[0] && parts[1] ? `${parts[0]} (${parts[1]})` : parts[0] || parts[1],
-        blocksSelection: injuryBlocksSelection(injury.status),
-      });
-    }
-  }
-  return (player: { playerId: string }): InjuryListing | null =>
-    byPlayerId.get(player.playerId) ?? null;
 }
 
 /**
@@ -214,18 +185,14 @@ export async function ensureDefaultLineups({
   const fixturesByPlayerId = fixtureResult.ok
     ? fixtureResult.fixturesByPlayerId
     : new Map<string, RoundPlayerFixture>();
-  let sourcePlayers: SourcePlayer[] = [];
-  try {
-    sourcePlayers = await getPlayers();
-  } catch (error) {
-    logger.warn('Default lineups: player feed unavailable', { leagueId, error });
-  }
   // The injury list is not league- or season-scoped: every league reads the same snapshot.
-  const injuries = await loadCurrentInjuries({ prisma: client, now });
-  if (!injuries.ok) {
-    logger.warn('Default lineups: injury list unavailable', { leagueId, reason: injuries.reason });
-  }
-  const injuryFor = buildInjuryLookup(injuries);
+  const [sourcePlayers, injuryFor] = await Promise.all([
+    getPlayers().catch((error: unknown): SourcePlayer[] => {
+      logger.warn('Default lineups: player feed unavailable', { leagueId, error });
+      return [];
+    }),
+    loadInjuryLookup({ prisma: client, now, logContext: { leagueId, scope: 'default lineups' } }),
+  ]);
   let scores = new Map<string, number>();
   try {
     scores = scoreRosterPlayers({

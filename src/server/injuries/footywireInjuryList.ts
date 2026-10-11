@@ -1,3 +1,4 @@
+import type { InjuryReturnStatus } from '@prisma/client';
 import { load } from 'cheerio';
 
 import { FOOTYWIRE_INJURY_LIST_URL } from './injuryListConstants';
@@ -15,9 +16,6 @@ import { FOOTYWIRE_INJURY_LIST_URL } from './injuryListConstants';
 const FETCH_TIMEOUT_MS = 15_000;
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-
-export type InjuryReturnStatus =
-  'TEST' | 'TBC' | 'SEASON' | 'PROTOCOLS' | 'WEEKS' | 'DAYS' | 'UNKNOWN';
 
 export interface ReturnTimeframe {
   status: InjuryReturnStatus;

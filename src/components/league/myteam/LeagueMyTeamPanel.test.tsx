@@ -27,7 +27,6 @@ function payload(overrides: Record<string, unknown> = {}) {
           isHome: true,
           bye: false,
           injury: null,
-          injuryBlocksSelection: false,
         },
         {
           playerId: 'def-2',
@@ -39,7 +38,6 @@ function payload(overrides: Record<string, unknown> = {}) {
           isHome: null,
           bye: true,
           injury: null,
-          injuryBlocksSelection: false,
         },
         {
           playerId: 'def-3',
@@ -51,7 +49,6 @@ function payload(overrides: Record<string, unknown> = {}) {
           isHome: false,
           bye: false,
           injury: null,
-          injuryBlocksSelection: false,
         },
         {
           playerId: 'mid-1',
@@ -62,8 +59,7 @@ function payload(overrides: Record<string, unknown> = {}) {
           opponent: 'Carlton',
           isHome: false,
           bye: false,
-          injury: 'Hamstring (2-3 weeks)',
-          injuryBlocksSelection: true,
+          injury: { label: 'Hamstring (2-3 weeks)', blocksSelection: true },
         },
         {
           playerId: 'mid-2',
@@ -75,7 +71,6 @@ function payload(overrides: Record<string, unknown> = {}) {
           isHome: true,
           bye: false,
           injury: null,
-          injuryBlocksSelection: false,
         },
       ],
       rounds: [
@@ -209,7 +204,7 @@ describe('LeagueMyTeamPanel', () => {
     const base = payload();
     const rosterPlayers = base.data.rosterPlayers.map((player) =>
       player.playerId === 'mid-2'
-        ? { ...player, injury: 'Knee (Test)', injuryBlocksSelection: false }
+        ? { ...player, injury: { label: 'Knee (Test)', blocksSelection: false } }
         : player
     );
     authenticatedFetchMock.mockImplementation(() => respond(payload({ rosterPlayers })));

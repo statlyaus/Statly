@@ -122,13 +122,15 @@ guessing. Use the [player identity runbook](../runbooks/player-identity.md) for 
 ### Injury list snapshots
 
 The Footywire injury list is the only source of lineup availability. `netlify/functions/cron-injuries.mts`
-calls `/api/cron/injuries` every six hours; `src/server/injuries/injuryListIngestion.ts` fetches,
+calls `/api/cron/injuries` every six hours; the route does nothing outside 1 January to 7 October
+Melbourne time (`src/server/injuries/injuryListSchedule.ts`), so the off-season holds the last
+in-season snapshot until it ages out. In season, `src/server/injuries/injuryListIngestion.ts` fetches,
 parses and matches the list, then stores it as an `InjuryListSnapshot` with one `InjuryListEntry`
-per row. Snapshots are keyed by a hash of the parsed source rows. A fetch whose rows hash to an
-existing snapshot creates nothing: it advances that snapshot's `confirmedAt` and re-runs player
-matching, updating entries whose match changed (a player imported since the snapshot was created,
-for example). The source rows of a stored snapshot never change; only `confirmedAt`, the derived
-player links and the match counts do.
+per row. A snapshot is identified by a hash of the parsed source rows together with each row's
+player link, so a fetch that repeats a stored list only advances that snapshot's `confirmedAt`,
+while a list whose rows or player links differ (a player imported since the last run, for example)
+is a new snapshot. Stored snapshots and entries are never rewritten, which keeps the record of which
+links were in force when a default lineup was filled.
 
 Ingestion fails closed. A fetch error or timeout, a page with no club tables or no rows, or more
 than 600 rows writes nothing. Each row is matched to a `Player` on exact normalized name and club

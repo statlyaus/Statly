@@ -56,17 +56,20 @@ describe('matchInjuryRowsToPlayers', () => {
 });
 
 describe('contentSha256', () => {
-  const rows = [
-    row('Fremantle Dockers', 'Sam Sturt', { returnRaw: 'TBC', status: 'TBC' }),
-    row('Brisbane Lions', 'Jack Payne'),
-    row('Brisbane Lions', 'Henry Smith'),
-  ];
+  const players = [{ id: 'p1', name: 'Jack Payne', club: 'Brisbane' }];
+  const rows = matchInjuryRowsToPlayers(
+    [
+      row('Fremantle Dockers', 'Sam Sturt', { returnRaw: 'TBC', status: 'TBC' }),
+      row('Brisbane Lions', 'Jack Payne'),
+      row('Brisbane Lions', 'Henry Smith'),
+    ],
+    players
+  );
 
-  it('is stable under row order and ignores match results', () => {
+  it('is stable under row order', () => {
     const hash = contentSha256(rows);
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
     expect(contentSha256([...rows].reverse())).toBe(hash);
-    expect(contentSha256(matchInjuryRowsToPlayers(rows, []))).toBe(hash);
   });
 
   it('changes when a parsed field changes', () => {
@@ -74,5 +77,22 @@ describe('contentSha256', () => {
       index === 1 ? { ...entry, returnRaw: '2-3 weeks', status: 'WEEKS' as const } : entry
     );
     expect(contentSha256(changed)).not.toBe(contentSha256(rows));
+  });
+
+  it('changes when a player link changes', () => {
+    // The same source rows, re-matched after Henry Smith was imported.
+    const relinked = matchInjuryRowsToPlayers(rows, [
+      ...players,
+      { id: 'p2', name: 'Henry Smith', club: 'Brisbane' },
+    ]);
+    expect(relinked[2]).toMatchObject({ playerId: 'p2', matchStatus: 'MATCHED' });
+    expect(contentSha256(relinked)).not.toBe(contentSha256(rows));
+  });
+
+  it('changes when only the match status changes', () => {
+    const ambiguous = rows.map((entry, index) =>
+      index === 0 ? { ...entry, matchStatus: 'AMBIGUOUS' as const } : entry
+    );
+    expect(contentSha256(ambiguous)).not.toBe(contentSha256(rows));
   });
 });

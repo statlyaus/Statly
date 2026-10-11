@@ -1,20 +1,17 @@
 -- CreateEnum
 CREATE TYPE "InjuryListMatchStatus" AS ENUM ('MATCHED', 'UNMATCHED', 'AMBIGUOUS');
 
+-- CreateEnum
+CREATE TYPE "InjuryReturnStatus" AS ENUM ('TEST', 'TBC', 'SEASON', 'PROTOCOLS', 'WEEKS', 'DAYS', 'UNKNOWN');
+
 -- CreateTable
 CREATE TABLE "InjuryListSnapshot" (
     "id" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "sourceUrl" TEXT NOT NULL,
     "contentSha256" TEXT NOT NULL,
-    "aflSeason" INTEGER NOT NULL,
-    "rowCount" INTEGER NOT NULL,
-    "matchedCount" INTEGER NOT NULL,
-    "unmatchedCount" INTEGER NOT NULL,
-    "ambiguousCount" INTEGER NOT NULL,
     "fetchedAt" TIMESTAMP(3) NOT NULL,
     "confirmedAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "InjuryListSnapshot_pkey" PRIMARY KEY ("id")
 );
@@ -28,7 +25,7 @@ CREATE TABLE "InjuryListEntry" (
     "playerName" TEXT NOT NULL,
     "injuryRaw" TEXT NOT NULL,
     "returnRaw" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
+    "status" "InjuryReturnStatus" NOT NULL,
     "etaWeeksMin" INTEGER,
     "etaWeeksMax" INTEGER,
     "etaDaysMin" INTEGER,

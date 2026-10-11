@@ -8,6 +8,7 @@ import {
   ingestFootywireInjuryList,
   InjuryListIngestionRejected,
 } from '@/server/injuries/injuryListIngestion';
+import { isInjuryListSeason } from '@/server/injuries/injuryListSchedule';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
+  const now = new Date();
+  // The fetch only runs 1 January to 7 October, Melbourne time.
+  if (!isInjuryListSeason(now)) {
+    return NextResponse.json(
+      { ok: true, skipped: 'off-season', checkedAt: now.toISOString() },
+      { headers: { 'Cache-Control': 'no-store' } }
     );
   }
 

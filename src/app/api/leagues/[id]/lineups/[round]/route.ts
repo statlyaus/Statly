@@ -6,12 +6,11 @@ import { getLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { loadCurrentInjuries, type CurrentInjuries } from '@/server/injuries/injuryListReadModel';
+import { loadInjuryLookup } from '@/server/injuries/injuryListReadModel';
 import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
 import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
 import { buildDefaultLineup, type AutoFillSpot } from '@/lib/leagues/lineupAutoFill';
 import {
-  buildInjuryLookup,
   buildLineupSpots,
   ensureDefaultLineups,
   parseLeagueCategories,
@@ -221,54 +220,49 @@ export async function GET(
 
   const categories = parseLeagueCategories(league.categoriesJson);
   let playerStats: ReturnType<typeof buildLeaguePlayerStatDatasetForTargets> | null = null;
-  // The injury list is not league- or season-scoped: every league reads the same snapshot. A
-  // failed read degrades to "nobody listed" rather than failing the whole lineup.
-  let injuries: CurrentInjuries;
-  let injuryError: unknown;
-  try {
-    injuries = await loadCurrentInjuries({ prisma, now });
-  } catch (error) {
-    injuries = { ok: false, reason: 'error' };
-    injuryError = error;
-  }
-  if (!injuries.ok) {
-    logger.warn('Lineup injury list unavailable', {
-      leagueId: id,
-      reason: injuries.reason,
-      error: injuryError,
-    });
-  }
-  const injuryFor = buildInjuryLookup(injuries);
+  // The injury list is not league- or season-scoped: every league reads the same snapshot.
+  const [sourcePlayers, injuryFor] = await Promise.all([
+    getPlayers().catch((error: unknown) => {
+      logger.warn('Lineup player stats unavailable', { leagueId: id, error });
+      return null;
+    }),
+    loadInjuryLookup({
+      prisma,
+      now,
+      logContext: { leagueId: id, round: roundNumber, scope: 'lineup page' },
+    }),
+  ]);
   let scores = new Map<string, number>();
-  try {
-    const sourcePlayers = await getPlayers();
-    scores = scoreRosterPlayers({
-      sourcePlayers,
-      roster: rosterPlayers.map((row) => ({
-        playerId: row.playerId,
-        name: row.player.name,
-        club: row.player.club,
-      })),
-      categoriesJson: league.categoriesJson,
-      categoryDirectionsJson: league.settings.categoryDirectionsJson,
-    });
-    playerStats = buildLeaguePlayerStatDatasetForTargets(
-      sourcePlayers,
-      rosterPlayers.map((row) => ({
-        id: row.playerId,
-        name: row.player.name,
-        club: row.player.club,
-      })),
-      {
-        categories,
-        categoryDirections: parseCategoryDirectionsJson(
+  if (sourcePlayers) {
+    try {
+      scores = scoreRosterPlayers({
+        sourcePlayers,
+        roster: rosterPlayers.map((row) => ({
+          playerId: row.playerId,
+          name: row.player.name,
+          club: row.player.club,
+        })),
+        categoriesJson: league.categoriesJson,
+        categoryDirectionsJson: league.settings.categoryDirectionsJson,
+      });
+      playerStats = buildLeaguePlayerStatDatasetForTargets(
+        sourcePlayers,
+        rosterPlayers.map((row) => ({
+          id: row.playerId,
+          name: row.player.name,
+          club: row.player.club,
+        })),
+        {
           categories,
-          league.settings.categoryDirectionsJson
-        ),
-      }
-    );
-  } catch (error) {
-    logger.warn('Lineup player stats unavailable', { leagueId: id, error });
+          categoryDirections: parseCategoryDirectionsJson(
+            categories,
+            league.settings.categoryDirectionsJson
+          ),
+        }
+      );
+    } catch (error) {
+      logger.warn('Lineup player stats unavailable', { leagueId: id, error });
+    }
   }
 
   // No saved lineup: offer the default the team will get if the manager changes nothing, so
@@ -319,8 +313,7 @@ export async function GET(
       isHome: fixturesByPlayerId.get(row.playerId)?.isHome ?? null,
       bye: fixturesByPlayerId.get(row.playerId)?.bye ?? false,
       // Shown for every listed player, including a `TEST` listing that does not bench him.
-      injury: injuryFor({ playerId: row.playerId })?.label ?? null,
-      injuryBlocksSelection: injuryFor({ playerId: row.playerId })?.blocksSelection ?? false,
+      injury: injuryFor(row),
     })),
     team: describeTeam(memberId),
     opponentTeam: describeTeam(effectiveContext?.opponent?.id),

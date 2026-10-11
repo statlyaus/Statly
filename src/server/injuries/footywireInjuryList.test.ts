@@ -7,27 +7,13 @@ import {
   normalizeReturnTimeframe,
   parseFootywireInjuryList,
 } from './footywireInjuryList';
+import { clubTable, injuryListPage as page, playerRow } from './__fixtures__/footywireHtml';
 import { FOOTYWIRE_INJURY_LIST_URL } from './injuryListConstants';
 
 const fixture = readFileSync(
   join(process.cwd(), 'src/server/injuries/__fixtures__/footywire-injury-list.html'),
   'utf8'
 );
-
-function page(tables: string): string {
-  return `<html><body>${tables}</body></html>`;
-}
-
-function clubTable(header: string, rows: string[]): string {
-  return `<table><tr><td class="tbtitle">${header}</td></tr><tr><td><table>
-    <tr><td class="lbnorm">&nbsp; Player</td><td class="bnorm">Injury</td><td class="bnorm">Returning</td></tr>
-    ${rows.join('\n')}
-  </table></td></tr></table>`;
-}
-
-function playerRow(href: string, name: string, injury: string, returning: string): string {
-  return `<tr class="darkcolor"><td>&nbsp; <a href="${href}">${name}</a></td><td>${injury}</td><td>${returning}</td></tr>`;
-}
 
 describe('normalizeReturnTimeframe', () => {
   const none = { etaWeeksMin: null, etaWeeksMax: null, etaDaysMin: null, etaDaysMax: null };
@@ -134,7 +120,8 @@ describe('parseFootywireInjuryList', () => {
 
   it('rejects a page whose club tables hold no rows at all', () => {
     const html = page(
-      clubTable('Carlton (0 Players)', []) + clubTable('Collingwood (0 Players)', [])
+      clubTable('Carlton (0 Players)', []),
+      clubTable('Collingwood (0 Players)', [])
     );
     expect(() => parseFootywireInjuryList(html)).toThrow(FootywireInjuryListParseError);
     expect(() => parseFootywireInjuryList(html)).toThrow(/no rows/);
@@ -171,7 +158,8 @@ describe('parseFootywireInjuryList', () => {
   it('rejects a player listed twice', () => {
     const row = playerRow('/afl/footy/pp-carlton-blues--sam-walsh', 'Sam Walsh', 'Back', 'TBC');
     const html = page(
-      clubTable('Carlton (1 Player)', [row]) + clubTable('Carlton Blues (1 Player)', [row])
+      clubTable('Carlton (1 Player)', [row]),
+      clubTable('Carlton Blues (1 Player)', [row])
     );
     expect(() => parseFootywireInjuryList(html)).toThrow(/listed twice/);
   });

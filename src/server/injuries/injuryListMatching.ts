@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { getTeamName } from '@/lib/teamLogos';
-import { normalizePlayerName } from '@/server/players/footywirePositions';
+
+import type { InjuryListMatchStatus } from '@prisma/client';
+
+import { normalizeClub, normalizePlayerName } from '@/server/players/footywirePositions';
 import type { ParsedInjuryRow } from './footywireInjuryList';
 
 /**
@@ -12,8 +14,6 @@ import type { ParsedInjuryRow } from './footywireInjuryList';
  * attached to the wrong player benches a healthy one, so an unsure row stays unmatched.
  */
 
-export type InjuryListMatchStatus = 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS';
-
 export interface InjuryListPlayer {
   id: string;
   name: string;
@@ -23,10 +23,6 @@ export interface InjuryListPlayer {
 export interface MatchedInjuryRow extends ParsedInjuryRow {
   playerId: string | null;
   matchStatus: InjuryListMatchStatus;
-}
-
-function normalizeClub(value: string): string {
-  return getTeamName(value.trim()).toLowerCase();
 }
 
 function identityKey(name: string, club: string): string {
@@ -65,11 +61,13 @@ function compareText(a: string, b: string): number {
 }
 
 /**
- * Hash of the parsed list, independent of row order and of player matching, so a re-fetch of the
- * same list hashes the same even after the player table changes. Only parsed fields are included,
- * in a fixed order; the raw HTML is not hashed because page chrome changes on every load.
+ * Identity of a snapshot: the parsed rows and the player each one links to, independent of row
+ * order. Links are part of it because they decide who is benched: a row that names a player
+ * imported since the last fetch must produce a new snapshot rather than leave the old, unlinked one
+ * current. Only parsed fields are included, in a fixed order; the raw HTML is not hashed because
+ * page chrome changes on every load.
  */
-export function contentSha256(rows: readonly ParsedInjuryRow[]): string {
+export function contentSha256(rows: readonly MatchedInjuryRow[]): string {
   const canonical = rows
     .map((row) => ({
       clubName: row.clubName,
@@ -82,6 +80,8 @@ export function contentSha256(rows: readonly ParsedInjuryRow[]): string {
       etaWeeksMax: row.etaWeeksMax,
       etaDaysMin: row.etaDaysMin,
       etaDaysMax: row.etaDaysMax,
+      playerId: row.playerId,
+      matchStatus: row.matchStatus,
     }))
     .sort((a, b) => compareText(a.clubName, b.clubName) || compareText(a.sourceKey, b.sourceKey));
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
