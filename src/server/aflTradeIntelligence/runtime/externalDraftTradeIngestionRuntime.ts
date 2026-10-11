@@ -238,10 +238,15 @@ export function createAflTradeExternalIngestionRuntime(
       };
       return ingestAuthorizedAflTradeExternalPage(effectiveCommand, {
         admission,
-        policyFor: (provider) => ({
-          ...config.providerPolicies[provider],
-          rawRetentionDays: config.limits.rawRetentionDays,
-        }),
+        policyFor: (provider) => {
+          // Reviewed statements are read from the checkout by the local runner only (#886).
+          if (provider === 'statly_reviewed')
+            throw new TypeError('Reviewed statements have no provider web policy.');
+          return {
+            ...config.providerPolicies[provider],
+            rawRetentionDays: config.limits.rawRetentionDays,
+          };
+        },
         resolveAuthorization: (rightsArtifactId) =>
           gateRepository.resolveAuthorization(rightsArtifactId),
         ingestion: {

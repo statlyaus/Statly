@@ -24,6 +24,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'statly_reviewed',
 ]);
 const entityKindSchema = z.enum(['club', 'player']);
 const seasonSchema = z.number().int().min(1897).max(2200);

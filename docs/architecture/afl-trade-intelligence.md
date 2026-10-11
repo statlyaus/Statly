@@ -557,6 +557,35 @@ becomes a promoted trade event's `date_precision` and a v4 arrival's entry preci
 (`loadReviewedTradePeriodWindows`), never from the operator's transaction-date file, and migration
 0263 makes both coverage validators refuse a window that no approved capture states for the season.
 
+Draft-night pick trades have no approved provider: Draftguru's trade pages cover the trade period,
+and the AFL reports a live trade only inside draft-night articles and club pages. They enter as a
+reviewed source class (statlyaus/Statly#886, owner decision 2026-10-12): provider `statly_reviewed`,
+capability `reviewed-draft-night-pick-trades`, one reviewed statement per season
+(`statly-reviewed-draft-night-trades/v1`, parsed by `statly-reviewed-draft-night-trades-parser/v1`
+in `source/reviewedDraftNightTradeStatement.ts`). A statement is Statly's own assertion, not a scrape,
+so it has its own provider, bound by contract to a statement file in this repository the way
+`statly_local_fixture` is bound to `fixture://statly/`. Each file is registered in
+`source/reviewedDraftNightTradeSourceScope.ts` by the sha256 of its exact bytes, beside the season's
+draft nights and the last slot of its final pre-draft order. The local runner reads the registered
+file from the checkout and never fetches its URL; the generic ingestion runtime refuses the
+capability. A deal names its draft night, its two clubs, what each gave (a slot of that season's
+national draft, numbered as the final pre-draft order numbers it, with the number the article stated
+on the night kept as `statedAs`, or a later season's pick by year, round and club), and the one
+retained article stating it. The parser emits what a Draftguru trade page emits: a `transaction`
+dated to the night, two `transaction_party` rows, and one `directed_transfer` per asset
+(`current_pick` keyed `pick:<season>:national:<slot>`, `future_pick` keyed
+`future-pick:<year>:national:<round>:<club>`). It emits nothing for the whole statement when any deal
+fails: no evidence, a date that is not a draft night, a slot outside 1..N, an asset on both sides or
+twice on one side, a deal moving no slot of the draft, a future pick not later than the season, or a
+duplicate deal. A deal's native event id never starts with a year, so it cannot share a promotion
+event key with a Draftguru trade. Reconciliation reads `statly_reviewed` trades with Draftguru's.
+The night is the transaction's day, so the promotion review keeps it rather than substituting the
+trade-period window. The pre-draft order is observed before that day, so a dated current-pick
+transfer also takes the order's pick when the pick's latest observation, made before the trade,
+names the sender as the slot's holder (`heldBySenderBeforeTrade`). The grader's traded-on link then
+finds the draft-night transfer by pick id. Identity resolution is provider-scoped, so the statement's
+club names need their own reviews.
+
 HPN construction and current reconstruction apply the same registered-spell predicate as both spell
 checks in the projected SQL finalizer. Source-first classification comes from the original immutable
 map assessment, so revocation or capture approval cannot grant a legacy exemption. Registered spells

@@ -16,6 +16,7 @@ import {
 import { createLocalDraftguruNationalYearTargets } from '../src/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import { createLocalOfficialAflDraftOrderTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
 import { createLocalOfficialAflTradePeriodTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflTradePeriodCapture';
+import { createLocalReviewedDraftNightTradeTargets } from '../src/server/aflTradeIntelligence/development/localReviewedDraftNightTradeCapture';
 import { createLocalOfficialAflDraftSessionTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 
@@ -43,6 +44,10 @@ import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability official-afl-trade-period-dates \
  *     --season 2022 [--season 2023 ...] [--url <reviewed announcement of those seasons> ...]
+ *   npm run outcomes:sources:capture-local-external -- \
+ *     --artifact-root <durable-absolute-dir> --capability reviewed-draft-night-pick-trades \
+ *     --season 2024 [--season 2023 ...] [--url <registered statement of those seasons> ...]
+ *   (run from the repository root: the registered statement is read from the checkout)
  *
  * Add --store-id <store-id> to write into the registered local store rooted at --artifact-root, so
  * every captured page's custody row records its location.
@@ -206,6 +211,15 @@ function officialTradePeriodTargets(values: OptionValues): LocalExternalCaptureT
   );
 }
 
+function reviewedDraftNightTargets(values: OptionValues): LocalExternalCaptureTarget[] {
+  if (values.has('--from-season')) usage('Draft-night statements come from each --season.');
+  if (!values.has('--season')) usage('Draft-night trade capture requires --season.');
+  return createLocalReviewedDraftNightTradeTargets(
+    (values.get('--season') ?? []).map((value) => season(value, '--season')),
+    values.get('--url')
+  );
+}
+
 export function parseLocalExternalCaptureArguments(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>>,
@@ -220,7 +234,7 @@ export function parseLocalExternalCaptureArguments(
   const capability = single(values, '--capability');
   if (!isLocalExternalCaptureCapability(capability)) {
     usage(
-      '--capability must be draftguru-trade-index, draftguru-trade-detail, draftguru-national-year-page, official-afl-completed-draft-session, official-afl-indicative-draft-order or official-afl-trade-period-dates.'
+      '--capability must be draftguru-trade-index, draftguru-trade-detail, draftguru-national-year-page, official-afl-completed-draft-session, official-afl-indicative-draft-order, official-afl-trade-period-dates or reviewed-draft-night-pick-trades.'
     );
   }
   const targets =
@@ -234,7 +248,9 @@ export function parseLocalExternalCaptureArguments(
             ? officialOrderTargets(values)
             : capability === 'official-afl-trade-period-dates'
               ? officialTradePeriodTargets(values)
-              : officialSessionTargets(values);
+              : capability === 'reviewed-draft-night-pick-trades'
+                ? reviewedDraftNightTargets(values)
+                : officialSessionTargets(values);
   const storeId = single(values, '--store-id');
   if (storeId !== undefined && !/^[a-z][a-z0-9-]{2,62}$/u.test(storeId)) {
     usage('--store-id must be lowercase letters, digits and hyphens, starting with a letter.');

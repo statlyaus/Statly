@@ -1,4 +1,5 @@
 import { draftSessionDateWindowSchema } from './draftSessionDatePrecision';
+import { isReviewedStatementSourceUrl } from './reviewedDraftNightTradeSourceScope';
 import { specialDraftEntitlementSchema } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -40,6 +41,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'statly_reviewed',
 ]);
 
 const sourceUrlSchema = z
@@ -725,6 +727,9 @@ const allowedKindsByProvider = {
     'draft_completed_member_exclusion',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
+  // A reviewer-compiled statement of draft-night pick trades (statlyaus/Statly#886): the claims a
+  // Draftguru trade page yields, nothing else.
+  statly_reviewed: new Set(['transaction', 'transaction_party', 'directed_transfer']),
 } as const;
 
 const evidenceContentSchema = z
@@ -745,6 +750,17 @@ const evidenceContentSchema = z
         path: ['capture', 'sourceUrl'],
         message:
           'The statly_local_fixture provider and fixture://statly/ source scheme must be used together.',
+      });
+    }
+    if (
+      (content.provider === 'statly_reviewed') !==
+      isReviewedStatementSourceUrl(content.capture.sourceUrl)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['capture', 'sourceUrl'],
+        message:
+          'The statly_reviewed provider and a reviewed statement in the Statly repository must be used together.',
       });
     }
     if (!allowedKindsByProvider[content.provider].has(content.claim.kind)) {

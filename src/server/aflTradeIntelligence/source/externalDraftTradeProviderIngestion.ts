@@ -17,6 +17,8 @@ import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from './draftCorroborat
 import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
 import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from './officialAflTradePeriodAdapter';
 import { reviewedOfficialAflTradePeriodPage } from './officialAflTradePeriodSourceScope';
+import { REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION } from './reviewedDraftNightTradeStatement';
+import { reviewedDraftNightTradeStatement } from './reviewedDraftNightTradeSourceScope';
 import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import { reviewedOfficialAflDraft2011EffectiveYear } from './officialAflDraft2011SessionFacts';
@@ -204,6 +206,24 @@ export function validateAflTradeExternalCaptureScope(
       invalid();
     return;
   }
+  if (request.capabilityId === 'reviewed-draft-night-pick-trades') {
+    // Parser v1 reads only a registered reviewed statement of draft-night pick trades (#886), in the
+    // environments it is registered for, effective from the season's last draft night.
+    const registered = reviewedDraftNightTradeStatement(request.sourceUrl);
+    if (
+      request.provider !== 'statly_reviewed' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION ||
+      registered === null ||
+      request.environment === 'production' ||
+      !registered.environments.includes(request.environment) ||
+      registered.season !== request.anchorSeasonYear ||
+      request.effectiveAt !== `${[...registered.draftNights].sort().at(-1)}T00:00:00.000Z`
+    )
+      invalid();
+    return;
+  }
   if (request.capabilityId === 'official-afl-player-continuity') {
     if (
       request.provider !== 'official_afl' ||
@@ -332,6 +352,7 @@ export function validateAflTradeExternalCaptureScope(
 const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
   'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   'official-afl-trade-period-dates': OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
+  'reviewed-draft-night-pick-trades': REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION,
   'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
   'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
   'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,

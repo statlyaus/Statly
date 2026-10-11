@@ -37,6 +37,10 @@ import {
   parseOfficialAflTradePeriodDates,
 } from '../source/officialAflTradePeriodAdapter';
 import { captureOfficialAflPage } from '../source/officialAflPageCapture';
+import {
+  parseReviewedDraftNightTrades,
+  REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION,
+} from '../source/reviewedDraftNightTradeStatement';
 import { PostgresAflTradeExternalCaptureRegistry } from '../source/postgresExternalCaptureRegistry';
 import { PostgresAflTradeExternalEvidenceRepository } from '../source/postgresExternalEvidenceRepository';
 import {
@@ -79,6 +83,13 @@ import {
   officialAflTradePeriodDecisionKey,
   type LocalOfficialAflTradePeriodTarget,
 } from './localOfficialAflTradePeriodCapture';
+import {
+  createReviewedDraftNightTradeCaptureCommand,
+  readReviewedDraftNightTradeStatement,
+  REVIEWED_DRAFT_NIGHT_TRADES_CAPABILITY,
+  reviewedDraftNightTradesDecisionKey,
+  type LocalReviewedDraftNightTradeTarget,
+} from './localReviewedDraftNightTradeCapture';
 
 export { LocalExternalCaptureError } from './localNarrowCaptureAuthority';
 
@@ -123,7 +134,8 @@ export type LocalExternalCaptureCapability =
   | typeof DRAFTGURU_NATIONAL_YEAR_CAPABILITY
   | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY
   | typeof OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY
-  | typeof OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY;
+  | typeof OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY
+  | typeof REVIEWED_DRAFT_NIGHT_TRADES_CAPABILITY;
 
 type CapturePolicy =
   | typeof LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY
@@ -134,7 +146,7 @@ type CapturePolicy =
 const CAPABILITY_PROFILES: Record<
   LocalExternalCaptureCapability,
   {
-    provider: 'draftguru' | 'official_afl';
+    provider: 'draftguru' | 'official_afl' | 'statly_reviewed';
     parserVersion: string;
     policy: CapturePolicy;
     rawRepositoryId: string;
@@ -184,6 +196,15 @@ const CAPABILITY_PROFILES: Record<
     policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
     rawRepositoryId: 'official-afl-trade-period-raw',
     decisionKey: officialAflTradePeriodDecisionKey,
+  },
+  // A reviewed statement is read from the checkout, not fetched; the rights still record the same
+  // narrow pacing, cache and retention as the Official AFL captures.
+  [REVIEWED_DRAFT_NIGHT_TRADES_CAPABILITY]: {
+    provider: 'statly_reviewed',
+    parserVersion: REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION,
+    policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
+    rawRepositoryId: 'statly-reviewed-draft-night-raw',
+    decisionKey: reviewedDraftNightTradesDecisionKey,
   },
 };
 
@@ -299,7 +320,8 @@ export type LocalExternalCaptureTarget =
   | LocalDraftguruNationalYearTarget
   | LocalOfficialAflDraftSessionTarget
   | LocalOfficialAflDraftOrderTarget
-  | LocalOfficialAflTradePeriodTarget;
+  | LocalOfficialAflTradePeriodTarget
+  | LocalReviewedDraftNightTradeTarget;
 
 /** Index: the whole `/trades` page bounded to seasons. Detail: one page per exact trade URL. */
 export function createLocalDraftguruTradeCaptureTargets(
@@ -354,6 +376,8 @@ export interface LocalExternalCaptureOptions {
   storeId?: string;
   userAgent: string;
   fetchImpl?: typeof fetch;
+  /** The checkout a reviewed statement is read from; the current directory by default. */
+  repositoryRoot?: string;
   now?: () => string;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -404,6 +428,13 @@ function createCommand(
   }
   if (target.capabilityId === OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY) {
     return createOfficialAflTradePeriodCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+    });
+  }
+  if (target.capabilityId === REVIEWED_DRAFT_NIGHT_TRADES_CAPABILITY) {
+    return createReviewedDraftNightTradeCaptureCommand(recorded.authority, {
       target,
       capturedAt,
       maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
@@ -466,6 +497,8 @@ function parsePage(
       });
     case OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY:
       return parseOfficialAflTradePeriodDates(html, { capture, seasonYear: target.season });
+    case REVIEWED_DRAFT_NIGHT_TRADES_CAPABILITY:
+      return parseReviewedDraftNightTrades(html, { capture, season: target.season });
   }
 }
 
@@ -572,13 +605,21 @@ export async function runLocalExternalCapture(
           captureRegistry,
           staging,
           capturePage: ({ url, validators, maximumBytes }) =>
-            (profile.provider === 'draftguru' ? captureDraftguruSource : captureOfficialAflPage)({
-              url,
-              validators,
-              maximumBytes,
-              timeoutMs: TIMEOUT_MS,
-              fetchImpl,
-            }),
+            profile.provider === 'statly_reviewed'
+              ? readReviewedDraftNightTradeStatement({
+                  url,
+                  maximumBytes,
+                  repositoryRoot: resolve(options.repositoryRoot ?? process.cwd()),
+                })
+              : (profile.provider === 'draftguru'
+                  ? captureDraftguruSource
+                  : captureOfficialAflPage)({
+                  url,
+                  validators,
+                  maximumBytes,
+                  timeoutMs: TIMEOUT_MS,
+                  fetchImpl,
+                }),
           parsePage: (input) => parsePage(target, command, input),
         },
       });

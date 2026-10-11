@@ -12,7 +12,7 @@ import { retainTestGateEvidence } from './testEvidenceStore';
 export async function registerSyntheticCaptureAuthority(
   sql: AflOutcomeSqlClient,
   input: {
-    provider: 'draftguru' | 'official_afl';
+    provider: 'draftguru' | 'official_afl' | 'statly_reviewed';
     environment: 'test_fixture' | 'non_production';
     year: number;
     at: string;

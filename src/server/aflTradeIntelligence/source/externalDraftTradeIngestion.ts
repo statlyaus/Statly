@@ -80,7 +80,7 @@ const localFixtureExecutionReceiptContentSchema = z
 const executionRequestSchema = z
   .object({
     environment: z.enum(['test_fixture', 'non_production', 'production']),
-    provider: z.enum(['draftguru', 'footywire', 'official_afl']),
+    provider: z.enum(['draftguru', 'footywire', 'official_afl', 'statly_reviewed']),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     discoveryFromSeasonYear: z.number().int().min(1988).max(2200).nullable().optional(),
@@ -285,6 +285,7 @@ const ingestionRequestSchema = z
       'footywire',
       'official_afl',
       'fitzroy_official_afl_player_details',
+      'statly_reviewed',
     ]),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),

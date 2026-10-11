@@ -55,7 +55,8 @@ function dependencies(options?: { replay?: boolean }) {
     async (request) => {
       if (
         request.provider === 'fitzroy_official_afl_player_details' ||
-        request.provider === 'statly_local_fixture'
+        request.provider === 'statly_local_fixture' ||
+        request.provider === 'statly_reviewed'
       ) {
         throw new Error('This fixture covers only the bounded external-page providers.');
       }

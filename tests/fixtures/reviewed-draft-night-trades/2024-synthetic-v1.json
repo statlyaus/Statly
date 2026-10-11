@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "statly-reviewed-draft-night-trades/v1",
+  "season": 2024,
+  "draftType": "national",
+  "deals": [
+    {
+      "occurredOn": "2024-11-20",
+      "sides": [
+        {
+          "club": "Synthetic Club",
+          "gives": [
+            {
+              "kind": "slot",
+              "slot": 1
+            }
+          ]
+        },
+        {
+          "club": "Synthetic Third Club",
+          "gives": [
+            {
+              "kind": "future_pick",
+              "draftYear": 2025,
+              "roundNumber": 1,
+              "originalClub": "Synthetic Third Club"
+            }
+          ]
+        }
+      ],
+      "evidenceArtifactId": "artifact:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "evidenceUrl": "https://www.afl.com.au/news/1/synthetic-draft-night-trade"
+    }
+  ]
+}

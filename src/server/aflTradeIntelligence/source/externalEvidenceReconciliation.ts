@@ -183,6 +183,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'statly_reviewed',
 ]);
 const instantSchema = z
   .string()
@@ -782,7 +783,38 @@ function uniqueShiftedSlot(input: CurrentPickCustodyMatchInput): boolean {
   );
 }
 
+/**
+ * A dated trade made after the slot's last observation: the observation names the trade's sender as
+ * the slot's holder before the trade (a draft-night trade read against the pre-draft order, #886).
+ * The observation must be the pick's latest usable one and record the same draft, slot and round, so
+ * a later observation always decides by the paths below.
+ */
+function heldBySenderBeforeTrade(input: CurrentPickCustodyMatchInput): boolean {
+  const { custody, currentPick, occurredOn } = input;
+  return (
+    occurredOn !== null &&
+    input.eventClaim !== null &&
+    isUsableCustody(custody) &&
+    custody.draftYear === currentPick.draftYear &&
+    custody.draftType === currentPick.draftType &&
+    custody.observedAt.slice(0, 10) < occurredOn &&
+    custody.recordedPickNumber !== null &&
+    currentPick.recordedPickNumber === custody.recordedPickNumber &&
+    (currentPick.recordedRoundNumber === undefined ||
+      custody.roundNumber === null ||
+      custody.roundNumber === currentPick.recordedRoundNumber) &&
+    custody.currentClubId === input.fromClubId &&
+    !input.pickCustody.some(
+      (later) =>
+        isUsableCustody(later) &&
+        later.pickId === custody.pickId &&
+        later.observedAt > custody.observedAt
+    )
+  );
+}
+
 function matchesCurrentPickCustody(input: CurrentPickCustodyMatchInput): boolean {
+  if (heldBySenderBeforeTrade(input)) return true;
   if (!custodyDescribesCurrentPick(input)) return false;
   const { custody } = input;
   const priorCustody = latestPriorCustody(input.pickCustody, custody);
@@ -1397,24 +1429,26 @@ export function reconcileAflTradeExternalEvidence(input: {
     return null;
   };
 
+  // Trades come from Draftguru trade pages and from the reviewed draft-night statements (#886).
+  const tradeProvider = (provider: Provider) =>
+    provider === 'draftguru' ||
+    provider === 'statly_reviewed' ||
+    provider === 'statly_local_fixture';
   const transactionClaims = evidence.filter(
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction' }> } } =>
-      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
-      row.content.claim.kind === 'transaction'
+      tradeProvider(row.content.provider) && row.content.claim.kind === 'transaction'
   );
   const parties = evidence.filter(
     (
       row
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction_party' }> } } =>
-      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
-      row.content.claim.kind === 'transaction_party'
+      tradeProvider(row.content.provider) && row.content.claim.kind === 'transaction_party'
   );
   const directedTransfers = evidence.filter(
     (
       row
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'directed_transfer' }> } } =>
-      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
-      row.content.claim.kind === 'directed_transfer'
+      tradeProvider(row.content.provider) && row.content.claim.kind === 'directed_transfer'
   );
   const transactionClaimsByNativeEventId = new Map<string, typeof transactionClaims>();
   for (const transaction of transactionClaims) {

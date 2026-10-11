@@ -1005,7 +1005,16 @@ Prerequisites:
      entry records the window the reviewer read, the capture is effective from its first day, and
      the parser must reproduce it. The window is a traded arrival's date precision, never a day.
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
-     refuses the capture's evidence rows.
+     refuses the capture's evidence rows; and
+   - one `reviewed-draft-night-pick-trades-issue886-private-<season>-draft-night-v1` decision per
+     captured season, for example
+     `reviewed-draft-night-pick-trades-issue886-private-2024-draft-night-v1`
+     (statlyaus/Statly#886). The rights name provider `statly_reviewed` and exactly
+     `REVIEWED_DRAFT_NIGHT_TRADES_FIELDS` from `development/localReviewedDraftNightTradeCapture.ts`.
+     They keep the `provider_web` / `automated_web` shape and the Official AFL pacing, cache and
+     retention, because the governed capture boundary and its v2 execution receipt require them,
+     even though the runner reads the statement from the checkout. A retained plan admits the
+     capability from migration 0270.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v2`, `draftguru-national-year-page/v3`,
    `official-afl-completed-draft-session/v19` or `official-afl-draft-order-parser/v3`), seasons inside one range, 1 request per 5 seconds
@@ -1091,6 +1100,35 @@ FC `news/41172` for 2019, 7 to 16 October; Sydney Swans `news/1023286` for 2021,
 but are not the AFL's; adding either, or any other substitute, is an owner decision recorded in the
 source policy before the scope file changes. A reviewed window is consumed by the promotion review
 command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
+
+Capture a season's reviewed draft-night pick trade statement (statlyaus/Statly#886) once the
+statement is registered in `source/reviewedDraftNightTradeSourceScope.ts` and the owner has
+recorded the per-season `-draft-night-v1` decision. Before writing a statement, store every
+article it cites through `outcomes:artifacts:store-evidence` as `raw_source` (see "Storing evidence
+before it is cited"); each deal's `evidenceArtifactId` is that stored artifact. Number every slot as
+the season's final pre-draft order numbers it, which is the numbering the order custody records.
+When the article states a different number on the night, record that number as `statedAs`. A
+corrected statement is a new file (`<season>-v2.json`) with a new registered sha256; a registered
+file is never edited. Run from the repository root, because the runner reads the registered file
+from the checkout and refuses bytes whose sha256 differs:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability reviewed-draft-night-pick-trades \
+  --season 2024
+```
+
+Expect `issueCount` 0. Any refused deal leaves the batch empty, and the capture then fails with
+`EMPTY_EVIDENCE`; fix the statement as a new version. The statement's club names are `statly_reviewed`
+identities, and identity review is provider-scoped, so they need an
+`afl_trade_external_identity_reviewer` grant for provider `statly_reviewed` and one club review each
+before the candidate resolves them. The onward trade's received picks carry no stated outcome
+(`pick_disposition`), so the grader reads them as `pick_outcome_unresolved`. A linked traded-on leg
+therefore moves from `traded_on_return_unlinked` to `traded_on_return_blocked`, not to a value,
+until outcomes are stated for those picks.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser

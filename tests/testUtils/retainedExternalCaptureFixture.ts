@@ -6,11 +6,17 @@ import {
 } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
 import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
 import { reviewedOfficialAflDraftOrderPages } from '@/server/aflTradeIntelligence/source/officialAflDraftOrderSourceScope';
+import { REVIEWED_DRAFT_NIGHT_TRADES_FIELDS } from '@/server/aflTradeIntelligence/development/localReviewedDraftNightTradeCapture';
+import {
+  parseReviewedDraftNightTrades,
+  REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION,
+} from '@/server/aflTradeIntelligence/source/reviewedDraftNightTradeStatement';
+import { reviewedDraftNightTradeStatements } from '@/server/aflTradeIntelligence/source/reviewedDraftNightTradeSourceScope';
 import {
   createAflTradeExternalEvidenceEnvelope,
   type AflTradeExternalEvidenceContent,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
@@ -56,9 +62,11 @@ export async function createRetainedExternalCaptureFixture(
   rookieExclusion = false,
   sessionWindow = false,
   miniCapacity = false,
-  options: { playerDeparture?: boolean; draftOrder?: boolean } = {}
+  options: { playerDeparture?: boolean; draftOrder?: boolean; draftNightTrades?: boolean } = {}
 ) {
-  const { playerDeparture = false, draftOrder = false } = options;
+  const { playerDeparture = false, draftOrder = false, draftNightTrades = false } = options;
+  // The synthetic reviewed draft-night statement registered for test_fixture only (issue 886).
+  const nightStatement = reviewedDraftNightTradeStatements(2024, 'test_fixture')[0]!;
   // The exact reviewed 2024 pre-draft order page (issue 853); its claims are observed at its as-of date.
   const orderPage = reviewedOfficialAflDraftOrderPages(2024)[0]!;
   const orderEffectiveAt = `${orderPage.asOf}T00:00:00.000Z`;
@@ -102,6 +110,17 @@ export async function createRetainedExternalCaptureFixture(
       tradeDetail)
   )
     throw new Error('Draft order fixture requires plain test scope.');
+  if (
+    draftNightTrades &&
+    (official ||
+      playerDeparture ||
+      draftOrder ||
+      environment !== 'test_fixture' ||
+      miniCapacity ||
+      enumerated ||
+      tradeDetail)
+  )
+    throw new Error('Draft-night statement fixture requires plain test scope.');
   const year = miniCapacity || playerDeparture ? 2012 : 2024;
   validateFixtureScope();
   await sql.query(`INSERT INTO outcome_competition_season (competition,season_year)
@@ -118,6 +137,12 @@ export async function createRetainedExternalCaptureFixture(
         provider: 'official_afl' as const,
         capabilityId: OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
         sourceUrl: orderPage.url,
+      };
+    if (draftNightTrades)
+      return {
+        provider: 'statly_reviewed' as const,
+        capabilityId: 'reviewed-draft-night-pick-trades',
+        sourceUrl: nightStatement.url,
       };
     const provider = official ? ('official_afl' as const) : ('draftguru' as const);
     const capabilityId = official
@@ -350,6 +375,7 @@ export async function createRetainedExternalCaptureFixture(
         .map((f) => 'player_departure_reference.' + f)
         .sort();
     if (draftOrder) return [...OFFICIAL_AFL_DRAFT_ORDER_FIELDS].sort();
+    if (draftNightTrades) return [...REVIEWED_DRAFT_NIGHT_TRADES_FIELDS].sort();
     const fields =
       official && enumerated
         ? [
@@ -438,13 +464,15 @@ export async function createRetainedExternalCaptureFixture(
         : 'Synthetic retained national selections',
       clientVersion: playerDeparture
         ? 'official-afl-player-departure/v1'
-        : draftOrder
-          ? OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
-          : official
-            ? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION
-            : miniCapacity && !official && !tradeDetail
-              ? DRAFTGURU_YEAR_PARSER_VERSION
-              : 'synthetic-national/v1',
+        : draftNightTrades
+          ? REVIEWED_DRAFT_NIGHT_TRADES_PARSER_VERSION
+          : draftOrder
+            ? OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
+            : official
+              ? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION
+              : miniCapacity && !official && !tradeDetail
+                ? DRAFTGURU_YEAR_PARSER_VERSION
+                : 'synthetic-national/v1',
     });
   function buildCaptureRequest() {
     const request = {
@@ -454,7 +482,7 @@ export async function createRetainedExternalCaptureFixture(
       anchorSeasonYear: year,
       discoveryFromSeasonYear: null,
       draftPathway:
-        playerDeparture || tradeDetail || (miniCapacity && !official)
+        playerDeparture || tradeDetail || draftNightTrades || (miniCapacity && !official)
           ? null
           : miniCapacity
             ? ('mini_draft' as const)
@@ -465,11 +493,13 @@ export async function createRetainedExternalCaptureFixture(
       capabilityId: content.acquisition.capabilityId,
       sourceUrl,
       capturedAt: at,
-      effectiveAt: draftOrder
-        ? orderEffectiveAt
-        : miniCapacity || playerDeparture
-          ? '2012-10-26T00:00:00.000Z'
-          : '2024-11-21T00:00:00.000Z',
+      effectiveAt: draftNightTrades
+        ? `${[...nightStatement.draftNights].sort().at(-1)}T00:00:00.000Z`
+        : draftOrder
+          ? orderEffectiveAt
+          : miniCapacity || playerDeparture
+            ? '2012-10-26T00:00:00.000Z'
+            : '2024-11-21T00:00:00.000Z',
       parserVersion: content.acquisition.clientVersion,
       fieldManifestSha256: sha(rights.content.fields),
       maximumBytes: 2097152,
@@ -478,7 +508,8 @@ export async function createRetainedExternalCaptureFixture(
   }
   const request = buildCaptureRequest();
   const raw = repository('raw_source');
-  function buildSourceBytes() {
+  async function buildSourceBytes() {
+    if (draftNightTrades) return new Uint8Array(await readFile(nightStatement.repositoryPath));
     if (playerDeparture)
       return new TextEncoder().encode('Synthetic explicit player departure from club in2012.');
     if (draftOrder)
@@ -520,7 +551,7 @@ export async function createRetainedExternalCaptureFixture(
     );
     return bytes;
   }
-  const bytes = buildSourceBytes();
+  const bytes = await buildSourceBytes();
   const sourceArtifact = createAflTradeByteArtifactRef(bytes, 'text/html', request.capturedAt);
   const captures = new PostgresAflTradeExternalCaptureRegistry(sql);
   const captured: PersistAflTradeExternalCaptureInput[] = [];
@@ -597,44 +628,50 @@ export async function createRetainedExternalCaptureFixture(
             lastModified: null,
           }),
           parsePage: ({ html, capture }) =>
-            playerDeparture || draftOrder
-              ? {
-                  evidence: [
-                    createAflTradeExternalEvidenceEnvelope({
-                      schemaVersion: 'afl-trade-external-evidence/v1',
-                      provider: 'official_afl',
-                      capture,
-                      sourceRow: {
-                        ordinal: 1,
-                        sourceKey: draftOrder ? '2024:national:1' : 'synthetic-departure',
-                      },
-                      claim: draftOrder
-                        ? {
-                            kind: 'pick_custody',
-                            observedAt: orderEffectiveAt,
-                            draftYear: 2024,
-                            draftType: 'national',
-                            roundNumber: 1,
-                            recordedPickNumber: 1,
-                            originalClub: { nativeId: null, recordedName: 'Synthetic Other Club' },
-                            currentClub: { nativeId: null, recordedName: 'Synthetic Club' },
-                          }
-                        : {
-                            kind: 'player_departure_reference',
-                            departureYear: 2012,
-                            recordedPlayer: 'Synthetic Player',
-                            recordedClub: 'Western Bulldogs',
-                            reason: 'contract_release',
-                          },
-                      publicationEligible: false,
-                    }),
-                  ],
-                  issues: [],
-                }
-              : miniCapacity && !tradeDetail
+            draftNightTrades
+              ? parseReviewedDraftNightTrades(html, { capture, season: year })
+              : playerDeparture || draftOrder
                 ? {
-                    evidence: (JSON.parse(html) as AflTradeExternalEvidenceContent['claim'][]).map(
-                      (claim, index) =>
+                    evidence: [
+                      createAflTradeExternalEvidenceEnvelope({
+                        schemaVersion: 'afl-trade-external-evidence/v1',
+                        provider: 'official_afl',
+                        capture,
+                        sourceRow: {
+                          ordinal: 1,
+                          sourceKey: draftOrder ? '2024:national:1' : 'synthetic-departure',
+                        },
+                        claim: draftOrder
+                          ? {
+                              kind: 'pick_custody',
+                              observedAt: orderEffectiveAt,
+                              draftYear: 2024,
+                              draftType: 'national',
+                              roundNumber: 1,
+                              recordedPickNumber: 1,
+                              originalClub: {
+                                nativeId: null,
+                                recordedName: 'Synthetic Other Club',
+                              },
+                              currentClub: { nativeId: null, recordedName: 'Synthetic Club' },
+                            }
+                          : {
+                              kind: 'player_departure_reference',
+                              departureYear: 2012,
+                              recordedPlayer: 'Synthetic Player',
+                              recordedClub: 'Western Bulldogs',
+                              reason: 'contract_release',
+                            },
+                        publicationEligible: false,
+                      }),
+                    ],
+                    issues: [],
+                  }
+                : miniCapacity && !tradeDetail
+                  ? {
+                      evidence: (
+                        JSON.parse(html) as AflTradeExternalEvidenceContent['claim'][]
+                      ).map((claim, index) =>
                         createAflTradeExternalEvidenceEnvelope({
                           schemaVersion: 'afl-trade-external-evidence/v1',
                           provider,
@@ -646,60 +683,60 @@ export async function createRetainedExternalCaptureFixture(
                           claim,
                           publicationEligible: false,
                         })
-                    ),
-                    issues: [],
-                  }
-                : official
-                  ? enumerated
-                    ? {
-                        evidence: (
-                          JSON.parse(html) as AflTradeExternalEvidenceContent['claim'][]
-                        ).map((claim, index) =>
-                          createAflTradeExternalEvidenceEnvelope({
-                            schemaVersion: 'afl-trade-external-evidence/v1',
-                            provider: 'official_afl',
+                      ),
+                      issues: [],
+                    }
+                  : official
+                    ? enumerated
+                      ? {
+                          evidence: (
+                            JSON.parse(html) as AflTradeExternalEvidenceContent['claim'][]
+                          ).map((claim, index) =>
+                            createAflTradeExternalEvidenceEnvelope({
+                              schemaVersion: 'afl-trade-external-evidence/v1',
+                              provider: 'official_afl',
+                              capture,
+                              sourceRow: {
+                                ordinal: index + 1,
+                                sourceKey: `synthetic-enumerated:${index}`,
+                              },
+                              claim,
+                              publicationEligible: false,
+                            })
+                          ),
+                          issues: [],
+                        }
+                      : parseOfficialAflDraftSession(html, { capture })
+                    : tradeDetail
+                      ? (() => {
+                          const result = parseDraftguruTradeDetail(html, {
                             capture,
-                            sourceRow: {
-                              ordinal: index + 1,
-                              sourceKey: `synthetic-enumerated:${index}`,
-                            },
-                            claim,
-                            publicationEligible: false,
-                          })
-                        ),
-                        issues: [],
-                      }
-                    : parseOfficialAflDraftSession(html, { capture })
-                  : tradeDetail
-                    ? (() => {
-                        const result = parseDraftguruTradeDetail(html, {
-                          capture,
-                          draftYear: year,
-                          effectiveAt: request.effectiveAt,
-                        });
-                        return !miniCapacity
-                          ? result
-                          : {
-                              ...result,
-                              evidence: result.evidence.map((e) =>
-                                createAflTradeExternalEvidenceEnvelope({
-                                  ...e.content,
-                                  claim:
-                                    e.content.claim.kind === 'directed_transfer' &&
-                                    e.content.claim.asset.kind === 'current_pick'
-                                      ? {
-                                          ...e.content.claim,
-                                          asset: {
-                                            ...e.content.claim.asset,
-                                            draftType: 'mini_draft',
-                                          },
-                                        }
-                                      : e.content.claim,
-                                })
-                              ),
-                            };
-                      })()
-                    : parseDraftguruNationalYearSelections(html, { capture, draftYear: year }),
+                            draftYear: year,
+                            effectiveAt: request.effectiveAt,
+                          });
+                          return !miniCapacity
+                            ? result
+                            : {
+                                ...result,
+                                evidence: result.evidence.map((e) =>
+                                  createAflTradeExternalEvidenceEnvelope({
+                                    ...e.content,
+                                    claim:
+                                      e.content.claim.kind === 'directed_transfer' &&
+                                      e.content.claim.asset.kind === 'current_pick'
+                                        ? {
+                                            ...e.content.claim,
+                                            asset: {
+                                              ...e.content.claim.asset,
+                                              draftType: 'mini_draft',
+                                            },
+                                          }
+                                        : e.content.claim,
+                                  })
+                                ),
+                              };
+                        })()
+                      : parseDraftguruNationalYearSelections(html, { capture, draftYear: year }),
         },
       }
     );
