@@ -392,6 +392,10 @@ async function insertCandidateHeader(
 ) {
   const content = candidate.content;
   const counts = issueCounts(content);
+  // The deferral columns (migration 0264) are named only for a candidate that carries a deferral,
+  // so a candidate without one still persists into a schema deployed before 0264 (the
+  // pre-migration test workspaces) and takes the columns' defaults otherwise.
+  const deferral = content.pickLineageDeferral ?? null;
   await transaction.query(
     `INSERT INTO outcome_external_reconciliation_candidate
           (candidate_id,source_authority_kind,historical_completion_id,
@@ -399,9 +403,11 @@ async function insertCandidateHeader(
            source_batch_count,identity_resolution_count,
            transaction_count,transfer_count,draft_selection_count,pick_custody_count,
            pick_lineage_count,issue_count,status,finalized_at,source_authority_json,
-           candidate_canonical_json,candidate_json,deferred_issue_count,lineage_deferral_decision_id)
+           candidate_canonical_json,candidate_json${
+             deferral === null ? '' : ',deferred_issue_count,lineage_deferral_decision_id'
+           })
          VALUES ($1,$2,$3,$4::"OutcomeEnvironment",$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-                 'open',NULL,$16::jsonb,$17,$18::jsonb,$19,$20)`,
+                 'open',NULL,$16::jsonb,$17,$18::jsonb${deferral === null ? '' : ',$19,$20'})`,
     [
       candidate.candidateId,
       sourceAuthority?.kind ?? null,
@@ -422,8 +428,7 @@ async function insertCandidateHeader(
       sourceAuthority === null ? null : canonicalizeAflTradeJson(sourceAuthority),
       sourceAuthority === null ? null : canonicalizeAflTradeJson(content),
       candidateJson,
-      counts.deferredIssueCount,
-      content.pickLineageDeferral?.decisionId ?? null,
+      ...(deferral === null ? [] : [counts.deferredIssueCount, deferral.decisionId]),
     ]
   );
 }
