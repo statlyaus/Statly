@@ -1023,10 +1023,15 @@ function joinEventualSelections(input: {
   issues: ReconciliationIssue[];
 }): void {
   const eventualPlayers = new Map<string, string | null>();
+  // Every staged row must be conserved by a record or an issue: each statement is cited on the
+  // directed transfer it names, admitted to a group or not, as a pick disposition is cited by its
+  // outcome; a statement naming no transfer of its page is an issue.
+  const eventualRows = new Map<string, string[]>();
   for (const row of input.evidence) {
     const claim = row.content.claim;
     if (row.content.provider !== 'draftguru' || claim.kind !== 'pick_eventual_selection') continue;
     const key = `${claim.nativeEventId}|${claim.nativeTransferId}`;
+    (eventualRows.get(key) ?? eventualRows.set(key, []).get(key)!).push(row.evidenceId);
     const player = claim.outcome === 'selected' ? (claim.player?.nativeId ?? null) : null;
     // Two statements for one transfer that disagree name no player.
     eventualPlayers.set(
@@ -1038,17 +1043,34 @@ function joinEventualSelections(input: {
   const groups = new Map<string, number[]>();
   input.resolvedTransfers.forEach(({ row }, index) => {
     const claim = row.content.claim;
-    const asset = input.transfers[index]!.asset;
+    const transfer = input.transfers[index]!;
+    if (row.content.provider !== 'draftguru' || claim.kind !== 'directed_transfer') return;
+    const transferKey = `${claim.nativeEventId}|${claim.nativeTransferId}`;
+    const cited = eventualRows.get(transferKey);
+    if (cited !== undefined) {
+      transfer.evidenceIds = sortedUnique([...transfer.evidenceIds, ...cited]);
+      eventualRows.delete(transferKey);
+    }
+    const asset = transfer.asset;
     if (
-      row.content.provider !== 'draftguru' ||
       asset.kind !== 'pick_entitlement' ||
       (claim.asset.kind !== 'current_pick' && claim.asset.kind !== 'future_pick')
     )
       return;
-    const player = eventualPlayers.get(`${claim.nativeEventId}|${claim.nativeTransferId}`);
+    const player = eventualPlayers.get(transferKey);
     if (!player) return;
     const key = `${asset.draftYear}|${asset.draftType}|${player}`;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(index);
+  });
+  eventualRows.forEach((evidenceIds, key) => {
+    const [nativeEventId, nativeTransferId] = key.split('|');
+    input.issues.push({
+      code: 'pick_outcome_unresolved',
+      severity: 'blocking',
+      subjectKey: `pick-outcome:${nativeEventId}:${nativeTransferId}`,
+      detail: 'A Draftguru eventual-selection statement names no directed transfer of its page.',
+      evidenceIds: sortedUnique(evidenceIds),
+    });
   });
   const usableCustody = new Map(
     input.pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)

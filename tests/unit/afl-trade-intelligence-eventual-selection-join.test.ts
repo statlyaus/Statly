@@ -402,6 +402,51 @@ describe('joining a renumbered pick through its eventual selection (statlyaus/St
     expect(issue!.detail).toContain(fifteen!);
   });
 
+  it('conserves every eventual-selection row on the transfer it names, admitted or not', () => {
+    // A branching group is refused by the join, but its statements are still cited.
+    const candidate = reconcile(
+      [
+        tradePeriod(),
+        draftNight(),
+        page('2024-other', [['West Coast', 'Geelong', 15, 'joe_berry/1']]),
+      ],
+      order
+    );
+    const pages = [
+      tradePeriod(),
+      draftNight(),
+      page('2024-other', [['West Coast', 'Geelong', 15, 'joe_berry/1']]),
+    ];
+    const cited = new Set([
+      ...candidate.transfers.flatMap(({ evidenceIds }) => evidenceIds),
+      ...candidate.issues.flatMap(({ evidenceIds }) => evidenceIds),
+    ]);
+    const statements = pages.flatMap((claims, index) =>
+      batch('draftguru', 'abcde'[index]!, claims).content.evidence.filter(
+        ({ content }) => content.claim.kind === 'pick_eventual_selection'
+      )
+    );
+    expect(statements.length).toBeGreaterThan(0);
+    expect(statements.every(({ evidenceId }) => cited.has(evidenceId))).toBe(true);
+  });
+
+  it('records an eventual-selection statement that names no transfer as a pick-outcome issue', () => {
+    const stray: Claim = {
+      kind: 'pick_eventual_selection',
+      nativeEventId: '2024-liam-baker-matt-owies',
+      nativeTransferId: 'pick:2024:national:99',
+      outcome: 'selected',
+      player: { nativeId: 'nobody/1', recordedName: 'nobody/1' },
+    };
+    const candidate = reconcile([[...tradePeriod(), stray], draftNight()], order);
+    const issue = candidate.issues.find(
+      ({ subjectKey }) =>
+        subjectKey === 'pick-outcome:2024-liam-baker-matt-owies:pick:2024:national:99'
+    );
+    expect(issue?.code).toBe('pick_outcome_unresolved');
+    expect(issue?.evidenceIds).toHaveLength(1);
+  });
+
   it('lets the grader follow the traded-on pick into its draft-night trade', () => {
     const grade = (eventual: boolean) => {
       const candidate = reconcile([tradePeriod(eventual), draftNight(eventual)], order);
