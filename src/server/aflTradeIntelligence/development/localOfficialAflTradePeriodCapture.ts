@@ -8,7 +8,7 @@ import {
   type LocalNarrowCaptureAuthority,
 } from './localNarrowCaptureAuthority';
 
-/** The governed capability id; parser v1 reads one season's trade-period window under it. */
+/** The governed capability id; parser v2 reads one season's trade-period window under it. */
 export const OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY = 'official-afl-trade-period-dates';
 
 /**
@@ -24,7 +24,7 @@ export const OFFICIAL_AFL_TRADE_PERIOD_FIELDS = [
 
 /**
  * The owner records one narrow decision per season and parser version, for example
- * `official-afl-trade-period-dates-issue869-private-2023-period-v1`. The runner never falls back
+ * `official-afl-trade-period-dates-issue869-private-2023-period-v2`. The runner never falls back
  * to another season or parser version.
  */
 export function officialAflTradePeriodDecisionKey(season: number): string {

@@ -189,7 +189,7 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'official-afl-trade-period-dates') {
-    // Parser v1 reads only the exact reviewed trade-period announcements (issue 869), effective
+    // Parser v2 reads only the exact reviewed trade-period announcements (issue 869), effective
     // from the opening day each page states.
     const reviewed = reviewedOfficialAflTradePeriodPage(request.sourceUrl);
     if (
