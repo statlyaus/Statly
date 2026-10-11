@@ -62,7 +62,8 @@ const promote = (
   namespace: string,
   pickSideIssues?: 'deferred' | 'blocking',
   originalClubUnresolved = false,
-  yearPageDraftAlreadyPromoted = false
+  yearPageDraftAlreadyPromoted = false,
+  reuseSeededTargets = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -71,10 +72,10 @@ const promote = (
     nativePlayerId: `${namespace}-player`,
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
-    ...(yearPageDraftAlreadyPromoted
+    ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
+    // A second promotion in a schema reuses the synthetic player and clubs the first one inserted.
+    ...(reuseSeededTargets
       ? {
-          yearPageDraftAlreadyPromoted: true,
-          // A second promotion in the schema reuses the seeded synthetic player and clubs.
           existingTargets: {
             playerId: 'synthetic-acquisition-player',
             playerName: 'Synthetic Player',
@@ -403,7 +404,7 @@ it('leaves an already-promoted draft to its promotion and writes only the trade'
   ]);
   expect(before.selections).toBe(2);
 
-  const deferred = await promote(ws, 'skip', 'deferred', false, true);
+  const deferred = await promote(ws, 'skip', 'deferred', false, true, true);
   expect(deferred.candidate.content.pickLineageDeferral).toEqual({
     decisionId: deferred.deferralDecisionId,
     promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
