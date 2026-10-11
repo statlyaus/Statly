@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   resolveNextEditableRoundNumber: vi.fn(),
   ensureDefaultLineups: vi.fn(),
   getPlayers: vi.fn(),
+  injurySnapshotFindFirst: vi.fn(),
+  injuryEntryFindMany: vi.fn(),
   buildLeaguePlayerStatDatasetForTargets: vi.fn(),
 }));
 
@@ -51,6 +53,8 @@ vi.mock('@/lib/prisma', () => ({
     leagueLineup: { findFirst: mocks.lineupFindFirst },
     leagueStanding: { findMany: mocks.standingFindMany },
     leagueMember: { findMany: mocks.memberFindMany },
+    injuryListSnapshot: { findFirst: mocks.injurySnapshotFindFirst },
+    injuryListEntry: { findMany: mocks.injuryEntryFindMany },
   },
 }));
 
@@ -68,6 +72,8 @@ vi.mock('@/server/leagues/lineupService', () => ({
   loadLineupRoundSummaries: mocks.loadLineupRoundSummaries,
   resolveNextEditableRoundNumber: mocks.resolveNextEditableRoundNumber,
 }));
+
+import { logger } from '@/lib/logger';
 
 import { GET, PATCH } from './route';
 
@@ -125,6 +131,8 @@ beforeEach(() => {
   mocks.memberFindMany.mockResolvedValue([]);
   mocks.ensureDefaultLineups.mockResolvedValue(0);
   mocks.getPlayers.mockResolvedValue([]);
+  mocks.injurySnapshotFindFirst.mockResolvedValue(null);
+  mocks.injuryEntryFindMany.mockResolvedValue([]);
   mocks.buildLeaguePlayerStatDatasetForTargets.mockReturnValue({
     context: {
       basis: 'PER_GAME',
@@ -408,8 +416,11 @@ describe('squad fixture context', () => {
         ['player-2', { startsAt: null, opponent: null, isHome: null, bye: true, status: null }],
       ]),
     });
-    mocks.getPlayers.mockResolvedValue([
-      { id: 'player-2', name: 'Player Two', injury: 'Hamstring' },
+    // A player-feed injury no longer counts; only the injury list snapshot does.
+    mocks.getPlayers.mockResolvedValue([{ id: 'player-1', name: 'Player One', injury: 'Knee' }]);
+    mocks.injurySnapshotFindFirst.mockResolvedValue({ id: 'snapshot-1', confirmedAt: new Date() });
+    mocks.injuryEntryFindMany.mockResolvedValue([
+      { playerId: 'player-2', status: 'WEEKS', injuryRaw: 'Hamstring', returnRaw: '2-3 weeks' },
     ]);
     mocks.memberFindMany.mockResolvedValue([
       { id: 'member-1', teamName: 'Alpha FC', teamLogoUrl: null, draftSlot: 1 },
@@ -457,7 +468,11 @@ describe('squad fixture context', () => {
         gameStartsAt: '2099-07-18T09:30:00.000Z',
         injury: null,
       }),
-      expect.objectContaining({ playerId: 'player-2', bye: true, injury: 'Hamstring' }),
+      expect.objectContaining({
+        playerId: 'player-2',
+        bye: true,
+        injury: { label: 'Hamstring (2-3 weeks)', blocksSelection: true },
+      }),
     ]);
     expect(body.data.team).toMatchObject({
       teamName: 'Alpha FC',
@@ -465,5 +480,54 @@ describe('squad fixture context', () => {
       rank: 2,
     });
     expect(body.data.opponentTeam).toMatchObject({ teamName: 'Beta FC', rank: 1, teams: 2 });
+  });
+
+  it('reads the injury list while the player feed is still loading', async () => {
+    let releasePlayers!: (players: unknown[]) => void;
+    mocks.getPlayers.mockReturnValue(
+      new Promise((resolve) => {
+        releasePlayers = resolve;
+      })
+    );
+
+    const pending = GET(new NextRequest('http://localhost/api/leagues/league-1/lineups/2'), params);
+    await vi.waitFor(() => expect(mocks.injurySnapshotFindFirst).toHaveBeenCalledTimes(1));
+    expect(mocks.getPlayers).toHaveBeenCalledTimes(1);
+    releasePlayers([]);
+
+    expect((await pending).status).toBe(200);
+  });
+
+  it('shows every player as available when the injury list cannot be read', async () => {
+    mocks.rosterFindMany.mockResolvedValue([
+      { playerId: 'player-1', player: { name: 'Player One', club: 'GWS', position: 'MID' } },
+    ]);
+    mocks.injurySnapshotFindFirst.mockRejectedValue(new Error('connection refused'));
+
+    const response = await GET(
+      new NextRequest('http://localhost/api/leagues/league-1/lineups/2'),
+      params
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.rosterPlayers).toEqual([
+      expect.objectContaining({ playerId: 'player-1', injury: null }),
+    ]);
+    const injuryWarnings = vi
+      .mocked(logger.warn)
+      .mock.calls.filter(([message]) => message === 'Injury list unavailable');
+    expect(injuryWarnings).toEqual([
+      [
+        'Injury list unavailable',
+        {
+          leagueId: 'league-1',
+          round: 2,
+          scope: 'lineup page',
+          reason: 'error',
+          error: 'connection refused',
+        },
+      ],
+    ]);
   });
 });
