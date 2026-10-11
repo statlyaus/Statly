@@ -6,7 +6,7 @@ import {
   type AflTradeExternalEvidenceEnvelope,
 } from './externalDraftTradeEvidenceContracts';
 
-export const OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION = 'official-afl-trade-period-parser/v1';
+export const OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION = 'official-afl-trade-period-parser/v2';
 
 type SourceCapture = AflTradeExternalEvidenceContent['capture'];
 
@@ -44,14 +44,26 @@ const DATE_MENTION = new RegExp(
 // A paragraph about the men's AFL trade period itself, not free agency, the AFLW period, the
 // selections-only session or list lodgement.
 const TRADE_PERIOD = /\btrade\s+period\b/i;
-const EXCLUDED = /sign\s+and\s+trade|free\s+agen|\baflw\b|selections?\s+only|list\s+lodg|pick\s+swap/i;
+const EXCLUDED =
+  /sign\s+and\s+trade|free\s+agen|\baflw\b|selections?\s+only|list\s+lodg|pick\s+swap/i;
+// v2 (statlyaus/Statly#869, owner-supplied pages for 2019 and 2021): a paragraph that names the
+// period's "opening day" and "deadline day" (2019), or one that says the period "officially starts
+// today" and concludes on a stated day (2021), where "today" is the article's own date in Melbourne.
+const OPENING_AND_DEADLINE = /\bopening\s+day\b[\s\S]*\bdeadline\s+day\b/i;
+const STARTS_TODAY = /\bperiod\s+officially\s+starts\s+today\b/i;
+// afl.com.au renamed the non-AMP date wrapper from `article__date` to `article__byline-date`; the
+// `datetime` values are unchanged. Either wrapper is read.
+const ARTICLE_DATE = '.article__date > time, .article__byline-date > time';
+const MELBOURNE_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Australia/Melbourne',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 const MAXIMUM_WINDOW_DAYS = 31;
 
 function normalizeText(value: string): string {
-  return value
-    .replace(/ /g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return value.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function isoDate(year: number, monthIndex: number, day: number): string | null {
@@ -78,11 +90,23 @@ function daysBetween(earliest: string, latest: string): number {
   return Math.round((Date.parse(latest) - Date.parse(earliest)) / 86_400_000);
 }
 
+/** The article's publication day in Melbourne, from its `<time datetime>`; null when absent. */
+function articleMelbourneDay($: ReturnType<typeof load>): string | null {
+  const datetime = $(ARTICLE_DATE).first().attr('datetime');
+  if (datetime === undefined) return null;
+  const instant = Date.parse(datetime);
+  if (Number.isNaN(instant)) return null;
+  return MELBOURNE_DAY.format(new Date(instant));
+}
+
 /**
  * Reads a reviewed Official AFL announcement of a season's trade-period dates
  * (statlyaus/Statly#869). One paragraph of the article body names the men's trade period with its
- * opening day and deadline day; the paragraph may state the deadline in its next sentence. The
- * window is emitted as a `trade_period_window` claim with explicit window precision, never a day
+ * opening day and deadline day; the paragraph may state the deadline in its next sentence. v2 also
+ * reads, on a page that names the trade period, a paragraph giving the period's "opening day" and
+ * "deadline day" (the 2019 page), and a paragraph saying the period "officially starts today" and
+ * concludes on a stated day, where today is the article's own date in Melbourne (the 2021 page).
+ * The window is emitted as a `trade_period_window` claim with explicit window precision, never a day
  * for any trade. Nothing is emitted unless exactly one such window is readable and lies inside the
  * season, since an ambiguous page must be reviewed, not guessed.
  */
@@ -108,18 +132,37 @@ export function parseOfficialAflTradePeriodDates(
       issues: [{ code: 'invalid_page', sourceKey, detail: 'The page has no article paragraphs.' }],
     };
   }
+  // A page is about the trade period when a paragraph names it, or its title or heading says
+  // "trade" (the 2021 opening-day preview is titled "YOUR CLUB'S TRADE PLANS").
+  const pageNamesTradePeriod =
+    /\btrade\b/i.test(`${$('title').text()} ${$('h1').text()}`) ||
+    paragraphs.some((paragraph) => TRADE_PERIOD.test(paragraph) && !EXCLUDED.test(paragraph));
   const windows: { earliestDate: string; latestDate: string }[] = [];
   for (const paragraph of paragraphs) {
     const sentences = paragraph.split(/(?<=[.!?])\s+/);
+    const dates: string[] = [];
     const start = sentences.findIndex(
       (sentence) => TRADE_PERIOD.test(sentence) && !EXCLUDED.test(sentence)
     );
-    if (start < 0) continue;
-    const dates: string[] = [];
-    for (const sentence of sentences.slice(start)) {
-      if (EXCLUDED.test(sentence)) break;
-      dates.push(...mentionedDates(sentence, input.seasonYear));
-      if (dates.length >= 2) break;
+    if (start >= 0) {
+      for (const sentence of sentences.slice(start)) {
+        if (EXCLUDED.test(sentence)) break;
+        dates.push(...mentionedDates(sentence, input.seasonYear));
+        if (dates.length >= 2) break;
+      }
+    } else if (
+      pageNamesTradePeriod &&
+      OPENING_AND_DEADLINE.test(paragraph) &&
+      !EXCLUDED.test(paragraph)
+    ) {
+      dates.push(...mentionedDates(paragraph, input.seasonYear));
+    } else if (pageNamesTradePeriod) {
+      const today = sentences.find(
+        (sentence) => STARTS_TODAY.test(sentence) && !EXCLUDED.test(sentence)
+      );
+      const opening = today === undefined ? null : articleMelbourneDay($);
+      if (today !== undefined && opening !== null)
+        dates.push(opening, ...mentionedDates(today, input.seasonYear));
     }
     if (dates.length < 2) continue;
     const [earliestDate, latestDate] = [dates[0]!, dates[1]!];
