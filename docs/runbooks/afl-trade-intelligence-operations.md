@@ -785,8 +785,12 @@ supersede production Gate authority, and production execution cannot reuse non-p
    must be repeated exactly. For an undated transaction, supply an independently supported day or
    explicit `occurredOn: null` to retain year-only factual precision. Do not invent a completion day.
    A null day may carry the season's reviewed trade-period window as `datePrecision`
-   (`{ precision: "window", eventDate: null, earliestDate, latestDate }`, migration 0261); the window
-   must lie inside the transaction season and comes from a reviewed source, never from the operator.
+   (`{ precision: "window", eventDate: null, earliestDate, latestDate }`, migration 0261). The
+   transaction-date file never carries a window: the review command reads the season's window from
+   the finalized evidence of approved `official-afl-trade-period-dates` captures in the candidate's
+   environment and competition and attaches it to every `occurredOn: null` transaction of that
+   season; a season with no reviewed window stays year-only. From migration 0263 the database refuses
+   a window that no such capture states, on the review decision and again on promotion.
    A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not

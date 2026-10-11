@@ -53,6 +53,7 @@ function repository(
   return {
     loadCandidate: vi.fn(async () => candidate()),
     loadCurrentDecision: vi.fn(async () => current),
+    loadReviewedTradePeriodWindows: vi.fn(async () => []),
     persistDecision: vi.fn(async ({ decision }) => ({
       candidateId: decision.content.candidateId,
       proposalId: decision.content.proposalId,

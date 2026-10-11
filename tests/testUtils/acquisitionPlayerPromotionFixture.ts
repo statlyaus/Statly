@@ -64,6 +64,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     partialTransactionDates?: boolean;
     /** The season's reviewed trade-period window for the undated trade (#869); needs partial dates. */
     tradePeriodWindow?: { earliestDate: string; latestDate: string };
+    /**
+     * Also stage that window as a finalized `trade_period_window` claim of an approved
+     * `official-afl-trade-period-dates` capture, as the review command reads it (needs 0262).
+     */
+    tradePeriodWindowClaim?: boolean;
     combinedDraftSessions?: boolean;
     official2017CombinedDraft?: boolean;
     officialCombinedDraftYear?: 2016 | 2017;
@@ -92,6 +97,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('Synthetic capture envelope overrides are limited to test_fixture.');
   if (options.tradePeriodWindow && !options.partialTransactionDates)
     throw new Error('A trade-period window applies only to a trade with no source day.');
+  if (options.tradePeriodWindowClaim && !options.tradePeriodWindow)
+    throw new Error('A trade-period window claim needs the window.');
   if (options.partialTransactionDates && (!options.sessionProposalV5 || options.lifecycle))
     throw new Error(
       'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
@@ -1985,6 +1992,133 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   }
   if (options.reciprocalPlayer || options.reciprocalFuturePickYearOffset !== undefined)
     reviewedAt = await databaseNow();
+  if (options.tradePeriodWindowClaim && tradeWindow) {
+    // The season's trade-period window as an approved Official AFL capture states it (#869): the
+    // review command reads the window from this row, never from the operator's file.
+    const windowBytes = new TextEncoder().encode(
+      `Synthetic trade period ${seasonYear}: ${tradeWindow.earliestDate} to ${tradeWindow.latestDate}.${options.fixtureNamespace ? ` (${fixtureNamespace})` : ''}`
+    );
+    const windowArtifact = createAflTradeByteArtifactRef(windowBytes, 'text/html', capturedAt);
+    retainedArtifacts.set(windowArtifact.artifactId, {
+      reference: windowArtifact,
+      bytes: windowBytes,
+    });
+    const windowCaptureId = createAflTradeContentAddress('source-capture', {
+      tradePeriod: seasonYear,
+      namespace: fixtureNamespace,
+    });
+    const windowRow = createAflTradeExternalEvidenceEnvelope({
+      schemaVersion: 'afl-trade-external-evidence/v1',
+      provider: 'official_afl',
+      capture: {
+        captureId: windowCaptureId,
+        artifactId: windowArtifact.artifactId,
+        contentSha256: windowArtifact.contentSha256,
+        mediaType: 'text/html',
+        sourceUrl: `https://www.afl.com.au/news/123/synthetic-trade-period-${seasonYear}`,
+        capturedAt,
+        effectiveAt: `${tradeWindow.earliestDate}T00:00:00.000Z`,
+        parserVersion: 'official-afl-trade-period-parser/v1',
+        fieldManifestSha256: sha256AflTradeCanonicalJson([]),
+      },
+      sourceRow: { ordinal: 1, sourceKey: `trade-period:${seasonYear}` },
+      claim: { kind: 'trade_period_window', seasonYear, datePrecision: tradeWindow },
+      publicationEligible: false,
+    });
+    const windowBatch = createAflTradeExternalEvidenceBatch({
+      schemaVersion: 'afl-trade-external-evidence-batch/v1',
+      provider: 'official_afl',
+      captureId: windowCaptureId,
+      evidence: [windowRow],
+      finalizedAt: capturedAt,
+      publicationEligible: false,
+    });
+    await outcomesPool.query(
+      `INSERT INTO outcome_artifact_custody
+        (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,environment,created_at,verified_at,custody_json)
+        VALUES($1,$2,$3,'text/html',$4,'raw_source','${environment}',$5,$5,'{}')`,
+      [
+        windowArtifact.artifactId,
+        windowArtifact.contentSha256,
+        windowArtifact.storageUri,
+        windowBytes.byteLength,
+        capturedAt,
+      ]
+    );
+    // A successful capture needs a captured attempt in the same environment (migration 0002).
+    const windowAttemptId = `trade-period-attempt-${seasonYear}-${fixtureNamespace}`;
+    await outcomesPool.query(
+      `INSERT INTO outcome_source_capture_attempt
+        (attempt_id,environment,provider,dataset,capability_id,status,started_at,completed_at,attempt_json)
+        VALUES($1,'${environment}','official_afl','trade-period-dates','official-afl-trade-period-dates','captured',$2,$2,'{}'::jsonb)`,
+      [windowAttemptId, capturedAt]
+    );
+    await outcomesPool.query(
+      `INSERT INTO outcome_source_capture
+        (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,
+         access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json)
+        VALUES($1,$2,$3,$4,'${environment}','official_afl','trade-period-dates','synthetic-v1','automated_web',
+          'official-afl-trade-period-dates','AFLM',$6,$7,$5,'approved',$8::jsonb)`,
+      [
+        windowCaptureId,
+        windowAttemptId,
+        windowArtifact.artifactId.replace('artifact:', 'source-snapshot:'),
+        windowArtifact.artifactId,
+        capturedAt,
+        seasonYear,
+        `${tradeWindow.earliestDate}T00:00:00.000Z`,
+        // Outside test_fixture, finalizing the batch needs a v2 execution receipt with an unexpired
+        // lease on the capture (migration 0010), as every other synthetic capture here carries.
+        canonicalizeAflTradeJson({
+          sourceUrl: windowRow.content.capture.sourceUrl,
+          ...(options.completeCaptureReceipts
+            ? {
+                executionReceipt: await completeSyntheticCaptureReceipt(sql, {
+                  environment,
+                  provider: 'official_afl',
+                  year: seasonYear,
+                  sourceUrl: windowRow.content.capture.sourceUrl,
+                  capabilityId: 'official-afl-trade-period-dates',
+                  dataset: 'trade-period-dates',
+                  datasetVersion: 'synthetic-v1',
+                  parserVersion: windowRow.content.capture.parserVersion,
+                  fieldManifestSha256: windowRow.content.capture.fieldManifestSha256,
+                  capturedAt,
+                  effectiveAt: `${tradeWindow.earliestDate}T00:00:00.000Z`,
+                  artifact: windowArtifact,
+                }),
+              }
+            : {}),
+        }),
+      ]
+    );
+    await outcomesPool.query(
+      `INSERT INTO outcome_external_evidence_batch
+        (batch_id,capture_id,provider,evidence_count,issue_count,row_set_sha256,issue_set_sha256,status,finalized_at,batch_json)
+        VALUES($1,$2,'official_afl',1,0,$3,$4,'open',NULL,$5::jsonb)`,
+      [
+        windowBatch.batchId,
+        windowCaptureId,
+        windowBatch.content.rowSetSha256,
+        sha256AflTradeCanonicalJson([]),
+        canonicalizeAflTradeJson(windowBatch),
+      ]
+    );
+    await outcomesPool.query(
+      `INSERT INTO outcome_external_evidence_row
+        (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json) VALUES($1,$2,1,$3,'trade_period_window',$4::jsonb)`,
+      [
+        windowRow.evidenceId,
+        windowBatch.batchId,
+        windowRow.content.sourceRow.sourceKey,
+        canonicalizeAflTradeJson(windowRow),
+      ]
+    );
+    await outcomesPool.query(
+      `UPDATE outcome_external_evidence_batch SET status='finalized',finalized_at=$2 WHERE batch_id=$1`,
+      [windowBatch.batchId, capturedAt]
+    );
+  }
   const syntheticCandidateContent = {
     schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
     environment,
