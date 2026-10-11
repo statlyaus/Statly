@@ -855,7 +855,10 @@ supersede production Gate authority, and production execution cannot reuse non-p
    at all (no event, selections or player assets), and the review refuses metadata for it. Nor is a
    draft whose every candidate selection is already a current canonical selection of a finalized
    promotion (the session-keyed draft promotions): preparation records it under
-   `pickLineageDeferral.promotedDrafts`, migration 0265 checks that on insert and again at promotion,
+   `pickLineageDeferral.promotedDrafts`, migration 0265 checks that on insert and again at promotion
+   (currency is asset-scoped since 0266: a scoped later version of a draft night retires only the
+   selections it cites or re-lists, so a session re-versioned for a few players still counts as
+   promoted for the rest),
    and the promotion writes nothing of it and no realization into it (the receipt counts
    `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and
