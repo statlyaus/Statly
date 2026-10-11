@@ -4129,7 +4129,7 @@ The remaining work proceeds through these independently verifiable gates:
    onward trade was captured but carried a different pick id. Each Draftguru pick row's giving side
    names the player eventually selected with that pick, whatever the page numbered it, so v3 emits
    v2's claims unchanged and then one `pick_eventual_selection` per traded pick: the player's
-   Draftguru native id, or "not used".
+   Draftguru native id, or "not used". Every `pick_eventual_selection` row is cited on the directed transfer it names, admitted to a group or not, so the candidate conserves it; a statement naming no transfer of its page is a `pick_outcome_unresolved` issue.
 
    Reconciliation (`joinEventualSelections`) groups a draft's Draftguru pick transfers by that native
    id. Two transfers from one provider need no identity resolution to match. A group is admitted only
