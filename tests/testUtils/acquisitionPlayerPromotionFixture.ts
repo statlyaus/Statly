@@ -287,6 +287,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     transactionId,
     nativeTransferId: nativePlayerId,
   });
+  // An already-promoted trade is left to its promotion, so the player asset this promotion writes
+  // belongs to the second trade (`<providerEventId>-again`), not to `transferId`.
+  const writtenTransferId = options.transactionAlreadyPromoted
+    ? createAflTradeContentAddress('external-transfer', {
+        transactionId: createAflTradeContentAddress('external-transaction', {
+          provider: 'draftguru',
+          nativeEventId: `${providerEventId}-again`,
+        }),
+        nativeTransferId: nativePlayerId,
+      })
+    : transferId;
   const reciprocalFuturePickTransferId = createAflTradeContentAddress('external-transfer', {
     transactionId,
     nativeTransferId: 'synthetic-reciprocal-future-pick',
@@ -2689,7 +2700,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
  JOIN outcome_event_asset asset ON asset.asset_version_id=member.canonical_record_id
  WHERE member.promotion_id=$1 AND member.record_kind='transfer' AND asset.player_id=$2
    AND member.source_record_id=$3`,
-    [receipt.promotionId, playerId, transferId]
+    [receipt.promotionId, playerId, writtenTransferId]
   );
   if (assets.rows.length !== 1)
     throw new Error('Synthetic public promotion did not produce one player asset.');
