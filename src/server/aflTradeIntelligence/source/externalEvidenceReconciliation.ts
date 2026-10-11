@@ -26,6 +26,7 @@ import {
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
 import {
+  aflTradePromotedDrafts,
   isAflTradePickSideReconciliationIssue,
   type AflTradePickLineageDeferral,
 } from './pickLineageDeferral';
@@ -1268,7 +1269,13 @@ export function reconcileAflTradeExternalEvidence(input: {
    * An approved owner `reconciliation_scope` decision (statlyaus/Statly#869). With it, pick-side issues
    * are recorded `deferred`; player-side issues stay `blocking`. Without it, output is unchanged.
    */
-  pickLineageDeferral?: AflTradePickLineageDeferral;
+  pickLineageDeferral?: Pick<AflTradePickLineageDeferral, 'decisionId'>;
+  /**
+   * Source selection ids that are already current canonical selections of finalized promotions, as
+   * the repository resolved them at preparation. Only with the deferral: a draft whose every
+   * candidate selection is in this set is recorded as already promoted and left unwritten.
+   */
+  promotedDraftSelectionIds?: readonly string[];
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -1280,6 +1287,12 @@ export function reconcileAflTradeExternalEvidence(input: {
           .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
           .strict()
           .parse(input.pickLineageDeferral);
+  const promotedDraftSelectionIds = new Set(
+    z.array(z.string().min(1)).optional().parse(input.promotedDraftSelectionIds) ?? []
+  );
+  if (promotedDraftSelectionIds.size > 0 && pickLineageDeferral === undefined) {
+    throw new TypeError('Already-promoted drafts are recorded only under a pick-side deferral.');
+  }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
   const reconciledAt = instantSchema.parse(input.reconciledAt);
@@ -1979,6 +1992,13 @@ export function reconcileAflTradeExternalEvidence(input: {
       : issue
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
+  const promotedDrafts = aflTradePromotedDrafts(draftSelections, promotedDraftSelectionIds);
+  const recordedDeferral =
+    pickLineageDeferral === undefined
+      ? undefined
+      : promotedDrafts.length === 0
+        ? pickLineageDeferral
+        : { ...pickLineageDeferral, promotedDrafts };
 
   const content: AflTradeExternalReconciliationContent = {
     schemaVersion:
@@ -2002,9 +2022,9 @@ export function reconcileAflTradeExternalEvidence(input: {
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     // Only a candidate that actually deferred something carries the decision, so a candidate prepared
     // with the option but no pick-side issue is byte-identical to one prepared without it.
-    ...(deferredIssueCount === 0 || pickLineageDeferral === undefined
+    ...(deferredIssueCount === 0 || recordedDeferral === undefined
       ? {}
-      : { pickLineageDeferral }),
+      : { pickLineageDeferral: recordedDeferral }),
     issues: severed
       .map((issue) => ({ ...issue, evidenceIds: sortedUnique(issue.evidenceIds) }))
       .sort(

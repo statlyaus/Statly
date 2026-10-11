@@ -32,6 +32,7 @@ import {
   authenticateAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionRequest,
   type AflTradeExternalCanonicalPromotionProposal,
+  type AflTradePromotionPickLineageDeferralReceipt,
 } from './externalCanonicalPromotionContracts';
 import {
   parseAflTradeExternalReconciliationCandidate,
@@ -60,7 +61,7 @@ export interface PromotedAflTradeExternalCandidate {
    * deferred-lineage promotion writes no custody observation and no realization for a deferred pick
    * and is never admitted to a promotion-backed corpus or factual release.
    */
-  readonly pickLineageDeferral: { decisionId: string; deferredIssueCount: number } | null;
+  readonly pickLineageDeferral: AflTradePromotionPickLineageDeferralReceipt | null;
 }
 
 export class AflTradeExternalCanonicalPromotionError extends Error {
@@ -504,6 +505,29 @@ async function requireCurrentLineageDeferralDecision(
   }
 }
 
+/**
+ * A draft the candidate records as already promoted must still be current canonical when the
+ * promotion runs: every candidate selection in it a current approved selection of a finalized
+ * promotion (the same test the candidate insert trigger applied, migration 0265).
+ */
+async function requireCurrentPromotedDrafts(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.promotedDrafts ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_drafts_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A draft the candidate leaves to an earlier promotion is no longer current canonical.'
+    );
+  }
+}
+
 async function loadEvidenceSources(
   transaction: AflOutcomeSqlTransaction,
   candidateId: string
@@ -716,7 +740,8 @@ async function ensureEventRoot(
   }
 }
 
-type ReviewedTransactionDate = AflTradeExternalCanonicalPromotionProposal['content']['transactionDateCoverage'][number];
+type ReviewedTransactionDate =
+  AflTradeExternalCanonicalPromotionProposal['content']['transactionDateCoverage'][number];
 type PromotedTransactionRecord = TransactionRecord & {
   datePrecision?: Extract<ReviewedTransactionDate, { datePrecision?: unknown }>['datePrecision'];
 };
@@ -1128,8 +1153,10 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         proposal: approval.proposal,
       });
       await requireCurrentLineageDeferralDecision(transaction, candidate);
+      await requireCurrentPromotedDrafts(transaction, candidate);
       // The pick side a deferred candidate leaves unwritten: custody of deferred picks, realizations
-      // into them, and the selections of a draft holding a deferred selection (#869).
+      // into them, the selections of a draft holding a deferred selection, and a draft that is
+      // already current canonical with the realizations into it (#869).
       const scope = aflTradePromotionWriteScope(candidate.content);
       if (
         'draftEventCoverage' in approval.proposal.content &&

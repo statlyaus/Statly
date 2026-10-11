@@ -302,7 +302,26 @@ const contentFieldsSchema = z
      * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
      */
     pickLineageDeferral: z
-      .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
+      .object({
+        decisionId: aflTradeContentAddressedIdSchema('review-decision'),
+        /**
+         * Drafts whose every candidate selection is already a current canonical selection of a
+         * finalized promotion; the promotion writes nothing of them. Present only when non-empty,
+         * sorted by year then type, each naming a draft the candidate holds a selection in.
+         */
+        promotedDrafts: z
+          .array(
+            z
+              .object({
+                draftYear: z.number().int().min(1897).max(2200),
+                draftType: z.string().trim().min(1).max(80),
+              })
+              .strict()
+          )
+          .min(1)
+          .max(100)
+          .optional(),
+      })
       .strict()
       .optional(),
     issues: z.array(issueSchema),
@@ -340,6 +359,33 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         'A deferral decision names a historical completion; the candidate needs its authority.',
     });
   }
+  const promotedDrafts = content.pickLineageDeferral?.promotedDrafts ?? [];
+  promotedDrafts.forEach((draft, index) => {
+    const previous = promotedDrafts[index - 1];
+    if (
+      previous !== undefined &&
+      (previous.draftYear > draft.draftYear ||
+        (previous.draftYear === draft.draftYear &&
+          previous.draftType.localeCompare(draft.draftType) >= 0))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedDrafts', index],
+        message: 'Already-promoted drafts must be unique and sorted by year then type.',
+      });
+    }
+    if (
+      !content.draftSelections.some(
+        ({ draftYear, draftType }) => draftYear === draft.draftYear && draftType === draft.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedDrafts', index],
+        message: 'An already-promoted draft must be one the candidate holds a selection in.',
+      });
+    }
+  });
   content.issues.forEach((issue, index) => {
     if (issue.severity === 'deferred' && !isAflTradePickSideReconciliationIssue(issue)) {
       context.addIssue({

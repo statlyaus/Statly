@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
@@ -31,7 +34,7 @@ const capturedAt = '2026-08-09T04:00:00.000Z';
 // One Draftguru trade whose only pick transfer has no custody evidence, so reconciliation records a
 // `lineage_unresolved` issue; clubs resolve through no reviewed decision, so the clubs are unresolved
 // too (player-side `transfer:` subjects, which stay blocking under any deferral).
-function sourceBatch() {
+function sourceBatch(withSelection = false) {
   const provider: AflTradeExternalEvidenceContent['provider'] = 'draftguru';
   const capture: AflTradeExternalEvidenceContent['capture'] = {
     captureId: `source-capture:${digest('1')}`,
@@ -66,6 +69,20 @@ function sourceBatch() {
         recordedPickNumber: 14,
       },
     },
+    // The 2025 draft's selection at 14, unreviewed: its identity issues are pick-side.
+    ...(withSelection
+      ? [
+          {
+            kind: 'draft_selection' as const,
+            draftYear: 2025,
+            draftType: 'national' as const,
+            selectionNumber: 14,
+            roundNumber: 1,
+            player: { nativeId: 'unreviewed-draftee', recordedName: 'Unreviewed Draftee' },
+            selectedByClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+          },
+        ]
+      : []),
   ];
   const evidence = claims.map((claim, index) =>
     createAflTradeExternalEvidenceEnvelope({
@@ -87,8 +104,11 @@ function sourceBatch() {
   });
 }
 
-function dependencies(decision: AflTradeReconciliationScopeDecision | null) {
-  const batch = sourceBatch();
+function dependencies(
+  decision: AflTradeReconciliationScopeDecision | null,
+  options: { withSelection?: boolean; promotedSelectionIds?: readonly string[] } = {}
+) {
+  const batch = sourceBatch(options.withSelection ?? false);
   const sourceAuthority = createAflTradeHistoricalCompletionReconciliationAuthority({
     schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
     kind: 'historical_plan_completion',
@@ -131,6 +151,9 @@ function dependencies(decision: AflTradeReconciliationScopeDecision | null) {
       },
     },
     scopeDecisionRepository: { loadDecision: vi.fn(async () => decision) },
+    promotedSelectionRepository: {
+      loadCurrentCanonicalSelectionIds: vi.fn(async () => options.promotedSelectionIds ?? []),
+    },
   };
   return { built, persisted };
 }
@@ -203,6 +226,64 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
       expect(persisted).toEqual([]);
     }
   );
+
+  it('records a draft whose every selection is already current canonical, and leaves it to that promotion', async () => {
+    const selectionId = createAflTradeContentAddress('external-draft-selection', {
+      draftYear: 2025,
+      draftType: 'national',
+      selectionNumber: 14,
+    });
+    const { built, persisted } = dependencies(approved, {
+      withSelection: true,
+      promotedSelectionIds: [selectionId, 'external-draft-selection:other'],
+    });
+    const result = await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      built
+    );
+    expect(
+      built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
+    ).toHaveBeenCalledWith('AFLM');
+    expect(result.pickLineageDeferral).toEqual({
+      decisionId,
+      promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
+    });
+    const candidate = persisted[0]!.candidate as {
+      content: { pickLineageDeferral?: unknown; issues: { severity: string }[] };
+    };
+    expect(candidate.content.pickLineageDeferral).toEqual(result.pickLineageDeferral);
+    // The selection's identity issues are still recorded (deferred); nothing is dropped.
+    expect(candidate.content.issues.filter((i) => i.severity === 'deferred').length).toBe(3);
+
+    // A draft with a selection nobody promoted is not recorded.
+    const partial = dependencies(approved, {
+      withSelection: true,
+      promotedSelectionIds: ['external-draft-selection:other'],
+    });
+    const unrecorded = await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      partial.built
+    );
+    expect(unrecorded.pickLineageDeferral).toEqual({ decisionId });
+    // Without the flag the reader is never consulted and the candidate is today's.
+    const plain = dependencies(null, { withSelection: true, promotedSelectionIds: [selectionId] });
+    await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
+    expect(
+      plain.built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
+    ).not.toHaveBeenCalled();
+  });
+
+  it('refuses the flag when no promoted draft-selection reader is wired', async () => {
+    const { built, persisted } = dependencies(approved);
+    const { promotedSelectionRepository: _omitted, ...withoutReader } = built;
+    await expect(
+      prepareAflTradeHistoricalReconciliation(
+        { completionId, pickLineageDeferral: { decisionId } },
+        withoutReader
+      )
+    ).rejects.toThrow(/reader/);
+    expect(persisted).toEqual([]);
+  });
 
   it('refuses the flag when no scope-decision repository is wired', async () => {
     const { built } = dependencies(approved);

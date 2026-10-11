@@ -852,7 +852,12 @@ supersede production Gate authority, and production execution cannot reuse non-p
    **Promoting a deferred-lineage candidate (#869).** The same review and promote commands apply; the
    candidate must have `issue_count = 0` (no blocking issue). The draft-events file lists only the
    drafts the candidate writes: a draft holding a deferred selection is not promoted by this candidate
-   at all (no event, selections or player assets), and the review refuses metadata for it. The
+   at all (no event, selections or player assets), and the review refuses metadata for it. Nor is a
+   draft whose every candidate selection is already a current canonical selection of a finalized
+   promotion (the session-keyed draft promotions): preparation records it under
+   `pickLineageDeferral.promotedDrafts`, migration 0265 checks that on insert and again at promotion,
+   and the promotion writes nothing of it and no realization into it (the receipt counts
+   `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and
    directed asset (a deferred pick keeps its stable `pick_id` on the asset), writes no custody
    observation and no `exercised_as` realization for a deferred pick, and records

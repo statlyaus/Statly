@@ -8,13 +8,14 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0264_pick_side_issue_deferral';
+const MIGRATION = '0265_deferred_candidate_promoted_drafts';
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 /**
  * One disposable schema per promotion: the synthetic fixture content-addresses its artifacts and
- * canonical rows, so two promotions in one schema collide. Each schema gets the history deployed
- * just before 0264 and applies the migration itself, as `prisma migrate deploy` will.
+ * canonical rows, so two promotions in one schema collide unless their namespaces differ. Each schema
+ * gets the history deployed just before 0265 (so 0264's deferral is in place) and applies 0265
+ * itself, as `prisma migrate deploy` will.
  */
 interface Workspace {
   pool: Pool;
@@ -60,7 +61,8 @@ const promote = (
   ws: Workspace,
   namespace: string,
   pickSideIssues?: 'deferred' | 'blocking',
-  originalClubUnresolved = false
+  originalClubUnresolved = false,
+  yearPageDraftAlreadyPromoted = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -69,6 +71,7 @@ const promote = (
     nativePlayerId: `${namespace}-player`,
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
+    ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
   });
 
 const count = async (ws: Workspace, sql: string) =>
@@ -351,4 +354,132 @@ it('keeps an unresolved original club blocking without the deferral', async () =
   );
   expect(candidate.rows).toEqual([{ issue_count: 4, deferred_issue_count: 0 }]);
   expect(await count(ws, 'outcome_external_canonical_promotion')).toBe(0);
+}, 300_000);
+
+// A deferred candidate carrying a draft that an earlier session-keyed promotion already made current
+// canonical leaves that draft alone (migration 0265): no second, session-less draft root, no duplicate
+// selections or player assets. The 2024 national draft is promoted first under session roots; the
+// deferred candidate then holds its selection 2, records the draft, and writes only the trade.
+it('leaves an already-promoted draft to its promotion and writes only the trade', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const seeded = await createSyntheticAcquisitionPlayerPromotion(ws.pool, {
+    draftSessions: true,
+    fixtureNamespace: 'seed',
+    providerEventId: '2024-seed-alpha',
+    nativePlayerId: 'seed-player',
+  });
+  expect(seeded.promotion.draftSelectionCount).toBe(2);
+  const draftState = async () => ({
+    roots: (
+      await ws.pool.query<{ stable_key: string }>(
+        `SELECT stable_key FROM outcome_event WHERE stable_key LIKE 'external-draft:%' ORDER BY stable_key`
+      )
+    ).rows.map(({ stable_key }) => stable_key),
+    versions: await count(ws, "outcome_event_version WHERE kind<>'trade'"),
+    selections: await count(ws, 'outcome_draft_selection'),
+    playerAssets: await count(
+      ws,
+      "outcome_event_asset WHERE kind='player' AND asset_key LIKE 'selected-player:%'"
+    ),
+  });
+  const before = await draftState();
+  expect(before.roots).toEqual([
+    'external-draft:AFLM:2024:national:session:1',
+    'external-draft:AFLM:2024:national:session:2',
+  ]);
+  expect(before.selections).toBe(2);
+
+  const deferred = await promote(ws, 'skip', 'deferred', false, true);
+  expect(deferred.candidate.content.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
+  });
+  // The selection is resolved through the seeded resolutions, so the only deferred issue is the
+  // reciprocal pick's lineage; the draft is excluded by the record, not by a deferred identity.
+  expect(
+    deferred.candidate.content.issues.map(({ code, severity }) => ({ code, severity }))
+  ).toEqual([{ code: 'lineage_unresolved', severity: 'deferred' }]);
+  expect(deferred.candidate.content.draftSelections).toEqual([
+    expect.objectContaining({
+      draftYear: 2024,
+      draftType: 'national',
+      selectionNumber: 2,
+      status: 'single_source',
+    }),
+  ]);
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 1,
+    promotedDraftCount: 1,
+  });
+  expect(deferred.promotion).toMatchObject({
+    transactionCount: 1,
+    transferCount: 2,
+    draftSelectionCount: 0,
+    draftPlayerAssetCount: 0,
+    pickCustodyCount: 0,
+    pickRealizationCount: 0,
+  });
+  // Nothing of the draft was written: same roots, versions, selections and player assets.
+  expect(await draftState()).toEqual(before);
+  const stored = await ws.pool.query<{ promoted: unknown; promotable: number; deferral: unknown }>(
+    `SELECT candidate_json#>'{content,pickLineageDeferral,promotedDrafts}' AS promoted,
+            (SELECT count(*)::integer FROM outcome_external_candidate_promotable_selections($1)) AS promotable,
+            (SELECT receipt_json#>'{content,pickLineageDeferral}' FROM outcome_external_canonical_promotion
+              WHERE candidate_id=$1) AS deferral
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1`,
+    [deferred.candidate.candidateId]
+  );
+  expect(stored.rows).toEqual([
+    {
+      promoted: [{ draftYear: 2024, draftType: 'national' }],
+      promotable: 0,
+      deferral: {
+        decisionId: deferred.deferralDecisionId,
+        deferredIssueCount: 1,
+        promotedDraftCount: 1,
+      },
+    },
+  ]);
+  // The reader the prepare command uses sees both seeded selections as current canonical.
+  const current = await ws.pool.query<{ selection_id: string }>(
+    "SELECT selection_id FROM outcome_current_canonical_draft_selection_ids('AFLM') ORDER BY selection_id"
+  );
+  expect(current.rows.map(({ selection_id }) => selection_id).sort()).toEqual(
+    seeded.candidate.content.draftSelections.map(({ selectionId }) => selectionId).sort()
+  );
+}, 300_000);
+
+it('refuses a candidate that records a draft nobody promoted', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  // No seeded draft sessions: the year page's identities have no current resolution, so the fixture
+  // cannot even build the candidate; the database guard is exercised directly on the same shape.
+  await expect(promote(ws, 'unpromoted', 'deferred', false, true)).rejects.toThrow(
+    /no current resolution/
+  );
+  const guard = await ws.pool.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_drafts_current($1::jsonb) AS current`,
+    [
+      JSON.stringify({
+        content: {
+          competition: 'AFLM',
+          draftSelections: [
+            { selectionId: 'external-draft-selection:x', draftYear: 2024, draftType: 'national' },
+          ],
+          pickLineageDeferral: {
+            decisionId: `review-decision:${'d'.repeat(64)}`,
+            promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
+          },
+        },
+      }),
+    ]
+  );
+  expect(guard.rows).toEqual([{ current: false }]);
+  const absent = await ws.pool.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_drafts_current($1::jsonb) AS current`,
+    [JSON.stringify({ content: { competition: 'AFLM', draftSelections: [] } })]
+  );
+  expect(absent.rows).toEqual([{ current: true }]);
 }, 300_000);
