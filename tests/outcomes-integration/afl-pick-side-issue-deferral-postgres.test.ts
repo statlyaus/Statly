@@ -8,14 +8,14 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0267_deferred_candidate_promoted_transactions';
+const MIGRATION = '0268_deferred_candidate_deferred_custody';
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 /**
  * One disposable schema per promotion: the synthetic fixture content-addresses its artifacts and
  * canonical rows, so two promotions in one schema collide unless their namespaces differ. Each schema
- * gets the history deployed just before 0267 (so 0264's deferral and 0265/0266's promoted-draft
- * record are in place) and applies 0267 itself, as `prisma migrate deploy` will.
+ * gets the history deployed just before 0268 (so 0264's deferral and the 0265 to 0267 records are
+ * in place) and applies 0268 itself, as `prisma migrate deploy` will.
  */
 interface Workspace {
   pool: Pool;
@@ -64,7 +64,8 @@ const promote = (
   originalClubUnresolved = false,
   yearPageDraftAlreadyPromoted = false,
   reuseSeededTargets = false,
-  transactionAlreadyPromoted = false
+  transactionAlreadyPromoted = false,
+  deferredCustody = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -73,6 +74,7 @@ const promote = (
     providerEventId: transactionAlreadyPromoted ? '2024-seed-alpha' : `2024-${namespace}-alpha`,
     nativePlayerId: transactionAlreadyPromoted ? 'seed-player' : `${namespace}-player`,
     ...(transactionAlreadyPromoted ? { transactionAlreadyPromoted: true } : {}),
+    ...(deferredCustody ? { deferredCustody: true } : {}),
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
     ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
@@ -699,4 +701,85 @@ it('refuses a candidate that records a trade nobody promoted', async () => {
     promote(ws, 'unpromoted-trade', 'deferred', false, false, false, true)
   ).rejects.toThrow(/current canonical with every transfer promoted/);
   expect(await count(ws, 'outcome_external_reconciliation_candidate')).toBe(0);
+}, 300_000);
+
+// A custody observation without a usable status under the deferral (migration 0268): recorded as
+// deferred custody on the candidate, counted on the receipt, written as nothing. Without the
+// deferral the candidate blocks as before.
+it('leaves an unresolved custody observation unwritten under the deferral and counts it', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const deferred = await promote(ws, 'custody', 'deferred', false, false, false, false, true);
+  const custodyId = deferred.candidate.content.pickCustody[0]!.custodyId;
+  expect(deferred.candidate.content.pickCustody.map(({ status }) => status)).toEqual([
+    'unresolved',
+  ]);
+  expect(deferred.candidate.content.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredCustodyIds: [custodyId],
+  });
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 3,
+    deferredCustodyCount: 1,
+  });
+  expect(deferred.promotion).toMatchObject({
+    transactionCount: 1,
+    transferCount: 2,
+    pickCustodyCount: 0,
+    pickRealizationCount: 0,
+  });
+  expect(await count(ws, 'outcome_pick_custody_observation')).toBe(0);
+  const stored = await ws.pool.query<{ unusable: number; valid: boolean; deferral: unknown }>(
+    `SELECT outcome_external_candidate_unusable_record_count($1) AS unusable,
+            outcome_external_candidate_deferred_custody_valid(candidate_json) AS valid,
+            (SELECT receipt_json#>'{content,pickLineageDeferral}' FROM outcome_external_canonical_promotion
+              WHERE candidate_id=$1) AS deferral
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1`,
+    [deferred.candidate.candidateId]
+  );
+  expect(stored.rows).toEqual([
+    {
+      unusable: 0,
+      valid: true,
+      deferral: {
+        decisionId: deferred.deferralDecisionId,
+        deferredIssueCount: 3,
+        deferredCustodyCount: 1,
+      },
+    },
+  ]);
+  // The guard refuses a recorded id that is not an unusable candidate custody row.
+  const guard = await ws.pool.query<{ valid: boolean }>(
+    `SELECT outcome_external_candidate_deferred_custody_valid($1::jsonb) AS valid`,
+    [
+      JSON.stringify({
+        content: {
+          pickCustody: [{ custodyId, status: 'single_source' }],
+          pickLineageDeferral: {
+            decisionId: deferred.deferralDecisionId,
+            deferredCustodyIds: [custodyId],
+          },
+        },
+      }),
+    ]
+  );
+  expect(guard.rows).toEqual([{ valid: false }]);
+}, 300_000);
+
+it('keeps an unresolved custody observation blocking without the deferral', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  await expect(
+    promote(ws, 'custody-blocking', 'blocking', false, false, false, false, true)
+  ).rejects.toThrow(/issue-free/);
+  const candidate = await ws.pool.query<{ issue_count: number; unusable: number }>(
+    `SELECT issue_count,outcome_external_candidate_unusable_record_count(candidate_id) AS unusable
+       FROM outcome_external_reconciliation_candidate`
+  );
+  // Three blocking issues, and the unresolved custody row still counts as unusable.
+  expect(candidate.rows.length).toBe(1);
+  expect(candidate.rows[0]).toMatchObject({ issue_count: 3 });
+  expect(candidate.rows[0]!.unusable).toBeGreaterThan(0);
+  expect(await count(ws, 'outcome_external_canonical_promotion')).toBe(0);
 }, 300_000);

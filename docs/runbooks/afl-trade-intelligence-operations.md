@@ -865,7 +865,11 @@ supersede production Gate authority, and production execution cannot reuse non-p
    same stable key from a finalized promotion with every one of the candidate's transfers a promoted
    asset on it: recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
    promotion, left unwritten (no trade version, asset, special custody or realization), omitted from
-   the reviewed transaction dates, and counted on the receipt with its ids,
+   the reviewed transaction dates, and counted on the receipt with its ids. A custody observation
+   without a usable status (`unresolved`, such as an order page's holder-only special pick with no
+   original club, or `disputed` behind a deferred `pick_identity_conflict`) is pick-side too: recorded
+   as `deferredCustodyIds`, checked by migration 0268 on insert and at promotion, written as nothing
+   and counted on the receipt as `deferredCustodyCount`; without a deferral it blocks as before,
    and the promotion writes nothing of it and no realization into it (the receipt counts
    `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and

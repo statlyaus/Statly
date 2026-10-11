@@ -113,6 +113,13 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * Needs `pickSideIssues`.
      */
     transactionAlreadyPromoted?: boolean;
+    /**
+     * The reciprocal future pick's custody observation is present but `unresolved` (a holder-only
+     * observation nobody can resolve, statlyaus/Statly#869): under `deferred` it is recorded as
+     * deferred custody and written as nothing; under `blocking` the candidate blocks as before.
+     * Needs `pickSideIssues`.
+     */
+    deferredCustody?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -172,6 +179,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
   if (options.transactionAlreadyPromoted && (!options.pickSideIssues || options.lifecycle))
     throw new Error('An already-promoted trade is a pick-side issue profile without a lifecycle.');
+  if (options.deferredCustody && !options.pickSideIssues)
+    throw new Error('Deferred custody is a pick-side issue profile.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -2406,6 +2415,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             ...(options.transactionAlreadyPromoted
               ? { promotedTransactions: [transactionId] }
               : {}),
+            ...(options.deferredCustody
+              ? { deferredCustodyIds: [reciprocalFuturePickCustodyId] }
+              : {}),
           },
         }),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
@@ -2576,7 +2588,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     ].sort((a, b) => a.transferId.localeCompare(b.transferId)),
     draftSelections: [...draftSelections, ...pickSideSelections],
     pickCustody:
-      options.reciprocalFuturePickYearOffset === undefined || pickSide !== null
+      options.reciprocalFuturePickYearOffset === undefined ||
+      (pickSide !== null && !options.deferredCustody)
         ? []
         : [
             {
@@ -2589,7 +2602,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               recordedPickNumber: null,
               originalClubId: targets.toClubId,
               currentClubId: targets.fromClubId,
-              status: 'single_source' as const,
+              // A holder-only observation nobody can resolve is pick-side under the deferral.
+              status: options.deferredCustody
+                ? ('unresolved' as const)
+                : ('single_source' as const),
               evidenceIds: playerBatch.batch.content.evidence
                 .filter(
                   (row) =>

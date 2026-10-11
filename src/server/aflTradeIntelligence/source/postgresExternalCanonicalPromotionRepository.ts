@@ -551,6 +551,29 @@ async function requireCurrentPromotedTransactions(
   }
 }
 
+/**
+ * Every custody id the candidate records as deferred must be one of its custody rows without a
+ * usable status (the candidate insert test, 0268); the stored candidate is immutable, so this is a
+ * re-check of the same fact in the promoter's transaction.
+ */
+async function requireDeferredCustodyRows(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.deferredCustodyIds ?? []).length === 0) return;
+  const result = await transaction.query<{ valid: boolean }>(
+    `SELECT outcome_external_candidate_deferred_custody_valid(candidate_json) AS valid
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.valid !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A custody observation the candidate records as deferred is not an unusable candidate custody row.'
+    );
+  }
+}
+
 async function loadEvidenceSources(
   transaction: AflOutcomeSqlTransaction,
   candidateId: string
@@ -1178,6 +1201,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await requireCurrentLineageDeferralDecision(transaction, candidate);
       await requireCurrentPromotedDrafts(transaction, candidate);
       await requireCurrentPromotedTransactions(transaction, candidate);
+      await requireDeferredCustodyRows(transaction, candidate);
       // What a deferred candidate leaves unwritten: custody of deferred picks, realizations into
       // them, the selections of a draft holding a deferred selection, a draft that is already
       // current canonical with the realizations into it, and a transaction that is already current
@@ -1296,7 +1320,12 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       const content = candidate.content;
       // Pick definitions and assets come from what is written; candidate-level checks keep `content`.
-      const written = { ...content, transactions: scope.transactions, transfers: scope.transfers };
+      const written = {
+        ...content,
+        transactions: scope.transactions,
+        transfers: scope.transfers,
+        pickCustody: scope.pickCustody,
+      };
       const reviewedTransactionDateById = new Map(
         approval.proposal.content.transactionDateCoverage.map((coverage) => [
           coverage.transactionId,

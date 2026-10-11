@@ -19,7 +19,10 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
 } from './externalReconciliationSourceAuthorityContracts';
-import { isAflTradePickSideReconciliationIssue } from './pickLineageDeferral';
+import {
+  isAflTradePickSideReconciliationIssue,
+  isAflTradeUsableCustodyStatus,
+} from './pickLineageDeferral';
 
 const instantSchema = z.iso.datetime({ offset: true });
 const statusSchema = z.enum(['single_source', 'corroborated', 'disputed', 'unresolved']);
@@ -331,6 +334,15 @@ const contentFieldsSchema = z
             z.array(aflTradeContentAddressedIdSchema('external-transaction')).min(1).max(10_000)
           )
           .optional(),
+        /**
+         * Custody observations without a usable status (`unresolved`, `disputed`): pick-side,
+         * left unwritten. Sorted unique, each a candidate custody row, present only when non-empty.
+         */
+        deferredCustodyIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
+          )
+          .optional(),
       })
       .strict()
       .optional(),
@@ -393,6 +405,16 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'promotedDrafts', index],
         message: 'An already-promoted draft must be one the candidate holds a selection in.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.deferredCustodyIds ?? []).forEach((custodyId, index) => {
+    const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
+    if (row === undefined || isAflTradeUsableCustodyStatus(row.status)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'deferredCustodyIds', index],
+        message: 'Deferred custody must be a candidate custody row without a usable status.',
       });
     }
   });
