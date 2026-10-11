@@ -4080,7 +4080,11 @@ The remaining work proceeds through these independently verifiable gates:
    deferred pick, and nothing of a draft that holds a deferred selection (the review covers only the
    drafts written; `outcome_external_draft_sessions_exact` compares against the promotable
    selections); the receipt records the decision and count, and the written counts are what the
-   typed-count finalization checks. A deferred-lineage promotion is excluded from the
+   typed-count finalization checks. A draft whose every candidate selection is already current
+   canonical under a finalized promotion is recorded as `promotedDrafts` at preparation (migration
+   0265: `outcome_current_canonical_draft_selection_ids`, checked on candidate insert and re-checked
+   by the promoter) and left to that promotion, with the realizations into it skipped and counted,
+   so the session-less metadata path never creates a second root for a session-keyed draft. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
 

@@ -97,6 +97,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * `pickSideIssues`; under `deferred` that identity issue is deferred with the lineage.
      */
     reciprocalFuturePickOriginalClubUnresolved?: boolean;
+    /**
+     * The year page's draft is already current canonical: an earlier `draftSessions` promotion in
+     * the same schema reviewed its draftee and club and promoted the selection under session-keyed
+     * roots (statlyaus/Statly#869). The candidate resolves the selection through those current
+     * resolutions and records the draft under `pickLineageDeferral.promotedDrafts`, so the deferred
+     * promotion writes nothing of it. Needs `pickSideIssues`.
+     */
+    yearPageDraftAlreadyPromoted?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -152,6 +160,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     );
   if (options.reciprocalFuturePickOriginalClubUnresolved && !options.pickSideIssues)
     throw new Error('An unreviewed original club is a pick-side issue profile.');
+  if (options.yearPageDraftAlreadyPromoted && !options.pickSideIssues)
+    throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -2181,6 +2191,26 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       : draftBatch!.batch.content.evidence.flatMap((row) =>
           row.content.claim.kind === 'draft_selection' ? [{ row, claim: row.content.claim }] : []
         );
+  // The year page's identities as an earlier promotion reviewed them (current resolutions), when
+  // the draft is already canonical; otherwise nobody has reviewed them and they stay unresolved.
+  const yearPageResolutions = new Map<string, string>();
+  if (options.yearPageDraftAlreadyPromoted) {
+    const current = await identities.loadCurrentResolutions(reviewPackage);
+    for (const { claim } of yearPageSelections) {
+      const resolution = current.find(
+        (value) =>
+          value.content.entityKind === 'player' &&
+          value.content.sourceIdentity.nativeId === claim.player.nativeId
+      );
+      if (!resolution)
+        throw new Error(
+          `The year page's draftee ${claim.player.recordedName} has no current resolution; promote the draft sessions first.`
+        );
+      yearPageResolutions.set(claim.player.nativeId ?? '', resolution.content.canonicalId);
+      if (!allResolutions.some((value) => value.resolutionId === resolution.resolutionId))
+        allResolutions.push(resolution);
+    }
+  }
   const reciprocalPickEvidenceIds = playerBatch.batch.content.evidence
     .filter(
       (row) =>
@@ -2221,16 +2251,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 },
               ]
             : []),
-          ...yearPageSelections.flatMap(({ row, claim }) =>
-            (['player', 'club'] as const).map((role) => ({
-              code: 'identity_unresolved' as const,
-              severity: pickSideSeverity,
-              subjectKey: `selection:${claim.draftYear}:${claim.draftType}:${claim.selectionNumber}:${role}`,
-              detail: `No current reviewed ${role} resolution exists for draftguru identity ${
-                role === 'player' ? claim.player.recordedName : claim.selectedByClub.recordedName
-              }.`,
-              evidenceIds: [row.evidenceId],
-            }))
+          ...(options.yearPageDraftAlreadyPromoted ? [] : yearPageSelections).flatMap(
+            ({ row, claim }) =>
+              (['player', 'club'] as const).map((role) => ({
+                code: 'identity_unresolved' as const,
+                severity: pickSideSeverity,
+                subjectKey: `selection:${claim.draftYear}:${claim.draftType}:${claim.selectionNumber}:${role}`,
+                detail: `No current reviewed ${role} resolution exists for draftguru identity ${
+                  role === 'player' ? claim.player.recordedName : claim.selectedByClub.recordedName
+                }.`,
+                evidenceIds: [row.evidenceId],
+              }))
           ),
         ]
   ).sort((a, b) => a.subjectKey.localeCompare(b.subjectKey) || a.code.localeCompare(b.code));
@@ -2240,6 +2271,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       draftType: claim.draftType,
       selectionNumber: claim.selectionNumber,
     });
+    const playerId = yearPageResolutions.get(claim.player.nativeId ?? '') ?? null;
     return {
       selectionId,
       draftYear: claim.draftYear,
@@ -2247,13 +2279,25 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       selectionNumber: claim.selectionNumber,
       roundNumber: claim.roundNumber,
       pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
-      playerId: null,
-      clubId: null,
-      status: 'unresolved' as const,
+      playerId,
+      // The session profile that seeded the draft wrote the selection with the trade's receiving club.
+      clubId: playerId === null ? null : targets.toClubId,
+      status: playerId === null ? ('unresolved' as const) : ('single_source' as const),
       supportingProviders: ['draftguru' as const],
       evidenceIds: [row.evidenceId],
     };
   });
+  // Drafts the candidate leaves to their earlier session-keyed promotion (#869).
+  const promotedDrafts = options.yearPageDraftAlreadyPromoted
+    ? [
+        ...new Map(
+          pickSideSelections.map((selection) => [
+            `${selection.draftYear}|${selection.draftType}`,
+            { draftYear: selection.draftYear, draftType: selection.draftType },
+          ])
+        ).values(),
+      ].sort((a, b) => a.draftYear - b.draftYear || a.draftType.localeCompare(b.draftType))
+    : [];
   let deferralDecisionId: string | null = null;
   if (pickSide === 'deferred') {
     // The owner's answered approval record, stored as an artifact in custody and cited by id.
@@ -2302,7 +2346,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     ...(pickSide === null ? {} : { sourceAuthority: loaded.sourceAuthority }),
     ...(deferralDecisionId === null
       ? {}
-      : { pickLineageDeferral: { decisionId: deferralDecisionId } }),
+      : {
+          pickLineageDeferral: {
+            decisionId: deferralDecisionId,
+            ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
+          },
+        }),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
     transactions: [
       {

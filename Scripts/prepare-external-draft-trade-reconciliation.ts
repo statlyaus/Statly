@@ -10,6 +10,7 @@ import {
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from '../src/server/aflTradeIntelligence/source/postgresExternalHistoricalReconciliationSource';
 import { PostgresAflTradeExternalIdentityReviewRepository } from '../src/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
 import { PostgresAflTradeExternalReconciliationRepository } from '../src/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
+import { PostgresAflTradePromotedDraftSelectionReader } from '../src/server/aflTradeIntelligence/source/postgresPromotedDraftSelectionReader';
 import { PostgresAflTradeReconciliationScopeDecisionRepository } from '../src/server/aflTradeIntelligence/source/postgresReconciliationScopeDecisionRepository';
 
 export interface PrepareCommandArguments {
@@ -63,6 +64,7 @@ async function connectPostgres(url: string): Promise<CommandConnection> {
   const identityReviewRepository = new PostgresAflTradeExternalIdentityReviewRepository(client);
   const candidateRepository = new PostgresAflTradeExternalReconciliationRepository(client);
   const scopeDecisionRepository = new PostgresAflTradeReconciliationScopeDecisionRepository(client);
+  const promotedSelectionRepository = new PostgresAflTradePromotedDraftSelectionReader(client);
   return {
     prepare: (input) =>
       prepareAflTradeHistoricalReconciliation(input, {
@@ -70,6 +72,7 @@ async function connectPostgres(url: string): Promise<CommandConnection> {
         identityReviewRepository,
         candidateRepository,
         scopeDecisionRepository,
+        promotedSelectionRepository,
       }),
     close: () => pool.end(),
   };

@@ -1335,6 +1335,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0262_trade_period_window_claim_kind',
       '0263_trade_period_window_from_source',
       '0264_pick_side_issue_deferral',
+      '0265_deferred_candidate_promoted_drafts',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

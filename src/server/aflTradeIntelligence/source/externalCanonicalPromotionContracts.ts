@@ -481,8 +481,16 @@ const requestPickLineageDeferralSchema = z
   .object({
     decisionId: reviewDecisionIdSchema,
     deferredIssueCount: z.number().int().positive(),
+    /** Drafts left to their existing current promotion; present only when any. */
+    promotedDraftCount: z.number().int().positive().optional(),
+    /** Resolved lineages into those drafts whose realization is not written; present only when any. */
+    skippedRealizationCount: z.number().int().positive().optional(),
   })
   .strict();
+
+export type AflTradePromotionPickLineageDeferralReceipt = z.infer<
+  typeof requestPickLineageDeferralSchema
+>;
 
 const requestContentSchema = z
   .object({
@@ -527,7 +535,7 @@ export interface AuthenticatedAflTradeExternalCanonicalPromotion {
   /** `exercised_as` realizations the promotion writes: none for a deferred pick or draft. */
   readonly pickRealizationCount: number;
   /** The reviewed deferral the promotion operates under, or null for an issue-free candidate. */
-  readonly pickLineageDeferral: { decisionId: string; deferredIssueCount: number } | null;
+  readonly pickLineageDeferral: AflTradePromotionPickLineageDeferralReceipt | null;
 }
 
 function usable(status: string): boolean {
@@ -622,8 +630,9 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   }
 
   const selectionIdsByKey = new Map<string, string[]>();
-  // Under a reviewed deferral (#869) a draft holding a deferred selection is not promoted, so the
-  // reviewer supplies metadata only for the drafts this candidate writes.
+  // Under a reviewed deferral (#869) a draft holding a deferred selection, or one that is already
+  // current canonical, is not promoted, so the reviewer supplies metadata only for the drafts this
+  // candidate writes.
   for (const selection of aflTradePromotionWriteScope(candidate.content).draftSelections) {
     const key = coverageKey(selection.draftYear, selection.draftType);
     const selectionIds = selectionIdsByKey.get(key) ?? [];
@@ -1078,6 +1087,13 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
         : {
             decisionId: scope.deferral.deferral.decisionId,
             deferredIssueCount: scope.deferral.deferredIssueCount,
+            // Present only when non-zero, so every earlier receipt keeps its content address.
+            ...(scope.promotedDraftCount === 0
+              ? {}
+              : { promotedDraftCount: scope.promotedDraftCount }),
+            ...(scope.skippedRealizationCount === 0
+              ? {}
+              : { skippedRealizationCount: scope.skippedRealizationCount }),
           },
   };
 }
