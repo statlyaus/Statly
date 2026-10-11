@@ -8,14 +8,14 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0265_deferred_candidate_promoted_drafts';
+const MIGRATION = '0266_promoted_drafts_scoped_supersession';
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 /**
  * One disposable schema per promotion: the synthetic fixture content-addresses its artifacts and
  * canonical rows, so two promotions in one schema collide unless their namespaces differ. Each schema
- * gets the history deployed just before 0265 (so 0264's deferral is in place) and applies 0265
- * itself, as `prisma migrate deploy` will.
+ * gets the history deployed just before 0266 (so 0264's deferral and 0265's promoted-draft record
+ * are in place) and applies 0266 itself, as `prisma migrate deploy` will.
  */
 interface Workspace {
   pool: Pool;
@@ -496,4 +496,109 @@ it('refuses a candidate that records a draft nobody promoted', async () => {
     [JSON.stringify({ content: { competition: 'AFLM', draftSelections: [] } })]
   );
   expect(absent.rows).toEqual([{ current: true }]);
+}, 300_000);
+
+// Asset-scoped supersession (0256, migration 0266). A follow-up promotion re-versions a draft night
+// for a few players; the scoped successor supersedes the origin only for the selections it cites or
+// re-lists, so the untouched selections stay current canonical and the draft still counts as
+// promoted. A successor that re-lists a selection retires it, and the draft no longer counts.
+it('counts a draft as promoted under a scoped successor and not under a re-listing', async () => {
+  const ws = await workspace();
+  const seeded = await createSyntheticAcquisitionPlayerPromotion(ws.pool, {
+    draftSessions: true,
+    fixtureNamespace: 'seed',
+    providerEventId: '2024-seed-alpha',
+    nativePlayerId: 'seed-player',
+  });
+  const seededIds = seeded.candidate.content.draftSelections
+    .map(({ selectionId }) => selectionId)
+    .sort();
+  const secondId = seeded.candidate.content.draftSelections.find(
+    ({ selectionNumber }) => selectionNumber === 2
+  )!.selectionId;
+  const currentIds = async () =>
+    (
+      await ws.pool.query<{ selection_id: string }>(
+        "SELECT selection_id FROM outcome_current_canonical_draft_selection_ids('AFLM') ORDER BY selection_id"
+      )
+    ).rows.map(({ selection_id }) => selection_id);
+  const session = async (selectionNumber: number) =>
+    (
+      await ws.pool.query<{ event_version_id: string; player_id: string }>(
+        `SELECT selection.event_version_id,selection.player_id FROM outcome_draft_selection selection
+          WHERE selection.selection_number=$1`,
+        [selectionNumber]
+      )
+    ).rows[0]!;
+  const second = await session(2);
+  const other = await session(1);
+  let ordinal = 0;
+  /** A later version of session 2's event, the way a scoped follow-up promotion re-versions a night. */
+  const supersede = async (previousVersionId: string, suffix: string) => {
+    const eventVersionId = `event-version:synthetic-scoped-${suffix}`;
+    const rowId = `${eventVersionId}:event-row`;
+    await ws.pool.query(
+      `INSERT INTO outcome_import_row
+         (import_row_id,import_run_id,source_locator,source_ordinal,record_kind,row_sha256,parse_status,raw_payload,recorded_at)
+       SELECT $1,import_row.import_run_id,import_row.source_locator||'#'||$2,1000000+$3,
+              import_row.record_kind,encode(sha256(convert_to($1,'UTF8')),'hex'),import_row.parse_status,import_row.raw_payload,clock_timestamp()
+         FROM outcome_event_version version
+         JOIN outcome_import_row import_row ON import_row.import_row_id=version.source_import_row_id
+        WHERE version.event_version_id=$4`,
+      [rowId, suffix, ++ordinal, previousVersionId]
+    );
+    await ws.pool.query(
+      `INSERT INTO outcome_event_version
+         (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,official_name,status,
+          source_import_row_id,supersedes_version_id,recorded_at,date_precision)
+       SELECT $1,event_id,version+1,kind,acquisition_mechanism,event_date,official_name,'approved',
+              $2,event_version_id,clock_timestamp(),date_precision
+         FROM outcome_event_version WHERE event_version_id=$3`,
+      [eventVersionId, rowId, previousVersionId]
+    );
+    return eventVersionId;
+  };
+  /** A selection on a later version, copied from a player's own promoted selection under a number. */
+  const addSelection = async (eventVersionId: string, player: string, selectionNumber: number) =>
+    ws.pool.query(
+      `INSERT INTO outcome_draft_selection
+       SELECT * FROM jsonb_populate_record(NULL::outcome_draft_selection,
+         (SELECT to_jsonb(selection) || jsonb_build_object(
+            'selection_id','synthetic-scoped-selection:'||$2::text||':'||$1::text,'event_version_id',$2::text,
+            'selection_number',$1::int,'pick_id',NULL,'source_import_row_id',$2::text||':event-row')
+            FROM outcome_draft_selection selection
+            WHERE selection.player_id=$3 ORDER BY selection.selection_number LIMIT 1))`,
+      [selectionNumber, eventVersionId, player]
+    );
+
+  // Before 0266 a scoped successor retired every selection of the origin version.
+  const scoped = await supersede(second.event_version_id, 'scoped');
+  await addSelection(scoped, other.player_id, 3);
+  expect(await currentIds()).toEqual(seededIds.filter((id) => id !== secondId));
+  await ws.pool.query(ws.migrationSql);
+  expect(await currentIds()).toEqual(seededIds);
+  // The deferred candidate holding selection 2 still records the draft and promotes nothing of it.
+  const deferred = await promote(ws, 'skip', 'deferred', false, true, true);
+  expect(deferred.candidate.content.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
+  });
+  expect(deferred.promotion).toMatchObject({ draftSelectionCount: 0, pickRealizationCount: 0 });
+  const stillCurrent = await ws.pool.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_drafts_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1`,
+    [deferred.candidate.candidateId]
+  );
+  expect(stillCurrent.rows).toEqual([{ current: true }]);
+
+  // A successor that re-lists selection 2 retires it: the draft no longer counts as promoted.
+  const relisting = await supersede(scoped, 'relisting');
+  await addSelection(relisting, second.player_id, 2);
+  expect(await currentIds()).toEqual(seededIds.filter((id) => id !== secondId));
+  const retired = await ws.pool.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_drafts_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1`,
+    [deferred.candidate.candidateId]
+  );
+  expect(retired.rows).toEqual([{ current: false }]);
 }, 300_000);

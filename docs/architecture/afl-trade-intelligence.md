@@ -4083,7 +4083,9 @@ The remaining work proceeds through these independently verifiable gates:
    typed-count finalization checks. A draft whose every candidate selection is already current
    canonical under a finalized promotion is recorded as `promotedDrafts` at preparation (migration
    0265: `outcome_current_canonical_draft_selection_ids`, checked on candidate insert and re-checked
-   by the promoter) and left to that promotion, with the realizations into it skipped and counted,
+   by the promoter; since 0266 a selection is current unless
+   `outcome_event_version_superseded_for` retires it, the same asset-scoped rule that keeps draftee
+   spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
    so the session-less metadata path never creates a second root for a session-keyed draft. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
