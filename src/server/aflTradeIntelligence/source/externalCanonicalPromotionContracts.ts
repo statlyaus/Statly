@@ -505,6 +505,16 @@ const requestPickLineageDeferralSchema = z
       .min(1)
       .max(100_000)
       .optional(),
+    /**
+     * Picks the written transfers number differently, defined from their one usable custody
+     * observation; each asset keeps its trade-time number. Present only when any, with their ids.
+     */
+    custodyDefinedPickCount: z.number().int().positive().optional(),
+    custodyDefinedPickIds: z
+      .array(aflTradeContentAddressedIdSchema('draft-pick'))
+      .min(1)
+      .max(100_000)
+      .optional(),
   })
   .superRefine((deferral, context) => {
     for (const [count, ids, label] of [
@@ -514,6 +524,7 @@ const requestPickLineageDeferralSchema = z
         deferral.retainedPickDefinitionIds,
         'Retained pick definition',
       ],
+      [deferral.custodyDefinedPickCount, deferral.custodyDefinedPickIds, 'Custody-defined pick'],
     ] as const) {
       const listed = ids ?? [];
       if (

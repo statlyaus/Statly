@@ -96,7 +96,8 @@ const promote = (
   yearPageDraftAlreadyPromoted = false,
   reuseSeededTargets = false,
   transactionAlreadyPromoted = false,
-  deferredCustody = false
+  deferredCustody = false,
+  custodyDefinedPick = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -106,6 +107,7 @@ const promote = (
     nativePlayerId: transactionAlreadyPromoted ? 'seed-player' : `${namespace}-player`,
     ...(transactionAlreadyPromoted ? { transactionAlreadyPromoted: true } : {}),
     ...(deferredCustody ? { deferredCustody: true } : {}),
+    ...(custodyDefinedPick ? { custodyDefinedPick: true } : {}),
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
     ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
@@ -1180,3 +1182,50 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
     })
   ).toEqual({ ...result, idempotentReplay: true });
 }, 600_000);
+
+// A stable pick the written transfers number differently (46 one way, 56 back) with one usable
+// custody observation (slot 56, round 3): under the deferral the pick is defined from that custody
+// row, each asset keeps its trade-time number, and the receipt lists it as custody-defined (#869).
+it('defines a differently numbered pick from its one usable custody observation under the deferral', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const deferred = await promote(
+    ws,
+    'numbered',
+    'deferred',
+    false,
+    false,
+    false,
+    false,
+    false,
+    true
+  );
+  const numbered = deferred.candidate.content.transfers.filter(
+    ({ asset }) => asset.kind === 'pick_entitlement' && asset.nominalPick !== null
+  );
+  expect(
+    numbered.map(({ asset }) => (asset as { nominalPick: number }).nominalPick).sort()
+  ).toEqual([46, 56]);
+  const pickId = (numbered[0]!.asset as { pickId: string }).pickId;
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 3,
+    custodyDefinedPickCount: 1,
+    custodyDefinedPickIds: [pickId],
+  });
+  expect(deferred.promotion).toMatchObject({ transferCount: 4, pickCustodyCount: 1 });
+  const pick = await ws.pool.query<{ nominal_round: number; nominal_pick: number }>(
+    'SELECT nominal_round,nominal_pick FROM outcome_draft_pick WHERE pick_id=$1',
+    [pickId]
+  );
+  expect(pick.rows).toEqual([{ nominal_round: 3, nominal_pick: 56 }]);
+  // Each asset keeps its own trade-time number as its recorded label.
+  const labels = await ws.pool.query<{ raw_description: string }>(
+    `SELECT asset.raw_description FROM outcome_event_asset asset
+       JOIN outcome_external_canonical_promotion_record record
+         ON record.canonical_record_id=asset.asset_version_id AND record.record_kind='transfer'
+      WHERE record.promotion_id=$1 AND asset.pick_id=$2 ORDER BY asset.raw_description`,
+    [deferred.promotion.promotionId, pickId]
+  );
+  expect(labels.rows.map(({ raw_description }) => raw_description)).toEqual(['Pick 46', 'Pick 56']);
+}, 300_000);

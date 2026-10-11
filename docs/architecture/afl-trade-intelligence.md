@@ -4097,7 +4097,11 @@ The remaining work proceeds through these independently verifiable gates:
    different facts and no reviewed lineage registration is retained under the deferral, referenced
    unchanged with no facts written, and the receipt lists `retainedPickDefinitionIds` with
    `retainedPickDefinitionCount` (decided from the stored facts before the receipt is addressed, so
-   a replay derives the same list); without a deferral it is the immutable conflict. A custody observation without a usable status is recorded as
+   a replay derives the same list); without a deferral it is the immutable conflict. A stable pick
+   the written transfers number differently is defined, under the deferral, from its one usable
+   custody observation and listed as `custodyDefinedPickIds` with `custodyDefinedPickCount`, each
+   asset keeping its trade-time number; no such single custody row, or more than one, is still
+   the conflict. A custody observation without a usable status is recorded as
    `deferredCustodyIds` (migration 0268 checks each is an unusable candidate custody row, on insert
    and at promotion; the unusable-record count ignores it) and written as nothing, counted on the
    receipt as `deferredCustodyCount`. A deferred-lineage promotion is excluded from the

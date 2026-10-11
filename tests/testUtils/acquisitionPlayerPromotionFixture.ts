@@ -120,6 +120,13 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * Needs `pickSideIssues`.
      */
     deferredCustody?: boolean;
+    /**
+     * The trade also moves one stable current pick twice under different numbers ("Pick 46" one
+     * way, "Pick 56" back) with exactly one usable custody observation for it (slot 56, round 3,
+     * statlyaus/Statly#869): under `deferred` the pick is defined from that custody row and listed
+     * on the receipt as custody-defined. Needs `pickSideIssues`.
+     */
+    custodyDefinedPick?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -181,6 +188,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('An already-promoted trade is a pick-side issue profile without a lifecycle.');
   if (options.deferredCustody && !options.pickSideIssues)
     throw new Error('Deferred custody is a pick-side issue profile.');
+  if (options.custodyDefinedPick && !options.pickSideIssues)
+    throw new Error('A custody-defined pick is a pick-side issue profile.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -324,6 +333,21 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   const reciprocalFuturePickCustodyId = createAflTradeContentAddress('external-pick-custody', {
     pickId: reciprocalFuturePickId,
     observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
+    currentClubId: targets.fromClubId,
+  });
+  const numberedPickId = createAflTradeContentAddress('draft-pick', {
+    fixtureNamespace,
+    synthetic: 'numbered-pick',
+  });
+  const numberedPickTransferIds = (['a', 'b'] as const).map((side) =>
+    createAflTradeContentAddress('external-transfer', {
+      transactionId,
+      nativeTransferId: `synthetic-numbered-pick-${side}`,
+    })
+  );
+  const numberedPickCustodyId = createAflTradeContentAddress('external-pick-custody', {
+    pickId: numberedPickId,
+    observedAt: `${seasonYear}-10-16T00:00:00.000Z`,
     currentClubId: targets.fromClubId,
   });
   let reviewedAt: string;
@@ -637,6 +661,35 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             },
           })
         );
+      }
+
+      if (options.custodyDefinedPick && request.capabilityId === 'draftguru-trade-detail') {
+        for (const [index, side] of (
+          [
+            { key: 'a', number: 46, from: targets.fromClubName, to: targets.toClubName },
+            { key: 'b', number: 56, from: targets.toClubName, to: targets.fromClubName },
+          ] as const
+        ).entries()) {
+          targetEvidence.push(
+            createAflTradeExternalEvidenceEnvelope({
+              ...evidence.content,
+              sourceRow: { ordinal: 40 + index, sourceKey: `synthetic-numbered-pick-${side.key}` },
+              claim: {
+                kind: 'directed_transfer',
+                nativeEventId: providerEventId,
+                nativeTransferId: `synthetic-numbered-pick-${side.key}`,
+                fromClub: { nativeId: null, recordedName: side.from },
+                toClub: { nativeId: null, recordedName: side.to },
+                asset: {
+                  kind: 'current_pick',
+                  draftYear: seasonYear,
+                  draftType: 'national',
+                  recordedPickNumber: side.number,
+                },
+              },
+            })
+          );
+        }
       }
 
       if (hasDraftSessions && evidence.content.claim.kind === 'draft_selection') {
@@ -2443,6 +2496,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           ...(options.reciprocalFuturePickYearOffset === undefined
             ? []
             : [reciprocalFuturePickTransferId]),
+          ...(options.custodyDefinedPick ? numberedPickTransferIds : []),
         ].sort(),
         // A trade with a blocking pick transfer is unresolved; under the deferral the exchange is
         // complete and only the pick's custody is left for later lineage.
@@ -2547,6 +2601,37 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             },
           ]),
 
+      ...(options.custodyDefinedPick
+        ? (
+            [
+              { key: 'a', number: 46, fromClubId: targets.fromClubId, toClubId: targets.toClubId },
+              { key: 'b', number: 56, fromClubId: targets.toClubId, toClubId: targets.fromClubId },
+            ] as const
+          ).map((side, index) => ({
+            transferId: numberedPickTransferIds[index]!,
+            transactionId,
+            fromClubId: side.fromClubId,
+            toClubId: side.toClubId,
+            asset: {
+              kind: 'pick_entitlement' as const,
+              pickId: numberedPickId,
+              draftYear: seasonYear,
+              draftType: 'national' as const,
+              nominalRound: null,
+              nominalPick: side.number,
+              originalClubId: targets.toClubId,
+              recordedLabel: `Pick ${side.number}`,
+            },
+            status: 'single_source' as const,
+            evidenceIds: playerBatch.batch.content.evidence
+              .filter(
+                (row) =>
+                  row.content.claim.kind === 'directed_transfer' &&
+                  row.content.claim.nativeTransferId === `synthetic-numbered-pick-${side.key}`
+              )
+              .map((row) => row.evidenceId),
+          }))
+        : []),
       {
         transferId,
         transactionId,
@@ -2587,8 +2672,32 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }),
     ].sort((a, b) => a.transferId.localeCompare(b.transferId)),
     draftSelections: [...draftSelections, ...pickSideSelections],
-    pickCustody:
-      options.reciprocalFuturePickYearOffset === undefined ||
+    pickCustody: [
+      // The numbered pick's one usable observation: the slot it became (56, round 3).
+      ...(options.custodyDefinedPick
+        ? [
+            {
+              custodyId: numberedPickCustodyId,
+              pickId: numberedPickId,
+              observedAt: `${seasonYear}-10-16T00:00:00.000Z`,
+              draftYear: seasonYear,
+              draftType: 'national' as const,
+              roundNumber: 3,
+              recordedPickNumber: 56,
+              originalClubId: targets.toClubId,
+              currentClubId: targets.fromClubId,
+              status: 'single_source' as const,
+              evidenceIds: playerBatch.batch.content.evidence
+                .filter(
+                  (row) =>
+                    row.content.claim.kind === 'directed_transfer' &&
+                    row.content.claim.nativeTransferId === 'synthetic-numbered-pick-b'
+                )
+                .map((row) => row.evidenceId),
+            },
+          ]
+        : []),
+      ...(options.reciprocalFuturePickYearOffset === undefined ||
       (pickSide !== null && !options.deferredCustody)
         ? []
         : [
@@ -2614,7 +2723,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 )
                 .map((row) => row.evidenceId),
             },
-          ],
+          ]),
+    ],
     pickLineage: [],
     issues: pickSideIssues,
     reconciledAt: reviewedAt,
