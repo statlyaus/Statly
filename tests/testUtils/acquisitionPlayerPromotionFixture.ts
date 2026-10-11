@@ -90,6 +90,13 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * with the default anchor, no draft sessions and no lifecycle.
      */
     pickSideIssues?: 'deferred' | 'blocking';
+    /**
+     * The reciprocal future pick names an original club nobody has reviewed (a concession
+     * entitlement label, statlyaus/Statly#869 candidate four): its `transfer:…:original-club`
+     * identity is unresolved, so the pick carries no origin and an unresolvable pick id. Needs
+     * `pickSideIssues`; under `deferred` that identity issue is deferred with the lineage.
+     */
+    reciprocalFuturePickOriginalClubUnresolved?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -143,6 +150,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error(
       'Pick-side issues need the reciprocal future pick, the default anchor, no draft sessions and no lifecycle.'
     );
+  if (options.reciprocalFuturePickOriginalClubUnresolved && !options.pickSideIssues)
+    throw new Error('An unreviewed original club is a pick-side issue profile.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -268,6 +277,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     roundNumber: 1,
     originalClubId: targets.toClubId,
   });
+  // A concession label is not a club: no reviewed club resolution ever matches it.
+  const reciprocalFuturePickOriginalClub = options.reciprocalFuturePickOriginalClubUnresolved
+    ? { nativeId: null, recordedName: `${fixtureNamespace} concession` }
+    : { nativeId: null, recordedName: targets.toClubName };
   const reciprocalFuturePickCustodyId = createAflTradeContentAddress('external-pick-custody', {
     pickId: reciprocalFuturePickId,
     observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
@@ -579,7 +592,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
                 draftType: 'national',
                 roundNumber: 1,
-                originalClub: { nativeId: null, recordedName: targets.toClubName },
+                originalClub: reciprocalFuturePickOriginalClub,
               },
             },
           })
@@ -2176,7 +2189,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     )
     .map((row) => row.evidenceId)
     .sort();
-  const pickSideIssues =
+  // With no reviewed original club the reconciler cannot name the entitlement: the pick id is
+  // addressed by the transfer evidence row and the asset carries no origin.
+  const reciprocalFuturePickAsset = options.reciprocalFuturePickOriginalClubUnresolved
+    ? {
+        pickId: createAflTradeContentAddress('draft-pick', {
+          unresolvedTransferEvidenceId: reciprocalPickEvidenceIds[0]!,
+        }),
+        originalClubId: null,
+      }
+    : { pickId: reciprocalFuturePickId, originalClubId: targets.toClubId };
+  const pickSideIssues = (
     pickSide === null
       ? []
       : [
@@ -2187,6 +2210,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
             evidenceIds: reciprocalPickEvidenceIds,
           },
+          ...(options.reciprocalFuturePickOriginalClubUnresolved
+            ? [
+                {
+                  code: 'identity_unresolved' as const,
+                  severity: pickSideSeverity,
+                  subjectKey: 'transfer:synthetic-reciprocal-future-pick:original-club',
+                  detail: `No current reviewed club resolution exists for draftguru identity ${reciprocalFuturePickOriginalClub.recordedName}.`,
+                  evidenceIds: reciprocalPickEvidenceIds,
+                },
+              ]
+            : []),
           ...yearPageSelections.flatMap(({ row, claim }) =>
             (['player', 'club'] as const).map((role) => ({
               code: 'identity_unresolved' as const,
@@ -2198,7 +2232,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               evidenceIds: [row.evidenceId],
             }))
           ),
-        ];
+        ]
+  ).sort((a, b) => a.subjectKey.localeCompare(b.subjectKey) || a.code.localeCompare(b.code));
   const pickSideSelections = yearPageSelections.map(({ row, claim }) => {
     const selectionId = createAflTradeContentAddress('external-draft-selection', {
       draftYear: claim.draftYear,
@@ -2376,12 +2411,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               toClubId: targets.fromClubId,
               asset: {
                 kind: 'pick_entitlement' as const,
-                pickId: reciprocalFuturePickId,
+                pickId: reciprocalFuturePickAsset.pickId,
                 draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
                 draftType: 'national' as const,
                 nominalRound: 1,
                 nominalPick: null,
-                originalClubId: targets.toClubId,
+                originalClubId: reciprocalFuturePickAsset.originalClubId,
                 recordedLabel: null,
               },
               status: pickSide === null ? ('single_source' as const) : ('unresolved' as const),

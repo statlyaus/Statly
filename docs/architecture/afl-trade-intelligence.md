@@ -4064,8 +4064,13 @@ The remaining work proceeds through these independently verifiable gates:
    Every reconciliation issue is `blocking` unless the candidate was prepared under an approved owner
    `reconciliation_scope` decision naming its completion. With it, issues whose subject is pick-side
    (`lineage_unresolved`, `pick_outcome_unresolved`, `pick_identity_conflict`, and
-   `identity_unresolved` on a `selection:` or `pick-outcome:` subject) are recorded `deferred` and the
-   candidate carries `pickLineageDeferral: { decisionId }`; player-side issues stay blocking. The
+   `identity_unresolved` on a `selection:` or `pick-outcome:` subject or on the
+   `transfer:…:original-club` role, the club whose future pick is traded) are recorded `deferred` and
+   the candidate carries `pickLineageDeferral: { decisionId }`; player-side issues, including the
+   `transfer:…:from`, `:to` and `:player` roles, stay blocking. A pick whose original club is
+   unresolved has an evidence-addressed pick id and an unresolved status, so its lineage issue is
+   deferred with the identity and the promotion writes the directed asset with no origin, no
+   custody observation and no realization. The
    stored `issue_count` is the blocking count, so the promotion gate keeps its meaning;
    `deferred_issue_count` and `lineage_deferral_decision_id` sit beside it under a CHECK and an insert
    trigger that requires the current approved decision for exactly that completion. A deferred

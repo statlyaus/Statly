@@ -788,9 +788,13 @@ supersede production Gate authority, and production execution cannot reuse non-p
    The command refuses a decision that is absent, not approved, superseded or names another
    completion before it builds anything. With it, issues whose subject is pick-side are recorded with
    `severity: deferred`: `lineage_unresolved`, `pick_outcome_unresolved`, `pick_identity_conflict`,
-   and `identity_unresolved` whose subject is a draft selection (`selection:…`) or a stated pick
-   outcome (`pick-outcome:…`). Player-transfer, transaction-party, custody-club and session identities
-   stay blocking and are resolved by ordinary identity review. A trade whose only unresolved transfer
+   and `identity_unresolved` whose subject is a draft selection (`selection:…`), a stated pick
+   outcome (`pick-outcome:…`) or the original club of a traded future pick
+   (`transfer:<native-transfer-id>:original-club`, the concession labels Draftguru prints as a
+   club, which the owner rejected as club identities on 2026-10-06; such a pick is written with no
+   origin and no custody). Player-transfer (`transfer:…:player`), exchange-club (`transfer:…:from`,
+   `transfer:…:to`), transaction-party, custody-club and session identities stay blocking and are
+   resolved by ordinary identity review. A trade whose only unresolved transfer
    is a pick with resolved clubs is a complete exchange; the pick's custody is its lineage, which the
    deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
    candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds

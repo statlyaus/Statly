@@ -56,13 +56,19 @@ afterAll(async () => {
   }
 });
 
-const promote = (ws: Workspace, namespace: string, pickSideIssues?: 'deferred' | 'blocking') =>
+const promote = (
+  ws: Workspace,
+  namespace: string,
+  pickSideIssues?: 'deferred' | 'blocking',
+  originalClubUnresolved = false
+) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
     fixtureNamespace: namespace,
     providerEventId: `2024-${namespace}-alpha`,
     nativePlayerId: `${namespace}-player`,
     ...(pickSideIssues ? { pickSideIssues } : {}),
+    ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
   });
 
 const count = async (ws: Workspace, sql: string) =>
@@ -259,4 +265,90 @@ it('promotes a deferred-lineage candidate without the pick side and keeps it out
   expect(eligible.rows[0]!.definition).toContain(
     "receipt_json#>'{content,pickLineageDeferral}' IS NULL"
   );
+}, 300_000);
+
+// Candidate four's four blocking subjects are `transfer:future-pick:…:original-club` identities: the
+// concession labels Draftguru prints as the original club of a traded pick, which the owner rejected
+// as club identities. That identity is pick-side: under the deferral the pick transfer is still
+// written as a directed asset with no origin, and no custody row exists for the pick.
+it('defers a pick transfer whose original club is unresolved and promotes it without custody', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const deferred = await promote(ws, 'origin', 'deferred', true);
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 4,
+  });
+  const issues = await ws.pool.query<{ code: string; subject_key: string; severity: string }>(
+    `SELECT code,subject_key,issue_json->>'severity' AS severity
+       FROM outcome_external_reconciliation_issue WHERE candidate_id=$1 ORDER BY subject_key`,
+    [deferred.candidate.candidateId]
+  );
+  expect(issues.rows.map(({ severity }) => severity)).toEqual(Array(4).fill('deferred'));
+  expect(issues.rows.map(({ code, subject_key }) => ({ code, subject_key }))).toEqual([
+    { code: 'lineage_unresolved', subject_key: expect.stringMatching(/^lineage:/) },
+    { code: 'identity_unresolved', subject_key: expect.stringMatching(/^selection:.*:club$/) },
+    { code: 'identity_unresolved', subject_key: expect.stringMatching(/^selection:.*:player$/) },
+    {
+      code: 'identity_unresolved',
+      subject_key: 'transfer:synthetic-reciprocal-future-pick:original-club',
+    },
+  ]);
+  const candidate = await ws.pool.query<{ issue_count: number; deferred_issue_count: number }>(
+    `SELECT issue_count,deferred_issue_count FROM outcome_external_reconciliation_candidate
+      WHERE candidate_id=$1`,
+    [deferred.candidate.candidateId]
+  );
+  expect(candidate.rows).toEqual([{ issue_count: 0, deferred_issue_count: 4 }]);
+
+  // The promotion wrote the trade and both directed assets; the pick exists with no origin and
+  // gets no custody observation and no realization.
+  const promotion = await ws.pool.query<{
+    transfer_count: number;
+    pick_custody_count: number;
+    pick_realization_count: number;
+    draft_selection_count: number;
+  }>(
+    `SELECT transfer_count,pick_custody_count,pick_realization_count,draft_selection_count
+       FROM outcome_external_canonical_promotion WHERE promotion_id=$1`,
+    [deferred.promotion.promotionId]
+  );
+  expect(promotion.rows).toEqual([
+    {
+      transfer_count: 2,
+      pick_custody_count: 0,
+      pick_realization_count: 0,
+      draft_selection_count: 0,
+    },
+  ]);
+  const pick = await ws.pool.query<{ pick_id: string; original_club_id: string | null }>(
+    `SELECT pick.pick_id,pick.original_club_id FROM outcome_draft_pick pick
+       JOIN outcome_event_asset asset ON asset.pick_id=pick.pick_id
+       JOIN outcome_external_canonical_promotion_record record
+         ON record.canonical_record_id=asset.asset_version_id AND record.record_kind='transfer'
+      WHERE record.promotion_id=$1`,
+    [deferred.promotion.promotionId]
+  );
+  expect(pick.rows).toEqual([
+    { pick_id: expect.stringMatching(/^draft-pick:[a-f0-9]{64}$/), original_club_id: null },
+  ]);
+  expect(await count(ws, 'outcome_pick_custody_observation')).toBe(0);
+  expect(await count(ws, 'outcome_pick_realization')).toBe(0);
+  // The deferred set the database derives for the promotion validators holds that pick.
+  const derived = await ws.pool.query<{ pick_id: string }>(
+    'SELECT pick_id FROM outcome_external_candidate_deferred_picks($1)',
+    [deferred.candidate.candidateId]
+  );
+  expect(derived.rows).toEqual([{ pick_id: pick.rows[0]!.pick_id }]);
+}, 300_000);
+
+it('keeps an unresolved original club blocking without the deferral', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  await expect(promote(ws, 'origin-blocking', 'blocking', true)).rejects.toThrow(/issue-free/);
+  const candidate = await ws.pool.query<{ issue_count: number; deferred_issue_count: number }>(
+    'SELECT issue_count,deferred_issue_count FROM outcome_external_reconciliation_candidate'
+  );
+  expect(candidate.rows).toEqual([{ issue_count: 4, deferred_issue_count: 0 }]);
+  expect(await count(ws, 'outcome_external_canonical_promotion')).toBe(0);
 }, 300_000);

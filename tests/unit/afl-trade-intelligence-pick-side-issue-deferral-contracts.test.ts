@@ -263,10 +263,21 @@ describe('reconciliation under a reviewed pick-side deferral (#869)', () => {
       { code: 'identity_unresolved', subjectKey: 'selection:2025:national:14:player' },
       { code: 'identity_unresolved', subjectKey: 'selection:2025:national:14:club' },
       { code: 'identity_unresolved', subjectKey: 'pick-outcome:t:receiving-club' },
+      // The club whose future pick is traded (candidate four's concession entitlements).
+      {
+        code: 'identity_unresolved',
+        subjectKey: 'transfer:future-pick:2023:national:2:north-melbourne-concession:original-club',
+      },
+      { code: 'identity_unresolved', subjectKey: 'transfer:t:original-club' },
     ];
     const playerSide = [
       { code: 'identity_unresolved', subjectKey: 'transfer:t:player' },
       { code: 'identity_unresolved', subjectKey: 'transfer:t:from' },
+      { code: 'identity_unresolved', subjectKey: 'transfer:t:to' },
+      // The role is the suffix: a native transfer id containing the words is not the original club.
+      { code: 'identity_unresolved', subjectKey: 'transfer:original-club:from' },
+      { code: 'identity_unresolved', subjectKey: 'transfer:t:original-club:to' },
+      { code: 'identity_resolution_conflict', subjectKey: 'transfer:t:original-club' },
       { code: 'identity_unresolved', subjectKey: 'custody:external-evidence:x:current' },
       { code: 'identity_unresolved', subjectKey: 'draft-session:2025:national:1:member:player' },
       { code: 'transaction_incomplete', subjectKey: 'transaction:e' },
@@ -277,6 +288,176 @@ describe('reconciliation under a reviewed pick-side deferral (#869)', () => {
     expect(playerSide.map(isAflTradePickSideReconciliationIssue)).toEqual(
       playerSide.map(() => false)
     );
+  });
+});
+
+// A 2023 trade whose future pick names an original club nobody can review: Draftguru labels the
+// North Melbourne concession entitlements as if they were clubs, and the owner rejected those names
+// as club identities (statlyaus/Statly#869). The pick cannot be identified, so its custody cannot be:
+// the original-club identity and the lineage are both pick-side.
+const concession = { nativeId: null, recordedName: 'North Melbourne concession' };
+const concessionTrade = batch('draftguru', 'b', [
+  {
+    kind: 'transaction',
+    nativeEventId: '2023-gws-bulldogs',
+    seasonYear: 2023,
+    occurredOn: '2023-10-11',
+    transactionType: 'trade',
+    title: 'GWS and Western Bulldogs trade',
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2023-gws-bulldogs',
+    nativePartyId: 'gws',
+    club: gws,
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2023-gws-bulldogs',
+    nativePartyId: 'western-bulldogs',
+    club: bulldogs,
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2023-gws-bulldogs',
+    nativeTransferId: 'harry-kyle',
+    fromClub: bulldogs,
+    toClub: gws,
+    asset: { kind: 'player', player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' } },
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2023-gws-bulldogs',
+    nativeTransferId: 'future-pick:2024:national:1:north-melbourne-concession-1',
+    fromClub: gws,
+    toClub: bulldogs,
+    asset: {
+      kind: 'future_pick',
+      draftYear: 2024,
+      draftType: 'national',
+      roundNumber: 1,
+      originalClub: concession,
+    },
+  },
+]);
+
+function reconcileConcession(deferral: boolean) {
+  return reconcileAflTradeExternalEvidence({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2023,
+    sourceBatches: [concessionTrade],
+    identityResolutions: resolutions,
+    sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+      ...sourceAuthority,
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([concessionTrade.batchId]),
+    }),
+    reconciledAt: '2026-08-09T05:00:00.000Z',
+    ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+  });
+}
+const originalClubSubject =
+  'transfer:future-pick:2024:national:1:north-melbourne-concession-1:original-club';
+
+describe('a pick transfer whose original club is unresolved (#869 candidate four)', () => {
+  it('without the option both the original-club identity and the lineage block', () => {
+    const plain = reconcileConcession(false);
+    expect(plain.content.pickLineageDeferral).toBeUndefined();
+    expect(
+      plain.content.issues.map(({ code, severity, subjectKey }) => ({ code, severity, subjectKey }))
+    ).toEqual([
+      {
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `lineage:${plain.content.transfers.find(({ asset }) => asset.kind === 'pick_entitlement')!.transferId}`,
+      },
+      { code: 'identity_unresolved', severity: 'blocking', subjectKey: originalClubSubject },
+    ]);
+    expect(plain.content.transactions.map(({ status }) => status)).toEqual(['unresolved']);
+  });
+
+  it('with the option both are deferred, the pick has no origin and no custody is written', () => {
+    const deferred = reconcileConcession(true);
+    expect(deferred.content.pickLineageDeferral).toEqual({ decisionId });
+    expect(deferred.content.issues.map(({ severity }) => severity)).toEqual([
+      'deferred',
+      'deferred',
+    ]);
+    expect(deferred.content.issues.map(({ subjectKey }) => subjectKey)).toContain(
+      originalClubSubject
+    );
+    const pickTransfer = deferred.content.transfers.find(
+      ({ asset }) => asset.kind === 'pick_entitlement'
+    )!;
+    expect(pickTransfer).toMatchObject({
+      status: 'unresolved',
+      fromClubId: 'club-gws',
+      toClubId: 'club-western-bulldogs',
+      asset: { originalClubId: null, pickId: expect.stringMatching(/^draft-pick:[a-f0-9]{64}$/) },
+    });
+    // The exchange is complete: both parties and the traded player are identified.
+    expect(deferred.content.transactions.map(({ status }) => status)).toEqual(['single_source']);
+    const scope = aflTradePickLineageDeferralScope(deferred.content);
+    expect(scope).toMatchObject({ deferredIssueCount: 2, blockingIssueCount: 0 });
+    expect([...scope.deferredTransferIds]).toEqual([pickTransfer.transferId]);
+    expect([...scope.deferredPickIds]).toEqual([(pickTransfer.asset as { pickId: string }).pickId]);
+    expect([...scope.deferredDraftKeys]).toEqual([]);
+    expect(aflTradePromotionWriteScope(deferred.content)).toMatchObject({
+      draftSelections: [],
+      pickCustody: [],
+      pickLineage: [],
+    });
+    expect(parseAflTradeExternalReconciliationCandidate(deferred).candidateId).toBe(
+      deferred.candidateId
+    );
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: deferred,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [],
+    });
+    expect(
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: deferred, proposal })
+    ).toMatchObject({
+      transactionCount: 1,
+      transferCount: 2,
+      pickCustodyCount: 0,
+      pickRealizationCount: 0,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 2 },
+    });
+  });
+
+  it('keeps the exchange clubs blocking: an unresolved sending club is not deferred', () => {
+    const unresolvedSender = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2023,
+      sourceBatches: [concessionTrade],
+      // No GWS resolution: the party, the sender of the pick and the receiver of the player.
+      identityResolutions: resolutions.slice(1),
+      sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+        ...sourceAuthority,
+        candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([concessionTrade.batchId]),
+      }),
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+      pickLineageDeferral: { decisionId },
+    });
+    const blocking = unresolvedSender.content.issues
+      .filter(({ severity }) => severity === 'blocking')
+      .map(({ code, subjectKey }) => ({ code, subjectKey }));
+    expect(blocking).toEqual([
+      { code: 'transaction_incomplete', subjectKey: 'transaction:2023-gws-bulldogs' },
+      { code: 'identity_unresolved', subjectKey: 'transaction:2023-gws-bulldogs:party:gws' },
+      {
+        code: 'identity_unresolved',
+        subjectKey: 'transfer:future-pick:2024:national:1:north-melbourne-concession-1:from',
+      },
+      { code: 'identity_unresolved', subjectKey: 'transfer:harry-kyle:to' },
+    ]);
+    expect(
+      unresolvedSender.content.issues
+        .filter(({ severity }) => severity === 'deferred')
+        .map(({ subjectKey }) => subjectKey)
+    ).toContain(originalClubSubject);
   });
 });
 
@@ -313,6 +494,31 @@ describe('candidate contract for deferred issues', () => {
         ],
       })
     ).toThrow(/Only a pick-side issue can be deferred/);
+    for (const role of ['from', 'to'] as const) {
+      expect(() =>
+        createAflTradeExternalReconciliationCandidate({
+          ...deferred,
+          issues: [
+            ...deferred.issues,
+            {
+              code: 'identity_unresolved',
+              severity: 'deferred',
+              subjectKey: `transfer:pick-14:${role}`,
+              detail: 'An exchange club marked deferred.',
+              evidenceIds: deferred.issues[0]!.evidenceIds,
+            },
+          ],
+        })
+      ).toThrow(/Only a pick-side issue can be deferred/);
+    }
+    // The original club of a traded pick is pick-side: the contract accepts it deferred.
+    const concessionDeferred = reconcileConcession(true);
+    expect(
+      concessionDeferred.content.issues.find(({ subjectKey }) => subjectKey === originalClubSubject)
+    ).toMatchObject({ severity: 'deferred' });
+    expect(
+      createAflTradeExternalReconciliationCandidate(concessionDeferred.content).candidateId
+    ).toBe(concessionDeferred.candidateId);
     const { sourceAuthority: _authority, ...legacy } = deferred;
     expect(() =>
       createAflTradeExternalReconciliationCandidate({
