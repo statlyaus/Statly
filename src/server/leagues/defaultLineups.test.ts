@@ -4,19 +4,33 @@ const mocks = vi.hoisted(() => ({
   getPlayers: vi.fn(),
   loadLineupRoundSummaries: vi.fn(),
   loadRoundPlayerFixtures: vi.fn(),
+  warn: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
-vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { warn: mocks.warn } }));
 vi.mock('@/lib/data', () => ({ getPlayers: mocks.getPlayers }));
 vi.mock('@/server/leagues/lineupService', () => ({
   loadLineupRoundSummaries: mocks.loadLineupRoundSummaries,
   loadRoundPlayerFixtures: mocks.loadRoundPlayerFixtures,
 }));
 
-import { ensureDefaultLineups } from './defaultLineups';
+import type { InjuryListing } from '@/server/injuries/injuryListReadModel';
+
+import { ensureDefaultLineups, toAutoFillPlayers } from './defaultLineups';
 
 type RosterRow = { memberId: string; playerId: string; position: string; club?: string };
+type InjuryEntry = { playerId: string; status: string; injuryRaw: string; returnRaw: string };
+
+const NOW = new Date('2026-07-18T00:00:00.000Z');
+
+function injurySnapshot(entries: InjuryEntry[], confirmedAt = NOW) {
+  return { id: 'snapshot-1', confirmedAt, entries };
+}
+
+function lookup(listings: Record<string, InjuryListing>) {
+  return (player: { playerId: string }) => listings[player.playerId] ?? null;
+}
 
 function buildClient({
   existingMemberIds = [] as string[],
@@ -24,8 +38,17 @@ function buildClient({
   roster = [] as RosterRow[],
   lineupSlots = { DEF: 1, MID: 1, RUC: 1, FWD: 1, UTIL: 1 },
   interchangeSlots = 1,
+  injurySnapshot = null as ReturnType<typeof injurySnapshot> | null,
 } = {}) {
   return {
+    injuryListSnapshot: {
+      findFirst: vi
+        .fn()
+        .mockResolvedValue(
+          injurySnapshot && { id: injurySnapshot.id, confirmedAt: injurySnapshot.confirmedAt }
+        ),
+    },
+    injuryListEntry: { findMany: vi.fn().mockResolvedValue(injurySnapshot?.entries ?? []) },
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
@@ -70,6 +93,7 @@ function createdPlayers(client: ReturnType<typeof buildClient>, call = 0) {
 
 describe('ensureDefaultLineups', () => {
   beforeEach(() => {
+    mocks.warn.mockClear();
     mocks.getPlayers.mockResolvedValue([]);
     mocks.loadLineupRoundSummaries.mockResolvedValue([{ round: 4, aflRound: 22 }]);
     mocks.loadRoundPlayerFixtures.mockResolvedValue({ ok: true, fixturesByPlayerId: new Map() });
@@ -127,10 +151,12 @@ describe('ensureDefaultLineups', () => {
       ok: true,
       fixturesByPlayerId: new Map([['bye-fwd', { bye: true, startsAt: null }]]),
     });
-    mocks.getPlayers.mockResolvedValue([{ id: 'hurt-def', name: 'hurt-def', injury: 'Knee' }]);
     const client = buildClient({
       lineupSlots: { DEF: 1, MID: 0, RUC: 0, FWD: 1, UTIL: 0 },
       interchangeSlots: 0,
+      injurySnapshot: injurySnapshot([
+        { playerId: 'hurt-def', status: 'SEASON', injuryRaw: 'Knee', returnRaw: 'Season' },
+      ]),
       roster: [
         { memberId: 'member-2', playerId: 'hurt-def', position: 'DEF' },
         { memberId: 'member-2', playerId: 'fit-def', position: 'DEF/FWD' },
@@ -142,6 +168,7 @@ describe('ensureDefaultLineups', () => {
       leagueId: 'league-1',
       round: 1,
       memberIds: ['member-2'],
+      now: NOW,
       client: client as never,
     });
 
@@ -184,5 +211,114 @@ describe('ensureDefaultLineups', () => {
         client: client as never,
       })
     ).resolves.toBe(1);
+  });
+
+  it('picks a player listed as Test, and warns but benches nobody when the list is stale', async () => {
+    const client = buildClient({
+      lineupSlots: { DEF: 1, MID: 0, RUC: 0, FWD: 0, UTIL: 0 },
+      interchangeSlots: 0,
+      roster: [{ memberId: 'member-1', playerId: 'test-def', position: 'DEF' }],
+      injurySnapshot: injurySnapshot([
+        { playerId: 'test-def', status: 'TEST', injuryRaw: 'Knee', returnRaw: 'Test' },
+      ]),
+    });
+    await ensureDefaultLineups({
+      leagueId: 'league-1',
+      round: 1,
+      memberIds: ['member-1'],
+      now: NOW,
+      client: client as never,
+    });
+    expect(createdPlayers(client).players.create).toEqual([
+      { playerId: 'test-def', slot: 'DEF', slotIndex: 0 },
+    ]);
+    expect(mocks.warn).not.toHaveBeenCalledWith('Injury list unavailable', expect.anything());
+
+    const staleClient = buildClient({
+      lineupSlots: { DEF: 1, MID: 0, RUC: 0, FWD: 0, UTIL: 0 },
+      interchangeSlots: 0,
+      roster: [{ memberId: 'member-1', playerId: 'hurt-def', position: 'DEF' }],
+      injurySnapshot: injurySnapshot(
+        [{ playerId: 'hurt-def', status: 'SEASON', injuryRaw: 'Knee', returnRaw: 'Season' }],
+        new Date('2026-07-01T00:00:00.000Z')
+      ),
+    });
+    await ensureDefaultLineups({
+      leagueId: 'league-1',
+      round: 1,
+      memberIds: ['member-1'],
+      now: NOW,
+      client: staleClient as never,
+    });
+    expect(createdPlayers(staleClient).players.create).toEqual([
+      { playerId: 'hurt-def', slot: 'DEF', slotIndex: 0 },
+    ]);
+    expect(mocks.warn).toHaveBeenCalledTimes(1);
+    expect(mocks.warn).toHaveBeenCalledWith('Injury list unavailable', {
+      leagueId: 'league-1',
+      scope: 'default lineups',
+      reason: 'stale',
+    });
+  });
+});
+
+describe('toAutoFillPlayers', () => {
+  const roster = [
+    { playerId: 'test-player', name: 'Test Player', position: 'MID' },
+    { playerId: 'season-player', name: 'Season Player', position: 'MID' },
+    { playerId: 'fit-player', name: 'Fit Player', position: 'MID' },
+  ];
+
+  function availability(injuryFor: (player: { playerId: string }) => InjuryListing | null) {
+    return toAutoFillPlayers({
+      roster,
+      fixturesByPlayerId: new Map(),
+      injuryFor,
+      scores: new Map(),
+      now: NOW,
+    }).map((player) => [player.playerId, player.available]);
+  }
+
+  it('leaves a non-blocking (Test) listing available and benches a blocking one', () => {
+    expect(
+      availability(
+        lookup({
+          'test-player': { label: 'Knee (Test)', blocksSelection: false },
+          'season-player': { label: 'ACL (Season)', blocksSelection: true },
+        })
+      )
+    ).toEqual([
+      ['test-player', true],
+      ['season-player', false],
+      ['fit-player', true],
+    ]);
+  });
+
+  it('counts everyone as available without a current list', () => {
+    expect(availability(() => null)).toEqual([
+      ['test-player', true],
+      ['season-player', true],
+      ['fit-player', true],
+    ]);
+  });
+
+  it('matches by player id only, never by a shared name', () => {
+    const players = toAutoFillPlayers({
+      roster: [
+        { playerId: 'listed-id', name: 'Josh Kelly', position: 'MID' },
+        { playerId: 'namesake-id', name: 'Josh Kelly', position: 'MID' },
+      ],
+      fixturesByPlayerId: new Map(),
+      injuryFor: lookup({
+        'listed-id': { label: 'Hamstring (2-3 weeks)', blocksSelection: true },
+      }),
+      scores: new Map(),
+      now: NOW,
+    });
+
+    expect(players.map((player) => [player.playerId, player.available])).toEqual([
+      ['listed-id', false],
+      ['namesake-id', true],
+    ]);
   });
 });

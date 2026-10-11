@@ -59,7 +59,7 @@ function payload(overrides: Record<string, unknown> = {}) {
           opponent: 'Carlton',
           isHome: false,
           bye: false,
-          injury: 'Hamstring',
+          injury: { label: 'Hamstring (2-3 weeks)', blocksSelection: true },
         },
         {
           playerId: 'mid-2',
@@ -157,7 +157,7 @@ describe('LeagueMyTeamPanel', () => {
     const benchBye = screen.getByRole('row', { name: 'Bench: Back Pocket' });
     expect(within(benchBye).getAllByText('BYE').length).toBeGreaterThan(0);
     const injured = screen.getByRole('row', { name: 'Bench: Mid Fielder' });
-    expect(within(injured).getByTitle('Hamstring')).toBeInTheDocument();
+    expect(within(injured).getByTitle('Hamstring (2-3 weeks)')).toBeInTheDocument();
   });
 
   it('fills empty spots with fit players, then saves only when the change is confirmed', async () => {
@@ -198,6 +198,26 @@ describe('LeagueMyTeamPanel', () => {
     );
     expect(await screen.findByText(/^Confirmed /)).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Unconfirmed changes' })).not.toBeInTheDocument();
+  });
+
+  it('fills with a player listed as Test, keeping his injury label', async () => {
+    const base = payload();
+    const rosterPlayers = base.data.rosterPlayers.map((player) =>
+      player.playerId === 'mid-2'
+        ? { ...player, injury: { label: 'Knee (Test)', blocksSelection: false } }
+        : player
+    );
+    authenticatedFetchMock.mockImplementation(() => respond(payload({ rosterPlayers })));
+
+    render(<LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill empty spots' }));
+
+    const testPlayer = screen.getByRole('row', { name: 'MID 1: Wing Man' });
+    // Listed but still selectable: a warning, not the injured tone.
+    expect(within(testPlayer).getByTitle('Knee (Test)')).toHaveClass('bg-warning');
+    expect(
+      screen.getByRole('button', { name: /^MID 1: Wing Man, listed \(Knee \(Test\)\)/ })
+    ).toBeInTheDocument();
   });
 
   it('only offers spots a player can play, and Discard restores the team', async () => {
