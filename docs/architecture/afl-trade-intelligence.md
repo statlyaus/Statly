@@ -548,7 +548,9 @@ list lodgement, and emits one `trade_period_window` claim with explicit window p
 emitted when the page states no window, two windows, or a window outside the season or longer than
 a month. 2019 and 2021 have no reviewed page; a substitute source is an owner decision. The window
 becomes a promoted trade event's `date_precision` and a v4 arrival's entry precision (migration
-0261), never a day for any trade.
+0261), never a day for any trade. The promotion review command reads it from those capture rows
+(`loadReviewedTradePeriodWindows`), never from the operator's transaction-date file, and migration
+0263 makes both coverage validators refuse a window that no approved capture states for the season.
 
 HPN construction and current reconstruction apply the same registered-spell predicate as both spell
 checks in the projected SQL finalizer. Source-first classification comes from the original immutable
