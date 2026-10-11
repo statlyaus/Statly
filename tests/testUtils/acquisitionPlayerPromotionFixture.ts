@@ -2067,7 +2067,29 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         capturedAt,
         seasonYear,
         `${tradeWindow.earliestDate}T00:00:00.000Z`,
-        canonicalizeAflTradeJson({ sourceUrl: windowRow.content.capture.sourceUrl }),
+        // Outside test_fixture, finalizing the batch needs a v2 execution receipt with an unexpired
+        // lease on the capture (migration 0010), as every other synthetic capture here carries.
+        canonicalizeAflTradeJson({
+          sourceUrl: windowRow.content.capture.sourceUrl,
+          ...(options.completeCaptureReceipts
+            ? {
+                executionReceipt: await completeSyntheticCaptureReceipt(sql, {
+                  environment,
+                  provider: 'official_afl',
+                  year: seasonYear,
+                  sourceUrl: windowRow.content.capture.sourceUrl,
+                  capabilityId: 'official-afl-trade-period-dates',
+                  dataset: 'trade-period-dates',
+                  datasetVersion: 'synthetic-v1',
+                  parserVersion: windowRow.content.capture.parserVersion,
+                  fieldManifestSha256: windowRow.content.capture.fieldManifestSha256,
+                  capturedAt,
+                  effectiveAt: `${tradeWindow.earliestDate}T00:00:00.000Z`,
+                  artifact: windowArtifact,
+                }),
+              }
+            : {}),
+        }),
       ]
     );
     await outcomesPool.query(
