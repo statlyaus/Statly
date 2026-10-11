@@ -71,7 +71,20 @@ const promote = (
     nativePlayerId: `${namespace}-player`,
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
-    ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
+    ...(yearPageDraftAlreadyPromoted
+      ? {
+          yearPageDraftAlreadyPromoted: true,
+          // A second promotion in the schema reuses the seeded synthetic player and clubs.
+          existingTargets: {
+            playerId: 'synthetic-acquisition-player',
+            playerName: 'Synthetic Player',
+            fromClubId: 'club-gws',
+            fromClubName: 'GWS',
+            toClubId: 'club-western-bulldogs',
+            toClubName: 'Western Bulldogs',
+          },
+        }
+      : {}),
   });
 
 const count = async (ws: Workspace, sql: string) =>
