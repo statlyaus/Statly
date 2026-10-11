@@ -1517,10 +1517,11 @@ export function reconcileAflTradeExternalEvidence(input: {
     }
     // Under the reviewed pick-side deferral a pick transfer whose clubs resolve is unresolved only
     // for its custody, which is the pick's lineage, not the transaction's: the exchange itself is
-    // complete. Without the deferral the rule is unchanged.
+    // complete. A special pick is the same: its lineage issue is deferred and the promotion writes
+    // nothing for it. Without the deferral the rule is unchanged.
     const deferrablePickTransfer = (transfer: CanonicalTransfer) =>
       pickLineageDeferral !== undefined &&
-      transfer.asset.kind === 'pick_entitlement' &&
+      (transfer.asset.kind === 'pick_entitlement' || transfer.asset.kind === 'special_pick') &&
       transfer.fromClubId !== null &&
       transfer.toClubId !== null;
     const complete =

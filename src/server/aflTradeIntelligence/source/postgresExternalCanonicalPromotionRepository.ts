@@ -1340,7 +1340,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           content.competition,
           content.anchorSeasonYear,
           content.transactions.length,
-          content.transfers.length,
+          authenticated.transferCount,
           authenticated.draftSelectionCount,
           draftPlayerAssetCount,
           authenticated.pickCustodyCount,
@@ -1623,7 +1623,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await persistTransactionEvents();
 
       const assetByTransfer = new Map<string, string>();
-      const pendingTransfers = [...content.transfers];
+      // A deferred special pick is written as nothing (#869); every other transfer becomes an asset.
+      const pendingTransfers = [...scope.transfers];
       const orderedTransfers: typeof pendingTransfers = [];
       const pendingIds = new Set(pendingTransfers.map((record) => record.transferId));
       while (pendingTransfers.length) {
@@ -2213,7 +2214,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         status: 'finalized',
         idempotentReplay: false,
         transactionCount: content.transactions.length,
-        transferCount: content.transfers.length,
+        transferCount: authenticated.transferCount,
         draftSelectionCount: authenticated.draftSelectionCount,
         draftPlayerAssetCount,
         pickCustodyCount: authenticated.pickCustodyCount,

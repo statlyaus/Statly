@@ -799,9 +799,13 @@ supersede production Gate authority, and production execution cannot reuse non-p
    deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
    candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds
    `deferred_issue_count` and `lineage_deferral_decision_id`, which the database checks against the
-   decision. Without the flag the candidate is byte-identical to today's. Candidate four's one
-   `special_pick` transfer is not deferrable: it still needs the special-entitlement path before
-   promotion.
+   decision. Without the flag the candidate is byte-identical to today's. A raw `special_pick`
+   transfer (a concession or compensation right with no registered award) is deferred like any
+   pick: its lineage issue is deferred, its trade is complete once both clubs resolve, the review's
+   special-entitlement gate passes, and the promotion writes nothing for it (no list-right asset, no
+   special custody, no realization), counted on the receipt as `deferredSpecialPickCount`. Without
+   the flag an unresolved special pick still refuses promotion until the special-entitlement path
+   resolves it.
 
 7. Prepare one reviewed JSON array containing only the missing draft-event metadata
    (`draftYear`, `draftType`, `eventDate`, `officialName`) for each exact draft represented by the

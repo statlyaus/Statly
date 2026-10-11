@@ -63,7 +63,8 @@ const promote = (
   pickSideIssues?: 'deferred' | 'blocking',
   originalClubUnresolved = false,
   yearPageDraftAlreadyPromoted = false,
-  reuseSeededTargets = false
+  reuseSeededTargets = false,
+  specialPickTransfer = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -73,6 +74,7 @@ const promote = (
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
     ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
+    ...(specialPickTransfer ? { specialPickTransfer: true } : {}),
     // A second promotion in a schema reuses the synthetic player and clubs the first one inserted.
     ...(reuseSeededTargets
       ? {
@@ -601,4 +603,76 @@ it('counts a draft as promoted under a scoped successor and not under a re-listi
     [deferred.candidate.candidateId]
   );
   expect(retired.rows).toEqual([{ current: false }]);
+}, 300_000);
+
+// A raw special pick (the 2020 Gold Coast concession right, no registered award) under the deferral
+// (#869, owner decision 2026-10-11): its lineage issue is deferred like any pick's, the review's
+// special-entitlement gate passes, and the promotion writes nothing for it: no list-right asset, no
+// special custody, no realization. The receipt counts it under the deferral. Without the deferral
+// the candidate still blocks.
+it('promotes a trade carrying a deferred special pick and writes nothing for the right', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const deferred = await promote(ws, 'right', 'deferred', false, false, false, true);
+  expect(deferred.candidate.content.transfers.map(({ asset }) => asset.kind).sort()).toEqual([
+    'pick_entitlement',
+    'player',
+    'special_pick',
+  ]);
+  expect(deferred.candidate.content.transactions.map(({ status }) => status)).toEqual([
+    'single_source',
+  ]);
+  expect(
+    deferred.candidate.content.issues.map(({ code, severity }) => ({ code, severity }))
+  ).toEqual([
+    { code: 'lineage_unresolved', severity: 'deferred' },
+    { code: 'lineage_unresolved', severity: 'deferred' },
+    { code: 'identity_unresolved', severity: 'deferred' },
+    { code: 'identity_unresolved', severity: 'deferred' },
+  ]);
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 4,
+    deferredSpecialPickCount: 1,
+  });
+  expect(deferred.promotion).toMatchObject({
+    transactionCount: 1,
+    transferCount: 2,
+    pickCustodyCount: 0,
+    pickRealizationCount: 0,
+  });
+  const header = await ws.pool.query<{ transfer_count: number; promotion_record_count: number }>(
+    `SELECT transfer_count,promotion_record_count FROM outcome_external_canonical_promotion
+      WHERE promotion_id=$1`,
+    [deferred.promotion.promotionId]
+  );
+  expect(header.rows).toEqual([{ transfer_count: 2, promotion_record_count: 3 }]);
+  const assets = await ws.pool.query<{ kind: string; special_entitlement_id: string | null }>(
+    `SELECT asset.kind::text AS kind,asset.special_entitlement_id FROM outcome_event_asset asset
+       JOIN outcome_external_canonical_promotion_record record
+         ON record.canonical_record_id=asset.asset_version_id AND record.record_kind='transfer'
+      WHERE record.promotion_id=$1 ORDER BY asset.kind::text`,
+    [deferred.promotion.promotionId]
+  );
+  expect(assets.rows).toEqual([
+    { kind: 'future_pick', special_entitlement_id: null },
+    { kind: 'player', special_entitlement_id: null },
+  ]);
+  expect(await count(ws, "outcome_event_asset WHERE kind='list_right'")).toBe(0);
+  expect(await count(ws, 'outcome_special_entitlement_custody')).toBe(0);
+  expect(await count(ws, 'outcome_special_entitlement_award')).toBe(0);
+  expect(await count(ws, 'outcome_pick_realization')).toBe(0);
+}, 300_000);
+
+it('keeps a raw special pick blocking without the deferral', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  await expect(
+    promote(ws, 'right-blocking', 'blocking', false, false, false, true)
+  ).rejects.toThrow(/issue-free/);
+  const candidate = await ws.pool.query<{ issue_count: number; deferred_issue_count: number }>(
+    'SELECT issue_count,deferred_issue_count FROM outcome_external_reconciliation_candidate'
+  );
+  expect(candidate.rows).toEqual([{ issue_count: 4, deferred_issue_count: 0 }]);
+  expect(await count(ws, 'outcome_external_canonical_promotion')).toBe(0);
 }, 300_000);

@@ -4086,7 +4086,11 @@ The remaining work proceeds through these independently verifiable gates:
    by the promoter; since 0266 a selection is current unless
    `outcome_event_version_superseded_for` retires it, the same asset-scoped rule that keeps draftee
    spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
-   so the session-less metadata path never creates a second root for a session-keyed draft. A deferred-lineage promotion is excluded from the
+   so the session-less metadata path never creates a second root for a session-keyed draft. A raw
+   `special_pick` transfer whose lineage issue is deferred passes the special-entitlement gate and is
+   written as nothing (no list-right asset, custody or realization; `transfer_count` is the written
+   count and the receipt carries `deferredSpecialPickCount`); without a deferral the gate is
+   unchanged. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
 

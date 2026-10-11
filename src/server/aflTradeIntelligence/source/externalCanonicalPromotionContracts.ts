@@ -485,6 +485,8 @@ const requestPickLineageDeferralSchema = z
     promotedDraftCount: z.number().int().positive().optional(),
     /** Resolved lineages into those drafts whose realization is not written; present only when any. */
     skippedRealizationCount: z.number().int().positive().optional(),
+    /** `special_pick` transfers left unwritten under the deferral; present only when any. */
+    deferredSpecialPickCount: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -527,9 +529,10 @@ export interface AuthenticatedAflTradeExternalCanonicalPromotion {
   readonly candidateId: string;
   readonly proposalId: string;
   readonly transactionCount: number;
-  readonly transferCount: number;
   /** Selections the promotion writes: none of a draft holding a deferred selection. */
   readonly draftSelectionCount: number;
+  /** Directed assets the promotion writes: none for a deferred special pick. */
+  readonly transferCount: number;
   /** Custody observations the promotion writes: none for a deferred pick. */
   readonly pickCustodyCount: number;
   /** `exercised_as` realizations the promotion writes: none for a deferred pick or draft. */
@@ -895,7 +898,13 @@ function assertPromotionCandidateScope(
   if (Date.parse(proposal.content.proposedAt) < Date.parse(content.reconciledAt)) {
     throw new TypeError('Promotion proposal cannot predate candidate reconciliation.');
   }
-  if (content.transfers.some(({ asset }) => asset.kind === 'special_pick')) {
+  // Under the reviewed deferral (#869) a special pick whose lineage issue is deferred is written as
+  // nothing at all, like any deferred pick; every other special pick still needs the entitlement path.
+  if (
+    aflTradePromotionWriteScope(content).transfers.some(
+      ({ asset }) => asset.kind === 'special_pick'
+    )
+  ) {
     throw new TypeError('Special entitlement must be resolved before canonical promotion.');
   }
   // Deferred pick-side issues (#869) stay on the candidate; only a blocking issue refuses promotion.
@@ -1077,7 +1086,7 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
     candidateId: candidate.candidateId,
     proposalId: proposal.proposalId,
     transactionCount: content.transactions.length,
-    transferCount: content.transfers.length,
+    transferCount: scope.transfers.length,
     draftSelectionCount: scope.draftSelections.length,
     pickCustodyCount: scope.pickCustody.length,
     pickRealizationCount: scope.pickLineage.length,
@@ -1094,6 +1103,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
             ...(scope.skippedRealizationCount === 0
               ? {}
               : { skippedRealizationCount: scope.skippedRealizationCount }),
+            ...(scope.deferredSpecialPickCount === 0
+              ? {}
+              : { deferredSpecialPickCount: scope.deferredSpecialPickCount }),
           },
   };
 }

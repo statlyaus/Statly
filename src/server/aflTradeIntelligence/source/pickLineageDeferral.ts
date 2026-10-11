@@ -173,6 +173,13 @@ export function aflTradePickLineageDeferralScope(
 
 export interface AflTradePromotionWriteScope<Content extends DeferralContentLike> {
   readonly deferral: AflTradePickLineageDeferralScope;
+  /**
+   * Directed transfers this promotion writes as assets: every transfer except a `special_pick`
+   * whose lineage issue is deferred. A deferred special pick gets no entitlement, custody or
+   * realization, exactly like any deferred pick; without a deferral every transfer is written and
+   * an unresolved special pick still refuses promotion.
+   */
+  readonly transfers: Content['transfers'];
   /** Draft selections in drafts this promotion writes (none of a deferred or already-promoted draft). */
   readonly draftSelections: Content['draftSelections'];
   /** Custody observations this promotion writes (none for a deferred pick). */
@@ -181,6 +188,8 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly pickLineage: Content['pickLineage'];
   /** Drafts left to their existing current promotion. */
   readonly promotedDraftCount: number;
+  /** `special_pick` transfers left unwritten under the deferral. */
+  readonly deferredSpecialPickCount: number;
   /**
    * Resolved lineages whose selection sits in an already-promoted draft. Their realization is not
    * written: the existing selection row keys its pick by draft slot while this candidate keys it by
@@ -201,13 +210,17 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
   if (deferral.deferredIssueCount === 0) {
     return {
       deferral,
+      transfers: content.transfers,
       draftSelections: content.draftSelections,
       pickCustody: content.pickCustody,
       pickLineage: content.pickLineage,
       promotedDraftCount: 0,
+      deferredSpecialPickCount: 0,
       skippedRealizationCount: 0,
     };
   }
+  const deferredSpecialPick = (transfer: Content['transfers'][number]) =>
+    transfer.asset.kind === 'special_pick' && deferral.deferredTransferIds.has(transfer.transferId);
   const selectionIdsIn = (keys: ReadonlySet<string>) =>
     new Set(
       content.draftSelections
@@ -226,6 +239,9 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
     promotedSelectionIds.has(lineage.selectionId);
   return {
     deferral,
+    transfers: content.transfers.filter(
+      (transfer) => !deferredSpecialPick(transfer)
+    ) as Content['transfers'],
     draftSelections: content.draftSelections.filter(
       ({ selectionId }) =>
         !deferredSelectionIds.has(selectionId) && !promotedSelectionIds.has(selectionId)
@@ -237,6 +253,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       (lineage) => !deferredLineage(lineage) && !skippedLineage(lineage)
     ) as Content['pickLineage'],
     promotedDraftCount: deferral.promotedDraftKeys.size,
+    deferredSpecialPickCount: content.transfers.filter(deferredSpecialPick).length,
     skippedRealizationCount: content.pickLineage.filter(skippedLineage).length,
   };
 }

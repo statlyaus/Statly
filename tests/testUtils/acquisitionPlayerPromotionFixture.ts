@@ -105,6 +105,13 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * promotion writes nothing of it. Needs `pickSideIssues`.
      */
     yearPageDraftAlreadyPromoted?: boolean;
+    /**
+     * The trade also sends a special pick (the 2020 Gold Coast concession right) the other way, a
+     * raw `special_pick` claim with no registered award (statlyaus/Statly#869). Its lineage issue
+     * is pick-side: under `deferred` the promotion writes nothing for it; under `blocking` it
+     * blocks. Needs `pickSideIssues`.
+     */
+    specialPickTransfer?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -162,6 +169,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('An unreviewed original club is a pick-side issue profile.');
   if (options.yearPageDraftAlreadyPromoted && !options.pickSideIssues)
     throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
+  if (options.specialPickTransfer && !options.pickSideIssues)
+    throw new Error('A raw special pick is a pick-side issue profile.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -281,6 +290,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     transactionId,
     nativeTransferId: 'synthetic-reciprocal-future-pick',
   });
+  const specialPickTransferId = createAflTradeContentAddress('external-transfer', {
+    transactionId,
+    nativeTransferId: 'synthetic-special-pick',
+  });
+  const specialPickAsset = {
+    kind: 'special_pick' as const,
+    entitlementType: 'assistance_concession' as const,
+    draftYear: 2020,
+    selectionOrdinal: null,
+    sourceLabel: '2020MIDR1 (Gold Coast concession)',
+  };
   const reciprocalFuturePickId = createAflTradeContentAddress('draft-pick', {
     draftYear: seasonYear + (options.reciprocalFuturePickYearOffset ?? 1),
     draftType: 'national',
@@ -604,6 +624,23 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 roundNumber: 1,
                 originalClub: reciprocalFuturePickOriginalClub,
               },
+            },
+          })
+        );
+      }
+
+      if (options.specialPickTransfer && request.capabilityId === 'draftguru-trade-detail') {
+        targetEvidence.push(
+          createAflTradeExternalEvidenceEnvelope({
+            ...evidence.content,
+            sourceRow: { ordinal: 21, sourceKey: 'synthetic-special-pick' },
+            claim: {
+              kind: 'directed_transfer',
+              nativeEventId: providerEventId,
+              nativeTransferId: 'synthetic-special-pick',
+              fromClub: { nativeId: null, recordedName: targets.toClubName },
+              toClub: { nativeId: null, recordedName: targets.fromClubName },
+              asset: specialPickAsset,
             },
           })
         );
@@ -2229,6 +2266,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         originalClubId: null,
       }
     : { pickId: reciprocalFuturePickId, originalClubId: targets.toClubId };
+  const specialPickEvidenceIds = playerBatch.batch.content.evidence
+    .filter(
+      (row) =>
+        row.content.claim.kind === 'directed_transfer' &&
+        row.content.claim.nativeTransferId === 'synthetic-special-pick'
+    )
+    .map((row) => row.evidenceId)
+    .sort();
   const pickSideIssues = (
     pickSide === null
       ? []
@@ -2240,6 +2285,18 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
             evidenceIds: reciprocalPickEvidenceIds,
           },
+          ...(options.specialPickTransfer
+            ? [
+                {
+                  code: 'lineage_unresolved' as const,
+                  severity: pickSideSeverity,
+                  subjectKey: `lineage:${specialPickTransferId}`,
+                  detail:
+                    'Special entitlement requires independently resolved award, activation and custody evidence.',
+                  evidenceIds: specialPickEvidenceIds,
+                },
+              ]
+            : []),
           ...(options.reciprocalFuturePickOriginalClubUnresolved
             ? [
                 {
@@ -2375,6 +2432,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           ...(options.reciprocalFuturePickYearOffset === undefined
             ? []
             : [reciprocalFuturePickTransferId]),
+          ...(options.specialPickTransfer ? [specialPickTransferId] : []),
         ].sort(),
         // A trade with a blocking pick transfer is unresolved; under the deferral the exchange is
         // complete and only the pick's custody is left for later lineage.
@@ -2479,6 +2537,19 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             },
           ]),
 
+      ...(options.specialPickTransfer
+        ? [
+            {
+              transferId: specialPickTransferId,
+              transactionId,
+              fromClubId: targets.toClubId,
+              toClubId: targets.fromClubId,
+              asset: specialPickAsset,
+              status: 'unresolved' as const,
+              evidenceIds: specialPickEvidenceIds,
+            },
+          ]
+        : []),
       {
         transferId,
         transactionId,

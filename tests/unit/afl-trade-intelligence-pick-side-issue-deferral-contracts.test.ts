@@ -848,3 +848,185 @@ describe('a deferred candidate whose draft is already current canonical', () => 
     ).toThrow();
   });
 });
+
+// A special pick (a concession or compensation right) under the deferral: its lineage issue is
+// deferred like any pick's, the review's special-entitlement gate passes, and the promotion writes
+// nothing for it (no entitlement asset, no custody, no realization). Without the deferral the gate
+// is unchanged (#869, owner decision 2026-10-11).
+const concessionRight = batch('draftguru', 'c', [
+  {
+    kind: 'transaction',
+    nativeEventId: '2019-geelong-gold-coast',
+    seasonYear: 2019,
+    occurredOn: '2019-10-16',
+    transactionType: 'trade',
+    title: 'Geelong and Gold Coast trade for draft picks',
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativePartyId: 'gws',
+    club: gws,
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativePartyId: 'western-bulldogs',
+    club: bulldogs,
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativeTransferId: 'harry-kyle',
+    fromClub: bulldogs,
+    toClub: gws,
+    asset: { kind: 'player', player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' } },
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativeTransferId: 'special-pick:2020MIDR1',
+    fromClub: gws,
+    toClub: bulldogs,
+    asset: {
+      kind: 'special_pick',
+      entitlementType: 'assistance_concession',
+      draftYear: 2020,
+      selectionOrdinal: null,
+      sourceLabel: '2020MIDR1 (Gold Coast concession)',
+    },
+  },
+]);
+
+function reconcileRight(deferral: boolean) {
+  return reconcileAflTradeExternalEvidence({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2019,
+    sourceBatches: [concessionRight],
+    identityResolutions: resolutions,
+    sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+      ...sourceAuthority,
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([concessionRight.batchId]),
+    }),
+    reconciledAt: '2026-08-09T05:00:00.000Z',
+    ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+  });
+}
+
+describe('a special pick under the pick-side deferral', () => {
+  const proposedAt = '2026-08-09T07:31:00.000Z';
+
+  it('without the deferral the special-entitlement gate refuses promotion as before', () => {
+    const plain = reconcileRight(false);
+    const special = plain.content.transfers.find(({ asset }) => asset.kind === 'special_pick')!;
+    expect(special.status).toBe('unresolved');
+    expect(plain.content.transactions.map(({ status }) => status)).toEqual(['unresolved']);
+    expect(
+      plain.content.issues.map(({ code, severity, subjectKey }) => ({ code, severity, subjectKey }))
+    ).toEqual([
+      {
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `lineage:${special.transferId}`,
+      },
+    ]);
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate: plain,
+        proposedAt,
+        draftEvents: [],
+      })
+    ).toThrow(/Special entitlement must be resolved before canonical promotion/);
+    const scope = aflTradePromotionWriteScope(plain.content);
+    expect(scope.transfers.length).toBe(2);
+    expect(scope.deferredSpecialPickCount).toBe(0);
+  });
+
+  it('with the deferral the gate passes, the trade is complete and the right is written as nothing', () => {
+    const deferred = reconcileRight(true);
+    const special = deferred.content.transfers.find(({ asset }) => asset.kind === 'special_pick')!;
+    // The raw right stays on the candidate unchanged; only the issue severity and trade status move.
+    expect(special).toMatchObject({
+      status: 'unresolved',
+      asset: { kind: 'special_pick', sourceLabel: '2020MIDR1 (Gold Coast concession)' },
+    });
+    expect(deferred.content.transactions.map(({ status }) => status)).toEqual(['single_source']);
+    expect(deferred.content.issues.map(({ severity }) => severity)).toEqual(['deferred']);
+    const scope = aflTradePromotionWriteScope(deferred.content);
+    expect(scope.transfers.map(({ transferId }) => transferId)).toEqual(
+      deferred.content.transfers
+        .filter(({ asset }) => asset.kind === 'player')
+        .map(({ transferId }) => transferId)
+    );
+    expect(scope).toMatchObject({
+      deferredSpecialPickCount: 1,
+      pickCustody: [],
+      pickLineage: [],
+    });
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: deferred,
+      proposedAt,
+      draftEvents: [],
+    });
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate: deferred,
+      proposal,
+    });
+    expect(authenticated).toMatchObject({
+      transactionCount: 1,
+      transferCount: 1,
+      pickCustodyCount: 0,
+      pickRealizationCount: 0,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 1, deferredSpecialPickCount: 1 },
+    });
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      candidateId: deferred.candidateId,
+      proposalId: proposal.proposalId,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+      pickLineageDeferral: authenticated.pickLineageDeferral!,
+    });
+    expect(request.content.pickLineageDeferral).toEqual({
+      decisionId,
+      deferredIssueCount: 1,
+      deferredSpecialPickCount: 1,
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+  });
+
+  it('a special pick whose lineage issue is not deferred still refuses, even on a deferred candidate', () => {
+    const deferred = reconcileRight(true);
+    const special = deferred.content.transfers.find(({ asset }) => asset.kind === 'special_pick')!;
+    // Hand-edited: the right's lineage issue blocking while the candidate still carries the decision
+    // for another deferred issue is not reachable by reconciliation; the gate must not depend on it.
+    const edited = {
+      ...deferred,
+      content: {
+        ...deferred.content,
+        issues: [
+          ...deferred.content.issues.map((issue) =>
+            issue.subjectKey === `lineage:${special.transferId}`
+              ? { ...issue, severity: 'blocking' as const }
+              : issue
+          ),
+          {
+            code: 'lineage_unresolved' as const,
+            severity: 'deferred' as const,
+            subjectKey: 'lineage:external-transfer:other',
+            detail: 'Another deferred lineage.',
+            evidenceIds: special.evidenceIds,
+          },
+        ].sort((a, b) => a.subjectKey.localeCompare(b.subjectKey)),
+      },
+    };
+    const candidate = createAflTradeExternalReconciliationCandidate(edited.content);
+    expect(aflTradePromotionWriteScope(candidate.content).deferredSpecialPickCount).toBe(0);
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate,
+        proposedAt,
+        draftEvents: [],
+      })
+    ).toThrow(/Special entitlement must be resolved before canonical promotion/);
+  });
+});
