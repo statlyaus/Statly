@@ -9,7 +9,7 @@ import {
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   captureDraftguruSource,
-  DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION,
+  DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
   parseDraftguruNationalYearSelections,
   parseDraftguruTradeDetail,
   parseDraftguruTradeIndexEvidence,
@@ -150,12 +150,13 @@ const CAPABILITY_PROFILES: Record<
   },
   'draftguru-trade-detail': {
     provider: 'draftguru',
-    // v2 adds each received pick's stated outcome; it has its own recorded decision.
-    parserVersion: DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION,
+    // v3 adds each traded pick's eventual selection to v2's received-pick outcome (#886); it has its
+    // own recorded decision, and the v2 decision and captures stay valid as recorded.
+    parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
     decisionKey: () =>
-      `${draftguruTradeDecisionKey('draftguru-trade-detail')}-${DRAFTGURU_TRADE_DISPOSITION_DECISION_SUFFIX}`,
+      `${draftguruTradeDecisionKey('draftguru-trade-detail')}-${DRAFTGURU_TRADE_EVENTUAL_SELECTION_DECISION_SUFFIX}`,
   },
   [DRAFTGURU_NATIONAL_YEAR_CAPABILITY]: {
     provider: 'draftguru',
@@ -195,6 +196,9 @@ export function isLocalExternalCaptureCapability(
 
 /** Suffix of the trade-detail decision key that authorises `draftguru-trade-parser/v2`. */
 export const DRAFTGURU_TRADE_DISPOSITION_DECISION_SUFFIX = 'parser-v2';
+
+/** Suffix of the trade-detail decision key that authorises `draftguru-trade-parser/v3` (#886). */
+export const DRAFTGURU_TRADE_EVENTUAL_SELECTION_DECISION_SUFFIX = 'parser-v3';
 
 export function draftguruTradeDecisionKey(capabilityId: DraftguruTradeCapability): string {
   return `${capabilityId}-issue-579-private-non_production`;

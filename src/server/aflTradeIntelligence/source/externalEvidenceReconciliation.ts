@@ -1000,6 +1000,213 @@ function reconcileDirectedTransfer(input: {
   };
 }
 
+/**
+ * One pick traded on several Draftguru pages is numbered as each page stood: before the draft by the
+ * pre-draft order, on draft night by the live order that bids shifted. The giving side of every pick
+ * row names the player eventually selected with it (`pick_eventual_selection`, parser v3), so a
+ * draft's Draftguru pick transfers naming one player's native id are one pick (statlyaus/Statly#886).
+ * A group is admitted only when its transfers walk the pick from club to club in exactly one order
+ * (`eventualSelectionPath`): a pick swapped back on draft night is admitted, while a group that
+ * branches or merges (a matched bid that consumed several picks for one player), a closed loop, or
+ * an ambiguous order is left as the slot rules made it. In an admitted group every member takes the one custody pick any member reached, else a
+ * player-keyed pick id. When the path reaches two custody picks, it takes the one reached first if
+ * the pre-draft order shows it delivered before the conflict (`earliestCustodyBeforeConflict`);
+ * otherwise every member is unresolved with a lineage issue naming both. Without eventual-selection
+ * claims nothing changes.
+ */
+function joinEventualSelections(input: {
+  evidence: readonly Evidence[];
+  resolvedTransfers: readonly ResolvedDirectedTransfer[];
+  transfers: CanonicalTransfer[];
+  transactionClaimsByNativeEventId: ReadonlyMap<string, readonly TransactionEvidence[]>;
+  pickCustody: readonly CanonicalPickCustody[];
+  issues: ReconciliationIssue[];
+}): void {
+  const eventualPlayers = new Map<string, string | null>();
+  for (const row of input.evidence) {
+    const claim = row.content.claim;
+    if (row.content.provider !== 'draftguru' || claim.kind !== 'pick_eventual_selection') continue;
+    const key = `${claim.nativeEventId}|${claim.nativeTransferId}`;
+    const player = claim.outcome === 'selected' ? (claim.player?.nativeId ?? null) : null;
+    // Two statements for one transfer that disagree name no player.
+    eventualPlayers.set(
+      key,
+      eventualPlayers.has(key) && eventualPlayers.get(key) !== player ? null : player
+    );
+  }
+  if (eventualPlayers.size === 0) return;
+  const groups = new Map<string, number[]>();
+  input.resolvedTransfers.forEach(({ row }, index) => {
+    const claim = row.content.claim;
+    const asset = input.transfers[index]!.asset;
+    if (
+      row.content.provider !== 'draftguru' ||
+      asset.kind !== 'pick_entitlement' ||
+      (claim.asset.kind !== 'current_pick' && claim.asset.kind !== 'future_pick')
+    )
+      return;
+    const player = eventualPlayers.get(`${claim.nativeEventId}|${claim.nativeTransferId}`);
+    if (!player) return;
+    const key = `${asset.draftYear}|${asset.draftType}|${player}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(index);
+  });
+  const usableCustody = new Map(
+    input.pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)
+  );
+  const transactionOf = (index: number) => {
+    const claims =
+      input.transactionClaimsByNativeEventId.get(
+        input.resolvedTransfers[index]!.row.content.claim.nativeEventId
+      ) ?? [];
+    return claims.length === 1 ? claims[0]!.content.claim : null;
+  };
+  groups.forEach((members, key) => {
+    const path = eventualSelectionPath(members, input.transfers, transactionOf);
+    if (path === null) return;
+    const reachedAt = path.map((index) => {
+      const asset = input.transfers[index]!.asset;
+      return asset.kind === 'pick_entitlement' && usableCustody.has(asset.pickId)
+        ? asset.pickId
+        : null;
+    });
+    const custodyPickIds = sortedUnique(reachedAt.filter((id): id is string => id !== null));
+    const earliest = earliestCustodyBeforeConflict(path, reachedAt, input.transfers, usableCustody);
+    if (custodyPickIds.length > 1 && earliest === null) {
+      path.forEach((index) => {
+        input.transfers[index]!.status = 'unresolved';
+      });
+      input.issues.push({
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `eventual-selection:${key}`,
+        detail: `Draftguru transfers naming one eventually selected player reach two custody picks: ${custodyPickIds.join(', ')}.`,
+        evidenceIds: sortedUnique(path.flatMap((index) => input.transfers[index]!.evidenceIds)),
+      });
+      return;
+    }
+    const [draftYear, draftType, player] = key.split('|');
+    const custody =
+      custodyPickIds.length === 1
+        ? usableCustody.get(custodyPickIds[0]!)!
+        : custodyPickIds.length > 1
+          ? usableCustody.get(earliest!)!
+          : null;
+    const pickId =
+      custody?.pickId ??
+      createAflTradeContentAddress('draft-pick', {
+        draftYear: Number(draftYear),
+        draftType,
+        eventualSelection: { provider: 'draftguru', playerNativeId: player },
+      });
+    path.forEach((index) => {
+      const transfer = input.transfers[index]!;
+      if (transfer.asset.kind !== 'pick_entitlement') return;
+      transfer.asset = {
+        ...transfer.asset,
+        pickId,
+        originalClubId: transfer.asset.originalClubId ?? custody?.originalClubId ?? null,
+      };
+      if (custody && transfer.fromClubId && transfer.toClubId) transfer.status = 'single_source';
+    });
+  });
+}
+
+/**
+ * When a path reaches two custody picks, the slot rules have joined a later transfer, numbered by
+ * the live draft-night order, to another entitlement whose pre-draft slot has that number. The pick
+ * the path reached first is the pick when the pre-draft order (observed before draft night) names
+ * as its holder a club the path delivered it to before any member reached another custody pick:
+ * those transfers preceded the order, so the conflicting one came after it. Otherwise (the holder
+ * received it only in or after the conflicting transfer, so both joins rest on pre-draft numbering)
+ * there is no choice to make and this returns null.
+ */
+function earliestCustodyBeforeConflict(
+  path: readonly number[],
+  reachedAt: readonly (string | null)[],
+  transfers: readonly CanonicalTransfer[],
+  usableCustody: ReadonlyMap<string, CanonicalPickCustody>
+): string | null {
+  const firstAt = reachedAt.findIndex((pickId) => pickId !== null);
+  if (firstAt < 0) return null;
+  const earliest = reachedAt[firstAt]!;
+  const conflictAt = reachedAt.findIndex((pickId) => pickId !== null && pickId !== earliest);
+  if (conflictAt < 0) return earliest;
+  const holder = usableCustody.get(earliest)!.currentClubId;
+  return path
+    .slice(0, conflictAt)
+    .some((index) => holder !== null && transfers[index]!.toClubId === holder)
+    ? earliest
+    : null;
+}
+
+/** The most transfers of one pick the path search will order; a longer group is left as it is. */
+const MAXIMUM_EVENTUAL_SELECTION_PATH = 12;
+
+/**
+ * The group's transfers in the one order that walks the pick from club to club, or null. Each step's
+ * sender must be the previous step's receiver, every transfer is used once, and seasons (and stated
+ * days, where both trades have one) never go backwards. A club may hold the pick more than once (a
+ * pick swapped back on draft night), but the walk must have one start and one end and exactly one
+ * such order: a group that branches or merges (a matched bid that consumed several picks for one
+ * player), a closed loop (no start), or one with two possible orders is refused.
+ */
+function eventualSelectionPath(
+  members: readonly number[],
+  transfers: readonly CanonicalTransfer[],
+  transactionOf: (index: number) => Extract<Claim, { kind: 'transaction' }> | null
+): number[] | null {
+  const edges = members.map((index) => ({ index, ...transfers[index]! }));
+  if (
+    edges.length > MAXIMUM_EVENTUAL_SELECTION_PATH ||
+    edges.some(({ fromClubId, toClubId }) => fromClubId === null || toClubId === null)
+  )
+    return null;
+  const balance = new Map<string, number>();
+  for (const { fromClubId, toClubId } of edges) {
+    balance.set(fromClubId!, (balance.get(fromClubId!) ?? 0) + 1);
+    balance.set(toClubId!, (balance.get(toClubId!) ?? 0) - 1);
+  }
+  const starts = [...balance].filter(([, value]) => value === 1).map(([club]) => club);
+  const ends = [...balance].filter(([, value]) => value === -1);
+  if (
+    starts.length !== 1 ||
+    ends.length !== 1 ||
+    [...balance.values()].some((value) => Math.abs(value) > 1)
+  )
+    return null;
+  const inOrder = (earlier: number, later: number) => {
+    const [before, after] = [transactionOf(earlier), transactionOf(later)];
+    if (before === null || after === null || after.seasonYear < before.seasonYear) return false;
+    return (
+      after.seasonYear > before.seasonYear ||
+      before.occurredOn === null ||
+      after.occurredOn === null ||
+      after.occurredOn >= before.occurredOn
+    );
+  };
+  const walks: number[][] = [];
+  const used = new Set<number>();
+  const walk: number[] = [];
+  const extend = (club: string) => {
+    if (walks.length > 1) return;
+    if (walk.length === edges.length) {
+      walks.push([...walk]);
+      return;
+    }
+    for (const edge of edges) {
+      if (used.has(edge.index) || edge.fromClubId !== club) continue;
+      if (walk.length > 0 && !inOrder(walk.at(-1)!, edge.index)) continue;
+      used.add(edge.index);
+      walk.push(edge.index);
+      extend(edge.toClubId!);
+      walk.pop();
+      used.delete(edge.index);
+    }
+  };
+  extend(starts[0]!);
+  return walks.length === 1 ? walks[0]! : null;
+}
+
 type PickDispositionEvidence = Evidence & {
   content: { claim: Extract<Claim, { kind: 'pick_disposition' }> };
 };
@@ -1508,6 +1715,14 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transfers: CanonicalTransfer[] = resolvedTransfers.map((transfer) =>
     reconcileDirectedTransfer({ transfer, resolve, pickCustody, slotChainCustody })
   );
+  joinEventualSelections({
+    evidence,
+    resolvedTransfers,
+    transfers,
+    transactionClaimsByNativeEventId,
+    pickCustody,
+    issues,
+  });
 
   const transactions: CanonicalTransaction[] = transactionClaims.map((row) => {
     const claim = row.content.claim;

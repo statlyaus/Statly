@@ -4121,6 +4121,34 @@ The remaining work proceeds through these independently verifiable gates:
    measured against Draftguru's stated outcomes, same-club number matching misattributed about one
    pick in eight, because bid matching and compensation picks renumber the draft.
 
+   **One pick across renumbered pages** (`pick_eventual_selection`, Draftguru trade parser v3,
+   statlyaus/Statly#886). A pick traded on several pages carries each page's own number. Before the
+   draft that is the pre-draft order's slot, and on draft night it is the live slot after bids, so
+   the slot rules give the same entitlement different pick ids and the grader's traded-on link
+   misses. On 2026-10-12, in all 63 draft-night `traded_on_return_unlinked` legs of batch seven, the
+   onward trade was captured but carried a different pick id. Each Draftguru pick row's giving side
+   names the player eventually selected with that pick, whatever the page numbered it, so v3 emits
+   v2's claims unchanged and then one `pick_eventual_selection` per traded pick: the player's
+   Draftguru native id, or "not used".
+
+   Reconciliation (`joinEventualSelections`) groups a draft's Draftguru pick transfers by that native
+   id. Two transfers from one provider need no identity resolution to match. A group is admitted only
+   when its transfers walk the pick from club to club in exactly one order: each step's sender is the
+   previous step's receiver, every transfer is used once, and seasons and stated days never go
+   backwards. A club may hold the pick more than once (a pick swapped back on draft night, as Hugh
+   Boxshall's was in 2024). A group that branches or merges (a matched bid that consumed several
+   picks for one player), a closed loop with no first holder, or one with two possible orders is left
+   as the slot rules made it. In an admitted group, every member takes the one custody pick that any
+   member reached. With no custody pick, every member takes a player-keyed pick id. With two custody
+   picks, the slot rules have usually joined a later transfer, numbered by the live draft-night
+   order, to another entitlement whose pre-draft slot carries that number. The group then takes the
+   pick it reached first, provided the pre-draft order (observed before draft night) names as that
+   pick's holder a club the group delivered it to before any member reached the other pick.
+   Otherwise both joins rest on pre-draft numbering, every member is unresolved, and a
+   `lineage_unresolved` issue names both. Without v3 claims nothing changes. Re-keying can change
+   the pick id of a transfer an earlier candidate promoted, so the promoted assets whose id would
+   change are counted before such a candidate is prepared.
+
    **"Not used" picks and nominated players.** A received pick is "not used" only on draft night:
    it was spent matching a bid or it was passed. No AFL publication records which picks a matched bid
    consumed, so the candidate records the sourceable fact instead. The Draftguru national-year page

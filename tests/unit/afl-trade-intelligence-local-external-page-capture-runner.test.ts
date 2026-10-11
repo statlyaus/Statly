@@ -45,7 +45,7 @@ import {
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
-import { DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
+import { DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 
 const digest = (character: string) => character.repeat(64);
 const evaluatedAt = '2026-09-25T00:00:00.000Z';
@@ -53,9 +53,9 @@ const evaluatedAt = '2026-09-25T00:00:00.000Z';
 function recorded(capabilityId: DraftguruTradeCapability) {
   const { sourceRights, proposal } = createDraftguruTradeAuthorityProposal({
     capabilityId,
-    // The runner captures trade detail with v2 under its own decision.
+    // The runner captures trade detail with v3 under its own decision.
     ...(capabilityId === 'draftguru-trade-detail'
-      ? { parserVersion: DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION }
+      ? { parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION }
       : {}),
     seasons: Array.from({ length: 15 }, (_, index) => 2011 + index),
     evidenceIds: {
