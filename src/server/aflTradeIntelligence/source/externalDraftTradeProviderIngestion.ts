@@ -166,7 +166,7 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'official-afl-indicative-draft-order') {
-    // Parser v2 reads only the exact reviewed pre-draft order pages, two of which are approved
+    // The table parser reads only the exact reviewed pre-draft order pages, three of which are
     // Internet Archive snapshots; v1 keeps the general afl.com.au article path.
     const reviewedOrder = reviewedOfficialAflDraftOrderPage(request.sourceUrl);
     const reviewedPage =

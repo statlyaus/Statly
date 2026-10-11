@@ -1,10 +1,11 @@
 /**
  * The exact reviewed Official AFL pre-draft national order pages for issue 853 (owner decision
  * 2026-10-09, recorded in the source policy): the order as it stood after each season's last
- * pick-swap deadline, which `official-afl-draft-order-parser/v3` reads as pick custody. 2023 and
- * 2024 were published only on the live `/draft/draft-order` page, since overwritten; the owner
- * approved exactly these two Internet Archive snapshots of it, served raw (`id_`). Inclusion grants
- * no further rights, and no other archive.org URL is reviewed.
+ * pick-swap deadline, which `official-afl-draft-order-parser/v4` reads as pick custody. 2023 to
+ * 2025 were published only on the live `/draft/draft-order` page, since overwritten; exactly these
+ * three Internet Archive snapshots of it are reviewed, served raw (`id_`). 2025 is the first capture
+ * after its pick-swap window closed on 7 November. Inclusion grants no further rights, and no other
+ * archive.org URL is reviewed.
  */
 const reviewedOrders = [
   {
@@ -37,6 +38,12 @@ const reviewedOrders = [
     season: 2024,
     url: 'https://web.archive.org/web/20241119043700id_/https://www.afl.com.au/draft/draft-order',
     asOf: '2024-11-12',
+  },
+  {
+    season: 2025,
+    url: 'https://web.archive.org/web/20251113035435id_/https://www.afl.com.au/draft/draft-order',
+    // The page states "As at conclusion of pick swaps window on November 7."
+    asOf: '2025-11-07',
   },
 ] as const;
 
