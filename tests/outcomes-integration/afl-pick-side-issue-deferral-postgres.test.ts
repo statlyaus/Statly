@@ -1,5 +1,36 @@
+import { createHash } from 'node:crypto';
+
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
+
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  createAflTradeExternalCanonicalPromotionProposal,
+  deriveAflTradeExternalCanonicalPromotionProposal,
+} from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionContracts';
+import { createAflTradeExternalCanonicalPromotionReviewDecision } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionReviewContracts';
+import { createAflTradeRetainedExternalCapturePlan } from '@/server/aflTradeIntelligence/source/externalDraftTradeDiscoveryContracts';
+import { parseAflTradeExternalEvidenceBatch } from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
+import { prepareAflTradeHistoricalReconciliation } from '@/server/aflTradeIntelligence/source/externalHistoricalReconciliationPreparation';
+import {
+  loadAflTradeExternalIdentityReviewQueue,
+  recordAflTradeExternalIdentityReviewDecision,
+} from '@/server/aflTradeIntelligence/source/externalIdentityReviewService';
+import { PostgresAflTradeExternalCanonicalPromotionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
+import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionReviewRepository';
+import { PostgresAflTradeExternalDiscoveryRepository } from '@/server/aflTradeIntelligence/source/postgresExternalDraftTradeDiscoveryRepository';
+import { PostgresAflTradeExternalHistoricalCaptureCompletionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalCaptureCompletionRepository';
+import { PostgresAflTradeExternalHistoricalReconciliationSource } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalReconciliationSource';
+import { PostgresAflTradeExternalIdentityReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
+import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
+import { PostgresAflTradePromotedDraftSelectionReader } from '@/server/aflTradeIntelligence/source/postgresPromotedDraftSelectionReader';
+import { PostgresAflTradeReconciliationScopeDecisionRepository } from '@/server/aflTradeIntelligence/source/postgresReconciliationScopeDecisionRepository';
+import { createRetainedExternalCaptureFixture } from '../testUtils/retainedExternalCaptureFixture';
 import { PostgresAflTradePromotionBackedCorpusRepository } from '@/server/aflTradeIntelligence/artifacts/postgresPromotionBackedCorpusRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
@@ -8,14 +39,14 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0268_deferred_candidate_deferred_custody';
+const MIGRATION = '0269_deferral_session_claims_written_drafts_only';
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 /**
  * One disposable schema per promotion: the synthetic fixture content-addresses its artifacts and
  * canonical rows, so two promotions in one schema collide unless their namespaces differ. Each schema
- * gets the history deployed just before 0268 (so 0264's deferral and the 0265 to 0267 records are
- * in place) and applies 0268 itself, as `prisma migrate deploy` will.
+ * gets the history deployed just before 0269 (so 0264's deferral and the 0265 to 0268 records are
+ * in place) and applies 0269 itself, as `prisma migrate deploy` will.
  */
 interface Workspace {
   pool: Pool;
@@ -783,3 +814,369 @@ it('keeps an unresolved custody observation blocking without the deferral', asyn
   expect(candidate.rows[0]!.unusable).toBeGreaterThan(0);
   expect(await count(ws, 'outcome_external_canonical_promotion')).toBe(0);
 }, 300_000);
+
+// Retained draft_session claims under the deferral (migration 0269). The genuine candidate's sources
+// hold the official completed-session captures of drafts it leaves to their earlier promotions; the
+// 0264 deferral branch refused any such claim. Built on the retained-capture chain, the real
+// preparation path: a draft page, its official session page and a pick trade.
+it('reviews and promotes a deferred candidate whose retained session claims belong to an already-promoted draft, and still refuses one that would write that draft', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const sql = createPgAflOutcomeSqlClient(ws.pool);
+  const instant = async () =>
+    (
+      await ws.pool.query<{ at: string }>(
+        `SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at`
+      )
+    ).rows[0]!.at;
+  const draft = await createRetainedExternalCaptureFixture(sql, false, 'test_fixture', 27);
+  const official = await createRetainedExternalCaptureFixture(sql, true);
+  const trade = await createRetainedExternalCaptureFixture(
+    sql,
+    false,
+    'test_fixture',
+    27,
+    false,
+    true
+  );
+  const fixtures = [draft, official, trade];
+  const reader = {
+    read: async (ref: Parameters<typeof draft.raw.loadExact>[0]) => {
+      for (const repo of fixtures.flatMap((f) => [f.raw, f.metadata])) {
+        const value = await repo.loadExact(ref, 2097152);
+        if (value) return value.bytes;
+      }
+      throw new Error('Missing retained fixture bytes');
+    },
+  };
+  const completions = new PostgresAflTradeExternalHistoricalCaptureCompletionRepository(sql);
+  const plans = new PostgresAflTradeExternalDiscoveryRepository(sql);
+  const complete = async (members: (typeof draft)[]) => {
+    const plannedAt = (
+      await ws.pool.query<{ at: string }>(
+        `SELECT to_char(
+           date_trunc('milliseconds',GREATEST(clock_timestamp(),max(finalized_at)))+interval '1 millisecond',
+           'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
+         FROM outcome_external_evidence_batch WHERE batch_id=ANY($1::text[])`,
+        [members.map((m) => m.target.evidenceBatchId)]
+      )
+    ).rows[0]!.at;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const plan = createAflTradeRetainedExternalCapturePlan({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      plannedAt,
+      scopeEvidence: members
+        .flatMap((m) => m.scopeEvidence)
+        .sort((a, b) => a.artifactId.localeCompare(b.artifactId)),
+      targets: members.map((m) => m.target).sort((a, b) => a.captureId.localeCompare(b.captureId)),
+    });
+    await plans.persistRetainedPlan(plan, reader);
+    return completions.completeRetainedPlan(plan.planId);
+  };
+  const source = new PostgresAflTradeExternalHistoricalReconciliationSource(sql);
+  const reviewRepository = new PostgresAflTradeExternalIdentityReviewRepository(sql);
+  const candidateRepository = new PostgresAflTradeExternalReconciliationRepository(sql);
+  const reviews = new PostgresAflTradeExternalCanonicalPromotionReviewRepository(sql);
+  const promotions = new PostgresAflTradeExternalCanonicalPromotionRepository(sql);
+  const actor = 'synthetic-session-claims-reviewer';
+  async function authority(role: string, provider: string, capabilityId: string) {
+    const at = await instant();
+    const document = {
+      evidenceKind: 'reviewer_authority_evidence',
+      environment: 'test_fixture',
+      principalRef: actor,
+      role,
+      provider,
+      capabilityId,
+      scopeKey: 'public-afl-draft-trade-outcomes',
+      competition: 'AFLM',
+      validFromSeason: 2024,
+      validThroughSeason: 2024,
+    };
+    const referenceId = createAflTradeContentAddress('reviewer-authority-evidence', document);
+    const digest = sha256AflTradeCanonicalJson(document);
+    const ref = createAflTradeCanonicalJsonArtifactRef(document, at);
+    await draft.metadata.putIfAbsent(
+      ref,
+      new TextEncoder().encode(canonicalizeAflTradeJson(document))
+    );
+    const approval = createAflTradeContentAddress('governed-evidence-approval-decision', {
+      referenceId,
+    });
+    await sql.transaction(async (tx) => {
+      await tx.query(
+        `INSERT INTO outcome_artifact_custody(artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,environment,created_at,verified_at,custody_json) VALUES($1,$2,$3,$4,$5,'capture_metadata','test_fixture',$6,$6,'{}')`,
+        [ref.artifactId, ref.contentSha256, ref.storageUri, ref.mediaType, ref.byteLength, at]
+      );
+      await tx.query(
+        `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at) VALUES($1,'governed_evidence_reference',$2,'approved','Synthetic scoped technical authority',$3::jsonb,$4,$5)`,
+        [approval, referenceId, canonicalizeAflTradeJson({ referenceSha256: digest }), actor, at]
+      );
+      await tx.query(
+        `INSERT INTO outcome_governed_evidence_reference(reference_id,reference_sha256,evidence_kind,artifact_id,environment,status,approval_decision_id,created_at,evidence_canonical_json,evidence_json) VALUES($1,$2,'reviewer_authority_evidence',$3,'test_fixture','approved',$4,$5,$6::text,($6::text)::jsonb)`,
+        [referenceId, digest, ref.artifactId, approval, at, canonicalizeAflTradeJson(document)]
+      );
+      await tx.query(
+        `INSERT INTO outcome_operational_principal_authority(authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,valid_from_season,valid_through_season,valid_from,valid_through) VALUES($1,$2,$3,'public-afl-draft-trade-outcomes',$4,$5,'AFLM',2024,2024,$6,NULL)`,
+        [referenceId, actor, role, provider, capabilityId, at]
+      );
+    });
+    return referenceId;
+  }
+  const identityAuthority = await authority(
+    'afl_trade_external_identity_reviewer',
+    'draftguru',
+    'external_identity_resolution'
+  );
+  const promoterAuthority = await authority(
+    'afl_trade_canonical_promoter',
+    'multi_source',
+    'external_candidate_promotion'
+  );
+  const reviewIdentities = async (completionId: string) => {
+    const queue = await loadAflTradeExternalIdentityReviewQueue(
+      { completionId },
+      { source, reviewRepository }
+    );
+    const decidedAt = await instant();
+    for (const [index, item] of queue.items.entries()) {
+      const canonicalId = `synthetic-${item.entityKind}-${index}`;
+      await ws.pool.query(
+        item.entityKind === 'player'
+          ? `INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')`
+          : `INSERT INTO outcome_club(club_id,current_name,status) VALUES($1,$2,'approved')`,
+        [canonicalId, item.observedNames[0]]
+      );
+      await recordAflTradeExternalIdentityReviewDecision(
+        {
+          completionId,
+          subjectId: item.subjectId,
+          decision: 'approved',
+          canonicalId,
+          rationale: 'Synthetic exact native identity',
+          authorityEvidenceId: identityAuthority,
+          decidedBy: actor,
+          decidedAt,
+        },
+        { source, reviewRepository }
+      );
+    }
+  };
+  const approve = async (candidateId: string, proposal: unknown) => {
+    const candidate = await reviews.loadCandidate(candidateId);
+    const typed = proposal as Parameters<typeof reviews.persistDecision>[0]['proposal'];
+    const decision = createAflTradeExternalCanonicalPromotionReviewDecision({
+      candidateId,
+      proposalId: typed.proposalId,
+      proposalSha256: typed.proposalId.split(':')[1]!,
+      proposal: typed,
+      revision: 1,
+      supersedesDecisionId: null,
+      decision: 'approved',
+      rationale: 'Synthetic review',
+      authorityEvidenceId: promoterAuthority,
+      decidedBy: actor,
+      decidedAt: await instant(),
+    });
+    await reviews.persistDecision({ candidate, proposal: typed, decision });
+    return decision.decisionId;
+  };
+
+  // The deferred completion: draft page, official session page and the pick trade.
+  const deferredCompletion = await complete([draft, official, trade]);
+  await reviewIdentities(deferredCompletion.completionId);
+  const approvalBytes = canonicalizeAflTradeJson({
+    approval: 'pick-side deferral',
+    completionId: deferredCompletion.completionId,
+  });
+  const approvalSha = createHash('sha256').update(approvalBytes).digest('hex');
+  const decidedAt = await instant();
+  await ws.pool.query(
+    `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+       environment,created_at,verified_at,custody_json)
+     VALUES ($1,$2,$3,'application/json',$4,'derived_private','test_fixture',$5,$5,'{}'::jsonb)`,
+    [
+      `artifact:${approvalSha}`,
+      approvalSha,
+      `artifact://sha256/${approvalSha}`,
+      Buffer.byteLength(approvalBytes),
+      decidedAt,
+    ]
+  );
+  const scope = await new PostgresAflTradeReconciliationScopeDecisionRepository(sql).recordApproval(
+    {
+      schemaVersion: 'afl-trade-reconciliation-scope-decision/v1',
+      completionId: deferredCompletion.completionId,
+      scope: 'pick_lineage_deferral',
+      approvalArtifactId: `artifact:${approvalSha}`,
+      rationale: 'Synthetic owner approval: defer the pick side until reviewed lineage lands.',
+      decidedBy: 'synthetic-owner',
+      decidedAt,
+    }
+  );
+  const prepareDeferred = () =>
+    prepareAflTradeHistoricalReconciliation(
+      {
+        completionId: deferredCompletion.completionId,
+        pickLineageDeferral: { decisionId: scope.decisionId },
+      },
+      {
+        source,
+        identityReviewRepository: reviewRepository,
+        candidateRepository,
+        scopeDecisionRepository: new PostgresAflTradeReconciliationScopeDecisionRepository(sql),
+        promotedSelectionRepository: new PostgresAflTradePromotedDraftSelectionReader(sql),
+      }
+    );
+  const sessionClaim = async (completionId: string) => {
+    const batches = (await source.load(completionId)).sourceBatches.map(
+      parseAflTradeExternalEvidenceBatch
+    );
+    const session = batches
+      .flatMap((b) => b.content.evidence)
+      .find((e) => e.content.claim.kind === 'draft_session')!;
+    const claim = session.content.claim;
+    if (claim.kind !== 'draft_session') throw new Error('Session missing');
+    return { evidenceId: session.evidenceId, claim };
+  };
+
+  // 1. Before the draft is promoted the deferred candidate would write it: its retained session
+  //    claim still refuses the metadata-only proposal.
+  const writing = await prepareDeferred();
+  const writingCandidate = await reviews.loadCandidate(writing.candidateId);
+  expect(writingCandidate.content.pickLineageDeferral).toEqual({ decisionId: scope.decisionId });
+  expect(writingCandidate.content.issues.map(({ code, severity }) => ({ code, severity }))).toEqual(
+    [{ code: 'lineage_unresolved', severity: 'deferred' }]
+  );
+  expect(writingCandidate.content.draftSelections).toHaveLength(27);
+  const session = await sessionClaim(deferredCompletion.completionId);
+  const tradeDates = writingCandidate.content.transactions.map(({ transactionId }) => ({
+    transactionId,
+    occurredOn: '2024-10-16',
+  }));
+  const writingProposal = deriveAflTradeExternalCanonicalPromotionProposal({
+    candidate: writingCandidate,
+    proposedAt: await instant(),
+    draftEvents: [
+      {
+        draftYear: 2024,
+        draftType: 'national',
+        eventDate: session.claim.eventDate,
+        officialName: session.claim.officialName,
+      },
+    ],
+    transactionDates: tradeDates,
+  });
+  await expect(approve(writing.candidateId, writingProposal)).rejects.toThrow(
+    /retained draft session/
+  );
+
+  // 2. The draft is promoted under its session root from a completion without the trade.
+  const draftCompletion = await complete([draft, official]);
+  const plain = await prepareAflTradeHistoricalReconciliation(
+    { completionId: draftCompletion.completionId },
+    { source, identityReviewRepository: reviewRepository, candidateRepository }
+  );
+  const plainCandidate = await reviews.loadCandidate(plain.candidateId);
+  expect(plainCandidate.content.issues).toEqual([]);
+  const { kind: _kind, selectionNumbers: _numbers, ...date } = session.claim;
+  const sessionProposal = createAflTradeExternalCanonicalPromotionProposal({
+    schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v2',
+    candidateId: plainCandidate.candidateId,
+    candidateSha256: plainCandidate.candidateId.split(':')[1]!,
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2024,
+    draftEventCoverage: [
+      {
+        ...date,
+        expectedSelectionCount: 27,
+        selectionIds: plainCandidate.content.draftSelections.map((s) => s.selectionId).sort(),
+        evidenceIds: [session.evidenceId],
+        status: 'complete',
+      },
+    ],
+    transactionDateCoverage: [],
+    proposedAt: await instant(),
+    publicationEligible: false,
+  });
+  const promoted = await promotions.promote({
+    candidateId: plainCandidate.candidateId,
+    approvalDecisionId: await approve(plainCandidate.candidateId, sessionProposal),
+  });
+  expect(promoted).toMatchObject({ draftSelectionCount: 27, pickLineageDeferral: null });
+  const draftVersions = () => count(ws, "outcome_event_version WHERE kind<>'trade'");
+  expect(await draftVersions()).toBe(1);
+
+  // 3. Re-prepared, the deferred candidate leaves the draft to that promotion; its retained session
+  //    claim no longer refuses, and the promotion writes only the trade.
+  const leaving = await prepareDeferred();
+  const leavingCandidate = await reviews.loadCandidate(leaving.candidateId);
+  expect(leavingCandidate.content.pickLineageDeferral).toEqual({
+    decisionId: scope.decisionId,
+    promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
+  });
+  const leavingProposal = deriveAflTradeExternalCanonicalPromotionProposal({
+    candidate: leavingCandidate,
+    proposedAt: await instant(),
+    draftEvents: [],
+    transactionDates: tradeDates,
+  });
+  expect(leavingProposal.content.draftEventCoverage).toEqual([]);
+  const exact = await ws.pool.query<{ exact: boolean }>(
+    'SELECT outcome_external_draft_sessions_exact($1,$2::jsonb) AS exact',
+    [leaving.candidateId, canonicalizeAflTradeJson(leavingProposal.content)]
+  );
+  expect(exact.rows).toEqual([{ exact: true }]);
+  // The trade's pick is already a canonical pick from the draft promotion, keyed by draft slot
+  // with facts the custody-keyed trade would change: retained unchanged, listed on the receipt.
+  const tradePick = leavingCandidate.content.transfers.find(
+    ({ asset }) => asset.kind === 'pick_entitlement'
+  )!.asset as { pickId: string };
+  const pickFacts = async () =>
+    (
+      await ws.pool.query(
+        `SELECT draft_season_year,draft_kind::text AS draft_kind,nominal_round,nominal_pick,original_club_id,status::text AS status
+           FROM outcome_draft_pick WHERE pick_id=$1`,
+        [tradePick.pickId]
+      )
+    ).rows;
+  const factsBefore = await pickFacts();
+  expect(factsBefore).toHaveLength(1);
+  const result = await promotions.promote({
+    candidateId: leaving.candidateId,
+    approvalDecisionId: await approve(leaving.candidateId, leavingProposal),
+  });
+  expect(result).toMatchObject({
+    transactionCount: 1,
+    transferCount: 1,
+    draftSelectionCount: 0,
+    pickCustodyCount: 0,
+    pickRealizationCount: 0,
+    pickLineageDeferral: {
+      decisionId: scope.decisionId,
+      deferredIssueCount: 1,
+      promotedDraftCount: 1,
+      retainedPickDefinitionCount: 1,
+      retainedPickDefinitionIds: [tradePick.pickId],
+    },
+  });
+  expect(await pickFacts()).toEqual(factsBefore);
+  expect(await count(ws, 'outcome_draft_pick_enrichment')).toBe(0);
+  expect(await draftVersions()).toBe(1);
+  // The receipt replays byte-identically from the same facts.
+  expect(
+    await promotions.promote({
+      candidateId: leaving.candidateId,
+      approvalDecisionId: (
+        await ws.pool.query<{ approval_decision_id: string }>(
+          'SELECT approval_decision_id FROM outcome_external_canonical_promotion WHERE candidate_id=$1',
+          [leaving.candidateId]
+        )
+      ).rows[0]!.approval_decision_id,
+    })
+  ).toEqual({ ...result, idempotentReplay: true });
+}, 600_000);
