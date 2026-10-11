@@ -880,7 +880,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `retainedPickDefinitionCount`; without a deferral that is still the immutable conflict. A stable
    pick the written transfers number differently (a trade page's "Pick 46" and a later trade's
    "Pick 56" for the same entitlement) is defined, under the deferral, from its one usable custody
-   observation (the slot it became) and listed as `custodyDefinedPickIds` with
+   observation in the candidate's full custody (the slot it became; a deferred pick's observation
+   counts here though it is not written) and listed as `custodyDefinedPickIds` with
    `custodyDefinedPickCount`, each asset keeping its trade-time number as its label; with no such
    single custody row, or more than one, it is still the conflict,
    and the promotion writes nothing of it and no realization into it (the receipt counts

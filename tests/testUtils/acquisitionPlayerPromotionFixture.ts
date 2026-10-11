@@ -126,7 +126,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * statlyaus/Statly#869): under `deferred` the pick is defined from that custody row and listed
      * on the receipt as custody-defined. Needs `pickSideIssues`.
      */
-    custodyDefinedPick?: boolean;
+    custodyDefinedPick?: boolean | 'deferred';
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -2355,6 +2355,25 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
             evidenceIds: reciprocalPickEvidenceIds,
           },
+          // A deferred numbered pick: both transfers carry a deferred lineage issue, so the pick's
+          // custody observation is not written while it still names the slot the pick became.
+          ...(options.custodyDefinedPick === 'deferred'
+            ? numberedPickTransferIds.map((transferId, index) => ({
+                code: 'lineage_unresolved' as const,
+                severity: pickSideSeverity,
+                subjectKey: `lineage:${transferId}`,
+                detail:
+                  'The transferred pick entitlement is not uniquely resolved to stable custody.',
+                evidenceIds: playerBatch.batch.content.evidence
+                  .filter(
+                    (row) =>
+                      row.content.claim.kind === 'directed_transfer' &&
+                      row.content.claim.nativeTransferId ===
+                        `synthetic-numbered-pick-${index === 0 ? 'a' : 'b'}`
+                  )
+                  .map((row) => row.evidenceId),
+              }))
+            : []),
           ...(options.reciprocalFuturePickOriginalClubUnresolved
             ? [
                 {
@@ -2622,7 +2641,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               originalClubId: targets.toClubId,
               recordedLabel: `Pick ${side.number}`,
             },
-            status: 'single_source' as const,
+            status:
+              options.custodyDefinedPick === 'deferred'
+                ? ('unresolved' as const)
+                : ('single_source' as const),
             evidenceIds: playerBatch.batch.content.evidence
               .filter(
                 (row) =>

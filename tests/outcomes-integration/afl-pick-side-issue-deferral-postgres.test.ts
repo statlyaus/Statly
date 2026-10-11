@@ -97,7 +97,7 @@ const promote = (
   reuseSeededTargets = false,
   transactionAlreadyPromoted = false,
   deferredCustody = false,
-  custodyDefinedPick = false
+  custodyDefinedPick: boolean | 'deferred' = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -107,7 +107,7 @@ const promote = (
     nativePlayerId: transactionAlreadyPromoted ? 'seed-player' : `${namespace}-player`,
     ...(transactionAlreadyPromoted ? { transactionAlreadyPromoted: true } : {}),
     ...(deferredCustody ? { deferredCustody: true } : {}),
-    ...(custodyDefinedPick ? { custodyDefinedPick: true } : {}),
+    ...(custodyDefinedPick ? { custodyDefinedPick } : {}),
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
     ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
@@ -1220,6 +1220,57 @@ it('defines a differently numbered pick from its one usable custody observation 
   );
   expect(pick.rows).toEqual([{ nominal_round: 3, nominal_pick: 56 }]);
   // Each asset keeps its own trade-time number as its recorded label.
+  const labels = await ws.pool.query<{ raw_description: string }>(
+    `SELECT asset.raw_description FROM outcome_event_asset asset
+       JOIN outcome_external_canonical_promotion_record record
+         ON record.canonical_record_id=asset.asset_version_id AND record.record_kind='transfer'
+      WHERE record.promotion_id=$1 AND asset.pick_id=$2 ORDER BY asset.raw_description`,
+    [deferred.promotion.promotionId, pickId]
+  );
+  expect(labels.rows.map(({ raw_description }) => raw_description)).toEqual(['Pick 46', 'Pick 56']);
+}, 300_000);
+
+// The same pick when it is a deferred pick: every transfer of it carries a deferred lineage issue,
+// so its custody observation is not written, yet that observation still names the slot it became.
+// The definition lookup reads the candidate's full custody, not the written custody (#869).
+it('defines a deferred differently numbered pick from its unwritten custody observation', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const deferred = await promote(
+    ws,
+    'numbered-deferred',
+    'deferred',
+    false,
+    false,
+    false,
+    false,
+    false,
+    'deferred'
+  );
+  const numbered = deferred.candidate.content.transfers.filter(
+    ({ asset }) => asset.kind === 'pick_entitlement' && asset.nominalPick !== null
+  );
+  expect(numbered.map(({ status }) => status)).toEqual(['unresolved', 'unresolved']);
+  const pickId = (numbered[0]!.asset as { pickId: string }).pickId;
+  expect(deferred.candidate.content.pickCustody.map(({ pickId: id }) => id)).toEqual([pickId]);
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 5,
+    custodyDefinedPickCount: 1,
+    custodyDefinedPickIds: [pickId],
+  });
+  // Four directed assets, no custody observation for the deferred pick, no realization.
+  expect(deferred.promotion).toMatchObject({
+    transferCount: 4,
+    pickCustodyCount: 0,
+    pickRealizationCount: 0,
+  });
+  expect(await count(ws, 'outcome_pick_custody_observation')).toBe(0);
+  const pick = await ws.pool.query<{ nominal_round: number; nominal_pick: number }>(
+    'SELECT nominal_round,nominal_pick FROM outcome_draft_pick WHERE pick_id=$1',
+    [pickId]
+  );
+  expect(pick.rows).toEqual([{ nominal_round: 3, nominal_pick: 56 }]);
   const labels = await ws.pool.query<{ raw_description: string }>(
     `SELECT asset.raw_description FROM outcome_event_asset asset
        JOIN outcome_external_canonical_promotion_record record
