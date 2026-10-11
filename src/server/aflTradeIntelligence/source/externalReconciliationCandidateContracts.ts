@@ -19,6 +19,7 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
 } from './externalReconciliationSourceAuthorityContracts';
+import { isAflTradePickSideReconciliationIssue } from './pickLineageDeferral';
 
 const instantSchema = z.iso.datetime({ offset: true });
 const statusSchema = z.enum(['single_source', 'corroborated', 'disputed', 'unresolved']);
@@ -183,7 +184,7 @@ const issueSchema = z
       'lineage_unresolved',
       'pick_outcome_unresolved',
     ]),
-    severity: z.literal('blocking'),
+    severity: z.enum(['blocking', 'deferred']),
     subjectKey: z.string().trim().min(1).max(1_000),
     detail: z.string().trim().min(1).max(4_000),
     evidenceIds: z.array(evidenceIdSchema),
@@ -296,6 +297,14 @@ const contentFieldsSchema = z
     pickCustody: z.array(custodySchema),
     pickLineage: z.array(lineageSchema),
     pickOutcomes: z.array(pickOutcomeSchema).min(1).optional(),
+    /**
+     * The approved owner `reconciliation_scope` decision under which pick-side issues are `deferred`
+     * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
+     */
+    pickLineageDeferral: z
+      .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
+      .strict()
+      .optional(),
     issues: z.array(issueSchema),
     reconciledAt: instantSchema,
     publicationEligible: z.literal(false),
@@ -303,6 +312,44 @@ const contentFieldsSchema = z
   .strict();
 
 type CandidateContent = z.infer<typeof contentFieldsSchema>;
+
+function validatePickLineageDeferral(content: CandidateContent, context: z.RefinementCtx) {
+  const deferred = content.issues.filter(({ severity }) => severity === 'deferred');
+  if (deferred.length > 0 && content.pickLineageDeferral === undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message: 'A deferred issue requires the approved reconciliation-scope decision.',
+    });
+  }
+  if (deferred.length === 0 && content.pickLineageDeferral !== undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message: 'A deferral decision is carried only by a candidate that deferred an issue.',
+    });
+  }
+  if (
+    content.pickLineageDeferral !== undefined &&
+    content.sourceAuthority?.kind !== 'historical_plan_completion'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message:
+        'A deferral decision names a historical completion; the candidate needs its authority.',
+    });
+  }
+  content.issues.forEach((issue, index) => {
+    if (issue.severity === 'deferred' && !isAflTradePickSideReconciliationIssue(issue)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['issues', index, 'severity'],
+        message: 'Only a pick-side issue can be deferred; player-side issues stay blocking.',
+      });
+    }
+  });
+}
 
 function validateSessionCorrectionMarker(content: CandidateContent, context: z.RefinementCtx) {
   if (content.reviewedSessionCorrection) {
@@ -480,6 +527,7 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
   validateSpecialCorrectionMarker(content, context);
   validateOrdinaryCorrectionMarker(content, context);
   validateCandidateSourceAuthority(content, context);
+  validatePickLineageDeferral(content, context);
   const transactionIds = new Set(content.transactions.map(({ transactionId }) => transactionId));
   const transferIds = new Set(content.transfers.map(({ transferId }) => transferId));
   const duplicate = (values: readonly string[]) => new Set(values).size !== values.length;

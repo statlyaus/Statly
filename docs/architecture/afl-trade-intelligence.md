@@ -4060,6 +4060,25 @@ The remaining work proceeds through these independently verifiable gates:
    selections, pick entitlements, and stable pick lineage. A future pick remains unresolved until its
    exact selection and player are authenticated.
 
+   **Pick-side deferral** (statlyaus/Statly#869, migration 0264, `source/pickLineageDeferral.ts`).
+   Every reconciliation issue is `blocking` unless the candidate was prepared under an approved owner
+   `reconciliation_scope` decision naming its completion. With it, issues whose subject is pick-side
+   (`lineage_unresolved`, `pick_outcome_unresolved`, `pick_identity_conflict`, and
+   `identity_unresolved` on a `selection:` or `pick-outcome:` subject) are recorded `deferred` and the
+   candidate carries `pickLineageDeferral: { decisionId }`; player-side issues stay blocking. The
+   stored `issue_count` is the blocking count, so the promotion gate keeps its meaning;
+   `deferred_issue_count` and `lineage_deferral_decision_id` sit beside it under a CHECK and an insert
+   trigger that requires the current approved decision for exactly that completion. A deferred
+   candidate without the option is byte-identical to today's, and a candidate prepared with the
+   option that defers nothing carries no key. Promotion of a deferred candidate writes every
+   transaction and directed asset, no custody observation or `exercised_as` realization for a
+   deferred pick, and nothing of a draft that holds a deferred selection (the review covers only the
+   drafts written; `outcome_external_draft_sessions_exact` compares against the promotable
+   selections); the receipt records the decision and count, and the written counts are what the
+   typed-count finalization checks. A deferred-lineage promotion is excluded from the
+   promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
+   Reversal is later reviewed lineage or a new candidate without the deferral.
+
    **Provider-stated pick outcomes** (`pick_disposition`, Draftguru trade parser v2) are kept apart
    from governed lineage. For each received pick, Draftguru states the player the receiving club used
    it on, "traded on", or "not used". A candidate records these as `pickOutcomes`: a `selected`

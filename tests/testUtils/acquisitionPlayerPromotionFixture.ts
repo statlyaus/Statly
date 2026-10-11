@@ -41,6 +41,8 @@ import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTrade
 import { PostgresAflTradeExternalCanonicalPromotionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionReviewRepository';
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
+import { AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
+import { PostgresAflTradeReconciliationScopeDecisionRepository } from '@/server/aflTradeIntelligence/source/postgresReconciliationScopeDecisionRepository';
 
 // Synthetic source parents only. Candidate, review and canonical promotion use public owners.
 export async function createSyntheticAcquisitionPlayerPromotion(
@@ -79,6 +81,15 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     lifecycle?: boolean;
     reciprocalPlayer?: boolean;
     reciprocalFuturePickYearOffset?: number;
+    /**
+     * A version 2 candidate from this fixture's own completion that carries pick-side issues
+     * (statlyaus/Statly#869): the reciprocal future pick has no custody (lineage unresolved) and the
+     * year page's draftee and club are unreviewed (selection identities unresolved). `deferred`
+     * records them under an approved `reconciliation_scope` decision and promotes; `blocking` leaves
+     * them blocking so the review and promotion are refused. Needs `reciprocalFuturePickYearOffset`
+     * with the default anchor, no draft sessions and no lifecycle.
+     */
+    pickSideIssues?: 'deferred' | 'blocking';
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -120,6 +131,18 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   )
     throw new Error('Reciprocal future-pick year offset must be a positive integer.');
   const hasDraftSessions = options.draftSessions || options.combinedDraftSessions;
+  if (
+    options.pickSideIssues &&
+    (options.reciprocalFuturePickYearOffset === undefined ||
+      hasDraftSessions ||
+      options.lifecycle ||
+      options.existingDraftTargets ||
+      (options.candidateAnchorSeasonYear !== undefined &&
+        options.candidateAnchorSeasonYear !== (options.tradeSeasonYear ?? 2024)))
+  )
+    throw new Error(
+      'Pick-side issues need the reciprocal future pick, the default anchor, no draft sessions and no lifecycle.'
+    );
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -2119,12 +2142,132 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       [windowBatch.batchId, capturedAt]
     );
   }
+  // Pick-side issues (#869). The candidate is version 2 over the completion's exact batch set: the
+  // year page's one selection is unresolved (its draftee and club have no reviewed identity) and
+  // the reciprocal future pick has no custody. Under `deferred` an approved reconciliation-scope
+  // decision is recorded first and the issues are deferred; under `blocking` they stay blocking.
+  const pickSide = options.pickSideIssues ?? null;
+  const pickSideSeverity = pickSide === 'deferred' ? ('deferred' as const) : ('blocking' as const);
+  if (pickSide !== null) {
+    if (!draftBatch) throw new Error('Missing synthetic year-page batch for pick-side issues.');
+    sourceBatchIds.push(draftBatch.batch.batchId);
+    // The version 2 authority binds the completion's exact batch set, and finalization conserves
+    // every evidence row of every listed batch, so this profile must be exactly those two batches.
+    const completionBatchIds = loaded.sourceBatches.map(({ batchId: id }) => id).sort();
+    if (
+      canonicalizeAflTradeJson(completionBatchIds) !==
+      canonicalizeAflTradeJson([...sourceBatchIds].sort())
+    )
+      throw new Error(
+        'Pick-side issues need the completion to hold exactly the trade and year-page batches.'
+      );
+  }
+  const yearPageSelections =
+    pickSide === null
+      ? []
+      : draftBatch!.batch.content.evidence.flatMap((row) =>
+          row.content.claim.kind === 'draft_selection' ? [{ row, claim: row.content.claim }] : []
+        );
+  const reciprocalPickEvidenceIds = playerBatch.batch.content.evidence
+    .filter(
+      (row) =>
+        row.content.claim.kind === 'directed_transfer' &&
+        row.content.claim.nativeTransferId === 'synthetic-reciprocal-future-pick'
+    )
+    .map((row) => row.evidenceId)
+    .sort();
+  const pickSideIssues =
+    pickSide === null
+      ? []
+      : [
+          {
+            code: 'lineage_unresolved' as const,
+            severity: pickSideSeverity,
+            subjectKey: `lineage:${reciprocalFuturePickTransferId}`,
+            detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
+            evidenceIds: reciprocalPickEvidenceIds,
+          },
+          ...yearPageSelections.flatMap(({ row, claim }) =>
+            (['player', 'club'] as const).map((role) => ({
+              code: 'identity_unresolved' as const,
+              severity: pickSideSeverity,
+              subjectKey: `selection:${claim.draftYear}:${claim.draftType}:${claim.selectionNumber}:${role}`,
+              detail: `No current reviewed ${role} resolution exists for draftguru identity ${
+                role === 'player' ? claim.player.recordedName : claim.selectedByClub.recordedName
+              }.`,
+              evidenceIds: [row.evidenceId],
+            }))
+          ),
+        ];
+  const pickSideSelections = yearPageSelections.map(({ row, claim }) => {
+    const selectionId = createAflTradeContentAddress('external-draft-selection', {
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      selectionNumber: claim.selectionNumber,
+    });
+    return {
+      selectionId,
+      draftYear: claim.draftYear,
+      draftType: claim.draftType,
+      selectionNumber: claim.selectionNumber,
+      roundNumber: claim.roundNumber,
+      pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
+      playerId: null,
+      clubId: null,
+      status: 'unresolved' as const,
+      supportingProviders: ['draftguru' as const],
+      evidenceIds: [row.evidenceId],
+    };
+  });
+  let deferralDecisionId: string | null = null;
+  if (pickSide === 'deferred') {
+    // The owner's answered approval record, stored as an artifact in custody and cited by id.
+    const approvalBytes = canonicalizeAflTradeJson({
+      approval: 'pick-side deferral',
+      completionId: completion.completionId,
+      fixtureNamespace,
+    });
+    const approvalSha = createHash('sha256').update(approvalBytes).digest('hex');
+    await outcomesPool.query(
+      `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+       environment,created_at,verified_at,custody_json)
+     VALUES ($1,$2,$3,'application/json',$4,'derived_private',
+             '${environment}','${reviewedAt}','${reviewedAt}','{}'::jsonb)
+     ON CONFLICT DO NOTHING`,
+      [
+        `artifact:${approvalSha}`,
+        approvalSha,
+        `artifact://sha256/${approvalSha}`,
+        Buffer.byteLength(approvalBytes),
+      ]
+    );
+    const recorded = await new PostgresAflTradeReconciliationScopeDecisionRepository(
+      sql
+    ).recordApproval({
+      schemaVersion: 'afl-trade-reconciliation-scope-decision/v1',
+      completionId: completion.completionId,
+      scope: 'pick_lineage_deferral',
+      approvalArtifactId: `artifact:${approvalSha}`,
+      rationale: 'Synthetic owner approval: defer the pick side until reviewed lineage lands.',
+      decidedBy: 'synthetic-owner',
+      decidedAt: reviewedAt,
+    });
+    deferralDecisionId = recorded.decisionId;
+  }
   const syntheticCandidateContent = {
-    schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
+    schemaVersion:
+      pickSide === null
+        ? AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION
+        : AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
     environment,
     competition: 'AFLM' as const,
     anchorSeasonYear: candidateAnchorSeasonYear,
     sourceBatchIds: sourceBatchIds.sort(),
+    ...(pickSide === null ? {} : { sourceAuthority: loaded.sourceAuthority }),
+    ...(deferralDecisionId === null
+      ? {}
+      : { pickLineageDeferral: { decisionId: deferralDecisionId } }),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
     transactions: [
       {
@@ -2149,7 +2292,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             ? []
             : [reciprocalFuturePickTransferId]),
         ].sort(),
-        status: 'single_source' as const,
+        // A trade with a blocking pick transfer is unresolved; under the deferral the exchange is
+        // complete and only the pick's custody is left for later lineage.
+        status: pickSide === 'blocking' ? ('unresolved' as const) : ('single_source' as const),
         evidenceIds: playerBatch.batch.content.evidence
           .filter(
             (row) =>
@@ -2239,7 +2384,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 originalClubId: targets.toClubId,
                 recordedLabel: null,
               },
-              status: 'single_source' as const,
+              status: pickSide === null ? ('single_source' as const) : ('unresolved' as const),
               evidenceIds: playerBatch.batch.content.evidence
                 .filter(
                   (row) =>
@@ -2289,9 +2434,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         ];
       }),
     ].sort((a, b) => a.transferId.localeCompare(b.transferId)),
-    draftSelections,
+    draftSelections: [...draftSelections, ...pickSideSelections],
     pickCustody:
-      options.reciprocalFuturePickYearOffset === undefined
+      options.reciprocalFuturePickYearOffset === undefined || pickSide !== null
         ? []
         : [
             {
@@ -2315,7 +2460,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             },
           ],
     pickLineage: [],
-    issues: [],
+    issues: pickSideIssues,
     reconciledAt: reviewedAt,
     publicationEligible: false as const,
   };
@@ -2478,6 +2623,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     [receipt.promotionId, playerId]
   );
   return {
+    /** The promotion receipt as returned, including any pick-side deferral it ran under (#869). */
+    promotion: receipt,
+    deferralDecisionId,
     lifecycleEntries: lifecycleAssets.rows.map((asset) => ({
       promotionId: receipt.promotionId,
       eventVersionId: asset.event_version_id,

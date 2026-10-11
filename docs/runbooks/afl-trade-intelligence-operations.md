@@ -775,6 +775,30 @@ supersede production Gate authority, and production execution cannot reuse non-p
    or parser produces a superseding capture; an issue-bearing batch is never silently treated as
    complete.
 
+   **Pick-side deferral (statlyaus/Statly#869, migration 0264).** A completion whose player side is
+   resolved but whose pick side is not (unresolved pick lineage, stated pick outcomes, colliding
+   custody identities, or draft-selection and pick-outcome identities nobody has reviewed) can be
+   prepared under an owner decision that defers the pick side. The decision is recorded only after
+   the owner's answered approval record is stored (`npm run outcomes:artifacts:store-evidence`, media
+   type `text/markdown`, class `capture_metadata`) and cites it:
+   `npm run outcomes:sources:record-reconciliation-scope -- --completion <completion-id> --scope pick_lineage_deferral --approval-artifact <artifact:sha256> --reviewer <principal-ref> --rationale <text> --decided-at <UTC-millisecond-instant>`.
+   It writes one approved `outcome_review_decision` with subject type `reconciliation_scope` and the
+   completion as subject; the artifact must be in custody and the completion complete. Then
+   `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion-id> --defer-pick-lineage <review-decision:…>`.
+   The command refuses a decision that is absent, not approved, superseded or names another
+   completion before it builds anything. With it, issues whose subject is pick-side are recorded with
+   `severity: deferred`: `lineage_unresolved`, `pick_outcome_unresolved`, `pick_identity_conflict`,
+   and `identity_unresolved` whose subject is a draft selection (`selection:…`) or a stated pick
+   outcome (`pick-outcome:…`). Player-transfer, transaction-party, custody-club and session identities
+   stay blocking and are resolved by ordinary identity review. A trade whose only unresolved transfer
+   is a pick with resolved clubs is a complete exchange; the pick's custody is its lineage, which the
+   deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
+   candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds
+   `deferred_issue_count` and `lineage_deferral_decision_id`, which the database checks against the
+   decision. Without the flag the candidate is byte-identical to today's. Candidate four's one
+   `special_pick` transfer is not deferrable: it still needs the special-entitlement path before
+   promotion.
+
 7. Prepare one reviewed JSON array containing only the missing draft-event metadata
    (`draftYear`, `draftType`, `eventDate`, `officialName`) for each exact draft represented by the
    candidate. The source selection rows own membership; operators cannot supply selection IDs,
@@ -820,6 +844,21 @@ supersede production Gate authority, and production execution cannot reuse non-p
    are created only for actual entitlement transformations. Exact replay returns the retained
    promotion receipt. Conflict, missing coverage or stale authority rolls back the entire transaction.
    Promotion does not register, validate or activate a factual release and cannot publish a grade.
+
+   **Promoting a deferred-lineage candidate (#869).** The same review and promote commands apply; the
+   candidate must have `issue_count = 0` (no blocking issue). The draft-events file lists only the
+   drafts the candidate writes: a draft holding a deferred selection is not promoted by this candidate
+   at all (no event, selections or player assets), and the review refuses metadata for it. The
+   promoter re-checks the deferral decision in its transaction, materializes every transaction and
+   directed asset (a deferred pick keeps its stable `pick_id` on the asset), writes no custody
+   observation and no `exercised_as` realization for a deferred pick, and records
+   `pickLineageDeferral: { decisionId, deferredIssueCount }` on the receipt, so the promotion id
+   differs from an undeferred promotion of the same candidate. Deferred issues stay on the candidate;
+   the grader keeps reporting those legs exactly as now. Nothing deferred is ever published: the
+   promotion-backed corpus excludes a deferred-lineage promotion from its scope and the database
+   refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
+   lineage or a new candidate without the deferral, which supersedes it.
+
 8. Register each immutable reviewed URL schedule once with
    `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
    schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
