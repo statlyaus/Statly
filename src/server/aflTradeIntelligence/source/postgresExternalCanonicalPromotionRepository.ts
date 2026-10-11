@@ -37,6 +37,7 @@ import {
   parseAflTradeExternalReconciliationCandidate,
   type AflTradeExternalReconciliationCandidateRecord,
 } from './externalReconciliationCandidateContracts';
+import { aflTradePromotionWriteScope } from './pickLineageDeferral';
 
 export interface PromoteAflTradeExternalCandidateInput {
   readonly candidateId: string;
@@ -54,6 +55,12 @@ export interface PromotedAflTradeExternalCandidate {
   readonly draftPlayerAssetCount: number;
   readonly pickCustodyCount: number;
   readonly pickRealizationCount: number;
+  /**
+   * The reviewed pick-side deferral this promotion ran under (statlyaus/Statly#869), or null. A
+   * deferred-lineage promotion writes no custody observation and no realization for a deferred pick
+   * and is never admitted to a promotion-backed corpus or factual release.
+   */
+  readonly pickLineageDeferral: { decisionId: string; deferredIssueCount: number } | null;
 }
 
 export class AflTradeExternalCanonicalPromotionError extends Error {
@@ -460,6 +467,39 @@ async function loadApproval(
     throw new AflTradeExternalCanonicalPromotionError(
       'APPROVAL_UNAVAILABLE',
       error instanceof Error ? error.message : 'Promotion approval evidence is invalid.'
+    );
+  }
+}
+
+/**
+ * A deferred-lineage candidate (#869) promotes only while its owner `reconciliation_scope` decision is
+ * still the current approved decision for the completion it was prepared from.
+ */
+async function requireCurrentLineageDeferralDecision(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  const deferral = candidate.content.pickLineageDeferral;
+  if (deferral === undefined) return;
+  const authority = candidate.content.sourceAuthority;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT NOT EXISTS (SELECT 1 FROM outcome_review_decision successor
+                         WHERE successor.supersedes_decision_id=decision.decision_id) AS current
+       FROM outcome_review_decision decision
+      WHERE decision.decision_id=$1
+        AND decision.subject_type='reconciliation_scope'
+        AND decision.subject_id=$2
+        AND decision.decision='approved'
+      FOR SHARE`,
+    [
+      deferral.decisionId,
+      authority?.kind === 'historical_plan_completion' ? authority.completionId : '',
+    ]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'APPROVAL_UNAVAILABLE',
+      'The pick-side deferral decision is absent, withdrawn, superseded, or names another completion.'
     );
   }
 }
@@ -1087,6 +1127,10 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidate,
         proposal: approval.proposal,
       });
+      await requireCurrentLineageDeferralDecision(transaction, candidate);
+      // The pick side a deferred candidate leaves unwritten: custody of deferred picks, realizations
+      // into them, and the selections of a draft holding a deferred selection (#869).
+      const scope = aflTradePromotionWriteScope(candidate.content);
       if (
         'draftEventCoverage' in approval.proposal.content &&
         approval.proposal.content.draftEventCoverage.length > 0
@@ -1142,6 +1186,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidateId: candidate.candidateId,
         proposalId: approval.proposal.proposalId,
         approvalDecisionId: input.approvalDecisionId,
+        ...(authenticated.pickLineageDeferral === null
+          ? {}
+          : { pickLineageDeferral: authenticated.pickLineageDeferral }),
       });
       const replay = await transaction.query<{
         promotion_id: string;
@@ -1191,6 +1238,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           draftPlayerAssetCount: Number(row.draft_player_asset_count),
           pickCustodyCount: Number(row.pick_custody_count),
           pickRealizationCount: Number(row.pick_realization_count),
+          pickLineageDeferral: request.content.pickLineageDeferral ?? null,
         };
       }
 
@@ -1235,7 +1283,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       const proposalJson = canonicalizeAflTradeJson(approval.proposal);
       const receiptCanonical = canonicalizeAflTradeJson(request.content);
       const receiptJson = canonicalizeAflTradeJson(request);
-      const draftPlayerAssetCount = content.draftSelections.length;
+      const draftPlayerAssetCount = authenticated.draftSelectionCount;
       const promotionRecordCount =
         authenticated.transactionCount +
         authenticated.transferCount +
@@ -1266,10 +1314,10 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           content.anchorSeasonYear,
           content.transactions.length,
           content.transfers.length,
-          content.draftSelections.length,
+          authenticated.draftSelectionCount,
           draftPlayerAssetCount,
-          content.pickCustody.length,
-          content.pickLineage.length,
+          authenticated.pickCustodyCount,
+          authenticated.pickRealizationCount,
           promotionRecordCount,
           approval.promotedAt,
           approval.proposal.proposalId.split(':')[1],
@@ -1880,7 +1928,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await persistDraftEventsAndSelections();
 
       async function persistPickCustody(): Promise<void> {
-        for (const record of content.pickCustody) {
+        for (const record of scope.pickCustody) {
           const date = pickCustodyDateColumns(record.observedAt);
           if (!record.currentClubId) {
             throw new AflTradeExternalCanonicalPromotionError(
@@ -1968,7 +2016,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await persistPickCustody();
 
       async function persistPickRealizations(): Promise<void> {
-        for (const record of content.pickLineage) {
+        for (const record of scope.pickLineage) {
           const transferAssetVersionId = assetByTransfer.get(record.transferId);
           const draftSelectionId =
             record.selectionId === null ? null : canonicalSelectionBySource.get(record.selectionId);
@@ -2139,10 +2187,11 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         idempotentReplay: false,
         transactionCount: content.transactions.length,
         transferCount: content.transfers.length,
-        draftSelectionCount: content.draftSelections.length,
+        draftSelectionCount: authenticated.draftSelectionCount,
         draftPlayerAssetCount,
-        pickCustodyCount: content.pickCustody.length,
-        pickRealizationCount: content.pickLineage.length,
+        pickCustodyCount: authenticated.pickCustodyCount,
+        pickRealizationCount: authenticated.pickRealizationCount,
+        pickLineageDeferral: authenticated.pickLineageDeferral,
       };
     });
   }

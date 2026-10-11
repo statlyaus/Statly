@@ -24,8 +24,18 @@ export interface PersistAflTradeExternalReconciliationInput {
 export interface PersistedAflTradeExternalReconciliation {
   candidateId: string;
   status: 'finalized';
+  /** Issues that refuse promotion; the stored `issue_count`. */
   blockingIssueCount: number;
+  /** Pick-side issues deferred under the candidate's reviewed deferral decision (#869). */
+  deferredIssueCount: number;
   idempotentReplay: boolean;
+}
+
+function issueCounts(content: AflTradeExternalReconciliationCandidateRecord['content']) {
+  const deferredIssueCount = content.issues.filter(
+    ({ severity }) => severity === 'deferred'
+  ).length;
+  return { deferredIssueCount, blockingIssueCount: content.issues.length - deferredIssueCount };
 }
 
 export class AflTradeExternalReconciliationPersistenceError extends Error {
@@ -381,6 +391,7 @@ async function insertCandidateHeader(
     AflTradeExternalReconciliationCandidateRecord['content']['sourceAuthority'] | null
 ) {
   const content = candidate.content;
+  const counts = issueCounts(content);
   await transaction.query(
     `INSERT INTO outcome_external_reconciliation_candidate
           (candidate_id,source_authority_kind,historical_completion_id,
@@ -388,9 +399,9 @@ async function insertCandidateHeader(
            source_batch_count,identity_resolution_count,
            transaction_count,transfer_count,draft_selection_count,pick_custody_count,
            pick_lineage_count,issue_count,status,finalized_at,source_authority_json,
-           candidate_canonical_json,candidate_json)
+           candidate_canonical_json,candidate_json,deferred_issue_count,lineage_deferral_decision_id)
          VALUES ($1,$2,$3,$4::"OutcomeEnvironment",$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-                 'open',NULL,$16::jsonb,$17,$18::jsonb)`,
+                 'open',NULL,$16::jsonb,$17,$18::jsonb,$19,$20)`,
     [
       candidate.candidateId,
       sourceAuthority?.kind ?? null,
@@ -406,10 +417,13 @@ async function insertCandidateHeader(
       content.draftSelections.length,
       content.pickCustody.length,
       content.pickLineage.length,
-      content.issues.length,
+      // `issue_count` is the blocking count, so the promotion gate keeps its meaning (#869).
+      counts.blockingIssueCount,
       sourceAuthority === null ? null : canonicalizeAflTradeJson(sourceAuthority),
       sourceAuthority === null ? null : canonicalizeAflTradeJson(content),
       candidateJson,
+      counts.deferredIssueCount,
+      content.pickLineageDeferral?.decisionId ?? null,
     ]
   );
 }
@@ -471,7 +485,7 @@ export class PostgresAflTradeExternalReconciliationRepository {
         return {
           candidateId: candidate.candidateId,
           status: 'finalized',
-          blockingIssueCount: content.issues.length,
+          ...issueCounts(content),
           idempotentReplay: true,
         };
       }
@@ -498,7 +512,7 @@ export class PostgresAflTradeExternalReconciliationRepository {
       return {
         candidateId: candidate.candidateId,
         status: 'finalized',
-        blockingIssueCount: content.issues.length,
+        ...issueCounts(content),
         idempotentReplay: false,
       };
     });

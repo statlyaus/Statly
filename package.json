@@ -90,6 +90,7 @@
     "outcomes:sources:dispatch-due-external": "tsx Scripts/dispatch-due-external-draft-trades.ts",
     "outcomes:sources:reconcile-external": "tsx Scripts/reconcile-external-draft-trade-evidence.ts",
     "outcomes:sources:promote-external": "tsx Scripts/promote-external-draft-trade-candidate.ts",
+    "outcomes:sources:record-reconciliation-scope": "tsx Scripts/record-reconciliation-scope-decision.ts",
     "outcomes:publication:prepare-factual": "tsx Scripts/prepare-afl-trade-factual-publication.ts",
     "outcomes:publication:prepare-valuation": "tsx Scripts/prepare-afl-trade-valuation-publication.ts",
     "outcomes:publication:manage-valuation": "tsx Scripts/manage-afl-trade-valuation-publication.ts",

@@ -117,6 +117,10 @@ async function loadCompletePromotions(
         AND promotion.status='finalized'
         AND promotion.finalized_at IS NOT NULL
         AND promotion.finalized_at <= $3
+        -- A deferred-lineage promotion (statlyaus/Statly#869) is never corpus-eligible: nothing
+        -- deferred is published. Migration 0264 refuses it as a member and excludes it from the
+        -- complete eligible set the corpus must contain.
+        AND promotion.receipt_json#>'{content,pickLineageDeferral}' IS NULL
       ORDER BY promotion.promotion_id
       FOR SHARE OF promotion`,
     [request.environment, request.competition, request.knowledgeCutoffAt]
@@ -124,7 +128,7 @@ async function loadCompletePromotions(
   if (promotionResult.rows.length === 0) {
     throw new AflTradePromotionBackedCorpusPersistenceError(
       'NO_PROMOTIONS',
-      'No finalized canonical promotions exist in the requested scope at the knowledge cutoff.'
+      'No finalized canonical promotions without a pick-side deferral exist in the requested scope at the knowledge cutoff.'
     );
   }
 

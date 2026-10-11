@@ -25,6 +25,10 @@ import {
   resolveCombinedDraftSessionEvidence,
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
+import {
+  isAflTradePickSideReconciliationIssue,
+  type AflTradePickLineageDeferral,
+} from './pickLineageDeferral';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
 function projectCombinedSessionSourceFact(
@@ -260,7 +264,8 @@ interface ReconciliationIssue {
     | 'transaction_incomplete'
     | 'lineage_unresolved'
     | 'pick_outcome_unresolved';
-  severity: 'blocking';
+  /** `deferred` only under a reviewed pick-side deferral (`pickLineageDeferral`), never on a player-side subject. */
+  severity: 'blocking' | 'deferred';
   subjectKey: string;
   detail: string;
   evidenceIds: string[];
@@ -385,6 +390,11 @@ export interface AflTradeExternalReconciliationContent {
   pickCustody: CanonicalPickCustody[];
   pickLineage: CanonicalPickLineage[];
   pickOutcomes?: CanonicalPickOutcome[];
+  /**
+   * The approved `reconciliation_scope` decision under which pick-side issues are `deferred`. Present
+   * only when at least one issue was deferred, so a candidate without deferral keeps its id.
+   */
+  pickLineageDeferral?: AflTradePickLineageDeferral;
   issues: ReconciliationIssue[];
   reconciledAt: string;
   publicationEligible: false;
@@ -1254,10 +1264,22 @@ export function reconcileAflTradeExternalEvidence(input: {
   identityResolutions: readonly unknown[];
   sourceAuthority?: unknown;
   reconciledAt: string;
+  /**
+   * An approved owner `reconciliation_scope` decision (statlyaus/Statly#869). With it, pick-side issues
+   * are recorded `deferred`; player-side issues stay `blocking`. Without it, output is unchanged.
+   */
+  pickLineageDeferral?: AflTradePickLineageDeferral;
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
     .parse(input.environment);
+  const pickLineageDeferral =
+    input.pickLineageDeferral === undefined
+      ? undefined
+      : z
+          .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
+          .strict()
+          .parse(input.pickLineageDeferral);
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
   const reconciledAt = instantSchema.parse(input.reconciledAt);
@@ -1480,11 +1502,21 @@ export function reconcileAflTradeExternalEvidence(input: {
         evidenceIds: [row.evidenceId, ...eventParties.map((party) => party.evidenceId)],
       });
     }
+    // Under the reviewed pick-side deferral a pick transfer whose clubs resolve is unresolved only
+    // for its custody, which is the pick's lineage, not the transaction's: the exchange itself is
+    // complete. Without the deferral the rule is unchanged.
+    const deferrablePickTransfer = (transfer: CanonicalTransfer) =>
+      pickLineageDeferral !== undefined &&
+      transfer.asset.kind === 'pick_entitlement' &&
+      transfer.fromClubId !== null &&
+      transfer.toClubId !== null;
     const complete =
       partyIds.every((partyId) => partyId !== null) &&
       partyIds.length >= 2 &&
       eventTransfers.length > 0 &&
-      eventTransfers.every((transfer) => transfer.status !== 'unresolved');
+      eventTransfers.every(
+        (transfer) => transfer.status !== 'unresolved' || deferrablePickTransfer(transfer)
+      );
     return {
       transactionId,
       providerEventId: claim.nativeEventId,
@@ -1935,6 +1967,19 @@ export function reconcileAflTradeExternalEvidence(input: {
     issues,
   });
 
+  if (pickLineageDeferral !== undefined && sourceAuthority?.kind !== 'historical_plan_completion') {
+    throw new TypeError(
+      'A pick-side deferral decision names a historical completion; it needs completion authority.'
+    );
+  }
+  // Under the reviewed deferral, pick-side issues are kept but marked deferred; nothing is removed.
+  const severed = issues.map((issue) =>
+    pickLineageDeferral !== undefined && isAflTradePickSideReconciliationIssue(issue)
+      ? { ...issue, severity: 'deferred' as const }
+      : issue
+  );
+  const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
+
   const content: AflTradeExternalReconciliationContent = {
     schemaVersion:
       sourceAuthority === undefined
@@ -1955,7 +2000,12 @@ export function reconcileAflTradeExternalEvidence(input: {
     pickLineage: pickLineage.sort((left, right) => left.lineageId.localeCompare(right.lineageId)),
     // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
-    issues: issues
+    // Only a candidate that actually deferred something carries the decision, so a candidate prepared
+    // with the option but no pick-side issue is byte-identical to one prepared without it.
+    ...(deferredIssueCount === 0 || pickLineageDeferral === undefined
+      ? {}
+      : { pickLineageDeferral }),
+    issues: severed
       .map((issue) => ({ ...issue, evidenceIds: sortedUnique(issue.evidenceIds) }))
       .sort(
         (left, right) =>

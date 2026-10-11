@@ -430,6 +430,7 @@ describe('external canonical promotion contracts', () => {
       draftSelectionCount: 1,
       pickCustodyCount: 1,
       pickRealizationCount: 1,
+      pickLineageDeferral: null,
     });
   });
 

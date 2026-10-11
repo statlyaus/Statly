@@ -16,6 +16,7 @@ import {
   parseAflTradeExternalReconciliationCandidate,
   type AflTradeExternalReconciliationCandidateRecord,
 } from './externalReconciliationCandidateContracts';
+import { aflTradePromotionWriteScope } from './pickLineageDeferral';
 
 export const AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION =
   'afl-trade-external-canonical-promotion-proposal/v1' as const;
@@ -475,12 +476,22 @@ export type AflTradeExternalCanonicalPromotionApprovalEvidence = z.infer<
   typeof aflTradeExternalCanonicalPromotionApprovalEvidenceSchema
 >;
 
+/** Recorded on the receipt of a promotion whose candidate deferred pick-side issues (#869). */
+const requestPickLineageDeferralSchema = z
+  .object({
+    decisionId: reviewDecisionIdSchema,
+    deferredIssueCount: z.number().int().positive(),
+  })
+  .strict();
+
 const requestContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_REQUEST_SCHEMA_VERSION),
     candidateId: candidateIdSchema,
     proposalId: proposalIdSchema,
     approvalDecisionId: reviewDecisionIdSchema,
+    // Present only on a deferred-lineage promotion, so every earlier receipt keeps its content address.
+    pickLineageDeferral: requestPickLineageDeferralSchema.optional(),
   })
   .strict();
 
@@ -509,9 +520,14 @@ export interface AuthenticatedAflTradeExternalCanonicalPromotion {
   readonly proposalId: string;
   readonly transactionCount: number;
   readonly transferCount: number;
+  /** Selections the promotion writes: none of a draft holding a deferred selection. */
   readonly draftSelectionCount: number;
+  /** Custody observations the promotion writes: none for a deferred pick. */
   readonly pickCustodyCount: number;
+  /** `exercised_as` realizations the promotion writes: none for a deferred pick or draft. */
   readonly pickRealizationCount: number;
+  /** The reviewed deferral the promotion operates under, or null for an issue-free candidate. */
+  readonly pickLineageDeferral: { decisionId: string; deferredIssueCount: number } | null;
 }
 
 function usable(status: string): boolean {
@@ -606,7 +622,9 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   }
 
   const selectionIdsByKey = new Map<string, string[]>();
-  for (const selection of candidate.content.draftSelections) {
+  // Under a reviewed deferral (#869) a draft holding a deferred selection is not promoted, so the
+  // reviewer supplies metadata only for the drafts this candidate writes.
+  for (const selection of aflTradePromotionWriteScope(candidate.content).draftSelections) {
     const key = coverageKey(selection.draftYear, selection.draftType);
     const selectionIds = selectionIdsByKey.get(key) ?? [];
     selectionIds.push(selection.selectionId);
@@ -871,18 +889,27 @@ function assertPromotionCandidateScope(
   if (content.transfers.some(({ asset }) => asset.kind === 'special_pick')) {
     throw new TypeError('Special entitlement must be resolved before canonical promotion.');
   }
-  if (content.issues.length !== 0) {
+  // Deferred pick-side issues (#869) stay on the candidate; only a blocking issue refuses promotion.
+  if (content.issues.some(({ severity }) => severity === 'blocking')) {
     throw new TypeError('A candidate with a blocking issue cannot be promoted.');
   }
 }
 
+/**
+ * Every record the promotion writes needs a usable status and complete identities. Under a reviewed
+ * deferral the pick side it does not write is exempt: a deferred pick transfer is still written as a
+ * directed asset (its clubs must resolve), but its unresolved status, the custody of a deferred pick
+ * and the selections of a deferred draft are left for later reviewed lineage.
+ */
 function assertPromotionFactIdentities(content: PromotionCandidateContent): void {
+  const scope = aflTradePromotionWriteScope(content);
+  const deferredTransfers = scope.deferral.deferredTransferIds;
   const records = [
     ...content.transactions,
-    ...content.transfers,
-    ...content.draftSelections,
-    ...content.pickCustody,
-    ...content.pickLineage,
+    ...content.transfers.filter(({ transferId }) => !deferredTransfers.has(transferId)),
+    ...scope.draftSelections,
+    ...scope.pickCustody,
+    ...scope.pickLineage,
   ];
   if (records.some(({ status }) => !usable(status))) {
     throw new TypeError('Every promoted factual record must have a usable reconciliation status.');
@@ -901,8 +928,8 @@ function assertPromotionFactIdentities(content: PromotionCandidateContent): void
         toClubId === null ||
         (asset.kind === 'player' && asset.playerId === null)
     ) ||
-    content.draftSelections.some(({ playerId, clubId }) => playerId === null || clubId === null) ||
-    content.pickCustody.some(({ currentClubId }) => currentClubId === null)
+    scope.draftSelections.some(({ playerId, clubId }) => playerId === null || clubId === null) ||
+    scope.pickCustody.some(({ currentClubId }) => currentClubId === null)
   ) {
     throw new TypeError('Promoted facts require complete reviewed canonical identities and dates.');
   }
@@ -966,7 +993,8 @@ function assertPromotionDraftCoverage(
   expectedCoverage: ReadonlyMap<string, string[]>
 ): void {
   const actualCoverage = new Map<string, string[]>();
-  content.draftSelections.forEach((selection) => {
+  // A draft holding a deferred selection is not promoted by this candidate, so coverage omits it.
+  aflTradePromotionWriteScope(content).draftSelections.forEach((selection) => {
     const key = coverageKey(selection.draftYear, selection.draftType);
     const values = actualCoverage.get(key) ?? [];
     values.push(selection.selectionId);
@@ -1024,14 +1052,32 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   const expectedCoverage = reviewedDraftCoverage(content, proposal);
   assertPromotionTransactionDates(content, proposal);
   assertPromotionDraftCoverage(content, expectedCoverage);
+  const scope = aflTradePromotionWriteScope(content);
+  if (
+    scope.deferral.deferredIssueCount > 0 &&
+    proposal.content.schemaVersion !==
+      AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION &&
+    proposal.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4'
+  ) {
+    throw new TypeError(
+      'A deferred-lineage candidate promotes through the metadata-only (v1/v4) proposal.'
+    );
+  }
 
   return {
     candidateId: candidate.candidateId,
     proposalId: proposal.proposalId,
     transactionCount: content.transactions.length,
     transferCount: content.transfers.length,
-    draftSelectionCount: content.draftSelections.length,
-    pickCustodyCount: content.pickCustody.length,
-    pickRealizationCount: content.pickLineage.length,
+    draftSelectionCount: scope.draftSelections.length,
+    pickCustodyCount: scope.pickCustody.length,
+    pickRealizationCount: scope.pickLineage.length,
+    pickLineageDeferral:
+      scope.deferral.deferral === null
+        ? null
+        : {
+            decisionId: scope.deferral.deferral.decisionId,
+            deferredIssueCount: scope.deferral.deferredIssueCount,
+          },
   };
 }
