@@ -4133,16 +4133,19 @@ The remaining work proceeds through these independently verifiable gates:
 
    Reconciliation (`joinEventualSelections`) groups a draft's Draftguru pick transfers by that native
    id. Two transfers from one provider need no identity resolution to match. A group is admitted only
-   when it forms one club-to-club path: each club gives and receives the pick at most once, and
-   seasons and stated days never go backwards along it. A group that branches or merges, such as a
-   matched bid that consumed several picks for one player, is left as the slot rules made it. In an
-   admitted group, every member takes the one custody pick that any member reached. With no custody
-   pick, every member takes a player-keyed pick id. With two custody picks, the slot rules have
-   usually joined a later transfer, numbered by the live draft-night order, to another entitlement
-   whose pre-draft slot carries that number. The group then takes the pick it reached first, provided
-   the pre-draft order (observed before draft night) names as that pick's holder a club the group
-   delivered it to before any member reached the other pick. Otherwise both joins rest on pre-draft
-   numbering, every member is unresolved, and a `lineage_unresolved` issue names both. Without v3 claims nothing changes. Re-keying can change
+   when its transfers walk the pick from club to club in exactly one order: each step's sender is the
+   previous step's receiver, every transfer is used once, and seasons and stated days never go
+   backwards. A club may hold the pick more than once (a pick swapped back on draft night, as Hugh
+   Boxshall's was in 2024). A group that branches or merges (a matched bid that consumed several
+   picks for one player), a closed loop with no first holder, or one with two possible orders is left
+   as the slot rules made it. In an admitted group, every member takes the one custody pick that any
+   member reached. With no custody pick, every member takes a player-keyed pick id. With two custody
+   picks, the slot rules have usually joined a later transfer, numbered by the live draft-night
+   order, to another entitlement whose pre-draft slot carries that number. The group then takes the
+   pick it reached first, provided the pre-draft order (observed before draft night) names as that
+   pick's holder a club the group delivered it to before any member reached the other pick.
+   Otherwise both joins rest on pre-draft numbering, every member is unresolved, and a
+   `lineage_unresolved` issue names both. Without v3 claims nothing changes. Re-keying can change
    the pick id of a transfer an earlier candidate promoted, so the promoted assets whose id would
    change are counted before such a candidate is prepared.
 

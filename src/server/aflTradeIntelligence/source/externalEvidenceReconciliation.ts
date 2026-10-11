@@ -1005,10 +1005,10 @@ function reconcileDirectedTransfer(input: {
  * pre-draft order, on draft night by the live order that bids shifted. The giving side of every pick
  * row names the player eventually selected with it (`pick_eventual_selection`, parser v3), so a
  * draft's Draftguru pick transfers naming one player's native id are one pick (statlyaus/Statly#886).
- * A group is admitted only when its transfers form one club-to-club path, each club giving and
- * receiving the pick at most once, in non-decreasing season and day order; a group that branches or
- * merges (a matched bid that consumed several picks for one player) is left as the slot rules made
- * it. In an admitted group every member takes the one custody pick any member reached, else a
+ * A group is admitted only when its transfers walk the pick from club to club in exactly one order
+ * (`eventualSelectionPath`): a pick swapped back on draft night is admitted, while a group that
+ * branches or merges (a matched bid that consumed several picks for one player), a closed loop, or
+ * an ambiguous order is left as the slot rules made it. In an admitted group every member takes the one custody pick any member reached, else a
  * player-keyed pick id. When the path reaches two custody picks, it takes the one reached first if
  * the pre-draft order shows it delivered before the conflict (`earliestCustodyBeforeConflict`);
  * otherwise every member is unresolved with a lineage issue naming both. Without eventual-selection
@@ -1139,10 +1139,16 @@ function earliestCustodyBeforeConflict(
     : null;
 }
 
+/** The most transfers of one pick the path search will order; a longer group is left as it is. */
+const MAXIMUM_EVENTUAL_SELECTION_PATH = 12;
+
 /**
- * The group's transfers in path order, or null: every club gives and receives the pick at most
- * once, the path from the one club that never receives it covers every transfer, and seasons (and
- * stated days, where both trades have one) never go backwards along it.
+ * The group's transfers in the one order that walks the pick from club to club, or null. Each step's
+ * sender must be the previous step's receiver, every transfer is used once, and seasons (and stated
+ * days, where both trades have one) never go backwards. A club may hold the pick more than once (a
+ * pick swapped back on draft night), but the walk must have one start and one end and exactly one
+ * such order: a group that branches or merges (a matched bid that consumed several picks for one
+ * player), a closed loop (no start), or one with two possible orders is refused.
  */
 function eventualSelectionPath(
   members: readonly number[],
@@ -1150,36 +1156,55 @@ function eventualSelectionPath(
   transactionOf: (index: number) => Extract<Claim, { kind: 'transaction' }> | null
 ): number[] | null {
   const edges = members.map((index) => ({ index, ...transfers[index]! }));
-  if (edges.some(({ fromClubId, toClubId }) => fromClubId === null || toClubId === null))
+  if (
+    edges.length > MAXIMUM_EVENTUAL_SELECTION_PATH ||
+    edges.some(({ fromClubId, toClubId }) => fromClubId === null || toClubId === null)
+  )
     return null;
-  const givers = edges.map(({ fromClubId }) => fromClubId!);
-  const receivers = edges.map(({ toClubId }) => toClubId!);
-  if (new Set(givers).size !== givers.length || new Set(receivers).size !== receivers.length)
+  const balance = new Map<string, number>();
+  for (const { fromClubId, toClubId } of edges) {
+    balance.set(fromClubId!, (balance.get(fromClubId!) ?? 0) + 1);
+    balance.set(toClubId!, (balance.get(toClubId!) ?? 0) - 1);
+  }
+  const starts = [...balance].filter(([, value]) => value === 1).map(([club]) => club);
+  const ends = [...balance].filter(([, value]) => value === -1);
+  if (
+    starts.length !== 1 ||
+    ends.length !== 1 ||
+    [...balance.values()].some((value) => Math.abs(value) > 1)
+  )
     return null;
-  const starts = givers.filter((club) => !receivers.includes(club));
-  if (starts.length !== 1) return null;
-  const path: number[] = [];
-  let club: string | undefined = starts[0];
-  while (club !== undefined) {
-    const edge = edges.find(({ fromClubId }) => fromClubId === club);
-    if (edge === undefined) break;
-    path.push(edge.index);
-    club = edge.toClubId!;
-    if (path.length > edges.length) return null;
-  }
-  if (path.length !== edges.length) return null;
-  for (let step = 1; step < path.length; step += 1) {
-    const [earlier, later] = [transactionOf(path[step - 1]!), transactionOf(path[step]!)];
-    if (earlier === null || later === null || later.seasonYear < earlier.seasonYear) return null;
-    if (
-      later.seasonYear === earlier.seasonYear &&
-      earlier.occurredOn !== null &&
-      later.occurredOn !== null &&
-      later.occurredOn < earlier.occurredOn
-    )
-      return null;
-  }
-  return path;
+  const inOrder = (earlier: number, later: number) => {
+    const [before, after] = [transactionOf(earlier), transactionOf(later)];
+    if (before === null || after === null || after.seasonYear < before.seasonYear) return false;
+    return (
+      after.seasonYear > before.seasonYear ||
+      before.occurredOn === null ||
+      after.occurredOn === null ||
+      after.occurredOn >= before.occurredOn
+    );
+  };
+  const walks: number[][] = [];
+  const used = new Set<number>();
+  const walk: number[] = [];
+  const extend = (club: string) => {
+    if (walks.length > 1) return;
+    if (walk.length === edges.length) {
+      walks.push([...walk]);
+      return;
+    }
+    for (const edge of edges) {
+      if (used.has(edge.index) || edge.fromClubId !== club) continue;
+      if (walk.length > 0 && !inOrder(walk.at(-1)!, edge.index)) continue;
+      used.add(edge.index);
+      walk.push(edge.index);
+      extend(edge.toClubId!);
+      walk.pop();
+      used.delete(edge.index);
+    }
+  };
+  extend(starts[0]!);
+  return walks.length === 1 ? walks[0]! : null;
 }
 
 type PickDispositionEvidence = Evidence & {

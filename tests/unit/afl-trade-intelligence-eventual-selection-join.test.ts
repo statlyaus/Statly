@@ -263,6 +263,64 @@ describe('joining a renumbered pick through its eventual selection (statlyaus/St
     );
   });
 
+  it('admits a pick swapped back on draft night, walking it in its one order', () => {
+    // As Hugh Boxshall's pick moved in 2024: West Coast receives it twice, once in the trade period
+    // and once back from Port; there is still one walk, Carlton → West Coast → Port → West Coast.
+    const swappedBack = page('2024-picks-port_adelaide-west_coast-30', [
+      ['Port Adelaide', 'West Coast', 20, 'joe_berry/1'],
+    ]);
+    const candidate = reconcile([tradePeriod(), draftNight(), swappedBack], order);
+    const custodyPick = candidate.pickCustody[0]!.pickId;
+    expect(pickIdOf(transferOf(candidate, 'West Coast', 'Port Adelaide', 15))).toBe(custodyPick);
+    expect(pickIdOf(transferOf(candidate, 'Port Adelaide', 'West Coast', 20))).toBe(custodyPick);
+  });
+
+  it('refuses a closed loop, which has no first holder', () => {
+    const loop = [
+      page('2024-picks-port_adelaide-west_coast-21', [
+        ['West Coast', 'Port Adelaide', 15, 'joe_berry/1'],
+      ]),
+      page('2024-picks-port_adelaide-richmond-22', [
+        ['Port Adelaide', 'Richmond', 20, 'joe_berry/1'],
+      ]),
+      page('2024-picks-richmond-west_coast-23', [['Richmond', 'West Coast', 30, 'joe_berry/1']]),
+    ];
+    const candidate = reconcile(loop, []);
+    const ids = new Set(
+      [
+        transferOf(candidate, 'West Coast', 'Port Adelaide', 15),
+        transferOf(candidate, 'Port Adelaide', 'Richmond', 20),
+        transferOf(candidate, 'Richmond', 'West Coast', 30),
+      ].map(pickIdOf)
+    );
+    expect(ids.size).toBe(3);
+  });
+
+  it('refuses a group with two possible orders', () => {
+    // West Coast sends the pick to Port twice (as 15 and as 25) and gets it back once in between:
+    // nothing says which transfer came first.
+    const ambiguous = [
+      tradePeriod(),
+      page('2024-picks-port_adelaide-west_coast-21', [
+        ['West Coast', 'Port Adelaide', 15, 'joe_berry/1'],
+      ]),
+      page('2024-picks-port_adelaide-west_coast-22', [
+        ['Port Adelaide', 'West Coast', 20, 'joe_berry/1'],
+      ]),
+      page('2024-picks-port_adelaide-west_coast-23', [
+        ['West Coast', 'Port Adelaide', 25, 'joe_berry/1'],
+      ]),
+    ];
+    const candidate = reconcile(ambiguous, order);
+    const custodyPick = candidate.pickCustody[0]!.pickId;
+    expect(pickIdOf(transferOf(candidate, 'West Coast', 'Port Adelaide', 15))).not.toBe(
+      custodyPick
+    );
+    expect(pickIdOf(transferOf(candidate, 'West Coast', 'Port Adelaide', 25))).not.toBe(
+      custodyPick
+    );
+  });
+
   it('takes the earliest custody pick when draft night misjoined a later transfer to another slot', () => {
     // The order also shows Port holding slot 15 as West Coast's own pick, so by number the draft-night
     // transfer (live #15) reaches that pick too. The order names West Coast, which the trade period
