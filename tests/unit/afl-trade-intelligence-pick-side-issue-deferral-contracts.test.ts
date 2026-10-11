@@ -32,6 +32,7 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
   createAflTradeHistoricalCompletionReconciliationAuthority,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
+import { pickDefinitionDisposition } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 import {
   aflTradeDeferredCustodyIds,
   aflTradePickLineageDeferralScope,
@@ -1289,5 +1290,103 @@ describe('deferred custody observations', () => {
         pickLineageDeferral: { decisionId, deferredCustodyIds: [] },
       })
     ).toThrow();
+  });
+});
+
+// A pick the promotion would define that is already a canonical pick with different facts, or with
+// empty facts this candidate would fill without reviewed lineage, is retained under the deferral:
+// referenced unchanged, no facts written, listed on the receipt. Without a deferral it is the
+// immutable conflict it always was (#869).
+describe('retained pick definitions', () => {
+  it('retains only under the deferral and only without reviewed lineage; conflicts otherwise', () => {
+    const facts = { nominalRound: 1, nominalPick: 27, originalClubId: null };
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'conflict' },
+        deferred: false,
+        registrationId: undefined,
+      })
+    ).toBe('conflict');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'conflict' },
+        deferred: true,
+        registrationId: undefined,
+      })
+    ).toBe('retain');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'enrich', facts },
+        deferred: false,
+        registrationId: undefined,
+      })
+    ).toBe('conflict');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'enrich', facts },
+        deferred: true,
+        registrationId: undefined,
+      })
+    ).toBe('retain');
+    // Reviewed lineage still enriches, deferral or not; an exact match needs nothing.
+    for (const deferred of [true, false]) {
+      expect(
+        pickDefinitionDisposition({
+          plan: { kind: 'enrich', facts },
+          deferred,
+          registrationId: `reviewed-pick-lineage-registration:${digest('1')}`,
+        })
+      ).toBe('enrich');
+      expect(
+        pickDefinitionDisposition({ plan: { kind: 'exact' }, deferred, registrationId: undefined })
+      ).toBe('exact');
+      expect(pickDefinitionDisposition({ plan: null, deferred, registrationId: undefined })).toBe(
+        'conflict'
+      );
+    }
+  });
+
+  it('is recorded on the receipt sorted, unique and counted exactly', () => {
+    const base = {
+      candidateId: `external-reconciliation:${digest('c')}`,
+      proposalId: `external-canonical-promotion-proposal:${digest('b')}`,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+    };
+    const picks = [`draft-pick:${digest('1')}`, `draft-pick:${digest('2')}`];
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      ...base,
+      pickLineageDeferral: {
+        decisionId,
+        deferredIssueCount: 1,
+        retainedPickDefinitionCount: 2,
+        retainedPickDefinitionIds: picks,
+      },
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    expect(request.promotionId).not.toBe(
+      createAflTradeExternalCanonicalPromotionRequest({
+        ...base,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 1 },
+      }).promotionId
+    );
+    for (const deferral of [
+      {
+        decisionId,
+        deferredIssueCount: 1,
+        retainedPickDefinitionCount: 1,
+        retainedPickDefinitionIds: picks,
+      },
+      { decisionId, deferredIssueCount: 1, retainedPickDefinitionIds: picks },
+      {
+        decisionId,
+        deferredIssueCount: 1,
+        retainedPickDefinitionCount: 2,
+        retainedPickDefinitionIds: [picks[1]!, picks[0]!],
+      },
+    ]) {
+      expect(() =>
+        createAflTradeExternalCanonicalPromotionRequest({ ...base, pickLineageDeferral: deferral })
+      ).toThrow(/counted exactly/);
+    }
   });
 });

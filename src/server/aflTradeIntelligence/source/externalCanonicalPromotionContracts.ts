@@ -494,17 +494,37 @@ const requestPickLineageDeferralSchema = z
       .min(1)
       .max(10_000)
       .optional(),
+    /**
+     * Picks the promotion would have defined that already exist as canonical picks with different
+     * facts and no reviewed lineage registration: referenced unchanged, no facts written. Present
+     * only when any, with their ids.
+     */
+    retainedPickDefinitionCount: z.number().int().positive().optional(),
+    retainedPickDefinitionIds: z
+      .array(aflTradeContentAddressedIdSchema('draft-pick'))
+      .min(1)
+      .max(100_000)
+      .optional(),
   })
   .superRefine((deferral, context) => {
-    const ids = deferral.promotedTransactionIds ?? [];
-    if (
-      (deferral.promotedTransactionCount ?? 0) !== ids.length ||
-      ids.some((id, index) => index > 0 && ids[index - 1]!.localeCompare(id) >= 0)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Promoted transaction ids must be sorted, unique and counted exactly.',
-      });
+    for (const [count, ids, label] of [
+      [deferral.promotedTransactionCount, deferral.promotedTransactionIds, 'Promoted transaction'],
+      [
+        deferral.retainedPickDefinitionCount,
+        deferral.retainedPickDefinitionIds,
+        'Retained pick definition',
+      ],
+    ] as const) {
+      const listed = ids ?? [];
+      if (
+        (count ?? 0) !== listed.length ||
+        listed.some((id, index) => index > 0 && listed[index - 1]!.localeCompare(id) >= 0)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: `${label} ids must be sorted, unique and counted exactly.`,
+        });
+      }
     }
   })
   .strict();

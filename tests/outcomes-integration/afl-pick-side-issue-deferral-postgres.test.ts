@@ -1131,6 +1131,21 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
     [leaving.candidateId, canonicalizeAflTradeJson(leavingProposal.content)]
   );
   expect(exact.rows).toEqual([{ exact: true }]);
+  // The trade's pick is already a canonical pick from the draft promotion, keyed by draft slot
+  // with facts the custody-keyed trade would change: retained unchanged, listed on the receipt.
+  const tradePick = leavingCandidate.content.transfers.find(
+    ({ asset }) => asset.kind === 'pick_entitlement'
+  )!.asset as { pickId: string };
+  const pickFacts = async () =>
+    (
+      await ws.pool.query(
+        `SELECT draft_season_year,draft_kind::text AS draft_kind,nominal_round,nominal_pick,original_club_id,status::text AS status
+           FROM outcome_draft_pick WHERE pick_id=$1`,
+        [tradePick.pickId]
+      )
+    ).rows;
+  const factsBefore = await pickFacts();
+  expect(factsBefore).toHaveLength(1);
   const result = await promotions.promote({
     candidateId: leaving.candidateId,
     approvalDecisionId: await approve(leaving.candidateId, leavingProposal),
@@ -1145,7 +1160,23 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
       decisionId: scope.decisionId,
       deferredIssueCount: 1,
       promotedDraftCount: 1,
+      retainedPickDefinitionCount: 1,
+      retainedPickDefinitionIds: [tradePick.pickId],
     },
   });
+  expect(await pickFacts()).toEqual(factsBefore);
+  expect(await count(ws, 'outcome_draft_pick_enrichment')).toBe(0);
   expect(await draftVersions()).toBe(1);
+  // The receipt replays byte-identically from the same facts.
+  expect(
+    await promotions.promote({
+      candidateId: leaving.candidateId,
+      approvalDecisionId: (
+        await ws.pool.query<{ approval_decision_id: string }>(
+          'SELECT approval_decision_id FROM outcome_external_canonical_promotion WHERE candidate_id=$1',
+          [leaving.candidateId]
+        )
+      ).rows[0]!.approval_decision_id,
+    })
+  ).toEqual({ ...result, idempotentReplay: true });
 }, 600_000);

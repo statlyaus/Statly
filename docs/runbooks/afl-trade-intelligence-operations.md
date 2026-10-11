@@ -872,7 +872,12 @@ supersede production Gate authority, and production execution cannot reuse non-p
    and counted on the receipt as `deferredCustodyCount`; without a deferral it blocks as before. A
    retained `draft_session` claim in the candidate's sources refuses the metadata-only proposal only
    for a draft the candidate writes (migration 0269): a session claim for a draft left to its earlier
-   promotion or holding a deferred selection proves nothing the promotion needs,
+   promotion or holding a deferred selection proves nothing the promotion needs. A pick the
+   promotion would define that is already a canonical pick with different facts (the draft
+   promotions key a pick by its slot, a trade by its custody) and no reviewed lineage registration
+   is retained under the deferral: the asset references the existing pick unchanged, no facts are
+   written, and the receipt lists it as `retainedPickDefinitionIds` with
+   `retainedPickDefinitionCount`; without a deferral that is still the immutable conflict,
    and the promotion writes nothing of it and no realization into it (the receipt counts
    `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and

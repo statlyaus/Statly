@@ -4093,7 +4093,11 @@ The remaining work proceeds through these independently verifiable gates:
    `outcome_external_candidate_promotable_transactions` behind the coverage validators and the
    unusable-record count) and written as nothing, with the realizations into its transfers skipped;
    the special-entitlement gate applies only to the transfers written, and the receipt carries the
-   skipped count and ids. A custody observation without a usable status is recorded as
+   skipped count and ids. A pick the promotion would define that is already canonical with
+   different facts and no reviewed lineage registration is retained under the deferral, referenced
+   unchanged with no facts written, and the receipt lists `retainedPickDefinitionIds` with
+   `retainedPickDefinitionCount` (decided from the stored facts before the receipt is addressed, so
+   a replay derives the same list); without a deferral it is the immutable conflict. A custody observation without a usable status is recorded as
    `deferredCustodyIds` (migration 0268 checks each is an unusable candidate custody row, on insert
    and at promotion; the unusable-record count ignores it) and written as nothing, counted on the
    receipt as `deferredCustodyCount`. A deferred-lineage promotion is excluded from the

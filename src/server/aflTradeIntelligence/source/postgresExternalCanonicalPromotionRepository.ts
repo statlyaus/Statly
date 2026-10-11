@@ -343,6 +343,24 @@ export function planPickEnrichment(
   return enriched ? { kind: 'enrich', facts } : { kind: 'exact' };
 }
 
+/**
+ * What a promotion does with a pick it would define that is already a canonical pick (#869). A
+ * stored pick with different facts, or with empty facts this candidate would fill without a reviewed
+ * lineage registration, is an immutable conflict. Under a pick-side deferral such a pick is
+ * retained instead: referenced unchanged for the asset, no facts written, listed on the receipt.
+ * Without a deferral the conflict throws as before.
+ */
+export function pickDefinitionDisposition(input: {
+  plan: ReturnType<typeof planPickEnrichment> | null;
+  deferred: boolean;
+  registrationId: string | undefined;
+}): 'exact' | 'enrich' | 'retain' | 'conflict' {
+  if (input.plan === null) return 'conflict';
+  if (input.plan.kind === 'exact') return 'exact';
+  if (input.plan.kind === 'enrich' && input.registrationId !== undefined) return 'enrich';
+  return input.deferred ? 'retain' : 'conflict';
+}
+
 async function reviewedLineageRegistrationFor(
   transaction: AflOutcomeSqlTransaction,
   candidateId: string
@@ -1258,13 +1276,61 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         }
       }
       await authenticateRightSources();
+      // Pick definitions and assets come from what is written; candidate-level checks keep `content`.
+      const written = {
+        ...candidate.content,
+        transactions: scope.transactions,
+        transfers: scope.transfers,
+        pickCustody: scope.pickCustody,
+      };
+      const definitions = pickDefinitions(written);
+      // Under the deferral a pick already defined with different facts, or with facts this candidate
+      // would fill without reviewed lineage, is retained: referenced unchanged, listed on the receipt.
+      // Decided before the receipt is addressed so a replay derives the same list from the same facts.
+      const retainedPickDefinitionIds = new Set<string>();
+      if (authenticated.pickLineageDeferral !== null) {
+        const registrationId =
+          candidate.content.reviewedCorrection?.registrationId ??
+          candidate.content.reviewedScope?.registrationId ??
+          (await reviewedLineageRegistrationFor(transaction, candidate.candidateId));
+        for (const definition of definitions.values()) {
+          const stored = await transaction.query<ResolvedPickRow>(
+            `SELECT pick_id,draft_season_year,draft_kind::text AS draft_kind,nominal_round,nominal_pick,
+                    original_club_id,status::text AS status,enrichment_id,enrichment_version
+               FROM outcome_draft_pick_facts(ARRAY[$1]::text[],NULL)`,
+            [definition.pickId]
+          );
+          const resolved = stored.rows[0];
+          if (resolved === undefined) continue;
+          const disposition = pickDefinitionDisposition({
+            plan: planPickEnrichment(resolved, {
+              ...definition,
+              draftKind: mapDraftKind(definition.draftType).eventKind,
+            }),
+            deferred: true,
+            registrationId,
+          });
+          if (disposition === 'retain') retainedPickDefinitionIds.add(definition.pickId);
+        }
+      }
+      const retainedPickDefinitions = [...retainedPickDefinitionIds].sort();
       const request = createAflTradeExternalCanonicalPromotionRequest({
         candidateId: candidate.candidateId,
         proposalId: approval.proposal.proposalId,
         approvalDecisionId: input.approvalDecisionId,
         ...(authenticated.pickLineageDeferral === null
           ? {}
-          : { pickLineageDeferral: authenticated.pickLineageDeferral }),
+          : {
+              pickLineageDeferral: {
+                ...authenticated.pickLineageDeferral,
+                ...(retainedPickDefinitions.length === 0
+                  ? {}
+                  : {
+                      retainedPickDefinitionCount: retainedPickDefinitions.length,
+                      retainedPickDefinitionIds: retainedPickDefinitions,
+                    }),
+              },
+            }),
       });
       const replay = await transaction.query<{
         promotion_id: string;
@@ -1319,13 +1385,6 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       }
 
       const content = candidate.content;
-      // Pick definitions and assets come from what is written; candidate-level checks keep `content`.
-      const written = {
-        ...content,
-        transactions: scope.transactions,
-        transfers: scope.transfers,
-        pickCustody: scope.pickCustody,
-      };
       const reviewedTransactionDateById = new Map(
         approval.proposal.content.transactionDateCoverage.map((coverage) => [
           coverage.transactionId,
@@ -1348,7 +1407,6 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         content
       );
       const evidence = await loadEvidenceSources(transaction, candidate.candidateId);
-      const definitions = pickDefinitions(written);
       const draftEventIds = approval.proposal.content.draftEventCoverage.map((coverage) =>
         createAflTradeContentAddress('draft-event', {
           competition: content.competition,
@@ -1527,6 +1585,20 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       async function persistPickDefinitions(): Promise<void> {
         for (const definition of definitions.values()) {
           const kind = mapDraftKind(definition.draftType);
+          if (retainedPickDefinitionIds.has(definition.pickId)) {
+            // Retained under the deferral: the existing canonical pick is referenced unchanged.
+            const existing = await transaction.query(
+              `SELECT pick_id FROM outcome_draft_pick WHERE pick_id=$1 FOR SHARE`,
+              [definition.pickId]
+            );
+            if (existing.rows.length !== 1) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'IMMUTABLE_CONFLICT',
+                `Pick ${definition.pickId} retained under the deferral is no longer a canonical pick.`
+              );
+            }
+            continue;
+          }
           await transaction.query(
             `INSERT INTO outcome_draft_pick
             (pick_id,draft_season_year,draft_kind,nominal_round,nominal_pick,original_club_id,status)
@@ -2275,7 +2347,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         draftPlayerAssetCount,
         pickCustodyCount: authenticated.pickCustodyCount,
         pickRealizationCount: authenticated.pickRealizationCount,
-        pickLineageDeferral: authenticated.pickLineageDeferral,
+        pickLineageDeferral: request.content.pickLineageDeferral ?? null,
       };
     });
   }
