@@ -1249,8 +1249,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     workItemId: workItem.workItemId,
     workItemSha256: workItem.workItemId.split(':')[1]!,
     workItem,
-    revision: 1,
-    supersedesDecisionId: null,
+    // A second promotion of the same player in one schema advances the subject's current revision.
+    ...(await nextIdentityRevision(workItem.content.subject.subjectId)),
     decision: 'approved',
     canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
       entityKind: 'player',

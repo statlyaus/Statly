@@ -574,10 +574,11 @@ it('counts a draft as promoted under a scoped successor and not under a re-listi
       [selectionNumber, eventVersionId, player]
     );
 
-  // Before 0266 a scoped successor retired every selection of the origin version.
+  // 0266 (in the deployed history) judges supersession per selection: a scoped successor carrying
+  // another number leaves selection 2 current, before and after this migration.
   const scoped = await supersede(second.event_version_id, 'scoped');
   await addSelection(scoped, other.player_id, 3);
-  expect(await currentIds()).toEqual(seededIds.filter((id) => id !== secondId));
+  expect(await currentIds()).toEqual(seededIds);
   await ws.pool.query(ws.migrationSql);
   expect(await currentIds()).toEqual(seededIds);
   // The deferred candidate holding selection 2 still records the draft and promotes nothing of it.
