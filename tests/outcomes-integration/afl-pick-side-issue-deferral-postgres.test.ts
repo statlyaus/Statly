@@ -225,7 +225,7 @@ it('promotes a deferred-lineage candidate without the pick side and keeps it out
     `SELECT asset.kind::text AS kind,asset.pick_id,asset.player_id FROM outcome_event_asset asset
        JOIN outcome_external_canonical_promotion_record record
          ON record.canonical_record_id=asset.asset_version_id AND record.record_kind='transfer'
-      WHERE record.promotion_id=$1 ORDER BY asset.kind`,
+      WHERE record.promotion_id=$1 ORDER BY asset.kind::text`,
     [deferred.promotion.promotionId]
   );
   expect(assets.rows).toEqual([
