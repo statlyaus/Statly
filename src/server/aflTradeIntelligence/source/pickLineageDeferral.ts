@@ -4,8 +4,10 @@
  * A reconciliation candidate may carry an approved owner decision (subject type `reconciliation_scope`,
  * naming the completion) under which issues whose subject is pick-side are recorded as `deferred`
  * instead of `blocking`: the pick-lineage codes, and an unresolved identity whose subject is a draft
- * selection or a provider-stated pick outcome. Player-transfer issues stay blocking. These functions are
- * pure: they classify issues and derive, from candidate content alone, which records a promotion of a
+ * selection, a provider-stated pick outcome or the original club a pick transfer names (the club whose
+ * entitlement is traded, which Draftguru labels by concession names the owner has rejected as club
+ * identities). Player-transfer and transaction-party issues stay blocking. These functions are pure:
+ * they classify issues and derive, from candidate content alone, which records a promotion of a
  * deferred candidate writes and which it leaves for later reviewed lineage.
  */
 
@@ -21,6 +23,15 @@ export const AFL_TRADE_PICK_SIDE_IDENTITY_SUBJECT_PREFIXES = [
   'pick-outcome:',
 ] as const;
 
+/**
+ * The one transfer-subject role that is pick-side: `transfer:<nativeTransferId>:original-club`, the
+ * club whose future pick is traded (`resolveFutureOriginalClub`). A pick transfer whose original
+ * club is unresolved gets an unresolvable pick id and an unresolved status, so its lineage issue is
+ * deferred too and the pick gets no custody observation. The `:from`, `:to` and `:player` roles are
+ * the exchange itself and stay blocking.
+ */
+export const AFL_TRADE_PICK_SIDE_TRANSFER_SUBJECT_ROLE = ':original-club';
+
 export interface AflTradeReconciliationIssueLike {
   readonly code: string;
   readonly severity: string;
@@ -34,19 +45,22 @@ export interface AflTradePickLineageDeferral {
 /**
  * Whether an issue's subject is pick-side. `lineage:` and `pick-custody:` subjects carry the lineage
  * codes; `selection:` and `pick-outcome:` identity subjects are a draft selection's player or club and
- * a stated outcome's receiving club or player. `transfer:`, `custody:`, `draft-session:` and transaction
- * subjects are not pick-side and stay blocking.
+ * a stated outcome's receiving club or player; a `transfer:…:original-club` identity subject is the
+ * club whose pick is traded. Every other `transfer:` role, `custody:`, `draft-session:` and
+ * transaction subjects are not pick-side and stay blocking.
  */
 export function isAflTradePickSideReconciliationIssue(issue: {
   readonly code: string;
   readonly subjectKey: string;
 }): boolean {
   if ((AFL_TRADE_PICK_SIDE_ISSUE_CODES as readonly string[]).includes(issue.code)) return true;
+  if (issue.code !== 'identity_unresolved') return false;
   return (
-    issue.code === 'identity_unresolved' &&
     AFL_TRADE_PICK_SIDE_IDENTITY_SUBJECT_PREFIXES.some((prefix) =>
       issue.subjectKey.startsWith(prefix)
-    )
+    ) ||
+    (issue.subjectKey.startsWith('transfer:') &&
+      issue.subjectKey.endsWith(AFL_TRADE_PICK_SIDE_TRANSFER_SUBJECT_ROLE))
   );
 }
 
