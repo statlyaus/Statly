@@ -1441,6 +1441,7 @@ describe('custody-defined pick definitions', () => {
   it('defines the pick from its one usable custody row under the deferral and lists it', () => {
     const resolved = resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
       deferred: true,
+      definitionCustody: [custody('a', 'single_source')] as never,
     });
     expect(resolved.custodyDefinedPickIds).toEqual([pickId]);
     expect(resolved.definitions.get(pickId)).toEqual({
@@ -1455,32 +1456,71 @@ describe('custody-defined pick definitions', () => {
     expect(
       resolveWrittenPickDefinitions(
         content([custody('a', 'corroborated'), custody('b', 'unresolved')]),
-        { deferred: true }
+        {
+          deferred: true,
+          definitionCustody: [custody('a', 'corroborated'), custody('b', 'unresolved')] as never,
+        }
       ).custodyDefinedPickIds
     ).toEqual([pickId]);
   });
 
   it('throws with no usable custody row, with two, and without the deferral', () => {
-    expect(() => resolveWrittenPickDefinitions(content([]), { deferred: true })).toThrow(
-      /conflicting nominalPick/
-    );
+    expect(() =>
+      resolveWrittenPickDefinitions(content([]), { deferred: true, definitionCustody: [] })
+    ).toThrow(/conflicting nominalPick/);
     expect(() =>
       resolveWrittenPickDefinitions(
         content([custody('a', 'single_source'), custody('b', 'single_source')]),
-        { deferred: true }
+        {
+          deferred: true,
+          definitionCustody: [
+            custody('a', 'single_source'),
+            custody('b', 'single_source'),
+          ] as never,
+        }
       )
     ).toThrow(/conflicting nominalPick/);
     expect(() =>
-      resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), { deferred: false })
+      resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
+        deferred: false,
+        definitionCustody: [custody('a', 'single_source')] as never,
+      })
     ).toThrow(/conflicting nominalPick/);
     // Agreeing numbers never need custody and are never listed.
     const agreeing = {
       ...content([]),
       transfers: [transfer('1', 46), transfer('2', 46)],
     } as unknown as Parameters<typeof resolveWrittenPickDefinitions>[0];
-    const resolved = resolveWrittenPickDefinitions(agreeing, { deferred: true });
+    const resolved = resolveWrittenPickDefinitions(agreeing, {
+      deferred: true,
+      definitionCustody: [],
+    });
     expect(resolved.custodyDefinedPickIds).toEqual([]);
     expect(resolved.definitions.get(pickId)?.nominalPick).toBe(46);
+  });
+
+  it('looks the custody row up in the candidate custody, so a deferred pick whose observation is not written still resolves', () => {
+    // The pick is deferred: its observation is out of the written custody but names the slot.
+    const written = content([]);
+    const resolved = resolveWrittenPickDefinitions(written, {
+      deferred: true,
+      definitionCustody: [custody('a', 'single_source')] as never,
+    });
+    expect(resolved.custodyDefinedPickIds).toEqual([pickId]);
+    expect(resolved.definitions.get(pickId)).toMatchObject({ nominalRound: 3, nominalPick: 56 });
+    // The written custody alone decides nothing: no row, or two rows, in the candidate still refuses.
+    expect(() =>
+      resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
+        deferred: true,
+        definitionCustody: [],
+      })
+    ).toThrow(/conflicting nominalPick/);
+    expect(() =>
+      resolveWrittenPickDefinitions(written, {
+        deferred: true,
+        definitionCustody: [custody('a', 'single_source'), custody('b', 'corroborated')] as never,
+      })
+    ).toThrow(/conflicting nominalPick/);
   });
 
   it('is recorded on the receipt sorted, unique and counted exactly', () => {

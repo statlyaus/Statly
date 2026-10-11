@@ -268,7 +268,14 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
  */
 export function resolveWrittenPickDefinitions(
   content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
-  options: { deferred: boolean }
+  options: {
+    deferred: boolean;
+    /**
+     * The candidate's full custody, for the single-usable-row lookup: a deferred pick's observation
+     * is left out of `content.pickCustody` (it is not written) but still names the slot it became.
+     */
+    definitionCustody: CandidateContent['pickCustody'];
+  }
 ): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
   const definitions = new Map<string, PickDefinition>();
   const custodyDefined = new Set<string>();
@@ -283,7 +290,7 @@ export function resolveWrittenPickDefinitions(
     }
     for (const [pickId, numbers] of numbersByPick) {
       if (numbers.size < 2) continue;
-      const usable = content.pickCustody.filter(
+      const usable = options.definitionCustody.filter(
         (custody) =>
           custody.pickId === pickId &&
           (custody.status === 'single_source' || custody.status === 'corroborated')
@@ -1328,6 +1335,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       };
       const { definitions, custodyDefinedPickIds } = resolveWrittenPickDefinitions(written, {
         deferred: authenticated.pickLineageDeferral !== null,
+        definitionCustody: candidate.content.pickCustody,
       });
       // Under the deferral a pick already defined with different facts, or with facts this candidate
       // would fill without reviewed lineage, is retained: referenced unchanged, listed on the receipt.
