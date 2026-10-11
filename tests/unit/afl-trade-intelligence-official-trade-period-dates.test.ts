@@ -37,7 +37,8 @@ const evidenceIds = {
   publicAccessReview: `artifact:${digest('3')}`,
   fieldBoundaryReview: `artifact:${digest('4')}`,
 };
-const page2023 = 'https://www.afl.com.au/news/1004881/afl-confirms-dates-for-2023-afl-trade-and-draft-period';
+const page2023 =
+  'https://www.afl.com.au/news/1004881/afl-confirms-dates-for-2023-afl-trade-and-draft-period';
 
 function recorded(season: number, clientVersion?: string) {
   const authority = officialAflTradePeriodAuthority({
@@ -80,8 +81,11 @@ const capture = (sourceUrl: string, effectiveAt: string) => ({
 });
 const article = (...paragraphs: string[]) =>
   `<html><body><div class="article__body">${paragraphs.map((p) => `<p>${p}</p>`).join('')}</div></body></html>`;
+// The non-AMP afl.com.au layout: the page title and the byline date wrapper precede the body.
+const datedArticle = (datetime: string, title: string, ...paragraphs: string[]) =>
+  `<html><head><title>${title}</title></head><body><div class="article__byline"><div class="article__byline-date"><time class="js-datetime" datetime="${datetime}"></time></div></div><div class="article__body">${paragraphs.map((p) => `<p>${p}</p>`).join('')}</div></body></html>`;
 
-describe('Official AFL trade-period dates parser v1 (issue 869)', () => {
+describe('Official AFL trade-period dates parser v2 (issue 869)', () => {
   const parse = (html: string, seasonYear: number) =>
     parseOfficialAflTradePeriodDates(html, {
       capture: capture(page2023, `${seasonYear}-10-01T00:00:00.000Z`),
@@ -134,6 +138,27 @@ describe('Official AFL trade-period dates parser v1 (issue 869)', () => {
       2020,
       window('2020-11-04', '2020-11-12'),
     ],
+    [
+      "the period's opening day and deadline day in the paragraph after the one naming it (2019 layout)",
+      article(
+        "WHEN the tickertape settles after Saturday's Toyota AFL Grand Final, the stage will be set for another huge AFL Trade Period.",
+        "From Trade Radio's opening day on Monday September 30 through to deadline day on Wednesday October 16, we've made it easy for you to get the trade news how you want it.",
+        'With so much rumour and speculation during Trade Period, it can be hard to keep track.'
+      ),
+      2019,
+      window('2019-09-30', '2019-10-16'),
+    ],
+    [
+      'a preview published on the opening day (2021 layout): today is the article date in Melbourne',
+      datedArticle(
+        '2021-10-03T19:53:00Z',
+        "YOUR CLUB'S TRADE PLANS: Targets, free agents, whispers, latest picks",
+        'The 10-day period officially starts today and concludes at 7.30pm AEDT on Wednesday, October 13. The free agency period opened at 9am on Friday, October 1 and closes on Friday, October 8.',
+        'Who will your club target, who will they shop around and what draft picks do they own?'
+      ),
+      2021,
+      window('2021-10-04', '2021-10-13'),
+    ],
   ])('reads %s as one window', (_label, html, seasonYear, expected) => {
     const result = parse(html, seasonYear);
     expect(result.issues).toEqual([]);
@@ -150,7 +175,11 @@ describe('Official AFL trade-period dates parser v1 (issue 869)', () => {
   });
 
   it.each([
-    ['no trade-period paragraph', article('The draft will be held on Wednesday, November 20.'), 'invalid_page'],
+    [
+      'no trade-period paragraph',
+      article('The draft will be held on Wednesday, November 20.'),
+      'invalid_page',
+    ],
     [
       'only an opening day',
       article('The Trade Period will commence on Monday, October 9 at 9am.'),
@@ -170,6 +199,21 @@ describe('Official AFL trade-period dates parser v1 (issue 869)', () => {
       'invalid_page',
     ],
     ['an empty body', '<html><body></body></html>', 'invalid_page'],
+    [
+      'an opening-day preview with no article date',
+      article(
+        'The Trade Period is here.',
+        'The 10-day period officially starts today and concludes at 7.30pm AEDT on Wednesday, October 18.'
+      ),
+      'invalid_page',
+    ],
+    [
+      'an opening day and deadline day on a page that never names the trade period',
+      article(
+        "From Trade Radio's opening day on Monday October 9 through to deadline day on Wednesday October 18, follow along."
+      ),
+      'invalid_page',
+    ],
   ])('refuses %s', (_label, html, code) => {
     const result = parse(html, 2023);
     expect(result.evidence).toEqual([]);
@@ -193,25 +237,28 @@ describe('Official AFL trade-period dates parser v1 (issue 869)', () => {
 });
 
 describe('reviewed Official AFL trade-period announcements', () => {
-  it('enumerates one reviewed page per season for 2020 and 2022 to 2025, and none for 2019 or 2021', () => {
-    const targets = createLocalOfficialAflTradePeriodTargets([2025, 2020, 2022, 2023, 2024]);
-    expect(targets.map(({ season }) => season)).toEqual([2020, 2022, 2023, 2024, 2025]);
+  it('enumerates one reviewed page per season for 2019 to 2025', () => {
+    const targets = createLocalOfficialAflTradePeriodTargets([
+      2025, 2020, 2022, 2023, 2024, 2019, 2021,
+    ]);
+    expect(targets.map(({ season }) => season)).toEqual([2019, 2020, 2021, 2022, 2023, 2024, 2025]);
     expect(targets.every(({ sourceUrl }) => new URL(sourceUrl).hostname === 'www.afl.com.au')).toBe(
       true
     );
-    expect(targets[2]).toEqual({
+    expect(targets[4]).toEqual({
       capabilityId: 'official-afl-trade-period-dates',
       season: 2023,
       sourceUrl: page2023,
       effectiveAt: '2023-10-09T00:00:00.000Z',
     });
-    for (const season of [2019, 2021])
-      expect(reviewedOfficialAflTradePeriodPages(season)).toEqual([]);
+    expect(reviewedOfficialAflTradePeriodPages(2019)[0]?.earliestDate).toBe('2019-09-30');
+    expect(reviewedOfficialAflTradePeriodPages(2021)[0]?.latestDate).toBe('2021-10-13');
+    expect(reviewedOfficialAflTradePeriodPages(2018)).toEqual([]);
     expect(reviewedOfficialAflTradePeriodPage(page2023)?.latestDate).toBe('2023-10-18');
   });
 
   it('keeps every reviewed window inside its season and under a month', () => {
-    for (const season of [2020, 2022, 2023, 2024, 2025]) {
+    for (const season of [2019, 2020, 2021, 2022, 2023, 2024, 2025]) {
       for (const page of reviewedOfficialAflTradePeriodPages(season)) {
         expect(page.earliestDate.slice(0, 4)).toBe(String(season));
         expect(page.earliestDate < page.latestDate).toBe(true);
@@ -222,7 +269,7 @@ describe('reviewed Official AFL trade-period announcements', () => {
     }
   });
 
-  it.each([[[]], [[2023, 2023]], [[2019]], [[2021]], [[2026]]])('rejects seasons %j', (seasons) => {
+  it.each([[[]], [[2023, 2023]], [[2018]], [[2026]]])('rejects seasons %j', (seasons) => {
     expect(() => createLocalOfficialAflTradePeriodTargets(seasons)).toThrow(
       LocalExternalCaptureError
     );
@@ -232,7 +279,11 @@ describe('reviewed Official AFL trade-period announcements', () => {
     [[]],
     [['https://www.afl.com.au/news/1/not-reviewed']],
     // A reviewed page of a season that was not requested.
-    [['https://www.afl.com.au/news/1110249/afl-confirms-dates-for-2024-free-agency-trade-and-draft-period']],
+    [
+      [
+        'https://www.afl.com.au/news/1110249/afl-confirms-dates-for-2024-free-agency-trade-and-draft-period',
+      ],
+    ],
   ])('refuses URLs %j for 2023', (urls) => {
     expect(() => createLocalOfficialAflTradePeriodTargets([2023], urls)).toThrow(
       LocalExternalCaptureError
@@ -241,10 +292,10 @@ describe('reviewed Official AFL trade-period announcements', () => {
 });
 
 describe('recorded Official AFL trade-period authority', () => {
-  it('loads the per-season decision recorded under the issue869 period-v1 key', async () => {
+  it('loads the per-season decision recorded under the issue869 period-v2 key', async () => {
     const record = recorded(2023);
     expect(record.decision.content.decisionKey).toBe(
-      'official-afl-trade-period-dates-issue869-private-2023-period-v1'
+      'official-afl-trade-period-dates-issue869-private-2023-period-v2'
     );
     const loaded = await loadRecordedLocalCaptureAuthority(
       ledgerOf(record),
@@ -263,7 +314,7 @@ describe('recorded Official AFL trade-period authority', () => {
         2023,
         evaluatedAt
       )
-    ).rejects.toThrow(/official-afl-trade-period-parser\/v1/);
+    ).rejects.toThrow(/official-afl-trade-period-parser\/v2/);
   });
 
   it('builds a command the scope rules and the recorded decision admit, and names every emitted leaf', () => {
@@ -279,12 +330,16 @@ describe('recorded Official AFL trade-period authority', () => {
       provider: 'official_afl',
       draftPathway: null,
       capabilityId: 'official-afl-trade-period-dates',
-      parserVersion: 'official-afl-trade-period-parser/v1',
+      parserVersion: 'official-afl-trade-period-parser/v2',
       sourceUrl: page2023,
       effectiveAt: '2023-10-09T00:00:00.000Z',
     });
     expect(
-      evaluateAflTradeGate0AAgainstDecision(record.decision, record.sourceRights, command.gateRequest)
+      evaluateAflTradeGate0AAgainstDecision(
+        record.decision,
+        record.sourceRights,
+        command.gateRequest
+      )
     ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
     const { evidence } = parseOfficialAflTradePeriodDates(
       article(
@@ -349,10 +404,13 @@ describe('trade-period capture scope (issue 869)', () => {
   };
 
   it.each([
-    ['an unreviewed afl.com.au article', { sourceUrl: 'https://www.afl.com.au/news/1/not-reviewed' }],
+    [
+      'an unreviewed afl.com.au article',
+      { sourceUrl: 'https://www.afl.com.au/news/1/not-reviewed' },
+    ],
     ['a reviewed page of another season', { anchorSeasonYear: 2024 }],
     ['another effective instant', { effectiveAt: '2023-10-10T00:00:00.000Z' }],
-    ['another parser version', { parserVersion: 'official-afl-trade-period-parser/v2' }],
+    ['another parser version', { parserVersion: 'official-afl-trade-period-parser/v3' }],
     ['a draft pathway', { draftPathway: 'national' as const }],
     ['another provider', { provider: 'draftguru' as const }],
   ])('refuses %s', (_label, overrides) => {
@@ -382,6 +440,8 @@ describe('trade-period capture scope (issue 869)', () => {
       env,
       []
     );
-    expect(parsed.targets).toEqual([expect.objectContaining({ season: 2023, sourceUrl: page2023 })]);
+    expect(parsed.targets).toEqual([
+      expect.objectContaining({ season: 2023, sourceUrl: page2023 }),
+    ]);
   });
 });

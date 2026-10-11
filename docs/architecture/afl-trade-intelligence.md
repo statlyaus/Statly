@@ -539,12 +539,17 @@ A traded player's arrival has no source day (Draftguru records a trade's year on
 source for its precision is the AFL's own announcement of each season's trade-period dates, captured
 under the narrow per-season capability `official-afl-trade-period-dates` (statlyaus/Statly#869, the
 shape of the pre-draft order capability of issue 853: an exact reviewed page per season in
-`officialAflTradePeriodSourceScope.ts`, a recorded `-period-v1` Gate 0A decision, the local runner,
+`officialAflTradePeriodSourceScope.ts`, a recorded `-period-v2` Gate 0A decision, the local runner,
 and the ingestion URL gate admitting only those pages at their stated opening day). Parser
-`official-afl-trade-period-parser/v1` reads the one article paragraph that names the men's trade
+`official-afl-trade-period-parser/v2` reads the one article paragraph that names the men's trade
 period with its opening and deadline days (a key-dates list line, or a sentence whose deadline
 follows in the next sentence), ignoring free agency, the AFLW period, selections-only sessions and
-list lodgement, and emits one `trade_period_window` claim with explicit window precision. Nothing is
+list lodgement, and emits one `trade_period_window` claim with explicit window precision. On a page
+that names the trade period, v2 also reads a paragraph giving the period's "opening day" and
+"deadline day" (the owner-supplied 2019 page, whose span starts at Trade Radio's opening day and so
+is wider than the period itself) and a paragraph saying the period "officially starts today" and
+concludes on a stated day, where today is the article's own `<time datetime>` as a Melbourne calendar
+day (the owner-supplied 2021 opening-day preview). Nothing is
 emitted when the page states no window, two windows, or a window outside the season or longer than
 a month. 2019 and 2021 have no reviewed page; a substitute source is an owner decision. The window
 becomes a promoted trade event's `date_precision` and a v4 arrival's entry precision (migration

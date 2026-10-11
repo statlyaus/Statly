@@ -1,19 +1,35 @@
 /**
  * The exact reviewed Official AFL announcements of each season's trade-period dates
  * (statlyaus/Statly#869, owner decision 2026-10-10: the yearly trade-period window is a traded
- * arrival's date precision). `official-afl-trade-period-parser/v1` reads one window per page. Each
+ * arrival's date precision). `official-afl-trade-period-parser/v2` reads one window per page. Each
  * entry records the window the reviewer read on the page, which the capture's `effectiveAt` repeats
- * and the parser must reproduce. Inclusion grants no further rights. 2019 and 2021 have no reviewed
- * page yet: no afl.com.au announcement of those seasons' dates was found on 2026-10-10, and the
- * owner has not approved a substitute source.
+ * and the parser must reproduce. Inclusion grants no further rights. The 2019 and 2021 pages were
+ * supplied by the owner on 2026-10-11; neither is a key-dates announcement, so each records the span
+ * the page itself states.
  */
 const reviewedAnnouncements = [
+  {
+    season: 2019,
+    url: 'https://www.afl.com.au/news/55757/heres-how-to-follow-the-2019-afl-trade-period-your-way',
+    // "From Trade Radio's opening day on Monday September 30 through to deadline day on Wednesday
+    // October 16": the span the page states, wider than the period's own opening.
+    earliestDate: '2019-09-30',
+    latestDate: '2019-10-16',
+  },
   {
     season: 2020,
     url: 'https://www.afl.com.au/news/498142/player-movement-dates-second-tier-next-generation-academies',
     // "November 4-12: AFL Trade Period" (the 2020 period ran in November after the delayed season).
     earliestDate: '2020-11-04',
     latestDate: '2020-11-12',
+  },
+  {
+    season: 2021,
+    url: 'https://www.afl.com.au/news/679307/trade-period-preview-your-clubs-targets-free-agents-latest-picks',
+    // Published 2021-10-03T19:53Z (4 October in Melbourne): "The 10-day period officially starts
+    // today and concludes at 7.30pm AEDT on Wednesday, October 13".
+    earliestDate: '2021-10-04',
+    latestDate: '2021-10-13',
   },
   {
     season: 2022,

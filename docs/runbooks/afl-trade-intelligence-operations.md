@@ -915,9 +915,9 @@ Prerequisites:
      AFL's and the archive is only its custodian. The `-order-v2` decisions and captures of
      2026-10-09 stay recorded but are never retained: v2 recorded each special pick as a parse issue,
      and a retained plan admits only issue-free batches; and
-   - one `official-afl-trade-period-dates-issue869-private-<season>-period-v1` decision per
-     captured season, for example `official-afl-trade-period-dates-issue869-private-2023-period-v1`
-     (statlyaus/Statly#869). Parser `official-afl-trade-period-parser/v1` reads the AFL's
+   - one `official-afl-trade-period-dates-issue869-private-<season>-period-v2` decision per
+     captured season, for example `official-afl-trade-period-dates-issue869-private-2023-period-v2`
+     (statlyaus/Statly#869). Parser `official-afl-trade-period-parser/v2` reads the AFL's
      announcement of that season's trade-period dates as one `trade_period_window` claim, so the
      rights must name exactly `OFFICIAL_AFL_TRADE_PERIOD_FIELDS` from
      `development/localOfficialAflTradePeriodCapture.ts`: the four non-null leaves of that claim.
@@ -988,7 +988,7 @@ this capability in a retained plan), rebuild the plan, completion and candidate 
 grade; the `traded_on_return_unlinked` count on #853 is the measure.
 
 Capture the Official AFL trade-period announcements (statlyaus/Statly#869) once the owner has
-recorded the per-season `-period-v1` decisions. Each `--season` is the exact reviewed announcement
+recorded the per-season `-period-v2` decisions. Each `--season` is the exact reviewed announcement
 of that season's dates; the parser emits one `trade_period_window` claim per page and nothing when
 the page does not state both the opening and the deadline day of the men's trade period:
 
