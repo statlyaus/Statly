@@ -485,6 +485,25 @@ const requestPickLineageDeferralSchema = z
     promotedDraftCount: z.number().int().positive().optional(),
     /** Resolved lineages into those drafts whose realization is not written; present only when any. */
     skippedRealizationCount: z.number().int().positive().optional(),
+    /** Transactions left to their existing current promotion; present only when any, with their ids. */
+    promotedTransactionCount: z.number().int().positive().optional(),
+    promotedTransactionIds: z
+      .array(aflTradeContentAddressedIdSchema('external-transaction'))
+      .min(1)
+      .max(10_000)
+      .optional(),
+  })
+  .superRefine((deferral, context) => {
+    const ids = deferral.promotedTransactionIds ?? [];
+    if (
+      (deferral.promotedTransactionCount ?? 0) !== ids.length ||
+      ids.some((id, index) => index > 0 && ids[index - 1]!.localeCompare(id) >= 0)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Promoted transaction ids must be sorted, unique and counted exactly.',
+      });
+    }
   })
   .strict();
 
@@ -574,8 +593,9 @@ function deriveTransactionDateCoverage(
   if (suppliedDateByTransaction.size !== suppliedTransactionDates.length) {
     throw new TypeError('Reviewed transaction-date keys must be unique.');
   }
-  const transactionDateCoverage = candidate.content.transactions
-    .map((transaction) => {
+  // A transaction left to its earlier promotion (#869) is not written, so it needs no reviewed date.
+  const transactionDateCoverage = aflTradePromotionWriteScope(candidate.content)
+    .transactions.map((transaction) => {
       const supplied = suppliedDateByTransaction.get(transaction.transactionId);
       if (
         transaction.occurredOn !== null &&
@@ -895,7 +915,13 @@ function assertPromotionCandidateScope(
   if (Date.parse(proposal.content.proposedAt) < Date.parse(content.reconciledAt)) {
     throw new TypeError('Promotion proposal cannot predate candidate reconciliation.');
   }
-  if (content.transfers.some(({ asset }) => asset.kind === 'special_pick')) {
+  // Only a transfer the promotion writes needs its special entitlement resolved: a transaction left
+  // to its earlier promotion (#869) is written as nothing.
+  if (
+    aflTradePromotionWriteScope(content).transfers.some(
+      ({ asset }) => asset.kind === 'special_pick'
+    )
+  ) {
     throw new TypeError('Special entitlement must be resolved before canonical promotion.');
   }
   // Deferred pick-side issues (#869) stay on the candidate; only a blocking issue refuses promotion.
@@ -914,8 +940,8 @@ function assertPromotionFactIdentities(content: PromotionCandidateContent): void
   const scope = aflTradePromotionWriteScope(content);
   const deferredTransfers = scope.deferral.deferredTransferIds;
   const records = [
-    ...content.transactions,
-    ...content.transfers.filter(({ transferId }) => !deferredTransfers.has(transferId)),
+    ...scope.transactions,
+    ...scope.transfers.filter(({ transferId }) => !deferredTransfers.has(transferId)),
     ...scope.draftSelections,
     ...scope.pickCustody,
     ...scope.pickLineage,
@@ -924,14 +950,14 @@ function assertPromotionFactIdentities(content: PromotionCandidateContent): void
     throw new TypeError('Every promoted factual record must have a usable reconciliation status.');
   }
   if (
-    content.transactions.some(
+    scope.transactions.some(
       ({ parties, transferIds, title, transactionType }) =>
         title === null ||
         transactionType === 'other' ||
         parties.length < 2 ||
         transferIds.length === 0
     ) ||
-    content.transfers.some(
+    scope.transfers.some(
       ({ fromClubId, toClubId, asset }) =>
         fromClubId === null ||
         toClubId === null ||
@@ -982,9 +1008,10 @@ function assertPromotionTransactionDates(
       { seasonYear, occurredOn },
     ])
   );
+  const written = aflTradePromotionWriteScope(content).transactions;
   if (
-    transactionDateById.size !== content.transactions.length ||
-    content.transactions.some(({ transactionId, seasonYear, occurredOn }) => {
+    transactionDateById.size !== written.length ||
+    written.some(({ transactionId, seasonYear, occurredOn }) => {
       const coverage = transactionDateById.get(transactionId);
       return (
         coverage === undefined ||
@@ -1076,8 +1103,8 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   return {
     candidateId: candidate.candidateId,
     proposalId: proposal.proposalId,
-    transactionCount: content.transactions.length,
-    transferCount: content.transfers.length,
+    transactionCount: scope.transactions.length,
+    transferCount: scope.transfers.length,
     draftSelectionCount: scope.draftSelections.length,
     pickCustodyCount: scope.pickCustody.length,
     pickRealizationCount: scope.pickLineage.length,
@@ -1094,6 +1121,12 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
             ...(scope.skippedRealizationCount === 0
               ? {}
               : { skippedRealizationCount: scope.skippedRealizationCount }),
+            ...(scope.promotedTransactionCount === 0
+              ? {}
+              : {
+                  promotedTransactionCount: scope.promotedTransactionCount,
+                  promotedTransactionIds: [...scope.deferral.promotedTransactionIds].sort(),
+                }),
           },
   };
 }

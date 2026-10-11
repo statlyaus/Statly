@@ -59,9 +59,13 @@ export interface AflTradeReconciliationScopeDecisionReader {
   loadDecision(decisionId: string): Promise<AflTradeReconciliationScopeDecision | null>;
 }
 
-/** Source selection ids that are current canonical selections of finalized promotions. */
+/** Current canonical selections and transactions of finalized promotions, by source id. */
 export interface AflTradePromotedDraftSelectionReader {
   loadCurrentCanonicalSelectionIds(competition: string): Promise<readonly string[]>;
+  /** Each current canonical trade event with the source transfer ids promoted as assets on it. */
+  loadCurrentCanonicalTransactions(
+    competition: string
+  ): Promise<readonly { transactionId: string; transferIds: readonly string[] }[]>;
 }
 
 export interface PrepareAflTradeHistoricalReconciliationDependencies {
@@ -86,6 +90,7 @@ export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTr
   pickLineageDeferral: {
     decisionId: string;
     promotedDrafts?: { draftYear: number; draftType: string }[];
+    promotedTransactions?: string[];
   } | null;
 }
 
@@ -178,6 +183,12 @@ export async function prepareAflTradeHistoricalReconciliation(
             source.competition
           )),
         ].sort();
+  const promotedTransactions =
+    deferralDecision === null
+      ? []
+      : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalTransactions(
+          source.competition
+        );
   const candidate = parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
       environment: source.environment,
@@ -189,7 +200,11 @@ export async function prepareAflTradeHistoricalReconciliation(
       reconciledAt,
       ...(input.pickLineageDeferral === undefined
         ? {}
-        : { pickLineageDeferral: input.pickLineageDeferral, promotedDraftSelectionIds }),
+        : {
+            pickLineageDeferral: input.pickLineageDeferral,
+            promotedDraftSelectionIds,
+            promotedTransactions,
+          }),
     })
   );
   const persisted = await dependencies.candidateRepository.persistCandidate({

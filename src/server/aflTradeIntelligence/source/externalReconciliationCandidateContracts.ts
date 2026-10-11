@@ -321,6 +321,16 @@ const contentFieldsSchema = z
           .min(1)
           .max(100)
           .optional(),
+        /**
+         * Transactions whose trade event is already current canonical with every transfer a
+         * promoted asset on it; the promotion writes nothing of them. Sorted unique, each a
+         * candidate transaction, present only when non-empty.
+         */
+        promotedTransactions: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-transaction')).min(1).max(10_000)
+          )
+          .optional(),
       })
       .strict()
       .optional(),
@@ -383,6 +393,15 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'promotedDrafts', index],
         message: 'An already-promoted draft must be one the candidate holds a selection in.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.promotedTransactions ?? []).forEach((transactionId, index) => {
+    if (!content.transactions.some((transaction) => transaction.transactionId === transactionId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedTransactions', index],
+        message: 'An already-promoted transaction must be one the candidate holds.',
       });
     }
   });

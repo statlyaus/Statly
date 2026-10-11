@@ -8,14 +8,14 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0266_promoted_drafts_scoped_supersession';
+const MIGRATION = '0267_deferred_candidate_promoted_transactions';
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 /**
  * One disposable schema per promotion: the synthetic fixture content-addresses its artifacts and
  * canonical rows, so two promotions in one schema collide unless their namespaces differ. Each schema
- * gets the history deployed just before 0266 (so 0264's deferral and 0265's promoted-draft record
- * are in place) and applies 0266 itself, as `prisma migrate deploy` will.
+ * gets the history deployed just before 0267 (so 0264's deferral and 0265/0266's promoted-draft
+ * record are in place) and applies 0267 itself, as `prisma migrate deploy` will.
  */
 interface Workspace {
   pool: Pool;
@@ -63,13 +63,16 @@ const promote = (
   pickSideIssues?: 'deferred' | 'blocking',
   originalClubUnresolved = false,
   yearPageDraftAlreadyPromoted = false,
-  reuseSeededTargets = false
+  reuseSeededTargets = false,
+  transactionAlreadyPromoted = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
     fixtureNamespace: namespace,
-    providerEventId: `2024-${namespace}-alpha`,
-    nativePlayerId: `${namespace}-player`,
+    // An already-promoted trade is the seed's trade: same provider event and player.
+    providerEventId: transactionAlreadyPromoted ? '2024-seed-alpha' : `2024-${namespace}-alpha`,
+    nativePlayerId: transactionAlreadyPromoted ? 'seed-player' : `${namespace}-player`,
+    ...(transactionAlreadyPromoted ? { transactionAlreadyPromoted: true } : {}),
     ...(pickSideIssues ? { pickSideIssues } : {}),
     ...(originalClubUnresolved ? { reciprocalFuturePickOriginalClubUnresolved: true } : {}),
     ...(yearPageDraftAlreadyPromoted ? { yearPageDraftAlreadyPromoted: true } : {}),
@@ -571,10 +574,11 @@ it('counts a draft as promoted under a scoped successor and not under a re-listi
       [selectionNumber, eventVersionId, player]
     );
 
-  // Before 0266 a scoped successor retired every selection of the origin version.
+  // 0266 (in the deployed history) judges supersession per selection: a scoped successor carrying
+  // another number leaves selection 2 current, before and after this migration.
   const scoped = await supersede(second.event_version_id, 'scoped');
   await addSelection(scoped, other.player_id, 3);
-  expect(await currentIds()).toEqual(seededIds.filter((id) => id !== secondId));
+  expect(await currentIds()).toEqual(seededIds);
   await ws.pool.query(ws.migrationSql);
   expect(await currentIds()).toEqual(seededIds);
   // The deferred candidate holding selection 2 still records the draft and promotes nothing of it.
@@ -601,4 +605,98 @@ it('counts a draft as promoted under a scoped successor and not under a re-listi
     [deferred.candidate.candidateId]
   );
   expect(retired.rows).toEqual([{ current: false }]);
+}, 300_000);
+
+// A deferred candidate carrying a trade that an earlier promotion already made current canonical,
+// with every transfer a promoted asset on it, leaves that trade alone (migration 0267): no new trade
+// version, no asset, no custody, no realization. The seed promotes the trade; the deferred candidate
+// then holds the same trade plus a second one it writes.
+it('leaves an already-promoted trade to its promotion and writes only the other trade', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  const seeded = await promote(ws, 'seed');
+  const seedTransaction = seeded.candidate.content.transactions[0]!;
+  expect(seeded.promotion).toMatchObject({ transactionCount: 1, transferCount: 2 });
+  const tradeState = async () => ({
+    versions: await count(
+      ws,
+      `outcome_event_version WHERE event_id='${seedTransaction.transactionId}'`
+    ),
+    assets: await count(
+      ws,
+      `outcome_event_asset asset JOIN outcome_event_version version USING(event_version_id)
+        WHERE version.event_id='${seedTransaction.transactionId}'`
+    ),
+  });
+  const before = await tradeState();
+  expect(before).toEqual({ versions: 1, assets: 2 });
+  const current = await ws.pool.query<{ transaction_id: string; transfer_ids: string[] }>(
+    "SELECT transaction_id,transfer_ids FROM outcome_current_canonical_transactions('AFLM')"
+  );
+  expect(current.rows).toEqual([
+    {
+      transaction_id: seedTransaction.transactionId,
+      transfer_ids: [...seedTransaction.transferIds].sort(),
+    },
+  ]);
+
+  const deferred = await promote(ws, 'again', 'deferred', false, false, true, true);
+  expect(deferred.candidate.content.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    promotedTransactions: [seedTransaction.transactionId],
+  });
+  expect(deferred.candidate.content.transactions.length).toBe(2);
+  expect(deferred.promotion.pickLineageDeferral).toEqual({
+    decisionId: deferred.deferralDecisionId,
+    deferredIssueCount: 3,
+    promotedTransactionCount: 1,
+    promotedTransactionIds: [seedTransaction.transactionId],
+  });
+  expect(deferred.promotion).toMatchObject({
+    transactionCount: 1,
+    transferCount: 1,
+    draftSelectionCount: 0,
+    pickCustodyCount: 0,
+    pickRealizationCount: 0,
+  });
+  // The seeded trade is untouched: same version, same assets; only the second trade was written.
+  expect(await tradeState()).toEqual(before);
+  const written = await ws.pool.query<{ source_record_id: string; record_kind: string }>(
+    `SELECT source_record_id,record_kind FROM outcome_external_canonical_promotion_record
+      WHERE promotion_id=$1 ORDER BY record_kind`,
+    [deferred.promotion.promotionId]
+  );
+  expect(written.rows.map(({ record_kind }) => record_kind)).toEqual(['transaction', 'transfer']);
+  expect(written.rows.map(({ source_record_id }) => source_record_id)).not.toContain(
+    seedTransaction.transactionId
+  );
+  const stored = await ws.pool.query<{ promotable: number; current: boolean; deferral: unknown }>(
+    `SELECT (SELECT count(*)::integer FROM outcome_external_candidate_promotable_transactions($1)) AS promotable,
+            outcome_external_candidate_promoted_transactions_current(candidate_json) AS current,
+            (SELECT receipt_json#>'{content,pickLineageDeferral}' FROM outcome_external_canonical_promotion
+              WHERE candidate_id=$1) AS deferral
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1`,
+    [deferred.candidate.candidateId]
+  );
+  expect(stored.rows).toEqual([
+    {
+      promotable: 1,
+      current: true,
+      deferral: {
+        decisionId: deferred.deferralDecisionId,
+        deferredIssueCount: 3,
+        promotedTransactionCount: 1,
+        promotedTransactionIds: [seedTransaction.transactionId],
+      },
+    },
+  ]);
+}, 300_000);
+
+it('refuses a candidate that records a trade nobody promoted', async () => {
+  const ws = await workspace();
+  await ws.pool.query(ws.migrationSql);
+  await expect(
+    promote(ws, 'unpromoted-trade', 'deferred', false, false, false, true)
+  ).rejects.toThrow(/current canonical with every transfer promoted/);
+  expect(await count(ws, 'outcome_external_reconciliation_candidate')).toBe(0);
 }, 300_000);
