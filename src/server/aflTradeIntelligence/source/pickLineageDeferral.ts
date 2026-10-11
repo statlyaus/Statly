@@ -61,6 +61,11 @@ export interface AflTradePickLineageDeferral {
    * realization). Sorted unique transaction ids, present only when non-empty.
    */
   readonly promotedTransactions?: string[];
+  /**
+   * Custody observations whose status is not usable (`unresolved` or `disputed`): pick-side, left
+   * unwritten by a deferred-lineage promotion. Sorted unique custody ids, present only when non-empty.
+   */
+  readonly deferredCustodyIds?: string[];
 }
 
 /**
@@ -105,7 +110,11 @@ interface DeferralContentLike {
     readonly draftType: string;
     readonly pickId: string;
   }[];
-  readonly pickCustody: readonly { readonly custodyId: string; readonly pickId: string }[];
+  readonly pickCustody: readonly {
+    readonly custodyId: string;
+    readonly pickId: string;
+    readonly status: string;
+  }[];
   readonly pickLineage: readonly {
     readonly lineageId: string;
     readonly pickId: string;
@@ -130,6 +139,8 @@ export interface AflTradePickLineageDeferralScope {
   readonly promotedDraftKeys: ReadonlySet<string>;
   /** Transactions already current canonical through an earlier promotion; left to it. */
   readonly promotedTransactionIds: ReadonlySet<string>;
+  /** Custody observations without a usable status, deferred rather than written. */
+  readonly deferredCustodyIds: ReadonlySet<string>;
 }
 
 /**
@@ -183,7 +194,26 @@ export function aflTradePickLineageDeferralScope(
       )
     ),
     promotedTransactionIds: new Set(content.pickLineageDeferral?.promotedTransactions ?? []),
+    deferredCustodyIds: new Set(content.pickLineageDeferral?.deferredCustodyIds ?? []),
   };
+}
+
+/** A custody observation the promotion can write: single-source or corroborated. */
+export function isAflTradeUsableCustodyStatus(status: string): boolean {
+  return status === 'single_source' || status === 'corroborated';
+}
+
+/** Custody ids a deferred candidate records as deferred: every row without a usable status, sorted. */
+export function aflTradeDeferredCustodyIds(
+  pickCustody: readonly { readonly custodyId: string; readonly status: string }[]
+): string[] {
+  return [
+    ...new Set(
+      pickCustody
+        .filter(({ status }) => !isAflTradeUsableCustodyStatus(status))
+        .map(({ custodyId }) => custodyId)
+    ),
+  ].sort();
 }
 
 export interface AflTradePromotionWriteScope<Content extends DeferralContentLike> {
@@ -202,6 +232,8 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly promotedDraftCount: number;
   /** Transactions left to their existing current promotion. */
   readonly promotedTransactionCount: number;
+  /** Custody observations without a usable status, left unwritten under the deferral. */
+  readonly deferredCustodyCount: number;
   /**
    * Resolved lineages whose selection sits in an already-promoted draft, or whose transfer belongs
    * to an already-promoted transaction. Their realization is not written: the existing selection
@@ -230,6 +262,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       pickLineage: content.pickLineage,
       promotedDraftCount: 0,
       promotedTransactionCount: 0,
+      deferredCustodyCount: 0,
       skippedRealizationCount: 0,
     };
   }
@@ -267,13 +300,15 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
         !deferredSelectionIds.has(selectionId) && !promotedSelectionIds.has(selectionId)
     ) as Content['draftSelections'],
     pickCustody: content.pickCustody.filter(
-      ({ pickId }) => !deferral.deferredPickIds.has(pickId)
+      ({ pickId, custodyId }) =>
+        !deferral.deferredPickIds.has(pickId) && !deferral.deferredCustodyIds.has(custodyId)
     ) as Content['pickCustody'],
     pickLineage: content.pickLineage.filter(
       (lineage) => !deferredLineage(lineage) && !skippedLineage(lineage)
     ) as Content['pickLineage'],
     promotedDraftCount: deferral.promotedDraftKeys.size,
     promotedTransactionCount: deferral.promotedTransactionIds.size,
+    deferredCustodyCount: deferral.deferredCustodyIds.size,
     skippedRealizationCount: content.pickLineage.filter(skippedLineage).length,
   };
 }

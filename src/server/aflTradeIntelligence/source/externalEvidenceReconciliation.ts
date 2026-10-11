@@ -26,6 +26,7 @@ import {
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
 import {
+  aflTradeDeferredCustodyIds,
   aflTradePromotedDrafts,
   aflTradePromotedTransactions,
   isAflTradePickSideReconciliationIssue,
@@ -2017,6 +2018,8 @@ export function reconcileAflTradeExternalEvidence(input: {
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
   const promotedDrafts = aflTradePromotedDrafts(draftSelections, promotedDraftSelectionIds);
   const promotedTransactions = aflTradePromotedTransactions(transactions, promotedTransferIds);
+  // Custody without a usable status is pick-side: recorded as deferred and left unwritten.
+  const deferredCustodyIds = aflTradeDeferredCustodyIds(pickCustody);
   const recordedDeferral =
     pickLineageDeferral === undefined
       ? undefined
@@ -2024,6 +2027,7 @@ export function reconcileAflTradeExternalEvidence(input: {
           ...pickLineageDeferral,
           ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
           ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
+          ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
         };
 
   const content: AflTradeExternalReconciliationContent = {
