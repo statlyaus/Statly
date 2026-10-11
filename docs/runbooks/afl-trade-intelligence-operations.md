@@ -959,12 +959,17 @@ Prerequisites:
 1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
    command loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
-     `draftguru-trade-detail-issue-579-private-non_production-parser-v2`. Trade detail is captured
-     with `draftguru-trade-parser/v2`, which also records each received pick's stated outcome
-     (`pick_disposition`: the player it was used on, "traded on" or "not used"; never games,
-     points or estimates). The v2 decision's source rights must name `DRAFTGURU_TRADE_DETAIL_V2_FIELDS`.
-     The v1 decision and the captures recorded under it stay valid; the runner no longer makes new
-     v1 trade-detail captures;
+     `draftguru-trade-detail-issue-579-private-non_production-parser-v3`. Trade detail is captured
+     with `draftguru-trade-parser/v3` (statlyaus/Statly#886). It emits v2's claims unchanged: each
+     received pick's stated outcome (`pick_disposition`: the player it was used on, "traded on" or
+     "not used"; never games, points or estimates). After them, for each traded pick, it emits the
+     player the giving side names as eventually selected with it (`pick_eventual_selection`: native
+     id and name, or "not used"). The v3 decision's source rights must name
+     `DRAFTGURU_TRADE_DETAIL_V3_FIELDS` (v2's fields plus `DRAFTGURU_TRADE_EVENTUAL_SELECTION_FIELDS`).
+     Staging admits the claim kind from migration 0270. The v1 and v2 decisions and the captures
+     recorded under them stay valid; the runner no longer makes new v1 or v2 trade-detail captures.
+     Before preparing a candidate from v3 captures, count the promoted transfer assets whose pick id
+     the eventual-selection join would change, and record the count on #886;
    - one `draftguru-national-year-page-issue579-private-<season>-parser-v3` decision per captured
      season, for example `draftguru-national-year-page-issue579-private-2019-parser-v3`. Parsers
      `draftguru-national-year-page/v2` and `/v3` also record each selection's `accessCategory`
@@ -1009,7 +1014,7 @@ Prerequisites:
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
      refuses the capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v2`, `draftguru-national-year-page/v3`,
+   `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
    `official-afl-completed-draft-session/v19` or `official-afl-draft-order-parser/v4`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence

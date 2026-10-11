@@ -1000,6 +1000,153 @@ function reconcileDirectedTransfer(input: {
   };
 }
 
+/**
+ * One pick traded on several Draftguru pages is numbered as each page stood: before the draft by the
+ * pre-draft order, on draft night by the live order that bids shifted. The giving side of every pick
+ * row names the player eventually selected with it (`pick_eventual_selection`, parser v3), so a
+ * draft's Draftguru pick transfers naming one player's native id are one pick (statlyaus/Statly#886).
+ * A group is admitted only when its transfers form one club-to-club path, each club giving and
+ * receiving the pick at most once, in non-decreasing season and day order; a group that branches or
+ * merges (a matched bid that consumed several picks for one player) is left as the slot rules made
+ * it. In an admitted group every member takes the one custody pick any member reached, else a
+ * player-keyed pick id; two custody picks leave every member unresolved with a lineage issue naming
+ * both. Without eventual-selection claims nothing changes.
+ */
+function joinEventualSelections(input: {
+  evidence: readonly Evidence[];
+  resolvedTransfers: readonly ResolvedDirectedTransfer[];
+  transfers: CanonicalTransfer[];
+  transactionClaimsByNativeEventId: ReadonlyMap<string, readonly TransactionEvidence[]>;
+  pickCustody: readonly CanonicalPickCustody[];
+  issues: ReconciliationIssue[];
+}): void {
+  const eventualPlayers = new Map<string, string | null>();
+  for (const row of input.evidence) {
+    const claim = row.content.claim;
+    if (row.content.provider !== 'draftguru' || claim.kind !== 'pick_eventual_selection') continue;
+    const key = `${claim.nativeEventId}|${claim.nativeTransferId}`;
+    const player = claim.outcome === 'selected' ? (claim.player?.nativeId ?? null) : null;
+    // Two statements for one transfer that disagree name no player.
+    eventualPlayers.set(
+      key,
+      eventualPlayers.has(key) && eventualPlayers.get(key) !== player ? null : player
+    );
+  }
+  if (eventualPlayers.size === 0) return;
+  const groups = new Map<string, number[]>();
+  input.resolvedTransfers.forEach(({ row }, index) => {
+    const claim = row.content.claim;
+    const asset = input.transfers[index]!.asset;
+    if (
+      row.content.provider !== 'draftguru' ||
+      asset.kind !== 'pick_entitlement' ||
+      (claim.asset.kind !== 'current_pick' && claim.asset.kind !== 'future_pick')
+    )
+      return;
+    const player = eventualPlayers.get(`${claim.nativeEventId}|${claim.nativeTransferId}`);
+    if (!player) return;
+    const key = `${asset.draftYear}|${asset.draftType}|${player}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(index);
+  });
+  const usableCustody = new Map(
+    input.pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)
+  );
+  const transactionOf = (index: number) => {
+    const claims =
+      input.transactionClaimsByNativeEventId.get(
+        input.resolvedTransfers[index]!.row.content.claim.nativeEventId
+      ) ?? [];
+    return claims.length === 1 ? claims[0]!.content.claim : null;
+  };
+  groups.forEach((members, key) => {
+    const path = eventualSelectionPath(members, input.transfers, transactionOf);
+    if (path === null) return;
+    const custodyPickIds = sortedUnique(
+      path.flatMap((index) => {
+        const asset = input.transfers[index]!.asset;
+        return asset.kind === 'pick_entitlement' && usableCustody.has(asset.pickId)
+          ? [asset.pickId]
+          : [];
+      })
+    );
+    if (custodyPickIds.length > 1) {
+      path.forEach((index) => {
+        input.transfers[index]!.status = 'unresolved';
+      });
+      input.issues.push({
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `eventual-selection:${key}`,
+        detail: `Draftguru transfers naming one eventually selected player reach two custody picks: ${custodyPickIds.join(', ')}.`,
+        evidenceIds: sortedUnique(path.flatMap((index) => input.transfers[index]!.evidenceIds)),
+      });
+      return;
+    }
+    const [draftYear, draftType, player] = key.split('|');
+    const custody = custodyPickIds.length === 1 ? usableCustody.get(custodyPickIds[0]!)! : null;
+    const pickId =
+      custody?.pickId ??
+      createAflTradeContentAddress('draft-pick', {
+        draftYear: Number(draftYear),
+        draftType,
+        eventualSelection: { provider: 'draftguru', playerNativeId: player },
+      });
+    path.forEach((index) => {
+      const transfer = input.transfers[index]!;
+      if (transfer.asset.kind !== 'pick_entitlement') return;
+      transfer.asset = {
+        ...transfer.asset,
+        pickId,
+        originalClubId: transfer.asset.originalClubId ?? custody?.originalClubId ?? null,
+      };
+      if (custody && transfer.fromClubId && transfer.toClubId) transfer.status = 'single_source';
+    });
+  });
+}
+
+/**
+ * The group's transfers in path order, or null: every club gives and receives the pick at most
+ * once, the path from the one club that never receives it covers every transfer, and seasons (and
+ * stated days, where both trades have one) never go backwards along it.
+ */
+function eventualSelectionPath(
+  members: readonly number[],
+  transfers: readonly CanonicalTransfer[],
+  transactionOf: (index: number) => Extract<Claim, { kind: 'transaction' }> | null
+): number[] | null {
+  const edges = members.map((index) => ({ index, ...transfers[index]! }));
+  if (edges.some(({ fromClubId, toClubId }) => fromClubId === null || toClubId === null))
+    return null;
+  const givers = edges.map(({ fromClubId }) => fromClubId!);
+  const receivers = edges.map(({ toClubId }) => toClubId!);
+  if (new Set(givers).size !== givers.length || new Set(receivers).size !== receivers.length)
+    return null;
+  const starts = givers.filter((club) => !receivers.includes(club));
+  if (starts.length !== 1) return null;
+  const path: number[] = [];
+  let club: string | undefined = starts[0];
+  while (club !== undefined) {
+    const edge = edges.find(({ fromClubId }) => fromClubId === club);
+    if (edge === undefined) break;
+    path.push(edge.index);
+    club = edge.toClubId!;
+    if (path.length > edges.length) return null;
+  }
+  if (path.length !== edges.length) return null;
+  for (let step = 1; step < path.length; step += 1) {
+    const [earlier, later] = [transactionOf(path[step - 1]!), transactionOf(path[step]!)];
+    if (earlier === null || later === null || later.seasonYear < earlier.seasonYear) return null;
+    if (
+      later.seasonYear === earlier.seasonYear &&
+      earlier.occurredOn !== null &&
+      later.occurredOn !== null &&
+      later.occurredOn < earlier.occurredOn
+    )
+      return null;
+  }
+  return path;
+}
+
 type PickDispositionEvidence = Evidence & {
   content: { claim: Extract<Claim, { kind: 'pick_disposition' }> };
 };
@@ -1508,6 +1655,14 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transfers: CanonicalTransfer[] = resolvedTransfers.map((transfer) =>
     reconcileDirectedTransfer({ transfer, resolve, pickCustody, slotChainCustody })
   );
+  joinEventualSelections({
+    evidence,
+    resolvedTransfers,
+    transfers,
+    transactionClaimsByNativeEventId,
+    pickCustody,
+    issues,
+  });
 
   const transactions: CanonicalTransaction[] = transactionClaims.map((row) => {
     const claim = row.content.claim;

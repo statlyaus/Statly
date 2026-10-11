@@ -284,6 +284,31 @@ const pickDispositionClaimSchema = z
     }
   });
 
+/**
+ * The player the provider says was eventually selected with a traded pick, read from the giving
+ * side of its trade row (draftguru-trade-parser/v3, statlyaus/Statly#886), or that the pick was not
+ * used. It binds to the directed transfer with the same native ids, so two transfers of one pick on
+ * two pages share it even when the pick was numbered differently on each.
+ */
+const pickEventualSelectionClaimSchema = z
+  .object({
+    kind: z.literal('pick_eventual_selection'),
+    nativeEventId: boundedText,
+    nativeTransferId: boundedText,
+    outcome: z.enum(['selected', 'not_used']),
+    player: recordedEntitySchema.optional(),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    if ((claim.outcome === 'selected') !== (claim.player !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['player'],
+        message: 'An eventual selection names a player exactly when the pick was selected.',
+      });
+    }
+  });
+
 const pickCustodyClaimSchema = z
   .object({
     kind: z.literal('pick_custody'),
@@ -661,6 +686,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   transactionPartyClaimSchema,
   directedTransferClaimSchema,
   pickDispositionClaimSchema,
+  pickEventualSelectionClaimSchema,
   draftSelectionClaimSchema,
   pickCustodyClaimSchema,
   playerDraftDetailClaimSchema,
@@ -687,6 +713,7 @@ const allowedKindsByProvider = {
     'transaction_party',
     'directed_transfer',
     'pick_disposition',
+    'pick_eventual_selection',
     'draft_selection',
     'pick_custody',
   ]),
@@ -696,6 +723,7 @@ const allowedKindsByProvider = {
     'transaction_party',
     'directed_transfer',
     'pick_disposition',
+    'pick_eventual_selection',
     'draft_selection',
   ]),
   footywire: new Set(['draft_selection']),
