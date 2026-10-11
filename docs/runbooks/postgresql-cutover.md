@@ -55,7 +55,8 @@ Cloud Run services use the Cloud SQL connector.
 - [ ] The same values, plus `REDIS_URL` and the server-only Firebase credentials, in Google Secret
       Manager and mounted into each Cloud Run service.
 - [ ] `CRON_SECRET` set in Netlify. The scheduled functions in `netlify/functions/` (daily jobs,
-      trades every 5 minutes, waivers hourly with a 6 am Melbourne run) call `/api/cron/*` with it,
+      trades every 5 minutes, waivers hourly with a 6 am Melbourne run, injuries every 6 hours) call
+      `/api/cron/*` with it,
       and those routes refuse every call without it.
 - [ ] Nothing printed in build logs, committed, or placed in a `NEXT_PUBLIC_` variable.
 

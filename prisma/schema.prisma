@@ -457,6 +457,7 @@ model Player {
   rosterPlayers      LeagueRosterPlayer[]
   lineupPlayers      LeagueLineupPlayer[]
   tradePlayers       LeagueTradePlayer[]
+  injuryListEntries  InjuryListEntry[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
@@ -478,6 +479,55 @@ model PlayerExternalIdentity {
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([provider, externalId])
+  @@index([playerId])
+}
+
+/// One distinct version of an external injury list. Append-only: a re-fetch whose contentSha256 matches
+/// the latest snapshot for that source only advances confirmedAt. Not league- or season-scoped.
+model InjuryListSnapshot {
+  id             String            @id @default(cuid())
+  source         String // 'footywire'
+  sourceUrl      String
+  contentSha256  String // sha256 of the normalized parsed rows, not the raw HTML
+  aflSeason      Int // calendar year of the fetch
+  rowCount       Int
+  matchedCount   Int
+  unmatchedCount Int
+  ambiguousCount Int
+  fetchedAt      DateTime // first time this content was seen
+  confirmedAt    DateTime // last time this exact content was fetched
+  createdAt      DateTime          @default(now())
+  entries        InjuryListEntry[]
+
+  @@unique([source, contentSha256])
+  @@index([source, confirmedAt])
+}
+
+enum InjuryListMatchStatus {
+  MATCHED
+  UNMATCHED
+  AMBIGUOUS
+}
+
+model InjuryListEntry {
+  id          String                @id @default(cuid())
+  snapshotId  String
+  clubName    String // Footywire club label as shown, e.g. 'Brisbane Lions'
+  sourceKey   String // Footywire player slug from the row link, e.g. 'pp-brisbane-lions--jack-payne'
+  playerName  String
+  injuryRaw   String
+  returnRaw   String
+  status      String // normalized: TEST, TBC, SEASON, PROTOCOLS, WEEKS, DAYS or UNKNOWN
+  etaWeeksMin Int?
+  etaWeeksMax Int?
+  etaDaysMin  Int?
+  etaDaysMax  Int?
+  playerId    String?
+  matchStatus InjuryListMatchStatus
+  snapshot    InjuryListSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  player      Player?               @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  @@index([snapshotId])
   @@index([playerId])
 }
 

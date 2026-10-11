@@ -55,7 +55,10 @@ interface SquadPlayer extends MyTeamSquadPlayer {
   opponent?: string | null;
   isHome?: boolean | null;
   bye?: boolean;
+  /** What the injury list says, shown even when the player can still be picked (a Test listing). */
   injury?: string | null;
+  /** Whether the listing keeps the player out of an auto-filled lineup; false for a Test listing. */
+  injuryBlocksSelection: boolean;
 }
 
 interface TeamSummary {
@@ -392,8 +395,8 @@ export function LeagueMyTeamPanel({
       players: data.rosterPlayers.map((player) => ({
         playerId: player.playerId,
         position: player.position,
-        // Players on a bye, listed injured or already playing are not picked automatically.
-        available: !player.bye && !player.injury && !hasGameStarted(player, now),
+        // Players on a bye, injured or already playing are not picked automatically.
+        available: !player.bye && !player.injuryBlocksSelection && !hasGameStarted(player, now),
         score: scores.get(player.playerId) ?? 0,
       })),
     }) as LineupAssignment[];
@@ -1198,7 +1201,14 @@ function PlayerCell({
             <Lock aria-label="Locked" className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {player.bye ? <Tag tone="warn" label="BYE" title="Club has a bye this round" /> : null}
-          {player.injury ? <Tag tone="bad" label="INJ" title={player.injury} /> : null}
+          {player.injury ? (
+            // A Test listing is shown but does not keep the player out, so it only warns.
+            <Tag
+              tone={player.injuryBlocksSelection ? 'bad' : 'warn'}
+              label="INJ"
+              title={player.injury}
+            />
+          ) : null}
           {outOfPosition ? (
             <Tag
               tone="bad"
@@ -1368,7 +1378,7 @@ function ReadinessRow({
 }) {
   const lockState = data.context?.lockState ?? null;
   const flagged = data.rosterPlayers.filter(
-    (player) => selectedIds.has(player.playerId) && (player.bye || player.injury)
+    (player) => selectedIds.has(player.playerId) && (player.bye || player.injuryBlocksSelection)
   ).length;
   const lockText = data.context?.lockAt
     ? `Locks ${formatWhen(data.context.lockAt)}`

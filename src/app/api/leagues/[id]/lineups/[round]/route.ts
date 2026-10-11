@@ -6,6 +6,7 @@ import { getLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { loadCurrentInjuries, type CurrentInjuries } from '@/server/injuries/injuryListReadModel';
 import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
 import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
 import { buildDefaultLineup, type AutoFillSpot } from '@/lib/leagues/lineupAutoFill';
@@ -220,11 +221,27 @@ export async function GET(
 
   const categories = parseLeagueCategories(league.categoriesJson);
   let playerStats: ReturnType<typeof buildLeaguePlayerStatDatasetForTargets> | null = null;
-  let injuryFor: ReturnType<typeof buildInjuryLookup> = () => null;
+  // The injury list is not league- or season-scoped: every league reads the same snapshot. A
+  // failed read degrades to "nobody listed" rather than failing the whole lineup.
+  let injuries: CurrentInjuries;
+  let injuryError: unknown;
+  try {
+    injuries = await loadCurrentInjuries({ prisma, now });
+  } catch (error) {
+    injuries = { ok: false, reason: 'error' };
+    injuryError = error;
+  }
+  if (!injuries.ok) {
+    logger.warn('Lineup injury list unavailable', {
+      leagueId: id,
+      reason: injuries.reason,
+      error: injuryError,
+    });
+  }
+  const injuryFor = buildInjuryLookup(injuries);
   let scores = new Map<string, number>();
   try {
     const sourcePlayers = await getPlayers();
-    injuryFor = buildInjuryLookup(sourcePlayers);
     scores = scoreRosterPlayers({
       sourcePlayers,
       roster: rosterPlayers.map((row) => ({
@@ -301,7 +318,9 @@ export async function GET(
       opponent: fixturesByPlayerId.get(row.playerId)?.opponent ?? null,
       isHome: fixturesByPlayerId.get(row.playerId)?.isHome ?? null,
       bye: fixturesByPlayerId.get(row.playerId)?.bye ?? false,
-      injury: injuryFor({ playerId: row.playerId, name: row.player.name }),
+      // Shown for every listed player, including a `TEST` listing that does not bench him.
+      injury: injuryFor({ playerId: row.playerId })?.label ?? null,
+      injuryBlocksSelection: injuryFor({ playerId: row.playerId })?.blocksSelection ?? false,
     })),
     team: describeTeam(memberId),
     opponentTeam: describeTeam(effectiveContext?.opponent?.id),

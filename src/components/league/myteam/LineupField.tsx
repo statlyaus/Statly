@@ -12,6 +12,8 @@ import { findAssignment, positionSuitsSlot, type MyTeamSquadPlayer } from './myT
 export interface FieldPlayer extends MyTeamSquadPlayer {
   bye?: boolean;
   injury?: string | null;
+  /** False for a Test listing: the label still shows, but the player is not flagged as out. */
+  injuryBlocksSelection: boolean;
 }
 
 export type FieldTarget = 'here' | 'swap' | null;
@@ -81,7 +83,9 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
     const state = [
       locked ? 'locked' : null,
       player?.bye ? 'bye' : null,
-      player?.injury ? `injured (${player.injury})` : null,
+      player?.injury
+        ? `${player.injuryBlocksSelection ? 'injured' : 'listed'} (${player.injury})`
+        : null,
       outOfPosition ? 'out of position' : null,
       target === 'swap' ? `tap to swap with ${player?.name ?? 'this player'}` : null,
       target === 'here' ? 'tap to move here' : null,
@@ -95,7 +99,12 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
       locked,
       target,
       selected,
-      flagged: player?.injury || outOfPosition ? 'bad' : player?.bye ? 'warn' : null,
+      flagged:
+        player?.injuryBlocksSelection || outOfPosition
+          ? 'bad'
+          : player?.bye || player?.injury
+            ? 'warn'
+            : null,
       disabled: !editable || (locked && !target),
       onClick: () => props.onSpot(spot),
     };
@@ -108,7 +117,9 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
     const state = [
       locked ? 'locked' : null,
       player.bye ? 'bye' : null,
-      player.injury ? `injured (${player.injury})` : null,
+      player.injury
+        ? `${player.injuryBlocksSelection ? 'injured' : 'listed'} (${player.injury})`
+        : null,
       target ? 'tap to put in the lineup' : null,
       selected ? 'selected' : null,
     ].filter(Boolean);
@@ -120,7 +131,7 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
       locked,
       target,
       selected,
-      flagged: player.injury ? 'bad' : player.bye ? 'warn' : null,
+      flagged: player.injuryBlocksSelection ? 'bad' : player.bye || player.injury ? 'warn' : null,
       disabled: !editable || (locked && !target),
       onClick: () => props.onBench(player),
     };

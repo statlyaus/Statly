@@ -296,6 +296,11 @@ Scripts/dev/curl-admin.sh cron /api/cron/daily
 Scripts/dev/curl-admin.sh user /api/user/leagues
 ```
 
+`Scripts/dev/curl-admin.sh cron /api/cron/injuries` fetches the Footywire injury list once and stores
+it as a snapshot; the response reports `created` or `unchanged` and the current matched, unmatched
+and ambiguous counts. A fetch failure, a parse failure or more than 600 rows returns 500 and writes
+nothing.
+
 Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
 succeed. The admin and user contracts are enforced by
 `tests/unit/adminControlPlaneAuthorization.test.ts` and
