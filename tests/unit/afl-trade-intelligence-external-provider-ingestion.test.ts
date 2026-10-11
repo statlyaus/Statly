@@ -674,10 +674,10 @@ describe('pre-draft order scope (issue 853)', () => {
     ...overrides,
   });
 
-  it('admits a reviewed archive snapshot under parser v3 at its stated as-of date', () => {
+  it('admits a reviewed archive snapshot under parser v4 at its stated as-of date', () => {
     expect(() =>
       validateAflTradeExternalCaptureScope(
-        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v3' })
+        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v4' })
       )
     ).not.toThrow();
   });
@@ -690,12 +690,35 @@ describe('pre-draft order scope (issue 853)', () => {
       '2023-11-16T00:00:00.000Z',
     ],
     ['a reviewed page at another as-of instant', archive, '2023-11-17T00:00:00.000Z'],
-  ])('refuses %s under parser v3', (_label, sourceUrl, effectiveAt) => {
+  ])('refuses %s under parser v4', (_label, sourceUrl, effectiveAt) => {
     expect(() =>
       validateAflTradeExternalCaptureScope(
-        order({ sourceUrl, effectiveAt, parserVersion: 'official-afl-draft-order-parser/v3' })
+        order({ sourceUrl, effectiveAt, parserVersion: 'official-afl-draft-order-parser/v4' })
       )
     ).toThrow(/do not exactly match/);
+  });
+
+  it.each([
+    [
+      'the reviewed 13 November snapshot at its stated as-of date',
+      '20251113035435',
+      '2025-11-07',
+      true,
+    ],
+    ['a later 2025 snapshot', '20251114092155', '2025-11-07', false],
+    ['the reviewed snapshot at the scrape date', '20251113035435', '2025-11-13', false],
+  ])('2025: admits only %s', (_label, timestamp, asOf, admitted) => {
+    const check = () =>
+      validateAflTradeExternalCaptureScope(
+        order({
+          sourceUrl: `https://web.archive.org/web/${timestamp}id_/https://www.afl.com.au/draft/draft-order`,
+          anchorSeasonYear: 2025,
+          effectiveAt: `${asOf}T00:00:00.000Z`,
+          parserVersion: 'official-afl-draft-order-parser/v4',
+        })
+      );
+    if (admitted) expect(check).not.toThrow();
+    else expect(check).toThrow(/do not exactly match/);
   });
 
   it('keeps the general article path for the v1 paragraph parser and refuses archive.org there', () => {

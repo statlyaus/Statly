@@ -4242,7 +4242,7 @@ The remaining work proceeds through these independently verifiable gates:
      `traded_on_return_unlinked` (139 picks behind 190 blocked trades in the first batch). The bridge
      is the Official AFL pre-draft order, which annotates each slot with its origin.
      `source/draftCorroborationAdapter.ts` reads the reviewed order tables as parser
-     `official-afl-draft-order-parser/v3` under the existing `official-afl-indicative-draft-order`
+     `official-afl-draft-order-parser/v4` under the existing `official-afl-indicative-draft-order`
      capability: every `ROUND <n>` row is one `pick_custody` claim with the slot, the round, the holder
      and the original club as of the page's stated date. The original club is the holder when the
      slot is unannotated, the `tied to`/`held by` club when named, otherwise the last club the chain
@@ -4253,12 +4253,19 @@ The remaining work proceeds through these independently verifiable gates:
      capability to the retained plan target's capability check, which until then refused its target
      rows (`23514`). A note whose last link is
      not a recorded club is `unsupported_order_annotation` and keeps no original club. A page must
-     name the next year's traded selections and
-     its slots must run 1..N, or nothing is emitted. The reviewed pages
-     (`source/officialAflDraftOrderSourceScope.ts`) are one article per season for 2019-2022 and,
-     for 2023 and 2024, the two owner-approved Internet Archive snapshots of the live order page,
-     which the capture and ingestion URL gates admit by exact match only. Post-night-one order pages
-     carry no origin and are not captured.
+     name the next year's traded selections under a `<year+1> DRAFT SELECTIONS TRADED` heading
+     (2025: `FUTURE SELECTIONS TRADED`), and its slots must run 1..N, or nothing is emitted. v4
+     reads the 2025 live page as well: its round headings sit in a single table cell, its stated
+     "As at conclusion of pick swaps window on <Month day>" must be the observation date, and its
+     per-club "YOUR CLUB'S PICKS" lists must be 18 recorded clubs naming exactly the table's slot
+     holders, or nothing is emitted. On the 2019-2024 pages v4 emits exactly what v3 emitted. The
+     reviewed pages (`source/officialAflDraftOrderSourceScope.ts`) are one article per season for
+     2019-2022 and, for 2023 to 2025, three Internet Archive snapshots of the live order page, which
+     the capture and ingestion URL gates admit by exact match only. 2025 is the 13 November 2025
+     snapshot, the first after the pick-swap window closed on 7 November (115 slots); later 2025
+     snapshots show a shorter order and are not reviewed. Post-night-one order pages carry no origin
+     and are not captured. A custody row with no original club is `unresolved` in reconciliation and
+     no join path below reads it.
      Reconciliation (`source/externalEvidenceReconciliation.ts`) then joins a `Pick N` transfer to a
      custody row with that slot number. A numbered pick joins a slot with the same number, or a
      differently numbered slot (a pick that shifted before draft night) only when both the transfer

@@ -2377,4 +2377,36 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
     );
     expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
   });
+
+  it('never joins a "Pick N" transfer to a slot whose original club the order does not state', () => {
+    // A special pick (compensation, assistance) is held with no original club. Neither the
+    // original-club paths nor the holder corroboration can key such a row, so it stays unresolved
+    // and no hop moves onto it, even when the holder and sender agree with the trades.
+    const holderOnly = (holder: string, suffix: string) =>
+      batch('official_afl', suffix, [
+        {
+          kind: 'pick_custody',
+          observedAt: '2025-11-07T00:00:00.000Z',
+          draftYear: 2025,
+          draftType: 'national',
+          roundNumber: 1,
+          recordedPickNumber: 14,
+          originalClub: null,
+          currentClub: { nativeId: null, recordedName: holder },
+        },
+      ]);
+    for (const order of [holderOnly('Western Bulldogs', 'd'), holderOnly('GWS', 'e')]) {
+      const candidate = reconcile(
+        [
+          ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+          ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+        ],
+        [order]
+      );
+      const [custody] = candidate.content.pickCustody;
+      expect(custody).toMatchObject({ originalClubId: null, status: 'unresolved' });
+      expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+      expect(pickIds(candidate).map((leg) => leg?.pickId)).not.toContain(custody!.pickId);
+    }
+  });
 });
