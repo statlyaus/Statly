@@ -32,7 +32,10 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
   createAflTradeHistoricalCompletionReconciliationAuthority,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
-import { pickDefinitionDisposition } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
+import {
+  pickDefinitionDisposition,
+  resolveWrittenPickDefinitions,
+} from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 import {
   aflTradeDeferredCustodyIds,
   aflTradePickLineageDeferralScope,
@@ -1388,5 +1391,119 @@ describe('retained pick definitions', () => {
         createAflTradeExternalCanonicalPromotionRequest({ ...base, pickLineageDeferral: deferral })
       ).toThrow(/counted exactly/);
     }
+  });
+});
+
+// A stable pick the written transfers number differently (a trade page's "Pick 46" and a later
+// trade's "Pick 56" for the same entitlement) is defined, under the deferral, from its one usable
+// custody observation; each asset keeps its trade-time number. No such single custody row, or more
+// than one, is the conflict it always was; without a deferral nothing changes (#869).
+describe('custody-defined pick definitions', () => {
+  const pickId = `draft-pick:${digest('e')}`;
+  const transfer = (nativeId: string, nominalPick: number) => ({
+    transferId: `external-transfer:${digest(nativeId)}`,
+    transactionId: `external-transaction:${digest('t')}`,
+    fromClubId: 'club-a',
+    toClubId: 'club-b',
+    status: 'single_source',
+    evidenceIds: [],
+    asset: {
+      kind: 'pick_entitlement',
+      pickId,
+      draftYear: 2019,
+      draftType: 'national',
+      nominalRound: null,
+      nominalPick,
+      originalClubId: 'club-collingwood',
+      recordedLabel: null,
+    },
+  });
+  const custody = (suffix: string, status: string) => ({
+    custodyId: `external-pick-custody:${digest(suffix)}`,
+    pickId,
+    observedAt: '2019-11-01T00:00:00.000Z',
+    draftYear: 2019,
+    draftType: 'national',
+    roundNumber: 3,
+    recordedPickNumber: 56,
+    originalClubId: 'club-collingwood',
+    currentClubId: 'club-b',
+    status,
+    evidenceIds: [],
+  });
+  const content = (pickCustody: ReturnType<typeof custody>[]) =>
+    ({
+      transfers: [transfer('1', 46), transfer('2', 56)],
+      draftSelections: [],
+      pickCustody,
+    }) as unknown as Parameters<typeof resolveWrittenPickDefinitions>[0];
+
+  it('defines the pick from its one usable custody row under the deferral and lists it', () => {
+    const resolved = resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
+      deferred: true,
+    });
+    expect(resolved.custodyDefinedPickIds).toEqual([pickId]);
+    expect(resolved.definitions.get(pickId)).toEqual({
+      pickId,
+      draftYear: 2019,
+      draftType: 'national',
+      nominalRound: 3,
+      nominalPick: 56,
+      originalClubId: 'club-collingwood',
+    });
+    // An unusable row does not count; a corroborated one does.
+    expect(
+      resolveWrittenPickDefinitions(
+        content([custody('a', 'corroborated'), custody('b', 'unresolved')]),
+        { deferred: true }
+      ).custodyDefinedPickIds
+    ).toEqual([pickId]);
+  });
+
+  it('throws with no usable custody row, with two, and without the deferral', () => {
+    expect(() => resolveWrittenPickDefinitions(content([]), { deferred: true })).toThrow(
+      /conflicting nominalPick/
+    );
+    expect(() =>
+      resolveWrittenPickDefinitions(
+        content([custody('a', 'single_source'), custody('b', 'single_source')]),
+        { deferred: true }
+      )
+    ).toThrow(/conflicting nominalPick/);
+    expect(() =>
+      resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), { deferred: false })
+    ).toThrow(/conflicting nominalPick/);
+    // Agreeing numbers never need custody and are never listed.
+    const agreeing = {
+      ...content([]),
+      transfers: [transfer('1', 46), transfer('2', 46)],
+    } as unknown as Parameters<typeof resolveWrittenPickDefinitions>[0];
+    const resolved = resolveWrittenPickDefinitions(agreeing, { deferred: true });
+    expect(resolved.custodyDefinedPickIds).toEqual([]);
+    expect(resolved.definitions.get(pickId)?.nominalPick).toBe(46);
+  });
+
+  it('is recorded on the receipt sorted, unique and counted exactly', () => {
+    const base = {
+      candidateId: `external-reconciliation:${digest('c')}`,
+      proposalId: `external-canonical-promotion-proposal:${digest('b')}`,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+    };
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      ...base,
+      pickLineageDeferral: {
+        decisionId,
+        deferredIssueCount: 1,
+        custodyDefinedPickCount: 1,
+        custodyDefinedPickIds: [pickId],
+      },
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionRequest({
+        ...base,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 1, custodyDefinedPickIds: [pickId] },
+      })
+    ).toThrow(/counted exactly/);
   });
 });

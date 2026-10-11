@@ -258,10 +258,53 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
   merge('originalClubId');
 }
 
-function pickDefinitions(content: CandidateContent): Map<string, PickDefinition> {
+/**
+ * The picks a promotion defines, from the written transfers, selections and custody (#869). Under a
+ * pick-side deferral a stable pick that the written transfers number differently (a trade page's
+ * "Pick 46" and a later trade's "Pick 56" for the same entitlement) is defined from its one usable
+ * custody observation, the slot it actually became, and listed as custody-defined; each asset keeps
+ * its own trade-time number as its recorded label. With no such single custody row, or more than
+ * one, the conflict throws as before. Without a deferral nothing changes.
+ */
+export function resolveWrittenPickDefinitions(
+  content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
+  options: { deferred: boolean }
+): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
   const definitions = new Map<string, PickDefinition>();
+  const custodyDefined = new Set<string>();
+  if (options.deferred) {
+    const numbersByPick = new Map<string, Set<number>>();
+    for (const transfer of content.transfers) {
+      if (transfer.asset.kind !== 'pick_entitlement' || transfer.asset.nominalPick === null)
+        continue;
+      const numbers = numbersByPick.get(transfer.asset.pickId) ?? new Set<number>();
+      numbers.add(transfer.asset.nominalPick);
+      numbersByPick.set(transfer.asset.pickId, numbers);
+    }
+    for (const [pickId, numbers] of numbersByPick) {
+      if (numbers.size < 2) continue;
+      const usable = content.pickCustody.filter(
+        (custody) =>
+          custody.pickId === pickId &&
+          (custody.status === 'single_source' || custody.status === 'corroborated')
+      );
+      if (usable.length !== 1) continue;
+      const custody = usable[0]!;
+      definitions.set(pickId, {
+        pickId,
+        draftYear: custody.draftYear,
+        draftType: custody.draftType,
+        nominalRound: custody.roundNumber,
+        nominalPick: custody.recordedPickNumber,
+        originalClubId: custody.originalClubId,
+      });
+      custodyDefined.add(pickId);
+    }
+  }
   content.transfers.forEach((transfer) => {
     if (transfer.asset.kind !== 'pick_entitlement') return;
+    // A custody-defined pick keeps the custody slot; the transfers' numbers stay on their assets.
+    if (custodyDefined.has(transfer.asset.pickId)) return;
     mergePickDefinition(definitions, {
       pickId: transfer.asset.pickId,
       draftYear: transfer.asset.draftYear,
@@ -291,7 +334,7 @@ function pickDefinitions(content: CandidateContent): Map<string, PickDefinition>
       originalClubId: custody.originalClubId,
     })
   );
-  return definitions;
+  return { definitions, custodyDefinedPickIds: [...custodyDefined].sort() };
 }
 
 interface ResolvedPickRow {
@@ -1283,7 +1326,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         transfers: scope.transfers,
         pickCustody: scope.pickCustody,
       };
-      const definitions = pickDefinitions(written);
+      const { definitions, custodyDefinedPickIds } = resolveWrittenPickDefinitions(written, {
+        deferred: authenticated.pickLineageDeferral !== null,
+      });
       // Under the deferral a pick already defined with different facts, or with facts this candidate
       // would fill without reviewed lineage, is retained: referenced unchanged, listed on the receipt.
       // Decided before the receipt is addressed so a replay derives the same list from the same facts.
@@ -1328,6 +1373,12 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
                   : {
                       retainedPickDefinitionCount: retainedPickDefinitions.length,
                       retainedPickDefinitionIds: retainedPickDefinitions,
+                    }),
+                ...(custodyDefinedPickIds.length === 0
+                  ? {}
+                  : {
+                      custodyDefinedPickCount: custodyDefinedPickIds.length,
+                      custodyDefinedPickIds,
                     }),
               },
             }),
