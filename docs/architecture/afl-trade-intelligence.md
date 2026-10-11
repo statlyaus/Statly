@@ -4137,8 +4137,12 @@ The remaining work proceeds through these independently verifiable gates:
    seasons and stated days never go backwards along it. A group that branches or merges, such as a
    matched bid that consumed several picks for one player, is left as the slot rules made it. In an
    admitted group, every member takes the one custody pick that any member reached. With no custody
-   pick, every member takes a player-keyed pick id. With two custody picks, every member is unresolved
-   and a `lineage_unresolved` issue names both. Without v3 claims nothing changes. Re-keying can change
+   pick, every member takes a player-keyed pick id. With two custody picks, the slot rules have
+   usually joined a later transfer, numbered by the live draft-night order, to another entitlement
+   whose pre-draft slot carries that number. The group then takes the pick it reached first, provided
+   the pre-draft order (observed before draft night) names as that pick's holder a club the group
+   delivered it to before any member reached the other pick. Otherwise both joins rest on pre-draft
+   numbering, every member is unresolved, and a `lineage_unresolved` issue names both. Without v3 claims nothing changes. Re-keying can change
    the pick id of a transfer an earlier candidate promoted, so the promoted assets whose id would
    change are counted before such a candidate is prepared.
 

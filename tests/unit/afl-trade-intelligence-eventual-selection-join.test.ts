@@ -263,18 +263,78 @@ describe('joining a renumbered pick through its eventual selection (statlyaus/St
     );
   });
 
-  it('leaves a group reaching two custody picks unresolved with a lineage issue naming both', () => {
-    // The order also shows Port holding slot 15 as West Coast's own pick, so the draft-night
-    // transfer reaches that custody pick by number while the trade-period one reaches slot 12.
+  it('takes the earliest custody pick when draft night misjoined a later transfer to another slot', () => {
+    // The order also shows Port holding slot 15 as West Coast's own pick, so by number the draft-night
+    // transfer (live #15) reaches that pick too. The order names West Coast, which the trade period
+    // delivered the pick to, as slot 12's holder, so slot 12 is the pick and the #15 join is wrong.
     const candidate = reconcile(
       [tradePeriod(), draftNight()],
       [...order, custody(15, 'Port Adelaide', 'West Coast')]
+    );
+    const twelve = candidate.pickCustody.find(
+      ({ recordedPickNumber }) => recordedPickNumber === 12
+    )!;
+    for (const transfer of [
+      transferOf(candidate, 'Carlton', 'West Coast', 12),
+      transferOf(candidate, 'West Coast', 'Port Adelaide', 15),
+    ]) {
+      expect(transfer.status).toBe('single_source');
+      expect(transfer.asset).toMatchObject({ pickId: twelve.pickId });
+    }
+    expect(
+      candidate.issues.some(({ subjectKey }) => subjectKey.startsWith('eventual-selection:'))
+    ).toBe(false);
+  });
+
+  it('leaves a group unresolved when both custody picks rest on pre-draft numbering', () => {
+    // Carlton's 2024 first-rounder went to West Coast in 2023, then to Port as #15. The order shows
+    // Port holding both Carlton's first-rounder (slot 12) and West Coast's slot 15: the #15 transfer
+    // preceded the order, so its number is the pre-draft slot and nothing chooses between the two.
+    const future = page('2023-carlton-west_coast', [], {});
+    future[0] = { ...(future[0] as Extract<Claim, { kind: 'transaction' }>), seasonYear: 2023 };
+    future.push(
+      {
+        kind: 'transaction_party',
+        nativeEventId: '2023-carlton-west_coast',
+        nativePartyId: 'carlton',
+        club: { nativeId: null, recordedName: 'Carlton' },
+      },
+      {
+        kind: 'transaction_party',
+        nativeEventId: '2023-carlton-west_coast',
+        nativePartyId: 'west coast',
+        club: { nativeId: null, recordedName: 'West Coast' },
+      },
+      {
+        kind: 'directed_transfer',
+        nativeEventId: '2023-carlton-west_coast',
+        nativeTransferId: 'future-pick:2024:national:1:carlton',
+        fromClub: { nativeId: null, recordedName: 'Carlton' },
+        toClub: { nativeId: null, recordedName: 'West Coast' },
+        asset: {
+          kind: 'future_pick',
+          draftYear: 2024,
+          draftType: 'national',
+          roundNumber: 1,
+          originalClub: { nativeId: null, recordedName: 'Carlton' },
+        },
+      },
+      {
+        kind: 'pick_eventual_selection',
+        nativeEventId: '2023-carlton-west_coast',
+        nativeTransferId: 'future-pick:2024:national:1:carlton',
+        outcome: 'selected',
+        player: { nativeId: 'joe_berry/1', recordedName: 'Joe Berry' },
+      }
+    );
+    const candidate = reconcile(
+      [future, draftNight()],
+      [custody(12, 'Port Adelaide', 'Carlton'), custody(15, 'Port Adelaide', 'West Coast')]
     );
     const [twelve, fifteen] = [12, 15].map(
       (slot) =>
         candidate.pickCustody.find(({ recordedPickNumber }) => recordedPickNumber === slot)!.pickId
     );
-    expect(transferOf(candidate, 'Carlton', 'West Coast', 12).status).toBe('unresolved');
     expect(transferOf(candidate, 'West Coast', 'Port Adelaide', 15).status).toBe('unresolved');
     const issue = candidate.issues.find(({ subjectKey }) =>
       subjectKey.startsWith('eventual-selection:2024|national|joe_berry/1')

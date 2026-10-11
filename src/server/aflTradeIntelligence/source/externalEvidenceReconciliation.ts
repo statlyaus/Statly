@@ -1009,8 +1009,10 @@ function reconcileDirectedTransfer(input: {
  * receiving the pick at most once, in non-decreasing season and day order; a group that branches or
  * merges (a matched bid that consumed several picks for one player) is left as the slot rules made
  * it. In an admitted group every member takes the one custody pick any member reached, else a
- * player-keyed pick id; two custody picks leave every member unresolved with a lineage issue naming
- * both. Without eventual-selection claims nothing changes.
+ * player-keyed pick id. When the path reaches two custody picks, it takes the one reached first if
+ * the pre-draft order shows it delivered before the conflict (`earliestCustodyBeforeConflict`);
+ * otherwise every member is unresolved with a lineage issue naming both. Without eventual-selection
+ * claims nothing changes.
  */
 function joinEventualSelections(input: {
   evidence: readonly Evidence[];
@@ -1061,15 +1063,15 @@ function joinEventualSelections(input: {
   groups.forEach((members, key) => {
     const path = eventualSelectionPath(members, input.transfers, transactionOf);
     if (path === null) return;
-    const custodyPickIds = sortedUnique(
-      path.flatMap((index) => {
-        const asset = input.transfers[index]!.asset;
-        return asset.kind === 'pick_entitlement' && usableCustody.has(asset.pickId)
-          ? [asset.pickId]
-          : [];
-      })
-    );
-    if (custodyPickIds.length > 1) {
+    const reachedAt = path.map((index) => {
+      const asset = input.transfers[index]!.asset;
+      return asset.kind === 'pick_entitlement' && usableCustody.has(asset.pickId)
+        ? asset.pickId
+        : null;
+    });
+    const custodyPickIds = sortedUnique(reachedAt.filter((id): id is string => id !== null));
+    const earliest = earliestCustodyBeforeConflict(path, reachedAt, input.transfers, usableCustody);
+    if (custodyPickIds.length > 1 && earliest === null) {
       path.forEach((index) => {
         input.transfers[index]!.status = 'unresolved';
       });
@@ -1083,7 +1085,12 @@ function joinEventualSelections(input: {
       return;
     }
     const [draftYear, draftType, player] = key.split('|');
-    const custody = custodyPickIds.length === 1 ? usableCustody.get(custodyPickIds[0]!)! : null;
+    const custody =
+      custodyPickIds.length === 1
+        ? usableCustody.get(custodyPickIds[0]!)!
+        : custodyPickIds.length > 1
+          ? usableCustody.get(earliest!)!
+          : null;
     const pickId =
       custody?.pickId ??
       createAflTradeContentAddress('draft-pick', {
@@ -1102,6 +1109,34 @@ function joinEventualSelections(input: {
       if (custody && transfer.fromClubId && transfer.toClubId) transfer.status = 'single_source';
     });
   });
+}
+
+/**
+ * When a path reaches two custody picks, the slot rules have joined a later transfer, numbered by
+ * the live draft-night order, to another entitlement whose pre-draft slot has that number. The pick
+ * the path reached first is the pick when the pre-draft order (observed before draft night) names
+ * as its holder a club the path delivered it to before any member reached another custody pick:
+ * those transfers preceded the order, so the conflicting one came after it. Otherwise (the holder
+ * received it only in or after the conflicting transfer, so both joins rest on pre-draft numbering)
+ * there is no choice to make and this returns null.
+ */
+function earliestCustodyBeforeConflict(
+  path: readonly number[],
+  reachedAt: readonly (string | null)[],
+  transfers: readonly CanonicalTransfer[],
+  usableCustody: ReadonlyMap<string, CanonicalPickCustody>
+): string | null {
+  const firstAt = reachedAt.findIndex((pickId) => pickId !== null);
+  if (firstAt < 0) return null;
+  const earliest = reachedAt[firstAt]!;
+  const conflictAt = reachedAt.findIndex((pickId) => pickId !== null && pickId !== earliest);
+  if (conflictAt < 0) return earliest;
+  const holder = usableCustody.get(earliest)!.currentClubId;
+  return path
+    .slice(0, conflictAt)
+    .some((index) => holder !== null && transfers[index]!.toClubId === holder)
+    ? earliest
+    : null;
 }
 
 /**
