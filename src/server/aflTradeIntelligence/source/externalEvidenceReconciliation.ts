@@ -27,6 +27,7 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradePromotedDrafts,
+  aflTradePromotedTransactions,
   isAflTradePickSideReconciliationIssue,
   type AflTradePickLineageDeferral,
 } from './pickLineageDeferral';
@@ -1276,6 +1277,13 @@ export function reconcileAflTradeExternalEvidence(input: {
    * candidate selection is in this set is recorded as already promoted and left unwritten.
    */
   promotedDraftSelectionIds?: readonly string[];
+  /**
+   * Transactions that are already current canonical, each with the transfer ids promoted as assets
+   * on its current trade version, as the repository resolved them at preparation. Only with the
+   * deferral: a candidate transaction whose every transfer is in its entry is recorded as already
+   * promoted and left unwritten.
+   */
+  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[];
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -1292,6 +1300,21 @@ export function reconcileAflTradeExternalEvidence(input: {
   );
   if (promotedDraftSelectionIds.size > 0 && pickLineageDeferral === undefined) {
     throw new TypeError('Already-promoted drafts are recorded only under a pick-side deferral.');
+  }
+  const promotedTransferIds = new Map(
+    (
+      z
+        .array(
+          z.object({ transactionId: z.string().min(1), transferIds: z.array(z.string().min(1)) })
+        )
+        .optional()
+        .parse(input.promotedTransactions) ?? []
+    ).map(({ transactionId, transferIds }) => [transactionId, new Set(transferIds)] as const)
+  );
+  if (promotedTransferIds.size > 0 && pickLineageDeferral === undefined) {
+    throw new TypeError(
+      'Already-promoted transactions are recorded only under a pick-side deferral.'
+    );
   }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
@@ -1993,12 +2016,15 @@ export function reconcileAflTradeExternalEvidence(input: {
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
   const promotedDrafts = aflTradePromotedDrafts(draftSelections, promotedDraftSelectionIds);
+  const promotedTransactions = aflTradePromotedTransactions(transactions, promotedTransferIds);
   const recordedDeferral =
     pickLineageDeferral === undefined
       ? undefined
-      : promotedDrafts.length === 0
-        ? pickLineageDeferral
-        : { ...pickLineageDeferral, promotedDrafts };
+      : {
+          ...pickLineageDeferral,
+          ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
+          ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
+        };
 
   const content: AflTradeExternalReconciliationContent = {
     schemaVersion:

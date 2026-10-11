@@ -54,6 +54,13 @@ export interface AflTradePickLineageDeferral {
    * them, so no second draft root, selection or player asset is created. Present only when non-empty.
    */
   readonly promotedDrafts?: AflTradePromotedDraft[];
+  /**
+   * Transactions whose trade event is already current canonical under the same stable key from a
+   * finalized promotion, with every one of their transfers a promoted asset on that current version:
+   * a deferred-lineage promotion writes nothing of them (no trade version, asset, custody or
+   * realization). Sorted unique transaction ids, present only when non-empty.
+   */
+  readonly promotedTransactions?: string[];
 }
 
 /**
@@ -83,8 +90,13 @@ export function draftCoverageKey(draftYear: number, draftType: string): string {
 }
 
 interface DeferralContentLike {
+  readonly transactions: readonly {
+    readonly transactionId: string;
+    readonly transferIds: readonly string[];
+  }[];
   readonly transfers: readonly {
     readonly transferId: string;
+    readonly transactionId: string;
     readonly asset: { readonly kind: string; readonly pickId?: string };
   }[];
   readonly draftSelections: readonly {
@@ -116,6 +128,8 @@ export interface AflTradePickLineageDeferralScope {
   readonly deferredDraftKeys: ReadonlySet<string>;
   /** Drafts (`draftYear|draftType`) already current canonical through an earlier promotion; left to it. */
   readonly promotedDraftKeys: ReadonlySet<string>;
+  /** Transactions already current canonical through an earlier promotion; left to it. */
+  readonly promotedTransactionIds: ReadonlySet<string>;
 }
 
 /**
@@ -168,11 +182,16 @@ export function aflTradePickLineageDeferralScope(
         draftCoverageKey(draftYear, draftType)
       )
     ),
+    promotedTransactionIds: new Set(content.pickLineageDeferral?.promotedTransactions ?? []),
   };
 }
 
 export interface AflTradePromotionWriteScope<Content extends DeferralContentLike> {
   readonly deferral: AflTradePickLineageDeferralScope;
+  /** Transactions this promotion writes as trade events: none already current canonical. */
+  readonly transactions: Content['transactions'];
+  /** Directed transfers this promotion writes as assets: none of an already-promoted transaction. */
+  readonly transfers: Content['transfers'];
   /** Draft selections in drafts this promotion writes (none of a deferred or already-promoted draft). */
   readonly draftSelections: Content['draftSelections'];
   /** Custody observations this promotion writes (none for a deferred pick). */
@@ -181,10 +200,13 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly pickLineage: Content['pickLineage'];
   /** Drafts left to their existing current promotion. */
   readonly promotedDraftCount: number;
+  /** Transactions left to their existing current promotion. */
+  readonly promotedTransactionCount: number;
   /**
-   * Resolved lineages whose selection sits in an already-promoted draft. Their realization is not
-   * written: the existing selection row keys its pick by draft slot while this candidate keys it by
-   * custody, so the realization validator's pick identity would not hold. Reviewed lineage binds them.
+   * Resolved lineages whose selection sits in an already-promoted draft, or whose transfer belongs
+   * to an already-promoted transaction. Their realization is not written: the existing selection
+   * row keys its pick by draft slot while this candidate keys it by custody, and a skipped transfer
+   * has no asset of this promotion to bind. Reviewed lineage binds them.
    */
   readonly skippedRealizationCount: number;
 }
@@ -201,13 +223,21 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
   if (deferral.deferredIssueCount === 0) {
     return {
       deferral,
+      transactions: content.transactions,
+      transfers: content.transfers,
       draftSelections: content.draftSelections,
       pickCustody: content.pickCustody,
       pickLineage: content.pickLineage,
       promotedDraftCount: 0,
+      promotedTransactionCount: 0,
       skippedRealizationCount: 0,
     };
   }
+  const skippedTransfer = (transfer: { readonly transactionId: string }) =>
+    deferral.promotedTransactionIds.has(transfer.transactionId);
+  const skippedTransferIds = new Set(
+    content.transfers.filter(skippedTransfer).map(({ transferId }) => transferId)
+  );
   const selectionIdsIn = (keys: ReadonlySet<string>) =>
     new Set(
       content.draftSelections
@@ -222,10 +252,16 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
     (lineage.selectionId !== null && deferredSelectionIds.has(lineage.selectionId));
   const skippedLineage = (lineage: Content['pickLineage'][number]) =>
     !deferredLineage(lineage) &&
-    lineage.selectionId !== null &&
-    promotedSelectionIds.has(lineage.selectionId);
+    ((lineage.selectionId !== null && promotedSelectionIds.has(lineage.selectionId)) ||
+      skippedTransferIds.has(lineage.transferId));
   return {
     deferral,
+    transactions: content.transactions.filter(
+      ({ transactionId }) => !deferral.promotedTransactionIds.has(transactionId)
+    ) as Content['transactions'],
+    transfers: content.transfers.filter(
+      (transfer) => !skippedTransfer(transfer)
+    ) as Content['transfers'],
     draftSelections: content.draftSelections.filter(
       ({ selectionId }) =>
         !deferredSelectionIds.has(selectionId) && !promotedSelectionIds.has(selectionId)
@@ -237,8 +273,36 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       (lineage) => !deferredLineage(lineage) && !skippedLineage(lineage)
     ) as Content['pickLineage'],
     promotedDraftCount: deferral.promotedDraftKeys.size,
+    promotedTransactionCount: deferral.promotedTransactionIds.size,
     skippedRealizationCount: content.pickLineage.filter(skippedLineage).length,
   };
+}
+
+/**
+ * Transactions a deferred candidate leaves to an existing promotion: the transaction's trade event
+ * is current canonical and every one of the candidate's transfers in it is a promoted asset on that
+ * current version (`promotedTransferIds`, resolved by the repository at preparation, keyed by
+ * transaction). Sorted unique ids; empty when nothing qualifies.
+ */
+export function aflTradePromotedTransactions(
+  transactions: readonly {
+    readonly transactionId: string;
+    readonly transferIds: readonly string[];
+  }[],
+  promotedTransferIds: ReadonlyMap<string, ReadonlySet<string>>
+): string[] {
+  return [
+    ...new Set(
+      transactions
+        .filter(({ transactionId, transferIds }) => {
+          const promoted = promotedTransferIds.get(transactionId);
+          return (
+            promoted !== undefined && transferIds.every((transferId) => promoted.has(transferId))
+          );
+        })
+        .map(({ transactionId }) => transactionId)
+    ),
+  ].sort();
 }
 
 /**

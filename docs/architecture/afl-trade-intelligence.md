@@ -4086,7 +4086,14 @@ The remaining work proceeds through these independently verifiable gates:
    by the promoter; since 0266 a selection is current unless
    `outcome_event_version_superseded_for` retires it, the same asset-scoped rule that keeps draftee
    spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
-   so the session-less metadata path never creates a second root for a session-keyed draft. A deferred-lineage promotion is excluded from the
+   so the session-less metadata path never creates a second root for a session-keyed draft. A
+   transaction whose trade event is current canonical under the same stable key from a finalized
+   promotion, with every candidate transfer a promoted asset on that version, is recorded as
+   `promotedTransactions` the same way (migration 0267: `outcome_current_canonical_transactions`,
+   `outcome_external_candidate_promotable_transactions` behind the coverage validators and the
+   unusable-record count) and written as nothing, with the realizations into its transfers skipped;
+   the special-entitlement gate applies only to the transfers written, and the receipt carries the
+   skipped count and ids. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
 

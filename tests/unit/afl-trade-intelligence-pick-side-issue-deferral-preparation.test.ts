@@ -106,7 +106,11 @@ function sourceBatch(withSelection = false) {
 
 function dependencies(
   decision: AflTradeReconciliationScopeDecision | null,
-  options: { withSelection?: boolean; promotedSelectionIds?: readonly string[] } = {}
+  options: {
+    withSelection?: boolean;
+    promotedSelectionIds?: readonly string[];
+    promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[];
+  } = {}
 ) {
   const batch = sourceBatch(options.withSelection ?? false);
   const sourceAuthority = createAflTradeHistoricalCompletionReconciliationAuthority({
@@ -153,6 +157,7 @@ function dependencies(
     scopeDecisionRepository: { loadDecision: vi.fn(async () => decision) },
     promotedSelectionRepository: {
       loadCurrentCanonicalSelectionIds: vi.fn(async () => options.promotedSelectionIds ?? []),
+      loadCurrentCanonicalTransactions: vi.fn(async () => options.promotedTransactions ?? []),
     },
   };
   return { built, persisted };
@@ -270,6 +275,50 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
     expect(
       plain.built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
+    ).not.toHaveBeenCalled();
+  });
+
+  it('records a transaction whose trade is current canonical with every transfer promoted, and leaves it', async () => {
+    const transactionId = createAflTradeContentAddress('external-transaction', {
+      provider: 'draftguru',
+      nativeEventId: '2025-gws-bulldogs',
+    });
+    const transferId = createAflTradeContentAddress('external-transfer', {
+      transactionId,
+      nativeTransferId: 'pick-14',
+    });
+    const { built, persisted } = dependencies(approved, {
+      promotedTransactions: [{ transactionId, transferIds: [transferId, 'external-transfer:x'] }],
+    });
+    const result = await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      built
+    );
+    expect(
+      built.promotedSelectionRepository!.loadCurrentCanonicalTransactions
+    ).toHaveBeenCalledWith('AFLM');
+    expect(result.pickLineageDeferral).toEqual({
+      decisionId,
+      promotedTransactions: [transactionId],
+    });
+    const candidate = persisted[0]!.candidate as { content: { pickLineageDeferral?: unknown } };
+    expect(candidate.content.pickLineageDeferral).toEqual(result.pickLineageDeferral);
+    // A transaction with a transfer nobody promoted is not recorded.
+    const partial = dependencies(approved, {
+      promotedTransactions: [{ transactionId, transferIds: ['external-transfer:x'] }],
+    });
+    const unrecorded = await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      partial.built
+    );
+    expect(unrecorded.pickLineageDeferral).toEqual({ decisionId });
+    // Without the flag the reader is never consulted.
+    const plain = dependencies(null, {
+      promotedTransactions: [{ transactionId, transferIds: [transferId] }],
+    });
+    await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
+    expect(
+      plain.built.promotedSelectionRepository!.loadCurrentCanonicalTransactions
     ).not.toHaveBeenCalled();
   });
 

@@ -105,6 +105,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * promotion writes nothing of it. Needs `pickSideIssues`.
      */
     yearPageDraftAlreadyPromoted?: boolean;
+    /**
+     * The trade is already current canonical: an earlier promotion in the same schema with the same
+     * `providerEventId` and `nativePlayerId` promoted it with every transfer (statlyaus/Statly#869).
+     * The candidate records it under `pickLineageDeferral.promotedTransactions` and leaves it, and
+     * carries a second trade (`<providerEventId>-again`, the player going back) that it writes.
+     * Needs `pickSideIssues`.
+     */
+    transactionAlreadyPromoted?: boolean;
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -162,6 +170,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('An unreviewed original club is a pick-side issue profile.');
   if (options.yearPageDraftAlreadyPromoted && !options.pickSideIssues)
     throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
+  if (options.transactionAlreadyPromoted && (!options.pickSideIssues || options.lifecycle))
+    throw new Error('An already-promoted trade is a pick-side issue profile without a lifecycle.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -663,6 +673,38 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               })
             );
           }
+        }
+        if (options.transactionAlreadyPromoted) {
+          const again = `${providerEventId}-again`;
+          targetEvidence.push(
+            createAflTradeExternalEvidenceEnvelope({
+              ...evidence.content,
+              sourceRow: { ordinal: 30, sourceKey: again },
+              claim: {
+                kind: 'directed_transfer',
+                nativeEventId: again,
+                nativeTransferId: nativePlayerId,
+                fromClub: { nativeId: null, recordedName: targets.toClubName },
+                toClub: { nativeId: null, recordedName: targets.fromClubName },
+                asset: {
+                  kind: 'player',
+                  player: { nativeId: nativePlayerId, recordedName: targets.playerName },
+                },
+              },
+            }),
+            createAflTradeExternalEvidenceEnvelope({
+              ...evidence.content,
+              sourceRow: { ordinal: 31, sourceKey: `${again}-transaction` },
+              claim: {
+                kind: 'transaction',
+                nativeEventId: again,
+                seasonYear,
+                occurredOn: `${seasonYear}-10-21`,
+                transactionType: 'trade',
+                title: again,
+              },
+            })
+          );
         }
         if (options.lifecycle) {
           for (const [index, transition] of [
@@ -2350,6 +2392,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           pickLineageDeferral: {
             decisionId: deferralDecisionId,
             ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
+            ...(options.transactionAlreadyPromoted
+              ? { promotedTransactions: [transactionId] }
+              : {}),
           },
         }),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
@@ -2582,11 +2627,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     competition: 'AFLM',
     anchorSeasonYear: candidateAnchorSeasonYear,
     draftEventCoverage,
-    transactionDateCoverage: candidate.content.transactions.map((transaction) => ({
-      transactionId: transaction.transactionId,
-      seasonYear,
-      occurredOn: transaction.occurredOn!,
-    })),
+    // A trade left to its earlier promotion (#869) gets no reviewed date: it is not written.
+    transactionDateCoverage: candidate.content.transactions
+      .filter(
+        ({ transactionId: id }) =>
+          !(candidate.content.pickLineageDeferral?.promotedTransactions ?? []).includes(id)
+      )
+      .map((transaction) => ({
+        transactionId: transaction.transactionId,
+        seasonYear,
+        occurredOn: transaction.occurredOn!,
+      })),
     proposedAt: reviewedAt,
     publicationEligible: false as const,
   };

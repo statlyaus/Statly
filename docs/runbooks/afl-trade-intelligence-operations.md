@@ -799,9 +799,12 @@ supersede production Gate authority, and production execution cannot reuse non-p
    deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
    candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds
    `deferred_issue_count` and `lineage_deferral_decision_id`, which the database checks against the
-   decision. Without the flag the candidate is byte-identical to today's. Candidate four's one
-   `special_pick` transfer is not deferrable: it still needs the special-entitlement path before
-   promotion.
+   decision. Without the flag the candidate is byte-identical to today's. A `special_pick` transfer
+   is not deferrable: the special-entitlement gate still refuses it, applied to the transfers the
+   promotion writes. Candidate four's one special pick sits in the 2019 Geelong and Gold Coast trade,
+   which the Cameron promotion already made current canonical with every transfer; preparation
+   records that trade under `pickLineageDeferral.promotedTransactions` and the promotion writes
+   nothing of it, so the gate never sees the right.
 
 7. Prepare one reviewed JSON array containing only the missing draft-event metadata
    (`draftYear`, `draftType`, `eventDate`, `officialName`) for each exact draft represented by the
@@ -858,7 +861,11 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `pickLineageDeferral.promotedDrafts`, migration 0265 checks that on insert and again at promotion
    (currency is asset-scoped since 0266: a scoped later version of a draft night retires only the
    selections it cites or re-lists, so a session re-versioned for a few players still counts as
-   promoted for the rest),
+   promoted for the rest). The same holds for a trade whose event is current canonical under the
+   same stable key from a finalized promotion with every one of the candidate's transfers a promoted
+   asset on it: recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
+   promotion, left unwritten (no trade version, asset, special custody or realization), omitted from
+   the reviewed transaction dates, and counted on the receipt with its ids,
    and the promotion writes nothing of it and no realization into it (the receipt counts
    `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and

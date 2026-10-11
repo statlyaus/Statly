@@ -528,6 +528,29 @@ async function requireCurrentPromotedDrafts(
   }
 }
 
+/**
+ * A transaction the candidate records as already promoted must still be current canonical when the
+ * promotion runs: its trade event current under the same stable key from a finalized promotion and
+ * every candidate transfer a promoted asset on that version (the candidate insert test, 0267).
+ */
+async function requireCurrentPromotedTransactions(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.promotedTransactions ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_transactions_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A transaction the candidate leaves to an earlier promotion is no longer current canonical.'
+    );
+  }
+}
+
 async function loadEvidenceSources(
   transaction: AflOutcomeSqlTransaction,
   candidateId: string
@@ -1154,9 +1177,11 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       });
       await requireCurrentLineageDeferralDecision(transaction, candidate);
       await requireCurrentPromotedDrafts(transaction, candidate);
-      // The pick side a deferred candidate leaves unwritten: custody of deferred picks, realizations
-      // into them, the selections of a draft holding a deferred selection, and a draft that is
-      // already current canonical with the realizations into it (#869).
+      await requireCurrentPromotedTransactions(transaction, candidate);
+      // What a deferred candidate leaves unwritten: custody of deferred picks, realizations into
+      // them, the selections of a draft holding a deferred selection, a draft that is already
+      // current canonical with the realizations into it, and a transaction that is already current
+      // canonical with its transfers and the realizations into them (#869).
       const scope = aflTradePromotionWriteScope(candidate.content);
       if (
         'draftEventCoverage' in approval.proposal.content &&
@@ -1270,13 +1295,15 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       }
 
       const content = candidate.content;
+      // Pick definitions and assets come from what is written; candidate-level checks keep `content`.
+      const written = { ...content, transactions: scope.transactions, transfers: scope.transfers };
       const reviewedTransactionDateById = new Map(
         approval.proposal.content.transactionDateCoverage.map((coverage) => [
           coverage.transactionId,
           coverage,
         ])
       );
-      const promotedTransactions = content.transactions.map((record) => {
+      const promotedTransactions = scope.transactions.map((record) => {
         const coverage = reviewedTransactionDateById.get(record.transactionId);
         if (coverage === undefined) {
           throw new AflTradeExternalCanonicalPromotionError(
@@ -1292,7 +1319,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         content
       );
       const evidence = await loadEvidenceSources(transaction, candidate.candidateId);
-      const definitions = pickDefinitions(content);
+      const definitions = pickDefinitions(written);
       const draftEventIds = approval.proposal.content.draftEventCoverage.map((coverage) =>
         createAflTradeContentAddress('draft-event', {
           competition: content.competition,
@@ -1339,8 +1366,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           content.environment,
           content.competition,
           content.anchorSeasonYear,
-          content.transactions.length,
-          content.transfers.length,
+          authenticated.transactionCount,
+          authenticated.transferCount,
           authenticated.draftSelectionCount,
           draftPlayerAssetCount,
           authenticated.pickCustodyCount,
@@ -1623,7 +1650,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await persistTransactionEvents();
 
       const assetByTransfer = new Map<string, string>();
-      const pendingTransfers = [...content.transfers];
+      // A transfer of an already-promoted transaction is written as nothing (#869).
+      const pendingTransfers = [...scope.transfers];
       const orderedTransfers: typeof pendingTransfers = [];
       const pendingIds = new Set(pendingTransfers.map((record) => record.transferId));
       while (pendingTransfers.length) {
@@ -2212,8 +2240,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidateId: candidate.candidateId,
         status: 'finalized',
         idempotentReplay: false,
-        transactionCount: content.transactions.length,
-        transferCount: content.transfers.length,
+        transactionCount: authenticated.transactionCount,
+        transferCount: authenticated.transferCount,
         draftSelectionCount: authenticated.draftSelectionCount,
         draftPlayerAssetCount,
         pickCustodyCount: authenticated.pickCustodyCount,
