@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import type { AflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
@@ -14,7 +15,6 @@ import {
   loadAflTradeExternalIdentityReviewQueue,
   recordAflTradeExternalIdentityReviewDecision,
 } from '@/server/aflTradeIntelligence/source/externalIdentityReviewService';
-import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionReviewRepository';
 import { PostgresAflTradeExternalDiscoveryRepository } from '@/server/aflTradeIntelligence/source/postgresExternalDraftTradeDiscoveryRepository';
 import { PostgresAflTradeExternalHistoricalCaptureCompletionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalCaptureCompletionRepository';
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalReconciliationSource';
@@ -230,11 +230,16 @@ it('stages a reviewed draft-night statement and links it to the trade-period pic
       candidateRepository: new PostgresAflTradeExternalReconciliationRepository(sql),
     }
   );
+  // Read the stored candidate directly: the promotion-review reader refuses a candidate with
+  // issues, and this one legitimately carries the unresolved lineage of its other picks.
   const candidate = (
-    await new PostgresAflTradeExternalCanonicalPromotionReviewRepository(sql).loadCandidate(
-      prepared.candidateId
+    await pool.query<{
+      candidate_json: { content: AflTradeExternalReconciliationCandidate['content'] };
+    }>(
+      'SELECT candidate_json FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1',
+      [prepared.candidateId]
     )
-  ).content;
+  ).rows[0]!.candidate_json.content;
   const club = clubIds.get('Synthetic Club')!;
   const orderPick = candidate.pickCustody.find(
     ({ recordedPickNumber }) => recordedPickNumber === 1
