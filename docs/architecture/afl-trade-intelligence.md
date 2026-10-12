@@ -4145,7 +4145,8 @@ The remaining work proceeds through these independently verifiable gates:
    pick it reached first, provided the pre-draft order (observed before draft night) names as that
    pick's holder a club the group delivered it to before any member reached the other pick.
    Otherwise both joins rest on pre-draft numbering, every member is unresolved, and a
-   `lineage_unresolved` issue names both. Without v3 claims nothing changes. Re-keying can change
+   `lineage_unresolved` issue names both. A Footyinfo board route can settle both refusals (see
+   "Footyinfo national draft boards" below). Without v3 claims nothing changes. Re-keying can change
    the pick id of a transfer an earlier candidate promoted, so the promoted assets whose id would
    change are counted before such a candidate is prepared.
 
@@ -4179,6 +4180,10 @@ The remaining work proceeds through these independently verifiable gates:
      outcome of the pick actually used for him, and one matched bid consumes several picks. Crediting
      each consumed pick with the nominee's first-stint value would count him once per pick.
    - `no_access_evidence`: **blocking**. Unknown is not zero.
+   - `board_pick_passed_or_removed`: **0 realized value**, as for a club that took no nominee. A
+     Footyinfo board pick states this pick was passed or removed (issue 853). The board lists a pick
+     spent matching a bid as points, never as a board pick, so this pick funded no nominee. It is
+     read only where the access evidence is missing; see "Footyinfo national draft boards".
 
    A not-used pick is never credited with any player's value. The rule applies to realized value only.
 
@@ -4328,14 +4333,38 @@ The remaining work proceeds through these independently verifiable gates:
        round, the number and player when selected, the club route the board prints, the route label
        and any matched bid, the points and the note. Each selection is also a `draft_selection`, so
        reconciliation already counts Footyinfo as a second provider for a selection's status.
-     - **What is not wired yet.** Two uses wait on a reconciliation change of their own:
-       - linking a `traded_on_return_unlinked` leg through the route's onward hop (the 14 legs listed
-         on #853 all have their route on the boards); and
-       - treating a passed or removed pick as not-used evidence.
+     - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row
+       is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
+       not it is read. Each record has its holder and route resolved club by club through `footyinfo`
+       club resolutions. A club with no resolution leaves the record unusable and is one
+       `board-pick:club:<code>` identity issue, which is pick-side and so deferrable. The key is
+       present only when a board is reconciled, so earlier candidate ids are unchanged. Two uses
+       follow.
+       - **Onward hops.** Some eventual-selection groups are refused by the walk above: a closed loop,
+         a merge or two possible orders. Some reach two custody picks with nothing to choose between
+         them. For these groups only, reconciliation reads the board route of the pick the player was
+         selected with. The player's Draftguru selection rows must name one number and one club. The
+         board must list one selected pick with that number, held by that club, whose player resolves
+         to the same canonical player and whose route resolves fully. Each member whose sender and
+         receiver form one hop of the route is admitted, provided no other member and no repeat of
+         the route shares that hop. The admitted members are re-keyed in route order, and at least
+         two must chain in time order. Members of another pick are left as they were, such as a pick
+         a matched bid merged into the group. Where a walk reaches two custody picks and the route
+         names every member's hop in order, the custody pick whose original club starts the route is
+         the pick. The board row is cited on every hop it keyed. The grader's traded-on rule is
+         unchanged: the re-keyed hops share one `pickId`, so the existing trail or later-trade link
+         finds the onward trade. Nothing is inferred from a pick number. The number only joins two
+         statements about one named player's selection.
+       - **Not-used evidence.** A stated not-used national pick with `no_access_evidence` takes
+         `board_pick_passed_or_removed` (citing `boardPickId`) when exactly one board pick matches:
+         same draft and round, held by the receiving club, with a route that hands it from the
+         sending club to the receiving club once. When the transfer names the original club, the
+         route must start there. That pick must be passed or removed. A selected match, a pick with
+         no round, or two matches leave the pick as it was.
 
        The grade's `single_source_pick_outcome` flag is still unconditional
-       (`valuation/realizedTradeGrade.ts`). Lifting it for corroborated outcomes is a grader rule
-       change.
+       (`valuation/realizedTradeGrade.ts`). Lifting it for outcomes Draftguru and Footyinfo
+       corroborate is a grader rule change and waits on an owner decision.
    - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
      repeatable-read transaction, one query per table: the finalized non-production candidate (its
      content address re-checked), the current HPN PAV calculation per requested season from

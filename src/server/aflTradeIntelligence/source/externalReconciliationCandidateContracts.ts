@@ -151,18 +151,28 @@ const pickOutcomeSchema = z
     selectionId: aflTradeContentAddressedIdSchema('external-draft-selection').nullable(),
     playerId: z.string().trim().min(1).max(240).nullable(),
     nominationBasis: z
-      .enum(['club_took_nominated_player', 'club_took_no_nominated_player', 'no_access_evidence'])
+      .enum([
+        'club_took_nominated_player',
+        'club_took_no_nominated_player',
+        'no_access_evidence',
+        'board_pick_passed_or_removed',
+      ])
       .optional(),
     receivingClubNominatedSelections: z.number().int().nonnegative().max(90).optional(),
+    /** The Footyinfo board pick stating the pick was passed or removed (issue 853). */
+    boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine((record) => {
     const { nominationBasis: basis, receivingClubNominatedSelections: count } = record;
+    if ((basis === 'board_pick_passed_or_removed') !== (record.boardPickId !== undefined))
+      return false;
     if (basis === undefined) return count === undefined;
     if (record.disposition !== 'not_used' || record.outcomeStatus !== 'stated') return false;
-    // Without complete access evidence the count is unknown, never zero.
-    if (basis === 'no_access_evidence') return count === undefined;
+    // Without complete access evidence the count is unknown, never zero; a board pick is no count.
+    if (basis === 'no_access_evidence' || basis === 'board_pick_passed_or_removed')
+      return count === undefined;
     if (basis === 'club_took_nominated_player') return count !== undefined && count > 0;
     return count === 0;
   }, 'A nomination basis belongs only to a stated not-used pick, and its count must match it.')
@@ -175,6 +185,25 @@ const pickOutcomeSchema = z
   .refine(
     (record) => record.outcomeStatus !== 'pending' || record.disposition === 'not_used',
     'Only a not-used pick can be pending.'
+  );
+
+/** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
+const draftBoardPickSchema = z
+  .object({
+    boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick'),
+    draftYear: z.number().int().min(1897).max(2200),
+    draftType: z.string().trim().min(1).max(80),
+    roundNumber: z.number().int().positive().nullable(),
+    recordedPickNumber: z.number().int().positive().nullable(),
+    status: z.enum(['selected', 'passed', 'removed']),
+    clubId: z.string().trim().min(1).max(240).nullable(),
+    routeClubIds: z.array(z.string().trim().min(1).max(240)).max(16).nullable(),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine(
+    (record) => (record.status === 'selected') === (record.recordedPickNumber !== null),
+    'A board pick has a number exactly when it was selected.'
   );
 
 const issueSchema = z
@@ -301,6 +330,8 @@ const contentFieldsSchema = z
     pickCustody: z.array(custodySchema),
     pickLineage: z.array(lineageSchema),
     pickOutcomes: z.array(pickOutcomeSchema).min(1).optional(),
+    /** Present only when a Footyinfo board was reconciled, so earlier candidate ids are unchanged. */
+    draftBoardPicks: z.array(draftBoardPickSchema).min(1).optional(),
     /**
      * The approved owner `reconciliation_scope` decision under which pick-side issues are `deferred`
      * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
@@ -626,6 +657,7 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     ['pickCustody', content.pickCustody.map(({ custodyId }) => custodyId)],
     ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
     ['pickOutcomes', (content.pickOutcomes ?? []).map(({ outcomeId }) => outcomeId)],
+    ['draftBoardPicks', (content.draftBoardPicks ?? []).map(({ boardPickId }) => boardPickId)],
   ] as const;
   const relevantSeasonYears = new Set([
     ...content.transactions.map(({ seasonYear }) => seasonYear),
@@ -715,16 +747,40 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
             )
             .flatMap(({ evidenceIds }) => evidenceIds)
         : [];
+    // A board basis cites the one board pick that states this pick passed or removed: held by the
+    // receiving club in the pick's draft and round, its route handing it over from the sender.
+    const board =
+      outcome.boardPickId === undefined
+        ? undefined
+        : (content.draftBoardPicks ?? []).find(
+            ({ boardPickId }) => boardPickId === outcome.boardPickId
+          );
+    const route = board?.routeClubIds ?? [];
+    const boardMatches =
+      outcome.boardPickId === undefined ||
+      (board !== undefined &&
+        asset !== null &&
+        board.status !== 'selected' &&
+        board.draftYear === asset.draftYear &&
+        board.draftType === asset.draftType &&
+        board.roundNumber === asset.nominalRound &&
+        board.clubId === transfer?.toClubId &&
+        route.some(
+          (club, at) =>
+            at > 0 && route[at - 1] === transfer.fromClubId && club === transfer.toClubId
+        ));
     const citable = new Set([
       ...(transfer?.evidenceIds ?? []),
       ...(selection?.evidenceIds ?? []),
       ...nominationEvidenceIds,
+      ...(board?.evidenceIds ?? []),
     ]);
     if (
       !transfer ||
       !asset ||
       !outcome.evidenceIds.every((evidenceId) => citable.has(evidenceId)) ||
-      !selectedPlayerMatches
+      !selectedPlayerMatches ||
+      !boardMatches
     ) {
       context.addIssue({
         code: 'custom',

@@ -19,10 +19,14 @@ export const AFL_TRADE_PICK_SIDE_ISSUE_CODES = [
   'pick_identity_conflict',
 ] as const;
 
-/** Subject-key prefixes of `identity_unresolved` issues that are pick-side. */
+/**
+ * Subject-key prefixes of `identity_unresolved` issues that are pick-side. `board-pick:` is a
+ * Footyinfo draft-board club (issue 853): a board pick is read only as pick-side evidence.
+ */
 export const AFL_TRADE_PICK_SIDE_IDENTITY_SUBJECT_PREFIXES = [
   'selection:',
   'pick-outcome:',
+  'board-pick:',
 ] as const;
 
 /**

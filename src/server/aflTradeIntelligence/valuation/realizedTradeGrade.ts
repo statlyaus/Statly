@@ -342,7 +342,12 @@ export function gradeAflTradesOnRealizedValue(
       };
     }
     if (outcome.disposition === 'not_used') {
-      if (outcome.nominationBasis === 'club_took_no_nominated_player')
+      // A board-stated passed or removed pick was not spent matching a bid: worth 0, like a pick of
+      // a club that took no nominee.
+      if (
+        outcome.nominationBasis === 'club_took_no_nominated_player' ||
+        outcome.nominationBasis === 'board_pick_passed_or_removed'
+      )
         return {
           ...base,
           state: 'valued',
