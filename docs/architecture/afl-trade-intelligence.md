@@ -4312,6 +4312,30 @@ The remaining work proceeds through these independently verifiable gates:
      hop unresolved. Nothing is
      inferred from the pick number alone: of 209 `Pick N` receipts, 31 do not sit at the AFL slot of
      that number.
+   - **Footyinfo national draft boards (issues 853 and 789).** The owner approved Footyinfo as a
+     provider on 2026-10-12, as a source rights record shows. The capability is
+     `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v1` reads
+     `source/footyinfoDraftBoardAdapter.ts`. It covers one page per draft year, 2019 to 2025,
+     captured only by the local runner on the grading VM; the deployed runtime refuses the provider.
+     - **Where the picks come from.** The board's rendered table lists only selections. Every pick,
+       including passed and removed ones, is in the board data the page embeds as serialized router
+       state. A bounded literal reader parses that data without evaluating it: it accepts objects,
+       arrays, strings, numbers, `!0`/`!1`, `null` and `void 0` behind optional `$R[n]=` slots, and
+       refuses a back-reference or code. Each selection must match its table row on number, club,
+       player link, route, points and note, or the page emits nothing.
+     - **What it emits.** One `draft_board_pick` per selected, passed or removed pick (migration 0271
+       admits the kind and lets the capability join a retained plan). Each states the holder, the
+       round, the number and player when selected, the club route the board prints, the route label
+       and any matched bid, the points and the note. Each selection is also a `draft_selection`, so
+       reconciliation already counts Footyinfo as a second provider for a selection's status.
+     - **What is not wired yet.** Two uses wait on a reconciliation change of their own:
+       - linking a `traded_on_return_unlinked` leg through the route's onward hop (the 14 legs listed
+         on #853 all have their route on the boards); and
+       - treating a passed or removed pick as not-used evidence.
+
+       The grade's `single_source_pick_outcome` flag is still unconditional
+       (`valuation/realizedTradeGrade.ts`). Lifting it for corroborated outcomes is a grader rule
+       change.
    - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
      repeatable-read transaction, one query per table: the finalized non-production candidate (its
      content address re-checked), the current HPN PAV calculation per requested season from

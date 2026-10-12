@@ -1,0 +1,283 @@
+/**
+ * Synthetic Footyinfo national draft boards in the reviewed markup (read in a browser on 2026-10-12;
+ * no provider bytes are retained in the repository). Players and notes are invented; the shape is
+ * the page's: a rendered table of selections and the board data, every pick including passed and
+ * removed ones, embedded as serialized router state with `$R[n]=` slot assignments, `!0`/`!1`
+ * booleans and provider fields the parser must ignore.
+ */
+
+const CLUB_NAMES: Readonly<Record<string, string>> = {
+  ADE: 'Adelaide',
+  BRL: 'Brisbane',
+  CAR: 'Carlton',
+  COL: 'Collingwood',
+  ESS: 'Essendon',
+  FRE: 'Fremantle',
+  GCS: 'Gold Coast',
+  GEE: 'Geelong',
+  HAW: 'Hawthorn',
+  MEL: 'Melbourne',
+  NTH: 'North Melbourne',
+  RCH: 'Richmond',
+  STK: 'St Kilda',
+};
+
+export interface SyntheticBoardPick {
+  id: number;
+  status: 'picked' | 'passed' | 'removed' | 'points_used';
+  club: string;
+  number?: number;
+  round?: number;
+  player?: { name: string; slug: string };
+  origin?:
+    | 'standard'
+    | 'free_agency_compensation'
+    | 'special_assistance'
+    | 'points_remainder'
+    | 'points_purchase';
+  points?: number;
+  note?: string;
+  bid?: { club: string; reason: string };
+  /** Hops as [kind, from, to]; `created_from_points` and `removed` hops take one club. */
+  lineage?: Array<[string, string | null, string | null]>;
+  /** Overrides the rendered table's route cell spans. */
+  tableRoute?: string[];
+}
+
+function team(abbrev: string): string {
+  return `{id:${Object.keys(CLUB_NAMES).indexOf(abbrev) + 1},name:"${CLUB_NAMES[abbrev]}",abbrev:"${abbrev}",primaryColour:"#000000",slug:"${CLUB_NAMES[abbrev]!.toLowerCase().replace(/ /g, '-')}",icon_url:"https://cdn.footyinfo.com/teams/${abbrev}.svg"}`;
+}
+
+/** Adds a `$R[n]=` slot before every object and array, as the page's serializer does. */
+function slotted(literal: string, first: number): string {
+  let next = first;
+  let inString = false;
+  let out = '';
+  for (let index = 0; index < literal.length; index += 1) {
+    const char = literal[index]!;
+    if (inString) {
+      out += char;
+      if (char === '\\') out += literal[++index];
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    if ((char === '{' || char === '[') && /[:[,]$|^$/.test(out.slice(-1))) out += `$R[${next++}]=`;
+    out += char;
+  }
+  return out;
+}
+
+export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
+  const fields = [
+    `id:${pick.id}`,
+    ...(pick.number === undefined ? [] : [`number:${pick.number}`]),
+    `number_settled:!0`,
+    ...(pick.round === undefined ? [] : [`round:${pick.round}`]),
+    `period:{id:196,year:${year},type:"national_draft",league:"AFL",start_date:"${year}-11-20"}`,
+    `team:${team(pick.club)}`,
+    ...(pick.player === undefined
+      ? []
+      : [
+          `player:{id:${pick.id + 10_000},known_as:"${pick.player.name}",slug:"${pick.player.slug}",dob:"2006-01-01",age_at_draft:18,height_cm:190,rating:{rating:50,tier:"Fringe",primaryRole:null,provisional:!1,current:!0}}`,
+        ]),
+    `status:{id:"${pick.status}",label:"${pick.status}"}`,
+    `origin:{id:"${pick.origin ?? 'standard'}",label:"origin"}`,
+    ...(pick.note === undefined ? [] : [`note:"${pick.note}"`]),
+    ...(pick.points === undefined ? [] : [`points:${pick.points}`]),
+    ...(pick.bid === undefined
+      ? []
+      : [
+          `points_used:100,consumed_picks:[{id:1,label:"R2 - Pick 40",number:null,original_number:40}]`,
+          `bid:{team:${team(pick.bid.club)},match_reason:"${pick.bid.reason}",match_player:{id:1,known_as:"Parent Player",slug:"parent-player"}}`,
+        ]),
+    `original:{team:${team(pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
+    ...(pick.lineage === undefined
+      ? []
+      : [
+          `lineage:[${pick.lineage
+            .map(
+              ([kind, from, to], index) =>
+                `{ordinal:${index + 1},type:{id:"${kind}",label:"${kind}"},${from === null ? '' : `from:${team(from)},`}${to === null ? '' : `to:${team(to)},`}year:${year},summary:"Moved"}`
+            )
+            .join(',')}]`,
+        ]),
+  ];
+  return `{${fields.join(',')}}`;
+}
+
+const ROUTE_LABELS: Readonly<Record<string, string>> = {
+  free_agency_compensation: 'Compensation',
+  special_assistance: 'Special assistance',
+  points_remainder: 'Leftover points',
+};
+
+function tableRouteSpans(pick: SyntheticBoardPick): string[] {
+  if (pick.tableRoute !== undefined) return pick.tableRoute;
+  if (pick.bid !== undefined) return ['Matched bid', `${pick.bid.club} bid · Father-son`];
+  const label = ROUTE_LABELS[pick.origin ?? 'standard'];
+  const hops = (pick.lineage ?? []).filter(([kind]) =>
+    ['trade', 'pick_swap', 'live_pick_swap'].includes(kind)
+  );
+  const chain = hops.length === 0 ? [] : [hops[0]![1]!, ...hops.map(([, , to]) => to!)];
+  return [
+    ...(label === undefined ? [] : [label]),
+    ...(chain.length === 0 || pick.origin === 'points_remainder' ? [] : [chain.join(' → ')]),
+  ];
+}
+
+function tableRow(pick: SyntheticBoardPick): string {
+  const route = tableRouteSpans(pick)
+    .map((text) => `<span class="whitespace-nowrap text-muted-foreground">${text}</span>`)
+    .join('');
+  return (
+    `<tr class="border-b"><td><a aria-label="Pick ${pick.number}" href="/draft/pick/${pick.id}">${pick.number}</a></td>` +
+    `<td><a title="${CLUB_NAMES[pick.club]}" href="/team/x"><img src="/x.svg" alt=""/><span>${pick.club}</span></a></td>` +
+    `<td><a href="/player/${pick.player!.slug}">${pick.player!.name}</a></td>` +
+    `<td><span role="img"><span>50</span></span></td><td>18</td><td>190</td><td title="Club/School/U18">U18</td>` +
+    `<td><span class="flex items-center gap-x-2 text-fine">${route}</span></td>` +
+    `<td>${pick.points ?? '–'}</td><td>${pick.note ?? ''}</td></tr>`
+  );
+}
+
+const HEADER =
+  '<tr><th scope="col">Pick</th><th scope="col">Club</th><th scope="col">Player</th>' +
+  '<th scope="col"><button type="button">Rtg<span aria-hidden="true">▽</span></button></th>' +
+  '<th scope="col">Age</th><th scope="col">Ht</th><th scope="col">From</th><th scope="col">Route</th>' +
+  '<th scope="col">Pts</th><th scope="col">Note</th></tr>';
+
+export function footyinfoBoardPage(
+  picks: readonly SyntheticBoardPick[],
+  options: { year?: number; loaderYear?: number; selectedKey?: string; tableRows?: string } = {}
+): string {
+  const year = options.year ?? 2024;
+  const records = slotted(picks.map((pick) => boardRecord(pick, year)).join(','), 40);
+  const router =
+    `$_TSR.router=($R=>$R[0]={manifest:$R[1]={routes:$R[2]={}},matches:$R[3]=[` +
+    `$R[4]={i:"__root__",u:1,s:"success",l:$R[5]={session:null,theme:"dark"},ssr:!0},` +
+    `$R[6]={i:"/draft/$year",u:1,s:"success",l:$R[7]={year:${options.loaderYear ?? year},periods:$R[8]=[],availableYears:$R[9]=[${year}],` +
+    `selected:$R[10]={id:196,name:"${year} National Draft",key:"${options.selectedKey ?? 'national_draft'}",year:${year},type:$R[11]={id:"${options.selectedKey ?? 'national_draft'}",isDraft:!0}},` +
+    `defaultTypeId:"national_draft",content:$R[12]={kind:"picks",picks:$R[13]=[${records}]},team:null},ssr:!0}],` +
+    `dehydratedData:$R[30]={}},$R[31]=($R[32]=() => {\n  const buffer = [];\n  return { flush() {} };\n})())($R["tsr"])`;
+  const rounds = new Map<number, SyntheticBoardPick[]>();
+  for (const pick of picks.filter(({ status }) => status === 'picked')) {
+    rounds.set(pick.round ?? 0, [...(rounds.get(pick.round ?? 0) ?? []), pick]);
+  }
+  const rows =
+    options.tableRows ??
+    [...rounds.entries()]
+      .map(
+        ([round, roundPicks]) =>
+          `<tr><th scope="rowgroup" colspan="10">Round ${round}</th></tr>${HEADER}${roundPicks.map(tableRow).join('')}`
+      )
+      .join('');
+  return (
+    `<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><title>${year} National Draft | Footyinfo</title>` +
+    `<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-X"></script>` +
+    `<script>window.dataLayer = window.dataLayer || [];</script></head><body><main>` +
+    `<label><input type="checkbox" checked=""/>Hide passed and removed picks</label>` +
+    `<table><tbody>${rows}</tbody></table></main>` +
+    `<script>(self.$R=self.$R||{})["tsr"]=[];</script><script>${router}</script>` +
+    `<script>($R=>$R[31].return(void 0))($R["tsr"]);</script></body></html>`
+  );
+}
+
+/** One board with each reviewed case: plain, matched bid, compensation, assistance with a route,
+ * leftover points, passed, removed, a passed pick with no round, and points used for a bid. */
+export const SYNTHETIC_BOARD_PICKS: readonly SyntheticBoardPick[] = [
+  {
+    id: 1,
+    status: 'picked',
+    club: 'RCH',
+    number: 1,
+    round: 1,
+    player: { name: 'Avery Example', slug: 'avery-example' },
+    points: 3000,
+  },
+  {
+    id: 2,
+    status: 'picked',
+    club: 'BRL',
+    number: 5,
+    round: 1,
+    player: { name: "Blake O'Example", slug: 'blake-oexample' },
+    origin: 'points_purchase',
+    points: 1878,
+    bid: { club: 'MEL', reason: 'father_son' },
+  },
+  {
+    id: 3,
+    status: 'picked',
+    club: 'STK',
+    number: 10,
+    round: 1,
+    player: { name: 'Casey Example', slug: 'casey-example' },
+    origin: 'free_agency_compensation',
+    points: 1395,
+    note: 'Band 1 compensation for Departed Player',
+  },
+  {
+    id: 4,
+    status: 'picked',
+    club: 'NTH',
+    number: 27,
+    round: 1,
+    player: { name: 'Drew Example', slug: 'drew-example' },
+    origin: 'special_assistance',
+    points: 703,
+    note: '2023 assistance package (end of R1)',
+    lineage: [
+      ['pick_swap', 'NTH', 'GCS'],
+      ['trade', 'GCS', 'RCH'],
+      ['live_pick_swap', 'RCH', 'NTH'],
+    ],
+  },
+  {
+    id: 5,
+    status: 'picked',
+    club: 'RCH',
+    number: 58,
+    round: 4,
+    player: { name: 'Ellis Example', slug: 'ellis-example' },
+    origin: 'points_remainder',
+    points: 170,
+    lineage: [
+      ['created_from_points', null, 'GCS'],
+      ['live_pick_swap', 'GCS', 'RCH'],
+    ],
+  },
+  {
+    id: 6,
+    status: 'passed',
+    club: 'CAR',
+    round: 4,
+    points: 49,
+    lineage: [
+      ['trade', 'FRE', 'STK'],
+      ['trade', 'STK', 'CAR'],
+    ],
+  },
+  {
+    id: 7,
+    status: 'removed',
+    club: 'GCS',
+    round: 4,
+    note: 'Removed - not enough list spots',
+    lineage: [
+      ['trade', 'COL', 'HAW'],
+      ['trade', 'HAW', 'ESS'],
+      ['pick_swap', 'ESS', 'RCH'],
+      ['trade', 'RCH', 'GCS'],
+      ['removed', 'GCS', null],
+    ],
+  },
+  { id: 8, status: 'passed', club: 'GEE', note: 'Not used' },
+  {
+    id: 9,
+    status: 'points_used',
+    club: 'ESS',
+    round: 2,
+    points: 563,
+    lineage: [['bid_match', 'ESS', 'ESS']],
+  },
+];

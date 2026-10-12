@@ -394,6 +394,59 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.publicationEligible).toBe(false);
   });
 
+  it('counts a Footyinfo board selection as a second provider and leaves its board picks unread', () => {
+    const footyinfo = batch('footyinfo', 'd', [
+      {
+        kind: 'draft_selection',
+        draftYear: 2025,
+        draftType: 'national',
+        selectionNumber: 14,
+        roundNumber: 1,
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+      },
+      {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        status: 'selected',
+        club: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        route: [
+          { nativeId: 'GWS', recordedName: 'GWS Giants' },
+          { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        ],
+        routeLabel: null,
+        bid: null,
+        points: 1200,
+        note: null,
+      },
+    ]);
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, footyinfo, officialOrder],
+      identityResolutions: [
+        ...resolutions,
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        resolution('footyinfo', 'player', 'Harry Kyle', 'player-harry-kyle', 'harry-kyle'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    expect(candidate.content.draftSelections).toEqual([
+      expect.objectContaining({
+        selectionNumber: 14,
+        playerId: 'player-harry-kyle',
+        status: 'corroborated',
+        supportingProviders: ['draftguru', 'footyinfo'],
+      }),
+    ]);
+    expect(candidate.content.issues).toEqual([]);
+  });
+
   it('preserves an incomplete transaction as unresolved blocking evidence', () => {
     const incompleteBatch = batch('draftguru', 'e', [
       {

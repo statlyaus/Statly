@@ -98,6 +98,7 @@ const selectionSchema = z
           'footywire',
           'official_afl',
           'fitzroy_official_afl_player_details',
+          'footyinfo',
         ])
       )
       .min(1),

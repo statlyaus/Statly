@@ -238,10 +238,16 @@ export function createAflTradeExternalIngestionRuntime(
       };
       return ingestAuthorizedAflTradeExternalPage(effectiveCommand, {
         admission,
-        policyFor: (provider) => ({
-          ...config.providerPolicies[provider],
-          rawRetentionDays: config.limits.rawRetentionDays,
-        }),
+        policyFor: (provider) => {
+          // Footyinfo egress is approved only through the local capture runner (issue 853).
+          if (provider === 'footyinfo') {
+            throw new TypeError('Footyinfo pages are captured only by the local capture runner.');
+          }
+          return {
+            ...config.providerPolicies[provider],
+            rawRetentionDays: config.limits.rawRetentionDays,
+          };
+        },
         resolveAuthorization: (rightsArtifactId) =>
           gateRepository.resolveAuthorization(rightsArtifactId),
         ingestion: {

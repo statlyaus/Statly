@@ -182,6 +182,32 @@ November 8 pick-swap deadline). The Internet Archive is the custodian of those b
 author; the content remains Official AFL and carries that provider's restrictions. No other
 archive.org use is approved.
 
+### Footyinfo national draft boards for issues 853 and 789
+
+On 2026-10-12 the Statly product owner approved Footyinfo as a new provider for realized trade
+grading (Gate 0A rights and egress, recorded in the owner's session). The decision is exactly seven
+pages, `https://www.footyinfo.com/draft/<year>` for 2019–2025, read as the national draft board with
+passed and removed picks shown. It covers six fields: pick number, club, player or Passed/Removed,
+the route (club chain), points and the note on bids, compensation and assistance. It approves three
+uses:
+
+1. pick lineage: the route per eventual selection;
+2. not-used evidence for passed and removed picks; and
+3. a second pick-outcome source next to Draftguru.
+
+Like the Draftguru and Official AFL decisions, this is an internal source-use risk assumption, not a
+claim of a provider licence. It is private, non-production, not for training and not for public
+output. Handling is the same as those providers: attribution, original URLs, byte custody and
+365-day private raw retention.
+
+Egress is approved only from the grading VM through the existing genuine-database wrapper. The
+pages are fetched by the local capture runner, sequentially, at most one request per five seconds,
+with a one-day request cache. Each request is bounded in bytes and time, follows no redirect and
+uses no login or discovery. The capture stops on 403, 429, any other non-200 status or schema
+drift. The site serves bot-detection scripts; a challenge is a stop, never something to work around.
+The repository keeps no provider bytes: its tests use synthetic pages in the reviewed markup. Other
+Footyinfo paths, years, fields or uses need a new decision.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five

@@ -737,3 +737,52 @@ describe('pre-draft order scope (issue 853)', () => {
     ).toThrow(/do not exactly match/);
   });
 });
+
+describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
+  const board = (overrides: Record<string, unknown>) =>
+    ({
+      ...request,
+      provider: 'footyinfo',
+      draftPathway: 'national',
+      capabilityId: 'footyinfo-national-draft-board',
+      anchorSeasonYear: 2024,
+      sourceUrl: 'https://www.footyinfo.com/draft/2024',
+      parserVersion: 'footyinfo-draft-board-parser/v1',
+      effectiveAt: request.capturedAt,
+      ...overrides,
+    }) as Parameters<typeof validateAflTradeExternalCaptureScope>[0];
+
+  it('admits the reviewed board of the anchor season, effective when captured', () => {
+    expect(() => validateAflTradeExternalCaptureScope(board({}))).not.toThrow();
+  });
+
+  it.each([
+    ['another year’s board', { sourceUrl: 'https://www.footyinfo.com/draft/2023' }],
+    [
+      'an unreviewed year',
+      { anchorSeasonYear: 2018, sourceUrl: 'https://www.footyinfo.com/draft/2018' },
+    ],
+    ['the bare host', { sourceUrl: 'https://footyinfo.com/draft/2024' }],
+    ['a query', { sourceUrl: 'https://www.footyinfo.com/draft/2024?hide=0' }],
+    ['another provider', { provider: 'draftguru' as const }],
+    ['another pathway', { draftPathway: 'rookie' as const }],
+    ['another parser', { parserVersion: 'footyinfo-draft-board-parser/v2' }],
+    ['an effective instant other than capture', { effectiveAt: '2024-11-20T00:00:00.000Z' }],
+  ])('refuses %s', (_label, overrides) => {
+    expect(() => validateAflTradeExternalCaptureScope(board(overrides))).toThrow(
+      /do not exactly match/
+    );
+  });
+
+  it('refuses a Footyinfo provider under another capability', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        board({
+          capabilityId: 'draftguru-year-page',
+          sourceUrl: 'https://www.draftguru.com.au/years/2024',
+          draftPathway: null,
+        })
+      )
+    ).toThrow(/do not exactly match/);
+  });
+});

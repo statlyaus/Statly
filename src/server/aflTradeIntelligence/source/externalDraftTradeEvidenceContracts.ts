@@ -40,6 +40,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'footyinfo',
 ]);
 
 const sourceUrlSchema = z
@@ -321,6 +322,72 @@ const pickCustodyClaimSchema = z
     currentClub: recordedEntitySchema,
   })
   .strict();
+
+/**
+ * One pick on a Footyinfo national draft board (`footyinfo-draft-board-parser/v1`, issues 853 and
+ * 789) as the board shows it with passed and removed picks included: the holder at the draft, the
+ * pick number and player when it was selected, and the route the board states. `route` is the club
+ * chain the board prints, original club first and holder last; it is empty when the board prints
+ * none, which never means the pick did not move. `routeLabel`, `bid` and `note` are what the board
+ * says about bids, compensation and assistance. A provider statement, never an inference.
+ */
+const draftBoardPickClaimSchema = z
+  .object({
+    kind: z.literal('draft_board_pick'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    roundNumber: positiveOrdinalSchema.nullable(),
+    recordedPickNumber: positiveOrdinalSchema.nullable(),
+    status: z.enum(['selected', 'passed', 'removed']),
+    club: recordedEntitySchema,
+    player: recordedEntitySchema.optional(),
+    route: z.array(recordedEntitySchema).max(16),
+    routeLabel: z
+      .enum(['matched_bid', 'compensation', 'special_assistance', 'leftover_points'])
+      .nullable(),
+    bid: z
+      .object({
+        club: recordedEntitySchema,
+        basis: z.enum(['father_son', 'academy', 'next_generation_academy']),
+      })
+      .strict()
+      .nullable(),
+    points: z.number().int().min(0).max(10_000).nullable(),
+    note: nullableBoundedText,
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const selected = claim.status === 'selected';
+    if (
+      selected !== (claim.player !== undefined) ||
+      selected !== (claim.recordedPickNumber !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['player'],
+        message: 'A board pick names a player and a pick number exactly when it was selected.',
+      });
+    }
+    const route = claim.route.map(({ nativeId, recordedName }) => nativeId ?? recordedName);
+    if (
+      route.length === 1 ||
+      route.some((club, index) => index > 0 && club === route[index - 1]) ||
+      (route.length > 0 && route.at(-1) !== (claim.club.nativeId ?? claim.club.recordedName))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['route'],
+        message: 'A board route is two or more distinct consecutive clubs ending with the holder.',
+      });
+    }
+    if ((claim.routeLabel === 'matched_bid') !== (claim.bid !== null)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['bid'],
+        message: 'A board pick names a bid exactly when its route says the bid was matched.',
+      });
+    }
+  });
 
 const playerDraftDetailClaimSchema = z
   .object({
@@ -689,6 +756,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   pickEventualSelectionClaimSchema,
   draftSelectionClaimSchema,
   pickCustodyClaimSchema,
+  draftBoardPickClaimSchema,
   playerDraftDetailClaimSchema,
 ]);
 
@@ -753,6 +821,7 @@ const allowedKindsByProvider = {
     'draft_completed_member_exclusion',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
+  footyinfo: new Set(['draft_selection', 'draft_board_pick']),
 } as const;
 
 const evidenceContentSchema = z

@@ -183,6 +183,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'footyinfo',
 ]);
 const instantSchema = z
   .string()
