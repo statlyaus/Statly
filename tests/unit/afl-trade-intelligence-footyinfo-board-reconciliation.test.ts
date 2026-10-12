@@ -588,7 +588,9 @@ describe('Footyinfo passed and removed picks as not-used evidence (issue 853)', 
       state: 'valued',
       basis: 'pick_not_used_no_nominee',
       realizedValue: 0,
-      reasons: ['single_source_pick_outcome'],
+      // Rule v2: the board corroborates Draftguru's "not used".
+      corroboratedBy: 'footyinfo',
+      reasons: [],
     });
   });
 
