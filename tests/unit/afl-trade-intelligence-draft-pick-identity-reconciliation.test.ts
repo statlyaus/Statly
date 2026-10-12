@@ -555,6 +555,94 @@ describe('number joins a transfer’s own statement contradicts (rule 3)', () =>
   });
 });
 
+describe('contradicted stated or exact ties, and disposition-only statements (review of #901)', () => {
+  it('moves an exact tie off a pick a stated tie keeps for another player, and records the conflict', () => {
+    const candidate = reconcile(
+      [
+        page(
+          '2023-carlton-west_coast',
+          [
+            {
+              from: 'Carlton',
+              to: 'West Coast',
+              asset: futurePick('Carlton'),
+              id: 'future-pick:2024:national:1:carlton',
+              eventual: 'berry',
+              disposition: { selected: 'berry' },
+            },
+          ],
+          2023
+        ),
+        page('2024-picks-carlton-west_coast-1', [
+          {
+            from: 'Carlton',
+            to: 'West Coast',
+            asset: pickNumber(10),
+            id: 'p10',
+            eventual: 'hall',
+            disposition: { selected: 'hall' },
+          },
+        ]),
+      ],
+      {
+        order: [custody(10, 'West Coast', 'Carlton')],
+        selections: [selection(10, 'hall', 'West Coast'), selection(11, 'berry', 'West Coast')],
+      }
+    );
+    const slot = candidate.pickCustody[0]!.pickId;
+    // The stated entitlement is the stronger tie and keeps the pick; the exact number match it
+    // contradicts leaves, and the contradiction is recorded so the pick is deferred.
+    expect(pickOf(transfer(candidate, 'Carlton', 'West Coast', null))).toBe(slot);
+    expect(pickOf(transfer(candidate, 'Carlton', 'West Coast', 10))).not.toBe(slot);
+    expect(conflicts(candidate)).toEqual([`pick-custody:${slot}`]);
+  });
+
+  it('reads a receiving club’s stated selection where Draftguru gives no eventual selection', () => {
+    const candidate = reconcile(
+      [
+        page('2024-picks-carlton-west_coast-1', [
+          {
+            from: 'Carlton',
+            to: 'West Coast',
+            asset: pickNumber(10),
+            id: 'p10',
+            disposition: { selected: 'berry' },
+          },
+        ]),
+        page('2024-picks-richmond-west_coast-2', [
+          {
+            from: 'West Coast',
+            to: 'Richmond',
+            asset: pickNumber(10),
+            id: 'p10',
+            eventual: 'hall',
+          },
+        ]),
+      ],
+      {
+        order: [custody(10, 'West Coast', 'Carlton')],
+        selections: [selection(10, 'berry', 'West Coast'), selection(12, 'hall', 'Richmond')],
+      }
+    );
+    const slot = candidate.pickCustody[0]!.pickId;
+    expect(pickOf(transfer(candidate, 'Carlton', 'West Coast', 10))).toBe(slot);
+    expect(pickOf(transfer(candidate, 'West Coast', 'Richmond', 10))).not.toBe(slot);
+  });
+
+  it('keys neither selection to a slot two observations number differently', () => {
+    const later = {
+      ...custody(14, 'West Coast', 'Carlton'),
+      observedAt: '2024-11-14T00:00:00.000Z',
+    };
+    const candidate = reconcile([], {
+      order: [custody(12, 'West Coast', 'Carlton'), later as Claim],
+      selections: [selection(12, 'berry', 'West Coast'), selection(14, 'hall', 'West Coast')],
+    });
+    const slot = candidate.pickCustody[0]!.pickId;
+    expect(candidate.draftSelections.map(({ pickId }) => pickId)).not.toContain(slot);
+  });
+});
+
 describe('selections keyed by the statements on their pick (rule 4)', () => {
   // As 2021 #12 and #14: Sydney's pick 12 (pre-draft) was used on Chesser at 14; West Coast's own
   // pick went to Port Adelaide on draft night as "Pick 12" and was used on Sinn at 12.

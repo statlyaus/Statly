@@ -86,15 +86,15 @@ a player other than the one Draftguru states that transfer's pick was used on.
 
 ## Rules
 
-| Rule | Statement                                                                                                                                                                                              | Batch ten                     | Enforced                       |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------ |
-| 1    | One transaction moves an id at most once from one resolved club and at most once into one resolved club, and its numbered transfers of that id carry one number.                                       | 4 transactions, all merges    | Finalize: refuse               |
-| 2    | An id's transfers and custody rows name at most one original club (rows with none are ignored).                                                                                                        | 16 ids                        | Finalize: refuse               |
-| 3    | The stated outcomes on one id name at most one drafted player.                                                                                                                                         | 6 ids                         | Finalize: refuse               |
-| 4    | One selection per pick id, and a pick's lineage rows name at most one selection.                                                                                                                       | 0 in all 36 stored candidates | Unique index; finalize check   |
-| 5    | Where a staged Footyinfo route covers a selected pick, a transfer on the selection's pick id that is not a hop of the route is recorded as a conflict on that pick.                                    | 25 of 30 checkable picks      | Finalize: refuse if unrecorded |
-| 6    | A number-only id is a placeholder: no two transfers in different transactions, and no transfer and selection, share one.                                                                               | 44 transfers                  | Finalize: refuse               |
-| 7    | When evidence cannot decide, the candidate records `pick_identity_conflict` under a `pick-custody:<pick id>` subject key and leaves each transfer on the id its own evidence formed; it never chooses. | n/a                           | Reconciler; rules 1 to 6       |
+| Rule | Statement                                                                                                                                                                                                                                                                | Batch ten                     | Enforced                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------ |
+| 1    | One transaction moves an id at most once from one resolved club and at most once into one resolved club, and its numbered transfers of that id carry one number.                                                                                                         | 4 transactions, all merges    | Finalize: refuse               |
+| 2    | An id's transfers and custody rows name at most one original club (rows with none are ignored).                                                                                                                                                                          | 16 ids                        | Finalize: refuse               |
+| 3    | The stated outcomes on one id name at most one drafted player.                                                                                                                                                                                                           | 6 ids                         | Finalize: refuse               |
+| 4    | One selection per pick id, and a pick's lineage rows name at most one selection.                                                                                                                                                                                         | 0 in all 36 stored candidates | Unique index; finalize check   |
+| 5    | Where a staged Footyinfo route covers a selected pick, a transfer on the selection's pick id that is not a hop of the route is recorded as a conflict on that pick.                                                                                                      | 25 of 30 checkable picks      | Finalize: refuse if unrecorded |
+| 6    | A number-only id is a placeholder: no two transfers in different transactions, and no transfer and selection, share one.                                                                                                                                                 | 44 transfers                  | Finalize: refuse               |
+| 7    | When evidence cannot decide, the candidate records `pick_identity_conflict` under a `pick-custody:<pick id>` subject key (the pick may be a custody, entitlement or eventual-selection id) and leaves each transfer on the id its own evidence formed; it never chooses. | n/a                           | Reconciler; rules 1 to 6       |
 
 The four rule 1 transactions: Port Adelaide and West Coast 2021 (Pick 14 one way, Sydney's Pick 12 the
 other), the Starcevich trade (Picks 16 and 22), the Petracca trade (Picks 7 and 8) and Brisbane and
@@ -211,15 +211,19 @@ The reconciler changes, in the order the reconciler applies them (`externalEvide
   chain's custody pick. The hops it used to join are joined by the eventual-selection join where
   Draftguru states they were used on one player.
 - **Number joins a transfer's own statement contradicts are refused** (`refuseContradictedNumberJoins`).
-  Each transfer's tie to its custody pick is `stated` (a future pick whose own round and original club
+  A transfer's statement is what Draftguru says its pick became: the giving side's eventual selection
+  and the receiving side's stated selection or "not used", keyed by the player's reviewed canonical id
+  (else its Draftguru id); two that disagree state nothing. These are the statements the candidate's
+  outcomes record, so the guards see every player rule 3 counts. Each transfer's tie to its custody pick is `stated` (a future pick whose own round and original club
   form the entitlement), `exact` (its sender, receiver and number are the slot's original club, holder
   and number, or a repeated observation proves the hop) or `number`. A drafted player whose stated or
   exact ties name one custody pick has that pick as its home, and its number joins to any other pick
   leave it; so do number joins to a pick whose original club the Footyinfo route for the player's
   selection does not start with. On each custody pick the remaining statements are compared by their
-  strongest tie: number joins stating anything but the strictly strongest leave the pick, and when no
-  statement is strictly strongest, or a stated or exact tie is contradicted, every number join leaves it
-  and a rule 7 conflict is recorded. A transfer that leaves takes its own number id.
+  strongest tie: every transfer stating anything but the strictly strongest leaves the pick, and a
+  stated or exact one that leaves is recorded as a rule 7 conflict; when no statement is strictly
+  strongest, every transfer with a statement leaves and the conflict is recorded. A transfer that leaves
+  takes an id of its own: its number, or a future pick's entitlement scoped to the transfer.
 - **The eventual-selection join keeps rules 1 to 3**: every hop of an admitted walk takes the original
   club of the pick the walk settles on (a current pick states none of its own; the trace shows each one
   it carried came from a number join). It records a conflict and re-keys nothing when a future-pick hop
@@ -229,7 +233,8 @@ The reconciler changes, in the order the reconciler applies them (`externalEvide
   Draftguru states was used on the selected player shares (one of them received by the selecting club).
   Only without such transfers is it joined to the order slot with its number and holder, and never to a
   slot whose transfers state another player, one another selection's transfers claim, or one whose
-  original club the selection's Footyinfo route contradicts.
+  original club the selection's Footyinfo route contradicts. Two selections joined to one pick (two
+  observations of one slot under different numbers) both keep their number keys.
 - **Rule 5 conflicts are recorded** (`recordBoardRouteConflicts`), and a pick with a recorded
   `pick-custody:` conflict gets no lineage row until reviewed evidence settles it.
 

@@ -1037,26 +1037,64 @@ function recordPickIdentityConflict(
   });
 }
 
+/** What Draftguru states a pick transfer's pick became: a drafted player, or not used. */
+interface PickStatement {
+  /** `player:<canonical id>`, `player-native:<Draftguru id>` when the player has no review, or `not_used`. */
+  key: string;
+  /** The Draftguru player id, for reading the player's Footyinfo route. */
+  native: string | null;
+}
+
 /**
- * What Draftguru states each pick transfer was eventually used on (`pick_eventual_selection`), keyed
- * by `nativeEventId|nativeTransferId`: `player:<native id>`, or `not_used`. Two statements for one
- * transfer that disagree state nothing.
+ * Every Draftguru statement of what a pick transfer's pick became, keyed by
+ * `nativeEventId|nativeTransferId`: the giving side's eventual selection (`pick_eventual_selection`)
+ * and the receiving side's disposition (`pick_disposition`, selected or not used; traded on says
+ * nothing about the pick's end). A player is keyed by its reviewed canonical id, else by its
+ * Draftguru id. Statements for one transfer that disagree state nothing. The same statements the
+ * candidate's outcomes record, so a guard that reads them sees every player rule 3 counts.
  */
-function eventualStatements(evidence: readonly Evidence[]): ReadonlyMap<string, string> {
-  const stated = new Map<string, string | null>();
+function pickStatements(
+  evidence: readonly Evidence[],
+  lookup: IdentityLookup
+): ReadonlyMap<string, PickStatement> {
+  const stated = new Map<string, PickStatement | null>();
+  const playerKey = (player: RecordedEntity | undefined): PickStatement | null => {
+    if (!player) return null;
+    const canonical = lookup('draftguru', 'player', player);
+    if (canonical !== null) return { key: `player:${canonical}`, native: player.nativeId ?? null };
+    return player.nativeId
+      ? { key: `player-native:${player.nativeId}`, native: player.nativeId }
+      : null;
+  };
   for (const row of evidence) {
     const claim = row.content.claim;
-    if (row.content.provider !== 'draftguru' || claim.kind !== 'pick_eventual_selection') continue;
+    if (row.content.provider !== 'draftguru') continue;
+    let value: PickStatement | null | undefined;
+    if (claim.kind === 'pick_eventual_selection') {
+      value =
+        claim.outcome === 'not_used' ? { key: 'not_used', native: null } : playerKey(claim.player);
+    } else if (claim.kind === 'pick_disposition' && claim.disposition !== 'traded_on') {
+      value =
+        claim.disposition === 'not_used'
+          ? { key: 'not_used', native: null }
+          : playerKey(claim.player);
+    } else {
+      continue;
+    }
     const key = `${claim.nativeEventId}|${claim.nativeTransferId}`;
-    const value =
-      claim.outcome === 'selected' && claim.player?.nativeId
-        ? `player:${claim.player.nativeId}`
-        : claim.outcome === 'not_used'
-          ? 'not_used'
-          : null;
-    stated.set(key, stated.has(key) && stated.get(key) !== value ? null : value);
+    const previous = stated.get(key);
+    stated.set(
+      key,
+      previous === undefined
+        ? value
+        : previous === null || value === null || previous.key !== value.key
+          ? null
+          : { key: previous.key, native: previous.native ?? value.native }
+    );
   }
-  return new Map([...stated].filter((entry): entry is [string, string] => entry[1] !== null));
+  return new Map(
+    [...stated].filter((entry): entry is [string, PickStatement] => entry[1] !== null)
+  );
 }
 
 /**
@@ -1098,11 +1136,11 @@ function custodyAnchor(
  *    Footyinfo board routes the player's pick from an original club other than the custody pick's
  *    (`createEventualSelectionRouteFinder`; the board prints the original club first).
  * 2. On each custody pick the remaining statements are compared by their strongest tie. When one is
- *    strictly the strongest, number-joined transfers stating anything else leave the pick. Otherwise
- *    the evidence cannot decide: every number join on the pick is refused and a conflict is
- *    recorded, as it is whenever a stated or exact tie is contradicted.
+ *    strictly the strongest, every transfer stating anything else leaves the pick; a stated or exact
+ *    tie that leaves is recorded as a conflict. Otherwise the evidence cannot decide: every transfer
+ *    with a statement leaves the pick and a conflict is recorded.
  *
- * A transfer that leaves a pick takes its own number id, so only the eventual-selection join, which
+ * A transfer that leaves a pick takes an id of its own, so only the eventual-selection join, which
  * reads the same statements, can join it to another transfer again.
  */
 function refuseContradictedNumberJoins(input: {
@@ -1110,7 +1148,7 @@ function refuseContradictedNumberJoins(input: {
   transfers: CanonicalTransfer[];
   slotChainCustody: ReadonlyMap<ResolvedDirectedTransfer, CanonicalPickCustody | null>;
   pickCustody: readonly CanonicalPickCustody[];
-  statements: ReadonlyMap<string, string>;
+  statements: ReadonlyMap<string, PickStatement>;
   issues: ReconciliationIssue[];
   routeOf: (
     draftYear: number,
@@ -1128,6 +1166,7 @@ function refuseContradictedNumberJoins(input: {
     index: number;
     pickId: string;
     statement: string;
+    native: string | null;
     anchor: CustodyAnchor;
   }
   const ties: Tie[] = [];
@@ -1140,7 +1179,8 @@ function refuseContradictedNumberJoins(input: {
     ties.push({
       index,
       pickId: transfer.asset.pickId,
-      statement,
+      statement: statement.key,
+      native: statement.native,
       anchor: custodyAnchor(
         resolved,
         input.slotChainCustody.get(resolved) ?? null,
@@ -1148,16 +1188,33 @@ function refuseContradictedNumberJoins(input: {
       ),
     });
   });
+  // A transfer that leaves takes an id of its own: its number, or for a future pick its stated
+  // entitlement scoped to the transfer, as a disputed entitlement's transfers are.
   const leave = (tie: Tie) => {
     const transfer = input.transfers[tie.index]!;
     const resolved = input.resolvedTransfers[tie.index]!;
     const claim = resolved.row.content.claim;
-    if (transfer.asset.kind !== 'pick_entitlement' || claim.asset.kind !== 'current_pick') return;
-    transfer.asset = {
-      ...transfer.asset,
-      pickId: currentPickNumberOnlyId(claim.asset, resolved.row.evidenceId),
-      originalClubId: null,
-    };
+    if (transfer.asset.kind !== 'pick_entitlement') return;
+    if (claim.asset.kind === 'current_pick') {
+      transfer.asset = {
+        ...transfer.asset,
+        pickId: currentPickNumberOnlyId(claim.asset, resolved.row.evidenceId),
+        originalClubId: null,
+      };
+    } else if (claim.asset.kind === 'future_pick') {
+      transfer.asset = {
+        ...transfer.asset,
+        pickId: createAflTradeContentAddress('draft-pick', {
+          draftYear: claim.asset.draftYear,
+          draftType: claim.asset.draftType,
+          roundNumber: claim.asset.roundNumber,
+          originalClubId: transfer.asset.originalClubId,
+          disputedTransferEvidenceId: resolved.row.evidenceId,
+        }),
+      };
+    } else {
+      return;
+    }
     transfer.status = 'unresolved';
   };
   const conflict = (pickId: string, tied: readonly Tie[]) =>
@@ -1171,7 +1228,7 @@ function refuseContradictedNumberJoins(input: {
   const home = new Map<string, string>();
   const strongPicks = new Map<string, Set<string>>();
   for (const tie of ties) {
-    if (!tie.statement.startsWith('player:') || tie.anchor === 'number') continue;
+    if (tie.statement === 'not_used' || tie.anchor === 'number') continue;
     const picks = strongPicks.get(tie.statement) ?? new Set<string>();
     picks.add(tie.pickId);
     strongPicks.set(tie.statement, picks);
@@ -1180,14 +1237,10 @@ function refuseContradictedNumberJoins(input: {
     if (picks.size === 1) home.set(statement, [...picks][0]!);
   });
   const routedElsewhere = (tie: Tie) => {
-    if (!tie.statement.startsWith('player:')) return false;
     const asset = input.transfers[tie.index]!.asset;
     if (asset.kind !== 'pick_entitlement') return false;
-    const route = input.routeOf(
-      asset.draftYear,
-      asset.draftType,
-      tie.statement.slice('player:'.length)
-    );
+    if (tie.native === null) return false;
+    const route = input.routeOf(asset.draftYear, asset.draftType, tie.native);
     return route !== null && route.routeClubIds[0] !== originalOf.get(tie.pickId);
   };
   const remaining = ties.filter((tie) => {
@@ -1211,13 +1264,14 @@ function refuseContradictedNumberJoins(input: {
     const best = Math.max(...strength.values());
     const leaders = [...strength].filter(([, rank]) => rank === best);
     const keep = leaders.length === 1 ? leaders[0]![0] : null;
-    let contradicted = keep === null;
-    for (const tie of tied) {
-      if (tie.statement === keep) continue;
-      if (tie.anchor === 'number') leave(tie);
-      else contradicted = true;
-    }
-    if (contradicted) conflict(pickId, tied);
+    // A stated or exact tie that contradicts the kept statement leaves too: one pick holds one
+    // outcome, and only the evidence-decided statement keeps it. Undecided, nothing keeps it.
+    if (
+      keep === null ||
+      tied.some(({ statement, anchor }) => statement !== keep && anchor !== 'number')
+    )
+      conflict(pickId, tied);
+    for (const tie of tied) if (tie.statement !== keep) leave(tie);
   });
 }
 
@@ -1557,7 +1611,7 @@ function violatesPickIdentityExchange(transfers: readonly CanonicalTransfer[]): 
 }
 
 function joinEventualSelections(input: {
-  statements: ReadonlyMap<string, string>;
+  statements: ReadonlyMap<string, PickStatement>;
   evidence: readonly Evidence[];
   resolvedTransfers: readonly ResolvedDirectedTransfer[];
   transfers: CanonicalTransfer[];
@@ -1750,11 +1804,13 @@ function joinEventualSelections(input: {
       const claim = input.resolvedTransfers[index]!.row.content.claim;
       return input.statements.get(`${claim.nativeEventId}|${claim.nativeTransferId}`);
     };
+    const groupStatements = sortedUnique(path.flatMap((index) => statementOf(index)?.key ?? []));
+    const groupStatement = groupStatements.length === 1 ? groupStatements[0] : undefined;
     const otherStatements = onPick.filter(
       (index) =>
         !onPath.has(index) &&
         statementOf(index) !== undefined &&
-        statementOf(index) !== `player:${player}`
+        statementOf(index)!.key !== groupStatement
     );
     const exchangeTwice = [
       ...new Set(onPick.map((index) => input.transfers[index]!.transactionId)),
@@ -2465,7 +2521,7 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transfers: CanonicalTransfer[] = resolvedTransfers.map((transfer) =>
     reconcileDirectedTransfer({ transfer, resolve, pickCustody, slotChainCustody })
   );
-  const statements = eventualStatements(evidence);
+  const statements = pickStatements(evidence, lookup);
   const routeOf = createEventualSelectionRouteFinder({
     evidence,
     boardPicks: draftBoard.records,
@@ -2599,44 +2655,36 @@ export function reconcileAflTradeExternalEvidence(input: {
     groupedSelections.set(key, group);
   });
 
+  // Every statement the transfers on a pick id make about what it became.
+  const statementsOnPick = new Map<string, Set<string>>();
   // The pick each Draftguru-selected player was drafted with, by the statements on its transfers
   // (pick-identity rule 4): the one pick id every transfer stating the player shares.
-  const statedSelectionPicks = new Map<string, string[]>();
+  const statedSelectionPicks = new Map<string, CanonicalTransfer[]>();
   transfers.forEach((transfer, index) => {
     if (transfer.asset.kind !== 'pick_entitlement') return;
     const claim = resolvedTransfers[index]!.row.content.claim;
     const statement = statements.get(`${claim.nativeEventId}|${claim.nativeTransferId}`);
-    if (!statement?.startsWith('player:')) return;
-    const key = `${transfer.asset.draftYear}|${transfer.asset.draftType}|${statement}`;
-    (statedSelectionPicks.get(key) ?? statedSelectionPicks.set(key, []).get(key)!).push(
-      String(index)
-    );
+    if (statement === undefined) return;
+    const set = statementsOnPick.get(transfer.asset.pickId) ?? new Set<string>();
+    set.add(statement.key);
+    statementsOnPick.set(transfer.asset.pickId, set);
+    if (statement.key === 'not_used') return;
+    const key = `${transfer.asset.draftYear}|${transfer.asset.draftType}|${statement.key}`;
+    (statedSelectionPicks.get(key) ?? statedSelectionPicks.set(key, []).get(key)!).push(transfer);
   });
-  const statedPickOf = (
-    draftYear: number,
-    draftType: string,
-    rows: readonly Evidence[],
-    clubId: string | null
-  ): string | null => {
-    const natives = sortedUnique(
-      rows.flatMap(({ content }) =>
-        content.provider === 'draftguru' &&
-        content.claim.kind === 'draft_selection' &&
-        content.claim.player.nativeId
-          ? [content.claim.player.nativeId]
-          : []
-      )
+  // A Draftguru selection's player, keyed as the transfer statements key it.
+  const selectionStatementOf = (rows: readonly Evidence[]): string | null => {
+    const keys = sortedUnique(
+      rows.flatMap(({ content }) => {
+        if (content.provider !== 'draftguru' || content.claim.kind !== 'draft_selection') return [];
+        const canonical = lookup('draftguru', 'player', content.claim.player);
+        if (canonical !== null) return [`player:${canonical}`];
+        return content.claim.player.nativeId
+          ? [`player-native:${content.claim.player.nativeId}`]
+          : [];
+      })
     );
-    if (natives.length !== 1 || clubId === null) return null;
-    const stated = (
-      statedSelectionPicks.get(`${draftYear}|${draftType}|player:${natives[0]}`) ?? []
-    ).map((index) => transfers[Number(index)]!);
-    const picks = sortedUnique(
-      stated.flatMap(({ asset }) => (asset.kind === 'pick_entitlement' ? [asset.pickId] : []))
-    );
-    return picks.length === 1 && stated.some(({ toClubId }) => toClubId === clubId)
-      ? picks[0]!
-      : null;
+    return keys.length === 1 ? keys[0]! : null;
   };
   const statedPickBySelection = new Map(
     [...groupedSelections].map(([key, rows]) => {
@@ -2648,28 +2696,28 @@ export function reconcileAflTradeExternalEvidence(input: {
           return club === null ? [] : [club];
         })
       );
-      return [
-        key,
-        clubs.length === 1
-          ? statedPickOf(first.draftYear, first.draftType, draftguru, clubs[0]!)
-          : null,
-      ] as const;
+      const statement = selectionStatementOf(draftguru);
+      const stated =
+        statement === null
+          ? []
+          : (statedSelectionPicks.get(`${first.draftYear}|${first.draftType}|${statement}`) ?? []);
+      const picks = sortedUnique(
+        stated.flatMap(({ asset }) => (asset.kind === 'pick_entitlement' ? [asset.pickId] : []))
+      );
+      // The pick must be stated for this player alone, and reach the selecting club.
+      const statedPick =
+        clubs.length === 1 &&
+        picks.length === 1 &&
+        stated.some(({ toClubId }) => toClubId === clubs[0]) &&
+        [...(statementsOnPick.get(picks[0]!) ?? [])].every((other) => other === statement)
+          ? picks[0]!
+          : null;
+      return [key, statedPick] as const;
     })
   );
   const statedPicks = new Set(
     [...statedPickBySelection.values()].filter((value): value is string => value !== null)
   );
-  // Every eventual selection the transfers on a pick id state.
-  const statementsOnPick = new Map<string, Set<string>>();
-  transfers.forEach((transfer, index) => {
-    if (transfer.asset.kind !== 'pick_entitlement') return;
-    const claim = resolvedTransfers[index]!.row.content.claim;
-    const statement = statements.get(`${claim.nativeEventId}|${claim.nativeTransferId}`);
-    if (statement === undefined) return;
-    const set = statementsOnPick.get(transfer.asset.pickId) ?? new Set<string>();
-    set.add(statement);
-    statementsOnPick.set(transfer.asset.pickId, set);
-  });
 
   const draftSelections: CanonicalDraftSelection[] = [...groupedSelections]
     .map(([selectionKey, rows]) => {
@@ -2783,6 +2831,9 @@ export function reconcileAflTradeExternalEvidence(input: {
       // claim, whose transfers state another player, or whose original club the board's route for
       // this player contradicts: the order was observed before draft-night bids renumbered picks.
       const statedPick = statedPickBySelection.get(selectionKey) ?? null;
+      const selectionStatement = selectionStatementOf(
+        rows.filter(({ content }) => content.provider === 'draftguru')
+      );
       const draftguruNative = rows.find(
         ({ content }) => content.provider === 'draftguru' && content.claim.player.nativeId
       )?.content.claim.player.nativeId;
@@ -2807,8 +2858,7 @@ export function reconcileAflTradeExternalEvidence(input: {
               (custody) =>
                 !statedPicks.has(custody.pickId) &&
                 [...(statementsOnPick.get(custody.pickId) ?? [])].every(
-                  (statement) =>
-                    draftguruNative !== undefined && statement === `player:${draftguruNative}`
+                  (statement) => statement === selectionStatement
                 ) &&
                 (route === null || route.routeClubIds[0] === custody.originalClubId)
             );
@@ -2862,6 +2912,26 @@ export function reconcileAflTradeExternalEvidence(input: {
         left.draftType.localeCompare(right.draftType) ||
         left.selectionNumber - right.selectionNumber
     );
+  // Rule 4: one selection per pick. Two selections joined to one pick (two observations of one slot
+  // under different numbers) cannot both be it, and nothing says which: both keep their number key.
+  const selectionsByPick = new Map<string, CanonicalDraftSelection[]>();
+  for (const selection of draftSelections) {
+    const group = selectionsByPick.get(selection.pickId) ?? [];
+    group.push(selection);
+    selectionsByPick.set(selection.pickId, group);
+  }
+  selectionsByPick.forEach((group) => {
+    if (group.length < 2) return;
+    for (const selection of group) {
+      selection.pickId = pickId(
+        selection.draftYear,
+        selection.draftType,
+        selection.selectionNumber,
+        selection.roundNumber
+      );
+      if (selection.status !== 'disputed') selection.status = 'unresolved';
+    }
+  });
 
   const partialSessionClaims = evidence.filter(({ content }) =>
     [
