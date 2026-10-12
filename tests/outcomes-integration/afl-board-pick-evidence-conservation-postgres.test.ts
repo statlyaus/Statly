@@ -59,7 +59,10 @@ afterAll(async () => {
 });
 
 it('conserves the board rows a candidate cites only on its board picks once 0272 is applied', async () => {
-  const draft = await createRetainedExternalCaptureFixture(sql, false, 'test_fixture', 1);
+  // The year page and the official session, as the retained-selection suite pairs them, so pick 1
+  // resolves through the dated session and the board's effect on its status is observable.
+  const draft = await createRetainedExternalCaptureFixture(sql, false, 'test_fixture', 27);
+  const official = await createRetainedExternalCaptureFixture(sql, true);
   const board = await createRetainedExternalCaptureFixture(
     sql,
     false,
@@ -82,22 +85,31 @@ it('conserves the board rows a candidate cites only on its board picks once 0272
          date_trunc('milliseconds',GREATEST(clock_timestamp(),max(finalized_at)))+interval '1 millisecond',
          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
        FROM outcome_external_evidence_batch WHERE batch_id=ANY($1::text[])`,
-      [[draft.target.evidenceBatchId, board.target.evidenceBatchId]]
+      [
+        [
+          draft.target.evidenceBatchId,
+          official.target.evidenceBatchId,
+          board.target.evidenceBatchId,
+        ],
+      ]
     )
   ).rows[0]!.at;
   await new Promise((resolve) => setTimeout(resolve, 5));
+  const fixtures = [draft, official, board];
   const plan = createAflTradeRetainedExternalCapturePlan({
     environment: 'test_fixture',
     competition: 'AFLM',
     plannedAt,
-    scopeEvidence: [...draft.scopeEvidence, ...board.scopeEvidence].sort((a, b) =>
-      a.artifactId.localeCompare(b.artifactId)
-    ),
-    targets: [draft.target, board.target].sort((a, b) => a.captureId.localeCompare(b.captureId)),
+    scopeEvidence: fixtures
+      .flatMap(({ scopeEvidence }) => scopeEvidence)
+      .sort((a, b) => a.artifactId.localeCompare(b.artifactId)),
+    targets: fixtures
+      .map(({ target }) => target)
+      .sort((a, b) => a.captureId.localeCompare(b.captureId)),
   });
   await new PostgresAflTradeExternalDiscoveryRepository(sql).persistRetainedPlan(plan, {
     read: async (ref) => {
-      for (const repo of [draft.raw, draft.metadata, board.raw, board.metadata]) {
+      for (const repo of fixtures.flatMap(({ raw, metadata }) => [raw, metadata])) {
         const value = await repo.loadExact(ref, 2097152);
         if (value) return value.bytes;
       }
@@ -107,7 +119,7 @@ it('conserves the board rows a candidate cites only on its board picks once 0272
   const completion = await new PostgresAflTradeExternalHistoricalCaptureCompletionRepository(
     sql
   ).completeRetainedPlan(plan.planId);
-  expect(completion).toMatchObject({ targetCount: 2, sourceBatchCount: 2 });
+  expect(completion).toMatchObject({ targetCount: 3, sourceBatchCount: 3 });
 
   const source = new PostgresAflTradeExternalHistoricalReconciliationSource(sql);
   const reviewRepository = new PostgresAflTradeExternalIdentityReviewRepository(sql);
@@ -162,9 +174,12 @@ it('conserves the board rows a candidate cites only on its board picks once 0272
   );
   // The board's club and player are subjects of their own provider; both resolve to the same
   // canonical club and player as the year page's, by the name each provider writes.
-  expect(queue.items.map(({ provider, entityKind }) => `${provider}:${entityKind}`).sort()).toEqual(
-    ['draftguru:club', 'draftguru:player', 'footyinfo:club', 'footyinfo:player']
-  );
+  expect(
+    queue.items
+      .filter(({ provider }) => provider === 'footyinfo')
+      .map(({ entityKind, observedNames }) => `${entityKind}:${observedNames[0]}`)
+      .sort()
+  ).toEqual(['club:Synthetic Club', 'player:Synthetic Player']);
   const identityReviewedAt = await databaseInstant();
   for (const item of queue.items) {
     const name = item.observedNames[0]!;
@@ -221,27 +236,38 @@ it('conserves the board rows a candidate cites only on its board picks once 0272
     'removed',
     'selected',
   ]);
-  // The board corroborates the year page's selection across the round difference (#898): the
-  // year page writes no round, the board does, and the selection keeps the year page's.
-  expect(candidate.content.draftSelections).toEqual([
-    expect.objectContaining({
-      selectionNumber: 1,
-      status: 'corroborated',
-      supportingProviders: ['draftguru', 'footyinfo'],
-      roundNumber: null,
-    }),
-  ]);
-  // Every source row of both batches is cited by the stored candidate, and only board picks cite
-  // the passed and removed rows.
+  // The board corroborates the year page's pick 1 across the round difference (#898): the year
+  // page writes no round, the board does, and the selection keeps the year page's. The other 26
+  // stay as the year page and session alone make them.
+  expect(candidate.content.draftSelections).toHaveLength(27);
+  expect(
+    candidate.content.draftSelections.find(({ selectionNumber }) => selectionNumber === 1)
+  ).toMatchObject({
+    status: 'corroborated',
+    supportingProviders: ['draftguru', 'footyinfo'],
+    roundNumber: null,
+  });
+  expect(
+    candidate.content.draftSelections
+      .filter(({ selectionNumber }) => selectionNumber !== 1)
+      .every(({ status }) => status === 'single_source')
+  ).toBe(true);
+  // Every row of the board batch is cited by the stored candidate, and only board picks cite the
+  // passed and removed rows.
   const cited = new Set([
     ...candidate.content.draftSelections.flatMap(({ evidenceIds }) => evidenceIds),
     ...(candidate.content.draftBoardPicks ?? []).flatMap(({ evidenceIds }) => evidenceIds),
   ]);
   const sourceRows = await pool.query<{ evidence_id: string; claim_kind: string }>(
-    `SELECT evidence_id, claim_kind FROM outcome_external_evidence_row WHERE batch_id=ANY($1::text[])`,
-    [[draft.target.evidenceBatchId, board.target.evidenceBatchId]]
+    `SELECT evidence_id, claim_kind FROM outcome_external_evidence_row WHERE batch_id=$1`,
+    [board.target.evidenceBatchId]
   );
-  expect(sourceRows.rows).toHaveLength(5);
+  expect(sourceRows.rows.map(({ claim_kind }) => claim_kind).sort()).toEqual([
+    'draft_board_pick',
+    'draft_board_pick',
+    'draft_board_pick',
+    'draft_selection',
+  ]);
   expect(sourceRows.rows.filter(({ evidence_id }) => !cited.has(evidence_id))).toEqual([]);
   const onlyOnBoardPicks = (candidate.content.draftBoardPicks ?? [])
     .filter(({ status }) => status !== 'selected')
