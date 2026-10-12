@@ -30,6 +30,7 @@ const primitiveInputSchema = z
       'footywire',
       'official_afl',
       'fitzroy_official_afl_player_details',
+      'footyinfo',
     ]),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),

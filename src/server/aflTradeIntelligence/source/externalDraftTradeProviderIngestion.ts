@@ -28,6 +28,8 @@ import {
   OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
 } from './officialAflIssuingAwardAdapter';
 import { DRAFTGURU_YEAR_PARSER_VERSION } from './draftguruEventYear';
+import { FOOTYINFO_DRAFT_BOARD_PARSER_VERSION } from './footyinfoDraftBoardAdapter';
+import { reviewedFootyinfoDraftBoardSeason } from './footyinfoDraftBoardSourceScope';
 import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
@@ -184,6 +186,20 @@ export function validateAflTradeExternalCaptureScope(
       request.discoveryFromSeasonYear != null ||
       !reviewedPage ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'footyinfo-national-draft-board') {
+    // Parser v1 reads only the exact reviewed national draft boards (issues 853 and 789). A board
+    // states no as-of date, so its claims are effective when captured.
+    if (
+      request.provider !== 'footyinfo' ||
+      request.draftPathway !== 'national' ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== FOOTYINFO_DRAFT_BOARD_PARSER_VERSION ||
+      reviewedFootyinfoDraftBoardSeason(request.sourceUrl) !== request.anchorSeasonYear ||
+      request.effectiveAt !== request.capturedAt
     )
       invalid();
     return;

@@ -33,6 +33,12 @@ import {
   createLocalOfficialAflDraftOrderTargets,
   createOfficialAflDraftOrderCaptureCommand,
 } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
+import {
+  createFootyinfoDraftBoardCaptureCommand,
+  createLocalFootyinfoDraftBoardTargets,
+} from '@/server/aflTradeIntelligence/development/localFootyinfoDraftBoardCapture';
+import { parseFootyinfoDraftBoard } from '@/server/aflTradeIntelligence/source/footyinfoDraftBoardAdapter';
+import { footyinfoBoardPage, SYNTHETIC_BOARD_PICKS } from '../testUtils/footyinfoDraftBoardPage';
 import { parseOfficialAflDraftOrderTable } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
 import { requireAflTradeExternalEvidenceFieldAuthority } from '@/server/aflTradeIntelligence/source/externalDraftTradeFieldManifest';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
@@ -42,6 +48,7 @@ import {
   approveNarrowAuthority,
   draftguruNationalYearAuthority,
   officialAflDraftOrderAuthority,
+  footyinfoDraftBoardAuthority,
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
@@ -937,5 +944,180 @@ describe('local capture arguments for pre-draft order pages', () => {
     expect(parsed.targets).toEqual([
       expect.objectContaining({ season: 2023, sourceUrl: archive2023 }),
     ]);
+  });
+});
+
+function recordedBoard(season: number, clientVersion?: string): RecordedAuthority {
+  const authority = footyinfoDraftBoardAuthority({
+    season,
+    ...(clientVersion === undefined ? {} : { clientVersion }),
+    evidenceIds: officialEvidenceIds,
+    timing: {
+      termsEffectiveAt: '2026-09-10T00:00:00.000Z',
+      termsExpireAt: '2027-09-09T00:00:00.000Z',
+      rightsProposedAt: '2026-09-24T00:00:00.000Z',
+      proposalProposedAt: '2026-09-24T00:00:01.000Z',
+    },
+  });
+  return {
+    ...authority,
+    decision: approveNarrowAuthority(authority, {
+      decidedAt: '2026-09-24T01:00:00.000Z',
+      revalidateAt: '2027-09-01T00:00:00.000Z',
+    }),
+  };
+}
+
+describe('recorded Footyinfo draft-board authority (issues 853 and 789)', () => {
+  it('loads the per-season decision recorded under the issue853 board-v1 key', async () => {
+    const record = recordedBoard(2024);
+    expect(record.decision.content.decisionKey).toBe(
+      'footyinfo-national-draft-board-issue853-private-2024-board-v1'
+    );
+    const loaded = await loadRecordedLocalCaptureAuthority(
+      ledgerOf(record),
+      'footyinfo-national-draft-board',
+      2024,
+      evaluatedAt
+    );
+    expect(loaded.decisionId).toBe(record.decision.decisionId);
+  });
+
+  it('refuses a recorded decision for another parser or with the one-hour cache', async () => {
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedBoard(2024, 'footyinfo-draft-board-parser/v0')),
+        'footyinfo-national-draft-board',
+        2024,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/footyinfo-draft-board-parser\/v1/);
+    const record = recordedBoard(2024);
+    const hourly = {
+      ...record.sourceRights,
+      content: {
+        ...record.sourceRights.content,
+        automatedAccess: {
+          ...record.sourceRights.content.automatedAccess,
+          cache: { permitted: true, maximumSeconds: 3_600 },
+        },
+      },
+    };
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(record, hourly),
+        'footyinfo-national-draft-board',
+        2024,
+        evaluatedAt
+      )
+    ).rejects.toThrow(LocalExternalCaptureError);
+  });
+
+  it('builds a command the scope rules and the recorded decision admit, and every emitted leaf is reviewed', () => {
+    for (const season of [2019, 2024, 2025]) {
+      const record = recordedBoard(season);
+      const [target] = createLocalFootyinfoDraftBoardTargets([season]);
+      const command = createFootyinfoDraftBoardCaptureCommand(record, {
+        target: target!,
+        capturedAt: evaluatedAt,
+        maximumBytes: 1024,
+      });
+      expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+      expect(command.request).toMatchObject({
+        provider: 'footyinfo',
+        draftPathway: 'national',
+        sourceUrl: `https://www.footyinfo.com/draft/${season}`,
+        parserVersion: 'footyinfo-draft-board-parser/v1',
+        effectiveAt: evaluatedAt,
+      });
+      expect(
+        evaluateAflTradeGate0AAgainstDecision(
+          record.decision,
+          record.sourceRights,
+          command.gateRequest
+        )
+      ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+      const { evidence, issues } = parseFootyinfoDraftBoard(
+        footyinfoBoardPage(SYNTHETIC_BOARD_PICKS, { year: season }),
+        {
+          capture: {
+            captureId: `source-capture:${digest('1')}`,
+            artifactId: `artifact:${digest('2')}`,
+            contentSha256: digest('2'),
+            mediaType: 'text/html',
+            sourceUrl: target!.sourceUrl,
+            capturedAt: evaluatedAt,
+            effectiveAt: evaluatedAt,
+            parserVersion: command.request.parserVersion,
+            fieldManifestSha256: command.request.fieldManifestSha256,
+          },
+          draftYear: season,
+        }
+      );
+      expect(issues).toEqual([]);
+      expect(evidence).toHaveLength(13);
+      const receipt = createAflTradeGate0AReceipt(
+        { proposals: [record.proposal], decisions: [record.decision] },
+        record.sourceRights,
+        command.gateRequest,
+        evaluatedAt
+      );
+      expect(() =>
+        requireAflTradeExternalEvidenceFieldAuthority({
+          evidence,
+          sourceRights: record.sourceRights,
+          gate0aReceipt: receipt,
+        })
+      ).not.toThrow();
+    }
+  });
+});
+
+describe('local Footyinfo draft-board targets and arguments', () => {
+  it('enumerates the one reviewed board per season, 2019 to 2025, in season order', () => {
+    expect(createLocalFootyinfoDraftBoardTargets([2025, 2019, 2022])).toEqual([
+      {
+        capabilityId: 'footyinfo-national-draft-board',
+        season: 2019,
+        sourceUrl: 'https://www.footyinfo.com/draft/2019',
+      },
+      {
+        capabilityId: 'footyinfo-national-draft-board',
+        season: 2022,
+        sourceUrl: 'https://www.footyinfo.com/draft/2022',
+      },
+      {
+        capabilityId: 'footyinfo-national-draft-board',
+        season: 2025,
+        sourceUrl: 'https://www.footyinfo.com/draft/2025',
+      },
+    ]);
+  });
+
+  it.each([[[]], [[2024, 2024]], [[2018]], [[2026]]])('rejects seasons %j', (seasons) => {
+    expect(() => createLocalFootyinfoDraftBoardTargets(seasons)).toThrow(LocalExternalCaptureError);
+  });
+
+  const env = {
+    AFL_OUTCOMES_DATABASE_URL: 'postgresql://statly:secret@127.0.0.1:5432/outcomes',
+    AFL_TRADE_EXTERNAL_USER_AGENT: 'Statly private evaluation (contact: owner@example.test)',
+  };
+  const base = ['--artifact-root', process.cwd(), '--capability', 'footyinfo-national-draft-board'];
+
+  it('parses board seasons and refuses --url', () => {
+    expect(
+      parseLocalExternalCaptureArguments([...base, '--season', '2024', '--season', '2019'], env, [])
+        .targets
+    ).toEqual([
+      expect.objectContaining({ season: 2019 }),
+      expect.objectContaining({ season: 2024 }),
+    ]);
+    expect(() =>
+      parseLocalExternalCaptureArguments(
+        [...base, '--season', '2024', '--url', 'https://www.footyinfo.com/draft/2024'],
+        env,
+        []
+      )
+    ).toThrow(/--season only/);
   });
 });

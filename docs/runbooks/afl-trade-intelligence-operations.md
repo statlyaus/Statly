@@ -941,8 +941,8 @@ custody and admission adapters differ:
 
 - raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
   same adapter the local official-AFL and AFLCA captures use) under
-  `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw` or
-  `<artifact-root>/official-afl-session-raw`; this custody cannot satisfy production or
+  `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw`,
+  `<artifact-root>/official-afl-session-raw` or `<artifact-root>/footyinfo-board-raw`; this custody cannot satisfy production or
   public-release storage. With `--store-id <store-id>` the pages go into the registered local store,
   whose root must be `--artifact-root`, and each page's custody row records its location in the same
   transaction. Always pass it on `statly-grading-1` (`statly-grading-1-artifacts`), so no new raw page
@@ -1012,12 +1012,22 @@ Prerequisites:
      entry records the window the reviewer read, the capture is effective from its first day, and
      the parser must reproduce it. The window is a traded arrival's date precision, never a day.
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
-     refuses the capture's evidence rows.
+     refuses the capture's evidence rows; and
+   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v1` decision per captured
+     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v1`
+     (issues 853 and 789; owner decision of 2026-10-12 in the source policy). Parser
+     `footyinfo-draft-board-parser/v1` reads `https://www.footyinfo.com/draft/<season>` as
+     `draft_board_pick` claims for every selected, passed and removed pick, and a `draft_selection`
+     for each selection. The rights must name exactly `FOOTYINFO_DRAFT_BOARD_FIELDS` from
+     `development/localFootyinfoDraftBoardCapture.ts`, with provider `footyinfo` and an 86,400 s
+     cache. Staging admits the claim kind from migration 0271; an earlier database refuses the
+     capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
-   `official-afl-completed-draft-session/v19` or `official-afl-draft-order-parser/v4`), seasons inside one range, 1 request per 5 seconds
+   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` or
+   `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
-   3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
+   3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
    parser, pacing, cache or retention fails closed; the runner does not adapt.
 3. `AFL_OUTCOMES_DATABASE_URL` names the loopback PostgreSQL outcomes database, and
@@ -1101,6 +1111,48 @@ FC `news/41172` for 2019, 7 to 16 October; Sydney Swans `news/1023286` for 2021,
 but are not the AFL's; adding either, or any other substitute, is an owner decision recorded in the
 source policy before the scope file changes. A reviewed window is consumed by the promotion review
 command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
+
+Capture the Footyinfo national draft boards (issues 853 and 789) once the owner's per-season
+`-board-v1` decisions are recorded. The owner approved egress only from `statly-grading-1` through
+the genuine-database wrapper, so this runs there and nowhere else. Each `--season` is the one board
+`https://www.footyinfo.com/draft/<season>`; there is no `--url`:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' --store-id '<store-id>' \
+  --capability footyinfo-national-draft-board \
+  --season 2019 --season 2020 --season 2021 --season 2022 --season 2023 --season 2024 \
+  --season 2025
+```
+
+The board shows only selections in its rendered table. Passed and removed picks are in the board
+data the page embeds (serialized router state), which the parser reads without evaluating it. Every
+selection in the data must match its table row on number, club, player, route, points and note, or
+the page is one `invalid_page` issue with no claims. Each response is capped at 2 MiB, per the owner's
+egress decision. Expect `issueCount` 0. A 403, a 429, any
+other non-200 status or a bot challenge fails the capture. Stop there: the decision does not allow
+retrying around it. Picks the board lists as points used to match a bid are not board rows and are
+not emitted.
+
+Each `draft_board_pick` states:
+
+- the holder at the draft (club code as `nativeId`, club name);
+- the round, where the board files the pick under one;
+- `selected`, `passed` or `removed`, with the pick number and player (slug and name) exactly when
+  selected;
+- the route the board prints, original club first and holder last;
+- the route label (`matched_bid`, `compensation`, `special_assistance` or `leftover_points`), and
+  for a matched bid the bidding club and basis;
+- the points and the note.
+
+An empty route means the board prints none, never that the pick did not move. A leftover-points
+pick's route is not printed. Footyinfo club and player names need their own `footyinfo` identity
+resolutions before reconciliation can use the rows. Reconciliation reads the `draft_selection`
+claims as a second provider for a selection now. Nothing reads `draft_board_pick` claims yet: using
+routes to link onward hops, and passed or removed picks as not-used evidence, is a reconciliation
+change of its own.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
