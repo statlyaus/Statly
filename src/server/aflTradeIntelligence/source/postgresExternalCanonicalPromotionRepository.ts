@@ -264,7 +264,9 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
  * "Pick 46" and a later trade's "Pick 56" for the same entitlement) is defined from its one usable
  * custody observation, the slot it actually became, and listed as custody-defined; each asset keeps
  * its own trade-time number as its recorded label. With no such single custody row, or more than
- * one, the conflict throws as before. Without a deferral nothing changes.
+ * one, the pick is defined without a number: since the pick-identity rules (migration 0273) a pick
+ * id names one pick whatever its pages numbered it, so differing numbers are renumbering, not two
+ * picks, and no number is the pick's own. Without a deferral nothing changes.
  */
 export function resolveWrittenPickDefinitions(
   content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
@@ -279,6 +281,7 @@ export function resolveWrittenPickDefinitions(
 ): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
   const definitions = new Map<string, PickDefinition>();
   const custodyDefined = new Set<string>();
+  const renumbered = new Set<string>();
   if (options.deferred) {
     const numbersByPick = new Map<string, Set<number>>();
     for (const transfer of content.transfers) {
@@ -295,7 +298,10 @@ export function resolveWrittenPickDefinitions(
           custody.pickId === pickId &&
           (custody.status === 'single_source' || custody.status === 'corroborated')
       );
-      if (usable.length !== 1) continue;
+      if (usable.length !== 1) {
+        renumbered.add(pickId);
+        continue;
+      }
       const custody = usable[0]!;
       definitions.set(pickId, {
         pickId,
@@ -317,7 +323,8 @@ export function resolveWrittenPickDefinitions(
       draftYear: transfer.asset.draftYear,
       draftType: transfer.asset.draftType,
       nominalRound: transfer.asset.nominalRound,
-      nominalPick: transfer.asset.nominalPick,
+      // A renumbered pick keeps each number on its own asset and none on the pick.
+      nominalPick: renumbered.has(transfer.asset.pickId) ? null : transfer.asset.nominalPick,
       originalClubId: transfer.asset.originalClubId,
     });
   });

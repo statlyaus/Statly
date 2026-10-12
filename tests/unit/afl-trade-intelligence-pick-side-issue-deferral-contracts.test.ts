@@ -1500,22 +1500,18 @@ describe('custody-defined pick definitions', () => {
     ).toEqual([pickId]);
   });
 
-  it('throws with no usable custody row, with two, and without the deferral', () => {
-    expect(() =>
-      resolveWrittenPickDefinitions(content([]), { deferred: true, definitionCustody: [] })
-    ).toThrow(/conflicting nominalPick/);
-    expect(() =>
-      resolveWrittenPickDefinitions(
-        content([custody('a', 'single_source'), custody('b', 'single_source')]),
-        {
-          deferred: true,
-          definitionCustody: [
-            custody('a', 'single_source'),
-            custody('b', 'single_source'),
-          ] as never,
-        }
-      )
-    ).toThrow(/conflicting nominalPick/);
+  it('defines a renumbered pick without a number under the deferral when custody does not settle it, and throws without the deferral', () => {
+    for (const rows of [[], [custody('a', 'single_source'), custody('b', 'single_source')]]) {
+      const resolved = resolveWrittenPickDefinitions(content(rows), {
+        deferred: true,
+        definitionCustody: rows as never,
+      });
+      expect(resolved.custodyDefinedPickIds).toEqual([]);
+      expect(resolved.definitions.get(pickId)).toMatchObject({
+        nominalPick: null,
+        originalClubId: 'club-collingwood',
+      });
+    }
     expect(() =>
       resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
         deferred: false,
@@ -1544,19 +1540,20 @@ describe('custody-defined pick definitions', () => {
     });
     expect(resolved.custodyDefinedPickIds).toEqual([pickId]);
     expect(resolved.definitions.get(pickId)).toMatchObject({ nominalRound: 3, nominalPick: 56 });
-    // The written custody alone decides nothing: no row, or two rows, in the candidate still refuses.
-    expect(() =>
+    // The written custody alone decides nothing: no row, or two rows, in the candidate leave the
+    // pick renumbered, without a number.
+    expect(
       resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
         deferred: true,
         definitionCustody: [],
-      })
-    ).toThrow(/conflicting nominalPick/);
-    expect(() =>
+      }).definitions.get(pickId)?.nominalPick
+    ).toBeNull();
+    expect(
       resolveWrittenPickDefinitions(written, {
         deferred: true,
         definitionCustody: [custody('a', 'single_source'), custody('b', 'corroborated')] as never,
-      })
-    ).toThrow(/conflicting nominalPick/);
+      }).definitions.get(pickId)?.nominalPick
+    ).toBeNull();
   });
 
   it('is recorded on the receipt sorted, unique and counted exactly', () => {
