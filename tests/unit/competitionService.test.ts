@@ -2,10 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_COMPETITION_RULES } from '@/server/leagues/competitionRules';
 
-const activityMocks = vi.hoisted(() => ({
-  logLeagueActivity: vi.fn().mockResolvedValue(undefined),
-}));
-
 const etlMocks = vi.hoisted(() => ({
   getRoundMatches: vi.fn().mockResolvedValue([]),
 }));
@@ -40,7 +36,6 @@ const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn((work: (tx: typeof txMocks) => Promise<unknown>) => work(txMocks)),
 }));
 
-vi.mock('@/lib/activity', () => activityMocks);
 vi.mock('@/server/etl/etlRoundData', () => etlMocks);
 vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
@@ -59,7 +54,6 @@ const rules = {
 describe('publishCompetition', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    activityMocks.logLeagueActivity.mockResolvedValue(undefined);
     prismaMocks.$transaction.mockImplementation((work) => work(txMocks));
     prismaMocks.league.findUnique.mockResolvedValue({
       id: 'league-1',
@@ -197,7 +191,6 @@ describe('setCompetitionRoundFallbackDeadline', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    activityMocks.logLeagueActivity.mockResolvedValue(undefined);
     prismaMocks.$transaction.mockImplementation((work) => work(txMocks));
     txMocks.leagueCompetitionAudit.create.mockResolvedValue({});
     txMocks.leagueCompetitionRound.updateMany.mockResolvedValue({ count: 1 });

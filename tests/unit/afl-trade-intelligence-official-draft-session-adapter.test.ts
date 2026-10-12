@@ -106,6 +106,46 @@ describe('bounded completed official draft sessions', () => {
       }
     }
   });
+  it('reads the same claim from the renamed byline date wrapper and refuses both or neither', () => {
+    const legacy = (stamp: string) =>
+      `<div class="article__date"><time datetime="${stamp}"></time></div>`;
+    const byline = (stamp: string) =>
+      `<div class="article__byline-date"><time datetime="${stamp}"></time></div>`;
+    const reports = [
+      {
+        url: 'https://www.afl.com.au/news/688959/the-horne-supremacy-north-melbourne-makes-jason-horne-francis-its-no1-pick-for-the-2021-nab-afl-draft',
+        stamp: '2021-11-24T10:36:00Z',
+        html: `<div class="article-body"><p>The No.1 pick in Wednesday night's NAB AFL Draft. With the final selection of the first round, No.20, Brisbane added Kai Lohmann.</p><h4>2021 NAB AFL Draft - First Round</h4>${rows(1, 20)}</div>`,
+      },
+      {
+        url: 'https://www.afl.com.au/news/689491/matt-johnson-wa-product-lands-at-fremantle-after-nervous-wait',
+        stamp: '2021-11-25T11:45:00Z',
+        html: `<div class="article-body"><p>NIGHT two of the NAB AFL Draft started with Fremantle snapping up West Australian slider Matthew Johnson and ended with Taj Woewodin becoming a Melbourne father-son selection. There were surprises as 65 players found their way on to AFL lists.</p><p><strong>NAB AFL DRAFT NIGHT TWO</strong></p>${rows(21, 65)}</div>`,
+      },
+      {
+        url: urls2023[1]!,
+        stamp: '2023-11-21T10:43:00Z',
+        html: page2023(2).replace(legacy('2023-11-21T10:43:00Z'), ''),
+      },
+    ];
+    for (const report of reports) {
+      const input = { capture: { ...capture(1), sourceUrl: report.url } };
+      const before = parseOfficialAflDraftSession(legacy(report.stamp) + report.html, input);
+      const after = parseOfficialAflDraftSession(byline(report.stamp) + report.html, input);
+      expect(before.issues).toEqual([]);
+      expect(after.issues).toEqual([]);
+      expect(after.evidence[0]?.content.claim).toEqual(before.evidence[0]?.content.claim);
+      for (const changed of [
+        legacy(report.stamp) + byline(report.stamp) + report.html,
+        report.html,
+        byline('2021-11-26T00:00:00Z') + report.html,
+      ]) {
+        const invalid = parseOfficialAflDraftSession(changed, input);
+        expect(invalid.evidence).toEqual([]);
+        expect(invalid.issues[0]?.code).toBe('invalid_draft_session');
+      }
+    }
+  });
   it('conserves the 59 selections across the 2022 reports and rejects changed evidence', () => {
     const reports = [
       {

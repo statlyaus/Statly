@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const activityMocks = vi.hoisted(() => ({
-  logLeagueActivity: vi.fn().mockResolvedValue(undefined),
-}));
-
 const txMocks = vi.hoisted(() => ({
   leagueLineup: { findFirst: vi.fn() },
   leagueLineupPlayer: { findMany: vi.fn(), updateMany: vi.fn() },
@@ -15,7 +11,6 @@ const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn((work: (tx: typeof txMocks) => Promise<unknown>) => work(txMocks)),
 }));
 
-vi.mock('@/lib/activity', () => activityMocks);
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
 
@@ -24,7 +19,6 @@ import { resolveAndPersistLineupAutosubs } from '@/server/leagues/lineupAutosubS
 describe('resolveAndPersistLineupAutosubs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    activityMocks.logLeagueActivity.mockResolvedValue(undefined);
     prismaMocks.$transaction.mockImplementation((work) => work(txMocks));
     txMocks.leagueLineup.findFirst.mockResolvedValue({ id: 'lineup-1' });
     txMocks.leagueLineupPlayer.findMany.mockResolvedValue([

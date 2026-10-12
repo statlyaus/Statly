@@ -189,6 +189,7 @@ export default function EnhancedInjuryFeed({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
+          role="alert"
           className="p-4 bg-amber-50 border border-amber-200 rounded-lg"
         >
           <div className="flex items-start space-x-3">
@@ -208,16 +209,18 @@ export default function EnhancedInjuryFeed({
               </svg>
             </div>
             <div>
-              <h4 className="font-medium text-amber-900">Unable to fetch live data</h4>
+              <h4 className="font-medium text-amber-900">Injuries unavailable</h4>
               <p className="text-sm text-amber-700 mt-1">{error}</p>
-              <p className="text-sm text-amber-600 mt-1">Showing sample data for demonstration</p>
+              <p className="text-sm text-amber-600 mt-1">
+                No injury list is shown until live data loads. Try refreshing later.
+              </p>
             </div>
           </div>
         </motion.div>
       )}
 
-      {/* Content */}
-      {!loading && (
+      {/* Content: never shown on error, so an empty list cannot read as "no injuries" */}
+      {!loading && !error && (
         <AnimatePresence mode="wait">
           {injuries.length === 0 ? (
             /* Empty State */

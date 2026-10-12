@@ -317,6 +317,125 @@ describe('waiver processing under two runs', () => {
   });
 });
 
+// The real client, except that inside a transaction the first roster upsert throws: a run that dies
+// after the FAAB debit and before the commit.
+function crashOnFirstRosterUpsert(): typeof prisma {
+  let armed = true;
+  const bound = (target: object, key: string | symbol) => {
+    const value = Reflect.get(target, key);
+    return typeof value === 'function' ? value.bind(target) : value;
+  };
+  const wrapTransaction = (tx: object) =>
+    new Proxy(tx, {
+      get(target, key) {
+        if (key !== 'leagueRosterPlayer') return bound(target, key);
+        const delegate = Reflect.get(target, key) as object;
+        return new Proxy(delegate, {
+          get(inner, method) {
+            if (method === 'upsert' && armed) {
+              return async () => {
+                armed = false;
+                throw new Error('simulated crash after the debit');
+              };
+            }
+            return bound(inner, method);
+          },
+        });
+      },
+    });
+
+  return new Proxy(prisma, {
+    get(target, key) {
+      if (key !== '$transaction') return bound(target, key);
+      return (work: (tx: object) => Promise<unknown>, options?: object) =>
+        prisma.$transaction((tx) => work(wrapTransaction(tx)), options);
+    },
+  });
+}
+
+describe('waiver processing after a crash', () => {
+  it('leaves a claim untouched when its run dies after the debit, and settles it once on the next run', async () => {
+    await prisma.leagueSettings.update({
+      where: { id: SETTINGS },
+      data: { faabBudget: FAAB.faabBudget },
+    });
+    await prisma.teamAction.deleteMany({ where: { leagueId: LEAGUE } });
+    await prisma.leagueRosterPlayer.deleteMany({ where: { leagueId: LEAGUE } });
+    await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });
+    await prisma.waiverPriority.createMany({
+      data: members.map((memberId, index) => ({
+        leagueId: LEAGUE,
+        memberId,
+        priority: index + 1,
+        remainingFAAB: 100,
+      })),
+    });
+    const claimStore = store();
+    const { id: claimId } = await claimStore.submitClaim({
+      leagueId: LEAGUE,
+      userId: users[0],
+      teamId: members[0],
+      playerId: players[2],
+      priority: 1,
+      bidAmount: 30,
+      waiverSettings: FAAB,
+    });
+    await prisma.teamAction.updateMany({
+      where: { leagueId: LEAGUE },
+      data: { processingAt: new Date(Date.now() - 1000) },
+    });
+    const projection = { projectLeague: vi.fn() } as never;
+    const readState = async () => ({
+      claim: await prisma.teamAction.findUniqueOrThrow({
+        where: { id: claimId },
+        select: { status: true },
+      }),
+      priorities: (
+        await prisma.waiverPriority.findMany({
+          where: { leagueId: LEAGUE },
+          orderBy: { memberId: 'asc' },
+          select: { priority: true, remainingFAAB: true, pendingBidTotal: true },
+        })
+      ).map((row) => [row.priority, row.remainingFAAB, row.pendingBidTotal]),
+      owners: await prisma.leagueRosterPlayer.findMany({
+        where: { leagueId: LEAGUE, playerId: players[2] },
+        select: { memberId: true },
+      }),
+    });
+
+    await expect(
+      new WaiverProcessingService(crashOnFirstRosterUpsert(), claimStore, projection).processLeague(
+        { leagueId: LEAGUE }
+      )
+    ).rejects.toThrow('simulated crash after the debit');
+
+    // Nothing of the claim committed: still pending, FAAB not debited, bid still reserved.
+    expect(await readState()).toEqual({
+      claim: { status: 'PENDING' },
+      priorities: [
+        [1, 100, 30],
+        [2, 100, 0],
+      ],
+      owners: [],
+    });
+
+    const retry = await new WaiverProcessingService(prisma, claimStore, projection).processLeague({
+      leagueId: LEAGUE,
+    });
+
+    expect(retry.results).toEqual([{ id: claimId, status: 'SUCCESSFUL' }]);
+    // Debited exactly once, the reservation released, and the winner moved to the back.
+    expect(await readState()).toEqual({
+      claim: { status: 'PROCESSED' },
+      priorities: [
+        [2, 70, 0],
+        [1, 100, 0],
+      ],
+      owners: [{ memberId: members[0] }],
+    });
+  });
+});
+
 describe('draft pick under two writers', () => {
   it('refuses a player drafted at another slot instead of failing the aborted transaction', async () => {
     const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);

@@ -100,7 +100,7 @@ export function normalizePlayerName(value: string): string {
     .trim();
 }
 
-function normalizeClub(value: string): string {
+export function normalizeClub(value: string): string {
   return getTeamName(value.trim()).toLowerCase();
 }
 

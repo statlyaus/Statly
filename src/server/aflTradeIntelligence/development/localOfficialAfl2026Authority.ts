@@ -58,13 +58,7 @@ const logical = (name: string): LocalOfficialAflFieldDescriptor => ({
 });
 
 export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
-  ...[
-    'providerId',
-    'utcStartTime',
-    'status',
-    'compSeason.shortName',
-    'round.name',
-  ].map(character),
+  ...['providerId', 'utcStartTime', 'status', 'compSeason.shortName', 'round.name'].map(character),
   integer('round.roundNumber'),
   ...[
     'venue.name',
@@ -83,11 +77,7 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   character('player.player.player.surname'),
   character('teamId'),
   logical('gamesPlayed'),
-  ...[
-    'timeOnGroundPercentage',
-    'goals',
-    'behinds',
-  ].map(number),
+  ...['timeOnGroundPercentage', 'goals', 'behinds'].map(number),
   logical('superGoals'),
   ...[
     'kicks',
@@ -116,12 +106,7 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   ].map(number),
   logical('ranking'),
   logical('lastUpdated'),
-  ...[
-    'turnovers',
-    'intercepts',
-    'tacklesInside50',
-    'shotsAtGoal',
-  ].map(number),
+  ...['turnovers', 'intercepts', 'tacklesInside50', 'shotsAtGoal'].map(number),
   logical('goalEfficiency'),
   logical('shotEfficiency'),
   logical('interchangeCounts'),
@@ -167,12 +152,26 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   character('team.name'),
 ] satisfies readonly LocalOfficialAflFieldDescriptor[];
 
-function artifact(label: string): string {
-  return `artifact:${sha256AflTradeCanonicalJson({
-    boundary: 'local-official-afl-2026',
-    label,
-  })}`;
+function evidenceValue(label: string) {
+  return { boundary: 'local-official-afl-2026', label };
 }
+
+function artifact(label: string): string {
+  return `artifact:${sha256AflTradeCanonicalJson(evidenceValue(label))}`;
+}
+
+/**
+ * The canonical JSON values whose SHA-256 digests are the evidence ids this authority cites. Outside
+ * test_fixture a Gate record may cite only retained evidence (migration 0253), so a caller appending
+ * these Gate records stores these bytes first.
+ */
+export const LOCAL_OFFICIAL_AFL_2026_GATE_EVIDENCE = [
+  'concluded-match-review',
+  'local-user-approval',
+  'rate-limit',
+  'source-governance-review',
+  'terms',
+].map(evidenceValue);
 
 function sourceFieldUse(sourceField: string) {
   return {
@@ -284,8 +283,7 @@ export function createLocalAflTradeOfficialAfl2026Authority() {
       },
       {
         conditionId: 'concluded-match-status-review',
-        description:
-          'Promote appearances only from rows whose official match status is concluded.',
+        description: 'Promote appearances only from rows whose official match status is concluded.',
         appliesToOperations: ['internal_quality_evaluation' as const],
         verificationEvidenceIds: [artifact('concluded-match-review')],
       },

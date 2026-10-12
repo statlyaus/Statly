@@ -4,7 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { prepareLocalAflTradeFitzRoyFactualReleaseCandidate } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsal';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { PostgresAflTradePrivateFactualPreparation } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationFactualPreparation';
 import { PostgresAflTradePrivateValuationHpnFactualPreparation } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationHpnFactualBinding';
@@ -15,6 +14,7 @@ import {
 } from '../testUtils/privateValuationFactualPreparationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 import { stageSourceFirstSupplementalHpnFixture } from '../testUtils/sourceFirstSupplementalHpnFixture';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -74,17 +74,7 @@ describe.sequential('source-first private HPN factual parent', () => {
     expect(supplemental.sourceAdmission.state).toBe('admitted');
     const staged = await stageAcceptedPrivateValuationCaptureFixture(client, 'source-first-hpn');
     const source = createLocalAflTradeFitzRoyFactualRehearsalFixture().command.capture;
-    const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
-    await ledger.appendBatch({
-      expectedRevision: (await ledger.load()).revision,
-      records: [
-        {
-          sourceRights: source.sourceRights,
-          proposal: source.ledger.proposals[0]!,
-          decision: source.ledger.decisions[0]!,
-        },
-      ],
-    });
+    await appendRehearsalSourceAuthority(client, source);
     let factual: Awaited<ReturnType<typeof prepareLocalAflTradeFitzRoyFactualReleaseCandidate>>;
     preparation = new PostgresAflTradePrivateFactualPreparation(client, {
       prepareSourceEvidence: async () => {

@@ -61,6 +61,7 @@ describe('external reconciliation command boundary', () => {
         candidateId: parseAflTradeExternalReconciliationCandidate(candidate).candidateId,
         status: 'finalized' as const,
         blockingIssueCount: 2,
+        deferredIssueCount: 0,
         idempotentReplay: false,
       })
     );
@@ -112,6 +113,7 @@ describe('external reconciliation command boundary', () => {
           candidateId: parsedCandidate.candidateId,
           status: 'finalized' as const,
           blockingIssueCount: 2,
+          deferredIssueCount: 0,
           idempotentReplay: candidateIds.length > 1,
         };
       }),
@@ -143,6 +145,7 @@ describe('external reconciliation command boundary', () => {
         candidateId: parseAflTradeExternalReconciliationCandidate(candidate).candidateId,
         status: 'finalized' as const,
         blockingIssueCount: 2,
+        deferredIssueCount: 0,
         idempotentReplay: true,
       })
     );

@@ -25,6 +25,7 @@ import { stageLocalAflTradeFitzRoyFixture } from './localFitzRoyStagingFixture';
 import { bindTestEvidenceStore } from './testEvidenceStore';
 import { registerSourceFirstHpnPlayerMapFixture } from './sourceFirstHpnPlayerMapFixture';
 import { registerSourceFirstHpnResultsMapFixture } from './sourceFirstHpnResultsMapFixture';
+import { appendRehearsalSourceAuthority } from './rehearsalSourceAuthority';
 
 /**
  * Builds and finalizes one genuine 2026 HPN PAV season input set through every source, identity,
@@ -50,17 +51,7 @@ export async function buildAppearanceMembershipHpnInputFixture({
       const options = { provider, profile: 'hpn_player_stats' as const, hpnPlayerSide };
       const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
       const source = fixture.command.capture;
-      if (hpnPlayerSide === 'home')
-        await ledger.appendBatch({
-          expectedRevision: (await ledger.load()).revision,
-          records: [
-            {
-              sourceRights: source.sourceRights,
-              proposal: source.ledger.proposals[0]!,
-              decision: source.ledger.decisions[0]!,
-            },
-          ],
-        });
+      if (hpnPlayerSide === 'home') await appendRehearsalSourceAuthority(client, source);
       const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
       const factual = await prepareLocalAflTradeFitzRoyFactualReleaseCandidate(client, {
         provider,
@@ -86,16 +77,7 @@ export async function buildAppearanceMembershipHpnInputFixture({
     provider: 'afl_tables',
     profile: 'match_only',
   }).command.capture;
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: resultSource.sourceRights,
-        proposal: resultSource.ledger.proposals[0]!,
-        decision: resultSource.ledger.decisions[0]!,
-      },
-    ],
-  });
+  await appendRehearsalSourceAuthority(client, resultSource);
   const results = await prepareLocalAflTradeFitzRoyMatchEvidence(client);
   const resultMap = await registerSourceFirstHpnResultsMapFixture(client, results);
   sources.push({

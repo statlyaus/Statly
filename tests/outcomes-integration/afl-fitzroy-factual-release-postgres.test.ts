@@ -26,6 +26,7 @@ import { runLocalAflTradeFactualReleaseRehearsal } from '@/server/aflTradeIntell
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { doesAflTradeArtifactRefMatchBytes } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { retainRehearsalGateEvidence } from '../testUtils/rehearsalSourceAuthority';
 import { createPostgresAflDraftTradeOutcomeReadService } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeProjectionReadRepository';
 import { AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE } from '@/server/aflTradeIntelligence/outcomes/outcomeReadService';
 import { createLocalAflTradeFactualReleaseExportBytes } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualReleaseRehearsal';
@@ -69,6 +70,8 @@ afterAll(async () => {
 describe('local fitzRoy factual-release lifecycle', () => {
   it('serves one active replacement release through the service, API, projection exports, and archive page', async () => {
     const client = createPgAflOutcomeSqlClient(outcomesPool);
+    // The rehearsal's Gate records cite only retained evidence (migration 0253).
+    await retainRehearsalGateEvidence(client);
     const rehearsal = await runLocalAflTradeFactualReleaseRehearsal(client);
 
     expect(rehearsal.baseline.releaseId).not.toBe(rehearsal.replacement.releaseId);
@@ -262,8 +265,9 @@ describe('local fitzRoy factual-release lifecycle', () => {
     const xlsxExport = extractAflTradeWorkbookOoxmlEvidence(exportBytes.xlsx);
     expect(jsonExport.releaseId).toBe(rehearsal.replacement.releaseId);
     expect(csvExport).toContain(`releaseId,${rehearsal.replacement.releaseId}`);
-    expect(
-      xlsxExport.sheets[0]?.rows[0]?.cells.map(({ inlineText }) => inlineText)
-    ).toEqual(['releaseId', rehearsal.replacement.releaseId]);
+    expect(xlsxExport.sheets[0]?.rows[0]?.cells.map(({ inlineText }) => inlineText)).toEqual([
+      'releaseId',
+      rehearsal.replacement.releaseId,
+    ]);
   });
 });

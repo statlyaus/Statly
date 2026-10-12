@@ -231,7 +231,7 @@ export default function LeagueWaiversContainer({
         url.searchParams.set('playersCursor', playersCursor);
       }
 
-      const response = await fetch(url.toString(), { signal });
+      const response = await fetch(url.toString(), { signal, cache: 'no-store' });
       const data = (await response.json().catch(() => ({}))) as WaiverBootstrapResponse;
       if (!response.ok) {
         throw new Error(data.error || `Waiver data failed with status ${response.status}`);

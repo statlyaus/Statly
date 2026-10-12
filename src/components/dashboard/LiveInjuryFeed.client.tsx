@@ -197,6 +197,7 @@ export default function LiveInjuryFeedClient({
         <motion.div
           initial={reduceMotion ? undefined : { opacity: 0, y: 10 }}
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+          role="alert"
           className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
         >
           <div className="flex items-start space-x-3">
@@ -216,15 +217,17 @@ export default function LiveInjuryFeedClient({
               </svg>
             </div>
             <div>
-              <h4 className="font-medium text-yellow-900">Data fetch issue</h4>
+              <h4 className="font-medium text-yellow-900">Injuries unavailable</h4>
               <p className="text-sm text-yellow-700 mt-1">{error}</p>
-              <p className="text-sm text-yellow-600 mt-1">Showing cached or sample data</p>
+              <p className="text-sm text-yellow-600 mt-1">
+                No injury list is shown until live data loads. Try refreshing later.
+              </p>
             </div>
           </div>
         </motion.div>
       )}
 
-      {!loading && <InjuryListDisplay injuries={sortedInjuries} groupByTeam={true} />}
+      {!loading && !error && <InjuryListDisplay injuries={sortedInjuries} groupByTeam={true} />}
 
       {!loading && !error && injuries.length === 0 && selectedTeam && (
         <div className="text-center py-6">

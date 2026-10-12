@@ -3,7 +3,6 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import {
   createAflTradeHpnFieldMapCandidate,
   listAflTradeHpnCandidateSourceFields,
@@ -25,6 +24,7 @@ import {
   createAflTradeAcquisitionSpellRegistrationRule,
 } from '@/server/aflTradeIntelligence/outcomes/acquisitionSpellRegistrationContracts';
 import { PostgresAflTradeAcquisitionSpellRegistrationRepository } from '@/server/aflTradeIntelligence/outcomes/postgresAcquisitionSpellRegistrationRepository';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -73,17 +73,7 @@ it('authenticates an exact source-first result map and refuses another source oc
   const options = { profile: 'completed_match_result' as const };
   const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
   const sourceAuthority = fixture.command.capture;
-  const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: sourceAuthority.sourceRights,
-        proposal: sourceAuthority.ledger.proposals[0]!,
-        decision: sourceAuthority.ledger.decisions[0]!,
-      },
-    ],
-  });
+  await appendRehearsalSourceAuthority(client, sourceAuthority);
   const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
   const retained = await client.query<{ finalized_at: Date; staging_sha256: string }>(
     'SELECT finalized_at,staging_sha256 FROM outcome_provider_normalization_run WHERE normalization_run_id=$1',

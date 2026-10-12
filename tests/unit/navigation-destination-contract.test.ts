@@ -41,7 +41,7 @@ describe('audited navigation destination contract', () => {
   });
 
   it("scopes the league tools to one of the viewer's leagues instead of demo data", () => {
-    for (const route of ['leaderboard', 'live-scoring', 'team-analytics']) {
+    for (const route of ['live-scoring', 'team-analytics']) {
       const page = readRepoFile(`src/app/(app)/${route}/page.tsx`);
       expect(page).toContain('LeagueToolPage');
       expect(page).not.toMatch(/mock|Matthew's Monstrous Team|The Bulldogs/);

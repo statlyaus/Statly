@@ -11,10 +11,12 @@ describe('prepare external historical reconciliation command', () => {
       completionId,
       status: 'finalized' as const,
       blockingIssueCount: 4,
+      deferredIssueCount: 0,
       idempotentReplay: false,
       requiresReview: true,
       promotionEligible: false as const,
       publicationEligible: false as const,
+      pickLineageDeferral: null,
     }));
     const close = vi.fn(async () => undefined);
     const output: string[] = [];

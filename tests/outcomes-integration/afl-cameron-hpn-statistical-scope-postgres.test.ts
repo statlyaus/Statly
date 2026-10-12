@@ -4,7 +4,6 @@ import { afterAll, expect, it } from 'vitest';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import {
   createAflTradeHpnFieldMapCandidate,
   listAflTradeHpnCandidateSourceFields,
@@ -18,6 +17,7 @@ import { PostgresAflTradeHpnProjectedFieldMapAuthority } from '@/server/aflTrade
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -62,17 +62,7 @@ it.each([
       const options = { profile: 'completed_match_result' as const, seasonYear: year };
       const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
       const authority = fixture.command.capture;
-      const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
-      await ledger.appendBatch({
-        expectedRevision: (await ledger.load()).revision,
-        records: [
-          {
-            sourceRights: authority.sourceRights,
-            proposal: authority.ledger.proposals[0]!,
-            decision: authority.ledger.decisions[0]!,
-          },
-        ],
-      });
+      await appendRehearsalSourceAuthority(client, authority);
       const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
       const normalization = (
         await client.query<{ finalized_at: Date; staging_sha256: string }>(
