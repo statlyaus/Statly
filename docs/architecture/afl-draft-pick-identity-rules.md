@@ -1,107 +1,147 @@
 # Draft-pick identity rules
 
-Status: proposed 2026-10-12 for owner approval (statlyaus/Statly#853, #789). The rules below are the
-contract for what one `draft-pick:` identity in an external reconciliation candidate means. The
-database enforces them when a candidate is stored or finalized, the grader enforces the one rule only
-it can see, and the reconciler must produce candidates that pass them, recording a conflict instead of
-guessing when evidence cannot decide. The rules bind candidates finalized after they ship; stored
-candidates and promoted state are covered under [Owner decisions](#owner-decisions).
+Status: proposed 2026-10-12 for owner approval (statlyaus/Statly#853, #789). This is the contract for
+what one `draft-pick:` id in an external reconciliation candidate may join, and which rules the
+database, not the reconciler's judgement, enforces. Every count below was measured on 2026-10-12 against
+batch ten (`realized-trade-grade-batch:6ec831a7…`, candidate `external-reconciliation:0b696b3b…`) unless
+another scope is named; what is not yet measured says so.
 
-The architecture already states the principle these rules make enforceable: a nominal pick number is
-not a stable entitlement identity
-([source capability table](afl-trade-intelligence.md#source-capability-and-evidence-hierarchy)).
+The architecture already states the principle: a nominal pick number is not a stable entitlement
+identity ([source capability table](afl-trade-intelligence.md#source-capability-and-evidence-hierarchy)).
+Nothing enforces it: neither the finalize check nor any trigger or index on the candidate tables checks
+pick identity today.
 
-## Why
+## How pick ids are formed
 
-Batch ten (`realized-trade-grade-batch:6ec831a7…`, candidate `external-reconciliation:0b696b3b…`) merged
-distinct picks into one identity. For example, one trade sends Gold Coast's 2025 picks 7 and 8 to
-Melbourne, and both carry one pick id. Proven merges are the 4 transactions that break rule 1 and the 16
-picks that break rule 2. A wider set is suspect: 59 pick ids carry more than one pick number, which a
-legitimately renumbered pick also does, so they are not all wrong. The grader links picks only by id
-equality, so a merged pick can follow the wrong onward trade without any signal: 200 pick legs on 155
-trades sit on one of the 59 suspect ids, and 56 of them are valued through an onward link that may be
-wrong.
+`externalEvidenceReconciliation.ts` forms five kinds of pick id. Batch ten's 878 pick transfers, classified
+by recomputing each kind's content address:
 
-The merges came from heuristics that let one chain member's match decide another's (`joinSlotChains`,
-`uniqueShiftedSlot`), from the eventual-selection join spreading one custody pick along a path, and from
-number-only keys that let a trade-period "Pick N" and draft-night selection N share an id. Nothing in the
-database checked pick identity.
+| Kind                  | Formed from                                                                                                  | Transfers |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| Entitlement (custody) | Draft year, draft type, round and original club, from an Official AFL order observation the transfer matched | 674       |
+| Entitlement, no order | The same fields for a future pick no order observation confirms                                              | 52        |
+| Eventual selection    | The player Draftguru states every hop of the pick was used on (#889); identified by elimination              | 90        |
+| Number only           | Draft year, type, pick number and round, when nothing else matched (`currentPickNumberKey`)                  | 61        |
+| Unresolved transfer   | The transfer's own evidence row, for a future pick with no resolved original club                            | 1         |
+
+An entitlement id is the pick itself (a club's round-N pick of a year; two picks of one club in one round
+collapse to one id, which the reconciler already flags as `pick_identity_conflict` when one order page
+shows both). It legitimately carries different
+numbers on different pages: Draftguru numbers each page as it then stood, and bids shift numbers on draft
+night (the reconciler's own note on the eventual-selection join). So "more than one number on an id" is
+not evidence of a merge: of 59 such ids, 19 are contradicted by any rule below.
+
+## What reads pick ids
+
+- The realized grader uses a pick id for one thing: following a traded-on pick to its onward trade
+  (`realizedTradeGrade.ts`, the pick trail and the same-id fallback). A traded pick's outcome (selected,
+  not used, traded on) comes from Draftguru's per-transfer disposition matched by player, receiving club
+  and draft year, never from the pick id. The grader never reads a transfer's status.
+- The trail walk chains every transfer on one id from club to club, so two picks on one id can form one
+  plausible trail and be followed without any signal.
+- The pick-side deferral treats `pick_identity_conflict` as pick-side for every subject key, but works out
+  which picks to leave unpromoted only from `lineage:<transfer>` and `pick-custody:<pick id>|…` subject
+  keys (`pickLineageDeferral.ts`).
+
+## What is wrong today
+
+Rules 1 to 3 below each show one id holding two picks, unless a source misstates the pick. Together they
+find **22 ids** in batch ten, all entitlement ids, carrying 79 pick legs. Their measured effect on the
+grade:
+
+- 4 of the 6 `traded_on_return_unlinked` legs sit on them (two onward trades on one id). A fifth, 2023
+  Pick 62, is very likely a merge the rules do not prove: Brisbane passes on a pick of that id that no
+  captured trade gave it. The sixth, 2025 Pick 46, has no captured onward trade at all.
+- 24 of the 134 `traded_on_return_blocked` legs sit on them.
+- 20 onward-valued legs sit on them, and every one is confirmed by a Footyinfo route naming the same three
+  clubs in order. Of all 123 onward links, 119 are confirmed that way and none of the other 4 sits on one
+  of the 22 ids, so no grade measured here follows a link the evidence contradicts.
+
+Cause, where verified: the eventual-selection join is the only step that changes a transfer's pick id
+after it is formed, and it keeps the transfer's own original club when it assigns another entitlement's
+id (`joinEventualSelections`). Every rule 2 failure therefore comes from it. Rule 1 and rule 3 failures
+have not been traced to a step; the slot-chain join (which deliberately gives a chain one custody pick so
+traded-on links survive) and the shifted-slot join are candidates, not established causes.
 
 ## Rules
 
-Counts are read-only measurements on the genuine grading database, 2026-10-12, against batch ten's
-candidate unless stated.
+| Rule | Statement                                                                                                                                                                 | Batch ten                           | Enforced                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------- |
+| 1    | One transaction moves an id at most once from one club and at most once into one club, and its numbered transfers of that id carry one number.                            | 4 transactions, all merges          | Finalize: refuse                    |
+| 2    | An id's transfers and custody rows name at most one original club (rows with none are ignored).                                                                           | 16 ids                              | Finalize: refuse                    |
+| 3    | The stated outcomes on one id name at most one drafted player.                                                                                                            | 6 ids                               | Finalize: refuse                    |
+| 4    | One selection per pick id, and a pick's lineage rows name at most one selection.                                                                                          | 0 in all 36 stored candidates       | Unique index; finalize check        |
+| 5    | Where a staged Footyinfo route covers a selected pick, a transfer on the selection's pick id that is not a hop of the route is recorded as a conflict on that pick.       | 25 of 30 checkable picks            | Finalize: refuse if unrecorded      |
+| 6    | A number-only id is a placeholder: no two transfers in different transactions, and no transfer and selection, share one.                                                  | 41 transfers share with a selection | Finalize, once ids state their kind |
+| 7    | When evidence cannot decide, the candidate records `pick_identity_conflict` under a `pick-custody:` subject key and leaves each transfer on its own id; it never chooses. | n/a                                 | Reconciler; rules 1 to 6            |
 
-| Rule | Statement                                                                                                                                                                                                 | Batch ten                    | Enforced                                     |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------- |
-| 1    | One transaction moves a pick at most once from one club and at most once into one club, and every numbered transfer of that pick in the transaction carries one number.                                   | 4 transactions               | Finalize check                               |
-| 2    | A pick names at most one original club across its transfers and custody rows. Rows with no original club (concession picks under the deferral) are ignored.                                               | 16 picks                     | Finalize check                               |
-| 3    | A traded-on pick is followed to an onward transfer only through an id backed by a custody observation or a staged board route. A number-only id never links two transfers; the leg grades unlinked.       | 15 of 123 onward-linked legs | Grader, checkable in the grade batch         |
-| 4    | Where a staged Footyinfo board route covers a selected pick, every transfer of that pick is a consecutive hop of the route.                                                                               | 25 of 30 checkable picks     | Finalize check                               |
-| 5    | All pick outcomes on one pick that name a drafted player name the same player.                                                                                                                            | 6 picks                      | Finalize check                               |
-| 6    | A pick has at most one selection, a selection at most one pick, and a pick's lineage rows name at most one selection.                                                                                     | 0 (all 36 stored candidates) | Unique indexes                               |
-| 7    | When evidence cannot decide which pick a transfer moves, the candidate records `pick_identity_conflict` (deferred under the pick-side deferral) and leaves the transfer on its own key; it never chooses. | n/a                          | Reconciler; rules 1 to 6 refuse its failures |
+The four rule 1 transactions: Port Adelaide and West Coast 2021 (Pick 14 one way, Sydney's Pick 12 the
+other), the Starcevich trade (Picks 16 and 22), the Petracca trade (Picks 7 and 8) and Brisbane and
+Hawthorn 2025 (Pick 22 one way, Pick 17 the other). Rule 2 examples: Brisbane's own 2024 Pick 47 on the
+Western Bulldogs' round-3 entitlement; Gold Coast's own 2023 Pick 27 on Fremantle's round-2 entitlement.
+Rule 3 examples: Petracca Picks 7 and 8 name Xavier Taylor and Latrelle Pickett.
 
-Notes:
+Why rule 5 records rather than refuses: the route and the transfers disagree, but the evidence does not say
+which side is wrong. In 8 of the 25 the selection is on an entitlement id, and in at least one of those the
+selection, not the transfers, appears mis-keyed: 2021 selection 32 was tied to Greater Western Sydney's
+round-2 entitlement because the pre-draft order had that entitlement at 32 with Geelong, while Footyinfo
+routes the pick Geelong used at 32 from Essendon. The other 17 are number-only collisions (rule 6). Of 253
+selected board picks with a route, rule 5 can check 30 today: for 211 no transfer carries the selection's
+pick id, and 12 are excluded because the selection's club differs or only Footyinfo states it.
 
-- Rule 1 counts transactions. In the narrower form of a unique index on (candidate, transaction,
-  sending club, pick), four of the 36 stored candidates already break it: 15 and 13 duplicate groups in
-  two candidates from 2026-10-10, 1 in batch nine's, 2 in batch ten's. Stored candidates are immutable,
-  so the rule is a finalize check on new candidates, not an index.
-- Rule 3 is enforced by the grader because the database cannot see it: a number-only id is never
-  custody-resolved and cannot form lineage (finalization already requires custody for lineage), so its
-  only effect is the grader's onward link. 204 of 878 pick transfers sit on ids with no custody row, and
-  15 onward-linked legs rest on one.
-- Rule 4 can check only selected board picks: passed and removed board picks carry no number and so no
-  pick. A selected board pick is tied to the selection with the same draft year and number and the same
-  club; Footyinfo-only selections are excluded so a board cannot corroborate itself. Of 253 selected
-  board picks with a route, 30 are checkable today; for the rest no transfer carries the selection's pick
-  id. Most failures are number-only joins, for example a 2025 "Pick 21" traded Essendon to Carlton on the
-  same id as draft-night selection 21, whose route is Gold Coast to Western Bulldogs.
-- A pick's number legitimately changes between the trade period and draft night (bids, academy
-  matches, compensation, order changes), Draftguru numbers each page as it then stood, and future picks
-  have no number. A "one number per pick" rule would refuse real picks, and all 878 pick transfers in
-  batch ten have a season but no exact date, so a date-ordered renumbering test is unusable. The rules
-  therefore state what may join two numbers, not a ban on numbers changing.
-- Rule 7 keeps the grade honest because the grader never reads transfer status: it follows a traded-on
-  pick only through exactly one onward transfer of the same id (`realizedTradeGrade.ts`), so a transfer
-  left on its own key grades `traded_on_return_unlinked`, blocked, rather than following a guess.
+Why rule 6 waits for ids to state their kind: the database cannot tell a number-only id from an
+eventual-selection id without recomputing content addresses, and eventual-selection ids legitimately span
+transactions. Number-only ids affect no grade today: none of the 123 onward links uses one, and their 61
+legs are graded without the pick id (50 unused picks, 10 blocked for missing access evidence, 1 selected
+pick). This is an identity fix, not a grade fix. It needs each pick id to
+carry its basis (`entitlement`, `eventual_selection`, `number`, `unresolved`), a candidate contract change.
+
+## Rejected after measurement
+
+- **One number per pick.** Refuses real picks: numbers change legitimately, and all 878 pick transfers in
+  batch ten have a season but no exact date, so no date order can tell a renumbering from a merge.
+- **Follow onward picks only through custody or route-backed ids.** Aimed at number-only links, of which
+  there are none. Custody-only would cut 15 onward links on eventual-selection ids, 14 of them confirmed by
+  a Footyinfo route; custody-or-route would cut the 1 that is not, which Draftguru states hop by hop.
+- **Every sender held the pick (continuity) as a refusal.** 16 of 355 entitlement ids break it, only 3 of
+  them proven merges; candidates start in 2019, so a pick acquired earlier breaks it legitimately. It is a
+  review signal.
+- **Rule 1 as a unique index.** Four of the 36 stored candidates break it (15, 13, 1 and 2 duplicate
+  groups); finalization runs only on the open-to-finalized transition, so a finalize check binds new
+  candidates without touching stored ones.
+- **Lineage as a unique index on pick.** Ten picks in batch ten legitimately have several lineage rows.
 
 ## Enforcement
 
-- Rules 1, 2, 4 and 5 are added to `finalize_outcome_external_reconciliation_candidate` in one
-  migration, patched by the exact-anchor `replace()` pattern of migrations 0264 and 0272, so a
-  candidate that breaks one is refused with a message naming the rule.
-- Rule 6 is unique indexes on `outcome_external_reconciliation_draft_selection (candidate_id, pick_id)`
-  and the lineage table, created after confirming no stored row breaks them.
-- Rule 3 is a grader change with a new grade-rule version, so batches before and after it are not
-  silently compared.
-- Every rule ships with an integration test that it refuses a violating candidate and accepts a lawful
-  one, including a renumbered pick joined by a custody observation, a future pick numbered later, and a
-  concession pick with no original club.
-- Before the migration merges, the rules run read-only against the genuine database and the PR lists
-  every stored candidate and pick they would refuse.
+- Rules 1, 2, 3 and 5 and the lineage half of rule 4 are added to
+  `finalize_outcome_external_reconciliation_candidate` in one migration by the exact-anchor `replace()`
+  pattern of migrations 0264 and 0272; a refused candidate names the rule.
+- The selection half of rule 4 is a unique index on
+  `outcome_external_reconciliation_draft_selection (candidate_id, pick_id)`.
+- Each rule ships with an integration test that it refuses a violating candidate and accepts a lawful one:
+  a renumbered entitlement, a future pick numbered later, a pick with no original club, and a pick swapped
+  back on draft night.
+- Before the migration merges, the rules run read-only against all 36 stored candidates and the PR lists
+  every candidate and pick they would refuse.
 
-## Reconciler and grader changes this requires
+## Reconciler changes
 
-- `joinSlotChains` gives a chain member a custody pick only when that member's own evidence matches it.
-- `uniqueShiftedSlot` no longer joins a transfer to a slot by endpoints alone when a board route or
-  custody observation contradicts it.
-- `joinEventualSelections` records `pick_identity_conflict` when a path reaches two custody picks,
-  instead of keeping the earliest, and does not spread a custody pick onto a hop whose number matches
-  no custody observation unless the board route names that hop.
-- The grader follows a traded-on pick only through a custody- or route-backed id (rule 3).
+- `joinEventualSelections` never gives a transfer an entitlement id whose original club differs from the
+  transfer's own, and never gives two transfers of one transaction the same id; it records rule 7's
+  conflict instead.
+- Each rule 1 and rule 3 failure is traced to the step that produced it before the slot-chain or
+  shifted-slot join is changed.
+- Pick ids state their kind (rule 6), and number-only ids are scoped to their transfer.
 
 ## Owner decisions
 
-- **Expected drop.** These changes turn guessed links into conflicts: up to 15 onward links from rule 3,
-  and the 56 onward-valued legs on suspect ids are re-decided, each either confirmed by evidence or
-  blocked. Batch counts will get worse before they get better.
-- **Promoted state.** Promotion `external-canonical-promotion:0d44778c…` holds 870 promoted pick assets.
-  The proven rule 1 merges did not reach it: there, Gold Coast's picks 7 and 8 and West Coast's 16 and 22
-  are four distinct picks, and no current canonical event holds one pick twice. But candidates since the
-  promotion re-keyed 157 promoted transfers, so candidate and canonical pick keys disagree for those. The
-  rules bind new candidates only; whether to reconcile the promoted keys (and the 173 arrival
-  registrations that cite this promotion) is a separate decision.
-- **Coverage.** Rule 4 checks 30 of 253 routed picks today. Its coverage grows only as rule 3's fixes
-  tie selections to their real transfers.
+- **Promoted state, not yet measured.** Promotion `external-canonical-promotion:0d44778c…` holds 870
+  promoted pick assets. Two of the four rule 1 merges are absent there (Gold Coast's 7 and 8 and West
+  Coast's 16 and 22 are four distinct picks), and no current canonical event holds one pick twice. Whether
+  promotion copies candidate pick ids, and whether the other two merges or any number-only collision
+  reached canonical state, is measured in the next grading-VM session.
+- **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
+  allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured
+  after the reconciler change, not predicted.
+- **Candidate contract.** Rule 6 adds a pick-id kind to every candidate, which changes every new
+  candidate's content address.
