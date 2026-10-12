@@ -4226,7 +4226,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v1`, unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v2` (v1 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4249,8 +4249,21 @@ The remaining work proceeds through these independently verifiable gates:
      equal-split tiebreak, provisional onward trade, no appearances after the trade, or a single-source
      pick outcome). Otherwise it is `complete`. Club totals are null when blocked, and are otherwise the
      exact received and given-up sums of the valued legs, so equal legs always seal to the same batch.
-   - **Single source.** Every valued or excluded pick leg carries `single_source_pick_outcome`, because
-     pick outcomes come only from Draftguru. In the MVP only a trade of players alone can be `complete`.
+   - **Single source (rule v2, owner decision 2026-10-12, issues 853 and 789).** Pick outcomes come from
+     Draftguru. A valued or excluded pick leg carries `single_source_pick_outcome` unless a Footyinfo
+     draft board corroborates its outcome. The leg then names `corroboratedBy: footyinfo` and drops the
+     reason. Corroboration means:
+     - **Selected:** the outcome's canonical selection is `corroborated`, with Draftguru and Footyinfo
+       among its providers agreeing on the player and club.
+     - **Not used:** the outcome's basis is `board_pick_passed_or_removed`.
+     - **Traded on:** exactly one board pick in the pick's draft routes it sender, receiver, onward
+       receiver, with that sequence once in its route.
+
+     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated. The
+     rule is `afl-trade-realized-grade-rule/v2`, and the grader seals v2. The contract still accepts v1
+     batches, which name no corroborating provider, so earlier batches stay valid. Each version states
+     its own limitation text.
+
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
      starts the season after the trade (or after the draft, for a selected pick). It ends at the first
@@ -4362,9 +4375,8 @@ The remaining work proceeds through these independently verifiable gates:
          route must start there. That pick must be passed or removed. A selected match, a pick with
          no round, or two matches leave the pick as it was.
 
-       The grade's `single_source_pick_outcome` flag is still unconditional
-       (`valuation/realizedTradeGrade.ts`). Lifting it for outcomes Draftguru and Footyinfo
-       corroborate is a grader rule change and waits on an owner decision.
+       Rule v2 of the grade (below, "Single source") lifts `single_source_pick_outcome` for
+       outcomes that Draftguru and Footyinfo corroborate.
    - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
      repeatable-read transaction, one query per table: the finalized non-production candidate (its
      content address re-checked), the current HPN PAV calculation per requested season from
