@@ -1,6 +1,9 @@
 # Draft-pick identity rules
 
-Status: proposed 2026-10-12 for owner approval (statlyaus/Statly#853, #789). This is the contract for
+Status: implemented 2026-10-12 (statlyaus/Statly#853, #789): migration
+`0273_draft_pick_identity_rules` enforces rules 1 to 6 at finalization, and the reconciler change in the
+same change set builds candidates that satisfy them ([Implementation](#implementation)). Repairing the
+promoted canonical state is a separate, owner-approved promotion. This is the contract for
 what one `draft-pick:` id in an external reconciliation candidate may join, and which rules the
 database, not the reconciler's judgement, enforces. Every count below was measured on 2026-10-12 against
 batch ten (`realized-trade-grade-batch:6ec831a7…`, candidate `external-reconciliation:0b696b3b…`) unless
@@ -61,11 +64,25 @@ grade:
   clubs in order. Of all 123 onward links, 119 are confirmed that way and none of the other 4 sits on one
   of the 22 ids, so no grade measured here follows a link the evidence contradicts.
 
-Cause, where verified: the eventual-selection join is the only step that changes a transfer's pick id
-after it is formed, and it keeps the transfer's own original club when it assigns another entitlement's
-id (`joinEventualSelections`). Every rule 2 failure therefore comes from it. Rule 1 and rule 3 failures
-have not been traced to a step; the slot-chain join (which deliberately gives a chain one custody pick so
-traded-on links survive) and the shifted-slot join are candidates, not established causes.
+Cause, traced transfer by transfer on 2026-10-12 by re-running the reconciler, instrumented, on batch
+ten's exact input (it reproduces candidate `0b696b3b…` byte for byte): every failure starts at a join that
+compares a transfer's pick number with the pre-draft order, which was observed at another time. Draftguru
+records no trade date, so the order's observation date cannot tell a trade-period hop from a draft-night
+hop numbered by the live order that bids had shifted.
+
+| Step that formed the wrong id                                                               | Rule 1 transactions | Rule 2 ids | Rule 3 ids |
+| ------------------------------------------------------------------------------------------- | ------------------- | ---------- | ---------- |
+| Chain spread: `joinSlotChains` gave a hop with no match of its own the chain's custody pick | 3                   | 4          | 3          |
+| `uniqueShiftedSlot`: a differently numbered slot with the same original club and holder     | 1                   | 4          | 1          |
+| `slotTransfersCorroborate`: a draft-night number equal to a pre-draft slot's number         | 0                   | 8          | 2          |
+
+The eventual-selection join then grouped the mis-keyed transfer with the hops Draftguru states were used
+on the same player, and kept the transfer's original club, which came only from the number join (a
+current pick states no original club): that is every rule 2 failure. Rule 6 is the number-only key itself
+(`currentPickNumberKey`), shared by any two transfers or a selection with one number. Of the 25 rule 5
+failures, 17 are those number-only collisions and 8 are selections joined, by number and holder, to the
+pre-draft slot sharing their number. 33 of batch ten's 40 lineage rows join a transfer to a selection of
+a player other than the one Draftguru states that transfer's pick was used on.
 
 ## Rules
 
@@ -160,36 +177,92 @@ Promotion `external-canonical-promotion:0d44778c…` (from candidate `819c3cd4�
 ## Enforcement
 
 - Rules 1, 2, 3, 5 and 6 and the lineage half of rule 4 are added to
-  `finalize_outcome_external_reconciliation_candidate` in one migration by the exact-anchor `replace()`
-  pattern of migrations 0264 and 0272; a refused candidate names the rule. Rule 6 recomputes id kinds with
-  `outcome_afl_trade_canonical_json`.
-- The selection half of rule 4 is a unique index on
-  `outcome_external_reconciliation_draft_selection (candidate_id, pick_id)`.
-- Each rule ships with an integration test that it refuses a violating candidate and accepts a lawful one:
-  a renumbered entitlement, a future pick numbered later, a pick with no original club, a pick swapped
-  back on draft night, a future-pick trade of a disputed entitlement, and one pick passed through three
-  clubs in one transaction.
+  `finalize_outcome_external_reconciliation_candidate` by migration `0273_draft_pick_identity_rules`, by
+  the exact-anchor `replace()` pattern of migrations 0264 and 0272: the checks run just before the
+  evidence-conservation check, and a refused candidate's error starts `Pick-identity rule N:`. Rule 6
+  recomputes the number-only address with `outcome_afl_trade_canonical_json`; it is the only id form the
+  rule needs to recognise, because the reconciler no longer writes it on a transfer (below).
+- The selection half of rule 4 is the unique index
+  `outcome_external_reconciliation_draft_selection_pick_key (candidate_id, pick_id)`. The lineage half
+  follows from it, since a lineage row's pick must be its selection's (migration 0208), and is checked
+  anyway.
+- `src/server/aflTradeIntelligence/source/pickIdentityRules.ts` states the same rules over candidate
+  content (`aflTradePickIdentityViolations`), so tests and read-only audits name exactly what
+  finalization refuses.
+- Each rule has an integration test that it refuses a violating candidate and accepts a lawful one: a
+  renumbered entitlement, a future pick numbered later, a pick with no original club, a pick swapped back
+  on draft night, a future-pick trade of a disputed entitlement, and one pick passed through three clubs
+  in one transaction (`tests/outcomes-integration/afl-draft-pick-identity-rules-postgres.test.ts`).
 - The read-only measurement above is repeated with the migration's exact SQL before it merges, and the PR
   lists every stored candidate and pick it would refuse.
 
+## Implementation
+
+The reconciler changes, in the order the reconciler applies them (`externalEvidenceReconciliation.ts`):
+
+- **Number-only ids are scoped to their transfer** (`currentPickNumberOnlyId`): a numbered transfer no
+  custody observation resolves takes its number plus its own evidence row, so it shares an id with no
+  other transfer or selection (rule 6). A selection with no custody keeps the plain number key, which no
+  transfer now carries.
+- **A disputed entitlement's future-pick transfers take transfer-scoped ids**: when the order shows two
+  picks of one club in one round, each transfer of that entitlement is its own pick until reviewed
+  evidence says which.
+- **No chain spread**: `joinSlotChains` no longer gives a hop with no custody match of its own the
+  chain's custody pick. The hops it used to join are joined by the eventual-selection join where
+  Draftguru states they were used on one player.
+- **Number joins a transfer's own statement contradicts are refused** (`refuseContradictedNumberJoins`).
+  Each transfer's tie to its custody pick is `stated` (a future pick whose own round and original club
+  form the entitlement), `exact` (its sender, receiver and number are the slot's original club, holder
+  and number, or a repeated observation proves the hop) or `number`. A drafted player whose stated or
+  exact ties name one custody pick has that pick as its home, and its number joins to any other pick
+  leave it; so do number joins to a pick whose original club the Footyinfo route for the player's
+  selection does not start with. On each custody pick the remaining statements are compared by their
+  strongest tie: number joins stating anything but the strictly strongest leave the pick, and when no
+  statement is strictly strongest, or a stated or exact tie is contradicted, every number join leaves it
+  and a rule 7 conflict is recorded. A transfer that leaves takes its own number id.
+- **The eventual-selection join keeps rules 1 to 3**: every hop of an admitted walk takes the original
+  club of the pick the walk settles on (a current pick states none of its own; the trace shows each one
+  it carried came from a number join). It records a conflict and re-keys nothing when a future-pick hop
+  states another round or original club, when the walk would move the pick twice, or under two numbers,
+  in one exchange, or when transfers already on the pick state another eventual selection.
+- **A selection is keyed by the statements on its pick**: its pick is the one pick id every transfer
+  Draftguru states was used on the selected player shares (one of them received by the selecting club).
+  Only without such transfers is it joined to the order slot with its number and holder, and never to a
+  slot whose transfers state another player, one another selection's transfers claim, or one whose
+  original club the selection's Footyinfo route contradicts.
+- **Rule 5 conflicts are recorded** (`recordBoardRouteConflicts`), and a pick with a recorded
+  `pick-custody:` conflict gets no lineage row until reviewed evidence settles it.
+
+Measured offline on batch ten's exact input (completion `d916ad94…`, the same identity resolutions and
+deferral decision; read-only):
+
+| Measure                         | Batch ten (`0b696b3b…`)                | New reconciler                                      |
+| ------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| Rule 1 / 2 / 3 / 6 failures     | 4 transactions / 16 / 6 / 44 transfers | 0 / 0 / 0 / 0                                       |
+| Rule 5 checkable / unrecorded   | 30 / 25                                | 240 / 0 (1 recorded conflict)                       |
+| `pick_identity_conflict` issues | 3 (disputed order rows)                | 4 (the same 3, and 1 rule 5)                        |
+| Traded-on legs the grader links | 257 of 263                             | 262 of 263                                          |
+| Lineage rows                    | 40, 33 to another player's selection   | 402, each to the selection its transfer's player is |
+| Pick transfers whose id changed | n/a                                    | 91 of 878                                           |
+
+The one traded-on leg left unlinked is the 2025 Pick 46 North Melbourne sent Carlton. Its onward trade is
+captured (Draftguru `2025-picks-brisbane-carlton-41`, Carlton to Brisbane as "Pick 38") and both hops
+state Koby Evans, whom the Footyinfo board routes North Melbourne > Carlton > Brisbane at 38. Koby Evans
+has no reviewed Draftguru identity, so the route cannot be read, and the walk reaches two custody picks
+(North Melbourne's 46 and, by a shifted-slot join, Carlton's 51): a recorded `lineage_unresolved` issue,
+not a source absence.
+
 ## Reconciler changes
 
-- `joinEventualSelections` never gives a transfer an entitlement id whose original club differs from the
-  transfer's own, and never gives two transfers of one transaction the same id; it records rule 7's
-  conflict instead.
-- Each rule 1 and rule 3 failure is traced to the step that produced it before the slot-chain or
-  shifted-slot join is changed.
-- A transfer of a disputed entitlement (two picks of one club in one round) takes a transfer-scoped id:
-  `futurePickTransferAsset` would otherwise give both picks the entitlement's id, and rules 1 and 3 would
-  refuse the candidate the first time one is traded.
-- Number-only ids are scoped to their transfer (rule 6).
+Specified before the trace and carried out as [Implementation](#implementation) describes. The trace
+refined one point: a current pick states no original club, so the eventual-selection join gives its hops
+the settled pick's original club instead of refusing them; only a future pick's stated round and original
+club can contradict the pick a walk settles on.
 
 ## Owner decisions
 
-- **Sequencing.** The migration refuses every candidate today's reconciler produces: batch ten breaks rules
-  1, 2, 3 and 6 and records no rule 5 conflicts. So it ships with the reconciler change or after it; if it
-  merged first, no #853 candidate could be finalized until the reconciler change landed. Recommended: one
-  change set, migration and reconciler together.
+- **Sequencing.** Decided 2026-10-12: one change set, migration and reconciler together, then a regrade
+  and a repair of promoted state.
 - **Repairing promoted state.** The rules bind new candidates only. Canonical state already holds 16
   merged pick ids, and number-only ids that join 125 assets to other trades and 145 to draft selections by
   number alone. Repairing it means a new promotion that supersedes the affected event versions, and 173 traded-player arrival spells start at events of the
