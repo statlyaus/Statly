@@ -119,8 +119,9 @@ function tableRouteSpans(pick: SyntheticBoardPick): string[] {
   if (pick.tableRoute !== undefined) return pick.tableRoute;
   if (pick.bid !== undefined) return ['Matched bid', `${pick.bid.club} bid · Father-son`];
   const label = ROUTE_LABELS[pick.origin ?? 'standard'];
-  const hops = (pick.lineage ?? []).filter(([kind]) =>
-    ['trade', 'pick_swap', 'live_pick_swap'].includes(kind)
+  // The board draws no step for a hop that leaves the pick with the same club.
+  const hops = (pick.lineage ?? []).filter(
+    ([kind, from, to]) => ['trade', 'pick_swap', 'live_pick_swap'].includes(kind) && from !== to
   );
   const chain = hops.length === 0 ? [] : [hops[0]![1]!, ...hops.map(([, , to]) => to!)];
   return [
