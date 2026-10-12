@@ -9,7 +9,7 @@ import {
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   captureDraftguruSource,
-  DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION,
+  DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
   parseDraftguruNationalYearSelections,
   parseDraftguruTradeDetail,
   parseDraftguruTradeIndexEvidence,
@@ -32,7 +32,16 @@ import {
   OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   parseOfficialAflDraftSession,
 } from '../source/officialAflDraftSessionAdapter';
+import {
+  OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
+  parseOfficialAflTradePeriodDates,
+} from '../source/officialAflTradePeriodAdapter';
 import { captureOfficialAflPage } from '../source/officialAflPageCapture';
+import {
+  captureFootyinfoDraftBoard,
+  FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
+  parseFootyinfoDraftBoard,
+} from '../source/footyinfoDraftBoardAdapter';
 import { PostgresAflTradeExternalCaptureRegistry } from '../source/postgresExternalCaptureRegistry';
 import { PostgresAflTradeExternalEvidenceRepository } from '../source/postgresExternalEvidenceRepository';
 import {
@@ -69,6 +78,19 @@ import {
   officialAflDraftOrderDecisionKey,
   type LocalOfficialAflDraftOrderTarget,
 } from './localOfficialAflDraftOrderCapture';
+import {
+  createOfficialAflTradePeriodCaptureCommand,
+  OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY,
+  officialAflTradePeriodDecisionKey,
+  type LocalOfficialAflTradePeriodTarget,
+} from './localOfficialAflTradePeriodCapture';
+
+import {
+  createFootyinfoDraftBoardCaptureCommand,
+  FOOTYINFO_DRAFT_BOARD_CAPABILITY,
+  footyinfoDraftBoardDecisionKey,
+  type LocalFootyinfoDraftBoardTarget,
+} from './localFootyinfoDraftBoardCapture';
 
 export { LocalExternalCaptureError } from './localNarrowCaptureAuthority';
 
@@ -103,7 +125,17 @@ export const LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY = {
   rawRetentionDays: 365,
 } as const;
 
+/** Footyinfo boards (owner decision 2026-10-12): one page per draft year, refetched at most daily. */
+export const LOCAL_FOOTYINFO_DRAFT_BOARD_CAPTURE_POLICY = {
+  upstreamRate: { requests: 1, perSeconds: 5, burst: 1 },
+  cacheSeconds: 86_400,
+  maximumLeaseMs: 120_000,
+  rawRetentionDays: 365,
+} as const;
+
 export const LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES = 4 * 1024 * 1024;
+/** The owner's egress decision bounds each board response to 2 MiB (a board is about 0.45 MB). */
+export const FOOTYINFO_DRAFT_BOARD_MAXIMUM_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
 const MAXIMUM_ADMISSION_ATTEMPTS = 5;
 const DRAFTGURU_TRADE_INDEX_URL = 'https://www.draftguru.com.au/trades';
@@ -112,18 +144,21 @@ export type LocalExternalCaptureCapability =
   | DraftguruTradeCapability
   | typeof DRAFTGURU_NATIONAL_YEAR_CAPABILITY
   | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY
-  | typeof OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY;
+  | typeof OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY
+  | typeof OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY
+  | typeof FOOTYINFO_DRAFT_BOARD_CAPABILITY;
 
 type CapturePolicy =
   | typeof LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY
   | typeof LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY
-  | typeof LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY;
+  | typeof LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY
+  | typeof LOCAL_FOOTYINFO_DRAFT_BOARD_CAPTURE_POLICY;
 
 /** What the runner requires of each capability's recorded authority, and where it keeps raw bytes. */
 const CAPABILITY_PROFILES: Record<
   LocalExternalCaptureCapability,
   {
-    provider: 'draftguru' | 'official_afl';
+    provider: 'draftguru' | 'official_afl' | 'footyinfo';
     parserVersion: string;
     policy: CapturePolicy;
     rawRepositoryId: string;
@@ -139,12 +174,13 @@ const CAPABILITY_PROFILES: Record<
   },
   'draftguru-trade-detail': {
     provider: 'draftguru',
-    // v2 adds each received pick's stated outcome; it has its own recorded decision.
-    parserVersion: DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION,
+    // v3 adds each traded pick's eventual selection to v2's received-pick outcome (#886); it has its
+    // own recorded decision, and the v2 decision and captures stay valid as recorded.
+    parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
     decisionKey: () =>
-      `${draftguruTradeDecisionKey('draftguru-trade-detail')}-${DRAFTGURU_TRADE_DISPOSITION_DECISION_SUFFIX}`,
+      `${draftguruTradeDecisionKey('draftguru-trade-detail')}-${DRAFTGURU_TRADE_EVENTUAL_SELECTION_DECISION_SUFFIX}`,
   },
   [DRAFTGURU_NATIONAL_YEAR_CAPABILITY]: {
     provider: 'draftguru',
@@ -167,6 +203,20 @@ const CAPABILITY_PROFILES: Record<
     rawRepositoryId: 'official-afl-order-raw',
     decisionKey: officialAflDraftOrderDecisionKey,
   },
+  [OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY]: {
+    provider: 'official_afl',
+    parserVersion: OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
+    policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
+    rawRepositoryId: 'official-afl-trade-period-raw',
+    decisionKey: officialAflTradePeriodDecisionKey,
+  },
+  [FOOTYINFO_DRAFT_BOARD_CAPABILITY]: {
+    provider: 'footyinfo',
+    parserVersion: FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
+    policy: LOCAL_FOOTYINFO_DRAFT_BOARD_CAPTURE_POLICY,
+    rawRepositoryId: 'footyinfo-board-raw',
+    decisionKey: footyinfoDraftBoardDecisionKey,
+  },
 };
 
 export function isLocalExternalCaptureCapability(
@@ -177,6 +227,9 @@ export function isLocalExternalCaptureCapability(
 
 /** Suffix of the trade-detail decision key that authorises `draftguru-trade-parser/v2`. */
 export const DRAFTGURU_TRADE_DISPOSITION_DECISION_SUFFIX = 'parser-v2';
+
+/** Suffix of the trade-detail decision key that authorises `draftguru-trade-parser/v3` (#886). */
+export const DRAFTGURU_TRADE_EVENTUAL_SELECTION_DECISION_SUFFIX = 'parser-v3';
 
 export function draftguruTradeDecisionKey(capabilityId: DraftguruTradeCapability): string {
   return `${capabilityId}-issue-579-private-non_production`;
@@ -280,7 +333,9 @@ export type LocalExternalCaptureTarget =
   | LocalDraftguruTradeCaptureTarget
   | LocalDraftguruNationalYearTarget
   | LocalOfficialAflDraftSessionTarget
-  | LocalOfficialAflDraftOrderTarget;
+  | LocalOfficialAflDraftOrderTarget
+  | LocalOfficialAflTradePeriodTarget
+  | LocalFootyinfoDraftBoardTarget;
 
 /** Index: the whole `/trades` page bounded to seasons. Detail: one page per exact trade URL. */
 export function createLocalDraftguruTradeCaptureTargets(
@@ -383,6 +438,20 @@ function createCommand(
       maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
     });
   }
+  if (target.capabilityId === FOOTYINFO_DRAFT_BOARD_CAPABILITY) {
+    return createFootyinfoDraftBoardCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: FOOTYINFO_DRAFT_BOARD_MAXIMUM_BYTES,
+    });
+  }
+  if (target.capabilityId === OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY) {
+    return createOfficialAflTradePeriodCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+    });
+  }
   if (target.capabilityId === OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY) {
     return createOfficialAflDraftSessionCaptureCommand(recorded.authority, {
       target,
@@ -438,6 +507,10 @@ function parsePage(
         draftYear: target.season,
         observedAt: command.request.effectiveAt,
       });
+    case OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY:
+      return parseOfficialAflTradePeriodDates(html, { capture, seasonYear: target.season });
+    case FOOTYINFO_DRAFT_BOARD_CAPABILITY:
+      return parseFootyinfoDraftBoard(html, { capture, draftYear: target.season });
   }
 }
 
@@ -544,7 +617,11 @@ export async function runLocalExternalCapture(
           captureRegistry,
           staging,
           capturePage: ({ url, validators, maximumBytes }) =>
-            (profile.provider === 'draftguru' ? captureDraftguruSource : captureOfficialAflPage)({
+            (profile.provider === 'draftguru'
+              ? captureDraftguruSource
+              : profile.provider === 'footyinfo'
+                ? captureFootyinfoDraftBoard
+                : captureOfficialAflPage)({
               url,
               validators,
               maximumBytes,

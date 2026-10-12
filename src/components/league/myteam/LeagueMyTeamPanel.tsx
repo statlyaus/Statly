@@ -55,7 +55,8 @@ interface SquadPlayer extends MyTeamSquadPlayer {
   opponent?: string | null;
   isHome?: boolean | null;
   bye?: boolean;
-  injury?: string | null;
+  /** The injury list's entry, shown even when the player can still be picked (a Test listing). */
+  injury: { label: string; blocksSelection: boolean } | null;
 }
 
 interface TeamSummary {
@@ -392,8 +393,7 @@ export function LeagueMyTeamPanel({
       players: data.rosterPlayers.map((player) => ({
         playerId: player.playerId,
         position: player.position,
-        // Players on a bye, listed injured or already playing are not picked automatically.
-        available: !player.bye && !player.injury && !hasGameStarted(player, now),
+        available: !player.bye && !player.injury?.blocksSelection && !hasGameStarted(player, now),
         score: scores.get(player.playerId) ?? 0,
       })),
     }) as LineupAssignment[];
@@ -1198,7 +1198,13 @@ function PlayerCell({
             <Lock aria-label="Locked" className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {player.bye ? <Tag tone="warn" label="BYE" title="Club has a bye this round" /> : null}
-          {player.injury ? <Tag tone="bad" label="INJ" title={player.injury} /> : null}
+          {player.injury ? (
+            <Tag
+              tone={player.injury.blocksSelection ? 'bad' : 'warn'}
+              label="INJ"
+              title={player.injury.label}
+            />
+          ) : null}
           {outOfPosition ? (
             <Tag
               tone="bad"
@@ -1368,7 +1374,7 @@ function ReadinessRow({
 }) {
   const lockState = data.context?.lockState ?? null;
   const flagged = data.rosterPlayers.filter(
-    (player) => selectedIds.has(player.playerId) && (player.bye || player.injury)
+    (player) => selectedIds.has(player.playerId) && (player.bye || player.injury?.blocksSelection)
   ).length;
   const lockText = data.context?.lockAt
     ? `Locks ${formatWhen(data.context.lockAt)}`

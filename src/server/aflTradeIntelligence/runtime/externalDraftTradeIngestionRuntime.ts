@@ -22,6 +22,7 @@ import {
   parseOfficialAflDraftOrderTable,
   parseOfficialAflIndicativeDraftOrder,
 } from '../source/draftCorroborationAdapter';
+import { parseOfficialAflTradePeriodDates } from '../source/officialAflTradePeriodAdapter';
 import {
   captureDraftguruSource,
   parseDraftguruPlayerTradeDetail,
@@ -204,6 +205,11 @@ export function createAflTradeExternalIngestionRuntime(
               draftYear: command.request.anchorSeasonYear,
               observedAt: command.request.effectiveAt,
             });
+          case 'official-afl-trade-period-dates':
+            return parseOfficialAflTradePeriodDates(html, {
+              capture,
+              seasonYear: command.request.anchorSeasonYear,
+            });
           case 'official-afl-compensation-lifecycle':
             return parseOfficialAflCompensationArticle(html, {
               capture,
@@ -232,10 +238,16 @@ export function createAflTradeExternalIngestionRuntime(
       };
       return ingestAuthorizedAflTradeExternalPage(effectiveCommand, {
         admission,
-        policyFor: (provider) => ({
-          ...config.providerPolicies[provider],
-          rawRetentionDays: config.limits.rawRetentionDays,
-        }),
+        policyFor: (provider) => {
+          // Footyinfo egress is approved only through the local capture runner (issue 853).
+          if (provider === 'footyinfo') {
+            throw new TypeError('Footyinfo pages are captured only by the local capture runner.');
+          }
+          return {
+            ...config.providerPolicies[provider],
+            rawRetentionDays: config.limits.rawRetentionDays,
+          };
+        },
         resolveAuthorization: (rightsArtifactId) =>
           gateRepository.resolveAuthorization(rightsArtifactId),
         ingestion: {

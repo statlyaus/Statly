@@ -394,6 +394,157 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.publicationEligible).toBe(false);
   });
 
+  it('counts a Footyinfo board selection as a second provider and records its board pick', () => {
+    const footyinfo = batch('footyinfo', 'd', [
+      {
+        kind: 'draft_selection',
+        draftYear: 2025,
+        draftType: 'national',
+        selectionNumber: 14,
+        roundNumber: 1,
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+      },
+      {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        status: 'selected',
+        club: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        route: [
+          { nativeId: 'GWS', recordedName: 'GWS Giants' },
+          { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        ],
+        routeLabel: null,
+        bid: null,
+        points: 1200,
+        note: null,
+      },
+    ]);
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, footyinfo, officialOrder],
+      identityResolutions: [
+        ...resolutions,
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        resolution('footyinfo', 'club', 'GWS Giants', 'club-gws', 'GWS'),
+        resolution('footyinfo', 'player', 'Harry Kyle', 'player-harry-kyle', 'harry-kyle'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    // The board pick is conserved as its own record, its route resolved club by club.
+    expect(candidate.content.draftBoardPicks).toEqual([
+      expect.objectContaining({
+        status: 'selected',
+        recordedPickNumber: 14,
+        clubId: 'club-western-bulldogs',
+        routeClubIds: ['club-gws', 'club-western-bulldogs'],
+      }),
+    ]);
+    expect(candidate.content.draftSelections).toEqual([
+      expect.objectContaining({
+        selectionNumber: 14,
+        playerId: 'player-harry-kyle',
+        status: 'corroborated',
+        supportingProviders: ['draftguru', 'footyinfo'],
+      }),
+    ]);
+    expect(candidate.content.issues).toEqual([]);
+  });
+
+  it('cites an unresolved Footyinfo selection row without unresolving the selection it corroborates', () => {
+    const footyinfoSelection = (player: string, nativeId: string) =>
+      batch('footyinfo', 'd', [
+        {
+          kind: 'draft_selection',
+          draftYear: 2025,
+          draftType: 'national',
+          selectionNumber: 14,
+          roundNumber: 1,
+          player: { nativeId, recordedName: player },
+          selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        },
+      ]);
+    const reconcileWith = (footyinfo: ReturnType<typeof footyinfoSelection>, extra = resolutions) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [draftguru, footyinfo, officialOrder],
+        identityResolutions: [
+          ...extra,
+          resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        ],
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+      });
+    const without = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, officialOrder],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    // No footyinfo player resolution: the row is cited, not counted.
+    const footyinfo = footyinfoSelection('H. Kyle', 'harry-kyle');
+    const candidate = reconcileWith(footyinfo);
+    const [selection] = candidate.content.draftSelections;
+    const [before] = without.content.draftSelections;
+    expect(selection).toMatchObject({
+      playerId: 'player-harry-kyle',
+      clubId: 'club-western-bulldogs',
+      status: before!.status,
+      supportingProviders: ['draftguru'],
+    });
+    expect(selection!.evidenceIds).toContain(footyinfo.content.evidence[0]!.evidenceId);
+    expect(candidate.content.issues).toEqual(without.content.issues);
+
+    // A resolved Footyinfo row naming another player still disputes the selection.
+    const disputed = reconcileWith(footyinfoSelection('Someone Else', 'someone-else'), [
+      ...resolutions,
+      resolution('footyinfo', 'player', 'Someone Else', 'player-someone-else', 'someone-else'),
+    ]);
+    expect(disputed.content.draftSelections[0]!.status).toBe('disputed');
+  });
+
+  it('resolves a Footyinfo-only selection like any provider, with its identity issue', () => {
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [
+        draftguru,
+        batch('footyinfo', 'd', [
+          {
+            kind: 'draft_selection',
+            draftYear: 2025,
+            draftType: 'national',
+            selectionNumber: 58,
+            roundNumber: 4,
+            player: { nativeId: 'ryan-byrnes', recordedName: 'Ryan Byrnes' },
+            selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+          },
+        ]),
+      ],
+      identityResolutions: [
+        ...resolutions,
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    expect(
+      candidate.content.draftSelections.find(({ selectionNumber }) => selectionNumber === 58)
+    ).toMatchObject({ status: 'unresolved', playerId: null });
+    expect(candidate.content.issues.map(({ subjectKey }) => subjectKey)).toContain(
+      'selection:2025:national:58:player'
+    );
+  });
+
   it('preserves an incomplete transaction as unresolved blocking evidence', () => {
     const incompleteBatch = batch('draftguru', 'e', [
       {
@@ -2376,5 +2527,37 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
       [order(14, 'Western Bulldogs', 'Carlton')]
     );
     expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+
+  it('never joins a "Pick N" transfer to a slot whose original club the order does not state', () => {
+    // A special pick (compensation, assistance) is held with no original club. Neither the
+    // original-club paths nor the holder corroboration can key such a row, so it stays unresolved
+    // and no hop moves onto it, even when the holder and sender agree with the trades.
+    const holderOnly = (holder: string, suffix: string) =>
+      batch('official_afl', suffix, [
+        {
+          kind: 'pick_custody',
+          observedAt: '2025-11-07T00:00:00.000Z',
+          draftYear: 2025,
+          draftType: 'national',
+          roundNumber: 1,
+          recordedPickNumber: 14,
+          originalClub: null,
+          currentClub: { nativeId: null, recordedName: holder },
+        },
+      ]);
+    for (const order of [holderOnly('Western Bulldogs', 'd'), holderOnly('GWS', 'e')]) {
+      const candidate = reconcile(
+        [
+          ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+          ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+        ],
+        [order]
+      );
+      const [custody] = candidate.content.pickCustody;
+      expect(custody).toMatchObject({ originalClubId: null, status: 'unresolved' });
+      expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+      expect(pickIds(candidate).map((leg) => leg?.pickId)).not.toContain(custody!.pickId);
+    }
   });
 });

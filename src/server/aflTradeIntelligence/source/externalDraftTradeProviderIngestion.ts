@@ -15,6 +15,8 @@ import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010Source
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
 import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from './draftCorroborationAdapter';
 import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
+import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from './officialAflTradePeriodAdapter';
+import { reviewedOfficialAflTradePeriodPage } from './officialAflTradePeriodSourceScope';
 import { reviewedOfficialAflMiniDraft2012EffectiveYear } from './officialAflMiniDraft2012SessionFacts';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import { reviewedOfficialAflDraft2011EffectiveYear } from './officialAflDraft2011SessionFacts';
@@ -26,6 +28,8 @@ import {
   OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
 } from './officialAflIssuingAwardAdapter';
 import { DRAFTGURU_YEAR_PARSER_VERSION } from './draftguruEventYear';
+import { FOOTYINFO_DRAFT_BOARD_PARSER_VERSION } from './footyinfoDraftBoardAdapter';
+import { reviewedFootyinfoDraftBoardSeason } from './footyinfoDraftBoardSourceScope';
 import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
@@ -164,7 +168,7 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'official-afl-indicative-draft-order') {
-    // Parser v2 reads only the exact reviewed pre-draft order pages, two of which are approved
+    // The table parser reads only the exact reviewed pre-draft order pages, three of which are
     // Internet Archive snapshots; v1 keeps the general afl.com.au article path.
     const reviewedOrder = reviewedOfficialAflDraftOrderPage(request.sourceUrl);
     const reviewedPage =
@@ -182,6 +186,36 @@ export function validateAflTradeExternalCaptureScope(
       request.discoveryFromSeasonYear != null ||
       !reviewedPage ||
       new Date(request.effectiveAt).getUTCFullYear() !== request.anchorSeasonYear
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'footyinfo-national-draft-board') {
+    // Parser v1 reads only the exact reviewed national draft boards (issues 853 and 789). A board
+    // states no as-of date, so its claims are effective when captured.
+    if (
+      request.provider !== 'footyinfo' ||
+      request.draftPathway !== 'national' ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== FOOTYINFO_DRAFT_BOARD_PARSER_VERSION ||
+      reviewedFootyinfoDraftBoardSeason(request.sourceUrl) !== request.anchorSeasonYear ||
+      request.effectiveAt !== request.capturedAt
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'official-afl-trade-period-dates') {
+    // Parser v2 reads only the exact reviewed trade-period announcements (issue 869), effective
+    // from the opening day each page states.
+    const reviewed = reviewedOfficialAflTradePeriodPage(request.sourceUrl);
+    if (
+      request.provider !== 'official_afl' ||
+      request.draftPathway !== null ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION ||
+      reviewed === null ||
+      reviewed.season !== request.anchorSeasonYear ||
+      request.effectiveAt !== `${reviewed.earliestDate}T00:00:00.000Z`
     )
       invalid();
     return;
@@ -313,6 +347,7 @@ export function validateAflTradeExternalCaptureScope(
 
 const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
   'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  'official-afl-trade-period-dates': OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
   'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
   'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
   'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,

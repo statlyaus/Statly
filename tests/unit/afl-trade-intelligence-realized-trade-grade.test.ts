@@ -586,6 +586,63 @@ describe('MVP realized trade grader', () => {
         onward: { transactionId: 'tx-3' },
       });
     });
+    // Issue 867: Brisbane's 2022 third-round pick went Brisbane → Geelong → Hawthorn → Collingwood →
+    // Geelong in 2021 and back to Brisbane in 2022. Two transfers leave Geelong, and undated same-season
+    // trades cannot be ordered, but only one ordering chains all five transfers.
+    const loop = (): Candidate => ({
+      transactions: [
+        trade('tx-1', 2021),
+        trade('tx-2', 2021),
+        trade('tx-3', 2021),
+        trade('tx-4', 2021),
+        trade('tx-5', 2022),
+      ],
+      transfers: [
+        pick('tr-1', 'tx-1', 'brisbane', 'geelong', 'pick-L', 2022, 50),
+        pick('tr-2', 'tx-2', 'geelong', 'hawthorn', 'pick-L', 2022, 50),
+        pick('tr-3', 'tx-3', 'hawthorn', 'collingwood', 'pick-L', 2022, 50),
+        pick('tr-4', 'tx-4', 'collingwood', 'geelong', 'pick-L', 2022, 50),
+        pick('tr-5', 'tx-5', 'geelong', 'brisbane', 'pick-L', 2022, 50),
+      ],
+      pickOutcomes: [
+        outcome('tr-1', { disposition: 'traded_on' }),
+        outcome('tr-2', { disposition: 'traded_on' }),
+        outcome('tr-3', { disposition: 'traded_on' }),
+        outcome('tr-4', { disposition: 'traded_on' }),
+        outcome('tr-5', {
+          disposition: 'not_used',
+          nominationBasis: 'club_took_no_nominated_player',
+          receivingClubNominatedSelections: 0,
+        }),
+      ],
+    });
+
+    it('follows a pick that leaves one club twice along its only complete trail', () => {
+      const batch = gradeAflTradesOnRealizedValue(inputs(loop()));
+      for (const transferId of ['tr-1', 'tr-2', 'tr-3', 'tr-4'])
+        expect(legOf(batch, transferId).reasons).not.toContain('traded_on_return_unlinked');
+      expect(legOf(batch, 'tr-1')).toMatchObject({ onward: { transactionId: 'tx-2' } });
+      expect(legOf(batch, 'tr-4')).toMatchObject({ onward: { transactionId: 'tx-5' } });
+    });
+
+    it('keeps a pick unlinked when more than one trail covers its transfers', () => {
+      // Out of Geelong to Hawthorn and to Carlton, each handing it straight back: either order works.
+      const ambiguous: Candidate = {
+        transactions: ['tx-1', 'tx-2', 'tx-3', 'tx-4', 'tx-5'].map((id) => trade(id, 2021)),
+        transfers: [
+          pick('tr-1', 'tx-1', 'brisbane', 'geelong', 'pick-M', 2022, 50),
+          pick('tr-2', 'tx-2', 'geelong', 'hawthorn', 'pick-M', 2022, 50),
+          pick('tr-3', 'tx-3', 'hawthorn', 'geelong', 'pick-M', 2022, 50),
+          pick('tr-4', 'tx-4', 'geelong', 'carlton', 'pick-M', 2022, 50),
+          pick('tr-5', 'tx-5', 'carlton', 'geelong', 'pick-M', 2022, 50),
+        ],
+        pickOutcomes: ['tr-1', 'tr-2', 'tr-3', 'tr-4', 'tr-5'].map((id) =>
+          outcome(id, { disposition: 'traded_on' })
+        ),
+      };
+      const batch = gradeAflTradesOnRealizedValue(inputs(ambiguous));
+      expect(legOf(batch, 'tr-1').reasons).toEqual(['traded_on_return_unlinked']);
+    });
   });
 
   describe('edge cases', () => {
@@ -803,5 +860,158 @@ describe('MVP realized trade grader', () => {
     );
     expect(second.batchId).toBe(first.batchId);
     expect(first.content.summary).toEqual({ complete: 1, provisional: 0, blocked: 0, ungraded: 0 });
+  });
+});
+
+describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 2026-10-12)', () => {
+  type Selection = NonNullable<Candidate['draftSelections']>[number];
+  type Board = NonNullable<Candidate['draftBoardPicks']>[number];
+  const selection = (fields: Partial<Selection>): Selection =>
+    ({
+      selectionId: 'selection-12',
+      draftYear: 2021,
+      draftType: 'national',
+      selectionNumber: 12,
+      roundNumber: 1,
+      pickId: 'pick-A',
+      playerId: 'd1',
+      clubId: 'hawthorn',
+      status: 'corroborated',
+      supportingProviders: ['draftguru', 'footyinfo'],
+      evidenceIds: [],
+      ...fields,
+    }) as Selection;
+  const board = (route: string[], fields: Partial<Board> = {}): Board =>
+    ({
+      boardPickId: `external-draft-board-pick:${hex(String(route.length))}`,
+      draftYear: 2021,
+      draftType: 'national',
+      roundNumber: 1,
+      recordedPickNumber: 20,
+      status: 'selected',
+      clubId: route.at(-1)!,
+      routeClubIds: route,
+      evidenceIds: [],
+      ...fields,
+    }) as Board;
+  const selected = (draftSelections: Selection[]) =>
+    legOf(
+      gradeAflTradesOnRealizedValue(
+        inputs(
+          {
+            transactions: [trade('tx-2', 2021)],
+            transfers: [pick('tr-2a', 'tx-2', 'richmond', 'hawthorn', 'pick-A', 2021, 12)],
+            pickOutcomes: [
+              outcome('tr-2a', {
+                disposition: 'selected',
+                playerId: 'd1',
+                selectionId: 'selection-12',
+              }),
+            ],
+            draftSelections,
+          },
+          {
+            seasonSpells: spells('d1', [
+              [2022, 'hawthorn'],
+              [2023, 'sydney'],
+            ]),
+            pav: pavRows('d1', [[2022, 'hawthorn', 5]]),
+            reviewedArrivals: [{ playerId: 'd1', clubId: 'hawthorn', season: 2022 }],
+          }
+        )
+      ),
+      'tr-2a'
+    );
+
+  it('drops single_source_pick_outcome from a selection Draftguru and Footyinfo both state', () => {
+    expect(selected([selection({})])).toMatchObject({
+      state: 'valued',
+      corroboratedBy: 'footyinfo',
+      reasons: [],
+    });
+  });
+
+  it('keeps it when the second provider is not Footyinfo or the selection is not corroborated', () => {
+    for (const fields of [
+      { supportingProviders: ['draftguru', 'footywire'] },
+      { status: 'single_source' },
+    ] as Partial<Selection>[]) {
+      const leg = selected([selection(fields)]);
+      expect(leg.reasons).toEqual(['single_source_pick_outcome']);
+      expect(leg).not.toHaveProperty('corroboratedBy');
+    }
+  });
+
+  // Melbourne → Hawthorn → St Kilda, with a sole-asset onward trade for player q.
+  const tradedOn = (draftBoardPicks: Board[]) =>
+    legOf(
+      gradeAflTradesOnRealizedValue(
+        inputs(
+          {
+            transactions: [trade('tx-A', 2021), trade('tx-B', 2021)],
+            transfers: [
+              pick('tr-A1', 'tx-A', 'melbourne', 'hawthorn', 'pick-P', 2021, 20),
+              pick('tr-B1', 'tx-B', 'hawthorn', 'st-kilda', 'pick-P', 2021, 20),
+              player('tr-B3', 'tx-B', 'st-kilda', 'hawthorn', 'q'),
+            ],
+            pickOutcomes: [
+              outcome('tr-A1', { disposition: 'traded_on' }),
+              outcome('tr-B1', {
+                disposition: 'not_used',
+                nominationBasis: 'club_took_no_nominated_player',
+                receivingClubNominatedSelections: 0,
+              }),
+            ],
+            draftBoardPicks,
+          },
+          {
+            seasonSpells: spells('q', [
+              [2022, 'hawthorn'],
+              [2023, 'essendon'],
+            ]),
+            pav: pavRows('q', [[2022, 'hawthorn', 40]]),
+            reviewedArrivals: [{ playerId: 'q', clubId: 'hawthorn', season: 2022 }],
+          }
+        )
+      ),
+      'tr-A1'
+    );
+
+  it('drops it from a traded-on pick when one board route names the leg and its onward hop', () => {
+    expect(tradedOn([board(['melbourne', 'hawthorn', 'st-kilda'])])).toMatchObject({
+      basis: 'pick_traded_on_return',
+      corroboratedBy: 'footyinfo',
+      // The onward trade is still provisional on its own single-source not-used pick.
+      reasons: ['traded_on_return_provisional'],
+    });
+  });
+
+  it('keeps it when no route, or more than one, names the hops in order', () => {
+    for (const boards of [
+      [],
+      [board(['hawthorn', 'st-kilda'])],
+      [board(['melbourne', 'hawthorn', 'carlton'])],
+      [board(['melbourne', 'hawthorn', 'st-kilda'], { draftYear: 2022 })],
+      [
+        board(['melbourne', 'hawthorn', 'st-kilda']),
+        board(['geelong', 'melbourne', 'hawthorn', 'st-kilda']),
+      ],
+    ]) {
+      expect(tradedOn(boards).reasons).toEqual([
+        'single_source_pick_outcome',
+        'traded_on_return_provisional',
+      ]);
+    }
+  });
+
+  it('seals rule v2 and its limitation', () => {
+    const batch = gradeAflTradesOnRealizedValue(
+      inputs({
+        transactions: [trade('tx-1', 2021)],
+        transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
+      })
+    );
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v2');
+    expect(batch.content.limitation).toContain('unless a Footyinfo draft board corroborates');
   });
 });

@@ -25,6 +25,13 @@ import {
   resolveCombinedDraftSessionEvidence,
   type CombinedDraftSessionFact,
 } from './combinedDraftSessionEvidence';
+import {
+  aflTradeDeferredCustodyIds,
+  aflTradePromotedDrafts,
+  aflTradePromotedTransactions,
+  isAflTradePickSideReconciliationIssue,
+  type AflTradePickLineageDeferral,
+} from './pickLineageDeferral';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
 function projectCombinedSessionSourceFact(
@@ -176,6 +183,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'footyinfo',
 ]);
 const instantSchema = z
   .string()
@@ -260,7 +268,8 @@ interface ReconciliationIssue {
     | 'transaction_incomplete'
     | 'lineage_unresolved'
     | 'pick_outcome_unresolved';
-  severity: 'blocking';
+  /** `deferred` only under a reviewed pick-side deferral (`pickLineageDeferral`), never on a player-side subject. */
+  severity: 'blocking' | 'deferred';
   subjectKey: string;
   detail: string;
   evidenceIds: string[];
@@ -355,8 +364,36 @@ interface CanonicalPickOutcome {
    * a received pick can be spent without the club using it. A fact about the draft, not a valuation.
    */
   nominationBasis?:
-    'club_took_nominated_player' | 'club_took_no_nominated_player' | 'no_access_evidence';
+    | 'club_took_nominated_player'
+    | 'club_took_no_nominated_player'
+    | 'no_access_evidence'
+    | 'board_pick_passed_or_removed';
   receivingClubNominatedSelections?: number;
+  /**
+   * With `board_pick_passed_or_removed` only: the Footyinfo board pick that states this pick was
+   * passed or removed at the draft. A board lists a pick spent matching a bid as points, never as a
+   * board pick, so a passed or removed pick was not consumed by a nominee.
+   */
+  boardPickId?: string;
+  evidenceIds: string[];
+}
+
+/**
+ * One pick a Footyinfo national draft board states (`draft_board_pick`, issues 853 and 789): the
+ * holder at the draft, the round, the number when selected, and the printed route resolved club by
+ * club (original club first, holder last; empty when the board prints none). `routeClubIds` and
+ * `clubId` are null when a club has no reviewed resolution. Every board row is one record, so the
+ * candidate conserves it whether or not reconciliation reads it.
+ */
+interface CanonicalDraftBoardPick {
+  boardPickId: string;
+  draftYear: number;
+  draftType: string;
+  roundNumber: number | null;
+  recordedPickNumber: number | null;
+  status: 'selected' | 'passed' | 'removed';
+  clubId: string | null;
+  routeClubIds: string[] | null;
   evidenceIds: string[];
 }
 
@@ -385,6 +422,13 @@ export interface AflTradeExternalReconciliationContent {
   pickCustody: CanonicalPickCustody[];
   pickLineage: CanonicalPickLineage[];
   pickOutcomes?: CanonicalPickOutcome[];
+  /** Present only when a Footyinfo board was reconciled, so earlier candidate ids are unchanged. */
+  draftBoardPicks?: CanonicalDraftBoardPick[];
+  /**
+   * The approved `reconciliation_scope` decision under which pick-side issues are `deferred`. Present
+   * only when at least one issue was deferred, so a candidate without deferral keeps its id.
+   */
+  pickLineageDeferral?: AflTradePickLineageDeferral;
   issues: ReconciliationIssue[];
   reconciledAt: string;
   publicationEligible: false;
@@ -987,13 +1031,490 @@ function reconcileDirectedTransfer(input: {
   };
 }
 
+/**
+ * One pick traded on several Draftguru pages is numbered as each page stood: before the draft by the
+ * pre-draft order, on draft night by the live order that bids shifted. The giving side of every pick
+ * row names the player eventually selected with it (`pick_eventual_selection`, parser v3), so a
+ * draft's Draftguru pick transfers naming one player's native id are one pick (statlyaus/Statly#886).
+ * A group is admitted only when its transfers walk the pick from club to club in exactly one order
+ * (`eventualSelectionPath`): a pick swapped back on draft night is admitted, while a group that
+ * branches or merges (a matched bid that consumed several picks for one player), a closed loop, or
+ * an ambiguous order is left as the slot rules made it. In an admitted group every member takes the one custody pick any member reached, else a
+ * player-keyed pick id. When the path reaches two custody picks, it takes the one reached first if
+ * the pre-draft order shows it delivered before the conflict (`earliestCustodyBeforeConflict`);
+ * otherwise every member is unresolved with a lineage issue naming both. Without eventual-selection
+ * claims nothing changes.
+ */
+type IdentityLookup = (
+  provider: Provider,
+  entityKind: 'club' | 'player',
+  sourceIdentity: RecordedEntity
+) => string | null;
+
+type DraftBoardPickEvidence = Evidence & {
+  content: { claim: Extract<Claim, { kind: 'draft_board_pick' }> };
+};
+
+/**
+ * One record per Footyinfo `draft_board_pick` row, its holder and route resolved club by club. A
+ * club with no reviewed resolution leaves the record unusable and is reported once, as one pick-side
+ * `board-pick:` identity issue citing every row that names it.
+ */
+function reconcileDraftBoardPicks(input: {
+  evidence: readonly Evidence[];
+  lookup: IdentityLookup;
+  issues: ReconciliationIssue[];
+}): { records: CanonicalDraftBoardPick[]; rows: ReadonlyMap<string, DraftBoardPickEvidence> } {
+  const unresolved = new Map<string, { club: RecordedEntity; evidenceIds: string[] }>();
+  const rows = new Map<string, DraftBoardPickEvidence>();
+  const records = input.evidence
+    .filter(
+      (row): row is DraftBoardPickEvidence =>
+        row.content.provider === 'footyinfo' && row.content.claim.kind === 'draft_board_pick'
+    )
+    .map((row) => {
+      const claim = row.content.claim;
+      const clubOf = (club: RecordedEntity) => {
+        const clubId = input.lookup('footyinfo', 'club', club);
+        if (clubId === null) {
+          const key = identityKey('footyinfo', 'club', club);
+          const entry = unresolved.get(key) ?? { club, evidenceIds: [] };
+          entry.evidenceIds.push(row.evidenceId);
+          unresolved.set(key, entry);
+        }
+        return clubId;
+      };
+      const clubId = clubOf(claim.club);
+      const route = claim.route.map(clubOf);
+      const boardPickId = createAflTradeContentAddress('external-draft-board-pick', {
+        evidenceId: row.evidenceId,
+      });
+      rows.set(boardPickId, row);
+      return {
+        boardPickId,
+        draftYear: claim.draftYear,
+        draftType: claim.draftType,
+        roundNumber: claim.roundNumber,
+        recordedPickNumber: claim.recordedPickNumber,
+        status: claim.status,
+        clubId,
+        routeClubIds: route.every((club): club is string => club !== null) ? route : null,
+        evidenceIds: [row.evidenceId],
+      };
+    });
+  unresolved.forEach(({ club, evidenceIds }) =>
+    input.issues.push({
+      code: 'identity_unresolved',
+      severity: 'blocking',
+      subjectKey: `board-pick:club:${club.nativeId ?? club.recordedName}`,
+      detail: `No current reviewed club resolution exists for footyinfo identity ${club.recordedName}.`,
+      evidenceIds: sortedUnique(evidenceIds),
+    })
+  );
+  return {
+    records: records.sort((left, right) => left.boardPickId.localeCompare(right.boardPickId)),
+    rows,
+  };
+}
+
+/**
+ * The index of the route club that `from` hands the pick to, when the route has that hop exactly
+ * once; otherwise -1. A route that passes the same pair twice names neither occurrence.
+ */
+function uniqueRouteHop(route: readonly string[], from: string | null, to: string | null): number {
+  const hops = route.flatMap((club, index) =>
+    index > 0 && route[index - 1] === from && club === to ? [index] : []
+  );
+  return hops.length === 1 ? hops[0]! : -1;
+}
+
+/** The Footyinfo route of the pick a Draftguru player was selected with, and the rows that state it. */
+interface EventualSelectionRoute {
+  routeClubIds: readonly string[];
+  evidenceIds: readonly string[];
+}
+
+/**
+ * Finds the board route of the pick Draftguru says a player was eventually selected with. The
+ * player's own Draftguru selection rows in that draft must name one selection number and one club;
+ * the board must list exactly one selected pick with that number, held by that club, with a fully
+ * resolved route; and the board's player must resolve to the same canonical player as Draftguru's.
+ * The number only joins two statements about one named player's selection; nothing is inferred
+ * from a pick number alone.
+ */
+function createEventualSelectionRouteFinder(input: {
+  evidence: readonly Evidence[];
+  boardPicks: readonly CanonicalDraftBoardPick[];
+  boardRows: ReadonlyMap<string, DraftBoardPickEvidence>;
+  lookup: IdentityLookup;
+}): (
+  draftYear: number,
+  draftType: string,
+  playerNativeId: string
+) => EventualSelectionRoute | null {
+  const selectionRows = input.evidence.filter(
+    (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'draft_selection' }> } } =>
+      row.content.provider === 'draftguru' && row.content.claim.kind === 'draft_selection'
+  );
+  return (draftYear, draftType, playerNativeId) => {
+    const rows = selectionRows.filter(
+      ({ content: { claim } }) =>
+        claim.draftYear === draftYear &&
+        claim.draftType === draftType &&
+        claim.player.nativeId === playerNativeId
+    );
+    const numbers = new Set(rows.map(({ content }) => content.claim.selectionNumber));
+    const players = new Set(
+      rows.map(({ content }) => input.lookup('draftguru', 'player', content.claim.player))
+    );
+    const clubs = new Set(
+      rows.map(({ content }) => input.lookup('draftguru', 'club', content.claim.selectedByClub))
+    );
+    if (numbers.size !== 1 || players.size !== 1 || clubs.size !== 1) return null;
+    const [playerId] = players;
+    const [clubId] = clubs;
+    const [selectionNumber] = numbers;
+    if (!playerId || !clubId) return null;
+    const boards = input.boardPicks.filter(
+      (board) =>
+        board.status === 'selected' &&
+        board.draftYear === draftYear &&
+        board.draftType === draftType &&
+        board.recordedPickNumber === selectionNumber
+    );
+    if (boards.length !== 1) return null;
+    const board = boards[0]!;
+    const boardPlayer = input.boardRows.get(board.boardPickId)!.content.claim.player;
+    if (
+      board.clubId !== clubId ||
+      board.routeClubIds === null ||
+      board.routeClubIds.length < 2 ||
+      !boardPlayer ||
+      input.lookup('footyinfo', 'player', boardPlayer) !== playerId
+    )
+      return null;
+    return { routeClubIds: board.routeClubIds, evidenceIds: board.evidenceIds };
+  };
+}
+
+/**
+ * The group members the board route names, in route order: each member whose sender and receiver
+ * are one hop of the route, where no other member and no other hop of the route has that pair.
+ * Members of another pick (a matched bid that consumed several) are left out, never re-keyed. At
+ * least two members must chain, and consecutive members must keep time order; otherwise null.
+ */
+function routedEventualSelectionPath(
+  members: readonly number[],
+  transfers: readonly CanonicalTransfer[],
+  route: readonly string[],
+  inOrder: (earlier: number, later: number) => boolean
+): number[] | null {
+  const byHop = new Map<number, number[]>();
+  for (const index of members) {
+    const hop = uniqueRouteHop(route, transfers[index]!.fromClubId, transfers[index]!.toClubId);
+    if (hop > 0) byHop.set(hop, [...(byHop.get(hop) ?? []), index]);
+  }
+  const path = [...byHop]
+    .filter(([, indices]) => indices.length === 1)
+    .sort(([left], [right]) => left - right)
+    .map(([, indices]) => indices[0]!);
+  if (path.length < 2 || path.some((index, at) => at > 0 && !inOrder(path[at - 1]!, index)))
+    return null;
+  return path;
+}
+
+/** Whether every member's hop is a hop of the route, in route order. */
+function routeNamesPath(
+  path: readonly number[],
+  transfers: readonly CanonicalTransfer[],
+  route: readonly string[]
+): boolean {
+  let previous = 0;
+  return path.every((index) => {
+    const hop = uniqueRouteHop(route, transfers[index]!.fromClubId, transfers[index]!.toClubId);
+    if (hop <= previous) return false;
+    previous = hop;
+    return true;
+  });
+}
+
+function joinEventualSelections(input: {
+  evidence: readonly Evidence[];
+  resolvedTransfers: readonly ResolvedDirectedTransfer[];
+  transfers: CanonicalTransfer[];
+  transactionClaimsByNativeEventId: ReadonlyMap<string, readonly TransactionEvidence[]>;
+  pickCustody: readonly CanonicalPickCustody[];
+  issues: ReconciliationIssue[];
+  /** The Footyinfo board route of the pick a Draftguru player was selected with, when one is staged. */
+  routeOf: (
+    draftYear: number,
+    draftType: string,
+    playerNativeId: string
+  ) => EventualSelectionRoute | null;
+}): void {
+  const eventualPlayers = new Map<string, string | null>();
+  // Every staged row must be conserved by a record or an issue: each statement is cited on the
+  // directed transfer it names, admitted to a group or not, as a pick disposition is cited by its
+  // outcome; a statement naming no transfer of its page is an issue.
+  const eventualRows = new Map<string, string[]>();
+  for (const row of input.evidence) {
+    const claim = row.content.claim;
+    if (row.content.provider !== 'draftguru' || claim.kind !== 'pick_eventual_selection') continue;
+    const key = `${claim.nativeEventId}|${claim.nativeTransferId}`;
+    (eventualRows.get(key) ?? eventualRows.set(key, []).get(key)!).push(row.evidenceId);
+    const player = claim.outcome === 'selected' ? (claim.player?.nativeId ?? null) : null;
+    // Two statements for one transfer that disagree name no player.
+    eventualPlayers.set(
+      key,
+      eventualPlayers.has(key) && eventualPlayers.get(key) !== player ? null : player
+    );
+  }
+  if (eventualPlayers.size === 0) return;
+  const groups = new Map<string, number[]>();
+  input.resolvedTransfers.forEach(({ row }, index) => {
+    const claim = row.content.claim;
+    const transfer = input.transfers[index]!;
+    if (row.content.provider !== 'draftguru' || claim.kind !== 'directed_transfer') return;
+    const transferKey = `${claim.nativeEventId}|${claim.nativeTransferId}`;
+    const cited = eventualRows.get(transferKey);
+    if (cited !== undefined) {
+      transfer.evidenceIds = sortedUnique([...transfer.evidenceIds, ...cited]);
+      eventualRows.delete(transferKey);
+    }
+    const asset = transfer.asset;
+    if (
+      asset.kind !== 'pick_entitlement' ||
+      (claim.asset.kind !== 'current_pick' && claim.asset.kind !== 'future_pick')
+    )
+      return;
+    const player = eventualPlayers.get(transferKey);
+    if (!player) return;
+    const key = `${asset.draftYear}|${asset.draftType}|${player}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(index);
+  });
+  eventualRows.forEach((evidenceIds, key) => {
+    const [nativeEventId, nativeTransferId] = key.split('|');
+    input.issues.push({
+      code: 'pick_outcome_unresolved',
+      severity: 'blocking',
+      subjectKey: `pick-outcome:${nativeEventId}:${nativeTransferId}`,
+      detail: 'A Draftguru eventual-selection statement names no directed transfer of its page.',
+      evidenceIds: sortedUnique(evidenceIds),
+    });
+  });
+  const usableCustody = new Map(
+    input.pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)
+  );
+  const transactionOf = (index: number) => {
+    const claims =
+      input.transactionClaimsByNativeEventId.get(
+        input.resolvedTransfers[index]!.row.content.claim.nativeEventId
+      ) ?? [];
+    return claims.length === 1 ? claims[0]!.content.claim : null;
+  };
+  const inOrder = transfersInOrder(transactionOf);
+  groups.forEach((members, key) => {
+    const [draftYear, draftType, player] = key.split('|');
+    // The board route is read only where the Draftguru walk alone cannot settle the pick: a group it
+    // refuses (a loop, a merge, two orders) or one that reaches two custody picks.
+    let route: EventualSelectionRoute | null | undefined;
+    const routeOf = () =>
+      route === undefined ? (route = input.routeOf(Number(draftYear), draftType!, player!)) : route;
+    let routed = false;
+    let path = eventualSelectionPath(members, input.transfers, inOrder);
+    if (path === null) {
+      const stated = routeOf();
+      path =
+        stated &&
+        routedEventualSelectionPath(members, input.transfers, stated.routeClubIds, inOrder);
+      if (path === null) return;
+      routed = true;
+    }
+    const reachedAt = path.map((index) => {
+      const asset = input.transfers[index]!.asset;
+      return asset.kind === 'pick_entitlement' && usableCustody.has(asset.pickId)
+        ? asset.pickId
+        : null;
+    });
+    const custodyPickIds = sortedUnique(reachedAt.filter((id): id is string => id !== null));
+    let earliest = earliestCustodyBeforeConflict(path, reachedAt, input.transfers, usableCustody);
+    if (custodyPickIds.length > 1 && earliest === null) {
+      const stated = routeOf();
+      earliest =
+        stated && routeNamesPath(path, input.transfers, stated.routeClubIds)
+          ? routeOriginalCustody(custodyPickIds, usableCustody, stated.routeClubIds)
+          : null;
+      if (earliest !== null) routed = true;
+    }
+    if (custodyPickIds.length > 1 && earliest === null) {
+      path.forEach((index) => {
+        input.transfers[index]!.status = 'unresolved';
+      });
+      input.issues.push({
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `eventual-selection:${key}`,
+        detail: `Draftguru transfers naming one eventually selected player reach two custody picks: ${custodyPickIds.join(', ')}.`,
+        evidenceIds: sortedUnique(path.flatMap((index) => input.transfers[index]!.evidenceIds)),
+      });
+      return;
+    }
+    const custody =
+      custodyPickIds.length === 1
+        ? usableCustody.get(custodyPickIds[0]!)!
+        : custodyPickIds.length > 1
+          ? usableCustody.get(earliest!)!
+          : null;
+    const pickId =
+      custody?.pickId ??
+      createAflTradeContentAddress('draft-pick', {
+        draftYear: Number(draftYear),
+        draftType,
+        eventualSelection: { provider: 'draftguru', playerNativeId: player },
+      });
+    path.forEach((index) => {
+      const transfer = input.transfers[index]!;
+      if (transfer.asset.kind !== 'pick_entitlement') return;
+      transfer.asset = {
+        ...transfer.asset,
+        pickId,
+        originalClubId: transfer.asset.originalClubId ?? custody?.originalClubId ?? null,
+      };
+      if (custody && transfer.fromClubId && transfer.toClubId) transfer.status = 'single_source';
+      // The board row that ordered the walk or chose its custody pick is cited on every hop it keyed.
+      if (routed)
+        transfer.evidenceIds = sortedUnique([...transfer.evidenceIds, ...route!.evidenceIds]);
+    });
+  });
+}
+
+/**
+ * Of the custody picks a walk reaches, the one whose original club is the first club of the board
+ * route (which prints the original club first), when exactly one is; otherwise null.
+ */
+function routeOriginalCustody(
+  custodyPickIds: readonly string[],
+  usableCustody: ReadonlyMap<string, CanonicalPickCustody>,
+  route: readonly string[]
+): string | null {
+  const named = custodyPickIds.filter(
+    (pickId) => usableCustody.get(pickId)!.originalClubId === route[0]
+  );
+  return named.length === 1 ? named[0]! : null;
+}
+
+/**
+ * Whether transfer `later` cannot precede transfer `earlier`: both trades are known, seasons never
+ * go backwards, and stated days never go backwards where both trades state one.
+ */
+function transfersInOrder(
+  transactionOf: (index: number) => Extract<Claim, { kind: 'transaction' }> | null
+): (earlier: number, later: number) => boolean {
+  return (earlier, later) => {
+    const [before, after] = [transactionOf(earlier), transactionOf(later)];
+    if (before === null || after === null || after.seasonYear < before.seasonYear) return false;
+    return (
+      after.seasonYear > before.seasonYear ||
+      before.occurredOn === null ||
+      after.occurredOn === null ||
+      after.occurredOn >= before.occurredOn
+    );
+  };
+}
+
+/**
+ * When a path reaches two custody picks, the slot rules have joined a later transfer, numbered by
+ * the live draft-night order, to another entitlement whose pre-draft slot has that number. The pick
+ * the path reached first is the pick when the pre-draft order (observed before draft night) names
+ * as its holder a club the path delivered it to before any member reached another custody pick:
+ * those transfers preceded the order, so the conflicting one came after it. Otherwise (the holder
+ * received it only in or after the conflicting transfer, so both joins rest on pre-draft numbering)
+ * there is no choice to make and this returns null.
+ */
+function earliestCustodyBeforeConflict(
+  path: readonly number[],
+  reachedAt: readonly (string | null)[],
+  transfers: readonly CanonicalTransfer[],
+  usableCustody: ReadonlyMap<string, CanonicalPickCustody>
+): string | null {
+  const firstAt = reachedAt.findIndex((pickId) => pickId !== null);
+  if (firstAt < 0) return null;
+  const earliest = reachedAt[firstAt]!;
+  const conflictAt = reachedAt.findIndex((pickId) => pickId !== null && pickId !== earliest);
+  if (conflictAt < 0) return earliest;
+  const holder = usableCustody.get(earliest)!.currentClubId;
+  return path
+    .slice(0, conflictAt)
+    .some((index) => holder !== null && transfers[index]!.toClubId === holder)
+    ? earliest
+    : null;
+}
+
+/** The most transfers of one pick the path search will order; a longer group is left as it is. */
+const MAXIMUM_EVENTUAL_SELECTION_PATH = 12;
+
+/**
+ * The group's transfers in the one order that walks the pick from club to club, or null. Each step's
+ * sender must be the previous step's receiver, every transfer is used once, and seasons (and stated
+ * days, where both trades have one) never go backwards. A club may hold the pick more than once (a
+ * pick swapped back on draft night), but the walk must have one start and one end and exactly one
+ * such order: a group that branches or merges (a matched bid that consumed several picks for one
+ * player), a closed loop (no start), or one with two possible orders is refused.
+ */
+function eventualSelectionPath(
+  members: readonly number[],
+  transfers: readonly CanonicalTransfer[],
+  inOrder: (earlier: number, later: number) => boolean
+): number[] | null {
+  const edges = members.map((index) => ({ index, ...transfers[index]! }));
+  if (
+    edges.length > MAXIMUM_EVENTUAL_SELECTION_PATH ||
+    edges.some(({ fromClubId, toClubId }) => fromClubId === null || toClubId === null)
+  )
+    return null;
+  const balance = new Map<string, number>();
+  for (const { fromClubId, toClubId } of edges) {
+    balance.set(fromClubId!, (balance.get(fromClubId!) ?? 0) + 1);
+    balance.set(toClubId!, (balance.get(toClubId!) ?? 0) - 1);
+  }
+  const starts = [...balance].filter(([, value]) => value === 1).map(([club]) => club);
+  const ends = [...balance].filter(([, value]) => value === -1);
+  if (
+    starts.length !== 1 ||
+    ends.length !== 1 ||
+    [...balance.values()].some((value) => Math.abs(value) > 1)
+  )
+    return null;
+  const walks: number[][] = [];
+  const used = new Set<number>();
+  const walk: number[] = [];
+  const extend = (club: string) => {
+    if (walks.length > 1) return;
+    if (walk.length === edges.length) {
+      walks.push([...walk]);
+      return;
+    }
+    for (const edge of edges) {
+      if (used.has(edge.index) || edge.fromClubId !== club) continue;
+      if (walk.length > 0 && !inOrder(walk.at(-1)!, edge.index)) continue;
+      used.add(edge.index);
+      walk.push(edge.index);
+      extend(edge.toClubId!);
+      walk.pop();
+      used.delete(edge.index);
+    }
+  };
+  extend(starts[0]!);
+  return walks.length === 1 ? walks[0]! : null;
+}
+
 type PickDispositionEvidence = Evidence & {
   content: { claim: Extract<Claim, { kind: 'pick_disposition' }> };
 };
 
 type NominationFacts = Pick<
   CanonicalPickOutcome,
-  'nominationBasis' | 'receivingClubNominatedSelections'
+  'nominationBasis' | 'receivingClubNominatedSelections' | 'boardPickId'
 >;
 
 type NominatedSelectionCount = { count: number; evidenceIds: string[] };
@@ -1114,6 +1635,33 @@ function classifyNotUsedPick(
 }
 
 /**
+ * The Footyinfo board pick that settles a stated "not used" pick with no access evidence: the one
+ * board pick in the pick's draft and round held by the receiving club whose route hands it from the
+ * sending club to the receiving club once (and starts at the pick's original club, when the
+ * transfer names one). It counts only when that pick was passed or removed. Nothing is matched by
+ * pick number.
+ */
+function notUsedBoardPick(
+  boardPicks: readonly CanonicalDraftBoardPick[],
+  asset: Extract<CanonicalTransferAsset, { kind: 'pick_entitlement' }>,
+  fromClubId: string | null,
+  receivingClubId: string
+): CanonicalDraftBoardPick | null {
+  if (asset.nominalRound === null || fromClubId === null) return null;
+  const matches = boardPicks.filter(
+    (board) =>
+      board.draftYear === asset.draftYear &&
+      board.draftType === asset.draftType &&
+      board.roundNumber === asset.nominalRound &&
+      board.clubId === receivingClubId &&
+      board.routeClubIds !== null &&
+      uniqueRouteHop(board.routeClubIds, fromClubId, receivingClubId) > 0 &&
+      (asset.originalClubId === null || board.routeClubIds[0] === asset.originalClubId)
+  );
+  return matches.length === 1 && matches[0]!.status !== 'selected' ? matches[0]! : null;
+}
+
+/**
  * Binds each `pick_disposition` claim to its directed transfer and, for a selected pick, to the one
  * selection of the stated player by the receiving club in the pick's draft year. The disposition's
  * evidence id joins its transfer's evidence, so the candidate's child tables conserve it.
@@ -1123,6 +1671,7 @@ function reconcilePickDispositions(input: {
   transfers: CanonicalTransfer[];
   draftSelections: readonly CanonicalDraftSelection[];
   anchorSeasonYear: number;
+  boardPicks: readonly CanonicalDraftBoardPick[];
   resolve: IdentityResolver;
   issues: ReconciliationIssue[];
 }): CanonicalPickOutcome[] {
@@ -1208,6 +1757,20 @@ function reconcilePickDispositions(input: {
       const outcome = classifyNotUsedPick(asset, input.anchorSeasonYear, () =>
         nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
       );
+      const board =
+        outcome.nomination.nominationBasis === 'no_access_evidence'
+          ? notUsedBoardPick(input.boardPicks, asset, transfer.fromClubId, receivingClubId)
+          : null;
+      if (board !== null) {
+        record(
+          outcome.status,
+          null,
+          null,
+          { nominationBasis: 'board_pick_passed_or_removed', boardPickId: board.boardPickId },
+          board.evidenceIds
+        );
+        continue;
+      }
       record(outcome.status, null, null, outcome.nomination, outcome.evidenceIds);
       continue;
     }
@@ -1254,10 +1817,56 @@ export function reconcileAflTradeExternalEvidence(input: {
   identityResolutions: readonly unknown[];
   sourceAuthority?: unknown;
   reconciledAt: string;
+  /**
+   * An approved owner `reconciliation_scope` decision (statlyaus/Statly#869). With it, pick-side issues
+   * are recorded `deferred`; player-side issues stay `blocking`. Without it, output is unchanged.
+   */
+  pickLineageDeferral?: Pick<AflTradePickLineageDeferral, 'decisionId'>;
+  /**
+   * Source selection ids that are already current canonical selections of finalized promotions, as
+   * the repository resolved them at preparation. Only with the deferral: a draft whose every
+   * candidate selection is in this set is recorded as already promoted and left unwritten.
+   */
+  promotedDraftSelectionIds?: readonly string[];
+  /**
+   * Transactions that are already current canonical, each with the transfer ids promoted as assets
+   * on its current trade version, as the repository resolved them at preparation. Only with the
+   * deferral: a candidate transaction whose every transfer is in its entry is recorded as already
+   * promoted and left unwritten.
+   */
+  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[];
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
     .parse(input.environment);
+  const pickLineageDeferral =
+    input.pickLineageDeferral === undefined
+      ? undefined
+      : z
+          .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
+          .strict()
+          .parse(input.pickLineageDeferral);
+  const promotedDraftSelectionIds = new Set(
+    z.array(z.string().min(1)).optional().parse(input.promotedDraftSelectionIds) ?? []
+  );
+  if (promotedDraftSelectionIds.size > 0 && pickLineageDeferral === undefined) {
+    throw new TypeError('Already-promoted drafts are recorded only under a pick-side deferral.');
+  }
+  const promotedTransferIds = new Map(
+    (
+      z
+        .array(
+          z.object({ transactionId: z.string().min(1), transferIds: z.array(z.string().min(1)) })
+        )
+        .optional()
+        .parse(input.promotedTransactions) ?? []
+    ).map(({ transactionId, transferIds }) => [transactionId, new Set(transferIds)] as const)
+  );
+  if (promotedTransferIds.size > 0 && pickLineageDeferral === undefined) {
+    throw new TypeError(
+      'Already-promoted transactions are recorded only under a pick-side deferral.'
+    );
+  }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
   const reconciledAt = instantSchema.parse(input.reconciledAt);
@@ -1337,6 +1946,11 @@ export function reconcileAflTradeExternalEvidence(input: {
     });
     return null;
   };
+
+  const lookup: IdentityLookup = (provider, entityKind, sourceIdentity) =>
+    resolutionIndex.get(identityKey(provider, entityKind, sourceIdentity))?.content.canonicalId ??
+    null;
+  const draftBoard = reconcileDraftBoardPicks({ evidence, lookup, issues });
 
   const transactionClaims = evidence.filter(
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction' }> } } =>
@@ -1449,6 +2063,20 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transfers: CanonicalTransfer[] = resolvedTransfers.map((transfer) =>
     reconcileDirectedTransfer({ transfer, resolve, pickCustody, slotChainCustody })
   );
+  joinEventualSelections({
+    evidence,
+    resolvedTransfers,
+    transfers,
+    transactionClaimsByNativeEventId,
+    pickCustody,
+    issues,
+    routeOf: createEventualSelectionRouteFinder({
+      evidence,
+      boardPicks: draftBoard.records,
+      boardRows: draftBoard.rows,
+      lookup,
+    }),
+  });
 
   const transactions: CanonicalTransaction[] = transactionClaims.map((row) => {
     const claim = row.content.claim;
@@ -1480,11 +2108,21 @@ export function reconcileAflTradeExternalEvidence(input: {
         evidenceIds: [row.evidenceId, ...eventParties.map((party) => party.evidenceId)],
       });
     }
+    // Under the reviewed pick-side deferral a pick transfer whose clubs resolve is unresolved only
+    // for its custody, which is the pick's lineage, not the transaction's: the exchange itself is
+    // complete. Without the deferral the rule is unchanged.
+    const deferrablePickTransfer = (transfer: CanonicalTransfer) =>
+      pickLineageDeferral !== undefined &&
+      transfer.asset.kind === 'pick_entitlement' &&
+      transfer.fromClubId !== null &&
+      transfer.toClubId !== null;
     const complete =
       partyIds.every((partyId) => partyId !== null) &&
       partyIds.length >= 2 &&
       eventTransfers.length > 0 &&
-      eventTransfers.every((transfer) => transfer.status !== 'unresolved');
+      eventTransfers.every(
+        (transfer) => transfer.status !== 'unresolved' || deferrablePickTransfer(transfer)
+      );
     return {
       transactionId,
       providerEventId: claim.nativeEventId,
@@ -1547,7 +2185,18 @@ export function reconcileAflTradeExternalEvidence(input: {
   const draftSelections: CanonicalDraftSelection[] = [...groupedSelections.values()]
     .map((rows) => {
       const first = rows[0].content.claim;
-      const resolvedRows = rows.map((row) => ({
+      // A Footyinfo row only corroborates another provider's selection (issue 853): when its player
+      // or club has no reviewed resolution it is cited but not counted, so it can neither unresolve
+      // nor null the selection the other provider states. Alone, it resolves like any provider.
+      const corroborationOnly = rows.some(({ content }) => content.provider !== 'footyinfo');
+      const counted = rows.filter(
+        ({ content }) =>
+          !corroborationOnly ||
+          content.provider !== 'footyinfo' ||
+          (lookup('footyinfo', 'player', content.claim.player) !== null &&
+            lookup('footyinfo', 'club', content.claim.selectedByClub) !== null)
+      );
+      const resolvedRows = counted.map((row) => ({
         row,
         playerId: resolve(
           row.content.provider,
@@ -1585,7 +2234,7 @@ export function reconcileAflTradeExternalEvidence(input: {
         });
       } else {
         [playerId, clubId] = resolvedPairs[0].split('|');
-        status = statusFromEvidence(new Set(rows.map((row) => row.content.provider)).size);
+        status = statusFromEvidence(new Set(counted.map((row) => row.content.provider)).size);
       }
 
       const detailSupport = detailClaims.filter((detail) => {
@@ -1631,7 +2280,7 @@ export function reconcileAflTradeExternalEvidence(input: {
         });
       }
       const supportingProviders = sortedUnique([
-        ...rows.map((row) => row.content.provider),
+        ...counted.map((row) => row.content.provider),
         ...detailSupport.map((row) => row.content.provider),
       ]) as Provider[];
       if (status === 'single_source' && supportingProviders.length >= 2) status = 'corroborated';
@@ -1931,9 +2580,36 @@ export function reconcileAflTradeExternalEvidence(input: {
     transfers,
     draftSelections,
     anchorSeasonYear,
+    boardPicks: draftBoard.records,
     resolve,
     issues,
   });
+
+  if (pickLineageDeferral !== undefined && sourceAuthority?.kind !== 'historical_plan_completion') {
+    throw new TypeError(
+      'A pick-side deferral decision names a historical completion; it needs completion authority.'
+    );
+  }
+  // Under the reviewed deferral, pick-side issues are kept but marked deferred; nothing is removed.
+  const severed = issues.map((issue) =>
+    pickLineageDeferral !== undefined && isAflTradePickSideReconciliationIssue(issue)
+      ? { ...issue, severity: 'deferred' as const }
+      : issue
+  );
+  const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
+  const promotedDrafts = aflTradePromotedDrafts(draftSelections, promotedDraftSelectionIds);
+  const promotedTransactions = aflTradePromotedTransactions(transactions, promotedTransferIds);
+  // Custody without a usable status is pick-side: recorded as deferred and left unwritten.
+  const deferredCustodyIds = aflTradeDeferredCustodyIds(pickCustody);
+  const recordedDeferral =
+    pickLineageDeferral === undefined
+      ? undefined
+      : {
+          ...pickLineageDeferral,
+          ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
+          ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
+          ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
+        };
 
   const content: AflTradeExternalReconciliationContent = {
     schemaVersion:
@@ -1955,7 +2631,13 @@ export function reconcileAflTradeExternalEvidence(input: {
     pickLineage: pickLineage.sort((left, right) => left.lineageId.localeCompare(right.lineageId)),
     // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
-    issues: issues
+    ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
+    // Only a candidate that actually deferred something carries the decision, so a candidate prepared
+    // with the option but no pick-side issue is byte-identical to one prepared without it.
+    ...(deferredIssueCount === 0 || recordedDeferral === undefined
+      ? {}
+      : { pickLineageDeferral: recordedDeferral }),
+    issues: severed
       .map((issue) => ({ ...issue, evidenceIds: sortedUnique(issue.evidenceIds) }))
       .sort(
         (left, right) =>

@@ -1,6 +1,9 @@
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import { aflTradeGateDecisionProposalSchema } from '../governance/gateDecisionTypes';
-import { DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION } from '../source/draftguruSourceAdapter';
+import {
+  DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION,
+  DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
+} from '../source/draftguruSourceAdapter';
 import {
   aflTradeSourceRightsProposalSchema,
   type AflTradeSourceRightsProposal,
@@ -71,6 +74,21 @@ export const DRAFTGURU_TRADE_DETAIL_V2_FIELDS = [
   ...DRAFTGURU_TRADE_DISPOSITION_FIELDS,
 ] as const;
 
+/** The leaves `draftguru-trade-parser/v3` adds: each traded pick's eventual selection (#886). */
+export const DRAFTGURU_TRADE_EVENTUAL_SELECTION_FIELDS = [
+  'pick_eventual_selection.nativeEventId',
+  'pick_eventual_selection.nativeTransferId',
+  'pick_eventual_selection.outcome',
+  'pick_eventual_selection.player.nativeId',
+  'pick_eventual_selection.player.recordedName',
+] as const;
+
+/** The trade-detail field boundary under `draftguru-trade-parser/v3`: v2's and the new leaves. */
+export const DRAFTGURU_TRADE_DETAIL_V3_FIELDS = [
+  ...DRAFTGURU_TRADE_DETAIL_V2_FIELDS,
+  ...DRAFTGURU_TRADE_EVENTUAL_SELECTION_FIELDS,
+] as const;
+
 export type DraftguruTradeCapability = 'draftguru-trade-index' | 'draftguru-trade-detail';
 
 /** Each capability's reviewed parser version; capture requests must name it exactly. */
@@ -82,7 +100,7 @@ export const DRAFTGURU_TRADE_PARSER_VERSIONS = {
 export interface DraftguruTradeAuthorityProposalInput {
   readonly capabilityId: DraftguruTradeCapability;
   readonly seasons: readonly number[];
-  /** Defaults to the capability's reviewed v1 parser; trade detail also accepts v2. */
+  /** Defaults to the capability's reviewed v1 parser; trade detail also accepts v2 and v3. */
   readonly parserVersion?: string;
   readonly evidenceIds: Readonly<{
     productOwnerAuthorization: string;
@@ -117,7 +135,9 @@ export function createDraftguruTradeAuthorityProposal(
   const { from, to } = contiguousSeasons(input.seasons);
   const seasons = Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
   const parserVersion = input.parserVersion ?? DRAFTGURU_TRADE_PARSER_VERSIONS[input.capabilityId];
-  const dispositions = parserVersion === DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION;
+  const eventualSelections = parserVersion === DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION;
+  const dispositions =
+    eventualSelections || parserVersion === DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION;
   if (
     parserVersion !== DRAFTGURU_TRADE_PARSER_VERSIONS[input.capabilityId] &&
     !(dispositions && input.capabilityId === 'draftguru-trade-detail')
@@ -127,17 +147,19 @@ export function createDraftguruTradeAuthorityProposal(
   const fields =
     input.capabilityId === 'draftguru-trade-index'
       ? DRAFTGURU_TRADE_INDEX_FIELDS
-      : dispositions
-        ? DRAFTGURU_TRADE_DETAIL_V2_FIELDS
-        : DRAFTGURU_TRADE_DETAIL_FIELDS;
+      : eventualSelections
+        ? DRAFTGURU_TRADE_DETAIL_V3_FIELDS
+        : dispositions
+          ? DRAFTGURU_TRADE_DETAIL_V2_FIELDS
+          : DRAFTGURU_TRADE_DETAIL_FIELDS;
   const dataset =
     input.capabilityId === 'draftguru-trade-index'
       ? 'Draftguru AFL trade index'
       : 'Draftguru AFL trade detail';
   const date = input.timing.termsEffectiveAt.slice(0, 10);
   const issue = 579;
-  // v2 is a separate decision, so the v1 decision and its captures stay valid as recorded.
-  const decisionKey = `${input.capabilityId}-issue-${issue}-private-non_production${dispositions ? '-parser-v2' : ''}`;
+  // v2 and v3 are separate decisions, so earlier decisions and their captures stay valid as recorded.
+  const decisionKey = `${input.capabilityId}-issue-${issue}-private-non_production${eventualSelections ? '-parser-v3' : dispositions ? '-parser-v2' : ''}`;
 
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,

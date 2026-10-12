@@ -51,7 +51,7 @@ export async function captureOfficialAflPage(input: {
   if (
     !reviewedPdf &&
     !isReviewedOfficialAflPlayerContinuitySource(input.url) &&
-    // The reviewed pre-draft orders include two approved Internet Archive snapshots (issue 853).
+    // The reviewed pre-draft orders include three Internet Archive snapshots (issue 853).
     reviewedOfficialAflDraftOrderPage(input.url) === null &&
     (url.protocol !== 'https:' ||
       (url.hostname !== 'www.afl.com.au' &&

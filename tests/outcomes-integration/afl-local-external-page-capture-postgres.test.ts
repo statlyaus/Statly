@@ -24,10 +24,13 @@ import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/afl
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
-import { DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
+import { DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 import { OFFICIAL_AFL_COMPLETED_SESSION_PAGES } from '../testUtils/officialAflCompletedSessionPages';
+import { createLocalFootyinfoDraftBoardTargets } from '@/server/aflTradeIntelligence/development/localFootyinfoDraftBoardCapture';
+import { footyinfoBoardPage, SYNTHETIC_BOARD_PICKS } from '../testUtils/footyinfoDraftBoardPage';
 import {
   approveNarrowAuthority,
+  footyinfoDraftBoardAuthority,
   draftguruNationalYearAuthority,
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
@@ -114,9 +117,9 @@ async function recordOwnerDecision(
 ) {
   const { sourceRights, proposal } = createDraftguruTradeAuthorityProposal({
     capabilityId,
-    // The local runner captures trade detail with v2, which records each received pick's outcome.
+    // The local runner captures trade detail with v3: v2 plus each traded pick's eventual selection.
     ...(capabilityId === 'draftguru-trade-detail'
-      ? { parserVersion: DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION }
+      ? { parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION }
       : {}),
     seasons: Array.from({ length: 15 }, (_, index) => 2011 + index),
     evidenceIds,
@@ -532,6 +535,55 @@ describe('local Draftguru national-year capture through the governed ingestion b
         pathway: 'national',
         decision_key: 'draftguru-national-year-page-issue579-private-2020-parser-v3',
       },
+    ]);
+  }, 90_000);
+});
+
+describe('local Footyinfo draft-board capture through the governed ingestion boundary', () => {
+  it('stages a recorded season’s board picks and selections under the board’s own decision', async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS, { year: 2020 }), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    };
+    const options = { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl };
+    const targets = createLocalFootyinfoDraftBoardTargets([2020]);
+    await expect(runLocalExternalCapture(options, targets)).rejects.toThrow(
+      /footyinfo-national-draft-board-issue853-private-2020-board-v1/
+    );
+    expect(calls).toEqual([]);
+
+    const evidenceIds = {
+      productOwnerAuthorization: await retainEvidenceDocument('board authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('board capture plan'),
+      publicAccessReview: await retainEvidenceDocument('board egress review'),
+      fieldBoundaryReview: await retainEvidenceDocument('board field review'),
+    };
+    await recordOfficialDecision(2020, evidenceIds, footyinfoDraftBoardAuthority);
+    const [result] = await runLocalExternalCapture(options, targets);
+    // Eight board picks (five selected, two passed, one removed) and the five selections.
+    expect(result).toMatchObject({
+      season: 2020,
+      status: 'staged',
+      evidenceCount: 13,
+      issueCount: 0,
+    });
+    expect(calls).toEqual(['https://www.footyinfo.com/draft/2020']);
+    expect(await readdir(join(artifactRoot, 'footyinfo-board-raw'))).not.toHaveLength(0);
+
+    const rows = await sql.query<{ kind: string; count: string }>(
+      `SELECT row.claim_kind AS kind, count(*)::text AS count
+         FROM outcome_external_evidence_row row
+         JOIN outcome_external_evidence_batch batch USING (batch_id)
+        WHERE batch.provider='footyinfo'
+        GROUP BY row.claim_kind ORDER BY row.claim_kind`
+    );
+    expect(rows.rows).toEqual([
+      { kind: 'draft_board_pick', count: '8' },
+      { kind: 'draft_selection', count: '5' },
     ]);
   }, 90_000);
 });
