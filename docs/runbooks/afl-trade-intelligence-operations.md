@@ -348,6 +348,13 @@ Insertion refuses a capture whose bytes are located, a second successor for the 
 different source URL or an earlier capture. Successors are never updated or deleted. v1, v2 and v3
 entries never read them.
 
+A reviewed spell stays current across a later identity review of the same player (migration 0254).
+The promoted asset keeps the identity decision it was promoted under; when that decision has been
+superseded by approved decisions of the same subject with the same canonical target, the check
+follows the chain to the current head. A review that changes the player, or a rejected or withdrawn
+head, still makes the spell non-current. Re-reviewing identities therefore never needs spells to be
+re-made; changing a player does.
+
 ### Storing evidence before it is cited
 
 Store any file a record will cite as evidence, such as an owner's approval record for a Gate
@@ -408,6 +415,46 @@ npm run outcomes:sources:register-capture-successor -- \
 
 Re-running a recorded successor is a no-op. A different successor for a capture that already has
 one is refused.
+
+### Citing evidence in Gate decisions
+
+From migration 0253 the Gate ledger refuses a new `non_production` or `production` proposal or
+decision that cites an `artifact:` reference with no custody location. That covers an owner's
+approval record, a review, or any other retained file. The repository refuses with
+`AflTradeArtifactUnlocatedError` (`ARTIFACT_UNLOCATED`) and lists the artifact ids, and nothing is
+written. The repository check switches on only when migration 0253 is present, so deploying the code
+without the migration changes nothing. A direct SQL insert fails with `Gate proposal cites evidence with no custody location` or
+`Gate decision cites evidence with no custody location`. The checked fields are the proposal's
+`evidenceIds` and condition `verificationEvidenceIds`, and the decision's `authorityEvidenceIds`,
+condition-result `evidenceIds` and reviewer `evidenceId`.
+
+Before you record a decision, store each file it cites with `outcomes:artifacts:store-evidence`
+(see "Storing evidence before it is cited") and cite the `artifactId` it prints. Only then append
+the proposal and decision. A refused append has written nothing, so append the same records again
+once the evidence is located. Do not cite a different id to get past the refusal. `test_fixture` records and references
+with other prefixes, such as `external-evidence:`, are not checked.
+
+Earlier rows are unchanged and still load. On `statly-grading-1` the three
+`official-afl-completed-draft-session-issue579-private-{2019,2020,2021}-session-v18` decisions
+(2026-09-29) cite `artifact:3ce8547d…` (the owner's approval record) and `artifact:2db6a682…`, and
+neither has custody. Their bytes are lost (#742 audit note). Exact replays of those decisions still
+succeed. A successor version of either decision must cite a retained record.
+
+Do not run `migrate deploy` with migration 0253 on `statly-grading-1` until all three hold:
+
+1. #828 is deployed and the valuation commands run with `AFL_TRADE_LOCAL_ARTIFACT_ROOT` set to the
+   root of `statly-grading-1-artifacts`, so private artifacts, including the qualification an
+   automated Gate 3 decision cites, are recorded with a location. Without it the migration refuses
+   every new automated model qualification.
+2. Every script or input file that records a Gate decision on the VM cites stored evidence. That
+   includes the reviewed inputs for `outcomes:sources:record-approved` and
+   `outcomes:sources:record-approved-external`.
+3. Renewals and successors of current decisions name freshly stored evidence. The renewal and
+   successor builders copy their predecessor's evidence ids, and on 2026-10-06 all 36 current Gate
+   0A decisions cited unlocated evidence.
+
+The census behind these conditions (2026-10-06, all non-`test_fixture` Gate records): of the cited
+evidence ids, 1 was located, 20 had a custody row but no location, and 55 had no custody row.
 
 ### Custody readback
 
@@ -693,8 +740,13 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `npm run outcomes:sources:record-external-identity-resolution -- --completion <completion-id> --subject <subject-id> --decision approved --canonical-id <approved-player-or-club-id> --reviewer <principal-ref> --authority-evidence <reviewer-authority-evidence-id> --rationale <text>`.
    Rejection and withdrawal omit `--canonical-id`. The command derives the exact work item, current
    revision, predecessor and approved canonical-record snapshot from PostgreSQL; operators cannot
-   submit those chain fields. A later completion may reuse a current decision only when its exact
-   observation work item is unchanged. New spellings, seasons or evidence require a successor review.
+   submit those chain fields. A later completion reuses a subject's current decision when its work
+   item is unchanged, or when the decision is approved and the later work item only adds seasons or
+   evidence rows with no spelling the reviewed work item lacked
+   (`doesAflTradeExternalIdentityDecisionCoverWorkItem`). A new spelling requires a successor
+   review. Do not record a successor to re-confirm the same canonical target: it moves the head
+   away from the decision that promoted assets and selections cite, and they stop validating
+   (statlyaus/Statly#742, 2026-10-06).
 
    If a canonical target is absent, retain an explicit external canonical-target registration v2
    review before calling `PostgresAflTradeProviderResolutionRepository.registerCanonicalTarget`.
@@ -723,6 +775,37 @@ supersede production Gate authority, and production execution cannot reuse non-p
    or parser produces a superseding capture; an issue-bearing batch is never silently treated as
    complete.
 
+   **Pick-side deferral (statlyaus/Statly#869, migration 0264).** A completion whose player side is
+   resolved but whose pick side is not (unresolved pick lineage, stated pick outcomes, colliding
+   custody identities, or draft-selection and pick-outcome identities nobody has reviewed) can be
+   prepared under an owner decision that defers the pick side. The decision is recorded only after
+   the owner's answered approval record is stored (`npm run outcomes:artifacts:store-evidence`, media
+   type `text/markdown`, class `capture_metadata`) and cites it:
+   `npm run outcomes:sources:record-reconciliation-scope -- --completion <completion-id> --scope pick_lineage_deferral --approval-artifact <artifact:sha256> --reviewer <principal-ref> --rationale <text> --decided-at <UTC-millisecond-instant>`.
+   It writes one approved `outcome_review_decision` with subject type `reconciliation_scope` and the
+   completion as subject; the artifact must be in custody and the completion complete. Then
+   `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion-id> --defer-pick-lineage <review-decision:…>`.
+   The command refuses a decision that is absent, not approved, superseded or names another
+   completion before it builds anything. With it, issues whose subject is pick-side are recorded with
+   `severity: deferred`: `lineage_unresolved`, `pick_outcome_unresolved`, `pick_identity_conflict`,
+   and `identity_unresolved` whose subject is a draft selection (`selection:…`), a stated pick
+   outcome (`pick-outcome:…`) or the original club of a traded future pick
+   (`transfer:<native-transfer-id>:original-club`, the concession labels Draftguru prints as a
+   club, which the owner rejected as club identities on 2026-10-06; such a pick is written with no
+   origin and no custody). Player-transfer (`transfer:…:player`), exchange-club (`transfer:…:from`,
+   `transfer:…:to`), transaction-party, custody-club and session identities stay blocking and are
+   resolved by ordinary identity review. A trade whose only unresolved transfer
+   is a pick with resolved clubs is a complete exchange; the pick's custody is its lineage, which the
+   deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
+   candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds
+   `deferred_issue_count` and `lineage_deferral_decision_id`, which the database checks against the
+   decision. Without the flag the candidate is byte-identical to today's. A `special_pick` transfer
+   is not deferrable: the special-entitlement gate still refuses it, applied to the transfers the
+   promotion writes. Candidate four's one special pick sits in the 2019 Geelong and Gold Coast trade,
+   which the Cameron promotion already made current canonical with every transfer; preparation
+   records that trade under `pickLineageDeferral.promotedTransactions` and the promotion writes
+   nothing of it, so the gate never sees the right.
+
 7. Prepare one reviewed JSON array containing only the missing draft-event metadata
    (`draftYear`, `draftType`, `eventDate`, `officialName`) for each exact draft represented by the
    candidate. The source selection rows own membership; operators cannot supply selection IDs,
@@ -732,6 +815,13 @@ supersede production Gate authority, and production execution cannot reuse non-p
    The transaction-date file must exactly cover every candidate transaction. A source-recorded date
    must be repeated exactly. For an undated transaction, supply an independently supported day or
    explicit `occurredOn: null` to retain year-only factual precision. Do not invent a completion day.
+   A null day may carry the season's reviewed trade-period window as `datePrecision`
+   (`{ precision: "window", eventDate: null, earliestDate, latestDate }`, migration 0261). The
+   transaction-date file never carries a window: the review command reads the season's window from
+   the finalized evidence of approved `official-afl-trade-period-dates` captures in the candidate's
+   environment and competition and attaches it to every `occurredOn: null` transaction of that
+   season; a season with no reviewed window stays year-only. From migration 0263 the database refuses
+   a window that no such capture states, on the review decision and again on promotion.
    A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not
@@ -761,6 +851,51 @@ supersede production Gate authority, and production execution cannot reuse non-p
    are created only for actual entitlement transformations. Exact replay returns the retained
    promotion receipt. Conflict, missing coverage or stale authority rolls back the entire transaction.
    Promotion does not register, validate or activate a factual release and cannot publish a grade.
+
+   **Promoting a deferred-lineage candidate (#869).** The same review and promote commands apply; the
+   candidate must have `issue_count = 0` (no blocking issue). The draft-events file lists only the
+   drafts the candidate writes: a draft holding a deferred selection is not promoted by this candidate
+   at all (no event, selections or player assets), and the review refuses metadata for it. Nor is a
+   draft whose every candidate selection is already a current canonical selection of a finalized
+   promotion (the session-keyed draft promotions): preparation records it under
+   `pickLineageDeferral.promotedDrafts`, migration 0265 checks that on insert and again at promotion
+   (currency is asset-scoped since 0266: a scoped later version of a draft night retires only the
+   selections it cites or re-lists, so a session re-versioned for a few players still counts as
+   promoted for the rest). The same holds for a trade whose event is current canonical under the
+   same stable key from a finalized promotion with every one of the candidate's transfers a promoted
+   asset on it: recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
+   promotion, left unwritten (no trade version, asset, special custody or realization), omitted from
+   the reviewed transaction dates, and counted on the receipt with its ids. A custody observation
+   without a usable status (`unresolved`, such as an order page's holder-only special pick with no
+   original club, or `disputed` behind a deferred `pick_identity_conflict`) is pick-side too: recorded
+   as `deferredCustodyIds`, checked by migration 0268 on insert and at promotion, written as nothing
+   and counted on the receipt as `deferredCustodyCount`; without a deferral it blocks as before. A
+   retained `draft_session` claim in the candidate's sources refuses the metadata-only proposal only
+   for a draft the candidate writes (migration 0269): a session claim for a draft left to its earlier
+   promotion or holding a deferred selection proves nothing the promotion needs. A pick the
+   promotion would define that is already a canonical pick with different facts (the draft
+   promotions key a pick by its slot, a trade by its custody) and no reviewed lineage registration
+   is retained under the deferral: the asset references the existing pick unchanged, no facts are
+   written, and the receipt lists it as `retainedPickDefinitionIds` with
+   `retainedPickDefinitionCount`; without a deferral that is still the immutable conflict. A stable
+   pick the written transfers number differently (a trade page's "Pick 46" and a later trade's
+   "Pick 56" for the same entitlement) is defined, under the deferral, from its one usable custody
+   observation in the candidate's full custody (the slot it became; a deferred pick's observation
+   counts here though it is not written) and listed as `custodyDefinedPickIds` with
+   `custodyDefinedPickCount`, each asset keeping its trade-time number as its label; with no such
+   single custody row, or more than one, it is still the conflict,
+   and the promotion writes nothing of it and no realization into it (the receipt counts
+   `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
+   promoter re-checks the deferral decision in its transaction, materializes every transaction and
+   directed asset (a deferred pick keeps its stable `pick_id` on the asset), writes no custody
+   observation and no `exercised_as` realization for a deferred pick, and records
+   `pickLineageDeferral: { decisionId, deferredIssueCount }` on the receipt, so the promotion id
+   differs from an undeferred promotion of the same candidate. Deferred issues stay on the candidate;
+   the grader keeps reporting those legs exactly as now. Nothing deferred is ever published: the
+   promotion-backed corpus excludes a deferred-lineage promotion from its scope and the database
+   refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
+   lineage or a new candidate without the deferral, which supersedes it.
+
 8. Register each immutable reviewed URL schedule once with
    `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
    schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
@@ -806,8 +941,8 @@ custody and admission adapters differ:
 
 - raw bytes go to local non-production filesystem custody (`local_non_production_filesystem`, the
   same adapter the local official-AFL and AFLCA captures use) under
-  `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw` or
-  `<artifact-root>/official-afl-session-raw`; this custody cannot satisfy production or
+  `<artifact-root>/draftguru-trade-raw`, `<artifact-root>/draftguru-national-raw`,
+  `<artifact-root>/official-afl-session-raw` or `<artifact-root>/footyinfo-board-raw`; this custody cannot satisfy production or
   public-release storage. With `--store-id <store-id>` the pages go into the registered local store,
   whose root must be `--artifact-root`, and each page's custody row records its location in the same
   transaction. Always pass it on `statly-grading-1` (`statly-grading-1-artifacts`), so no new raw page
@@ -824,21 +959,75 @@ Prerequisites:
 1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
    command loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
-     `draftguru-trade-detail-issue-579-private-non_production`;
-   - one `draftguru-national-year-page-issue579-private-<season>` decision per captured season, for
-     example `draftguru-national-year-page-issue579-private-2024`. The runner never uses a combined
-     key such as `-2018-combined-v2`; and
+     `draftguru-trade-detail-issue-579-private-non_production-parser-v3`. Trade detail is captured
+     with `draftguru-trade-parser/v3` (statlyaus/Statly#886). It emits v2's claims unchanged: each
+     received pick's stated outcome (`pick_disposition`: the player it was used on, "traded on" or
+     "not used"; never games, points or estimates). After them, for each traded pick, it emits the
+     player the giving side names as eventually selected with it (`pick_eventual_selection`: native
+     id and name, or "not used"). The v3 decision's source rights must name
+     `DRAFTGURU_TRADE_DETAIL_V3_FIELDS` (v2's fields plus `DRAFTGURU_TRADE_EVENTUAL_SELECTION_FIELDS`).
+     Staging admits the claim kind from migration 0270. The v1 and v2 decisions and the captures
+     recorded under them stay valid; the runner no longer makes new v1 or v2 trade-detail captures.
+     Before preparing a candidate from v3 captures, count the promoted transfer assets whose pick id
+     the eventual-selection join would change, and record the count on #886;
+   - one `draftguru-national-year-page-issue579-private-<season>-parser-v3` decision per captured
+     season, for example `draftguru-national-year-page-issue579-private-2019-parser-v3`. Parsers
+     `draftguru-national-year-page/v2` and `/v3` also record each selection's `accessCategory`
+     (open, academy or father-son), so their rights must name `DRAFTGURU_NATIONAL_YEAR_FIELDS`. v3
+     also reads the 2019 page's club-qualified academy forms (`Academy(<club>)`,
+     `Academy (NG)(<club>)`, optionally ending ` - Not Matched`); on a page with only the plain forms
+     it emits exactly what v2 emits. The v1 and v2 per-season decisions and their captures stay
+     valid, and reconciliation counts access from both v2 and v3 captures, so a season needs a v3
+     decision only before its next capture. The runner never uses a combined key such as
+     `-2018-combined-v2`; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
-     `official-afl-completed-draft-session-issue579-private-2020-session-v18`. The key names the
+     `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
      current parser version, so a parser change needs a newly recorded decision; the runner never
      falls back to an earlier season key or parser. Every season in a run must have its decision
-     before any page is fetched.
+     before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
+     date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
+     values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
+     and still requires exactly one. The v18 decisions and their captures stay valid; and
+   - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v4` decision per
+     captured season, 2019 to 2025, for example
+     `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. Parser
+     `official-afl-draft-order-parser/v4` reads the reviewed pre-draft order table as `pick_custody`
+     claims (issue 853), so the rights must name exactly `OFFICIAL_AFL_DRAFT_ORDER_FIELDS` from
+     `development/localOfficialAflDraftOrderCapture.ts`: the seven non-null leaves of that claim. The
+     2023 to 2025 pages are the three Internet Archive snapshots named in the source policy; the
+     rights record still names `official_afl` as the provider, because the content is the AFL's and
+     the archive is only its custodian. The `-order-v2` decisions and captures of 2026-10-09 stay
+     recorded but are never retained: v2 recorded each special pick as a parse issue, and a retained
+     plan admits only issue-free batches. The `-order-v3` decisions and captures stay recorded too;
+     v4 emits the same claims on 2019-2024 and adds the 2025 page, but the runner reads only the
+     current parser's key, so a v4 capture of any season needs its `-order-v4` decision; and
+   - one `official-afl-trade-period-dates-issue869-private-<season>-period-v2` decision per
+     captured season, for example `official-afl-trade-period-dates-issue869-private-2023-period-v2`
+     (statlyaus/Statly#869). Parser `official-afl-trade-period-parser/v2` reads the AFL's
+     announcement of that season's trade-period dates as one `trade_period_window` claim, so the
+     rights must name exactly `OFFICIAL_AFL_TRADE_PERIOD_FIELDS` from
+     `development/localOfficialAflTradePeriodCapture.ts`: the four non-null leaves of that claim.
+     The reviewed pages are enumerated in `source/officialAflTradePeriodSourceScope.ts`; each
+     entry records the window the reviewer read, the capture is effective from its first day, and
+     the parser must reproduce it. The window is a traded arrival's date precision, never a day.
+     Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
+     refuses the capture's evidence rows; and
+   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v1` decision per captured
+     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v1`
+     (issues 853 and 789; owner decision of 2026-10-12 in the source policy). Parser
+     `footyinfo-draft-board-parser/v1` reads `https://www.footyinfo.com/draft/<season>` as
+     `draft_board_pick` claims for every selected, passed and removed pick, and a `draft_selection`
+     for each selection. The rights must name exactly `FOOTYINFO_DRAFT_BOARD_FIELDS` from
+     `development/localFootyinfoDraftBoardCapture.ts`, with provider `footyinfo` and an 86,400 s
+     cache. Staging admits the claim kind from migration 0271; an earlier database refuses the
+     capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v1`, `draftguru-national-year-page/v1` or
-   `official-afl-completed-draft-session/v18`), seasons inside one range, 1 request per 5 seconds
+   `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
+   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` or
+   `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
-   3,600 s for Draftguru national-year pages and Official AFL) and exactly one `provider-egress-control` evidence
+   3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
    parser, pacing, cache or retention fails closed; the runner does not adapt.
 3. `AFL_OUTCOMES_DATABASE_URL` names the loopback PostgreSQL outcomes database, and
@@ -865,10 +1054,111 @@ npm run outcomes:sources:capture-local-external -- \
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
 (2010-2018) are not enumerable here and are refused.
 
+To capture only some of a season's pages, add `--url` with each exact reviewed page, for example to
+recapture one night without fetching the other again.
+`--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
+refused before anything is fetched. `--season` is still required.
+
+Capture the Official AFL pre-draft orders for 2019 to 2025 (issue 853). Each `--season` is the one
+reviewed order page as it stood after that season's last pick-swap deadline; 2023 to 2025 fetch the
+reviewed Internet Archive snapshots (raw `id_` form, no redirect; the archive declares
+`content-encoding: gzip` and the fetch decodes it). Every claim is observed at the page's stated
+as-of date, for 2025 the close of the pick-swap window on 7 November:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability official-afl-indicative-draft-order \
+  --season 2019 --season 2020 --season 2021 --season 2022 --season 2023 --season 2024 \
+  --season 2025
+```
+
+Expect `issueCount` 0 on every page; a nonzero count means an annotation form the parser has not
+seen, and the page cannot enter a retained plan until the parser is revised under a new version.
+Compensation, assistance, concession and priority picks (41 across the seven pages, 7 of them in
+2025's 115 slots) are claims with
+no original club; they are custody observations of their holder only and never link a traded-on
+pick. After capture, the order's club
+spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need current
+`official_afl` club resolutions before reconciliation can use the rows; an unresolved name leaves
+that row `unresolved`. Then, on an outcomes database at migration 0260 or later (earlier ones refuse
+this capability in a retained plan), rebuild the plan, completion and candidate as usual and run the realized
+grade; the `traded_on_return_unlinked` count on #853 is the measure.
+
+Capture the Official AFL trade-period announcements (statlyaus/Statly#869) once the owner has
+recorded the per-season `-period-v2` decisions. Each `--season` is the exact reviewed announcement
+of that season's dates; the parser emits one `trade_period_window` claim per page and nothing when
+the page does not state both the opening and the deadline day of the men's trade period:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' \
+  --capability official-afl-trade-period-dates \
+  --season 2020 --season 2022 --season 2023 --season 2024 --season 2025
+```
+
+Expect `issueCount` 0 and one claim per page whose window equals the reviewed entry. The reviewed
+announcements are the AFL's own key-dates articles: 2020 (`news/498142`, 4 to 12 November), 2022
+(`news/811821`, 3 to 12 October), 2023 (`news/1004881`, 9 to 18 October), 2024 (`news/1110249`, 7 to
+16 October) and 2025 (`news/1291626`, 6 to 15 October). **2019 and 2021 have no reviewed page**: no
+afl.com.au announcement of those seasons' dates was found (2026-10-10), and the Internet Archive
+holds no 2019 or 2021 snapshot of `afl.com.au/trade/key-dates`. Club pages state them (Melbourne
+FC `news/41172` for 2019, 7 to 16 October; Sydney Swans `news/1023286` for 2021, 4 to 13 October)
+but are not the AFL's; adding either, or any other substitute, is an owner decision recorded in the
+source policy before the scope file changes. A reviewed window is consumed by the promotion review
+command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
+
+Capture the Footyinfo national draft boards (issues 853 and 789) once the owner's per-season
+`-board-v1` decisions are recorded. The owner approved egress only from `statly-grading-1` through
+the genuine-database wrapper, so this runs there and nowhere else. Each `--season` is the one board
+`https://www.footyinfo.com/draft/<season>`; there is no `--url`:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+AFL_TRADE_EXTERNAL_USER_AGENT='Statly private evaluation (contact: <owner-contact>)' \
+npm run outcomes:sources:capture-local-external -- \
+  --artifact-root '<durable-artifact-root>' --store-id '<store-id>' \
+  --capability footyinfo-national-draft-board \
+  --season 2019 --season 2020 --season 2021 --season 2022 --season 2023 --season 2024 \
+  --season 2025
+```
+
+The board shows only selections in its rendered table. Passed and removed picks are in the board
+data the page embeds (serialized router state), which the parser reads without evaluating it. Every
+selection in the data must match its table row on number, club, player, route, points and note, or
+the page is one `invalid_page` issue with no claims. Each response is capped at 2 MiB, per the owner's
+egress decision. Expect `issueCount` 0. A 403, a 429, any
+other non-200 status or a bot challenge fails the capture. Stop there: the decision does not allow
+retrying around it. Picks the board lists as points used to match a bid are not board rows and are
+not emitted.
+
+Each `draft_board_pick` states:
+
+- the holder at the draft (club code as `nativeId`, club name);
+- the round, where the board files the pick under one;
+- `selected`, `passed` or `removed`, with the pick number and player (slug and name) exactly when
+  selected;
+- the route the board prints, original club first and holder last;
+- the route label (`matched_bid`, `compensation`, `special_assistance` or `leftover_points`), and
+  for a matched bid the bidding club and basis;
+- the points and the note.
+
+An empty route means the board prints none, never that the pick did not move. A leftover-points
+pick's route is not printed. Footyinfo club and player names need their own `footyinfo` identity
+resolutions before reconciliation can use the rows. Reconciliation reads the `draft_selection`
+claims as a second provider for a selection now. Nothing reads `draft_board_pick` claims yet: using
+routes to link onward hops, and passed or removed picks as not-used evidence, is a reconciliation
+change of its own.
+
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v1`), which keeps national selections and counts every other pathway
-as excluded. It is never the general `draftguru-event-year` year-page parser:
+(`draftguru-national-year-page/v3`), which keeps national selections and counts every other pathway
+as excluded, and records each selection's access category from the page's category cell. An
+unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
@@ -1529,6 +1819,14 @@ missing or mismatched ancestry as unavailable authority; never rebuild terminal 
 caller-provided identifiers.
 
 ### Operating automatic local private valuation
+
+When the outcomes database has a registered local store, `AFL_TRADE_LOCAL_ARTIFACT_ROOT` must be
+that store's root. On `statly-grading-1` that is the root registered for `statly-grading-1-artifacts`
+(`SELECT root_locator FROM outcome_artifact_store`). The worker, the ad hoc
+valuation command and provisioning then write private evaluation artifacts through the store, so
+each custody row records its location. That includes the qualification an automated Gate 3
+decision cites, which migration 0253 requires to be located. Any other root is refused at
+startup. A database with no registered store keeps the plain local repository.
 
 The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback
 `statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and then polls
@@ -2955,6 +3253,47 @@ a model or supply Gate 3 model-validity evidence. Do not claim a real model, num
 valuation publication until an executor has produced an immutable run and the later independent gates
 have approved its exact artifacts.
 
+## Grading trades on realized value (MVP)
+
+`outcomes:grading:realized` grades every trade in one reconciliation candidate on realized first-stint
+value (statlyaus/Statly#789). The rules are in the architecture doc's "Realized trade grade (MVP) contract"
+section. The command reads the candidate, the current HPN PAV calculation per season, and the current
+season spells and reviewed arrivals in one read-only transaction. It seals the private batch, writes it
+to `--out`, and stores it in the registered store as `derived_private` (repository
+`realized-trade-grades`): the bytes are written and read back in full, then one transaction records the
+custody row and its location. The batch is a calculation output, not a source, so it is not
+`raw_source`. Nothing else is written. `--dry-run` grades and writes `--out` but stores nothing.
+
+The nightly custody readback reads every `raw_source` row in full but only samples other classes (5% a
+run by default), so it does not check every stored batch each night. To check every stored batch, run
+`npm run outcomes:artifacts:readback -- --store-id <store-id> --sample-fraction 1`, which reads every
+located row of the store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:realized -- \
+  --candidate <external-reconciliation:...> --method <hpn-pav-method:...> \
+  --seasons 2021-2026 --official-seasons 2021-2025 --benchmark <hpn-pick-benchmark:...> \
+  --store-id <store-id> --out <absolute-path.json> [--dry-run]
+```
+
+- `--out` must not exist yet. The batch is never overwritten. It is written only after the batch is
+  stored, so a refused store leaves no batch file. If writing `--out` then fails, the error names the
+  stored `artifactId`, which is the batch's only copy.
+- The command refuses, and stores nothing, when:
+  - the candidate is not finalized `non_production`;
+  - a season has no finalized current PAV calculation, or its calculation was finalized after the run
+    started;
+  - a season has no season spells;
+  - a PAV row is duplicated or not bound to a current season spell;
+  - the candidate holds no trades.
+- A trade the batch cannot represent (no transfers, or an unusable club) is listed as `ungraded`.
+  Read the printed `summary` before citing a batch.
+- The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
+  cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
+  by `artifactId` and `batchId`, never "the latest".
+- It is private and `non_production`. Nothing here is publishable.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark
@@ -3492,6 +3831,9 @@ Migration0172 allows issuing references in retained completions only. Include th
 exact candidate source set before canonical custody; source capture alone does not extend a prior
 completion. Register current issuing-year capture/reviewer coverage before invoking the award owner.
 Retained article bytes and parser verification alone are not registered capture or award evidence.
+Migration 0260 likewise admits Official AFL pre-draft order captures
+(`official-afl-indicative-draft-order`, issue 853) to retained plans; before it, `retained-plan`
+apply failed the target capability check (`23514`).
 
 ### Compensation lifecycle references
 
@@ -3929,6 +4271,12 @@ existing registered identity review guard. Wrong URL/year/pathway reject. The Co
 is exact-URL only. Gate field authorization remains unchanged: every emitted field still requires an
 explicit reviewed mapping and archive request. Verify and retain governance, capture, identity and
 promotion results for the authorized target; parser eligibility is not source permission.
+
+Parser v19 (see "Capturing source evidence") changed only the shared 2020–2023 report routing. The
+thirteen per-season parsers under `src/server/aflTradeIntelligence/source/` (2010 list and session,
+2011–2019 sessions, 2011 and 2012 mini drafts) still read only `.article__date > time`, so a live
+recapture of any 2010–2019 page refuses until they are changed under a later parser version. Their
+existing captures stay valid.
 
 Migration0204 requires session boundary and member-identity approvals to retain the exact source
 observation, entity and season. A same-name approval from another season cannot substitute for it.

@@ -19,6 +19,10 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
 } from './externalReconciliationSourceAuthorityContracts';
+import {
+  isAflTradePickSideReconciliationIssue,
+  isAflTradeUsableCustodyStatus,
+} from './pickLineageDeferral';
 
 const instantSchema = z.iso.datetime({ offset: true });
 const statusSchema = z.enum(['single_source', 'corroborated', 'disputed', 'unresolved']);
@@ -94,6 +98,7 @@ const selectionSchema = z
           'footywire',
           'official_afl',
           'fitzroy_official_afl_player_details',
+          'footyinfo',
         ])
       )
       .min(1),
@@ -136,6 +141,71 @@ const lineageSchema = z
     'Non-player outcomes require no selection; selected outcomes require a selection.'
   );
 
+/** A provider-stated received-pick outcome; single-source and separate from governed lineage. */
+const pickOutcomeSchema = z
+  .object({
+    outcomeId: aflTradeContentAddressedIdSchema('external-pick-outcome'),
+    transferId: aflTradeContentAddressedIdSchema('external-transfer'),
+    disposition: z.enum(['selected', 'traded_on', 'not_used']),
+    outcomeStatus: z.enum(['stated', 'pending', 'unresolved']),
+    selectionId: aflTradeContentAddressedIdSchema('external-draft-selection').nullable(),
+    playerId: z.string().trim().min(1).max(240).nullable(),
+    nominationBasis: z
+      .enum([
+        'club_took_nominated_player',
+        'club_took_no_nominated_player',
+        'no_access_evidence',
+        'board_pick_passed_or_removed',
+      ])
+      .optional(),
+    receivingClubNominatedSelections: z.number().int().nonnegative().max(90).optional(),
+    /** The Footyinfo board pick stating the pick was passed or removed (issue 853). */
+    boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine((record) => {
+    const { nominationBasis: basis, receivingClubNominatedSelections: count } = record;
+    if ((basis === 'board_pick_passed_or_removed') !== (record.boardPickId !== undefined))
+      return false;
+    if (basis === undefined) return count === undefined;
+    if (record.disposition !== 'not_used' || record.outcomeStatus !== 'stated') return false;
+    // Without complete access evidence the count is unknown, never zero; a board pick is no count.
+    if (basis === 'no_access_evidence' || basis === 'board_pick_passed_or_removed')
+      return count === undefined;
+    if (basis === 'club_took_nominated_player') return count !== undefined && count > 0;
+    return count === 0;
+  }, 'A nomination basis belongs only to a stated not-used pick, and its count must match it.')
+  .refine(
+    (record) =>
+      record.selectionId === null ||
+      (record.disposition === 'selected' && record.outcomeStatus === 'stated'),
+    'Only a stated selected outcome names a selection.'
+  )
+  .refine(
+    (record) => record.outcomeStatus !== 'pending' || record.disposition === 'not_used',
+    'Only a not-used pick can be pending.'
+  );
+
+/** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
+const draftBoardPickSchema = z
+  .object({
+    boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick'),
+    draftYear: z.number().int().min(1897).max(2200),
+    draftType: z.string().trim().min(1).max(80),
+    roundNumber: z.number().int().positive().nullable(),
+    recordedPickNumber: z.number().int().positive().nullable(),
+    status: z.enum(['selected', 'passed', 'removed']),
+    clubId: z.string().trim().min(1).max(240).nullable(),
+    routeClubIds: z.array(z.string().trim().min(1).max(240)).max(16).nullable(),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine(
+    (record) => (record.status === 'selected') === (record.recordedPickNumber !== null),
+    'A board pick has a number exactly when it was selected.'
+  );
+
 const issueSchema = z
   .object({
     code: z.enum([
@@ -145,8 +215,9 @@ const issueSchema = z
       'pick_identity_conflict',
       'transaction_incomplete',
       'lineage_unresolved',
+      'pick_outcome_unresolved',
     ]),
-    severity: z.literal('blocking'),
+    severity: z.enum(['blocking', 'deferred']),
     subjectKey: z.string().trim().min(1).max(1_000),
     detail: z.string().trim().min(1).max(4_000),
     evidenceIds: z.array(evidenceIdSchema),
@@ -258,6 +329,55 @@ const contentFieldsSchema = z
     draftSelections: z.array(selectionSchema),
     pickCustody: z.array(custodySchema),
     pickLineage: z.array(lineageSchema),
+    pickOutcomes: z.array(pickOutcomeSchema).min(1).optional(),
+    /** Present only when a Footyinfo board was reconciled, so earlier candidate ids are unchanged. */
+    draftBoardPicks: z.array(draftBoardPickSchema).min(1).optional(),
+    /**
+     * The approved owner `reconciliation_scope` decision under which pick-side issues are `deferred`
+     * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
+     */
+    pickLineageDeferral: z
+      .object({
+        decisionId: aflTradeContentAddressedIdSchema('review-decision'),
+        /**
+         * Drafts whose every candidate selection is already a current canonical selection of a
+         * finalized promotion; the promotion writes nothing of them. Present only when non-empty,
+         * sorted by year then type, each naming a draft the candidate holds a selection in.
+         */
+        promotedDrafts: z
+          .array(
+            z
+              .object({
+                draftYear: z.number().int().min(1897).max(2200),
+                draftType: z.string().trim().min(1).max(80),
+              })
+              .strict()
+          )
+          .min(1)
+          .max(100)
+          .optional(),
+        /**
+         * Transactions whose trade event is already current canonical with every transfer a
+         * promoted asset on it; the promotion writes nothing of them. Sorted unique, each a
+         * candidate transaction, present only when non-empty.
+         */
+        promotedTransactions: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-transaction')).min(1).max(10_000)
+          )
+          .optional(),
+        /**
+         * Custody observations without a usable status (`unresolved`, `disputed`): pick-side,
+         * left unwritten. Sorted unique, each a candidate custody row, present only when non-empty.
+         */
+        deferredCustodyIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
     issues: z.array(issueSchema),
     reconciledAt: instantSchema,
     publicationEligible: z.literal(false),
@@ -265,6 +385,90 @@ const contentFieldsSchema = z
   .strict();
 
 type CandidateContent = z.infer<typeof contentFieldsSchema>;
+
+function validatePickLineageDeferral(content: CandidateContent, context: z.RefinementCtx) {
+  const deferred = content.issues.filter(({ severity }) => severity === 'deferred');
+  if (deferred.length > 0 && content.pickLineageDeferral === undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message: 'A deferred issue requires the approved reconciliation-scope decision.',
+    });
+  }
+  if (deferred.length === 0 && content.pickLineageDeferral !== undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message: 'A deferral decision is carried only by a candidate that deferred an issue.',
+    });
+  }
+  if (
+    content.pickLineageDeferral !== undefined &&
+    content.sourceAuthority?.kind !== 'historical_plan_completion'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message:
+        'A deferral decision names a historical completion; the candidate needs its authority.',
+    });
+  }
+  const promotedDrafts = content.pickLineageDeferral?.promotedDrafts ?? [];
+  promotedDrafts.forEach((draft, index) => {
+    const previous = promotedDrafts[index - 1];
+    if (
+      previous !== undefined &&
+      (previous.draftYear > draft.draftYear ||
+        (previous.draftYear === draft.draftYear &&
+          previous.draftType.localeCompare(draft.draftType) >= 0))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedDrafts', index],
+        message: 'Already-promoted drafts must be unique and sorted by year then type.',
+      });
+    }
+    if (
+      !content.draftSelections.some(
+        ({ draftYear, draftType }) => draftYear === draft.draftYear && draftType === draft.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedDrafts', index],
+        message: 'An already-promoted draft must be one the candidate holds a selection in.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.deferredCustodyIds ?? []).forEach((custodyId, index) => {
+    const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
+    if (row === undefined || isAflTradeUsableCustodyStatus(row.status)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'deferredCustodyIds', index],
+        message: 'Deferred custody must be a candidate custody row without a usable status.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.promotedTransactions ?? []).forEach((transactionId, index) => {
+    if (!content.transactions.some((transaction) => transaction.transactionId === transactionId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedTransactions', index],
+        message: 'An already-promoted transaction must be one the candidate holds.',
+      });
+    }
+  });
+  content.issues.forEach((issue, index) => {
+    if (issue.severity === 'deferred' && !isAflTradePickSideReconciliationIssue(issue)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['issues', index, 'severity'],
+        message: 'Only a pick-side issue can be deferred; player-side issues stay blocking.',
+      });
+    }
+  });
+}
 
 function validateSessionCorrectionMarker(content: CandidateContent, context: z.RefinementCtx) {
   if (content.reviewedSessionCorrection) {
@@ -442,6 +646,7 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
   validateSpecialCorrectionMarker(content, context);
   validateOrdinaryCorrectionMarker(content, context);
   validateCandidateSourceAuthority(content, context);
+  validatePickLineageDeferral(content, context);
   const transactionIds = new Set(content.transactions.map(({ transactionId }) => transactionId));
   const transferIds = new Set(content.transfers.map(({ transferId }) => transferId));
   const duplicate = (values: readonly string[]) => new Set(values).size !== values.length;
@@ -451,6 +656,8 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     ['draftSelections', content.draftSelections.map(({ selectionId }) => selectionId)],
     ['pickCustody', content.pickCustody.map(({ custodyId }) => custodyId)],
     ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
+    ['pickOutcomes', (content.pickOutcomes ?? []).map(({ outcomeId }) => outcomeId)],
+    ['draftBoardPicks', (content.draftBoardPicks ?? []).map(({ boardPickId }) => boardPickId)],
   ] as const;
   const relevantSeasonYears = new Set([
     ...content.transactions.map(({ seasonYear }) => seasonYear),
@@ -509,6 +716,91 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         code: 'custom',
         path: ['transactions', index],
         message: 'Incomplete transactions must remain unresolved with an exact blocking issue.',
+      });
+    }
+  });
+  (content.pickOutcomes ?? []).forEach((outcome, index) => {
+    const transfer = content.transfers.find(({ transferId }) => transferId === outcome.transferId);
+    const selection = content.draftSelections.find(
+      ({ selectionId }) => selectionId === outcome.selectionId
+    );
+    const selectedPlayerMatches =
+      outcome.selectionId === null ||
+      (selection !== undefined &&
+        transfer?.asset.kind === 'pick_entitlement' &&
+        selection.draftYear === transfer.asset.draftYear &&
+        selection.draftType === transfer.asset.draftType &&
+        selection.clubId === transfer.toClubId &&
+        selection.playerId !== null &&
+        selection.playerId === outcome.playerId);
+    // A nomination basis may also cite the receiving club's selections in the pick's draft: the
+    // year-page rows its count was read from.
+    const asset = transfer?.asset.kind === 'pick_entitlement' ? transfer.asset : null;
+    const nominationEvidenceIds =
+      outcome.nominationBasis !== undefined && transfer && asset
+        ? content.draftSelections
+            .filter(
+              (candidate) =>
+                candidate.draftYear === asset.draftYear &&
+                candidate.draftType === asset.draftType &&
+                candidate.clubId === transfer.toClubId
+            )
+            .flatMap(({ evidenceIds }) => evidenceIds)
+        : [];
+    // A board basis cites the one board pick that states this pick passed or removed: held by the
+    // receiving club in the pick's draft and round, its route handing it over from the sender.
+    const board =
+      outcome.boardPickId === undefined
+        ? undefined
+        : (content.draftBoardPicks ?? []).find(
+            ({ boardPickId }) => boardPickId === outcome.boardPickId
+          );
+    const route = board?.routeClubIds ?? [];
+    const boardMatches =
+      outcome.boardPickId === undefined ||
+      (board !== undefined &&
+        asset !== null &&
+        board.status !== 'selected' &&
+        board.draftYear === asset.draftYear &&
+        board.draftType === asset.draftType &&
+        board.roundNumber === asset.nominalRound &&
+        board.clubId === transfer?.toClubId &&
+        route.some(
+          (club, at) =>
+            at > 0 && route[at - 1] === transfer.fromClubId && club === transfer.toClubId
+        ));
+    const citable = new Set([
+      ...(transfer?.evidenceIds ?? []),
+      ...(selection?.evidenceIds ?? []),
+      ...nominationEvidenceIds,
+      ...(board?.evidenceIds ?? []),
+    ]);
+    if (
+      !transfer ||
+      !asset ||
+      !outcome.evidenceIds.every((evidenceId) => citable.has(evidenceId)) ||
+      !selectedPlayerMatches ||
+      !boardMatches
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index],
+        message:
+          'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
+      });
+    }
+    if (
+      outcome.outcomeStatus === 'unresolved' &&
+      !content.issues.some(
+        ({ code, evidenceIds }) =>
+          code === 'pick_outcome_unresolved' &&
+          outcome.evidenceIds.some((evidenceId) => evidenceIds.includes(evidenceId))
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'outcomeStatus'],
+        message: 'An unresolved pick outcome requires its blocking issue.',
       });
     }
   });
@@ -587,6 +879,29 @@ export function parseAflTradeExternalReconciliationCandidate(
   input: unknown
 ): AflTradeExternalReconciliationCandidateRecord {
   return aflTradeExternalReconciliationCandidateSchema.parse(input);
+}
+
+/**
+ * The stated pick outcomes a derived candidate can keep: those whose transfer is still a pick
+ * transfer in it and whose named selection, if any, it still holds. Returns no key when none remain,
+ * so the derived candidate's id matches one built without dispositions.
+ */
+export function retainAflTradePickOutcomes(
+  pickOutcomes: CandidateContent['pickOutcomes'],
+  kept: Pick<CandidateContent, 'transfers' | 'draftSelections'>
+): Pick<CandidateContent, 'pickOutcomes'> {
+  const pickTransfers = new Set(
+    kept.transfers
+      .filter(({ asset }) => asset.kind === 'pick_entitlement')
+      .map(({ transferId }) => transferId)
+  );
+  const selections = new Set(kept.draftSelections.map(({ selectionId }) => selectionId));
+  const retained = (pickOutcomes ?? []).filter(
+    (outcome) =>
+      pickTransfers.has(outcome.transferId) &&
+      (outcome.selectionId === null || selections.has(outcome.selectionId))
+  );
+  return retained.length === 0 ? {} : { pickOutcomes: retained };
 }
 
 export function createAflTradeExternalReconciliationCandidate(

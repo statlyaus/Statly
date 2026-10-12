@@ -5,15 +5,34 @@ import {
 } from '@/server/aflTradeIntelligence/development/localDraftguruTradeAuthorityProposal';
 import {
   DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
+  DRAFTGURU_NATIONAL_YEAR_FIELDS as PRODUCTION_DRAFTGURU_NATIONAL_YEAR_FIELDS,
   DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
   draftguruNationalYearDecisionKey,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
+import {
+  FOOTYINFO_DRAFT_BOARD_CAPABILITY,
+  FOOTYINFO_DRAFT_BOARD_FIELDS,
+  footyinfoDraftBoardDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localFootyinfoDraftBoardCapture';
+import { FOOTYINFO_DRAFT_BOARD_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/footyinfoDraftBoardAdapter';
 import type { LocalNarrowCaptureAuthority } from '@/server/aflTradeIntelligence/development/localNarrowCaptureAuthority';
+import {
+  OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
+  OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
+  officialAflDraftOrderDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
 import { officialAflDraftSessionDecisionKey } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import {
   aflTradeGateDecisionProposalSchema,
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
+import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
+import {
+  OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY,
+  OFFICIAL_AFL_TRADE_PERIOD_FIELDS,
+  officialAflTradePeriodDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localOfficialAflTradePeriodCapture';
+import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflTradePeriodAdapter';
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
@@ -26,16 +45,8 @@ export const OFFICIAL_AFL_DRAFT_SESSION_FIELDS = [
   'draft_session.sessionOrdinal',
 ] as const;
 
-/** The genuine recorded field boundary for Draftguru national-year selections. */
-export const DRAFTGURU_NATIONAL_YEAR_FIELDS = [
-  'draft_selection.draftType',
-  'draft_selection.draftYear',
-  'draft_selection.player.nativeId',
-  'draft_selection.player.recordedName',
-  'draft_selection.selectedByClub.nativeId',
-  'draft_selection.selectedByClub.recordedName',
-  'draft_selection.selectionNumber',
-] as const;
+/** The genuine recorded field boundary for Draftguru national-year selections (parser v2). */
+export const DRAFTGURU_NATIONAL_YEAR_FIELDS = PRODUCTION_DRAFTGURU_NATIONAL_YEAR_FIELDS;
 
 interface NarrowAuthorityTiming {
   evidenceIds: DraftguruTradeAuthorityProposalInput['evidenceIds'];
@@ -51,8 +62,9 @@ function narrowSeasonAuthority(
     season: number;
     version?: number;
     decisionKey: string;
-    provider: 'draftguru' | 'official_afl';
+    provider: 'draftguru' | 'official_afl' | 'footyinfo';
     dataset: string;
+    cacheSeconds?: number;
     capabilityId: string;
     clientVersion: string;
     fields: readonly string[];
@@ -79,7 +91,7 @@ function narrowSeasonAuthority(
     },
     automatedAccess: {
       ...base.automatedAccess,
-      cache: { permitted: true, maximumSeconds: 3_600 },
+      cache: { permitted: true, maximumSeconds: input.cacheSeconds ?? 3_600 },
     },
     fields: input.fields.map((sourceField) => ({
       ...base.fields[0]!,
@@ -136,6 +148,36 @@ export function officialAflDraftSessionAuthority(
   });
 }
 
+/** The shape of the owner's recorded per-season Official AFL pre-draft order authority (issue 853). */
+export function officialAflDraftOrderAuthority(
+  input: NarrowAuthorityTiming & { season: number; clientVersion?: string; version?: number }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: officialAflDraftOrderDecisionKey(input.season),
+    provider: 'official_afl',
+    dataset: `Official AFL ${input.season} pre-draft national order`,
+    capabilityId: OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
+    clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+    fields: OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
+  });
+}
+
+/** The shape of the owner's recorded per-season Official AFL trade-period authority (issue 869). */
+export function officialAflTradePeriodAuthority(
+  input: NarrowAuthorityTiming & { season: number; clientVersion?: string; version?: number }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: officialAflTradePeriodDecisionKey(input.season),
+    provider: 'official_afl',
+    dataset: `Official AFL ${input.season} trade-period dates`,
+    capabilityId: OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY,
+    clientVersion: input.clientVersion ?? OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
+    fields: OFFICIAL_AFL_TRADE_PERIOD_FIELDS,
+  });
+}
+
 /** The shape of the owner's recorded per-season Draftguru national-year authority. */
 export function draftguruNationalYearAuthority(
   input: NarrowAuthorityTiming & { season: number; clientVersion?: string }
@@ -148,6 +190,22 @@ export function draftguruNationalYearAuthority(
     capabilityId: DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
     clientVersion: input.clientVersion ?? DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
     fields: DRAFTGURU_NATIONAL_YEAR_FIELDS,
+  });
+}
+
+/** The shape of the owner's recorded per-season Footyinfo draft-board authority (issue 853). */
+export function footyinfoDraftBoardAuthority(
+  input: NarrowAuthorityTiming & { season: number; clientVersion?: string }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: footyinfoDraftBoardDecisionKey(input.season),
+    provider: 'footyinfo',
+    dataset: `Footyinfo ${input.season} national draft board`,
+    capabilityId: FOOTYINFO_DRAFT_BOARD_CAPABILITY,
+    clientVersion: input.clientVersion ?? FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
+    fields: FOOTYINFO_DRAFT_BOARD_FIELDS,
+    cacheSeconds: 86_400,
   });
 }
 

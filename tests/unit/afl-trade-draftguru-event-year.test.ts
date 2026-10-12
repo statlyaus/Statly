@@ -77,7 +77,7 @@ describe('Draftguru event year provenance', () => {
 
   it('preserves national-only delegation and its 59 complete evidence records', () => {
     const result = parseDraftguruNationalYearSelections(html, {
-      capture: { ...capture, parserVersion: 'draftguru-national-year-parser/v1' },
+      capture: { ...capture, parserVersion: 'draftguru-national-year-page/v1' },
       draftYear: 2020,
     });
     expect(result.issues).toEqual([]);
@@ -91,6 +91,144 @@ describe('Draftguru event year provenance', () => {
         )
         .map((row) => row.content.claim)
     );
+  });
+
+  describe('national-year parser v2 access categories', () => {
+    const parseNational = (body = html, parserVersion = 'draftguru-national-year-page/v2') =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: { ...capture, parserVersion },
+        draftYear: 2020,
+      });
+    const categories = (result: ReturnType<typeof parseNational>) =>
+      result.evidence.map(({ content }) =>
+        content.claim.kind === 'draft_selection' ? content.claim.accessCategory : 'not-a-selection'
+      );
+
+    it('records each national selection as open, academy or father-son', () => {
+      const result = parseNational();
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      const counts = categories(result).reduce<Record<string, number>>(
+        (total, value) => ({ ...total, [String(value)]: (total[String(value)] ?? 0) + 1 }),
+        {}
+      );
+      expect(counts).toEqual({ open: 48, academy: 10, father_son: 1 });
+    });
+
+    it('keeps v1 claims exactly as recorded, with no access category', () => {
+      expect(categories(parseNational(html, 'draftguru-national-year-page/v1'))).toEqual(
+        Array.from({ length: 59 }, () => undefined)
+      );
+    });
+
+    it.each(['Academy Scholarship', 'Academy (Northern)', 'Father-Son', 'Father-Son Unknown'])(
+      'quarantines the near-miss category %s instead of reading it as a nomination',
+      (label) => {
+        const body = html.replace(
+          /<td class="category">\s*Academy\s*</,
+          `<td class="category">${label}<`
+        );
+        expect(body).not.toBe(html);
+        expect(parseNational(body).issues).toContainEqual(
+          expect.objectContaining({
+            code: 'unsupported_row',
+            detail: expect.stringContaining(label),
+          })
+        );
+      }
+    );
+
+    it('quarantines an unreviewed category instead of guessing', () => {
+      const body = html.replace(
+        /<td class="category">\s*Academy/,
+        '<td class="category">Rookie Elevation'
+      );
+      const result = parseNational(body);
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('Rookie Elevation'),
+        })
+      );
+    });
+
+    it('reads access only under parser v2, so other callers keep their own field boundary', () => {
+      const result = parseNational(html, 'official-afl-completed-draft-session/v1');
+      expect(result.evidence.length).toBeGreaterThan(0);
+      expect(categories(result).every((category) => category === undefined)).toBe(true);
+    });
+  });
+
+  describe('national-year parser v3 club-qualified academy forms', () => {
+    const V3 = 'draftguru-national-year-page/v3';
+    const parseNational = (body = html, parserVersion = V3) =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: { ...capture, parserVersion },
+        draftYear: 2020,
+      });
+    // Pick 1 is Jamarra Ugle-Hagan, selected by the Western Bulldogs.
+    const firstAcademyCell = /<td class="category">Academy \(NG\)\n<\/td>/;
+    const withPickOneCell = (label: string) => {
+      const body = html.replace(firstAcademyCell, `<td class="category">${label}</td>`);
+      expect(body).not.toBe(html);
+      return body;
+    };
+    const pickOne = (result: ReturnType<typeof parseNational>) =>
+      result.evidence.find(
+        ({ content }) =>
+          content.claim.kind === 'draft_selection' && content.claim.selectionNumber === 1
+      )?.content.claim;
+
+    it('emits exactly the v2 claims on a page with only the plain forms', () => {
+      const v2 = parseNational(html, 'draftguru-national-year-page/v2');
+      const v3 = parseNational();
+      expect(v3.issues).toEqual([]);
+      expect(v3.evidence.map(({ content }) => content.claim)).toEqual(
+        v2.evidence.map(({ content }) => content.claim)
+      );
+    });
+
+    it.each([
+      ['Academy(Western Bulldogs)', 'academy'],
+      ['Academy (NG)(Western Bulldogs)', 'academy'],
+      ['Academy(Brisbane - Not Matched)', 'open'],
+      ['Academy (NG)(St Kilda - Not Matched)', 'open'],
+    ])('reads %s on a Western Bulldogs selection as %s', (label, expected) => {
+      const result = parseNational(withPickOneCell(label));
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(pickOne(result)).toMatchObject({ accessCategory: expected });
+    });
+
+    it.each([
+      // Another club's academy, matched: the selecting club cannot have matched it.
+      'Academy(Brisbane)',
+      'Academy (NG)(St Kilda)',
+      // The selecting club declining its own academy bid is contradictory.
+      'Academy(Western Bulldogs - Not Matched)',
+      'Academy(Brisbane - Matched)',
+      'Academy()',
+      'Academy(western bulldogs)',
+      'Academy (NG) (Western Bulldogs)',
+    ])('quarantines %s on a Western Bulldogs selection', (label) => {
+      expect(parseNational(withPickOneCell(label)).issues).toContainEqual(
+        expect.objectContaining({ code: 'unsupported_row', detail: expect.stringContaining(label) })
+      );
+    });
+
+    it('keeps v2 refusing the club-qualified forms', () => {
+      expect(
+        parseNational(
+          withPickOneCell('Academy(Western Bulldogs)'),
+          'draftguru-national-year-page/v2'
+        ).issues
+      ).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('Academy(Western Bulldogs)'),
+        })
+      );
+    });
   });
 
   it.each([

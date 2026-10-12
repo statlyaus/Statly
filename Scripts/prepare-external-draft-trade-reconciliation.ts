@@ -10,9 +10,17 @@ import {
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from '../src/server/aflTradeIntelligence/source/postgresExternalHistoricalReconciliationSource';
 import { PostgresAflTradeExternalIdentityReviewRepository } from '../src/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
 import { PostgresAflTradeExternalReconciliationRepository } from '../src/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
+import { PostgresAflTradePromotedDraftSelectionReader } from '../src/server/aflTradeIntelligence/source/postgresPromotedDraftSelectionReader';
+import { PostgresAflTradeReconciliationScopeDecisionRepository } from '../src/server/aflTradeIntelligence/source/postgresReconciliationScopeDecisionRepository';
+
+export interface PrepareCommandArguments {
+  completionId: string;
+  /** `--defer-pick-lineage <review-decision:…>`: the owner's approved reconciliation-scope decision (#869). */
+  pickLineageDeferral?: { decisionId: string };
+}
 
 interface CommandConnection {
-  prepare(input: { completionId: string }): Promise<PreparedAflTradeHistoricalReconciliation>;
+  prepare(input: PrepareCommandArguments): Promise<PreparedAflTradeHistoricalReconciliation>;
   close(): Promise<void>;
 }
 
@@ -21,14 +29,26 @@ interface CommandDependencies {
   writeOutput(line: string): void;
 }
 
-function parseArguments(argv: readonly string[]): { completionId: string } {
-  if (argv.length !== 2) {
-    throw new TypeError('Invalid arguments: use --completion <id>.');
+const usage =
+  'Invalid arguments: use --completion <id> [--defer-pick-lineage <review-decision:sha256>].';
+
+export function parseAflTradePrepareExternalReconciliationArguments(
+  argv: readonly string[]
+): PrepareCommandArguments {
+  if (argv.length !== 2 && argv.length !== 4) throw new TypeError(usage);
+  if (argv[0] !== '--completion' || argv[1] === undefined || argv[1].trim() === '') {
+    throw new TypeError(usage);
   }
-  if (argv[0] !== '--completion' || argv[1]?.trim() === '') {
-    throw new TypeError('Invalid arguments: use --completion <id>.');
+  if (argv.length === 2) return { completionId: argv[1] };
+  const decisionId = argv[3];
+  if (
+    argv[2] !== '--defer-pick-lineage' ||
+    decisionId === undefined ||
+    !/^review-decision:[a-f0-9]{64}$/.test(decisionId)
+  ) {
+    throw new TypeError(usage);
   }
-  return { completionId: argv[1] };
+  return { completionId: argv[1], pickLineageDeferral: { decisionId } };
 }
 
 function databaseUrl(env: Readonly<Record<string, string | undefined>>): string {
@@ -43,12 +63,16 @@ async function connectPostgres(url: string): Promise<CommandConnection> {
   const source = new PostgresAflTradeExternalHistoricalReconciliationSource(client);
   const identityReviewRepository = new PostgresAflTradeExternalIdentityReviewRepository(client);
   const candidateRepository = new PostgresAflTradeExternalReconciliationRepository(client);
+  const scopeDecisionRepository = new PostgresAflTradeReconciliationScopeDecisionRepository(client);
+  const promotedSelectionRepository = new PostgresAflTradePromotedDraftSelectionReader(client);
   return {
     prepare: (input) =>
       prepareAflTradeHistoricalReconciliation(input, {
         source,
         identityReviewRepository,
         candidateRepository,
+        scopeDecisionRepository,
+        promotedSelectionRepository,
       }),
     close: () => pool.end(),
   };
@@ -66,10 +90,10 @@ export async function runAflTradePrepareExternalHistoricalReconciliationCommand(
   },
   dependencies: CommandDependencies = defaultDependencies
 ): Promise<PreparedAflTradeHistoricalReconciliation> {
-  const args = parseArguments(input.argv);
+  const args = parseAflTradePrepareExternalReconciliationArguments(input.argv);
   const connection = await dependencies.connect(databaseUrl(input.env));
   try {
-    const result = await connection.prepare({ completionId: args.completionId });
+    const result = await connection.prepare(args);
     dependencies.writeOutput(JSON.stringify(result));
     return result;
   } finally {

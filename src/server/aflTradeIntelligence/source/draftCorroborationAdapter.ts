@@ -166,6 +166,282 @@ export function parseOfficialAflIndicativeDraftOrder(
       };
 }
 
+/**
+ * Parser for the reviewed pre-draft order tables (issue 853); v1 above reads the 2026 paragraph form.
+ * v4 also reads the 2025 live page: a round heading may sit in a single table cell, the traded block
+ * may be titled "FUTURE SELECTIONS TRADED", the stated pick-swap as-of date must be the observation
+ * date, and the per-club pick lists must agree with the table. On the 2019-2024 pages it emits what
+ * v3 emitted. v3: a special pick's missing original club is a claim fact, not a parse issue, and a
+ * club name may follow an article ("received from the Western Bulldogs").
+ */
+export const OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION = 'official-afl-draft-order-parser/v4';
+
+// Longest first, so "North Melbourne" never reads as "Melbourne". Names are recorded as written.
+const CLUB_NAMES = [
+  'Greater Western Sydney',
+  'Western Bulldogs',
+  'North Melbourne',
+  'Brisbane Lions',
+  'Port Adelaide',
+  'GWS Giants',
+  'Collingwood',
+  'Gold Coast',
+  'West Coast',
+  'Fremantle',
+  'St Kilda',
+  'Adelaide',
+  'Brisbane',
+  'Essendon',
+  'Hawthorn',
+  'Melbourne',
+  'Richmond',
+  'Carlton',
+  'Geelong',
+  'Sydney',
+  'GWS',
+];
+const CLUB_PATTERN = CLUB_NAMES.map((name) => name.replace(/ /g, '\\s+')).join('|');
+// The 2025 club lists and order table name two clubs differently ("GWS", "Greater Western Sydney").
+const CLUB_ALIASES: Record<string, string> = {
+  'Greater Western Sydney': 'GWS',
+  'GWS Giants': 'GWS',
+  'Brisbane Lions': 'Brisbane',
+};
+const sameClub = (left: string, right: string) =>
+  (CLUB_ALIASES[left] ?? left) === (CLUB_ALIASES[right] ?? right);
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const ROUND_NUMBERS: Record<string, number> = {
+  ONE: 1,
+  TWO: 2,
+  THREE: 3,
+  FOUR: 4,
+  FIVE: 5,
+  SIX: 6,
+  SEVEN: 7,
+  EIGHT: 8,
+};
+// A compensation, assistance, concession or priority pick has no ladder slot of an original club,
+// so naming one would collide with that club's own pick in the round. Its claim says so by carrying
+// no original club; that is a fact of the page, not a parse issue.
+const SPECIAL_ORIGIN = /compensation|assistance package|concession|priority pick/i;
+
+/**
+ * The club after the last `prefix` in the note. `undefined` means the prefix is absent; `null`
+ * means the last one names something other than a recorded club (an abbreviation, say), which must
+ * never fall back to an earlier club in the chain.
+ */
+function lastClub(annotation: string, prefix: string): string | null | undefined {
+  const occurrences = [...annotation.matchAll(new RegExp(`\\b${prefix}\\s+`, 'g'))];
+  const last = occurrences.at(-1);
+  if (!last) return undefined;
+  const club = new RegExp(`^(?:the\\s+)?(${CLUB_PATTERN})\\b`, 'i').exec(
+    annotation.slice(last.index + last[0].length)
+  );
+  return club ? normalizeText(club[1]!) : null;
+}
+
+/**
+ * The original club of a slot from its order annotation: none means the holder's own pick; an
+ * explicit "tied to"/"held by" club wins; otherwise the last club a chain received it from is the
+ * earliest holder the page records. Special picks and unreadable notes keep no original club.
+ */
+function originalClubFromAnnotation(
+  holder: string,
+  annotation: string | null
+): { originalClub: string | null; issue: DraftCorroborationIssue['code'] | null } {
+  if (annotation === null) return { originalClub: holder, issue: null };
+  if (SPECIAL_ORIGIN.test(annotation)) return { originalClub: null, issue: null };
+  const explicit = lastClub(annotation, '(?:tied\\s+to|held\\s+by)');
+  const club = explicit === undefined ? lastClub(annotation, 'from') : explicit;
+  return club
+    ? { originalClub: club, issue: null }
+    : { originalClub: null, issue: 'unsupported_order_annotation' };
+}
+
+/**
+ * The slot holders of the 2025 page's "YOUR CLUB'S PICKS" lists (`Club: 16, 48, ...`, one line per
+ * club): `undefined` when the page has no such heading, `null` when the lists are not exactly 18
+ * recorded clubs whose slots never repeat.
+ */
+function clubPickLists($: CheerioAPI): Map<number, string> | null | undefined {
+  const headings = $('h1, h2, h3, h4, h5, h6').filter((_index, element) =>
+    /^YOUR CLUB['’]S PICKS$/i.test(normalizeText($(element).text()))
+  );
+  if (headings.length === 0) return undefined;
+  if (headings.length > 1) return null;
+  const lines = paragraphLines($, headings.next('p'));
+  const listed = new Map<number, string>();
+  const clubs = new Set<string>();
+  const line = new RegExp(`^(${CLUB_PATTERN}):\\s*(\\d{1,3}(?:\\s*,\\s*\\d{1,3})*)$`);
+  for (const text of lines) {
+    const match = line.exec(text);
+    if (!match) return null;
+    const club = normalizeText(match[1]!);
+    clubs.add(CLUB_ALIASES[club] ?? club);
+    for (const pick of match[2]!.split(',').map(Number)) {
+      if (listed.has(pick)) return null;
+      listed.set(pick, club);
+    }
+  }
+  return lines.length === 18 && clubs.size === 18 ? listed : null;
+}
+
+/**
+ * Reads a reviewed Official AFL pre-draft order (2019-2024 articles, the two approved archive
+ * snapshots of the live order page, and the 2025 one): every `ROUND <n>` table row is one slot's
+ * holder, round and original club as of `observedAt`. The page must name the next year's (or
+ * "future") traded selections, the slots must run 1..N without a gap, a stated pick-swap as-of date
+ * must be `observedAt`'s date, and the club pick lists, when present, must name every slot's holder;
+ * otherwise nothing is emitted.
+ */
+export function parseOfficialAflDraftOrderTable(
+  html: string,
+  input: { capture: SourceCapture; draftYear: number; observedAt: string }
+): DraftCorroborationResult {
+  if (!Number.isInteger(input.draftYear) || input.draftYear < 1897 || input.draftYear > 2200) {
+    throw new TypeError('draftYear must be an AFL-era year.');
+  }
+  const $ = load(html);
+  const invalid = (detail: string): DraftCorroborationResult => ({
+    evidence: [],
+    issues: [{ code: 'invalid_page', sourceKey: String(input.draftYear), detail }],
+  });
+  const nextYearTraded = new RegExp(
+    `^(?:${input.draftYear + 1}\\s+DRAFT|FUTURE)\\s+SELECTIONS TRADED\\b`,
+    'i'
+  );
+  const headings = $('th, h1, h2, h3, h4, h5, h6').filter((_index, element) =>
+    nextYearTraded.test(normalizeText($(element).text()))
+  );
+  if (headings.length === 0) {
+    return invalid('The page does not list the next year’s traded selections for this draft.');
+  }
+  // 2025: "As at conclusion of pick swaps window on November 7." The order is observed on that day.
+  const statedAsOf = $('p')
+    .toArray()
+    .map((element) =>
+      /^As at conclusion of pick swaps window on ([A-Za-z]+) (\d{1,2})\.?$/i.exec(
+        normalizeText($(element).text())
+      )
+    )
+    .filter((match) => match !== null)
+    .map(([, month, day]) => {
+      const index = MONTHS.findIndex((name) => name.toLowerCase() === month!.toLowerCase());
+      return index < 0
+        ? null
+        : `${input.draftYear}-${String(index + 1).padStart(2, '0')}-${day!.padStart(2, '0')}`;
+    });
+  if (statedAsOf.some((date) => date !== input.observedAt.slice(0, 10))) {
+    return invalid('The page states a pick-swap as-of date other than the observation date.');
+  }
+  const slots: Array<{ pick: number; round: number; holder: string; annotation: string | null }> =
+    [];
+  const rowIssues: DraftCorroborationIssue[] = [];
+  $('table').each((_tableIndex, table) => {
+    let round: number | null = null;
+    $(table)
+      .find('tr')
+      .each((_rowIndex, row) => {
+        const headers = $(row).children('th');
+        const cells = $(row).children('td');
+        // 2025 puts the round heading in a single `td`; a single `td` that is not one is skipped.
+        const single = headers.length === 1 ? headers : headers.length === 0 ? cells : null;
+        if (single?.length === 1) {
+          const heading = /^ROUND\s+([A-Z]+)$/i.exec(normalizeText(single.text()));
+          if (heading || headers.length === 1) {
+            round = heading ? (ROUND_NUMBERS[heading[1]!.toUpperCase()] ?? null) : null;
+          }
+          return;
+        }
+        if (round === null || cells.length !== 2) return;
+        const first = normalizeText(cells.eq(0).text());
+        const second = normalizeText(cells.eq(1).text());
+        const numbered = /^(\d{1,3})\.\s*(.+)$/.exec(second);
+        const [pickText, recorded] = /^\d{1,3}$/.test(first)
+          ? [first, second]
+          : numbered
+            ? [numbered[1]!, numbered[2]!]
+            : [null, null];
+        if (pickText === null || recorded === null) return;
+        const open = recorded.indexOf('(');
+        const close = recorded.lastIndexOf(')');
+        const holder = normalizeText(open < 0 ? recorded : recorded.slice(0, open)).replace(
+          /\*$/,
+          ''
+        );
+        const annotation =
+          open < 0 || close < open
+            ? null
+            : normalizeText(recorded.slice(open + 1, close).replace(/\*/g, ''));
+        if (!new RegExp(`^(?:${CLUB_PATTERN})$`).test(holder)) {
+          rowIssues.push({
+            code: 'invalid_order_row',
+            sourceKey: `${input.draftYear}:national:${pickText}`,
+            detail: `Slot holder is not a recorded club name: ${holder}`,
+          });
+          return;
+        }
+        slots.push({ pick: Number(pickText), round, holder, annotation: annotation || null });
+      });
+  });
+  if (rowIssues.length > 0) return { evidence: [], issues: rowIssues };
+  const picks = slots.map(({ pick }) => pick);
+  if (slots.length === 0 || picks.some((pick, index) => pick !== index + 1)) {
+    return invalid('Order slots are absent or do not run from 1 without a gap.');
+  }
+  const listed = clubPickLists($);
+  if (
+    listed === null ||
+    (listed !== undefined &&
+      (listed.size !== slots.length ||
+        slots.some(({ pick, holder }) => !sameClub(listed.get(pick) ?? '', holder))))
+  ) {
+    return invalid('The club pick lists do not name exactly the order table’s slot holders.');
+  }
+  const issues: DraftCorroborationIssue[] = [];
+  const evidence = slots.map(({ pick, round, holder, annotation }, index) => {
+    const sourceKey = `${input.draftYear}:national:${pick}`;
+    const origin = originalClubFromAnnotation(holder, annotation);
+    if (origin.issue) {
+      issues.push({ code: origin.issue, sourceKey, detail: `Order annotation: ${annotation}` });
+    }
+    return createAflTradeExternalEvidenceEnvelope({
+      schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+      provider: 'official_afl',
+      capture: input.capture,
+      sourceRow: { ordinal: index + 1, sourceKey },
+      claim: {
+        kind: 'pick_custody',
+        observedAt: input.observedAt,
+        draftYear: input.draftYear,
+        draftType: 'national',
+        roundNumber: round,
+        recordedPickNumber: pick,
+        originalClub:
+          origin.originalClub === null
+            ? null
+            : { nativeId: null, recordedName: origin.originalClub },
+        currentClub: { nativeId: null, recordedName: holder },
+      },
+      publicationEligible: false,
+    });
+  });
+  return { evidence, issues };
+}
+
 function fieldIndex(table: AflTradeFitzRoyDecodedTable, name: string): number {
   return table.fields.findIndex((field) => field.name === name);
 }

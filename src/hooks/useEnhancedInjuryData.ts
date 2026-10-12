@@ -336,6 +336,49 @@ export async function fetchPlayersForLinking(): Promise<Player[]> {
 }
 
 /**
+ * Read an /api/injuries response, throwing the route's own error message when it failed closed.
+ */
+async function readInjuryResponse(
+  response: Response
+): Promise<{ data?: NormalizedInjuryData[]; lastUpdated?: string | null }> {
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  // Get response text first to check if it's valid JSON
+  const responseText = await response.text();
+  if (!responseText || responseText.trim() === '') {
+    throw new Error('Empty response from injury API');
+  }
+
+  let injuryData;
+  try {
+    injuryData = JSON.parse(responseText);
+  } catch (parseError) {
+    console.error('JSON parsing error for injury data:', {
+      responseText: responseText.substring(0, 200), // First 200 chars for debugging
+      parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+    });
+    throw new Error('Invalid JSON response from injury API');
+  }
+
+  if (!injuryData.success) {
+    throw new Error(injuryData.error || 'Failed to fetch injury data');
+  }
+  return injuryData;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: unknown };
+    if (typeof body.error === 'string' && body.error) return body.error;
+  } catch {
+    // keep the status message
+  }
+  return `HTTP ${response.status}: ${response.statusText}`;
+}
+
+/**
  * Enhanced hook that returns injuries with linked player data
  */
 export interface UseEnhancedInjuryDataOptions {
@@ -387,32 +430,7 @@ export function useEnhancedInjuryData(
       const injuryUrl = teamFilter ? `/api/injuries?team=${teamFilter}` : '/api/injuries';
       const injuryResponse = await fetch(injuryUrl);
 
-      // Check if response is ok and has content
-      if (!injuryResponse.ok) {
-        throw new Error(`HTTP ${injuryResponse.status}: ${injuryResponse.statusText}`);
-      }
-
-      // Get response text first to check if it's valid JSON
-      const responseText = await injuryResponse.text();
-
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Empty response from injury API');
-      }
-
-      let injuryData;
-      try {
-        injuryData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('JSON parsing error for injury data:', {
-          responseText: responseText.substring(0, 200), // First 200 chars for debugging
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        });
-        throw new Error('Invalid JSON response from injury API');
-      }
-
-      if (!injuryData.success) {
-        throw new Error(injuryData.error || 'Failed to fetch injury data');
-      }
+      const injuryData = await readInjuryResponse(injuryResponse);
 
       const normalizedInjuries: NormalizedInjuryData[] = injuryData.data || [];
 
@@ -446,6 +464,9 @@ export function useEnhancedInjuryData(
       setLastUpdated(injuryData.lastUpdated || new Date().toISOString());
     } catch (err) {
       console.error('Failed to fetch enhanced injury data:', err);
+      // Drop any earlier list so a failed refresh cannot pass stale rows off as current.
+      setInjuries([]);
+      setLegacyInjuries([]);
       setError(err instanceof Error ? err.message : 'Failed to fetch injury data');
     } finally {
       setLoading(false);

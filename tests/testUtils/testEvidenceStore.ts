@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
@@ -13,7 +13,11 @@ import {
   type AflTradeEvidenceStoreBinding,
 } from '@/server/aflTradeIntelligence/artifacts/artifactStoreLocation';
 import { registerLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactCustodyLocationBackfill';
-import { bindLocalAflTradeArtifactStore } from '@/server/aflTradeIntelligence/development/localArtifactStoreBinding';
+import {
+  bindLocalAflTradeArtifactRepository,
+  bindLocalAflTradeArtifactStore,
+} from '@/server/aflTradeIntelligence/development/localArtifactStoreBinding';
+import type { AflTradeImmutableArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
@@ -57,6 +61,50 @@ export async function bindTestEvidenceStore(
     repositoryId: 'reviewed-registration-evidence',
     artifactClass: 'raw_source',
     maximumObjectBytes: 64 * 1024 * 1024,
+  });
+}
+
+/**
+ * A repository in the schema's local non-production store, rooted at the suite's own artifact
+ * directory, so real custody writers record each artifact's location themselves. The store is
+ * registered at `rootDirectory` when the schema has none; a store already registered at another root
+ * is refused, because a schema holds one local store and the suite reads its artifacts from that root.
+ */
+export async function bindTestStoreRepository(
+  target: Pool | AflOutcomeSqlClient,
+  input: {
+    rootDirectory: string;
+    repositoryId: string;
+    artifactClass: 'raw_source' | 'capture_metadata' | 'derived_private';
+    maximumObjectBytes: number;
+  }
+): Promise<AflTradeImmutableArtifactRepository> {
+  const client = sqlClient(target);
+  const existing = await client.query<{ store_id: string; root_locator: string }>(
+    `SELECT store_id, root_locator FROM outcome_artifact_store
+      WHERE environment='non_production' AND assurance='local_non_production_filesystem'`
+  );
+  const root = await realpath(input.rootDirectory);
+  let storeId = existing.rows[0]?.store_id;
+  if (storeId === undefined) {
+    storeId = TEST_STORE_ID;
+    await registerLocalAflTradeArtifactStore(client, { storeId, rootDirectory: root });
+  } else if ((await realpath(existing.rows[0]!.root_locator)) !== root) {
+    throw new Error(
+      `The schema's local store ${storeId} is rooted elsewhere; bind it before using another root.`
+    );
+  }
+  const health = await client.query<{ healthy: boolean }>(
+    `SELECT outcome_artifact_custody_healthy('non_production') AS healthy`
+  );
+  if (health.rows[0]?.healthy !== true) {
+    await readBackLocalAflTradeArtifactCustody({ client, storeId });
+  }
+  return bindLocalAflTradeArtifactRepository(client, {
+    storeId,
+    repositoryId: input.repositoryId,
+    artifactClass: input.artifactClass,
+    maximumObjectBytes: input.maximumObjectBytes,
   });
 }
 

@@ -16,6 +16,7 @@ import { requireAflTradeExternalEvidenceFieldAuthority } from '@/server/aflTrade
 import {
   ingestAuthorizedAflTradeExternalPage,
   type AflTradeExternalProviderIngestionDependencies,
+  validateAflTradeExternalCaptureScope,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { PostgresAflTradeExternalCaptureRegistry } from '@/server/aflTradeIntelligence/source/postgresExternalCaptureRegistry';
@@ -657,5 +658,131 @@ describe('authorized external provider ingestion', () => {
       expect.anything(),
       expect.objectContaining({ outcome: 'failed' })
     );
+  });
+});
+
+describe('pre-draft order scope (issue 853)', () => {
+  const archive =
+    'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-order';
+  const order = (overrides: Partial<typeof request>) => ({
+    ...request,
+    provider: 'official_afl' as const,
+    draftPathway: 'national' as const,
+    capabilityId: 'official-afl-indicative-draft-order',
+    anchorSeasonYear: 2023,
+    effectiveAt: '2023-11-16T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('admits a reviewed archive snapshot under parser v4 at its stated as-of date', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v4' })
+      )
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['another archive timestamp', archive.replace('230530', '230531'), '2023-11-16T00:00:00.000Z'],
+    [
+      'an unreviewed afl.com.au article',
+      'https://www.afl.com.au/news/1/not-reviewed',
+      '2023-11-16T00:00:00.000Z',
+    ],
+    ['a reviewed page at another as-of instant', archive, '2023-11-17T00:00:00.000Z'],
+  ])('refuses %s under parser v4', (_label, sourceUrl, effectiveAt) => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl, effectiveAt, parserVersion: 'official-afl-draft-order-parser/v4' })
+      )
+    ).toThrow(/do not exactly match/);
+  });
+
+  it.each([
+    [
+      'the reviewed 13 November snapshot at its stated as-of date',
+      '20251113035435',
+      '2025-11-07',
+      true,
+    ],
+    ['a later 2025 snapshot', '20251114092155', '2025-11-07', false],
+    ['the reviewed snapshot at the scrape date', '20251113035435', '2025-11-13', false],
+  ])('2025: admits only %s', (_label, timestamp, asOf, admitted) => {
+    const check = () =>
+      validateAflTradeExternalCaptureScope(
+        order({
+          sourceUrl: `https://web.archive.org/web/${timestamp}id_/https://www.afl.com.au/draft/draft-order`,
+          anchorSeasonYear: 2025,
+          effectiveAt: `${asOf}T00:00:00.000Z`,
+          parserVersion: 'official-afl-draft-order-parser/v4',
+        })
+      );
+    if (admitted) expect(check).not.toThrow();
+    else expect(check).toThrow(/do not exactly match/);
+  });
+
+  it('keeps the general article path for the v1 paragraph parser and refuses archive.org there', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({
+          sourceUrl: 'https://www.afl.com.au/news/1542355/example/amp',
+          parserVersion: 'official-afl-order-parser/v1',
+        })
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl: archive, parserVersion: 'official-afl-order-parser/v1' })
+      )
+    ).toThrow(/do not exactly match/);
+  });
+});
+
+describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
+  const board = (overrides: Record<string, unknown>) =>
+    ({
+      ...request,
+      provider: 'footyinfo',
+      draftPathway: 'national',
+      capabilityId: 'footyinfo-national-draft-board',
+      anchorSeasonYear: 2024,
+      sourceUrl: 'https://www.footyinfo.com/draft/2024',
+      parserVersion: 'footyinfo-draft-board-parser/v1',
+      effectiveAt: request.capturedAt,
+      ...overrides,
+    }) as Parameters<typeof validateAflTradeExternalCaptureScope>[0];
+
+  it('admits the reviewed board of the anchor season, effective when captured', () => {
+    expect(() => validateAflTradeExternalCaptureScope(board({}))).not.toThrow();
+  });
+
+  it.each([
+    ['another year’s board', { sourceUrl: 'https://www.footyinfo.com/draft/2023' }],
+    [
+      'an unreviewed year',
+      { anchorSeasonYear: 2018, sourceUrl: 'https://www.footyinfo.com/draft/2018' },
+    ],
+    ['the bare host', { sourceUrl: 'https://footyinfo.com/draft/2024' }],
+    ['a query', { sourceUrl: 'https://www.footyinfo.com/draft/2024?hide=0' }],
+    ['another provider', { provider: 'draftguru' as const }],
+    ['another pathway', { draftPathway: 'rookie' as const }],
+    ['another parser', { parserVersion: 'footyinfo-draft-board-parser/v2' }],
+    ['an effective instant other than capture', { effectiveAt: '2024-11-20T00:00:00.000Z' }],
+  ])('refuses %s', (_label, overrides) => {
+    expect(() => validateAflTradeExternalCaptureScope(board(overrides))).toThrow(
+      /do not exactly match/
+    );
+  });
+
+  it('refuses a Footyinfo provider under another capability', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        board({
+          capabilityId: 'draftguru-year-page',
+          sourceUrl: 'https://www.draftguru.com.au/years/2024',
+          draftPathway: null,
+        })
+      )
+    ).toThrow(/do not exactly match/);
   });
 });

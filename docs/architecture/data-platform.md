@@ -20,6 +20,7 @@ it has been deployed. Go-live remains blocked until the
 | User identity and tokens                                                          | Firebase Authentication                       | Server code verifies identity before domain authorization.                 |
 | Leagues, seasons, membership, drafts, rosters, lineups, matchups, trades, waivers | Prisma services                               | Canonical protected state; every operation is league- and season-scoped.   |
 | Live AFL stat evidence                                                            | Footywire/fitzRoy ETL and Firestore ingestion | External data is normalized before fantasy calculations.                   |
+| AFL injury list                                                                   | Prisma snapshots of the Footywire list        | Append-only, 48-hour freshness, exact name-and-club identity match only.   |
 | Compatibility projections                                                         | Firestore, temporarily                        | Rebuild from canonical relational state; never reverse ownership silently. |
 | Queues, locks, caches, rate limits, Pub/Sub                                       | Redis                                         | Ephemeral coordination only, never durable fantasy truth.                  |
 | Bidirectional realtime delivery                                                   | Socket.IO                                     | Transport for server-authoritative events and commands.                    |
@@ -117,6 +118,29 @@ fails the cycle; production does not substitute mock data.
 Player identity may be tolerant at read boundaries, but canonical repairs are explicit data
 operations. Firestore match-stat evidence must not create or merge protected player ownership by
 guessing. Use the [player identity runbook](../runbooks/player-identity.md) for reviewed consolidation.
+
+### Injury list snapshots
+
+The Footywire injury list is the only source of lineup availability. `netlify/functions/cron-injuries.mts`
+calls `/api/cron/injuries` every six hours; the route does nothing outside 1 January to 7 October
+Melbourne time (`src/server/injuries/injuryListSchedule.ts`), so the off-season holds the last
+in-season snapshot until it ages out. In season, `src/server/injuries/injuryListIngestion.ts` fetches,
+parses and matches the list, then stores it as an `InjuryListSnapshot` with one `InjuryListEntry`
+per row. A snapshot is identified by a hash of the parsed source rows together with each row's
+player link, so a fetch that repeats a stored list only advances that snapshot's `confirmedAt`,
+while a list whose rows or player links differ (a player imported since the last run, for example)
+is a new snapshot. Stored snapshots and entries are never rewritten, which keeps the record of which
+links were in force when a default lineup was filled.
+
+Ingestion fails closed. A fetch error or timeout, a page with no club tables or no rows, or more
+than 600 rows writes nothing. Each row is matched to a `Player` on exact normalized name and club
+only; a row with no match or more than one match is stored with no `playerId` and its match status,
+never guessed. Injuries are not league- or season-scoped data.
+
+Readers use `src/server/injuries/injuryListReadModel.ts`, which returns the latest snapshot only
+while it was confirmed within the last 48 hours; otherwise it reports `none` or `stale`. Default
+lineups and the lineup page then treat every player as available and log a warning. A `TEST` return
+estimate is shown but does not block selection; every other status does.
 
 ## Rejected alternatives
 

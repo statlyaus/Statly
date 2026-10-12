@@ -13,7 +13,10 @@ import {
   createAflTradeExternalIdentityResolution,
   reconcileAflTradeExternalEvidence,
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
-import { parseAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
+import {
+  parseAflTradeExternalReconciliationCandidate,
+  retainAflTradePickOutcomes,
+} from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
@@ -389,6 +392,157 @@ describe('external draft and trade evidence reconciliation', () => {
     ]);
     expect(candidate.content.issues).toEqual([]);
     expect(candidate.content.publicationEligible).toBe(false);
+  });
+
+  it('counts a Footyinfo board selection as a second provider and records its board pick', () => {
+    const footyinfo = batch('footyinfo', 'd', [
+      {
+        kind: 'draft_selection',
+        draftYear: 2025,
+        draftType: 'national',
+        selectionNumber: 14,
+        roundNumber: 1,
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+      },
+      {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        status: 'selected',
+        club: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        route: [
+          { nativeId: 'GWS', recordedName: 'GWS Giants' },
+          { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        ],
+        routeLabel: null,
+        bid: null,
+        points: 1200,
+        note: null,
+      },
+    ]);
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, footyinfo, officialOrder],
+      identityResolutions: [
+        ...resolutions,
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        resolution('footyinfo', 'club', 'GWS Giants', 'club-gws', 'GWS'),
+        resolution('footyinfo', 'player', 'Harry Kyle', 'player-harry-kyle', 'harry-kyle'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    // The board pick is conserved as its own record, its route resolved club by club.
+    expect(candidate.content.draftBoardPicks).toEqual([
+      expect.objectContaining({
+        status: 'selected',
+        recordedPickNumber: 14,
+        clubId: 'club-western-bulldogs',
+        routeClubIds: ['club-gws', 'club-western-bulldogs'],
+      }),
+    ]);
+    expect(candidate.content.draftSelections).toEqual([
+      expect.objectContaining({
+        selectionNumber: 14,
+        playerId: 'player-harry-kyle',
+        status: 'corroborated',
+        supportingProviders: ['draftguru', 'footyinfo'],
+      }),
+    ]);
+    expect(candidate.content.issues).toEqual([]);
+  });
+
+  it('cites an unresolved Footyinfo selection row without unresolving the selection it corroborates', () => {
+    const footyinfoSelection = (player: string, nativeId: string) =>
+      batch('footyinfo', 'd', [
+        {
+          kind: 'draft_selection',
+          draftYear: 2025,
+          draftType: 'national',
+          selectionNumber: 14,
+          roundNumber: 1,
+          player: { nativeId, recordedName: player },
+          selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        },
+      ]);
+    const reconcileWith = (footyinfo: ReturnType<typeof footyinfoSelection>, extra = resolutions) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [draftguru, footyinfo, officialOrder],
+        identityResolutions: [
+          ...extra,
+          resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        ],
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+      });
+    const without = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, officialOrder],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    // No footyinfo player resolution: the row is cited, not counted.
+    const footyinfo = footyinfoSelection('H. Kyle', 'harry-kyle');
+    const candidate = reconcileWith(footyinfo);
+    const [selection] = candidate.content.draftSelections;
+    const [before] = without.content.draftSelections;
+    expect(selection).toMatchObject({
+      playerId: 'player-harry-kyle',
+      clubId: 'club-western-bulldogs',
+      status: before!.status,
+      supportingProviders: ['draftguru'],
+    });
+    expect(selection!.evidenceIds).toContain(footyinfo.content.evidence[0]!.evidenceId);
+    expect(candidate.content.issues).toEqual(without.content.issues);
+
+    // A resolved Footyinfo row naming another player still disputes the selection.
+    const disputed = reconcileWith(footyinfoSelection('Someone Else', 'someone-else'), [
+      ...resolutions,
+      resolution('footyinfo', 'player', 'Someone Else', 'player-someone-else', 'someone-else'),
+    ]);
+    expect(disputed.content.draftSelections[0]!.status).toBe('disputed');
+  });
+
+  it('resolves a Footyinfo-only selection like any provider, with its identity issue', () => {
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [
+        draftguru,
+        batch('footyinfo', 'd', [
+          {
+            kind: 'draft_selection',
+            draftYear: 2025,
+            draftType: 'national',
+            selectionNumber: 58,
+            roundNumber: 4,
+            player: { nativeId: 'ryan-byrnes', recordedName: 'Ryan Byrnes' },
+            selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+          },
+        ]),
+      ],
+      identityResolutions: [
+        ...resolutions,
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    expect(
+      candidate.content.draftSelections.find(({ selectionNumber }) => selectionNumber === 58)
+    ).toMatchObject({ status: 'unresolved', playerId: null });
+    expect(candidate.content.issues.map(({ subjectKey }) => subjectKey)).toContain(
+      'selection:2025:national:58:player'
+    );
   });
 
   it('preserves an incomplete transaction as unresolved blocking evidence', () => {
@@ -1774,4 +1928,636 @@ it('reconciles only the reviewed 2016 one-session article identities outside fix
       reconcile2016([inventory, rejectedWrap, schedule, total]).content.issues[0]?.detail
     ).toContain('reviewed Official AFL article identity');
   }
+});
+
+describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
+  const draftguruClaims = draftguru.content.evidence.map(({ content }) => content.claim);
+  const disposition = (
+    overrides: Partial<
+      Extract<AflTradeExternalEvidenceContent['claim'], { kind: 'pick_disposition' }>
+    >
+  ): AflTradeExternalEvidenceContent['claim'] => {
+    const claim = {
+      kind: 'pick_disposition' as const,
+      nativeEventId: '2025-gws-bulldogs',
+      nativeTransferId: 'pick-14',
+      receivingClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+      disposition: 'selected' as const,
+      player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+      ...overrides,
+    };
+    // A non-selected disposition carries no player key at all.
+    if (claim.player === undefined) delete (claim as { player?: unknown }).player;
+    return claim;
+  };
+  const reconcileWith = (claims: AflTradeExternalEvidenceContent['claim'][], suffix = '5') =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [batch('draftguru', suffix, [...draftguruClaims, ...claims])],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+
+  it('binds a selected pick to the receiving club’s selection of the stated player', () => {
+    const candidate = parseAflTradeExternalReconciliationCandidate(
+      reconcileWith([disposition({})])
+    );
+    const [transfer] = candidate.content.transfers;
+    const [selection] = candidate.content.draftSelections;
+
+    expect(candidate.content.pickOutcomes).toEqual([
+      expect.objectContaining({
+        transferId: transfer!.transferId,
+        disposition: 'selected',
+        outcomeStatus: 'stated',
+        selectionId: selection!.selectionId,
+        playerId: 'player-harry-kyle',
+      }),
+    ]);
+    // The disposition row is conserved through its transfer, which the database also counts.
+    expect(transfer!.evidenceIds).toEqual(
+      expect.arrayContaining(candidate.content.pickOutcomes![0]!.evidenceIds.slice(0, 1))
+    );
+    expect(candidate.content.pickLineage).toEqual([]);
+  });
+
+  it('records traded-on and not-used picks without a selection', () => {
+    const tradedOn = reconcileWith(
+      [disposition({ disposition: 'traded_on', player: undefined })],
+      '6'
+    );
+    expect(tradedOn.content.pickOutcomes).toEqual([
+      expect.objectContaining({
+        disposition: 'traded_on',
+        outcomeStatus: 'stated',
+        selectionId: null,
+        playerId: null,
+      }),
+    ]);
+    const notUsed = reconcileWith(
+      [disposition({ disposition: 'not_used', player: undefined })],
+      '7'
+    );
+    expect(notUsed.content.pickOutcomes).toEqual([
+      expect.objectContaining({ disposition: 'not_used', outcomeStatus: 'stated' }),
+    ]);
+  });
+
+  describe('not-used picks and the receiving club’s nominated selections', () => {
+    type Access = 'open' | 'academy' | 'father_son';
+    const YEAR_PAGE_V2 = 'draftguru-national-year-page/v2';
+    const tradeClaims = draftguruClaims.filter((claim) => claim.kind !== 'draft_selection');
+    const notUsed = disposition({ disposition: 'not_used', player: undefined });
+    const harryKyle = draftguruClaims.find((claim) => claim.kind === 'draft_selection')!;
+    // A complete synthetic 2025 national draft: GWS takes 1 to 13, the Bulldogs take 14.
+    const yearPage = (bulldogsAccess: Access, omit: number[] = []) =>
+      Array.from({ length: 14 }, (_, index) => index + 1)
+        .filter((number) => !omit.includes(number))
+        .map((number) =>
+          number === 14
+            ? { ...harryKyle, accessCategory: bulldogsAccess }
+            : {
+                kind: 'draft_selection' as const,
+                draftYear: 2025,
+                draftType: 'national' as const,
+                selectionNumber: number,
+                roundNumber: 1,
+                player: { nativeId: null, recordedName: `Synthetic Player ${number}` },
+                selectedByClub: { nativeId: null, recordedName: 'GWS' },
+                accessCategory: 'open' as const,
+              }
+        );
+    const officialSession = (selectionNumbers: number[]) =>
+      batch('official_afl', '6', [
+        {
+          kind: 'draft_session',
+          draftYear: 2025,
+          draftType: 'national',
+          sessionOrdinal: 1,
+          eventDate: '2025-11-20',
+          officialName: 'Synthetic completed national draft',
+          selectionNumbers,
+        },
+      ]);
+    const allFourteen = Array.from({ length: 14 }, (_, index) => index + 1);
+    const reconcileDraft = ({
+      page,
+      parserVersion = YEAR_PAGE_V2,
+      session = officialSession(allFourteen),
+      outcome = notUsed,
+    }: {
+      page: AflTradeExternalEvidenceContent['claim'][];
+      parserVersion?: string;
+      session?: ReturnType<typeof officialSession> | null;
+      outcome?: AflTradeExternalEvidenceContent['claim'];
+    }) =>
+      parseAflTradeExternalReconciliationCandidate(
+        reconcileAflTradeExternalEvidence({
+          environment: 'test_fixture',
+          competition: 'AFLM',
+          anchorSeasonYear: 2025,
+          sourceBatches: [
+            batch('draftguru', 'a', [...tradeClaims, outcome]),
+            batch('draftguru', 'b', page, undefined, { parserVersion }),
+            ...(session ? [session] : []),
+          ],
+          identityResolutions: resolutions,
+          reconciledAt: '2026-08-09T05:00:00.000Z',
+        })
+      );
+    const basisOf = (candidate: ReturnType<typeof reconcileDraft>) =>
+      candidate.content.pickOutcomes![0]!;
+
+    it('records a nominated player when the official session proves the whole draft', () => {
+      const candidate = reconcileDraft({ page: yearPage('academy') });
+      const outcome = basisOf(candidate);
+      expect(outcome).toEqual(
+        expect.objectContaining({
+          disposition: 'not_used',
+          nominationBasis: 'club_took_nominated_player',
+          receivingClubNominatedSelections: 1,
+        })
+      );
+      // The disposition row, the Bulldogs' year-page row and the official session row.
+      expect(outcome.evidenceIds).toHaveLength(3);
+    });
+
+    it('counts access categories from a v3 year page the same as v2', () => {
+      expect(
+        basisOf(
+          reconcileDraft({
+            page: yearPage('academy'),
+            parserVersion: 'draftguru-national-year-page/v3',
+          })
+        )
+      ).toEqual(
+        expect.objectContaining({
+          nominationBasis: 'club_took_nominated_player',
+          receivingClubNominatedSelections: 1,
+        })
+      );
+    });
+
+    it('records no nominated player when every row in the proven draft says so', () => {
+      expect(basisOf(reconcileDraft({ page: yearPage('open') }))).toEqual(
+        expect.objectContaining({
+          nominationBasis: 'club_took_no_nominated_player',
+          receivingClubNominatedSelections: 0,
+        })
+      );
+    });
+
+    it.each([
+      ['the year page omits a row the official session lists', { page: yearPage('open', [3]) }],
+      [
+        'the official session does not start at selection 1',
+        { page: yearPage('open'), session: officialSession(allFourteen.slice(1)) },
+      ],
+      ['no official session covers the draft', { page: yearPage('open'), session: null }],
+      [
+        'the access categories are not from a v2 or v3 Draftguru year page',
+        { page: yearPage('academy'), parserVersion: 'draftguru-national-year-page/v1' },
+      ],
+    ])('leaves the count unknown when %s', (_label, input) => {
+      const outcome = basisOf(reconcileDraft(input));
+      expect(outcome).toEqual(expect.objectContaining({ nominationBasis: 'no_access_evidence' }));
+      expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
+    });
+
+    it('carries no nomination basis on selected or traded-on picks', () => {
+      const candidate = reconcileDraft({ page: yearPage('academy'), outcome: disposition({}) });
+      expect(basisOf(candidate)).not.toHaveProperty('nominationBasis');
+    });
+  });
+
+  it('keeps a not-used future pick pending until its draft is inside the candidate', () => {
+    const futureClaims = futureDraftguru.content.evidence.map(({ content }) => content.claim);
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [
+        batch('draftguru', '8', [
+          ...futureClaims,
+          disposition({
+            nativeEventId: '2025-gws-bulldogs-future',
+            nativeTransferId: 'gws-2026-round-2',
+            disposition: 'not_used',
+            player: undefined,
+          }),
+        ]),
+      ],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    expect(candidate.content.pickOutcomes).toEqual([
+      expect.objectContaining({ disposition: 'not_used', outcomeStatus: 'pending' }),
+    ]);
+  });
+
+  it('leaves a stated player with no matching selection unresolved, with a blocking issue', () => {
+    const candidate = reconcileWith(
+      [
+        disposition({ player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' } }),
+        // The same player selected by another club does not satisfy the receiving club's outcome.
+      ].map((claim) => ({
+        ...claim,
+        receivingClub: { nativeId: null, recordedName: 'GWS' },
+      })) as AflTradeExternalEvidenceContent['claim'][],
+      '9'
+    );
+    expect(candidate.content.pickOutcomes).toEqual([
+      expect.objectContaining({ outcomeStatus: 'unresolved', selectionId: null }),
+    ]);
+    expect(candidate.content.issues).toContainEqual(
+      expect.objectContaining({ code: 'pick_outcome_unresolved' })
+    );
+  });
+
+  it('keeps only outcomes whose pick transfer and selection a derived candidate retains', () => {
+    const candidate = parseAflTradeExternalReconciliationCandidate(
+      reconcileWith([disposition({})])
+    );
+    const { transfers, draftSelections, pickOutcomes } = candidate.content;
+    expect(retainAflTradePickOutcomes(pickOutcomes, { transfers, draftSelections })).toEqual({
+      pickOutcomes,
+    });
+    expect(retainAflTradePickOutcomes(pickOutcomes, { transfers, draftSelections: [] })).toEqual(
+      {}
+    );
+    expect(retainAflTradePickOutcomes(pickOutcomes, { transfers: [], draftSelections })).toEqual(
+      {}
+    );
+  });
+
+  it('adds no pickOutcomes key when no dispositions are present, so candidate ids are unchanged', () => {
+    const candidate = reconcileWith([], '4');
+    expect('pickOutcomes' in candidate.content).toBe(false);
+  });
+});
+
+describe('pre-draft order custody joined to numbered pick trades (issue 853)', () => {
+  const trade = (
+    eventId: string,
+    from: string,
+    to: string,
+    asset: Extract<AflTradeExternalEvidenceContent['claim'], { kind: 'directed_transfer' }>['asset']
+  ): AflTradeExternalEvidenceContent['claim'][] => [
+    {
+      kind: 'transaction',
+      nativeEventId: eventId,
+      seasonYear: 2025,
+      // Draftguru records no transaction instant.
+      occurredOn: null,
+      transactionType: 'trade',
+      title: `${from} to ${to}`,
+    },
+    {
+      kind: 'transaction_party',
+      nativeEventId: eventId,
+      nativePartyId: from.toLowerCase(),
+      club: { nativeId: null, recordedName: from },
+    },
+    {
+      kind: 'transaction_party',
+      nativeEventId: eventId,
+      nativePartyId: to.toLowerCase(),
+      club: { nativeId: null, recordedName: to },
+    },
+    {
+      kind: 'directed_transfer',
+      nativeEventId: eventId,
+      nativeTransferId: `${eventId}:asset`,
+      fromClub: { nativeId: null, recordedName: from },
+      toClub: { nativeId: null, recordedName: to },
+      asset,
+    },
+  ];
+  const pick = (recordedPickNumber: number) =>
+    ({
+      kind: 'current_pick',
+      draftYear: 2025,
+      draftType: 'national',
+      recordedPickNumber,
+      recordedLabel: `Pick ${recordedPickNumber}`,
+    }) as const;
+  const future = (originalClub: string) =>
+    ({
+      kind: 'future_pick',
+      draftYear: 2025,
+      draftType: 'national',
+      roundNumber: 1,
+      originalClub: { nativeId: null, recordedName: originalClub },
+    }) as const;
+  // One pre-draft order observation: slot 14 is held by `holder`, originally `original`'s pick.
+  const order = (slot: number, holder: string, original: string, suffix = 'd', roundNumber = 1) =>
+    batch('official_afl', suffix, [
+      {
+        kind: 'pick_custody',
+        observedAt: '2025-11-15T00:00:00.000Z',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber,
+        recordedPickNumber: slot,
+        originalClub: { nativeId: null, recordedName: original },
+        currentClub: { nativeId: null, recordedName: holder },
+      },
+    ]);
+  const clubs = [
+    'GWS',
+    'Western Bulldogs',
+    'Richmond',
+    'Carlton',
+    'Essendon',
+    'Melbourne',
+    'Footscray',
+    'Brisbane',
+    'Port Adelaide',
+  ];
+  const clubResolutions = clubs.flatMap((club) => [
+    resolution('draftguru', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
+    resolution('official_afl', 'club', club, `club-${club.toLowerCase().replace(/ /g, '-')}`),
+  ]);
+  const reconcile = (
+    claims: AflTradeExternalEvidenceContent['claim'][],
+    orders: ReturnType<typeof batch>[]
+  ) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [batch('draftguru', 'a', claims), ...orders],
+      identityResolutions: clubResolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+  const pickIds = (candidate: ReturnType<typeof reconcile>) =>
+    candidate.content.transfers.map(({ asset, status }) =>
+      asset.kind === 'pick_entitlement' ? { pickId: asset.pickId, status } : null
+    );
+
+  it('links a pick traded on as "Pick N" to the future pick that became it', () => {
+    // Carlton -> GWS as Carlton's 2025 first-round pick; GWS -> Bulldogs as "Pick 14"; the order
+    // shows the Bulldogs holding slot 14, originally Carlton's.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    const [futureLeg, numberedLeg] = pickIds(candidate);
+    expect(futureLeg?.status).toBe('single_source');
+    expect(numberedLeg?.status).toBe('single_source');
+    expect(numberedLeg?.pickId).toBe(futureLeg?.pickId);
+    expect(numberedLeg?.pickId).toBe(candidate.content.pickCustody[0]!.pickId);
+  });
+
+  it('links two "Pick N" hops when the order holder is two trades downstream', () => {
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', pick(14)),
+        ...trade('e2', 'GWS', 'Richmond', pick(14)),
+        ...trade('e3', 'Richmond', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    const ids = pickIds(candidate);
+    expect(ids.map((leg) => leg?.status)).toEqual([
+      'single_source',
+      'single_source',
+      'single_source',
+    ]);
+    expect(new Set(ids.map((leg) => leg?.pickId)).size).toBe(1);
+  });
+
+  it('links a draft-night trade away from the order holder', () => {
+    // The order (observed before the draft) shows GWS holding its own slot 14; GWS trades it on
+    // the night. Draftguru records no date, so the observation is not refused as premature.
+    const candidate = reconcile(
+      [...trade('e1', 'GWS', 'Western Bulldogs', pick(14))],
+      [order(14, 'GWS', 'GWS')]
+    );
+    expect(pickIds(candidate)).toEqual([
+      { pickId: candidate.content.pickCustody[0]!.pickId, status: 'single_source' },
+    ]);
+  });
+
+  it('leaves a sender with no evidence of holding the slot unlinked', () => {
+    // The order says slot 14 was Carlton's; nothing shows Carlton's pick ever reaching GWS.
+    const candidate = reconcile(
+      [...trade('e1', 'GWS', 'Western Bulldogs', pick(14))],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    expect(pickIds(candidate)).toEqual([expect.objectContaining({ status: 'unresolved' })]);
+    expect(pickIds(candidate)[0]?.pickId).not.toBe(candidate.content.pickCustody[0]!.pickId);
+  });
+
+  it('leaves a pick whose recorded number misses the slot unlinked', () => {
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(15)),
+      ],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+
+  it('leaves a receiver unconnected to the order holder unlinked', () => {
+    // Essendon holds slot 14 in the order and never traded "Pick 14" with anyone in the candidate.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'Essendon', 'Carlton')]
+    );
+    expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+
+  it('does not read an earlier observation this way once a later one exists', () => {
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [
+        batch('official_afl', 'd', [
+          {
+            kind: 'pick_custody',
+            observedAt: '2025-10-20T00:00:00.000Z',
+            draftYear: 2025,
+            draftType: 'national',
+            roundNumber: 1,
+            recordedPickNumber: 14,
+            originalClub: { nativeId: null, recordedName: 'Carlton' },
+            currentClub: { nativeId: null, recordedName: 'GWS' },
+          },
+          {
+            kind: 'pick_custody',
+            observedAt: '2025-11-15T00:00:00.000Z',
+            draftYear: 2025,
+            draftType: 'national',
+            roundNumber: 1,
+            recordedPickNumber: 14,
+            originalClub: { nativeId: null, recordedName: 'Carlton' },
+            currentClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+          },
+        ]),
+      ]
+    );
+    // The sequence of observations resolves the numbered hop on its own; exactly one match.
+    expect(pickIds(candidate)[1]).toEqual({
+      pickId: candidate.content.pickCustody[0]!.pickId,
+      status: 'single_source',
+    });
+  });
+
+  it('re-keys every "Pick N" hop of a chain when only the later hop is corroborated', () => {
+    // 2024 slot 54 on the grading VM: the order shows Essendon holding Footscray's pick. Nothing
+    // delivers the slot to Melbourne, so only Essendon -> Brisbane is corroborated on its own;
+    // re-keying it alone left Melbourne -> Essendon on the number key and orphaned its traded-on link.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Melbourne', 'Essendon', pick(54)),
+        ...trade('e2', 'Essendon', 'Brisbane', pick(54)),
+      ],
+      [order(54, 'Essendon', 'Footscray')]
+    );
+    const custodyPickId = candidate.content.pickCustody[0]!.pickId;
+    expect(pickIds(candidate)).toEqual([
+      { pickId: custodyPickId, status: 'single_source' },
+      { pickId: custodyPickId, status: 'single_source' },
+    ]);
+  });
+
+  it('keeps a chain on its number key when its hops would map to two custody picks', () => {
+    // Two order rows for slot 14 name different original clubs. Carlton -> GWS matches only the
+    // first; GWS -> Bulldogs matches both. Neither hop moves, so the chain stays linked.
+    const candidate = reconcile(
+      [
+        ...trade('e1', 'Carlton', 'GWS', pick(14)),
+        ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+      ],
+      [order(14, 'GWS', 'Carlton', 'd'), order(14, 'Western Bulldogs', 'GWS', 'e')]
+    );
+    const [first, second] = pickIds(candidate);
+    const custodyPickIds = candidate.content.pickCustody.map((custody) => custody.pickId);
+    expect(new Set(custodyPickIds).size).toBe(2);
+    expect(first?.pickId).toBe(second?.pickId);
+    expect(custodyPickIds).not.toContain(first?.pickId);
+  });
+
+  it('joins only the transfer whose pick number is the slot when the sender is the original club', () => {
+    // 2019 on the grading VM: Port Adelaide -> Brisbane traded "Pick 22", "Pick 29" and "Pick 71";
+    // the order shows Brisbane holding slot 29, originally Port Adelaide's. Holder and original club
+    // alone joined all three to slot 29.
+    const transferOf = (recordedPickNumber: number) => {
+      const transfer = trade('e1', 'Port Adelaide', 'Brisbane', pick(recordedPickNumber)).at(-1)!;
+      return { ...transfer, nativeTransferId: `e1:${recordedPickNumber}` };
+    };
+    const candidate = reconcile(
+      [...trade('e1', 'Port Adelaide', 'Brisbane', pick(22)), transferOf(29), transferOf(71)],
+      [order(29, 'Brisbane', 'Port Adelaide')]
+    );
+    const custodyPickId = candidate.content.pickCustody[0]!.pickId;
+    const byLabel = new Map(
+      candidate.content.transfers.map((transfer) => [
+        transfer.asset.kind === 'pick_entitlement' ? transfer.asset.recordedLabel : null,
+        transfer,
+      ])
+    );
+    expect(candidate.content.transfers).toHaveLength(3);
+    const linked = byLabel.get('Pick 29')!;
+    expect(linked).toMatchObject({ status: 'single_source' });
+    expect(linked.asset).toMatchObject({ pickId: custodyPickId });
+    for (const label of ['Pick 22', 'Pick 71']) {
+      const unlinked = byLabel.get(label)!;
+      expect(unlinked).toMatchObject({ status: 'unresolved' });
+      expect(unlinked.asset).not.toMatchObject({ pickId: custodyPickId });
+    }
+    expect(
+      new Set(
+        candidate.content.transfers.map((transfer) =>
+          transfer.asset.kind === 'pick_entitlement' ? transfer.asset.pickId : null
+        )
+      ).size
+    ).toBe(3);
+  });
+
+  it('leaves a shifted pick unlinked when two slots share its original club and holder', () => {
+    // Slots 15 and 40 are Carlton's first- and second-round picks held by GWS; "Pick 14" could
+    // have shifted to either.
+    const candidate = reconcile(
+      [...trade('e1', 'Carlton', 'GWS', pick(14))],
+      [order(15, 'GWS', 'Carlton', 'd', 1), order(40, 'GWS', 'Carlton', 'e', 2)]
+    );
+    expect(candidate.content.pickCustody.map((custody) => custody.status)).toEqual([
+      'single_source',
+      'single_source',
+    ]);
+    const custodyPickIds = candidate.content.pickCustody.map((custody) => custody.pickId);
+    expect(pickIds(candidate)).toEqual([expect.objectContaining({ status: 'unresolved' })]);
+    expect(custodyPickIds).not.toContain(pickIds(candidate)[0]?.pickId);
+  });
+
+  it('joins the same-numbered slot when another slot shares its original club and holder', () => {
+    // A second slot for the pair is not a shifted candidate, so it cannot make "Pick 14" ambiguous.
+    const candidate = reconcile(
+      [...trade('e1', 'Carlton', 'GWS', pick(14))],
+      [order(14, 'GWS', 'Carlton', 'd', 1), order(40, 'GWS', 'Carlton', 'e', 2)]
+    );
+    const slot14 = candidate.content.pickCustody.find(
+      (custody) => custody.recordedPickNumber === 14
+    )!;
+    expect(slot14.status).toBe('single_source');
+    expect(pickIds(candidate)).toEqual([{ pickId: slot14.pickId, status: 'single_source' }]);
+  });
+
+  it('leaves the pick unlinked when the trade has duplicate transaction evidence', () => {
+    const duplicated = [
+      ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+      ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+    ];
+    const [transaction] = trade('e2', 'GWS', 'Western Bulldogs', pick(14));
+    const candidate = reconcile(
+      [...duplicated, transaction!],
+      [order(14, 'Western Bulldogs', 'Carlton')]
+    );
+    expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+  });
+
+  it('never joins a "Pick N" transfer to a slot whose original club the order does not state', () => {
+    // A special pick (compensation, assistance) is held with no original club. Neither the
+    // original-club paths nor the holder corroboration can key such a row, so it stays unresolved
+    // and no hop moves onto it, even when the holder and sender agree with the trades.
+    const holderOnly = (holder: string, suffix: string) =>
+      batch('official_afl', suffix, [
+        {
+          kind: 'pick_custody',
+          observedAt: '2025-11-07T00:00:00.000Z',
+          draftYear: 2025,
+          draftType: 'national',
+          roundNumber: 1,
+          recordedPickNumber: 14,
+          originalClub: null,
+          currentClub: { nativeId: null, recordedName: holder },
+        },
+      ]);
+    for (const order of [holderOnly('Western Bulldogs', 'd'), holderOnly('GWS', 'e')]) {
+      const candidate = reconcile(
+        [
+          ...trade('e1', 'Carlton', 'GWS', future('Carlton')),
+          ...trade('e2', 'GWS', 'Western Bulldogs', pick(14)),
+        ],
+        [order]
+      );
+      const [custody] = candidate.content.pickCustody;
+      expect(custody).toMatchObject({ originalClubId: null, status: 'unresolved' });
+      expect(pickIds(candidate)[1]).toEqual(expect.objectContaining({ status: 'unresolved' }));
+      expect(pickIds(candidate).map((leg) => leg?.pickId)).not.toContain(custody!.pickId);
+    }
+  });
 });

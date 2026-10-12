@@ -10,7 +10,9 @@ import type { AnyNode } from 'domhandler';
 
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
   createAflTradeExternalEvidenceEnvelope,
+  isDraftguruNationalYearAccessParserVersion,
   type AflTradeExternalEvidenceContent,
   type AflTradeExternalEvidenceEnvelope,
 } from './externalDraftTradeEvidenceContracts';
@@ -33,6 +35,7 @@ export interface DraftguruParseIssue {
     | 'unsupported_row'
     | 'unpaired_asset'
     | 'ambiguous_asset'
+    | 'unsupported_disposition'
     | 'player_projection_incomplete';
   sourceKey: string;
   detail: string;
@@ -191,6 +194,68 @@ interface AssetOccurrence {
   direction: 'gave' | 'got';
   asset: ParsedAsset;
   sourceKey: string;
+  disposition?: ParsedDisposition | { unsupported: string };
+  /** The giving side's outcome for a traded pick (v3): who was eventually selected with it. */
+  eventual?: ParsedDisposition | { unsupported: string };
+}
+
+/** Parser version whose recorded rights admit the received-pick disposition fields. */
+export const DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION = 'draftguru-trade-parser/v2';
+
+/**
+ * v3 (statlyaus/Statly#886) emits exactly v2's claims, then one `pick_eventual_selection` per traded
+ * pick: the player the giving side of the row names as eventually selected with it, or "Pick not
+ * used". The giving side names that player whatever the pick was numbered on this page, so it
+ * identifies one pick across pages numbered before and after draft-night renumbering.
+ */
+export const DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION = 'draftguru-trade-parser/v3';
+
+type ParsedDisposition =
+  | { disposition: 'selected'; player: { nativeId: string | null; recordedName: string } }
+  | { disposition: 'traded_on' | 'not_used' };
+
+const DISPOSITION_TEXT: Readonly<Record<string, 'traded_on' | 'not_used'>> = {
+  'pick traded on to another club': 'traded_on',
+  'pick not used': 'not_used',
+};
+
+/**
+ * The source's stated outcome for the pick in one side of a movement row: the player-name cell when
+ * the receiving club used it, otherwise the pick-description text. Games, points, expected value and
+ * estimates are never read. Returns null when the side holds no pick.
+ */
+function parseSideDisposition(
+  cells: Array<Cheerio<AnyNode> | null>,
+  start: number
+): ParsedDisposition | { unsupported: string } | null {
+  const side = cells
+    .slice(start, start + 5)
+    .filter((cell): cell is Cheerio<AnyNode> => cell !== null);
+  const pick = side.find(
+    (cell) =>
+      cell.hasClass('actual-asset') &&
+      (cell.hasClass('pick-name') || cell.hasClass('future-pick-name'))
+  );
+  if (!pick) return null;
+  const player = side.find(
+    (cell) => cell.hasClass('player-name') && !cell.hasClass('actual-asset')
+  );
+  if (player) {
+    const recordedName = normalizeText(player.text());
+    if (!recordedName) return { unsupported: 'empty player cell' };
+    return {
+      disposition: 'selected',
+      player: {
+        nativeId: sourceNativeId(player.find('a').attr('href'), '/players/'),
+        recordedName,
+      },
+    };
+  }
+  const description = normalizeText(
+    side.find((cell) => cell.hasClass('pick-description'))?.text() ?? ''
+  );
+  const disposition = DISPOSITION_TEXT[description.toLowerCase()];
+  return disposition ? { disposition } : { unsupported: description || 'no disposition cell' };
 }
 
 function parseSideAsset(
@@ -301,6 +366,12 @@ export function parseDraftguruTradeDetail(
   const partyNames: string[] = [];
   const occurrences: AssetOccurrence[] = [];
   const issues: DraftguruParseIssue[] = [];
+  // Only a v2 capture's recorded rights admit the disposition fields, so v1 replays stay exact.
+  const recordsEventualSelections =
+    input.capture.parserVersion === DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION;
+  const recordsDispositions =
+    recordsEventualSelections ||
+    input.capture.parserVersion === DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION;
   let currentClub: string | null = null;
   table.find('tr').each((rowIndex, row) => {
     const wrapped = $(row);
@@ -329,19 +400,31 @@ export function parseDraftguruTradeDetail(
     reportUnsupportedSide(0, 'gave');
     reportUnsupportedSide(5, 'got');
     if (gave) {
+      const eventual =
+        recordsEventualSelections &&
+        (gave.asset.kind === 'current_pick' || gave.asset.kind === 'future_pick')
+          ? parseSideDisposition(cells, 0)
+          : null;
       occurrences.push({
         ...gave,
         clubName: currentClub,
         direction: 'gave',
         sourceKey: `${eventId}:row-${rowIndex + 1}:gave`,
+        ...(eventual ? { eventual } : {}),
       });
     }
     if (got) {
+      const disposition =
+        recordsDispositions &&
+        (got.asset.kind === 'current_pick' || got.asset.kind === 'future_pick')
+          ? parseSideDisposition(cells, 5)
+          : null;
       occurrences.push({
         ...got,
         clubName: currentClub,
         direction: 'got',
         sourceKey: `${eventId}:row-${rowIndex + 1}:got`,
+        ...(disposition ? { disposition } : {}),
       });
     }
   });
@@ -388,6 +471,8 @@ export function parseDraftguruTradeDetail(
     values.push(occurrence);
     occurrencesByFingerprint.set(occurrence.fingerprint, values);
   });
+  // v3's eventual selections follow every v2 claim, so a v2 row keeps its ordinal and key.
+  const eventualSelections: Array<[string, AflTradeExternalEvidenceContent['claim']]> = [];
   [...occurrencesByFingerprint.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .forEach(([fingerprint, values]) => {
@@ -413,7 +498,54 @@ export function parseDraftguruTradeDetail(
           asset: giver.asset,
         })
       );
+      // Only a named player or "Pick not used" is an eventual outcome; anything else (a pick not yet
+      // drafted, "traded on") states none, and is not an issue, so a v3 batch's issues equal v2's.
+      const eventual = giver.eventual;
+      if (eventual !== undefined && !('unsupported' in eventual)) {
+        if (eventual.disposition === 'selected') {
+          eventualSelections.push([
+            `${eventId}:eventual:${fingerprint}`,
+            {
+              kind: 'pick_eventual_selection',
+              nativeEventId: eventId,
+              nativeTransferId: fingerprint,
+              outcome: 'selected',
+              player: eventual.player,
+            },
+          ]);
+        } else if (eventual.disposition === 'not_used') {
+          eventualSelections.push([
+            `${eventId}:eventual:${fingerprint}`,
+            {
+              kind: 'pick_eventual_selection',
+              nativeEventId: eventId,
+              nativeTransferId: fingerprint,
+              outcome: 'not_used',
+            },
+          ]);
+        }
+      }
+      const stated = receiver.disposition;
+      if (stated === undefined) return;
+      if ('unsupported' in stated) {
+        issues.push({
+          code: 'unsupported_disposition',
+          sourceKey: receiver.sourceKey,
+          detail: `Received-pick outcome was not recognised: ${stated.unsupported}`,
+        });
+        return;
+      }
+      evidence.push(
+        create(`${eventId}:disposition:${fingerprint}`, {
+          kind: 'pick_disposition',
+          nativeEventId: eventId,
+          nativeTransferId: fingerprint,
+          receivingClub: { nativeId: null, recordedName: receiver.clubName },
+          ...stated,
+        })
+      );
     });
+  for (const [sourceKey, claim] of eventualSelections) evidence.push(create(sourceKey, claim));
 
   return { evidence, issues };
 }
@@ -499,9 +631,39 @@ export function parseDraftguruYearSelections(
   return parseDraftguruYearSelectionRows(html, input);
 }
 
+/**
+ * The year page's second category cell, matched against the exact reviewed forms only: blank for an
+ * open selection, `Academy` or `Academy (NG)` for an academy nomination, and `Father-Son(<father>)`
+ * for a father-son nomination. Any other text, including a new academy label or a father-son cell
+ * without a name, is unreviewed and returns null, so the row is quarantined rather than counted.
+ *
+ * With `qualified` (parser v3), the 2019 club-qualified forms are also reviewed. `Academy(<club>)` or
+ * `Academy (NG)(<club>)` is an academy nomination only when the named club is the selecting club. With
+ * ` - Not Matched`, the named academy club declined to match the bid, so the selecting club used an
+ * ordinary pick: that is an open selection, and the named club must differ from the selecting club.
+ * Any other combination is unreviewed and returns null.
+ */
+function accessCategoryOf(
+  text: string,
+  selectingClub: string,
+  qualified: boolean
+): 'open' | 'academy' | 'father_son' | null {
+  if (text === '') return 'open';
+  if (text === 'Academy' || text === 'Academy (NG)') return 'academy';
+  if (/^Father-Son ?\([A-Z][A-Za-z'’.-]*(?: [A-Za-z'’.-]+)+\)$/.test(text)) return 'father_son';
+  if (!qualified) return null;
+  const match = /^Academy(?: \(NG\))?\(([A-Z][A-Za-z'’. -]*?[A-Za-z])( - Not Matched)?\)$/.exec(
+    text
+  );
+  if (!match || !selectingClub) return null;
+  const namedClub = match[1]!;
+  if (match[2]) return namedClub !== selectingClub ? 'open' : null;
+  return namedClub === selectingClub ? 'academy' : null;
+}
+
 function parseDraftguruYearSelectionRows(
   html: string,
-  input: { capture: SourceCapture; draftYear: number }
+  input: { capture: SourceCapture; draftYear: number; readAccessCategory?: boolean }
 ): DraftguruTradeParseResult & {
   scopeSummary: {
     observedRows: number;
@@ -562,6 +724,23 @@ function parseDraftguruYearSelectionRows(
     const clubCell = wrapped.find('td.club').first();
     const playerName = normalizeText(playerCell.text());
     const clubName = normalizeText(clubCell.text());
+    const categoryCells = wrapped.find('td.category');
+    const accessCategory = input.readAccessCategory
+      ? accessCategoryOf(
+          normalizeText(categoryCells.eq(1).text()),
+          clubName,
+          input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+        )
+      : undefined;
+    if (input.readAccessCategory && (categoryCells.length !== 2 || accessCategory === null)) {
+      scopeSummary.invalidRows++;
+      issues.push({
+        code: 'unsupported_row',
+        sourceKey: `year-row:${rowIndex + 1}`,
+        detail: `Unreviewed access category: ${normalizeText(categoryCells.eq(1).text())}`,
+      });
+      return;
+    }
     if (
       !draftType ||
       numberCells.length !== 1 ||
@@ -620,6 +799,7 @@ function parseDraftguruYearSelectionRows(
             nativeId: sourceNativeId(clubCell.find('a').attr('href'), '/clubs/'),
             recordedName: clubName,
           },
+          ...(accessCategory ? { accessCategory } : {}),
         },
         publicationEligible: false,
       })
@@ -698,7 +878,10 @@ export function parseDraftguruNationalYearSelections(
     $(row).remove();
   });
   if (issues.length) return { evidence: [], issues, scopeSummary: summary };
-  const result = parseDraftguruYearSelectionRows($.html(), input);
+  const result = parseDraftguruYearSelectionRows($.html(), {
+    ...input,
+    readAccessCategory: isDraftguruNationalYearAccessParserVersion(input.capture.parserVersion),
+  });
   if (!summary.includedRows)
     result.issues.push({
       code: 'unsupported_row',

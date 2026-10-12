@@ -278,7 +278,7 @@ function isNavActive(pathname: string | null | undefined, href: string): boolean
   if (href === '/matches') return p.startsWith('/matches');
   if (href === '/live-scoring') return p.startsWith('/live-scoring');
   if (href === '/waivers') return p.startsWith('/waivers');
-  if (href === '/rankings') return p.startsWith('/rankings') || p.startsWith('/leaderboard');
+  if (href === '/rankings') return p.startsWith('/rankings');
   if (href === '/team-analytics')
     return p.startsWith('/team-analytics') || p.startsWith('/rosters');
   if (href === '/commissioner') return p.startsWith('/commissioner');
@@ -304,7 +304,6 @@ function shouldShowLeagueSwitcher(pathname: string | null | undefined): boolean 
     p.startsWith('/waivers') ||
     p.startsWith('/team-analytics') ||
     p.startsWith('/rankings') ||
-    p.startsWith('/leaderboard') ||
     p.startsWith('/rosters')
   );
 }
