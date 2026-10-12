@@ -863,13 +863,17 @@ supersede production Gate authority, and production execution cannot reuse non-p
    selections it cites or re-lists, so a session re-versioned for a few players still counts as
    promoted for the rest). The same holds for a trade whose event is current canonical under the
    same stable key from a finalized promotion with every one of the candidate's transfers a promoted
-   asset on it: recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
+   asset on it under the candidate's pick id (migration 0274; a trade whose pick id changed is
+   written again as a superseding version): recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
    promotion, left unwritten (no trade version, asset, special custody or realization), omitted from
    the reviewed transaction dates, and counted on the receipt with its ids. A custody observation
    without a usable status (`unresolved`, such as an order page's holder-only special pick with no
    original club, or `disputed` behind a deferred `pick_identity_conflict`) is pick-side too: recorded
    as `deferredCustodyIds`, checked by migration 0268 on insert and at promotion, written as nothing
    and counted on the receipt as `deferredCustodyCount`; without a deferral it blocks as before. A
+   usable custody row already canonical under a finalized promotion with the same facts is recorded
+   as `promotedCustodyIds`, checked by migration 0274 on insert and at promotion, written as nothing
+   and counted as `promotedCustodyCount`; one with different facts still refuses. A
    retained `draft_session` claim in the candidate's sources refuses the metadata-only proposal only
    for a draft the candidate writes (migration 0269): a session claim for a draft left to its earlier
    promotion or holding a deferred selection proves nothing the promotion needs. A pick the

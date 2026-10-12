@@ -272,7 +272,12 @@ club can contradict the pick a walk settles on.
   merged pick ids, and number-only ids that join 125 assets to other trades and 145 to draft selections by
   number alone. Repairing it means a new promotion that supersedes the affected event versions, and 173 traded-player arrival spells start at events of the
   current promotion, so a repair must carry or re-register them. Whether and when to repair is the owner's
-  decision; the rules and reconciler change come first so a repair promotes correct ids.
+  decision; the rules and reconciler change come first so a repair promotes correct ids. The repair is
+  an ordinary deferred-lineage promotion of a new candidate (migration 0274): a promoted trade counts
+  as already promoted only when every pick transfer keeps its promoted asset's pick id, so exactly the
+  trades whose pick ids changed get a superseding version; custody already canonical with the
+  candidate's facts is recorded as `promotedCustodyIds` and left unwritten. The arrival spells that
+  start at a superseded version are re-registered afterwards.
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
   allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured
   after the reconciler change, not predicted.

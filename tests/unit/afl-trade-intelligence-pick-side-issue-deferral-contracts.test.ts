@@ -37,13 +37,17 @@ import {
   resolveWrittenPickDefinitions,
 } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 import {
+  aflTradeCanonicalDraftKind,
   aflTradeDeferredCustodyIds,
   aflTradePickLineageDeferralScope,
+  aflTradePromotedCustodyIds,
   aflTradePromotedDrafts,
   aflTradePromotedTransactions,
   aflTradePromotionWriteScope,
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
+  type AflTradeCurrentCanonicalPickCustody,
+  type AflTradeCurrentCanonicalTransaction,
 } from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
 
 const digest = (character: string) => character.repeat(64);
@@ -187,7 +191,7 @@ function reconcile(
   deferral: boolean,
   authority: boolean = true,
   promotedDraftSelectionIds?: readonly string[],
-  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[]
+  promotedTransactions?: readonly AflTradeCurrentCanonicalTransaction[]
 ) {
   return reconcileAflTradeExternalEvidence({
     environment: 'test_fixture',
@@ -967,7 +971,7 @@ const concessionTransferIds = ['harry-kyle', 'special-pick:2020MIDR1'].map((nati
 
 function reconcileRight(
   deferral: boolean,
-  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[]
+  promotedTransactions?: readonly AflTradeCurrentCanonicalTransaction[]
 ) {
   return reconcileAflTradeExternalEvidence({
     environment: 'test_fixture',
@@ -987,7 +991,14 @@ function reconcileRight(
 
 describe('a deferred candidate whose transaction is already current canonical', () => {
   const proposedAt = '2026-08-09T07:31:00.000Z';
-  const promoted = [{ transactionId: concessionTransactionId, transferIds: concessionTransferIds }];
+  // The concession trade moves a player and a special pick: no transfer names a pick id.
+  const promoted = [
+    {
+      transactionId: concessionTransactionId,
+      transferIds: concessionTransferIds,
+      transferPickIds: [],
+    },
+  ];
 
   it('derives promoted transactions only when every transfer is promoted, sorted', () => {
     const transactions = [
@@ -995,16 +1006,20 @@ describe('a deferred candidate whose transaction is already current canonical', 
       { transactionId: 'transaction:a', transferIds: ['t3'] },
       { transactionId: 'transaction:c', transferIds: ['t4'] },
     ];
-    const current = new Map<string, ReadonlySet<string>>([
-      ['transaction:b', new Set(['t1', 't2', 't9'])],
-      ['transaction:a', new Set(['t3'])],
-      ['transaction:c', new Set(['t5'])],
-    ]);
-    expect(aflTradePromotedTransactions(transactions, current)).toEqual([
+    const transfers = ['t1', 't2', 't3', 't4'].map((transferId) => ({
+      transferId,
+      asset: { kind: 'player' },
+    }));
+    const current = [
+      { transactionId: 'transaction:b', transferIds: ['t1', 't2', 't9'], transferPickIds: [] },
+      { transactionId: 'transaction:a', transferIds: ['t3'], transferPickIds: [] },
+      { transactionId: 'transaction:c', transferIds: ['t5'], transferPickIds: [] },
+    ];
+    expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
       'transaction:a',
       'transaction:b',
     ]);
-    expect(aflTradePromotedTransactions(transactions, new Map())).toEqual([]);
+    expect(aflTradePromotedTransactions(transactions, transfers, [])).toEqual([]);
   });
 
   it('records the transaction at reconciliation only under the deferral and only when fully promoted', () => {
@@ -1016,7 +1031,11 @@ describe('a deferred candidate whose transaction is already current canonical', 
     expect(recorded.candidateId).not.toBe(reconcileRight(true).candidateId);
     expect(
       reconcileRight(true, [
-        { transactionId: concessionTransactionId, transferIds: [concessionTransferIds[0]!] },
+        {
+          transactionId: concessionTransactionId,
+          transferIds: [concessionTransferIds[0]!],
+          transferPickIds: [],
+        },
       ]).content.pickLineageDeferral
     ).toEqual({ decisionId });
     expect(() => reconcileRight(false, promoted)).toThrow(/only under a pick-side deferral/);
@@ -1545,5 +1564,339 @@ describe('custody-defined pick definitions', () => {
         pickLineageDeferral: { decisionId, deferredIssueCount: 1, custodyDefinedPickIds: [pickId] },
       })
     ).toThrow(/counted exactly/);
+  });
+});
+
+// Repairing promoted pick identity (#853). A trade promoted before the identity rules carries pick
+// ids the rules have since changed: it counts as already promoted only when every pick transfer
+// keeps its promoted asset's pick id, so a re-keyed trade is written again as a superseding version.
+// Custody an earlier promotion wrote with the candidate's facts is left to it: a custody id addresses
+// its evidence, so writing it a second time would collide with the first row.
+describe('repairing promoted pick identity (#853)', () => {
+  const tradeId = createAflTradeContentAddress('external-transaction', {
+    provider: 'draftguru',
+    nativeEventId: '2025-gws-bulldogs',
+  });
+
+  it('lists a transaction only when every pick transfer keeps its promoted pick id', () => {
+    const transactions = [
+      { transactionId: 'transaction:kept', transferIds: ['player', 'pick-kept'] },
+      { transactionId: 'transaction:rekeyed', transferIds: ['pick-rekeyed'] },
+      { transactionId: 'transaction:pickless', transferIds: ['pick-pickless'] },
+      { transactionId: 'transaction:unheld', transferIds: ['pick-unheld'] },
+    ];
+    const pick = (transferId: string, pickId: string) => ({
+      transferId,
+      asset: { kind: 'pick_entitlement', pickId },
+    });
+    const transfers = [
+      { transferId: 'player', asset: { kind: 'player' } },
+      pick('pick-kept', 'pick:a'),
+      pick('pick-rekeyed', 'pick:new'),
+      pick('pick-pickless', 'pick:c'),
+    ];
+    const current = [
+      {
+        transactionId: 'transaction:kept',
+        transferIds: ['pick-kept', 'player'],
+        transferPickIds: [{ transferId: 'pick-kept', pickId: 'pick:a' }],
+      },
+      {
+        transactionId: 'transaction:rekeyed',
+        transferIds: ['pick-rekeyed'],
+        transferPickIds: [{ transferId: 'pick-rekeyed', pickId: 'pick:old' }],
+      },
+      // A promoted asset that names no pick does not stand for a candidate pick transfer.
+      {
+        transactionId: 'transaction:pickless',
+        transferIds: ['pick-pickless'],
+        transferPickIds: [],
+      },
+      // A transfer the candidate does not hold is never matched.
+      {
+        transactionId: 'transaction:unheld',
+        transferIds: ['pick-unheld'],
+        transferPickIds: [{ transferId: 'pick-unheld', pickId: 'pick:d' }],
+      },
+    ];
+    expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
+      'transaction:kept',
+    ]);
+  });
+
+  it('records the trade at reconciliation only under its promoted pick id, and writes a re-keyed one', () => {
+    const unrecorded = reconcile(true);
+    const trade = unrecorded.content.transactions.find(
+      ({ transactionId }) => transactionId === tradeId
+    )!;
+    const pickTransfer = unrecorded.content.transfers.find(
+      ({ asset }) => asset.kind === 'pick_entitlement'
+    )!;
+    const promotedUnder = (pickId: string) => [
+      {
+        transactionId: tradeId,
+        transferIds: trade.transferIds,
+        transferPickIds: [{ transferId: pickTransfer.transferId, pickId }],
+      },
+    ];
+    const kept = reconcile(
+      true,
+      true,
+      undefined,
+      promotedUnder((pickTransfer.asset as { pickId: string }).pickId)
+    );
+    expect(kept.content.pickLineageDeferral?.promotedTransactions).toEqual([tradeId]);
+    expect(
+      aflTradePromotionWriteScope(kept.content).transactions.map(
+        ({ transactionId }) => transactionId
+      )
+    ).not.toContain(tradeId);
+    // The identity rules changed the pick's id since it was promoted: the trade is written again.
+    const rekeyed = reconcile(true, true, undefined, promotedUnder(`draft-pick:${digest('0')}`));
+    expect(rekeyed.content.pickLineageDeferral?.promotedTransactions).toBeUndefined();
+    expect(rekeyed.candidateId).toBe(unrecorded.candidateId);
+    expect(
+      aflTradePromotionWriteScope(rekeyed.content).transactions.map(
+        ({ transactionId }) => transactionId
+      )
+    ).toContain(tradeId);
+    // The repository must state each promoted asset's pick id; without it nothing is decided.
+    expect(() =>
+      reconcile(true, true, undefined, [
+        { transactionId: tradeId, transferIds: trade.transferIds } as never,
+      ])
+    ).toThrow();
+  });
+
+  it('maps candidate draft types to the canonical kind the promoter writes', () => {
+    expect(
+      [
+        'national',
+        'National Draft',
+        'pre-season',
+        'rookie',
+        'mid_season',
+        'mini_draft',
+        'supplemental_selection',
+        'expansion',
+        'constructor',
+      ].map(aflTradeCanonicalDraftKind)
+    ).toEqual([
+      'national_draft',
+      'national_draft',
+      'preseason_draft',
+      'rookie_draft',
+      'midseason_draft',
+      'supplemental_selection',
+      'supplemental_selection',
+      null,
+      null,
+    ]);
+  });
+
+  const stored: AflTradeCurrentCanonicalPickCustody = {
+    custodyId: 'custody:a',
+    pickId: 'pick:a',
+    observedAt: '2025-10-15T00:00:00.000Z',
+    observedDate: null,
+    draftSeasonYear: 2025,
+    draftKind: 'national_draft',
+    recordedRound: 1,
+    recordedPick: 14,
+    originalClubId: 'club-gws',
+    currentClubId: 'club-western-bulldogs',
+    predecessorCustodyId: null,
+  };
+  const row = {
+    custodyId: 'custody:a',
+    pickId: 'pick:a',
+    observedAt: '2025-10-15T00:00:00.000Z' as unknown,
+    draftYear: 2025,
+    draftType: 'national',
+    roundNumber: 1 as number | null,
+    recordedPickNumber: 14 as number | null,
+    originalClubId: 'club-gws' as string | null,
+    currentClubId: 'club-western-bulldogs' as string | null,
+    predecessorCustodyId: null as string | null,
+    status: 'single_source',
+  };
+
+  it('lists usable custody already canonical with the same facts, and nothing that differs', () => {
+    expect(aflTradePromotedCustodyIds([row, row], [stored])).toEqual(['custody:a']);
+    // The same instant written with an offset is the same observation.
+    expect(
+      aflTradePromotedCustodyIds(
+        [{ ...row, observedAt: '2025-10-15T10:00:00.000+10:00' }],
+        [stored]
+      )
+    ).toEqual(['custody:a']);
+    const yearOnly = {
+      ...stored,
+      observedAt: null,
+      observedDate: { precision: 'year', year: 2025 },
+    };
+    expect(
+      aflTradePromotedCustodyIds(
+        [{ ...row, observedAt: { precision: 'year', year: 2025 } }],
+        [yearOnly]
+      )
+    ).toEqual(['custody:a']);
+    expect(
+      aflTradePromotedCustodyIds(
+        [{ ...row, observedAt: { precision: 'day', date: '2025-10-15' } }],
+        [yearOnly]
+      )
+    ).toEqual([]);
+    for (const changed of [
+      { custodyId: 'custody:b' },
+      { pickId: 'pick:b' },
+      { observedAt: '2025-10-16T00:00:00.000Z' },
+      { observedAt: { precision: 'year', year: 2025 } },
+      { draftYear: 2026 },
+      { draftType: 'rookie' },
+      { roundNumber: 2 },
+      { recordedPickNumber: null },
+      { originalClubId: null },
+      { currentClubId: 'club-gws' },
+      { predecessorCustodyId: 'custody:z' },
+      { status: 'unresolved' },
+    ]) {
+      expect(aflTradePromotedCustodyIds([{ ...row, ...changed }], [stored])).toEqual([]);
+    }
+    expect(aflTradePromotedCustodyIds([row], [])).toEqual([]);
+  });
+
+  it('leaves already-canonical custody unwritten and counts it, only under the deferral', () => {
+    const content = {
+      transactions: [],
+      transfers: [],
+      draftSelections: [],
+      pickCustody: [
+        { custodyId: 'custody:a', pickId: 'pick:a', status: 'single_source' },
+        { custodyId: 'custody:b', pickId: 'pick:b', status: 'single_source' },
+      ],
+      pickLineage: [],
+      issues: [
+        { code: 'lineage_unresolved', severity: 'deferred', subjectKey: 'lineage:transfer:x' },
+      ],
+      pickLineageDeferral: { decisionId, promotedCustodyIds: ['custody:a'] },
+    };
+    const written = aflTradePromotionWriteScope(content);
+    expect([...written.deferral.promotedCustodyIds]).toEqual(['custody:a']);
+    expect(written.pickCustody.map(({ custodyId }) => custodyId)).toEqual(['custody:b']);
+    expect(written.promotedCustodyCount).toBe(1);
+    expect(
+      aflTradePromotionWriteScope({ ...content, issues: [], pickLineageDeferral: undefined })
+    ).toMatchObject({ promotedCustodyCount: 0 });
+  });
+
+  it('records already-canonical custody at reconciliation only under the deferral, and the receipt counts it', () => {
+    // The order page states pick 14's custody with its original club, so the row is usable.
+    const order = batch('official_afl', 'e', [
+      {
+        kind: 'pick_custody',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        originalClub: gws,
+        currentClub: bulldogs,
+        observedAt: '2025-10-01T00:00:00.000Z',
+      },
+    ]);
+    const reconcileOrder = (
+      deferral: boolean,
+      promotedCustody?: readonly AflTradeCurrentCanonicalPickCustody[]
+    ) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [draftguru, order],
+        identityResolutions: [
+          ...resolutions,
+          resolution('official_afl', 'club', gws, 'club-gws'),
+          resolution('official_afl', 'club', bulldogs, 'club-western-bulldogs'),
+        ],
+        sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+          ...sourceAuthority,
+          candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson(
+            [draftguru.batchId, order.batchId].sort()
+          ),
+        }),
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+        ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+        ...(promotedCustody === undefined ? {} : { promotedCustody }),
+      });
+    const plain = reconcileOrder(true);
+    const custody = plain.content.pickCustody.find(({ status }) =>
+      isAflTradeUsableCustodyStatus(status)
+    )!;
+    expect(custody).toBeDefined();
+    const canonical: AflTradeCurrentCanonicalPickCustody = {
+      custodyId: custody.custodyId,
+      pickId: custody.pickId,
+      observedAt: '2025-10-01T00:00:00.000Z',
+      observedDate: null,
+      draftSeasonYear: 2025,
+      draftKind: 'national_draft',
+      recordedRound: custody.roundNumber,
+      recordedPick: custody.recordedPickNumber,
+      originalClubId: custody.originalClubId,
+      currentClubId: custody.currentClubId!,
+      predecessorCustodyId:
+        (custody as { predecessorCustodyId?: string | null }).predecessorCustodyId ?? null,
+    };
+    const recorded = reconcileOrder(true, [canonical]);
+    expect(recorded.content.pickLineageDeferral?.promotedCustodyIds).toEqual([custody.custodyId]);
+    expect(recorded.content.pickCustody).toEqual(plain.content.pickCustody);
+    // Different facts under the same id are not recorded: that promotion still refuses.
+    expect(
+      reconcileOrder(true, [{ ...canonical, currentClubId: 'club-gws' }]).content
+        .pickLineageDeferral?.promotedCustodyIds
+    ).toBeUndefined();
+    expect(() => reconcileOrder(false, [canonical])).toThrow(/only under a pick-side deferral/);
+    expect(
+      aflTradePromotionWriteScope(recorded.content).pickCustody.map(({ custodyId }) => custodyId)
+    ).not.toContain(custody.custodyId);
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: recorded,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [],
+    });
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate: recorded,
+      proposal,
+    });
+    expect(authenticated.pickCustodyCount).toBe(
+      aflTradePromotionWriteScope(recorded.content).pickCustody.length
+    );
+    expect(authenticated.pickLineageDeferral).toMatchObject({
+      decisionId,
+      promotedCustodyCount: 1,
+    });
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      candidateId: recorded.candidateId,
+      proposalId: proposal.proposalId,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+      pickLineageDeferral: authenticated.pickLineageDeferral!,
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    // The candidate contract refuses a listed id that is not a usable custody row it holds.
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded.content,
+        pickLineageDeferral: {
+          decisionId,
+          promotedCustodyIds: [`external-pick-custody:${digest('5')}`],
+        },
+      })
+    ).toThrow(/usable candidate custody row/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded.content,
+        pickLineageDeferral: { decisionId, promotedCustodyIds: [] },
+      })
+    ).toThrow();
   });
 });

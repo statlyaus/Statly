@@ -11,6 +11,8 @@
  * deferred candidate writes and which it leaves for later reviewed lineage. A draft the candidate
  * carries that is already current canonical (`promotedDrafts`, resolved at preparation and checked
  * by the database) is left to that promotion rather than written again under a session-less root.
+ * So is a transaction already current canonical with the candidate's own pick ids, and a custody
+ * observation already canonical with the candidate's facts (`promotedCustodyIds`, #853).
  */
 
 export const AFL_TRADE_PICK_SIDE_ISSUE_CODES = [
@@ -60,9 +62,11 @@ export interface AflTradePickLineageDeferral {
   readonly promotedDrafts?: AflTradePromotedDraft[];
   /**
    * Transactions whose trade event is already current canonical under the same stable key from a
-   * finalized promotion, with every one of their transfers a promoted asset on that current version:
-   * a deferred-lineage promotion writes nothing of them (no trade version, asset, custody or
-   * realization). Sorted unique transaction ids, present only when non-empty.
+   * finalized promotion, with every one of their transfers a promoted asset on that current version
+   * and every pick transfer's pick id that asset's pick id: a deferred-lineage promotion writes
+   * nothing of them (no trade version, asset, custody or realization). A transaction whose pick ids
+   * changed (#853) is not listed, so its promotion writes a superseding version. Sorted unique
+   * transaction ids, present only when non-empty.
    */
   readonly promotedTransactions?: string[];
   /**
@@ -70,6 +74,41 @@ export interface AflTradePickLineageDeferral {
    * unwritten by a deferred-lineage promotion. Sorted unique custody ids, present only when non-empty.
    */
   readonly deferredCustodyIds?: string[];
+  /**
+   * Usable custody observations already canonical under a finalized promotion with the candidate's
+   * facts (#853): a custody id addresses its evidence, so writing it again would collide. Left
+   * unwritten. Sorted unique custody ids, present only when non-empty.
+   */
+  readonly promotedCustodyIds?: string[];
+}
+
+/**
+ * A current canonical trade event as the repository reads it at preparation: the source transfer ids
+ * promoted as assets on its current version, and the pick id of each of those assets that names one.
+ */
+export interface AflTradeCurrentCanonicalTransaction {
+  readonly transactionId: string;
+  readonly transferIds: readonly string[];
+  readonly transferPickIds: readonly { readonly transferId: string; readonly pickId: string }[];
+}
+
+/**
+ * A custody observation canonical under a finalized promotion, as the repository reads it at
+ * preparation (`outcome_current_canonical_pick_custody`). `observedAt` is a UTC millisecond instant,
+ * or null when the observation carries a partial `observedDate`.
+ */
+export interface AflTradeCurrentCanonicalPickCustody {
+  readonly custodyId: string;
+  readonly pickId: string;
+  readonly observedAt: string | null;
+  readonly observedDate: Readonly<Record<string, string | number>> | null;
+  readonly draftSeasonYear: number;
+  readonly draftKind: string;
+  readonly recordedRound: number | null;
+  readonly recordedPick: number | null;
+  readonly originalClubId: string | null;
+  readonly currentClubId: string;
+  readonly predecessorCustodyId: string | null;
 }
 
 /**
@@ -145,6 +184,8 @@ export interface AflTradePickLineageDeferralScope {
   readonly promotedTransactionIds: ReadonlySet<string>;
   /** Custody observations without a usable status, deferred rather than written. */
   readonly deferredCustodyIds: ReadonlySet<string>;
+  /** Custody observations already canonical with the candidate's facts; left to that promotion. */
+  readonly promotedCustodyIds: ReadonlySet<string>;
 }
 
 /**
@@ -199,6 +240,7 @@ export function aflTradePickLineageDeferralScope(
     ),
     promotedTransactionIds: new Set(content.pickLineageDeferral?.promotedTransactions ?? []),
     deferredCustodyIds: new Set(content.pickLineageDeferral?.deferredCustodyIds ?? []),
+    promotedCustodyIds: new Set(content.pickLineageDeferral?.promotedCustodyIds ?? []),
   };
 }
 
@@ -228,7 +270,7 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly transfers: Content['transfers'];
   /** Draft selections in drafts this promotion writes (none of a deferred or already-promoted draft). */
   readonly draftSelections: Content['draftSelections'];
-  /** Custody observations this promotion writes (none for a deferred pick). */
+  /** Custody observations this promotion writes (none for a deferred pick, none already canonical). */
   readonly pickCustody: Content['pickCustody'];
   /** `exercised_as` realizations this promotion writes (none for a deferred pick or a deferred or already-promoted draft). */
   readonly pickLineage: Content['pickLineage'];
@@ -238,6 +280,8 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly promotedTransactionCount: number;
   /** Custody observations without a usable status, left unwritten under the deferral. */
   readonly deferredCustodyCount: number;
+  /** Custody observations already canonical with the candidate's facts, left unwritten. */
+  readonly promotedCustodyCount: number;
   /**
    * Resolved lineages whose selection sits in an already-promoted draft, or whose transfer belongs
    * to an already-promoted transaction. Their realization is not written: the existing selection
@@ -267,6 +311,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       promotedDraftCount: 0,
       promotedTransactionCount: 0,
       deferredCustodyCount: 0,
+      promotedCustodyCount: 0,
       skippedRealizationCount: 0,
     };
   }
@@ -305,7 +350,9 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
     ) as Content['draftSelections'],
     pickCustody: content.pickCustody.filter(
       ({ pickId, custodyId }) =>
-        !deferral.deferredPickIds.has(pickId) && !deferral.deferredCustodyIds.has(custodyId)
+        !deferral.deferredPickIds.has(pickId) &&
+        !deferral.deferredCustodyIds.has(custodyId) &&
+        !deferral.promotedCustodyIds.has(custodyId)
     ) as Content['pickCustody'],
     pickLineage: content.pickLineage.filter(
       (lineage) => !deferredLineage(lineage) && !skippedLineage(lineage)
@@ -313,6 +360,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
     promotedDraftCount: deferral.promotedDraftKeys.size,
     promotedTransactionCount: deferral.promotedTransactionIds.size,
     deferredCustodyCount: deferral.deferredCustodyIds.size,
+    promotedCustodyCount: deferral.promotedCustodyIds.size,
     skippedRealizationCount: content.pickLineage.filter(skippedLineage).length,
   };
 }
@@ -320,26 +368,161 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
 /**
  * Transactions a deferred candidate leaves to an existing promotion: the transaction's trade event
  * is current canonical and every one of the candidate's transfers in it is a promoted asset on that
- * current version (`promotedTransferIds`, resolved by the repository at preparation, keyed by
- * transaction). Sorted unique ids; empty when nothing qualifies.
+ * current version whose pick id, for a pick transfer, is the candidate's own (`current`, resolved by
+ * the repository at preparation). A player or special transfer compares nothing more. A transaction
+ * whose pick ids changed since it was promoted (#853) is not listed, so a promotion of the candidate
+ * writes a superseding version with the new ids. Sorted unique ids; empty when nothing qualifies.
  */
 export function aflTradePromotedTransactions(
   transactions: readonly {
     readonly transactionId: string;
     readonly transferIds: readonly string[];
   }[],
-  promotedTransferIds: ReadonlyMap<string, ReadonlySet<string>>
+  transfers: readonly {
+    readonly transferId: string;
+    readonly asset: { readonly kind: string; readonly pickId?: string };
+  }[],
+  current: readonly AflTradeCurrentCanonicalTransaction[]
 ): string[] {
+  const promotedById = new Map(
+    current.map((entry) => [
+      entry.transactionId,
+      {
+        transferIds: new Set(entry.transferIds),
+        pickIdByTransfer: new Map(
+          entry.transferPickIds.map(({ transferId, pickId }) => [transferId, pickId] as const)
+        ),
+      },
+    ])
+  );
+  const transferById = new Map(transfers.map((transfer) => [transfer.transferId, transfer]));
   return [
     ...new Set(
       transactions
         .filter(({ transactionId, transferIds }) => {
-          const promoted = promotedTransferIds.get(transactionId);
+          const promoted = promotedById.get(transactionId);
           return (
-            promoted !== undefined && transferIds.every((transferId) => promoted.has(transferId))
+            promoted !== undefined &&
+            transferIds.every((transferId) => {
+              const transfer = transferById.get(transferId);
+              if (transfer === undefined || !promoted.transferIds.has(transferId)) return false;
+              return (
+                transfer.asset.kind !== 'pick_entitlement' ||
+                (transfer.asset.pickId !== undefined &&
+                  transfer.asset.pickId === promoted.pickIdByTransfer.get(transferId))
+              );
+            })
           );
         })
         .map(({ transactionId }) => transactionId)
+    ),
+  ].sort();
+}
+
+const CANONICAL_DRAFT_KIND_BY_TYPE = new Map([
+  ['national', 'national_draft'],
+  ['national_draft', 'national_draft'],
+  ['preseason', 'preseason_draft'],
+  ['pre_season', 'preseason_draft'],
+  ['preseason_draft', 'preseason_draft'],
+  ['rookie', 'rookie_draft'],
+  ['rookie_draft', 'rookie_draft'],
+  ['midseason', 'midseason_draft'],
+  ['mid_season', 'midseason_draft'],
+  ['midseason_draft', 'midseason_draft'],
+  ['mini_draft', 'supplemental_selection'],
+  ['supplemental_selection', 'supplemental_selection'],
+]);
+
+/**
+ * The canonical draft kind a candidate draft type is promoted as (the promoter's mapping, and
+ * `outcome_external_draft_type_kind` in migration 0274); null when there is none.
+ */
+export function aflTradeCanonicalDraftKind(draftType: string): string | null {
+  return (
+    CANONICAL_DRAFT_KIND_BY_TYPE.get(
+      draftType
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+    ) ?? null
+  );
+}
+
+function sameCustodyObservation(
+  observedAt: unknown,
+  current: AflTradeCurrentCanonicalPickCustody
+): boolean {
+  if (typeof observedAt === 'string') {
+    const instant = Date.parse(observedAt);
+    return (
+      current.observedDate === null &&
+      !Number.isNaN(instant) &&
+      new Date(instant).toISOString() === current.observedAt
+    );
+  }
+  if (
+    current.observedAt !== null ||
+    current.observedDate === null ||
+    typeof observedAt !== 'object' ||
+    observedAt === null
+  ) {
+    return false;
+  }
+  const candidate = observedAt as Readonly<Record<string, unknown>>;
+  const stored = current.observedDate;
+  const keys = Object.keys(candidate);
+  return (
+    keys.length === Object.keys(stored).length &&
+    keys.every((key) => candidate[key] === stored[key])
+  );
+}
+
+/**
+ * Custody a deferred candidate leaves to an existing promotion: usable candidate custody rows whose
+ * id is already a canonical custody observation of a finalized promotion with the same pick, date,
+ * draft, recorded round and pick, original and current club and predecessor (`current`, resolved by
+ * the repository at preparation; migration 0274 checks the same facts). A custody id addresses its
+ * evidence, so a second promotion of it would collide with the first; one whose facts differ is not
+ * listed and still refuses. Sorted unique ids; empty when nothing qualifies.
+ */
+export function aflTradePromotedCustodyIds(
+  pickCustody: readonly {
+    readonly custodyId: string;
+    readonly pickId: string;
+    readonly observedAt: unknown;
+    readonly predecessorCustodyId?: string | null;
+    readonly draftYear: number;
+    readonly draftType: string;
+    readonly roundNumber: number | null;
+    readonly recordedPickNumber: number | null;
+    readonly originalClubId: string | null;
+    readonly currentClubId: string | null;
+    readonly status: string;
+  }[],
+  current: readonly AflTradeCurrentCanonicalPickCustody[]
+): string[] {
+  const currentById = new Map(current.map((custody) => [custody.custodyId, custody]));
+  return [
+    ...new Set(
+      pickCustody
+        .filter((custody) => {
+          const stored = currentById.get(custody.custodyId);
+          return (
+            stored !== undefined &&
+            isAflTradeUsableCustodyStatus(custody.status) &&
+            stored.pickId === custody.pickId &&
+            sameCustodyObservation(custody.observedAt, stored) &&
+            stored.draftSeasonYear === custody.draftYear &&
+            stored.draftKind === aflTradeCanonicalDraftKind(custody.draftType) &&
+            stored.recordedRound === custody.roundNumber &&
+            stored.recordedPick === custody.recordedPickNumber &&
+            stored.originalClubId === custody.originalClubId &&
+            stored.currentClubId === custody.currentClubId &&
+            stored.predecessorCustodyId === (custody.predecessorCustodyId ?? null)
+          );
+        })
+        .map(({ custodyId }) => custodyId)
     ),
   ].sort();
 }
