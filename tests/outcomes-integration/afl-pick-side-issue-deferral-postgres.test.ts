@@ -1133,8 +1133,9 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
     [leaving.candidateId, canonicalizeAflTradeJson(leavingProposal.content)]
   );
   expect(exact.rows).toEqual([{ exact: true }]);
-  // The trade's pick is already a canonical pick from the draft promotion, keyed by draft slot
-  // with facts the custody-keyed trade would change: retained unchanged, listed on the receipt.
+  // The trade's "Pick N" has no custody, so it is its own pick, scoped to its transfer: it no longer
+  // shares the draft promotion's slot-keyed pick by number (pick-identity rule 6). The promotion
+  // writes it as a new canonical pick and retains nothing.
   const tradePick = leavingCandidate.content.transfers.find(
     ({ asset }) => asset.kind === 'pick_entitlement'
   )!.asset as { pickId: string };
@@ -1146,8 +1147,7 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
         [tradePick.pickId]
       )
     ).rows;
-  const factsBefore = await pickFacts();
-  expect(factsBefore).toHaveLength(1);
+  expect(await pickFacts()).toEqual([]);
   const result = await promotions.promote({
     candidateId: leaving.candidateId,
     approvalDecisionId: await approve(leaving.candidateId, leavingProposal),
@@ -1162,11 +1162,10 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
       decisionId: scope.decisionId,
       deferredIssueCount: 1,
       promotedDraftCount: 1,
-      retainedPickDefinitionCount: 1,
-      retainedPickDefinitionIds: [tradePick.pickId],
     },
   });
-  expect(await pickFacts()).toEqual(factsBefore);
+  expect(result.pickLineageDeferral).not.toHaveProperty('retainedPickDefinitionIds');
+  expect(await pickFacts()).toHaveLength(1);
   expect(await count(ws, 'outcome_draft_pick_enrichment')).toBe(0);
   expect(await draftVersions()).toBe(1);
   // The receipt replays byte-identically from the same facts.
