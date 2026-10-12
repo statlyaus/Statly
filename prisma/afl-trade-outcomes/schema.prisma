@@ -620,6 +620,8 @@ model OutcomeExternalReconciliationCandidate {
   pickCustodyCount             Int                                               @map("pick_custody_count")
   pickLineageCount             Int                                               @map("pick_lineage_count")
   issueCount                   Int                                               @map("issue_count")
+  deferredIssueCount           Int                                               @default(0) @map("deferred_issue_count")
+  lineageDeferralDecisionId    String?                                           @map("lineage_deferral_decision_id")
   status                       String
   finalizedAt                  DateTime?                                         @map("finalized_at") @outcomes.Timestamptz(3)
   sourceAuthorityJson          Json?                                             @map("source_authority_json")

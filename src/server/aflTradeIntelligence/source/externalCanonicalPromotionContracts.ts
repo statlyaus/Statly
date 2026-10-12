@@ -16,6 +16,7 @@ import {
   parseAflTradeExternalReconciliationCandidate,
   type AflTradeExternalReconciliationCandidateRecord,
 } from './externalReconciliationCandidateContracts';
+import { aflTradePromotionWriteScope } from './pickLineageDeferral';
 
 export const AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION =
   'afl-trade-external-canonical-promotion-proposal/v1' as const;
@@ -76,18 +77,42 @@ const draftEventCoverageSchema = z
     }
   });
 
-const reviewedTransactionDateSchema = z
+/**
+ * A reviewed transaction date: the source day repeated exactly, or `occurredOn: null` for a
+ * transaction the source does not date. A null day may carry the season's reviewed trade-period
+ * window as `datePrecision`; the window is explicit precision, never a substituted day.
+ */
+const reviewedTransactionDateFields = z
   .object({
     transactionId: transactionIdSchema,
     occurredOn: z.iso.date().nullable(),
+    datePrecision: draftSessionDateWindowSchema.optional(),
   })
   .strict();
 
-const transactionDateCoverageSchema = reviewedTransactionDateSchema
-  .extend({
-    seasonYear: z.number().int().min(1897).max(2200),
-  })
-  .strict();
+function requireWindowOnlyWithoutDay(
+  value: { occurredOn: string | null; datePrecision?: unknown },
+  context: z.RefinementCtx
+) {
+  if (value.datePrecision !== undefined && value.occurredOn !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['datePrecision'],
+      message: 'A trade-period window applies only to a transaction with no source day.',
+    });
+  }
+}
+
+const reviewedTransactionDateSchema = reviewedTransactionDateFields.superRefine(
+  requireWindowOnlyWithoutDay
+);
+
+const transactionDateCoverageFields = reviewedTransactionDateFields.safeExtend({
+  seasonYear: z.number().int().min(1897).max(2200),
+});
+const transactionDateCoverageSchema = transactionDateCoverageFields.superRefine(
+  requireWindowOnlyWithoutDay
+);
 
 const proposalBaseSchema = z
   .object({
@@ -99,7 +124,12 @@ const proposalBaseSchema = z
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     draftEventCoverage: z.array(draftEventCoverageSchema).max(100),
     transactionDateCoverage: z
-      .array(transactionDateCoverageSchema.extend({ occurredOn: z.iso.date() }))
+      .array(
+        transactionDateCoverageFields.safeExtend({
+          occurredOn: z.iso.date(),
+          datePrecision: z.never().optional(),
+        })
+      )
       .max(10_000),
     proposedAt: instantSchema,
     publicationEligible: z.literal(false),
@@ -360,13 +390,25 @@ const proposalContentSchema = proposalFieldsSchema.superRefine((proposal, contex
   const proposedOn = new Date(proposal.proposedAt).toLocaleDateString('en-CA', {
     timeZone: 'Australia/Melbourne',
   });
-  proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear }, index) => {
+  proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear, datePrecision }, index) => {
     if (occurredOn === null) {
       if (seasonYear > Number(proposedOn.slice(0, 4))) {
         context.addIssue({
           code: 'custom',
           path: ['transactionDateCoverage', index],
           message: 'Transaction occurrence year cannot postdate the promotion proposal.',
+        });
+      }
+      if (
+        datePrecision !== undefined &&
+        (Number(datePrecision.earliestDate.slice(0, 4)) !== seasonYear ||
+          datePrecision.latestDate > proposedOn)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transactionDateCoverage', index, 'datePrecision'],
+          message:
+            'A trade-period window must lie within its transaction season and not postdate the proposal.',
         });
       }
       return;
@@ -434,12 +476,82 @@ export type AflTradeExternalCanonicalPromotionApprovalEvidence = z.infer<
   typeof aflTradeExternalCanonicalPromotionApprovalEvidenceSchema
 >;
 
+/** Recorded on the receipt of a promotion whose candidate deferred pick-side issues (#869). */
+const requestPickLineageDeferralSchema = z
+  .object({
+    decisionId: reviewDecisionIdSchema,
+    deferredIssueCount: z.number().int().positive(),
+    /** Drafts left to their existing current promotion; present only when any. */
+    promotedDraftCount: z.number().int().positive().optional(),
+    /** Resolved lineages into those drafts whose realization is not written; present only when any. */
+    skippedRealizationCount: z.number().int().positive().optional(),
+    /** Custody observations without a usable status, left unwritten; present only when any. */
+    deferredCustodyCount: z.number().int().positive().optional(),
+    /** Transactions left to their existing current promotion; present only when any, with their ids. */
+    promotedTransactionCount: z.number().int().positive().optional(),
+    promotedTransactionIds: z
+      .array(aflTradeContentAddressedIdSchema('external-transaction'))
+      .min(1)
+      .max(10_000)
+      .optional(),
+    /**
+     * Picks the promotion would have defined that already exist as canonical picks with different
+     * facts and no reviewed lineage registration: referenced unchanged, no facts written. Present
+     * only when any, with their ids.
+     */
+    retainedPickDefinitionCount: z.number().int().positive().optional(),
+    retainedPickDefinitionIds: z
+      .array(aflTradeContentAddressedIdSchema('draft-pick'))
+      .min(1)
+      .max(100_000)
+      .optional(),
+    /**
+     * Picks the written transfers number differently, defined from their one usable custody
+     * observation; each asset keeps its trade-time number. Present only when any, with their ids.
+     */
+    custodyDefinedPickCount: z.number().int().positive().optional(),
+    custodyDefinedPickIds: z
+      .array(aflTradeContentAddressedIdSchema('draft-pick'))
+      .min(1)
+      .max(100_000)
+      .optional(),
+  })
+  .superRefine((deferral, context) => {
+    for (const [count, ids, label] of [
+      [deferral.promotedTransactionCount, deferral.promotedTransactionIds, 'Promoted transaction'],
+      [
+        deferral.retainedPickDefinitionCount,
+        deferral.retainedPickDefinitionIds,
+        'Retained pick definition',
+      ],
+      [deferral.custodyDefinedPickCount, deferral.custodyDefinedPickIds, 'Custody-defined pick'],
+    ] as const) {
+      const listed = ids ?? [];
+      if (
+        (count ?? 0) !== listed.length ||
+        listed.some((id, index) => index > 0 && listed[index - 1]!.localeCompare(id) >= 0)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: `${label} ids must be sorted, unique and counted exactly.`,
+        });
+      }
+    }
+  })
+  .strict();
+
+export type AflTradePromotionPickLineageDeferralReceipt = z.infer<
+  typeof requestPickLineageDeferralSchema
+>;
+
 const requestContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_REQUEST_SCHEMA_VERSION),
     candidateId: candidateIdSchema,
     proposalId: proposalIdSchema,
     approvalDecisionId: reviewDecisionIdSchema,
+    // Present only on a deferred-lineage promotion, so every earlier receipt keeps its content address.
+    pickLineageDeferral: requestPickLineageDeferralSchema.optional(),
   })
   .strict();
 
@@ -468,9 +580,14 @@ export interface AuthenticatedAflTradeExternalCanonicalPromotion {
   readonly proposalId: string;
   readonly transactionCount: number;
   readonly transferCount: number;
+  /** Selections the promotion writes: none of a draft holding a deferred selection. */
   readonly draftSelectionCount: number;
+  /** Custody observations the promotion writes: none for a deferred pick. */
   readonly pickCustodyCount: number;
+  /** `exercised_as` realizations the promotion writes: none for a deferred pick or draft. */
   readonly pickRealizationCount: number;
+  /** The reviewed deferral the promotion operates under, or null for an issue-free candidate. */
+  readonly pickLineageDeferral: AflTradePromotionPickLineageDeferralReceipt | null;
 }
 
 function usable(status: string): boolean {
@@ -504,22 +621,23 @@ function deriveTransactionDateCoverage(
     .max(10_000)
     .parse(transactionDates ?? []);
   const suppliedDateByTransaction = new Map(
-    suppliedTransactionDates.map((value) => [value.transactionId, value.occurredOn])
+    suppliedTransactionDates.map((value) => [value.transactionId, value])
   );
   if (suppliedDateByTransaction.size !== suppliedTransactionDates.length) {
     throw new TypeError('Reviewed transaction-date keys must be unique.');
   }
-  const transactionDateCoverage = candidate.content.transactions
-    .map((transaction) => {
+  // A transaction left to its earlier promotion (#869) is not written, so it needs no reviewed date.
+  const transactionDateCoverage = aflTradePromotionWriteScope(candidate.content)
+    .transactions.map((transaction) => {
       const supplied = suppliedDateByTransaction.get(transaction.transactionId);
       if (
         transaction.occurredOn !== null &&
         supplied !== undefined &&
-        supplied !== transaction.occurredOn
+        (supplied.occurredOn !== transaction.occurredOn || supplied.datePrecision !== undefined)
       ) {
         throw new TypeError('Reviewed transaction date conflicts with exact source evidence.');
       }
-      const occurredOn = transaction.occurredOn ?? supplied;
+      const occurredOn = transaction.occurredOn ?? supplied?.occurredOn;
       if (occurredOn === undefined) {
         throw new TypeError('Every promoted transaction requires one reviewed transaction date.');
       }
@@ -527,6 +645,9 @@ function deriveTransactionDateCoverage(
         transactionId: transaction.transactionId,
         seasonYear: transaction.seasonYear,
         occurredOn,
+        ...(occurredOn === null && supplied?.datePrecision !== undefined
+          ? { datePrecision: supplied.datePrecision }
+          : {}),
       };
     })
     .sort((left, right) => left.transactionId.localeCompare(right.transactionId));
@@ -562,7 +683,10 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   }
 
   const selectionIdsByKey = new Map<string, string[]>();
-  for (const selection of candidate.content.draftSelections) {
+  // Under a reviewed deferral (#869) a draft holding a deferred selection, or one that is already
+  // current canonical, is not promoted, so the reviewer supplies metadata only for the drafts this
+  // candidate writes.
+  for (const selection of aflTradePromotionWriteScope(candidate.content).draftSelections) {
     const key = coverageKey(selection.draftYear, selection.draftType);
     const selectionIds = selectionIdsByKey.get(key) ?? [];
     selectionIds.push(selection.selectionId);
@@ -824,41 +948,56 @@ function assertPromotionCandidateScope(
   if (Date.parse(proposal.content.proposedAt) < Date.parse(content.reconciledAt)) {
     throw new TypeError('Promotion proposal cannot predate candidate reconciliation.');
   }
-  if (content.transfers.some(({ asset }) => asset.kind === 'special_pick')) {
+  // Only a transfer the promotion writes needs its special entitlement resolved: a transaction left
+  // to its earlier promotion (#869) is written as nothing.
+  if (
+    aflTradePromotionWriteScope(content).transfers.some(
+      ({ asset }) => asset.kind === 'special_pick'
+    )
+  ) {
     throw new TypeError('Special entitlement must be resolved before canonical promotion.');
   }
-  if (content.issues.length !== 0) {
+  // Deferred pick-side issues (#869) stay on the candidate; only a blocking issue refuses promotion.
+  if (content.issues.some(({ severity }) => severity === 'blocking')) {
     throw new TypeError('A candidate with a blocking issue cannot be promoted.');
   }
 }
 
+/**
+ * Every record the promotion writes needs a usable status and complete identities. Under a reviewed
+ * deferral the pick side it does not write is exempt: a deferred pick transfer is still written as a
+ * directed asset (its clubs must resolve), but its unresolved status, the custody of a deferred pick
+ * and the selections of a deferred draft are left for later reviewed lineage.
+ */
 function assertPromotionFactIdentities(content: PromotionCandidateContent): void {
+  const scope = aflTradePromotionWriteScope(content);
+  const deferredTransfers = scope.deferral.deferredTransferIds;
   const records = [
-    ...content.transactions,
-    ...content.transfers,
-    ...content.draftSelections,
-    ...content.pickCustody,
-    ...content.pickLineage,
+    ...scope.transactions,
+    ...scope.transfers.filter(({ transferId }) => !deferredTransfers.has(transferId)),
+    ...scope.draftSelections,
+    ...scope.pickCustody,
+    ...scope.pickLineage,
   ];
   if (records.some(({ status }) => !usable(status))) {
     throw new TypeError('Every promoted factual record must have a usable reconciliation status.');
   }
   if (
-    content.transactions.some(
+    scope.transactions.some(
       ({ parties, transferIds, title, transactionType }) =>
         title === null ||
         transactionType === 'other' ||
         parties.length < 2 ||
         transferIds.length === 0
     ) ||
-    content.transfers.some(
+    scope.transfers.some(
       ({ fromClubId, toClubId, asset }) =>
         fromClubId === null ||
         toClubId === null ||
         (asset.kind === 'player' && asset.playerId === null)
     ) ||
-    content.draftSelections.some(({ playerId, clubId }) => playerId === null || clubId === null) ||
-    content.pickCustody.some(({ currentClubId }) => currentClubId === null)
+    scope.draftSelections.some(({ playerId, clubId }) => playerId === null || clubId === null) ||
+    scope.pickCustody.some(({ currentClubId }) => currentClubId === null)
   ) {
     throw new TypeError('Promoted facts require complete reviewed canonical identities and dates.');
   }
@@ -902,9 +1041,10 @@ function assertPromotionTransactionDates(
       { seasonYear, occurredOn },
     ])
   );
+  const written = aflTradePromotionWriteScope(content).transactions;
   if (
-    transactionDateById.size !== content.transactions.length ||
-    content.transactions.some(({ transactionId, seasonYear, occurredOn }) => {
+    transactionDateById.size !== written.length ||
+    written.some(({ transactionId, seasonYear, occurredOn }) => {
       const coverage = transactionDateById.get(transactionId);
       return (
         coverage === undefined ||
@@ -922,7 +1062,8 @@ function assertPromotionDraftCoverage(
   expectedCoverage: ReadonlyMap<string, string[]>
 ): void {
   const actualCoverage = new Map<string, string[]>();
-  content.draftSelections.forEach((selection) => {
+  // A draft holding a deferred selection is not promoted by this candidate, so coverage omits it.
+  aflTradePromotionWriteScope(content).draftSelections.forEach((selection) => {
     const key = coverageKey(selection.draftYear, selection.draftType);
     const values = actualCoverage.get(key) ?? [];
     values.push(selection.selectionId);
@@ -980,14 +1121,48 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   const expectedCoverage = reviewedDraftCoverage(content, proposal);
   assertPromotionTransactionDates(content, proposal);
   assertPromotionDraftCoverage(content, expectedCoverage);
+  const scope = aflTradePromotionWriteScope(content);
+  if (
+    scope.deferral.deferredIssueCount > 0 &&
+    proposal.content.schemaVersion !==
+      AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION &&
+    proposal.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4'
+  ) {
+    throw new TypeError(
+      'A deferred-lineage candidate promotes through the metadata-only (v1/v4) proposal.'
+    );
+  }
 
   return {
     candidateId: candidate.candidateId,
     proposalId: proposal.proposalId,
-    transactionCount: content.transactions.length,
-    transferCount: content.transfers.length,
-    draftSelectionCount: content.draftSelections.length,
-    pickCustodyCount: content.pickCustody.length,
-    pickRealizationCount: content.pickLineage.length,
+    transactionCount: scope.transactions.length,
+    transferCount: scope.transfers.length,
+    draftSelectionCount: scope.draftSelections.length,
+    pickCustodyCount: scope.pickCustody.length,
+    pickRealizationCount: scope.pickLineage.length,
+    pickLineageDeferral:
+      scope.deferral.deferral === null
+        ? null
+        : {
+            decisionId: scope.deferral.deferral.decisionId,
+            deferredIssueCount: scope.deferral.deferredIssueCount,
+            // Present only when non-zero, so every earlier receipt keeps its content address.
+            ...(scope.promotedDraftCount === 0
+              ? {}
+              : { promotedDraftCount: scope.promotedDraftCount }),
+            ...(scope.skippedRealizationCount === 0
+              ? {}
+              : { skippedRealizationCount: scope.skippedRealizationCount }),
+            ...(scope.promotedTransactionCount === 0
+              ? {}
+              : {
+                  promotedTransactionCount: scope.promotedTransactionCount,
+                  promotedTransactionIds: [...scope.deferral.promotedTransactionIds].sort(),
+                }),
+            ...(scope.deferredCustodyCount === 0
+              ? {}
+              : { deferredCustodyCount: scope.deferredCustodyCount }),
+          },
   };
 }

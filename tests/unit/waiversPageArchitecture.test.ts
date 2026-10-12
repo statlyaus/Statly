@@ -44,6 +44,27 @@ describe('league waivers page Firestore architecture', () => {
     expect(containerSource).toContain('role="alert"');
   });
 
+  it('never lets a browser reuse waiver data and labels activity by outcome', () => {
+    const routeSource = readFileSync(
+      join(process.cwd(), 'src/app/api/leagues/[id]/waivers/route.ts'),
+      'utf8'
+    );
+    const containerSource = readFileSync(
+      join(process.cwd(), 'src/components/waivers/LeagueWaiversContainer.tsx'),
+      'utf8'
+    );
+    const faabSource = readFileSync(
+      join(process.cwd(), 'src/components/waivers/WaiverFAABSystem.tsx'),
+      'utf8'
+    );
+
+    // Both successful responses, the Firebase-disabled one and the normal one, are no-store.
+    expect(routeSource.match(/\{ status: 200, headers: NO_STORE \}/g)).toHaveLength(2);
+    expect(containerSource).toContain("fetch(url.toString(), { signal, cache: 'no-store' })");
+    expect(faabSource).toContain('`${team} claimed ${player}`');
+    expect(faabSource).toContain('`${team} missed out on ${player}`');
+  });
+
   it('omits optional Firestore fields instead of writing undefined values', () => {
     const submitSource = readFileSync(
       join(process.cwd(), 'src/app/api/leagues/[id]/waivers/submit/route.ts'),

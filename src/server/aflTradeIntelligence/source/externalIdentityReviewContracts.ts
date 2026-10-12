@@ -24,6 +24,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'footyinfo',
 ]);
 const entityKindSchema = z.enum(['club', 'player']);
 const seasonSchema = z.number().int().min(1897).max(2200);
@@ -532,4 +533,27 @@ export function parseAflTradeExternalIdentityReviewDecision(
   input: unknown
 ): AflTradeExternalIdentityReviewDecision {
   return aflTradeExternalIdentityReviewDecisionSchema.parse(input);
+}
+
+/**
+ * Whether a subject's current decision still decides a later work item. The exact reviewed work item
+ * always does. An approved decision also carries to a later completion whose observations of the
+ * same subject add only seasons or evidence rows: every observed spelling was in the reviewed work
+ * item, so nothing new was asserted about who the subject is. A new spelling needs a fresh review.
+ * Carrying the decision avoids superseding it, which would orphan every promoted record that cites
+ * it (statlyaus/Statly#742).
+ */
+export function doesAflTradeExternalIdentityDecisionCoverWorkItem(
+  decision: AflTradeExternalIdentityReviewDecision,
+  workItem: AflTradeExternalIdentityReviewWorkItem
+): boolean {
+  if (decision.content.workItemId === workItem.workItemId) return true;
+  if (
+    decision.content.decision !== 'approved' ||
+    decision.content.subject.subjectId !== workItem.content.subject.subjectId
+  ) {
+    return false;
+  }
+  const reviewedNames = new Set(decision.content.workItem.content.observedNames);
+  return workItem.content.observedNames.every((name) => reviewedNames.has(name));
 }

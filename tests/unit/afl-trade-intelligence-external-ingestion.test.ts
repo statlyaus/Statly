@@ -352,6 +352,49 @@ describe('external AFL draft/trade page ingestion', () => {
     expect(deps.staging.persist).not.toHaveBeenCalled();
   });
 
+  it('names the parser issues when a captured page yields no evidence', async () => {
+    const deps = dependencies();
+    const page = new TextEncoder().encode('<html>draft</html>');
+    const issues = Array.from({ length: 7 }, (_, index) => ({
+      code: 'invalid_page',
+      sourceKey: String(2019 + index),
+      detail: index === 0 ? `Unreadable board data ${'x'.repeat(400)}` : `Issue ${index}`,
+    }));
+    const failure = ingestAflTradeExternalPage(
+      {
+        ...sourceScope,
+        provider: 'draftguru',
+        sourceUrl: 'https://www.draftguru.com.au/years/2025',
+        capturedAt,
+        effectiveAt: capturedAt,
+        parserVersion: 'draftguru-parser/v1',
+        fieldManifestSha256: digest('f'),
+        maximumBytes: 1_000_000,
+      },
+      {
+        rawArtifacts: createAflTradeFixtureArtifactRepository({ artifactClass: 'raw_source' }),
+        captureRegistry: deps.captureRegistry,
+        staging: deps.staging,
+        authorizeCapture: deps.authorizeCapture,
+        capturePage: async () => ({
+          status: 'captured',
+          sourceUrl: 'https://www.draftguru.com.au/years/2025',
+          bytes: page,
+          contentSha256: sha256(page),
+          mediaType: 'text/html',
+          eTag: null,
+          lastModified: null,
+        }),
+        parsePage: () => ({ evidence: [], issues }),
+      }
+    );
+    await expect(failure).rejects.toThrow(
+      /empty factual batch\. Parser issues: invalid_page 2019: Unreadable board data x+…; invalid_page 2020: Issue 1;.* \(\+2 more\)$/
+    );
+    await expect(failure).rejects.not.toThrow(/x{300}/);
+    expect(deps.staging.persist).not.toHaveBeenCalled();
+  });
+
   it('fails closed before custody when the capture adapter reports a different byte digest', async () => {
     const deps = dependencies();
     const rawArtifacts = createAflTradeFixtureArtifactRepository({ artifactClass: 'raw_source' });
@@ -499,28 +542,37 @@ describe('external AFL draft/trade page ingestion', () => {
       const parsePdf = vi.fn<NonNullable<AflTradeExternalPageIngestionDependencies['parsePdf']>>(
         async ({ bytes: parserBytes, capture }) => {
           expect(parserBytes).toEqual(original);
-          expect(capture).toMatchObject({ mediaType: 'application/pdf', contentSha256: sha256(original) });
+          expect(capture).toMatchObject({
+            mediaType: 'application/pdf',
+            contentSha256: sha256(original),
+          });
           expect(deps.captureRegistry.persistCapture).toHaveBeenCalledOnce();
           const stored = await rawArtifacts.loadExact(
-            createAflTradeByteArtifactRef(original, 'application/pdf', capturedAt), 1000
+            createAflTradeByteArtifactRef(original, 'application/pdf', capturedAt),
+            1000
           );
           expect(stored?.bytes).toEqual(original);
           parserBytes[0] = 0; // A parser cannot mutate the capture buffer.
           return {
-            evidence: scenario === 'empty evidence' ? [] : [createAflTradeExternalEvidenceEnvelope({
-              schemaVersion: 'afl-trade-external-evidence/v1',
-              provider: 'official_afl',
-              capture,
-              sourceRow: { ordinal: 1, sourceKey: 'fixture:list-total' },
-              claim: {
-                kind: 'draft_completed_list_total',
-                draftYear: 2010,
-                draftType: 'national',
-                population: 'national_selections_and_rookie_promotions',
-                playerCount: 4,
-              },
-              publicationEligible: false,
-            })],
+            evidence:
+              scenario === 'empty evidence'
+                ? []
+                : [
+                    createAflTradeExternalEvidenceEnvelope({
+                      schemaVersion: 'afl-trade-external-evidence/v1',
+                      provider: 'official_afl',
+                      capture,
+                      sourceRow: { ordinal: 1, sourceKey: 'fixture:list-total' },
+                      claim: {
+                        kind: 'draft_completed_list_total',
+                        draftYear: 2010,
+                        draftType: 'national',
+                        population: 'national_selections_and_rookie_promotions',
+                        playerCount: 4,
+                      },
+                      publicationEligible: false,
+                    }),
+                  ],
             issues: [],
           };
         }
@@ -528,26 +580,33 @@ describe('external AFL draft/trade page ingestion', () => {
       if (scenario === 'revoked authority') {
         deps.authorizeCapture.mockRejectedValueOnce(new Error('authority withdrawn'));
       }
-      const run = ingestAflTradeExternalPage({
-        ...sourceScope,
-        provider: 'official_afl',
-        sourceUrl,
-        capturedAt,
-        effectiveAt: capturedAt,
-        parserVersion: 'fixture-pdf/v1',
-        fieldManifestSha256: digest('f'),
-        maximumBytes: 1000,
-      }, {
-        ...deps,
-        rawArtifacts,
-        capturePage: async () => ({
-          status: 'captured', sourceUrl, bytes,
-          contentSha256: scenario === 'wrong digest' ? digest('0') : sha256(bytes),
-          mediaType: 'application/pdf', eTag: null, lastModified: null,
-        }),
-        parsePage,
-        ...(scenario === 'missing parser' ? {} : { parsePdf }),
-      });
+      const run = ingestAflTradeExternalPage(
+        {
+          ...sourceScope,
+          provider: 'official_afl',
+          sourceUrl,
+          capturedAt,
+          effectiveAt: capturedAt,
+          parserVersion: 'fixture-pdf/v1',
+          fieldManifestSha256: digest('f'),
+          maximumBytes: 1000,
+        },
+        {
+          ...deps,
+          rawArtifacts,
+          capturePage: async () => ({
+            status: 'captured',
+            sourceUrl,
+            bytes,
+            contentSha256: scenario === 'wrong digest' ? digest('0') : sha256(bytes),
+            mediaType: 'application/pdf',
+            eTag: null,
+            lastModified: null,
+          }),
+          parsePage,
+          ...(scenario === 'missing parser' ? {} : { parsePdf }),
+        }
+      );
       if (scenario === 'valid') {
         await expect(run).resolves.toMatchObject({ status: 'staged', evidenceCount: 1 });
         expect(bytes).toEqual(original);
@@ -562,5 +621,4 @@ describe('external AFL draft/trade page ingestion', () => {
       expect(parsePage).not.toHaveBeenCalled();
     }
   );
-
 });

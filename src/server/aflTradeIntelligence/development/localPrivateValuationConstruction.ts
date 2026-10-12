@@ -21,7 +21,9 @@ import {
 } from '../valuation/postgresPrivateValuationHpnPreparation';
 import { requireAflTradePrivateValuationHpnScopePolicy } from '../valuation/privateValuationHpnScopePolicy';
 import { createPostgresAflTradeRetainedValuationInputBundleSelector } from '../valuation/retainedValuationInputBundleConstruction';
+import { openLocalAflTradePrivateDerivedRepository } from './localArtifactStoreBinding';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from './localFileConditionalObjectStore';
+import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
 import { createLocalAflTradeGenuineAdmittedPlayerExecutor } from './localGenuineAdmittedPlayerContribution';
 import { inspectLocalPrivateValuationConstructionReadiness } from './localPrivateValuationConstructionReadiness';
 import { createLocalAflTradePrivateValuationConstructionEvidence } from './localPrivateValuationConstructionEvidence';
@@ -455,7 +457,15 @@ export async function composeLocalAflTradePrivateValuationConstruction(
     report,
     construction: createConstruction({
       pool: input.pool,
-      artifactRoot: input.artifactRoot,
+      // Bound to the registered store when there is one, so staged artifacts are located.
+      artifacts: await openLocalAflTradePrivateDerivedRepository(
+        createPgAflOutcomeSqlClient(input.pool),
+        {
+          rootDirectory: input.artifactRoot,
+          repositoryId: 'governed-private-evaluation',
+          maximumObjectBytes: input.maximumArtifactBytes ?? DEFAULT_MAXIMUM_ARTIFACT_BYTES,
+        }
+      ),
       maximumArtifactBytes: input.maximumArtifactBytes ?? DEFAULT_MAXIMUM_ARTIFACT_BYTES,
       selection,
       hpnPreparation: authority.hpnPreparation,
@@ -470,18 +480,14 @@ export async function composeLocalAflTradePrivateValuationConstruction(
  */
 function createConstruction(input: {
   readonly pool: AflOutcomePgPool;
-  readonly artifactRoot: string;
+  readonly artifacts: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
   readonly selection: LocalPrivateValuationConstructionSelection;
   readonly hpnPreparation: AflTradePrivateValuationHpnPreparationDependencies;
   readonly constructTrade: AflTradeLocalPrivateValuationTradeConstructor;
 }): AflTradeLocalPrivateValuationConstruction {
   const client = createPgAflOutcomeSqlClient(input.pool);
-  const artifacts = createLocalAflTradePrivateDerivedArtifactRepository({
-    rootDirectory: input.artifactRoot,
-    repositoryId: 'governed-private-evaluation',
-    maximumObjectBytes: input.maximumArtifactBytes,
-  });
+  const artifacts = input.artifacts;
   const staging = createPostgresGovernedPrivateEvaluationStagingRepository({
     client,
     artifactRepository: artifacts,

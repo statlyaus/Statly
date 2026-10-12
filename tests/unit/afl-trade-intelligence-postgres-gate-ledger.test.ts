@@ -337,6 +337,10 @@ class MemoryGateSqlClient implements AflOutcomeSqlClient {
         [...this.decisions.values()].map((decision_json) => ({ decision_json }))
       ) as never;
     }
+    if (normalized.includes("to_regproc('outcome_gate_unlocated_artifact_ids')")) {
+      // A database before migration 0253: the cited-evidence check does not apply.
+      return this.result([{ present: false }]) as never;
+    }
     if (normalized.includes('FROM outcome_source_rights_proposal')) {
       const content_json = this.rights.get(String(values[0]));
       return this.result(content_json === undefined ? [] : [{ content_json }]) as never;

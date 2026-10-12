@@ -110,6 +110,93 @@ describe('Draftguru source adapter', () => {
     expect(result.issues).toEqual([]);
   });
 
+  describe('pick dispositions (draftguru-trade-parser/v2)', () => {
+    const v2Capture = { ...capture, parserVersion: 'draftguru-trade-parser/v2' };
+    const html = `
+      <h2 class="heading">2025 GWS and Western Bulldogs Trade for Draft Picks</h2>
+      <table class="individual-trade">
+        <tr class="club-header"><td>Greater Western Sydney</td></tr>
+        <tr class="movement"><td></td><td></td><td></td><td></td><td></td><td class="pick-name actual-asset">Pick 12</td><td class="pick-description" colspan="2">Pick traded on to another club</td><td class="pick-points">1140 points</td><td class="expected-value">84 XG</td></tr>
+        <tr class="movement"><td class="pick-name actual-asset">Pick 14</td><td class="player-name"><a href="/players/josh_lindsay/1">Josh&nbsp;Lindsay</a></td><td class="player-games">12 games</td><td class="pick-points">1024 points</td><td class="expected-value">80 XG</td><td class="future-pick-name actual-asset">2026R2 (St Kilda)<br/><span class="pick-estimation">(estimate: pick 25)</span></td><td class="pick-description" colspan="2">Pick not used</td><td class="pick-points">500 points</td><td class="expected-value">20 XG</td></tr>
+        <tr class="club-header"><td>Western Bulldogs</td></tr>
+        <tr class="movement"><td class="pick-name actual-asset">Pick 12</td><td class="pick-description" colspan="2">Pick traded on to another club</td><td class="pick-points">1140 points</td><td class="expected-value">84 XG</td><td class="pick-name actual-asset">Pick 14</td><td class="player-name"><a href="/players/josh_lindsay/1">Josh&nbsp;Lindsay</a></td><td class="player-games">12 games</td><td class="pick-points">1024 points</td><td class="expected-value">80 XG</td></tr>
+        <tr class="movement"><td class="future-pick-name actual-asset">2026R2 (St Kilda)<br/><span class="pick-estimation">(estimate: pick 25)</span></td><td class="pick-description" colspan="2">Pick not used</td><td class="pick-points">500 points</td><td class="expected-value">20 XG</td><td></td><td></td><td></td><td></td><td></td></tr>
+      </table>`;
+    const parse = (input = html, parserCapture: typeof capture | typeof v2Capture = v2Capture) =>
+      parseDraftguruTradeDetail(input, {
+        capture: parserCapture,
+        draftYear: 2025,
+        effectiveAt: '2025-10-08T00:00:00.000Z',
+      });
+    const dispositions = (result: ReturnType<typeof parse>) =>
+      result.evidence
+        .map(({ content }) => content.claim)
+        .filter((claim) => claim.kind === 'pick_disposition');
+
+    it('records each received pick’s stated outcome on the receiving side only', () => {
+      const result = parse();
+      expect(result.issues).toEqual([]);
+      expect(dispositions(result)).toEqual([
+        {
+          kind: 'pick_disposition',
+          nativeEventId: '2025-picks-gws-western-bulldogs',
+          nativeTransferId: 'future-pick:2026:national:2:st-kilda',
+          receivingClub: { nativeId: null, recordedName: 'Greater Western Sydney' },
+          disposition: 'not_used',
+        },
+        {
+          kind: 'pick_disposition',
+          nativeEventId: '2025-picks-gws-western-bulldogs',
+          nativeTransferId: 'pick:2025:national:12',
+          receivingClub: { nativeId: null, recordedName: 'Greater Western Sydney' },
+          disposition: 'traded_on',
+        },
+        {
+          kind: 'pick_disposition',
+          nativeEventId: '2025-picks-gws-western-bulldogs',
+          nativeTransferId: 'pick:2025:national:14',
+          receivingClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+          disposition: 'selected',
+          player: { nativeId: 'josh_lindsay/1', recordedName: 'Josh Lindsay' },
+        },
+      ]);
+    });
+
+    it('binds every disposition to a directed transfer in the same capture', () => {
+      const result = parse();
+      const transferIds = new Set(
+        result.evidence
+          .map(({ content }) => content.claim)
+          .flatMap((claim) => (claim.kind === 'directed_transfer' ? [claim.nativeTransferId] : []))
+      );
+      for (const disposition of dispositions(result)) {
+        expect(transferIds.has(disposition.nativeTransferId)).toBe(true);
+      }
+    });
+
+    it('never emits games, points, expected-value or estimate text', () => {
+      const serialized = JSON.stringify(parse().evidence.map(({ content }) => content.claim));
+      for (const excluded of ['games', 'points', 'XG', 'estimate', '1024', '1140']) {
+        expect(serialized).not.toContain(excluded);
+      }
+    });
+
+    it('quarantines an unrecognised disposition instead of guessing', () => {
+      const result = parse(html.replace('Pick not used', 'Pick swapped at the draft'));
+      expect(dispositions(result).map(({ disposition }) => disposition)).toEqual([
+        'traded_on',
+        'selected',
+      ]);
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({ code: 'unsupported_disposition' })
+      );
+    });
+
+    it('emits nothing new for a v1 capture, whose recorded rights do not name dispositions', () => {
+      expect(dispositions(parse(html, capture))).toEqual([]);
+    });
+  });
+
   it('projects one exact player transfer without admitting unrelated pick movements', () => {
     const html = `
       <h2 class="heading">2025 GWS and Western Bulldogs Trade</h2>

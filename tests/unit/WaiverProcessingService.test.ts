@@ -98,12 +98,12 @@ function createDbMock() {
 
 function createClaimStoreMock() {
   return {
-    markSuccessful: vi.fn().mockResolvedValue(undefined),
-    markFailed: vi.fn().mockResolvedValue(undefined),
+    claimPending: vi.fn().mockResolvedValue(new Date('2026-06-24T10:00:00.000Z')),
+    rejectClaim: vi.fn().mockResolvedValue(undefined),
+    debitFaabInTransaction: vi.fn().mockResolvedValue({ ok: true }),
+    completeClaim: vi.fn().mockResolvedValue(undefined),
+    publishSettlement: vi.fn().mockResolvedValue(undefined),
     recordActivity: vi.fn().mockResolvedValue(undefined),
-    decrementPendingBidTotal: vi.fn().mockResolvedValue(undefined),
-    debitFaab: vi.fn().mockResolvedValue(undefined),
-    advancePriority: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -180,10 +180,19 @@ describe('WaiverProcessingService', () => {
         playerIds: JSON.stringify(['keep-player', 'free-player']),
       },
     });
-    expect(claimStore.markSuccessful).toHaveBeenCalledWith(
-      expect.objectContaining({ leagueId: 'league-1', claimId: 'claim-1' })
+    expect(claimStore.claimPending).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1' })
     );
-    expect(claimStore.advancePriority).toHaveBeenCalledWith('league-1', 'user-1');
+    expect(claimStore.completeClaim).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1' }),
+      false
+    );
+    expect(claimStore.publishSettlement).toHaveBeenCalledWith(
+      expect.objectContaining({ leagueId: 'league-1', status: 'SUCCESSFUL' })
+    );
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
     expect(projection.projectLeague).toHaveBeenCalledWith({ leagueId: 'league-1' });
   });
 
@@ -238,14 +247,20 @@ describe('WaiverProcessingService', () => {
       { id: 'claim-1', status: 'FAILED', reason: 'Roster limit reached' },
     ]);
     expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
-    expect(claimStore.markFailed).toHaveBeenCalledWith(
-      expect.objectContaining({ claimId: 'claim-1', reason: 'Roster limit reached' })
+    expect(claimStore.rejectClaim).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1' }),
+      false
     );
+    expect(claimStore.publishSettlement).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'FAILED', reason: 'Roster limit reached' })
+    );
+    expect(claimStore.completeClaim).not.toHaveBeenCalled();
     expect(projection.projectLeague).not.toHaveBeenCalled();
   });
 
   it('does not debit FAAB when canonical roster validation fails', async () => {
-    const { db } = createDbMock();
+    const { db, tx } = createDbMock();
     const claimStore = createClaimStoreMock();
     const projection = { projectLeague: vi.fn() };
     const service = new WaiverProcessingService(db as never, claimStore, projection);
@@ -259,12 +274,76 @@ describe('WaiverProcessingService', () => {
     expect(result.results).toEqual([
       { id: 'claim-1', status: 'FAILED', reason: 'Roster limit reached' },
     ]);
-    expect(claimStore.debitFaab).not.toHaveBeenCalled();
-    expect(claimStore.decrementPendingBidTotal).toHaveBeenCalledWith(
+    expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
+    expect(claimStore.rejectClaim).toHaveBeenCalledWith(
+      tx,
       expect.objectContaining({ id: 'claim-1', bidAmount: 12 }),
       true
     );
     expect(projection.projectLeague).not.toHaveBeenCalled();
+  });
+
+  it('rejects a claim the FAAB debit refuses, without touching the roster', async () => {
+    const { db, tx } = createDbMock();
+    const claimStore = createClaimStoreMock();
+    claimStore.debitFaabInTransaction.mockResolvedValue({ ok: false, reason: 'Insufficient FAAB' });
+    const projection = { projectLeague: vi.fn() };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      claims: [claim({ dropPlayerId: 'old-player', bidAmount: 12 })],
+    });
+
+    expect(result.results).toEqual([
+      { id: 'claim-1', status: 'FAILED', reason: 'Insufficient FAAB' },
+    ]);
+    expect(claimStore.rejectClaim).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1' }),
+      true
+    );
+    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('skips a claim another run already settled', async () => {
+    const { db, tx } = createDbMock();
+    const claimStore = createClaimStoreMock();
+    claimStore.claimPending.mockResolvedValue(null);
+    const projection = { projectLeague: vi.fn() };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      claims: [claim({ dropPlayerId: 'old-player', bidAmount: 12 })],
+    });
+
+    expect(result).toEqual({ processed: 0, results: [] });
+    expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(claimStore.publishSettlement).not.toHaveBeenCalled();
+    expect(claimStore.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('leaves the run to fail, unsettled, when a claim transaction throws', async () => {
+    const { db, tx } = createDbMock();
+    tx.leagueRosterPlayer.upsert.mockRejectedValueOnce(new Error('connection lost'));
+    const claimStore = createClaimStoreMock();
+    const projection = { projectLeague: vi.fn() };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    await expect(
+      service.processClaims({
+        leagueId: 'league-1',
+        waiverSettings: { system: 'PRIORITY' },
+        claims: [claim({ dropPlayerId: 'old-player' })],
+      })
+    ).rejects.toThrow('connection lost');
+    expect(claimStore.publishSettlement).not.toHaveBeenCalled();
+    expect(claimStore.recordActivity).not.toHaveBeenCalled();
   });
 
   it('rejects a claim when another alias for the logical player is already owned', async () => {
@@ -643,34 +722,69 @@ describe('PrismaWaiverClaimStore', () => {
     expect(activityDoc.set).not.toHaveBeenCalled();
   });
 
-  it('updates canonical status and mirrors successful processing to Firestore', async () => {
-    const db = {
+  it('takes a pending claim only once and rejects it inside the settling transaction', async () => {
+    const tx = {
       teamAction: {
+        updateMany: vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 }),
         update: vi.fn().mockResolvedValue({ id: 'action-1' }),
+      },
+      waiverPriority: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore({} as never, firestore as never);
+    const pending = claim({ id: 'action-1', bidAmount: 7 });
+
+    expect(await store.claimPending(tx as never, pending)).toEqual(expect.any(Date));
+    expect(await store.claimPending(tx as never, pending)).toBeNull();
+    expect(tx.teamAction.updateMany).toHaveBeenCalledWith({
+      where: { id: 'action-1', status: 'PENDING' },
+      data: { status: 'PROCESSED', processedAt: expect.any(Date) },
+    });
+
+    await store.rejectClaim(tx as never, pending, true);
+
+    expect(tx.waiverPriority.updateMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1', pendingBidTotal: { gte: 7 } },
+      data: { pendingBidTotal: { decrement: 7 } },
+    });
+    expect(tx.teamAction.update).toHaveBeenCalledWith({
+      where: { id: 'action-1' },
+      data: { status: 'REJECTED' },
+    });
+  });
+
+  it('mirrors a settled outcome to Firestore after the commit', async () => {
+    const db = {
+      leagueMember: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+      },
+      waiverPriority: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 0 },
+          ]),
       },
     };
     const { firestore, waiverDoc } = createCompatibilityProjectionMock();
     const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+    const processedAt = new Date('2026-06-24T10:00:00.000Z');
 
-    await store.markSuccessful({
+    await store.publishSettlement({
       leagueId: 'league-1',
-      claimId: 'action-1',
       claim: claim({ id: 'action-1' }),
+      status: 'FAILED',
+      processedAt,
+      reason: 'Insufficient FAAB',
     });
 
-    expect(db.teamAction.update).toHaveBeenCalledWith({
-      where: { id: 'action-1' },
-      data: expect.objectContaining({
-        status: 'PROCESSED',
-        processedAt: expect.any(Date),
-      }),
+    expect(waiverDoc.update).toHaveBeenCalledWith({
+      status: 'FAILED',
+      processedAt,
+      reason: 'Insufficient FAAB',
     });
-    expect(waiverDoc.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'SUCCESSFUL',
-        processedAt: expect.any(Date),
-      })
-    );
   });
 
   it('cancels canonical pending claims and releases reserved FAAB before mirroring cancellation', async () => {

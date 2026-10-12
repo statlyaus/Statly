@@ -17,7 +17,12 @@ import { createAflTradeDurableObjectArtifactRepository } from '../artifacts/dura
 import { createAflTradeS3ConditionalObjectStore } from '../artifacts/s3ConditionalObjectStore';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
-import { parseOfficialAflIndicativeDraftOrder } from '../source/draftCorroborationAdapter';
+import {
+  OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+  parseOfficialAflDraftOrderTable,
+  parseOfficialAflIndicativeDraftOrder,
+} from '../source/draftCorroborationAdapter';
+import { parseOfficialAflTradePeriodDates } from '../source/officialAflTradePeriodAdapter';
 import {
   captureDraftguruSource,
   parseDraftguruPlayerTradeDetail,
@@ -191,10 +196,19 @@ export function createAflTradeExternalIngestionRuntime(
           case 'footywire-draft-results':
             return parseFootywireDraftSelections(html, { capture });
           case 'official-afl-indicative-draft-order':
-            return parseOfficialAflIndicativeDraftOrder(html, {
+            return (
+              command.request.parserVersion === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
+                ? parseOfficialAflDraftOrderTable
+                : parseOfficialAflIndicativeDraftOrder
+            )(html, {
               capture,
               draftYear: command.request.anchorSeasonYear,
               observedAt: command.request.effectiveAt,
+            });
+          case 'official-afl-trade-period-dates':
+            return parseOfficialAflTradePeriodDates(html, {
+              capture,
+              seasonYear: command.request.anchorSeasonYear,
             });
           case 'official-afl-compensation-lifecycle':
             return parseOfficialAflCompensationArticle(html, {
@@ -224,10 +238,16 @@ export function createAflTradeExternalIngestionRuntime(
       };
       return ingestAuthorizedAflTradeExternalPage(effectiveCommand, {
         admission,
-        policyFor: (provider) => ({
-          ...config.providerPolicies[provider],
-          rawRetentionDays: config.limits.rawRetentionDays,
-        }),
+        policyFor: (provider) => {
+          // Footyinfo egress is approved only through the local capture runner (issue 853).
+          if (provider === 'footyinfo') {
+            throw new TypeError('Footyinfo pages are captured only by the local capture runner.');
+          }
+          return {
+            ...config.providerPolicies[provider],
+            rawRetentionDays: config.limits.rawRetentionDays,
+          };
+        },
         resolveAuthorization: (rightsArtifactId) =>
           gateRepository.resolveAuthorization(rightsArtifactId),
         ingestion: {

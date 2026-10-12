@@ -76,7 +76,11 @@ export function createDraftguruTradeCaptureCommand(
       sourceUrl: input.sourceUrl,
       capturedAt: input.capturedAt,
       effectiveAt: input.effectiveAt,
-      parserVersion: DRAFTGURU_TRADE_PARSER_VERSIONS[capabilityId],
+      // The recorded rights name the reviewed parser; the runner checks it against its profile.
+      parserVersion:
+        authority.sourceRights.content.acquisition.kind === 'provider_web'
+          ? authority.sourceRights.content.acquisition.clientVersion
+          : DRAFTGURU_TRADE_PARSER_VERSIONS[capabilityId],
       fieldManifestSha256: sha256AflTradeCanonicalJson(authority.sourceRights.content.fields),
       maximumBytes: input.maximumBytes,
     },

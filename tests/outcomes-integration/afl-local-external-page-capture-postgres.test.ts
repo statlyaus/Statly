@@ -7,12 +7,7 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import {
-  canonicalizeAflTradeJson,
-  createAflTradeContentAddress,
-} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import { verifyAflTradeArtifactReadback } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createDraftguruTradeAuthorityProposal,
   type DraftguruTradeCapability,
@@ -22,14 +17,20 @@ import {
   createLocalDraftguruTradeCaptureTargets,
   runLocalExternalCapture,
 } from '@/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
+import { readBackLocalAflTradeArtifactCustody } from '@/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
+import { storeLocalAflTradeEvidence } from '@/server/aflTradeIntelligence/development/localEvidenceStorage';
 import { createLocalOfficialAflDraftSessionTargets } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 import { OFFICIAL_AFL_COMPLETED_SESSION_PAGES } from '../testUtils/officialAflCompletedSessionPages';
+import { createLocalFootyinfoDraftBoardTargets } from '@/server/aflTradeIntelligence/development/localFootyinfoDraftBoardCapture';
+import { footyinfoBoardPage, SYNTHETIC_BOARD_PICKS } from '../testUtils/footyinfoDraftBoardPage';
 import {
   approveNarrowAuthority,
+  footyinfoDraftBoardAuthority,
   draftguruNationalYearAuthority,
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
@@ -50,6 +51,7 @@ const sql = createPgAflOutcomeSqlClient(outcomesPool);
 const userAgent = 'Statly private evaluation test (contact: owner@example.com)';
 const cameronUrl = 'https://www.draftguru.com.au/trades/2020-jeremy-cameron';
 let artifactRoot: string;
+const CAPTURE_STORE_ID = 'external-capture-store';
 
 const instant = (offsetMinutes: number) =>
   new Date(Date.now() + offsetMinutes * 60_000).toISOString();
@@ -61,7 +63,10 @@ function cameronTradeHtml(): string {
     '<td class="player-name actual-asset"><a href="/players/jeremy-cameron">Jeremy Cameron</a></td>'
   );
   const pick = side('<td class="pick-name actual-asset">Pick 13</td>');
-  return `<!doctype html><h2 class="heading">2020 Jeremy Cameron Trade</h2><table class="individual-trade"><tr class="club-header"><td>Greater Western Sydney</td></tr><tr class="movement">${player}${empty}</tr><tr class="movement">${empty}${pick}</tr><tr class="club-header"><td>Geelong</td></tr><tr class="movement">${pick}${empty}</tr><tr class="movement">${empty}${player}</tr></table>`;
+  // Trade parser v2 reads the received pick's stated outcome: GWS used pick 13 on Tanner Bruhn.
+  const receivedPick =
+    '<td class="pick-name actual-asset">Pick 13</td><td class="player-name"><a href="/players/tanner_bruhn/1">Tanner Bruhn</a></td><td colspan="3"></td>';
+  return `<!doctype html><h2 class="heading">2020 Jeremy Cameron Trade</h2><table class="individual-trade"><tr class="club-header"><td>Greater Western Sydney</td></tr><tr class="movement">${player}${empty}</tr><tr class="movement">${empty}${receivedPick}</tr><tr class="club-header"><td>Geelong</td></tr><tr class="movement">${pick}${empty}</tr><tr class="movement">${empty}${player}</tr></table>`;
 }
 
 const indexHtml = `<!doctype html><a href="/trades/2020-jeremy-cameron">Cameron</a><a href="/trades/2020-jaeger-o'meara">O'Meara</a><a href="/trades/2019-out-of-range">Earlier</a>`;
@@ -92,34 +97,17 @@ function stubDraftguru() {
   return { calls, fetchImpl };
 }
 
-async function retainEvidenceDocument(name: string, at: string): Promise<string> {
-  const repository = createLocalAflTradeNonProductionArtifactRepository({
-    rootDirectory: artifactRoot,
+/** Stores an owner's evidence document the way the store-evidence command does: write first. */
+async function retainEvidenceDocument(name: string): Promise<string> {
+  const stored = await storeLocalAflTradeEvidence(sql, {
+    storeId: CAPTURE_STORE_ID,
     repositoryId: 'owner-evidence',
     artifactClass: 'capture_metadata',
+    bytes: new TextEncoder().encode(`# ${name}\n\nSynthetic reviewed evidence.\n`),
+    mediaType: 'text/markdown',
     maximumObjectBytes: 1024 * 1024,
   });
-  const bytes = new TextEncoder().encode(`# ${name}\n\nSynthetic reviewed evidence.\n`);
-  const reference = createAflTradeByteArtifactRef(bytes, 'text/markdown', at);
-  await repository.putIfAbsent(reference, bytes);
-  const readback = await verifyAflTradeArtifactReadback(repository, reference, at, 1024 * 1024);
-  await sql.query(
-    `INSERT INTO outcome_artifact_custody
-      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,environment,
-       created_at,verified_at,custody_json)
-     VALUES ($1,$2,$3,$4,$5,'capture_metadata','non_production',$6,$7,$8::jsonb)`,
-    [
-      reference.artifactId,
-      reference.contentSha256,
-      reference.storageUri,
-      reference.mediaType,
-      reference.byteLength,
-      at,
-      readback.content.verifiedAt,
-      canonicalizeAflTradeJson(readback),
-    ]
-  );
-  return reference.artifactId;
+  return stored.reference.artifactId;
 }
 
 /** Stands in for the owner's recorded decision, written through the real Gate ledger owner. */
@@ -129,6 +117,10 @@ async function recordOwnerDecision(
 ) {
   const { sourceRights, proposal } = createDraftguruTradeAuthorityProposal({
     capabilityId,
+    // The local runner captures trade detail with v3: v2 plus each traded pick's eventual selection.
+    ...(capabilityId === 'draftguru-trade-detail'
+      ? { parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION }
+      : {}),
     seasons: Array.from({ length: 15 }, (_, index) => 2011 + index),
     evidenceIds,
     timing: {
@@ -190,6 +182,13 @@ beforeAll(async () => {
      VALUES ('AFLM',2019),('AFLM',2020),('AFLM',2021) ON CONFLICT DO NOTHING`
   );
   artifactRoot = await mkdtemp(join(tmpdir(), 'statly-local-external-capture-'));
+  // One registered store holds the captured pages and the owner evidence their decisions cite, and a
+  // clean readback lets that evidence be stored (#759).
+  await registerLocalAflTradeArtifactStore(sql, {
+    storeId: CAPTURE_STORE_ID,
+    rootDirectory: artifactRoot,
+  });
+  await readBackLocalAflTradeArtifactCustody({ client: sql, storeId: CAPTURE_STORE_ID });
 }, 120_000);
 
 afterAll(async () => {
@@ -219,10 +218,10 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
 
   it('captures the 2020 Cameron trade page, holds its repeat for the cache period, and paces the index', async () => {
     const evidenceIds = {
-      productOwnerAuthorization: await retainEvidenceDocument('authorization', instant(-130)),
-      boundedCapturePlan: await retainEvidenceDocument('capture plan', instant(-130)),
-      publicAccessReview: await retainEvidenceDocument('access review', instant(-130)),
-      fieldBoundaryReview: await retainEvidenceDocument('field review', instant(-130)),
+      productOwnerAuthorization: await retainEvidenceDocument('authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('capture plan'),
+      publicAccessReview: await retainEvidenceDocument('access review'),
+      fieldBoundaryReview: await retainEvidenceDocument('field review'),
     };
     await recordOwnerDecision('draftguru-trade-detail', evidenceIds);
     await recordOwnerDecision('draftguru-trade-index', evidenceIds);
@@ -244,6 +243,15 @@ describe('local Draftguru trade capture through the governed ingestion boundary'
     });
     if (staged?.status !== 'staged') throw new Error('Expected a staged capture.');
     expect(staged.evidenceCount).toBeGreaterThan(0);
+    // Parser v2 stages the received pick's stated outcome, which 0255 admits as a claim kind.
+    const dispositions = await sql.query<{ disposition: string; player: string }>(
+      `SELECT evidence_json#>>'{content,claim,disposition}' AS disposition,
+              evidence_json#>>'{content,claim,player,recordedName}' AS player
+         FROM outcome_external_evidence_row
+        WHERE batch_id=$1 AND claim_kind='pick_disposition'`,
+      [staged.batchId]
+    );
+    expect(dispositions.rows).toEqual([{ disposition: 'selected', player: 'Tanner Bruhn' }]);
     expect(provider.calls).toHaveLength(1);
     expect(provider.calls[0]).toMatchObject({ url: cameronUrl, userAgent, ifNoneMatch: null });
 
@@ -374,13 +382,13 @@ describe('local Official AFL completed-session capture through the governed inge
     const provider = stubOfficialAfl();
     // Pages are written into the registered local store rooted at the capture root (#759).
     await registerLocalAflTradeArtifactStore(sql, {
-      storeId: 'external-capture-store',
+      storeId: CAPTURE_STORE_ID,
       rootDirectory: artifactRoot,
     });
     const options = {
       sql,
       artifactRootDirectory: artifactRoot,
-      storeId: 'external-capture-store',
+      storeId: CAPTURE_STORE_ID,
       userAgent,
       fetchImpl: provider.fetchImpl,
     };
@@ -388,18 +396,15 @@ describe('local Official AFL completed-session capture through the governed inge
       code: 'AUTHORITY_MISMATCH',
     });
     const evidenceIds = {
-      productOwnerAuthorization: await retainEvidenceDocument(
-        'session authorization',
-        instant(-130)
-      ),
-      boundedCapturePlan: await retainEvidenceDocument('session capture plan', instant(-130)),
-      publicAccessReview: await retainEvidenceDocument('session access review', instant(-130)),
-      fieldBoundaryReview: await retainEvidenceDocument('session field review', instant(-130)),
+      productOwnerAuthorization: await retainEvidenceDocument('session authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('session capture plan'),
+      publicAccessReview: await retainEvidenceDocument('session access review'),
+      fieldBoundaryReview: await retainEvidenceDocument('session field review'),
     };
     await recordOfficialDecision(2019, evidenceIds);
     await recordOfficialDecision(2020, evidenceIds);
     await expect(runLocalExternalCapture(options, sessionTargets())).rejects.toThrow(
-      /official-afl-completed-draft-session-issue579-private-2021-session-v18/
+      /official-afl-completed-draft-session-issue579-private-2021-session-v19/
     );
     expect(provider.calls).toEqual([]);
 
@@ -443,13 +448,13 @@ describe('local Official AFL completed-session capture through the governed inge
     );
     expect(located.rows).toHaveLength(4);
     for (const row of located.rows) {
-      expect(row.store_id).toBe('external-capture-store');
+      expect(row.store_id).toBe(CAPTURE_STORE_ID);
       expect(row.object_key).toMatch(
         /^official-afl-session-raw\/local_non_production_filesystem\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/[a-f0-9]{64}$/u
       );
     }
 
-    // Each capture receipt names the v18 parser and the season's own recorded decision.
+    // Each capture receipt names the v19 parser and the season's own recorded decision.
     const receipts = await sql.query<{ parser: string; decision_key: string }>(
       `SELECT manifest_json->>'parserVersion' AS parser,
               manifest_json#>>'{executionReceipt,content,gate0aReceipt,content,request,decisionKey}'
@@ -460,20 +465,20 @@ describe('local Official AFL completed-session capture through the governed inge
     );
     expect(receipts.rows).toEqual([
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2019-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2019-session-v19',
       },
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2020-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2020-session-v19',
       },
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v19',
       },
       {
-        parser: 'official-afl-completed-draft-session/v18',
-        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v18',
+        parser: 'official-afl-completed-draft-session/v19',
+        decision_key: 'official-afl-completed-draft-session-issue579-private-2021-session-v19',
       },
     ]);
   }, 90_000);
@@ -500,13 +505,10 @@ describe('local Draftguru national-year capture through the governed ingestion b
     expect(calls).toEqual([]);
 
     const evidenceIds = {
-      productOwnerAuthorization: await retainEvidenceDocument(
-        'national authorization',
-        instant(-130)
-      ),
-      boundedCapturePlan: await retainEvidenceDocument('national capture plan', instant(-130)),
-      publicAccessReview: await retainEvidenceDocument('national access review', instant(-130)),
-      fieldBoundaryReview: await retainEvidenceDocument('national field review', instant(-130)),
+      productOwnerAuthorization: await retainEvidenceDocument('national authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('national capture plan'),
+      publicAccessReview: await retainEvidenceDocument('national access review'),
+      fieldBoundaryReview: await retainEvidenceDocument('national field review'),
     };
     await recordOfficialDecision(2020, evidenceIds, draftguruNationalYearAuthority);
     const [result] = await runLocalExternalCapture(options, targets);
@@ -529,10 +531,59 @@ describe('local Draftguru national-year capture through the governed ingestion b
     );
     expect(receipts.rows).toEqual([
       {
-        parser: 'draftguru-national-year-page/v1',
+        parser: 'draftguru-national-year-page/v3',
         pathway: 'national',
-        decision_key: 'draftguru-national-year-page-issue579-private-2020',
+        decision_key: 'draftguru-national-year-page-issue579-private-2020-parser-v3',
       },
+    ]);
+  }, 90_000);
+});
+
+describe('local Footyinfo draft-board capture through the governed ingestion boundary', () => {
+  it('stages a recorded season’s board picks and selections under the board’s own decision', async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS, { year: 2020 }), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    };
+    const options = { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl };
+    const targets = createLocalFootyinfoDraftBoardTargets([2020]);
+    await expect(runLocalExternalCapture(options, targets)).rejects.toThrow(
+      /footyinfo-national-draft-board-issue853-private-2020-board-v1/
+    );
+    expect(calls).toEqual([]);
+
+    const evidenceIds = {
+      productOwnerAuthorization: await retainEvidenceDocument('board authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('board capture plan'),
+      publicAccessReview: await retainEvidenceDocument('board egress review'),
+      fieldBoundaryReview: await retainEvidenceDocument('board field review'),
+    };
+    await recordOfficialDecision(2020, evidenceIds, footyinfoDraftBoardAuthority);
+    const [result] = await runLocalExternalCapture(options, targets);
+    // Eight board picks (five selected, two passed, one removed) and the five selections.
+    expect(result).toMatchObject({
+      season: 2020,
+      status: 'staged',
+      evidenceCount: 13,
+      issueCount: 0,
+    });
+    expect(calls).toEqual(['https://www.footyinfo.com/draft/2020']);
+    expect(await readdir(join(artifactRoot, 'footyinfo-board-raw'))).not.toHaveLength(0);
+
+    const rows = await sql.query<{ kind: string; count: string }>(
+      `SELECT row.claim_kind AS kind, count(*)::text AS count
+         FROM outcome_external_evidence_row row
+         JOIN outcome_external_evidence_batch batch USING (batch_id)
+        WHERE batch.provider='footyinfo'
+        GROUP BY row.claim_kind ORDER BY row.claim_kind`
+    );
+    expect(rows.rows).toEqual([
+      { kind: 'draft_board_pick', count: '8' },
+      { kind: 'draft_selection', count: '5' },
     ]);
   }, 90_000);
 });

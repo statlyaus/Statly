@@ -10,6 +10,7 @@ import {
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
+import { loadInjuryLookup, type InjuryListing } from '@/server/injuries/injuryListReadModel';
 import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
 import {
   loadLineupRoundSummaries,
@@ -26,25 +27,13 @@ import {
 } from '@/types/fantasyCategories';
 
 type SourcePlayer = Awaited<ReturnType<typeof getPlayers>>[number];
-type DefaultLineupClient = Pick<typeof prisma, 'league' | 'leagueLineup' | 'leagueRosterPlayer'>;
+type DefaultLineupClient = Pick<
+  typeof prisma,
+  'league' | 'leagueLineup' | 'leagueRosterPlayer' | 'injuryListSnapshot' | 'injuryListEntry'
+>;
 
 /** On-field groups in team-sheet order, then interchange. */
 const FIELD_SLOT_ORDER = ['DEF', 'MID', 'RUC', 'FWD', 'UTIL'] as const;
-
-/** Player-feed statuses that are not injuries (the feed falls back to these when no injury is listed). */
-export const NON_INJURY_STATUSES = new Set([
-  'home',
-  'away',
-  'active',
-  'available',
-  'fit',
-  'ok',
-  'none',
-  'n/a',
-  'selected',
-  'named',
-  'playing',
-]);
 
 export function parseLeagueCategories(value: string | null | undefined): FantasyCategoryKey[] {
   if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
@@ -72,21 +61,6 @@ export function buildLineupSpots(
   return [...field, ...interchange];
 }
 
-/** Looks up a listed injury by player id, then by name. */
-export function buildInjuryLookup(sourcePlayers: readonly SourcePlayer[]) {
-  const byKey = new Map<string, string>();
-  for (const source of sourcePlayers) {
-    const injury = typeof source.injury === 'string' ? source.injury.trim() : '';
-    if (!injury || NON_INJURY_STATUSES.has(injury.toLowerCase())) continue;
-    byKey.set(`id:${source.id}`, injury);
-    byKey.set(`name:${source.name.trim().toLowerCase()}`, injury);
-  }
-  return (player: { playerId: string; name: string }): string | null =>
-    byKey.get(`id:${player.playerId}`) ??
-    byKey.get(`name:${player.name.trim().toLowerCase()}`) ??
-    null;
-}
-
 /**
  * Candidates for a default lineup. `ignoreGameStarts` treats players whose game has started as
  * available, for a default that stands in for the lineup the team had before the round began.
@@ -101,7 +75,7 @@ export function toAutoFillPlayers({
 }: {
   roster: ReadonlyArray<{ playerId: string; name: string; position: string | null }>;
   fixturesByPlayerId: ReadonlyMap<string, RoundPlayerFixture>;
-  injuryFor: (player: { playerId: string; name: string }) => string | null;
+  injuryFor: (player: { playerId: string }) => Pick<InjuryListing, 'blocksSelection'> | null;
   scores: ReadonlyMap<string, number>;
   now: Date;
   ignoreGameStarts?: boolean;
@@ -112,7 +86,8 @@ export function toAutoFillPlayers({
     return {
       playerId: player.playerId,
       position: player.position,
-      available: !fixture?.bye && !injuryFor(player) && (ignoreGameStarts || !started),
+      available:
+        !fixture?.bye && !injuryFor(player)?.blocksSelection && (ignoreGameStarts || !started),
       score: scores.get(player.playerId) ?? 0,
     };
   });
@@ -210,13 +185,14 @@ export async function ensureDefaultLineups({
   const fixturesByPlayerId = fixtureResult.ok
     ? fixtureResult.fixturesByPlayerId
     : new Map<string, RoundPlayerFixture>();
-  let sourcePlayers: SourcePlayer[] = [];
-  try {
-    sourcePlayers = await getPlayers();
-  } catch (error) {
-    logger.warn('Default lineups: player feed unavailable', { leagueId, error });
-  }
-  const injuryFor = buildInjuryLookup(sourcePlayers);
+  // The injury list is not league- or season-scoped: every league reads the same snapshot.
+  const [sourcePlayers, injuryFor] = await Promise.all([
+    getPlayers().catch((error: unknown): SourcePlayer[] => {
+      logger.warn('Default lineups: player feed unavailable', { leagueId, error });
+      return [];
+    }),
+    loadInjuryLookup({ prisma: client, now, logContext: { leagueId, scope: 'default lineups' } }),
+  ]);
   let scores = new Map<string, number>();
   try {
     scores = scoreRosterPlayers({

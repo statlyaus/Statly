@@ -4,6 +4,7 @@ import { specialEntitlementAwardSchema } from './specialEntitlementAwardContract
 import {
   createAflTradeExternalReconciliationCandidate,
   parseAflTradeExternalReconciliationCandidate,
+  retainAflTradePickOutcomes,
 } from './externalReconciliationCandidateContracts';
 
 const bindingSchema = z
@@ -70,8 +71,14 @@ export function resolveSpecialEntitlementCustody(input: {
     throw new TypeError('Award bindings must identify existing source transfers.');
   if (Date.parse(input.reconciledAt) < Date.parse(source.content.reconciledAt))
     throw new TypeError('Resolution cannot predate its source candidate.');
+  const { pickOutcomes, ...retainedContent } = source.content;
   return createAflTradeExternalReconciliationCandidate({
-    ...source.content,
+    ...retainedContent,
+    // A transfer resolved as a special entitlement is no longer an ordinary pick with an outcome.
+    ...retainAflTradePickOutcomes(pickOutcomes, {
+      transfers,
+      draftSelections: source.content.draftSelections,
+    }),
     transfers,
     // Any former ordinary-pick exercise remains in the retained source candidate, pending the
     // separate retrospective exercise owner; it cannot price the special right as an ordinary pick.

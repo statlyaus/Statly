@@ -58,12 +58,26 @@ interface ClaimStore {
   releaseProcessingLease?(leagueId: string, startedAt: Date): Promise<void>;
   loadWaiverSettings?(leagueId: string): Promise<WaiverSettings>;
   loadPendingClaims?(leagueId: string): Promise<WaiverClaim[]>;
-  markSuccessful(input: { leagueId: string; claimId: string; claim: WaiverClaim }): Promise<void>;
-  markFailed(input: {
+  // A claim settles in one transaction: these take the settling transaction and never commit alone.
+  claimPending(tx: WaiverSettlementTransaction, claim: WaiverClaim): Promise<Date | null>;
+  rejectClaim(tx: WaiverSettlementTransaction, claim: WaiverClaim, isFAAB: boolean): Promise<void>;
+  debitFaabInTransaction(
+    tx: WaiverSettlementTransaction,
+    claim: WaiverClaim,
+    waiverSettings: WaiverSettings
+  ): Promise<{ ok: boolean; reason?: string }>;
+  completeClaim(
+    tx: WaiverSettlementTransaction,
+    claim: WaiverClaim,
+    isFAAB: boolean
+  ): Promise<void>;
+  // Runs after the commit, so it cannot change an outcome.
+  publishSettlement(input: {
     leagueId: string;
-    claimId: string;
     claim: WaiverClaim;
-    reason: string;
+    status: 'SUCCESSFUL' | 'FAILED';
+    processedAt: Date;
+    reason?: string;
   }): Promise<void>;
   recordActivity(input: {
     leagueId: string;
@@ -71,14 +85,12 @@ interface ClaimStore {
     type: 'waiver-submitted' | 'waiver-successful' | 'waiver-failed';
     reason?: string;
   }): Promise<void>;
-  decrementPendingBidTotal(claim: WaiverClaim, isFAAB: boolean): Promise<void>;
-  debitFaab(
-    claim: WaiverClaim,
-    waiverSettings: WaiverSettings
-  ): Promise<{ ok: boolean; reason?: string }>;
-  refundFaab?(claim: WaiverClaim): Promise<void>;
-  advancePriority(leagueId: string, userId: string): Promise<void>;
 }
+
+type ClaimSettlement =
+  | { status: 'SKIPPED' }
+  | { status: 'SUCCESSFUL'; processedAt: Date }
+  | { status: 'FAILED'; processedAt: Date; reason: string };
 
 export interface SubmitWaiverClaimInput {
   leagueId: string;
@@ -132,6 +144,11 @@ type PrismaLike = Pick<
 type PrismaWaiverStoreDb = Pick<
   typeof prisma,
   '$transaction' | 'league' | 'leagueMember' | 'teamAction' | 'waiverPriority' | 'pick'
+>;
+
+type WaiverSettlementTransaction = Pick<
+  PrismaTransactionClient,
+  'leagueMember' | 'teamAction' | 'waiverPriority'
 >;
 
 type FirestoreLike = Pick<typeof adminDb, 'collection' | 'doc'>;
@@ -329,46 +346,40 @@ export class WaiverProcessingService {
         remainingClaims.splice(remainingIndex, 1);
       }
 
-      const validation = await this.validateCanonicalRosterChange(input.leagueId, claim);
-      if (validation.status === 'FAILED') {
-        await this.failClaim(input.leagueId, claim, validation.reason, isFAAB);
-        results.push({ id: claim.id, status: 'FAILED', reason: validation.reason });
-        continue;
-      }
-
-      if (isFAAB) {
-        const debit = await this.claimStore.debitFaab(claim, input.waiverSettings);
-        if (!debit.ok) {
-          const reason = debit.reason ?? 'FAAB balance unavailable';
-          await this.failClaim(input.leagueId, claim, reason, isFAAB);
-          results.push({ id: claim.id, status: 'FAILED', reason });
-          continue;
-        }
-      }
-
-      const result = await this.applyCanonicalRosterChange(
+      // A rethrown error leaves this claim PENDING and ends the run: a later claim must not be
+      // settled ahead of one whose outcome is unknown.
+      const settlement = await this.settleClaim(
         input.leagueId,
         claim,
-        input.waiverSettings
+        input.waiverSettings,
+        isFAAB
       );
-
-      if (result.status === 'FAILED') {
-        if (isFAAB) {
-          await this.claimStore.refundFaab?.(claim);
-        }
-        await this.failClaim(input.leagueId, claim, result.reason, isFAAB);
-        results.push({ id: claim.id, status: 'FAILED', reason: result.reason });
+      if (settlement.status === 'SKIPPED') {
+        logger.info('Skipped a waiver claim another run already settled', {
+          leagueId: input.leagueId,
+          claimId: claim.id,
+        });
         continue;
       }
 
-      await this.claimStore.decrementPendingBidTotal(claim, isFAAB);
-      await this.claimStore.markSuccessful({ leagueId: input.leagueId, claimId: claim.id, claim });
+      await this.claimStore.publishSettlement({ leagueId: input.leagueId, claim, ...settlement });
+
+      if (settlement.status === 'FAILED') {
+        await this.claimStore.recordActivity({
+          leagueId: input.leagueId,
+          claim,
+          type: 'waiver-failed',
+          reason: settlement.reason,
+        });
+        results.push({ id: claim.id, status: 'FAILED', reason: settlement.reason });
+        continue;
+      }
+
       await this.claimStore.recordActivity({
         leagueId: input.leagueId,
         claim,
         type: 'waiver-successful',
       });
-      await this.claimStore.advancePriority(input.leagueId, claim.userId);
       priorityEntries = buildAdvancedWaiverPriorityUpdates(priorityEntries, claim.userId);
       await this.projectionService.projectLeague({ leagueId: input.leagueId });
 
@@ -378,86 +389,91 @@ export class WaiverProcessingService {
     return { processed: results.length, results };
   }
 
-  private async failClaim(
+  /**
+   * Settles one claim in one transaction: the claim's status, the roster check, the FAAB debit, the
+   * roster change, the pending-bid release and the priority advance commit together or not at all,
+   * so a run that dies part way leaves the claim PENDING for the next run to settle once.
+   */
+  private async settleClaim(
     leagueId: string,
     claim: WaiverClaim,
-    reason: string,
+    waiverSettings: WaiverSettings,
     isFAAB: boolean
-  ): Promise<void> {
-    await this.claimStore.decrementPendingBidTotal(claim, isFAAB);
-    await this.claimStore.markFailed({ leagueId, claimId: claim.id, claim, reason });
-    await this.claimStore.recordActivity({ leagueId, claim, type: 'waiver-failed', reason });
+  ): Promise<ClaimSettlement> {
+    return this.db.$transaction(async (tx: PrismaTransactionClient): Promise<ClaimSettlement> => {
+      const processedAt = await this.claimStore.claimPending(tx, claim);
+      if (!processedAt) return { status: 'SKIPPED' };
+
+      const reject = async (reason: string): Promise<ClaimSettlement> => {
+        await this.claimStore.rejectClaim(tx, claim, isFAAB);
+        return { status: 'FAILED', processedAt, reason };
+      };
+
+      // The roster check runs before the debit, so a claim that cannot be awarded is never charged.
+      const plan = await this.buildCanonicalRosterPlan(tx, leagueId, claim);
+      if (plan.status === 'FAILED') return reject(plan.reason);
+
+      if (isFAAB) {
+        const debit = await this.claimStore.debitFaabInTransaction(tx, claim, waiverSettings);
+        if (!debit.ok) return reject(debit.reason ?? 'FAAB balance unavailable');
+      }
+
+      await this.applyCanonicalRosterPlan(tx, leagueId, claim, plan, waiverSettings);
+      await this.claimStore.completeClaim(tx, claim, isFAAB);
+      return { status: 'SUCCESSFUL', processedAt };
+    });
   }
 
-  private async applyCanonicalRosterChange(
+  private async applyCanonicalRosterPlan(
+    tx: PrismaTransactionClient,
     leagueId: string,
     claim: WaiverClaim,
+    plan: Extract<CanonicalRosterPlan, { status: 'READY' }>,
     waiverSettings: WaiverSettings
-  ): Promise<{ status: 'SUCCESSFUL' } | { status: 'FAILED'; reason: string }> {
-    return this.db.$transaction(
-      async (
-        tx: PrismaTransactionClient
-      ): Promise<{ status: 'SUCCESSFUL' } | { status: 'FAILED'; reason: string }> => {
-        const plan = await this.buildCanonicalRosterPlan(tx, leagueId, claim);
-        if (plan.status === 'FAILED') {
-          return plan;
-        }
-        if (plan.dropPlayerId) {
-          await tx.leagueRosterPlayer.deleteMany({
-            where: { leagueId, memberId: plan.memberId, playerId: plan.dropPlayerId },
-          });
-          await tx.teamAction.create({
-            data: {
-              leagueId,
-              memberId: plan.memberId,
-              actionType: 'DROP_PLAYER',
-              status: 'PENDING',
-              details: JSON.stringify({
-                playerId: plan.dropPlayerId,
-                source: 'drop-to-waivers',
-                waiverClaimId: claim.id,
-              }),
-              processingAt: calculateProcessingAt(waiverSettings),
-            },
-            select: { id: true },
-          });
-        }
+  ): Promise<void> {
+    if (plan.dropPlayerId) {
+      await tx.leagueRosterPlayer.deleteMany({
+        where: { leagueId, memberId: plan.memberId, playerId: plan.dropPlayerId },
+      });
+      await tx.teamAction.create({
+        data: {
+          leagueId,
+          memberId: plan.memberId,
+          actionType: 'DROP_PLAYER',
+          status: 'PENDING',
+          details: JSON.stringify({
+            playerId: plan.dropPlayerId,
+            source: 'drop-to-waivers',
+            waiverClaimId: claim.id,
+          }),
+          processingAt: calculateProcessingAt(waiverSettings),
+        },
+        select: { id: true },
+      });
+    }
 
-        await tx.leagueRoster.upsert({
-          where: { leagueId_memberId: { leagueId, memberId: plan.memberId } },
-          update: { playerIds: plan.nextPlayerIds },
-          create: { leagueId, memberId: plan.memberId, playerIds: plan.nextPlayerIds },
-        });
-        await tx.leagueRosterPlayer.upsert({
-          where: { leagueId_playerId: { leagueId, playerId: plan.playerId } },
-          update: {
-            memberId: plan.memberId,
-            draftId: null,
-            pickId: null,
-            acquiredBy: 'WAIVER',
-            acquiredAt: new Date(),
-          },
-          create: {
-            leagueId,
-            memberId: plan.memberId,
-            playerId: plan.playerId,
-            acquiredBy: 'WAIVER',
-            acquiredAt: new Date(),
-          },
-        });
-
-        return { status: 'SUCCESSFUL' };
-      }
-    );
-  }
-
-  private async validateCanonicalRosterChange(
-    leagueId: string,
-    claim: WaiverClaim
-  ): Promise<CanonicalRosterPlan> {
-    return this.db.$transaction((tx: PrismaTransactionClient) =>
-      this.buildCanonicalRosterPlan(tx, leagueId, claim)
-    );
+    await tx.leagueRoster.upsert({
+      where: { leagueId_memberId: { leagueId, memberId: plan.memberId } },
+      update: { playerIds: plan.nextPlayerIds },
+      create: { leagueId, memberId: plan.memberId, playerIds: plan.nextPlayerIds },
+    });
+    await tx.leagueRosterPlayer.upsert({
+      where: { leagueId_playerId: { leagueId, playerId: plan.playerId } },
+      update: {
+        memberId: plan.memberId,
+        draftId: null,
+        pickId: null,
+        acquiredBy: 'WAIVER',
+        acquiredAt: new Date(),
+      },
+      create: {
+        leagueId,
+        memberId: plan.memberId,
+        playerId: plan.playerId,
+        acquiredBy: 'WAIVER',
+        acquiredAt: new Date(),
+      },
+    });
   }
 
   private async buildCanonicalRosterPlan(
@@ -816,37 +832,60 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     return { id: action.id, processingAt };
   }
 
-  async markSuccessful(input: {
-    leagueId: string;
-    claimId: string;
-    claim: WaiverClaim;
-  }): Promise<void> {
+  // Takes the claim inside the settling transaction. The status is provisional until the commit
+  // (`rejectClaim` overwrites it), and the row lock makes a second run's attempt wait, then skip.
+  async claimPending(tx: WaiverSettlementTransaction, claim: WaiverClaim): Promise<Date | null> {
     const processedAt = new Date();
-    await this.db.teamAction.update({
-      where: { id: input.claimId },
+    const { count } = await tx.teamAction.updateMany({
+      where: { id: claim.id, status: 'PENDING' },
       data: { status: 'PROCESSED', processedAt },
     });
-    await this.updateClaimProjection(input.leagueId, input.claimId, {
-      status: 'SUCCESSFUL',
-      processedAt,
-    });
+    return count === 1 ? processedAt : null;
   }
 
-  async markFailed(input: {
+  async rejectClaim(
+    tx: WaiverSettlementTransaction,
+    claim: WaiverClaim,
+    isFAAB: boolean
+  ): Promise<void> {
+    if (isFAAB) await this.releasePendingBid(tx, claim);
+    await tx.teamAction.update({ where: { id: claim.id }, data: { status: 'REJECTED' } });
+  }
+
+  async completeClaim(
+    tx: WaiverSettlementTransaction,
+    claim: WaiverClaim,
+    isFAAB: boolean
+  ): Promise<void> {
+    if (isFAAB) await this.releasePendingBid(tx, claim);
+    await this.advancePriorityRows(tx, claim.leagueId, claim.userId);
+  }
+
+  async publishSettlement(input: {
     leagueId: string;
-    claimId: string;
     claim: WaiverClaim;
-    reason: string;
+    status: 'SUCCESSFUL' | 'FAILED';
+    processedAt: Date;
+    reason?: string;
   }): Promise<void> {
-    const processedAt = new Date();
-    await this.db.teamAction.update({
-      where: { id: input.claimId },
-      data: { status: 'REJECTED', processedAt },
-    });
-    await this.updateClaimProjection(input.leagueId, input.claimId, {
-      status: 'FAILED',
-      processedAt,
-      reason: input.reason,
+    try {
+      // A success moves the whole league's priority order; a failure changes only the claimant's
+      // pending bid.
+      await (input.status === 'SUCCESSFUL'
+        ? this.mirrorLeaguePriorityProjection(input.leagueId)
+        : this.mirrorPriorityProjection(input.leagueId, input.claim.teamId));
+    } catch (error) {
+      // The claim is already settled in Prisma; a stale projection must not stop the run.
+      logger.warn('Failed to mirror waiver priority projection after settlement', {
+        leagueId: input.leagueId,
+        claimId: input.claim.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    await this.updateClaimProjection(input.leagueId, input.claim.id, {
+      status: input.status,
+      processedAt: input.processedAt,
+      ...(input.reason ? { reason: input.reason } : {}),
     });
   }
 
@@ -893,46 +932,14 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     }
   }
 
-  async decrementPendingBidTotal(claim: WaiverClaim, isFAAB: boolean): Promise<void> {
-    if (!isFAAB || typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
-    await this.releasePendingBid(this.db, claim);
-    await this.mirrorPriorityProjection(claim.leagueId, claim.teamId);
-  }
-
   async debitFaab(
     claim: WaiverClaim,
     waiverSettings: WaiverSettings
   ): Promise<{ ok: boolean; reason?: string }> {
-    if (waiverSettings.system !== 'FAAB' || typeof claim.bidAmount !== 'number') {
-      return { ok: true };
-    }
-
     try {
-      const bid = claim.bidAmount;
-      const member = { leagueId: claim.leagueId, memberId: claim.teamId };
-      const result = await this.db.$transaction(async (tx) => {
-        // An unset balance starts at the league budget. Guarded on null, so a concurrent writer
-        // that already set it is left alone.
-        if (typeof waiverSettings.faabBudget === 'number') {
-          await tx.waiverPriority.updateMany({
-            where: { ...member, remainingFAAB: null },
-            data: { remainingFAAB: waiverSettings.faabBudget },
-          });
-        }
-
-        // A decrement guarded by the balance, never a balance read earlier and written back: a
-        // concurrent debit re-checks the guard against the committed balance after the row lock.
-        const { count } = await tx.waiverPriority.updateMany({
-          where: { ...member, remainingFAAB: { gte: bid } },
-          data: { remainingFAAB: { decrement: bid } },
-        });
-        if (count === 1) return { ok: true };
-
-        const [priority] = await this.loadPriorityRows(tx, claim.leagueId, claim.teamId);
-        return typeof priority?.remainingFAAB === 'number'
-          ? { ok: false, reason: 'Insufficient FAAB' }
-          : { ok: false, reason: 'FAAB balance unavailable' };
-      });
+      const result = await this.db.$transaction((tx) =>
+        this.debitFaabInTransaction(tx, claim, waiverSettings)
+      );
       if (result.ok) {
         await this.mirrorPriorityProjection(claim.leagueId, claim.teamId);
       }
@@ -948,6 +955,39 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     }
   }
 
+  async debitFaabInTransaction(
+    tx: WaiverSettlementTransaction,
+    claim: WaiverClaim,
+    waiverSettings: WaiverSettings
+  ): Promise<{ ok: boolean; reason?: string }> {
+    if (waiverSettings.system !== 'FAAB' || typeof claim.bidAmount !== 'number') {
+      return { ok: true };
+    }
+
+    const bid = claim.bidAmount;
+    const member = { leagueId: claim.leagueId, memberId: claim.teamId };
+    // An unset balance starts at the league budget. Guarded on null, so a concurrent writer that
+    // already set it is left alone.
+    if (typeof waiverSettings.faabBudget === 'number') {
+      await tx.waiverPriority.updateMany({
+        where: { ...member, remainingFAAB: null },
+        data: { remainingFAAB: waiverSettings.faabBudget },
+      });
+    }
+
+    // A decrement guarded by the balance, never a balance read earlier and written back: a
+    // concurrent debit re-checks the guard against the committed balance after the row lock.
+    const { count } = await tx.waiverPriority.updateMany({
+      where: { ...member, remainingFAAB: { gte: bid } },
+      data: { remainingFAAB: { decrement: bid } },
+    });
+    if (count === 1) return { ok: true };
+
+    const [priority] = await this.loadPriorityRows(tx, claim.leagueId, claim.teamId);
+    return typeof priority?.remainingFAAB === 'number'
+      ? { ok: false, reason: 'Insufficient FAAB' }
+      : { ok: false, reason: 'FAAB balance unavailable' };
+  }
   async refundFaab(claim: WaiverClaim): Promise<void> {
     if (typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
 
@@ -967,13 +1007,22 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   }
 
   async advancePriority(leagueId: string, userId: string): Promise<void> {
-    const members = await this.db.leagueMember.findMany({
+    await this.advancePriorityRows(this.db, leagueId, userId);
+    await this.mirrorLeaguePriorityProjection(leagueId);
+  }
+
+  private async advancePriorityRows(
+    db: Pick<PrismaWaiverStoreDb, 'leagueMember' | 'waiverPriority'>,
+    leagueId: string,
+    userId: string
+  ): Promise<void> {
+    const members = await db.leagueMember.findMany({
       where: { leagueId },
       select: { id: true, userId: true },
     });
     const userIdByMemberId = new Map(members.map((member) => [member.id, member.userId]));
     const memberIdByUserId = new Map(members.map((member) => [member.userId, member.id]));
-    const entries: WaiverPriorityEntry[] = (await this.loadPriorityRows(this.db, leagueId))
+    const entries: WaiverPriorityEntry[] = (await this.loadPriorityRows(db, leagueId))
       .map((row) => {
         const rowUserId = userIdByMemberId.get(row.memberId);
         if (!rowUserId) return null;
@@ -987,12 +1036,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       const original = entries.find((entry) => entry.userId === update.userId);
       if (!memberId || !original || original.priority === update.priority) continue;
 
-      await this.db.waiverPriority.updateMany({
+      await db.waiverPriority.updateMany({
         where: { leagueId, memberId },
         data: { priority: update.priority },
       });
     }
-    await this.mirrorLeaguePriorityProjection(leagueId);
   }
 
   private async mapActionsToClaims(

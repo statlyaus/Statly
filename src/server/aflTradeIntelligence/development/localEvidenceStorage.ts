@@ -13,6 +13,9 @@ import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepo
 import { bindLocalAflTradeArtifactStore } from './localArtifactStoreBinding';
 import { loadLocalAflTradeNonProductionStoredReference } from './localFileConditionalObjectStore';
 
+/** The classes evidence may be stored as; `derived_private` holds private calculation outputs. */
+export type AflTradeStoredEvidenceClass = 'raw_source' | 'capture_metadata' | 'derived_private';
+
 const MEDIA_TYPE_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/u;
 
 export interface AflTradeStoredEvidence {
@@ -31,7 +34,13 @@ export interface AflTradeStoredEvidence {
  */
 async function referenceForRetry(
   client: AflOutcomeSqlClient,
-  input: { storeId: string; repositoryId: string; bytes: Uint8Array; mediaType: string }
+  input: {
+    storeId: string;
+    repositoryId: string;
+    artifactClass: AflTradeStoredEvidenceClass;
+    bytes: Uint8Array;
+    mediaType: string;
+  }
 ): Promise<AflTradeArtifactRef> {
   const fresh = createAflTradeByteArtifactRef(
     input.bytes,
@@ -48,16 +57,17 @@ async function referenceForRetry(
     contentSha256: fresh.contentSha256,
   });
   const custody = (
-    await client.query<{ created_at: string; media_type: string }>(
+    await client.query<{ created_at: string; media_type: string; artifact_class: string }>(
       `SELECT to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-              media_type
+              media_type, artifact_class::text AS artifact_class
          FROM outcome_artifact_custody WHERE artifact_id=$1`,
       [fresh.artifactId]
     )
   ).rows[0];
   // Refused before any byte is written, so a corrected retry is not blocked by a wrong envelope.
   if (
-    (custody !== undefined && custody.media_type !== input.mediaType) ||
+    (custody !== undefined &&
+      (custody.media_type !== input.mediaType || custody.artifact_class !== input.artifactClass)) ||
     (stored !== null && stored.mediaType !== input.mediaType)
   ) {
     throw new Error(`Evidence ${fresh.artifactId} differs from its custody row.`);
@@ -69,18 +79,18 @@ async function referenceForRetry(
 }
 
 /**
- * Stores one evidence file, such as an owner's approval record, so a Gate decision or reviewed
- * record may cite it: the bytes are written to the registered local non-production store and read
+ * Stores one evidence file, such as an owner's approval record or a private grade batch, so a Gate
+ * decision or reviewed record may cite it: the bytes are written to the registered local non-production store and read
  * back in full, then one transaction records the custody row and its location. Nothing is
  * recorded when the write or read-back fails. Storing the same bytes again is a no-op, and bytes
- * whose custody row already exists without a location (recorded as lost) are located again.
+ * whose custody row already exists without a location (recorded as lost) are located again. Bytes whose custody row names another class are refused.
  */
 export async function storeLocalAflTradeEvidence(
   client: AflOutcomeSqlClient,
   input: {
     storeId: string;
     repositoryId: string;
-    artifactClass: 'raw_source' | 'capture_metadata';
+    artifactClass: AflTradeStoredEvidenceClass;
     bytes: Uint8Array;
     mediaType: string;
     maximumObjectBytes: number;
@@ -96,7 +106,7 @@ export async function storeLocalAflTradeEvidence(
   await requireAflTradeCustodyHealthy(client, 'non_production');
   const reference = await referenceForRetry(client, input);
   await storeAndReadBackAflTradeEvidence(store, [{ reference, bytes: input.bytes }]);
-  // The custody row records the same read-back receipt every local repository writer records.
+  // The custody row records the read-back receipt the evidence writers record.
   const readback = await verifyAflTradeArtifactReadback(
     {
       assurance: 'local_non_production_filesystem',

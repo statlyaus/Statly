@@ -57,7 +57,12 @@ import {
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
 
-export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v18';
+export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v19';
+
+// afl.com.au renamed the non-AMP date wrapper from `article__date` to `article__byline-date`
+// (seen 2026-10-08); the `datetime` values are unchanged. v19 accepts either wrapper, and the
+// parser still requires exactly one date element, so a page with both or neither is refused.
+const ARTICLE_DATE = '.article__date > time, .article__byline-date > time';
 
 // Exact reviewed completed reports: contextual date, event-day narrative and full
 // selection coverage must agree. Publication time alone is never an event date.
@@ -70,7 +75,7 @@ const reviewedReports = [
     numberedParagraphHeadings: true,
     tableFirst: 1,
     recapFirstRound: false,
-    contextualDateSelector: '.article__date > time',
+    contextualDateSelector: ARTICLE_DATE,
     ordinal: 1,
     date: '2020-12-09',
     displayedDate: '2020-12-09T12:30:00Z',
@@ -86,7 +91,7 @@ const reviewedReports = [
     firstRound: 'First Round',
     tableFirst: 1,
     recapFirstRound: false,
-    contextualDateSelector: '.article__date > time',
+    contextualDateSelector: ARTICLE_DATE,
     ordinal: 1,
     date: '2021-11-24',
     displayedDate: '2021-11-24T10:36:00Z',
@@ -103,7 +108,7 @@ const reviewedReports = [
     paragraphMarker: 'NAB AFL DRAFT NIGHT TWO',
     tableFirst: 21,
     recapFirstRound: false,
-    contextualDateSelector: '.article__date > time',
+    contextualDateSelector: ARTICLE_DATE,
     ordinal: 2,
     date: '2021-11-25',
     displayedDate: '2021-11-25T11:45:00Z',
@@ -120,7 +125,7 @@ const reviewedReports = [
     firstRound: 'First Round',
     tableFirst: 1,
     recapFirstRound: false,
-    contextualDateSelector: '.article__date > time',
+    contextualDateSelector: ARTICLE_DATE,
     ordinal: 1,
     date: '2022-11-28',
     displayedDate: '2022-11-28T10:30:00Z',
@@ -202,7 +207,7 @@ const reviewedReports = [
     firstRound: 'Second Round',
     tableFirst: 30,
     recapFirstRound: false,
-    contextualDateSelector: '.article__date > time',
+    contextualDateSelector: ARTICLE_DATE,
     ordinal: 2,
     date: '2023-11-21',
     displayedDate: '2023-11-21T10:43:00Z',

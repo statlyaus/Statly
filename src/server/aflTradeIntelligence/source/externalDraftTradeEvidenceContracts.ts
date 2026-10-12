@@ -40,6 +40,7 @@ const providerSchema = z.enum([
   'footywire',
   'official_afl',
   'fitzroy_official_afl_player_details',
+  'footyinfo',
 ]);
 
 const sourceUrlSchema = z
@@ -60,6 +61,28 @@ const sourceUrlSchema = z
       message: 'Source URL must use HTTPS or the internal fitzroy scheme.',
     });
   });
+
+/**
+ * The Draftguru national-year parser that reads each selection's access category from the plain forms
+ * (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`).
+ */
+export const DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION = 'draftguru-national-year-page/v2';
+
+/**
+ * v3 also reads the club-qualified academy forms the 2019 page uses (`Academy(<club>)`,
+ * `Academy (NG)(<club>)`, each optionally ending ` - Not Matched`). On a page with only the plain
+ * forms it emits exactly what v2 emits.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION =
+  'draftguru-national-year-page/v3';
+
+/** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
+export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
+  return (
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+  );
+}
 
 const sourceCaptureSchema = z
   .object({
@@ -228,8 +251,64 @@ const draftSelectionClaimSchema = z
     roundNumber: positiveOrdinalSchema.nullable(),
     player: recordedEntitySchema,
     selectedByClub: recordedEntitySchema,
+    /**
+     * How the selecting club accessed the player, as the Draftguru national-year page (parser v2)
+     * states it: an open selection, or an academy or father-son nomination (both reached through a
+     * matched bid in the national draft). Absent for sources and parsers that do not record it.
+     */
+    accessCategory: z.enum(['open', 'academy', 'father_son']).optional(),
   })
   .strict();
+
+/**
+ * What the source states became of one received pick: used by the receiving club on the named
+ * player, traded on, or not used. It binds to the directed transfer with the same native ids and
+ * is a provider statement, never an inference from pick numbers.
+ */
+const pickDispositionClaimSchema = z
+  .object({
+    kind: z.literal('pick_disposition'),
+    nativeEventId: boundedText,
+    nativeTransferId: boundedText,
+    receivingClub: recordedEntitySchema,
+    disposition: z.enum(['selected', 'traded_on', 'not_used']),
+    player: recordedEntitySchema.optional(),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    if ((claim.disposition === 'selected') !== (claim.player !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['player'],
+        message: 'A pick disposition names a player exactly when the pick was selected.',
+      });
+    }
+  });
+
+/**
+ * The player the provider says was eventually selected with a traded pick, read from the giving
+ * side of its trade row (draftguru-trade-parser/v3, statlyaus/Statly#886), or that the pick was not
+ * used. It binds to the directed transfer with the same native ids, so two transfers of one pick on
+ * two pages share it even when the pick was numbered differently on each.
+ */
+const pickEventualSelectionClaimSchema = z
+  .object({
+    kind: z.literal('pick_eventual_selection'),
+    nativeEventId: boundedText,
+    nativeTransferId: boundedText,
+    outcome: z.enum(['selected', 'not_used']),
+    player: recordedEntitySchema.optional(),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    if ((claim.outcome === 'selected') !== (claim.player !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['player'],
+        message: 'An eventual selection names a player exactly when the pick was selected.',
+      });
+    }
+  });
 
 const pickCustodyClaimSchema = z
   .object({
@@ -243,6 +322,72 @@ const pickCustodyClaimSchema = z
     currentClub: recordedEntitySchema,
   })
   .strict();
+
+/**
+ * One pick on a Footyinfo national draft board (`footyinfo-draft-board-parser/v1`, issues 853 and
+ * 789) as the board shows it with passed and removed picks included: the holder at the draft, the
+ * pick number and player when it was selected, and the route the board states. `route` is the club
+ * chain the board prints, original club first and holder last; it is empty when the board prints
+ * none, which never means the pick did not move. `routeLabel`, `bid` and `note` are what the board
+ * says about bids, compensation and assistance. A provider statement, never an inference.
+ */
+const draftBoardPickClaimSchema = z
+  .object({
+    kind: z.literal('draft_board_pick'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    roundNumber: positiveOrdinalSchema.nullable(),
+    recordedPickNumber: positiveOrdinalSchema.nullable(),
+    status: z.enum(['selected', 'passed', 'removed']),
+    club: recordedEntitySchema,
+    player: recordedEntitySchema.optional(),
+    route: z.array(recordedEntitySchema).max(16),
+    routeLabel: z
+      .enum(['matched_bid', 'compensation', 'special_assistance', 'leftover_points'])
+      .nullable(),
+    bid: z
+      .object({
+        club: recordedEntitySchema,
+        basis: z.enum(['father_son', 'academy', 'next_generation_academy']),
+      })
+      .strict()
+      .nullable(),
+    points: z.number().int().min(0).max(10_000).nullable(),
+    note: nullableBoundedText,
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const selected = claim.status === 'selected';
+    if (
+      selected !== (claim.player !== undefined) ||
+      selected !== (claim.recordedPickNumber !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['player'],
+        message: 'A board pick names a player and a pick number exactly when it was selected.',
+      });
+    }
+    const route = claim.route.map(({ nativeId, recordedName }) => nativeId ?? recordedName);
+    if (
+      route.length === 1 ||
+      route.some((club, index) => index > 0 && club === route[index - 1]) ||
+      (route.length > 0 && route.at(-1) !== (claim.club.nativeId ?? claim.club.recordedName))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['route'],
+        message: 'A board route is two or more distinct consecutive clubs ending with the holder.',
+      });
+    }
+    if ((claim.routeLabel === 'matched_bid') !== (claim.bid !== null)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['bid'],
+        message: 'A board pick names a bid exactly when its route says the bid was matched.',
+      });
+    }
+  });
 
 const playerDraftDetailClaimSchema = z
   .object({
@@ -316,6 +461,20 @@ const draftSessionWindowClaimSchema = z
   .refine(
     (claim) => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.draftYear,
     'Draft session window must belong to its draft year.'
+  );
+
+// A season's men's trade period as the AFL announced it (statlyaus/Statly#869): explicit window
+// precision for trades whose source states no day. Never a substituted day.
+const tradePeriodWindowClaimSchema = z
+  .object({
+    kind: z.literal('trade_period_window'),
+    seasonYear: yearSchema,
+    datePrecision: draftSessionDateWindowSchema,
+  })
+  .strict()
+  .refine(
+    (claim) => Number(claim.datePrecision.earliestDate.slice(0, 4)) === claim.seasonYear,
+    'Trade period window must belong to its season.'
   );
 
 // Prospective capacity is distinct from an observed completed total.
@@ -576,6 +735,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSessionClaimSchema,
   draftSessionDateClaimSchema,
   draftSessionWindowClaimSchema,
+  tradePeriodWindowClaimSchema,
   draftSessionCompletionClaimSchema,
   draftSelectionCapacityClaimSchema,
   draftCompletedListTotalClaimSchema,
@@ -592,8 +752,11 @@ const claimSchema = z.discriminatedUnion('kind', [
   transactionClaimSchema,
   transactionPartyClaimSchema,
   directedTransferClaimSchema,
+  pickDispositionClaimSchema,
+  pickEventualSelectionClaimSchema,
   draftSelectionClaimSchema,
   pickCustodyClaimSchema,
+  draftBoardPickClaimSchema,
   playerDraftDetailClaimSchema,
 ]);
 
@@ -617,6 +780,8 @@ const allowedKindsByProvider = {
     'transaction',
     'transaction_party',
     'directed_transfer',
+    'pick_disposition',
+    'pick_eventual_selection',
     'draft_selection',
     'pick_custody',
   ]),
@@ -625,6 +790,8 @@ const allowedKindsByProvider = {
     'transaction',
     'transaction_party',
     'directed_transfer',
+    'pick_disposition',
+    'pick_eventual_selection',
     'draft_selection',
   ]),
   footywire: new Set(['draft_selection']),
@@ -639,6 +806,7 @@ const allowedKindsByProvider = {
     'draft_session',
     'draft_session_date',
     'draft_session_window',
+    'trade_period_window',
     'draft_selection_capacity',
     'draft_completed_list_total',
     'draft_rookie_list_additions',
@@ -653,6 +821,7 @@ const allowedKindsByProvider = {
     'draft_completed_member_exclusion',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
+  footyinfo: new Set(['draft_selection', 'draft_board_pick']),
 } as const;
 
 const evidenceContentSchema = z
