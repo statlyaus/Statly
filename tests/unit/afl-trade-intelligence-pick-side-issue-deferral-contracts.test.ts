@@ -1518,6 +1518,24 @@ describe('custody-defined pick definitions', () => {
         definitionCustody: [custody('a', 'single_source')] as never,
       })
     ).toThrow(/conflicting nominalPick/);
+    // Pages that also disagree on the round leave the pick without a round, under the deferral only.
+    const reRounded = {
+      ...content([]),
+      transfers: [
+        transfer('1', 46),
+        { ...transfer('2', 56), asset: { ...transfer('2', 56).asset, nominalRound: 4 } },
+        { ...transfer('3', 46), asset: { ...transfer('3', 46).asset, nominalRound: 3 } },
+      ],
+    } as unknown as Parameters<typeof resolveWrittenPickDefinitions>[0];
+    expect(
+      resolveWrittenPickDefinitions(reRounded, {
+        deferred: true,
+        definitionCustody: [],
+      }).definitions.get(pickId)
+    ).toMatchObject({ nominalPick: null, nominalRound: null });
+    expect(() =>
+      resolveWrittenPickDefinitions(reRounded, { deferred: false, definitionCustody: [] })
+    ).toThrow(/conflicting/);
     // Agreeing numbers never need custody and are never listed.
     const agreeing = {
       ...content([]),

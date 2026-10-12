@@ -282,15 +282,23 @@ export function resolveWrittenPickDefinitions(
   const definitions = new Map<string, PickDefinition>();
   const custodyDefined = new Set<string>();
   const renumbered = new Set<string>();
+  const reRounded = new Set<string>();
   if (options.deferred) {
     const numbersByPick = new Map<string, Set<number>>();
+    const roundsByPick = new Map<string, Set<number>>();
     for (const transfer of content.transfers) {
-      if (transfer.asset.kind !== 'pick_entitlement' || transfer.asset.nominalPick === null)
-        continue;
+      if (transfer.asset.kind !== 'pick_entitlement') continue;
+      if (transfer.asset.nominalRound !== null) {
+        const rounds = roundsByPick.get(transfer.asset.pickId) ?? new Set<number>();
+        rounds.add(transfer.asset.nominalRound);
+        roundsByPick.set(transfer.asset.pickId, rounds);
+      }
+      if (transfer.asset.nominalPick === null) continue;
       const numbers = numbersByPick.get(transfer.asset.pickId) ?? new Set<number>();
       numbers.add(transfer.asset.nominalPick);
       numbersByPick.set(transfer.asset.pickId, numbers);
     }
+    for (const [pickId, rounds] of roundsByPick) if (rounds.size > 1) reRounded.add(pickId);
     for (const [pickId, numbers] of numbersByPick) {
       if (numbers.size < 2) continue;
       const usable = options.definitionCustody.filter(
@@ -322,8 +330,8 @@ export function resolveWrittenPickDefinitions(
       pickId: transfer.asset.pickId,
       draftYear: transfer.asset.draftYear,
       draftType: transfer.asset.draftType,
-      nominalRound: transfer.asset.nominalRound,
-      // A renumbered pick keeps each number on its own asset and none on the pick.
+      // A renumbered pick keeps each number (and a round its pages disagree on) on its own asset.
+      nominalRound: reRounded.has(transfer.asset.pickId) ? null : transfer.asset.nominalRound,
       nominalPick: renumbered.has(transfer.asset.pickId) ? null : transfer.asset.nominalPick,
       originalClubId: transfer.asset.originalClubId,
     });

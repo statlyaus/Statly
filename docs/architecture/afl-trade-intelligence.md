@@ -4108,8 +4108,8 @@ The remaining work proceeds through these independently verifiable gates:
    the written transfers number differently is defined, under the deferral, from its one usable
    custody observation in the candidate's full custody (a deferred pick's unwritten observation
    included) and listed as `custodyDefinedPickIds` with `custodyDefinedPickCount`, each
-   asset keeping its trade-time number; no such single custody row, or more than one, is still
-   the conflict. A custody observation without a usable status is recorded as
+   asset keeping its trade-time number; with no such single custody row, or more than one, the
+   pick is defined without a number (and without a round when the transfers disagree on it). A custody observation without a usable status is recorded as
    `deferredCustodyIds` (migration 0268 checks each is an unusable candidate custody row, on insert
    and at promotion; the unusable-record count ignores it) and written as nothing, counted on the
    receipt as `deferredCustodyCount`. A usable custody row that records an observation already

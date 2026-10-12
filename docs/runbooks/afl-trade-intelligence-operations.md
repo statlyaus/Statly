@@ -889,7 +889,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
    observation in the candidate's full custody (the slot it became; a deferred pick's observation
    counts here though it is not written) and listed as `custodyDefinedPickIds` with
    `custodyDefinedPickCount`, each asset keeping its trade-time number as its label; with no such
-   single custody row, or more than one, it is still the conflict,
+   single custody row, or more than one, it is defined without a number or, when its transfers also
+   disagree on the round, without a round (a pick id names one pick since the identity rules),
    and the promotion writes nothing of it and no realization into it (the receipt counts
    `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and

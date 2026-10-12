@@ -53,7 +53,8 @@ RETURNS TABLE (transaction_id TEXT, transfer_id TEXT, pick_id TEXT) LANGUAGE sql
 $$;
 
 -- Current canonical trade events whose current version came from a promotion of reviewed pick
--- lineage: the promoted candidate carried a reviewed correction or a reviewed scope. A reviewer
+-- lineage: the promoted candidate carried a reviewed correction or a reviewed scope, or a reviewed
+-- pick-lineage registration names it (as the promoter's own lookup does). A reviewer
 -- settled those pick ids, so reconciliation's ids do not supersede them.
 CREATE FUNCTION outcome_current_canonical_reviewed_lineage_transactions(target_competition TEXT)
 RETURNS TABLE (transaction_id TEXT) LANGUAGE sql STABLE AS $$
@@ -69,7 +70,9 @@ RETURNS TABLE (transaction_id TEXT) LANGUAGE sql STABLE AS $$
     JOIN outcome_event event ON event.event_id=version.event_id AND event.competition=target_competition
    WHERE record.record_kind='transaction'
      AND (candidate.candidate_json#>'{content,reviewedCorrection}' IS NOT NULL
-          OR candidate.candidate_json#>'{content,reviewedScope}' IS NOT NULL)
+          OR candidate.candidate_json#>'{content,reviewedScope}' IS NOT NULL
+          OR EXISTS (SELECT 1 FROM outcome_reviewed_pick_lineage_registration registration
+                      WHERE registration.candidate_id=candidate.candidate_id))
      AND NOT EXISTS (SELECT 1 FROM outcome_event_version successor
                       WHERE successor.supersedes_version_id=version.event_version_id)
 $$;
