@@ -666,4 +666,59 @@ describe('realized trade grade batch contract', () => {
       /expected false/,
     ],
   ])('refuses %s', (_label, build, message) => refuses(build(), message));
+
+  describe('rule v2 corroboration', () => {
+    const V2 = {
+      ruleVersion: 'afl-trade-realized-grade-rule/v2' as const,
+      limitation:
+        'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; not public factual, publication, production or activation authority.' as const,
+    };
+    const pickTradeId = () =>
+      content().trades.find((row) =>
+        row.legs.some(
+          (leg) => leg.basis === 'pick_selected_first_stint' && leg.reasons.length === 1
+        )
+      )!;
+    const corroborate = (value: Content) => {
+      const target = value.trades.find(
+        ({ transactionId }) => transactionId === pickTradeId().transactionId
+      )!;
+      const index = target.legs.findIndex((leg) => leg.basis === 'pick_selected_first_stint');
+      return withLeg(value, target.transactionId, index, (leg) => ({
+        ...leg,
+        corroboratedBy: 'footyinfo',
+        reasons: leg.reasons.filter((reason) => reason !== SINGLE),
+      }));
+    };
+
+    it('still parses a stored v1 batch', () => {
+      expect(() => createAflTradeRealizedTradeGradeBatch(content())).not.toThrow();
+    });
+
+    it('accepts a corroborated pick leg without single_source_pick_outcome under v2', () => {
+      const value = corroborate({ ...content(), ...V2 });
+      expect(() => createAflTradeRealizedTradeGradeBatch(value)).not.toThrow();
+    });
+
+    it('refuses a corroborated leg under v1', () => {
+      expect(() => createAflTradeRealizedTradeGradeBatch(corroborate(content()))).toThrow(
+        /Rule v1 treats every pick outcome as single-source/
+      );
+    });
+
+    it('refuses a v2 pick leg that drops the reason without naming a provider', () => {
+      const value = corroborate({ ...content(), ...V2 });
+      for (const row of value.trades)
+        for (const leg of row.legs) delete (leg as { corroboratedBy?: string }).corroboratedBy;
+      expect(() => createAflTradeRealizedTradeGradeBatch(value)).toThrow(
+        /single-source exactly when no second provider corroborates/
+      );
+    });
+
+    it('refuses a limitation that is not its rule version’s', () => {
+      expect(() =>
+        createAflTradeRealizedTradeGradeBatch({ ...content(), ruleVersion: V2.ruleVersion })
+      ).toThrow(/limitation must be the one its rule version states/);
+    });
+  });
 });

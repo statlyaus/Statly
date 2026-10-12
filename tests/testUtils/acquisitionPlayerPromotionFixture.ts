@@ -90,6 +90,43 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * with the default anchor, no draft sessions and no lifecycle.
      */
     pickSideIssues?: 'deferred' | 'blocking';
+    /**
+     * The reciprocal future pick names an original club nobody has reviewed (a concession
+     * entitlement label, statlyaus/Statly#869 candidate four): its `transfer:…:original-club`
+     * identity is unresolved, so the pick carries no origin and an unresolvable pick id. Needs
+     * `pickSideIssues`; under `deferred` that identity issue is deferred with the lineage.
+     */
+    reciprocalFuturePickOriginalClubUnresolved?: boolean;
+    /**
+     * The year page's draft is already current canonical: an earlier `draftSessions` promotion in
+     * the same schema reviewed its draftee and club and promoted the selection under session-keyed
+     * roots (statlyaus/Statly#869). The candidate resolves the selection through those current
+     * resolutions and records the draft under `pickLineageDeferral.promotedDrafts`, so the deferred
+     * promotion writes nothing of it. Needs `pickSideIssues`.
+     */
+    yearPageDraftAlreadyPromoted?: boolean;
+    /**
+     * The trade is already current canonical: an earlier promotion in the same schema with the same
+     * `providerEventId` and `nativePlayerId` promoted it with every transfer (statlyaus/Statly#869).
+     * The candidate records it under `pickLineageDeferral.promotedTransactions` and leaves it, and
+     * carries a second trade (`<providerEventId>-again`, the player going back) that it writes.
+     * Needs `pickSideIssues`.
+     */
+    transactionAlreadyPromoted?: boolean;
+    /**
+     * The reciprocal future pick's custody observation is present but `unresolved` (a holder-only
+     * observation nobody can resolve, statlyaus/Statly#869): under `deferred` it is recorded as
+     * deferred custody and written as nothing; under `blocking` the candidate blocks as before.
+     * Needs `pickSideIssues`.
+     */
+    deferredCustody?: boolean;
+    /**
+     * The trade also moves one stable current pick twice under different numbers ("Pick 46" one
+     * way, "Pick 56" back) with exactly one usable custody observation for it (slot 56, round 3,
+     * statlyaus/Statly#869): under `deferred` the pick is defined from that custody row and listed
+     * on the receipt as custody-defined. Needs `pickSideIssues`.
+     */
+    custodyDefinedPick?: boolean | 'deferred';
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -143,6 +180,16 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error(
       'Pick-side issues need the reciprocal future pick, the default anchor, no draft sessions and no lifecycle.'
     );
+  if (options.reciprocalFuturePickOriginalClubUnresolved && !options.pickSideIssues)
+    throw new Error('An unreviewed original club is a pick-side issue profile.');
+  if (options.yearPageDraftAlreadyPromoted && !options.pickSideIssues)
+    throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
+  if (options.transactionAlreadyPromoted && (!options.pickSideIssues || options.lifecycle))
+    throw new Error('An already-promoted trade is a pick-side issue profile without a lifecycle.');
+  if (options.deferredCustody && !options.pickSideIssues)
+    throw new Error('Deferred custody is a pick-side issue profile.');
+  if (options.custodyDefinedPick && !options.pickSideIssues)
+    throw new Error('A custody-defined pick is a pick-side issue profile.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -258,6 +305,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     transactionId,
     nativeTransferId: nativePlayerId,
   });
+  // An already-promoted trade is left to its promotion, so the player asset this promotion writes
+  // belongs to the second trade (`<providerEventId>-again`), not to `transferId`.
+  const writtenTransferId = options.transactionAlreadyPromoted
+    ? createAflTradeContentAddress('external-transfer', {
+        transactionId: createAflTradeContentAddress('external-transaction', {
+          provider: 'draftguru',
+          nativeEventId: `${providerEventId}-again`,
+        }),
+        nativeTransferId: nativePlayerId,
+      })
+    : transferId;
   const reciprocalFuturePickTransferId = createAflTradeContentAddress('external-transfer', {
     transactionId,
     nativeTransferId: 'synthetic-reciprocal-future-pick',
@@ -268,9 +326,28 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     roundNumber: 1,
     originalClubId: targets.toClubId,
   });
+  // A concession label is not a club: no reviewed club resolution ever matches it.
+  const reciprocalFuturePickOriginalClub = options.reciprocalFuturePickOriginalClubUnresolved
+    ? { nativeId: null, recordedName: `${fixtureNamespace} concession` }
+    : { nativeId: null, recordedName: targets.toClubName };
   const reciprocalFuturePickCustodyId = createAflTradeContentAddress('external-pick-custody', {
     pickId: reciprocalFuturePickId,
     observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
+    currentClubId: targets.fromClubId,
+  });
+  const numberedPickId = createAflTradeContentAddress('draft-pick', {
+    fixtureNamespace,
+    synthetic: 'numbered-pick',
+  });
+  const numberedPickTransferIds = (['a', 'b'] as const).map((side) =>
+    createAflTradeContentAddress('external-transfer', {
+      transactionId,
+      nativeTransferId: `synthetic-numbered-pick-${side}`,
+    })
+  );
+  const numberedPickCustodyId = createAflTradeContentAddress('external-pick-custody', {
+    pickId: numberedPickId,
+    observedAt: `${seasonYear}-10-16T00:00:00.000Z`,
     currentClubId: targets.fromClubId,
   });
   let reviewedAt: string;
@@ -579,11 +656,40 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
                 draftType: 'national',
                 roundNumber: 1,
-                originalClub: { nativeId: null, recordedName: targets.toClubName },
+                originalClub: reciprocalFuturePickOriginalClub,
               },
             },
           })
         );
+      }
+
+      if (options.custodyDefinedPick && request.capabilityId === 'draftguru-trade-detail') {
+        for (const [index, side] of (
+          [
+            { key: 'a', number: 46, from: targets.fromClubName, to: targets.toClubName },
+            { key: 'b', number: 56, from: targets.toClubName, to: targets.fromClubName },
+          ] as const
+        ).entries()) {
+          targetEvidence.push(
+            createAflTradeExternalEvidenceEnvelope({
+              ...evidence.content,
+              sourceRow: { ordinal: 40 + index, sourceKey: `synthetic-numbered-pick-${side.key}` },
+              claim: {
+                kind: 'directed_transfer',
+                nativeEventId: providerEventId,
+                nativeTransferId: `synthetic-numbered-pick-${side.key}`,
+                fromClub: { nativeId: null, recordedName: side.from },
+                toClub: { nativeId: null, recordedName: side.to },
+                asset: {
+                  kind: 'current_pick',
+                  draftYear: seasonYear,
+                  draftType: 'national',
+                  recordedPickNumber: side.number,
+                },
+              },
+            })
+          );
+        }
       }
 
       if (hasDraftSessions && evidence.content.claim.kind === 'draft_selection') {
@@ -640,6 +746,38 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               })
             );
           }
+        }
+        if (options.transactionAlreadyPromoted) {
+          const again = `${providerEventId}-again`;
+          targetEvidence.push(
+            createAflTradeExternalEvidenceEnvelope({
+              ...evidence.content,
+              sourceRow: { ordinal: 30, sourceKey: again },
+              claim: {
+                kind: 'directed_transfer',
+                nativeEventId: again,
+                nativeTransferId: nativePlayerId,
+                fromClub: { nativeId: null, recordedName: targets.toClubName },
+                toClub: { nativeId: null, recordedName: targets.fromClubName },
+                asset: {
+                  kind: 'player',
+                  player: { nativeId: nativePlayerId, recordedName: targets.playerName },
+                },
+              },
+            }),
+            createAflTradeExternalEvidenceEnvelope({
+              ...evidence.content,
+              sourceRow: { ordinal: 31, sourceKey: `${again}-transaction` },
+              claim: {
+                kind: 'transaction',
+                nativeEventId: again,
+                seasonYear,
+                occurredOn: `${seasonYear}-10-21`,
+                transactionType: 'trade',
+                title: again,
+              },
+            })
+          );
         }
         if (options.lifecycle) {
           for (const [index, transition] of [
@@ -1184,8 +1322,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     workItemId: workItem.workItemId,
     workItemSha256: workItem.workItemId.split(':')[1]!,
     workItem,
-    revision: 1,
-    supersedesDecisionId: null,
+    // A second promotion of the same player in one schema advances the subject's current revision.
+    ...(await nextIdentityRevision(workItem.content.subject.subjectId)),
     decision: 'approved',
     canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
       entityKind: 'player',
@@ -2168,6 +2306,26 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       : draftBatch!.batch.content.evidence.flatMap((row) =>
           row.content.claim.kind === 'draft_selection' ? [{ row, claim: row.content.claim }] : []
         );
+  // The year page's identities as an earlier promotion reviewed them (current resolutions), when
+  // the draft is already canonical; otherwise nobody has reviewed them and they stay unresolved.
+  const yearPageResolutions = new Map<string, string>();
+  if (options.yearPageDraftAlreadyPromoted) {
+    const current = await identities.loadCurrentResolutions(reviewPackage);
+    for (const { claim } of yearPageSelections) {
+      const resolution = current.find(
+        (value) =>
+          value.content.entityKind === 'player' &&
+          value.content.sourceIdentity.nativeId === claim.player.nativeId
+      );
+      if (!resolution)
+        throw new Error(
+          `The year page's draftee ${claim.player.recordedName} has no current resolution; promote the draft sessions first.`
+        );
+      yearPageResolutions.set(claim.player.nativeId ?? '', resolution.content.canonicalId);
+      if (!allResolutions.some((value) => value.resolutionId === resolution.resolutionId))
+        allResolutions.push(resolution);
+    }
+  }
   const reciprocalPickEvidenceIds = playerBatch.batch.content.evidence
     .filter(
       (row) =>
@@ -2176,7 +2334,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     )
     .map((row) => row.evidenceId)
     .sort();
-  const pickSideIssues =
+  // With no reviewed original club the reconciler cannot name the entitlement: the pick id is
+  // addressed by the transfer evidence row and the asset carries no origin.
+  const reciprocalFuturePickAsset = options.reciprocalFuturePickOriginalClubUnresolved
+    ? {
+        pickId: createAflTradeContentAddress('draft-pick', {
+          unresolvedTransferEvidenceId: reciprocalPickEvidenceIds[0]!,
+        }),
+        originalClubId: null,
+      }
+    : { pickId: reciprocalFuturePickId, originalClubId: targets.toClubId };
+  const pickSideIssues = (
     pickSide === null
       ? []
       : [
@@ -2187,24 +2355,57 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
             evidenceIds: reciprocalPickEvidenceIds,
           },
-          ...yearPageSelections.flatMap(({ row, claim }) =>
-            (['player', 'club'] as const).map((role) => ({
-              code: 'identity_unresolved' as const,
-              severity: pickSideSeverity,
-              subjectKey: `selection:${claim.draftYear}:${claim.draftType}:${claim.selectionNumber}:${role}`,
-              detail: `No current reviewed ${role} resolution exists for draftguru identity ${
-                role === 'player' ? claim.player.recordedName : claim.selectedByClub.recordedName
-              }.`,
-              evidenceIds: [row.evidenceId],
-            }))
+          // A deferred numbered pick: both transfers carry a deferred lineage issue, so the pick's
+          // custody observation is not written while it still names the slot the pick became.
+          ...(options.custodyDefinedPick === 'deferred'
+            ? numberedPickTransferIds.map((transferId, index) => ({
+                code: 'lineage_unresolved' as const,
+                severity: pickSideSeverity,
+                subjectKey: `lineage:${transferId}`,
+                detail:
+                  'The transferred pick entitlement is not uniquely resolved to stable custody.',
+                evidenceIds: playerBatch.batch.content.evidence
+                  .filter(
+                    (row) =>
+                      row.content.claim.kind === 'directed_transfer' &&
+                      row.content.claim.nativeTransferId ===
+                        `synthetic-numbered-pick-${index === 0 ? 'a' : 'b'}`
+                  )
+                  .map((row) => row.evidenceId),
+              }))
+            : []),
+          ...(options.reciprocalFuturePickOriginalClubUnresolved
+            ? [
+                {
+                  code: 'identity_unresolved' as const,
+                  severity: pickSideSeverity,
+                  subjectKey: 'transfer:synthetic-reciprocal-future-pick:original-club',
+                  detail: `No current reviewed club resolution exists for draftguru identity ${reciprocalFuturePickOriginalClub.recordedName}.`,
+                  evidenceIds: reciprocalPickEvidenceIds,
+                },
+              ]
+            : []),
+          ...(options.yearPageDraftAlreadyPromoted ? [] : yearPageSelections).flatMap(
+            ({ row, claim }) =>
+              (['player', 'club'] as const).map((role) => ({
+                code: 'identity_unresolved' as const,
+                severity: pickSideSeverity,
+                subjectKey: `selection:${claim.draftYear}:${claim.draftType}:${claim.selectionNumber}:${role}`,
+                detail: `No current reviewed ${role} resolution exists for draftguru identity ${
+                  role === 'player' ? claim.player.recordedName : claim.selectedByClub.recordedName
+                }.`,
+                evidenceIds: [row.evidenceId],
+              }))
           ),
-        ];
+        ]
+  ).sort((a, b) => a.subjectKey.localeCompare(b.subjectKey) || a.code.localeCompare(b.code));
   const pickSideSelections = yearPageSelections.map(({ row, claim }) => {
     const selectionId = createAflTradeContentAddress('external-draft-selection', {
       draftYear: claim.draftYear,
       draftType: claim.draftType,
       selectionNumber: claim.selectionNumber,
     });
+    const playerId = yearPageResolutions.get(claim.player.nativeId ?? '') ?? null;
     return {
       selectionId,
       draftYear: claim.draftYear,
@@ -2212,13 +2413,25 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       selectionNumber: claim.selectionNumber,
       roundNumber: claim.roundNumber,
       pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
-      playerId: null,
-      clubId: null,
-      status: 'unresolved' as const,
+      playerId,
+      // The session profile that seeded the draft wrote the selection with the trade's receiving club.
+      clubId: playerId === null ? null : targets.toClubId,
+      status: playerId === null ? ('unresolved' as const) : ('single_source' as const),
       supportingProviders: ['draftguru' as const],
       evidenceIds: [row.evidenceId],
     };
   });
+  // Drafts the candidate leaves to their earlier session-keyed promotion (#869).
+  const promotedDrafts = options.yearPageDraftAlreadyPromoted
+    ? [
+        ...new Map(
+          pickSideSelections.map((selection) => [
+            `${selection.draftYear}|${selection.draftType}`,
+            { draftYear: selection.draftYear, draftType: selection.draftType },
+          ])
+        ).values(),
+      ].sort((a, b) => a.draftYear - b.draftYear || a.draftType.localeCompare(b.draftType))
+    : [];
   let deferralDecisionId: string | null = null;
   if (pickSide === 'deferred') {
     // The owner's answered approval record, stored as an artifact in custody and cited by id.
@@ -2267,7 +2480,18 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     ...(pickSide === null ? {} : { sourceAuthority: loaded.sourceAuthority }),
     ...(deferralDecisionId === null
       ? {}
-      : { pickLineageDeferral: { decisionId: deferralDecisionId } }),
+      : {
+          pickLineageDeferral: {
+            decisionId: deferralDecisionId,
+            ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
+            ...(options.transactionAlreadyPromoted
+              ? { promotedTransactions: [transactionId] }
+              : {}),
+            ...(options.deferredCustody
+              ? { deferredCustodyIds: [reciprocalFuturePickCustodyId] }
+              : {}),
+          },
+        }),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
     transactions: [
       {
@@ -2291,6 +2515,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           ...(options.reciprocalFuturePickYearOffset === undefined
             ? []
             : [reciprocalFuturePickTransferId]),
+          ...(options.custodyDefinedPick ? numberedPickTransferIds : []),
         ].sort(),
         // A trade with a blocking pick transfer is unresolved; under the deferral the exchange is
         // complete and only the pick's custody is left for later lineage.
@@ -2376,12 +2601,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               toClubId: targets.fromClubId,
               asset: {
                 kind: 'pick_entitlement' as const,
-                pickId: reciprocalFuturePickId,
+                pickId: reciprocalFuturePickAsset.pickId,
                 draftYear: seasonYear + options.reciprocalFuturePickYearOffset,
                 draftType: 'national' as const,
                 nominalRound: 1,
                 nominalPick: null,
-                originalClubId: targets.toClubId,
+                originalClubId: reciprocalFuturePickAsset.originalClubId,
                 recordedLabel: null,
               },
               status: pickSide === null ? ('single_source' as const) : ('unresolved' as const),
@@ -2395,6 +2620,40 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             },
           ]),
 
+      ...(options.custodyDefinedPick
+        ? (
+            [
+              { key: 'a', number: 46, fromClubId: targets.fromClubId, toClubId: targets.toClubId },
+              { key: 'b', number: 56, fromClubId: targets.toClubId, toClubId: targets.fromClubId },
+            ] as const
+          ).map((side, index) => ({
+            transferId: numberedPickTransferIds[index]!,
+            transactionId,
+            fromClubId: side.fromClubId,
+            toClubId: side.toClubId,
+            asset: {
+              kind: 'pick_entitlement' as const,
+              pickId: numberedPickId,
+              draftYear: seasonYear,
+              draftType: 'national' as const,
+              nominalRound: null,
+              nominalPick: side.number,
+              originalClubId: targets.toClubId,
+              recordedLabel: `Pick ${side.number}`,
+            },
+            status:
+              options.custodyDefinedPick === 'deferred'
+                ? ('unresolved' as const)
+                : ('single_source' as const),
+            evidenceIds: playerBatch.batch.content.evidence
+              .filter(
+                (row) =>
+                  row.content.claim.kind === 'directed_transfer' &&
+                  row.content.claim.nativeTransferId === `synthetic-numbered-pick-${side.key}`
+              )
+              .map((row) => row.evidenceId),
+          }))
+        : []),
       {
         transferId,
         transactionId,
@@ -2435,8 +2694,33 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       }),
     ].sort((a, b) => a.transferId.localeCompare(b.transferId)),
     draftSelections: [...draftSelections, ...pickSideSelections],
-    pickCustody:
-      options.reciprocalFuturePickYearOffset === undefined || pickSide !== null
+    pickCustody: [
+      // The numbered pick's one usable observation: the slot it became (56, round 3).
+      ...(options.custodyDefinedPick
+        ? [
+            {
+              custodyId: numberedPickCustodyId,
+              pickId: numberedPickId,
+              observedAt: `${seasonYear}-10-16T00:00:00.000Z`,
+              draftYear: seasonYear,
+              draftType: 'national' as const,
+              roundNumber: 3,
+              recordedPickNumber: 56,
+              originalClubId: targets.toClubId,
+              currentClubId: targets.fromClubId,
+              status: 'single_source' as const,
+              evidenceIds: playerBatch.batch.content.evidence
+                .filter(
+                  (row) =>
+                    row.content.claim.kind === 'directed_transfer' &&
+                    row.content.claim.nativeTransferId === 'synthetic-numbered-pick-b'
+                )
+                .map((row) => row.evidenceId),
+            },
+          ]
+        : []),
+      ...(options.reciprocalFuturePickYearOffset === undefined ||
+      (pickSide !== null && !options.deferredCustody)
         ? []
         : [
             {
@@ -2449,7 +2733,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
               recordedPickNumber: null,
               originalClubId: targets.toClubId,
               currentClubId: targets.fromClubId,
-              status: 'single_source' as const,
+              // A holder-only observation nobody can resolve is pick-side under the deferral.
+              status: options.deferredCustody
+                ? ('unresolved' as const)
+                : ('single_source' as const),
               evidenceIds: playerBatch.batch.content.evidence
                 .filter(
                   (row) =>
@@ -2458,7 +2745,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 )
                 .map((row) => row.evidenceId),
             },
-          ],
+          ]),
+    ],
     pickLineage: [],
     issues: pickSideIssues,
     reconciledAt: reviewedAt,
@@ -2498,11 +2786,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     competition: 'AFLM',
     anchorSeasonYear: candidateAnchorSeasonYear,
     draftEventCoverage,
-    transactionDateCoverage: candidate.content.transactions.map((transaction) => ({
-      transactionId: transaction.transactionId,
-      seasonYear,
-      occurredOn: transaction.occurredOn!,
-    })),
+    // A trade left to its earlier promotion (#869) gets no reviewed date: it is not written.
+    transactionDateCoverage: candidate.content.transactions
+      .filter(
+        ({ transactionId: id }) =>
+          !(candidate.content.pickLineageDeferral?.promotedTransactions ?? []).includes(id)
+      )
+      .map((transaction) => ({
+        transactionId: transaction.transactionId,
+        seasonYear,
+        occurredOn: transaction.occurredOn!,
+      })),
     proposedAt: reviewedAt,
     publicationEligible: false as const,
   };
@@ -2554,7 +2848,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
  JOIN outcome_event_asset asset ON asset.asset_version_id=member.canonical_record_id
  WHERE member.promotion_id=$1 AND member.record_kind='transfer' AND asset.player_id=$2
    AND member.source_record_id=$3`,
-    [receipt.promotionId, playerId, transferId]
+    [receipt.promotionId, playerId, writtenTransferId]
   );
   if (assets.rows.length !== 1)
     throw new Error('Synthetic public promotion did not produce one player asset.');

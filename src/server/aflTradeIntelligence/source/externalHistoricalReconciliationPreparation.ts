@@ -59,12 +59,26 @@ export interface AflTradeReconciliationScopeDecisionReader {
   loadDecision(decisionId: string): Promise<AflTradeReconciliationScopeDecision | null>;
 }
 
+/** Current canonical selections and transactions of finalized promotions, by source id. */
+export interface AflTradePromotedDraftSelectionReader {
+  loadCurrentCanonicalSelectionIds(competition: string): Promise<readonly string[]>;
+  /** Each current canonical trade event with the source transfer ids promoted as assets on it. */
+  loadCurrentCanonicalTransactions(
+    competition: string
+  ): Promise<readonly { transactionId: string; transferIds: readonly string[] }[]>;
+}
+
 export interface PrepareAflTradeHistoricalReconciliationDependencies {
   source: AflTradeHistoricalReconciliationSource;
   identityReviewRepository: AflTradeHistoricalIdentityReviewRepository;
   candidateRepository: AflTradeHistoricalReconciliationCandidateRepository;
   /** Required only to prepare with `pickLineageDeferral`. */
   scopeDecisionRepository?: AflTradeReconciliationScopeDecisionReader;
+  /**
+   * Required only to prepare with `pickLineageDeferral`: a draft whose every selection is already
+   * current canonical is recorded on the candidate and left to that promotion.
+   */
+  promotedSelectionRepository?: AflTradePromotedDraftSelectionReader;
 }
 
 export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTradeExternalReconciliation {
@@ -73,7 +87,11 @@ export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTr
   promotionEligible: false;
   publicationEligible: false;
   /** The deferral the candidate carries, or null when nothing was deferred. */
-  pickLineageDeferral: { decisionId: string } | null;
+  pickLineageDeferral: {
+    decisionId: string;
+    promotedDrafts?: { draftYear: number; draftType: string }[];
+    promotedTransactions?: string[];
+  } | null;
 }
 
 export class AflTradeReconciliationScopeDecisionError extends Error {
@@ -95,6 +113,11 @@ async function requireLineageDeferralDecision(
   if (dependencies.scopeDecisionRepository === undefined) {
     throw new AflTradeReconciliationScopeDecisionError(
       'Pick-side deferral needs the reconciliation-scope decision repository.'
+    );
+  }
+  if (dependencies.promotedSelectionRepository === undefined) {
+    throw new AflTradeReconciliationScopeDecisionError(
+      'Pick-side deferral needs the promoted draft-selection reader.'
     );
   }
   const decision = await dependencies.scopeDecisionRepository.loadDecision(decisionId);
@@ -150,6 +173,22 @@ export async function prepareAflTradeHistoricalReconciliation(
     (latest, instant) => (Date.parse(instant) > Date.parse(latest) ? instant : latest),
     source.sourceAuthority.completedAt
   );
+  // Drafts already current canonical are left to their promotion; resolved once, before the
+  // candidate is built, so the stored candidate says which drafts it leaves and the database checks it.
+  const promotedDraftSelectionIds =
+    deferralDecision === null
+      ? []
+      : [
+          ...(await dependencies.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds(
+            source.competition
+          )),
+        ].sort();
+  const promotedTransactions =
+    deferralDecision === null
+      ? []
+      : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalTransactions(
+          source.competition
+        );
   const candidate = parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
       environment: source.environment,
@@ -161,7 +200,11 @@ export async function prepareAflTradeHistoricalReconciliation(
       reconciledAt,
       ...(input.pickLineageDeferral === undefined
         ? {}
-        : { pickLineageDeferral: input.pickLineageDeferral }),
+        : {
+            pickLineageDeferral: input.pickLineageDeferral,
+            promotedDraftSelectionIds,
+            promotedTransactions,
+          }),
     })
   );
   const persisted = await dependencies.candidateRepository.persistCandidate({

@@ -20,15 +20,27 @@ import {
  * the docs forbid composing with Statly model units, so this contract is separate from the draw-based
  * complete-exchange assessment, and it carries no letter grade.
  *
- * Pick outcomes come from one source (Draftguru), so every valued or excluded pick leg carries
- * `single_source_pick_outcome`: only a trade of players alone can be `complete`.
+ * Pick outcomes come from Draftguru. Under rule v1 every valued or excluded pick leg carries
+ * `single_source_pick_outcome`, so only a trade of players alone can be `complete`. Under rule v2
+ * (owner decision 2026-10-12, issues 853 and 789) a pick leg whose outcome a Footyinfo draft board
+ * corroborates says so (`corroboratedBy: 'footyinfo'`) and drops that reason; every other valued or
+ * excluded pick leg keeps it. A v1 batch never names a corroborating provider.
  *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v1' as const;
+  'afl-trade-realized-grade-rule/v2' as const;
+/** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
+const RULE_LIMITATIONS = {
+  'afl-trade-realized-grade-rule/v1':
+    'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
+  'afl-trade-realized-grade-rule/v2':
+    'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; not public factual, publication, production or activation authority.',
+} as const;
+export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
+  RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
 
 /** Reasons that make a leg, and so its trade, ungradable. */
 export const AFL_TRADE_REALIZED_GRADE_BLOCKING_REASONS = [
@@ -154,6 +166,8 @@ const legBase = {
   receivingClubId: aflTradePublicIdSchema,
   reasons: reasonsSchema,
   atTrade: atTradeSchema,
+  /** Rule v2: the second provider whose evidence agrees with the pick outcome this leg rests on. */
+  corroboratedBy: z.literal('footyinfo').optional(),
 };
 
 const legUnionSchema = z.union([
@@ -226,9 +240,16 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
     'A pick leg is never valued on the player basis.',
   ],
   [
+    (leg) =>
+      leg.corroboratedBy !== undefined && (leg.assetKind !== 'pick' || leg.state === 'blocked'),
+    'Only a valued or excluded pick leg rests on a corroborated pick outcome.',
+  ],
+  [
     (leg, has) =>
-      leg.assetKind === 'pick' && leg.state !== 'blocked' && !has('single_source_pick_outcome'),
-    'A pick outcome is single-source, so a valued or excluded pick leg is provisional.',
+      leg.assetKind === 'pick' &&
+      leg.state !== 'blocked' &&
+      has('single_source_pick_outcome') === (leg.corroboratedBy !== undefined),
+    'A valued or excluded pick leg is single-source exactly when no second provider corroborates it.',
   ],
   [
     (leg, has) => leg.assetKind === 'player' && has('single_source_pick_outcome'),
@@ -385,7 +406,12 @@ export type AflTradeRealizedTradeGrade = z.infer<typeof aflTradeRealizedTradeGra
 const batchContentFieldsSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION),
-    ruleVersion: z.literal(AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION),
+    ruleVersion: z.enum(
+      Object.keys(RULE_LIMITATIONS) as [
+        keyof typeof RULE_LIMITATIONS,
+        ...(keyof typeof RULE_LIMITATIONS)[],
+      ]
+    ),
     environment: z.literal('non_production'),
     valueUnit: z.literal('career_pav'),
     inputs: z
@@ -434,8 +460,11 @@ const batchContentFieldsSchema = z
       .strict(),
     publicationEligible: z.literal(false),
     publicationProhibited: z.literal(true),
-    limitation: z.literal(
-      'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.'
+    limitation: z.enum(
+      Object.values(RULE_LIMITATIONS) as [
+        (typeof RULE_LIMITATIONS)[keyof typeof RULE_LIMITATIONS],
+        ...(typeof RULE_LIMITATIONS)[keyof typeof RULE_LIMITATIONS][],
+      ]
     ),
   })
   .strict();
@@ -456,6 +485,13 @@ function batchShapeIssues(content: BatchContent): Issue[] {
     issues.push(['ungraded', 'A trade is either graded or ungraded.']);
   if (content.trades.length + content.ungraded.length === 0)
     issues.push(['trades', 'A batch grades or names at least one trade.']);
+  if (content.limitation !== RULE_LIMITATIONS[content.ruleVersion])
+    issues.push(['limitation', 'The limitation must be the one its rule version states.']);
+  if (
+    content.ruleVersion === 'afl-trade-realized-grade-rule/v1' &&
+    content.trades.some(({ legs }) => legs.some((leg) => leg.corroboratedBy !== undefined))
+  )
+    issues.push(['trades', 'Rule v1 treats every pick outcome as single-source.']);
   const summary = content.summary;
   if (
     summary.complete !== count('complete') ||

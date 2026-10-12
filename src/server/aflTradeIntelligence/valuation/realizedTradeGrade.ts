@@ -2,6 +2,7 @@ import type { AflTradeExternalReconciliationCandidateRecord } from '../source/ex
 import { hpnDpv3ValueForPick } from '../modeling/hpnPickValueBenchmark';
 import {
   AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION,
+  AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION,
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
@@ -20,7 +21,8 @@ type PickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
 /** Everything the MVP grader reads, already loaded; the grader itself does no I/O. */
 export interface AflTradeRealizedTradeGradeInputs {
   candidateId: string;
-  candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'>;
+  candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
+    Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks'>>;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */
   pavCalculations: readonly { season: number; calculationId: string; official: boolean }[];
   /** HPN PAV per player per season at one club, from the pinned calculations. */
@@ -39,6 +41,11 @@ export interface AflTradeRealizedTradeGradeInputs {
 type Leg = AflTradeRealizedTradeGradeLeg;
 type Ungraded = AflTradeRealizedTradeGradeBatchContent['ungraded'][number];
 const SINGLE: AflTradeRealizedGradeReason = 'single_source_pick_outcome';
+/** Rule v2: a corroborated pick leg names its second provider; any other drops nothing. */
+const sourceOf = (corroborated: boolean) =>
+  corroborated
+    ? { corroboratedBy: 'footyinfo' as const, single: [] as AflTradeRealizedGradeReason[] }
+    : { single: [SINGLE] };
 const sorted = (reasons: Iterable<AflTradeRealizedGradeReason>) => [...new Set(reasons)].sort();
 
 interface Stint {
@@ -269,6 +276,39 @@ export function gradeAflTradesOnRealizedValue(
   const outcomes = new Map<string, PickOutcome>(
     (inputs.candidate.pickOutcomes ?? []).map((outcome) => [outcome.transferId, outcome])
   );
+  const selections = new Map(
+    (inputs.candidate.draftSelections ?? []).map((selection) => [selection.selectionId, selection])
+  );
+  // Rule v2: a selected outcome is corroborated when its canonical selection is, by Draftguru and
+  // Footyinfo agreeing on the player and club.
+  const selectionCorroborated = (selectionId: string | null) => {
+    const selection = selectionId === null ? undefined : selections.get(selectionId);
+    return (
+      selection?.status === 'corroborated' &&
+      selection.supportingProviders.includes('draftguru') &&
+      selection.supportingProviders.includes('footyinfo')
+    );
+  };
+  // Rule v2: a traded-on outcome is corroborated when exactly one board pick in its draft routes it
+  // sender → receiver → onward receiver, with that hop pair once in its route.
+  const routeCorroborated = (transfer: Transfer, onward: Transfer) => {
+    const asset = transfer.asset;
+    if (asset.kind !== 'pick_entitlement') return false;
+    const boards = (inputs.candidate.draftBoardPicks ?? []).filter(
+      ({ draftYear, draftType, routeClubIds }) =>
+        draftYear === asset.draftYear &&
+        draftType === asset.draftType &&
+        routeClubIds !== null &&
+        routeClubIds.filter(
+          (club, at) =>
+            at > 1 &&
+            routeClubIds[at - 2] === transfer.fromClubId &&
+            routeClubIds[at - 1] === transfer.toClubId &&
+            club === onward.toClubId
+        ).length === 1
+    );
+    return boards.length === 1;
+  };
   const graded = new Map<string, AflTradeRealizedTradeGrade>();
 
   const blocked = (
@@ -326,10 +366,12 @@ export function gradeAflTradesOnRealizedValue(
       );
       const stint = firstStint(index, outcome.playerId, receiving, asset.draftYear + 1, reviewed);
       if (noPavCoverage(stint)) return blocked(base, ['hpn_pav_head_missing']);
-      const reasons = [SINGLE, ...stintReasons(index, stint)];
+      const { single, ...source } = sourceOf(selectionCorroborated(outcome.selectionId));
+      const reasons = [...single, ...stintReasons(index, stint)];
       if (!reviewed) reasons.push('arrival_unreviewed');
       return {
         ...base,
+        ...source,
         state: 'valued',
         basis: 'pick_selected_first_stint',
         realizedValue: stint.value,
@@ -342,14 +384,25 @@ export function gradeAflTradesOnRealizedValue(
       };
     }
     if (outcome.disposition === 'not_used') {
-      if (outcome.nominationBasis === 'club_took_no_nominated_player')
+      // A board-stated passed or removed pick was not spent matching a bid: worth 0, like a pick of
+      // a club that took no nominee.
+      if (
+        outcome.nominationBasis === 'club_took_no_nominated_player' ||
+        outcome.nominationBasis === 'board_pick_passed_or_removed'
+      ) {
+        // Rule v2: the board's passed or removed pick corroborates Draftguru's "not used".
+        const { single, ...source } = sourceOf(
+          outcome.nominationBasis === 'board_pick_passed_or_removed'
+        );
         return {
           ...base,
+          ...source,
           state: 'valued',
           basis: 'pick_not_used_no_nominee',
           realizedValue: 0,
-          reasons: [SINGLE],
+          reasons: single,
         };
+      }
       if (outcome.nominationBasis === 'club_took_nominated_player')
         return {
           ...base,
@@ -378,13 +431,15 @@ export function gradeAflTradesOnRealizedValue(
     const onward = gradeTrade(onwardTransfer.transactionId, stack);
     if (onward.state === 'blocked') return blocked(base, ['traded_on_return_blocked']);
     const pickLeg = onward.legs.find((leg) => leg.transferId === onwardTransfer.transferId)!;
+    const { single, ...source } = sourceOf(routeCorroborated(transfer, onwardTransfer));
     if (pickLeg.state === 'excluded')
       return {
         ...base,
+        ...source,
         state: 'excluded',
         basis: 'pick_traded_on_return_unallocated',
         onwardTransactionId: onward.transactionId,
-        reasons: sorted([SINGLE, 'traded_on_return_unallocated']),
+        reasons: sorted([...single, 'traded_on_return_unallocated']),
       };
     const club = onward.clubs.find(({ clubId }) => clubId === receiving)!;
     const given = onward.legs.filter((leg) => leg.sendingClubId === receiving);
@@ -399,11 +454,12 @@ export function gradeAflTradesOnRealizedValue(
         : allocation === 'relative_value'
           ? weight / givenUp
           : 1 / given.length;
-    const reasons: AflTradeRealizedGradeReason[] = [SINGLE];
+    const reasons: AflTradeRealizedGradeReason[] = [...single];
     if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
     if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
     return {
       ...base,
+      ...source,
       state: 'valued',
       basis: 'pick_traded_on_return',
       realizedValue: share * returnValue,
@@ -474,7 +530,6 @@ export function gradeAflTradesOnRealizedValue(
     },
     publicationEligible: false,
     publicationProhibited: true,
-    limitation:
-      'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
+    limitation: AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
@@ -32,9 +33,17 @@ import {
   createAflTradeHistoricalCompletionReconciliationAuthority,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
 import {
+  pickDefinitionDisposition,
+  resolveWrittenPickDefinitions,
+} from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
+import {
+  aflTradeDeferredCustodyIds,
   aflTradePickLineageDeferralScope,
+  aflTradePromotedDrafts,
+  aflTradePromotedTransactions,
   aflTradePromotionWriteScope,
   isAflTradePickSideReconciliationIssue,
+  isAflTradeUsableCustodyStatus,
 } from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
 
 const digest = (character: string) => character.repeat(64);
@@ -174,7 +183,12 @@ const sourceAuthority = createAflTradeHistoricalCompletionReconciliationAuthorit
   completedAt: '2026-08-09T04:30:00.000Z',
 });
 
-function reconcile(deferral: boolean, authority: boolean = true) {
+function reconcile(
+  deferral: boolean,
+  authority: boolean = true,
+  promotedDraftSelectionIds?: readonly string[],
+  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[]
+) {
   return reconcileAflTradeExternalEvidence({
     environment: 'test_fixture',
     competition: 'AFLM',
@@ -184,8 +198,16 @@ function reconcile(deferral: boolean, authority: boolean = true) {
     ...(authority ? { sourceAuthority } : {}),
     reconciledAt: '2026-08-09T05:00:00.000Z',
     ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+    ...(promotedDraftSelectionIds === undefined ? {} : { promotedDraftSelectionIds }),
+    ...(promotedTransactions === undefined ? {} : { promotedTransactions }),
   });
 }
+
+const selection14 = createAflTradeContentAddress('external-draft-selection', {
+  draftYear: 2025,
+  draftType: 'national',
+  selectionNumber: 14,
+});
 
 describe('reconciliation under a reviewed pick-side deferral (#869)', () => {
   it('without the option every issue is blocking and the candidate carries no deferral', () => {
@@ -263,10 +285,21 @@ describe('reconciliation under a reviewed pick-side deferral (#869)', () => {
       { code: 'identity_unresolved', subjectKey: 'selection:2025:national:14:player' },
       { code: 'identity_unresolved', subjectKey: 'selection:2025:national:14:club' },
       { code: 'identity_unresolved', subjectKey: 'pick-outcome:t:receiving-club' },
+      // The club whose future pick is traded (candidate four's concession entitlements).
+      {
+        code: 'identity_unresolved',
+        subjectKey: 'transfer:future-pick:2023:national:2:north-melbourne-concession:original-club',
+      },
+      { code: 'identity_unresolved', subjectKey: 'transfer:t:original-club' },
     ];
     const playerSide = [
       { code: 'identity_unresolved', subjectKey: 'transfer:t:player' },
       { code: 'identity_unresolved', subjectKey: 'transfer:t:from' },
+      { code: 'identity_unresolved', subjectKey: 'transfer:t:to' },
+      // The role is the suffix: a native transfer id containing the words is not the original club.
+      { code: 'identity_unresolved', subjectKey: 'transfer:original-club:from' },
+      { code: 'identity_unresolved', subjectKey: 'transfer:t:original-club:to' },
+      { code: 'identity_resolution_conflict', subjectKey: 'transfer:t:original-club' },
       { code: 'identity_unresolved', subjectKey: 'custody:external-evidence:x:current' },
       { code: 'identity_unresolved', subjectKey: 'draft-session:2025:national:1:member:player' },
       { code: 'transaction_incomplete', subjectKey: 'transaction:e' },
@@ -277,6 +310,176 @@ describe('reconciliation under a reviewed pick-side deferral (#869)', () => {
     expect(playerSide.map(isAflTradePickSideReconciliationIssue)).toEqual(
       playerSide.map(() => false)
     );
+  });
+});
+
+// A 2023 trade whose future pick names an original club nobody can review: Draftguru labels the
+// North Melbourne concession entitlements as if they were clubs, and the owner rejected those names
+// as club identities (statlyaus/Statly#869). The pick cannot be identified, so its custody cannot be:
+// the original-club identity and the lineage are both pick-side.
+const concession = { nativeId: null, recordedName: 'North Melbourne concession' };
+const concessionTrade = batch('draftguru', 'b', [
+  {
+    kind: 'transaction',
+    nativeEventId: '2023-gws-bulldogs',
+    seasonYear: 2023,
+    occurredOn: '2023-10-11',
+    transactionType: 'trade',
+    title: 'GWS and Western Bulldogs trade',
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2023-gws-bulldogs',
+    nativePartyId: 'gws',
+    club: gws,
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2023-gws-bulldogs',
+    nativePartyId: 'western-bulldogs',
+    club: bulldogs,
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2023-gws-bulldogs',
+    nativeTransferId: 'harry-kyle',
+    fromClub: bulldogs,
+    toClub: gws,
+    asset: { kind: 'player', player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' } },
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2023-gws-bulldogs',
+    nativeTransferId: 'future-pick:2024:national:1:north-melbourne-concession-1',
+    fromClub: gws,
+    toClub: bulldogs,
+    asset: {
+      kind: 'future_pick',
+      draftYear: 2024,
+      draftType: 'national',
+      roundNumber: 1,
+      originalClub: concession,
+    },
+  },
+]);
+
+function reconcileConcession(deferral: boolean) {
+  return reconcileAflTradeExternalEvidence({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2023,
+    sourceBatches: [concessionTrade],
+    identityResolutions: resolutions,
+    sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+      ...sourceAuthority,
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([concessionTrade.batchId]),
+    }),
+    reconciledAt: '2026-08-09T05:00:00.000Z',
+    ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+  });
+}
+const originalClubSubject =
+  'transfer:future-pick:2024:national:1:north-melbourne-concession-1:original-club';
+
+describe('a pick transfer whose original club is unresolved (#869 candidate four)', () => {
+  it('without the option both the original-club identity and the lineage block', () => {
+    const plain = reconcileConcession(false);
+    expect(plain.content.pickLineageDeferral).toBeUndefined();
+    expect(
+      plain.content.issues.map(({ code, severity, subjectKey }) => ({ code, severity, subjectKey }))
+    ).toEqual([
+      {
+        code: 'lineage_unresolved',
+        severity: 'blocking',
+        subjectKey: `lineage:${plain.content.transfers.find(({ asset }) => asset.kind === 'pick_entitlement')!.transferId}`,
+      },
+      { code: 'identity_unresolved', severity: 'blocking', subjectKey: originalClubSubject },
+    ]);
+    expect(plain.content.transactions.map(({ status }) => status)).toEqual(['unresolved']);
+  });
+
+  it('with the option both are deferred, the pick has no origin and no custody is written', () => {
+    const deferred = reconcileConcession(true);
+    expect(deferred.content.pickLineageDeferral).toEqual({ decisionId });
+    expect(deferred.content.issues.map(({ severity }) => severity)).toEqual([
+      'deferred',
+      'deferred',
+    ]);
+    expect(deferred.content.issues.map(({ subjectKey }) => subjectKey)).toContain(
+      originalClubSubject
+    );
+    const pickTransfer = deferred.content.transfers.find(
+      ({ asset }) => asset.kind === 'pick_entitlement'
+    )!;
+    expect(pickTransfer).toMatchObject({
+      status: 'unresolved',
+      fromClubId: 'club-gws',
+      toClubId: 'club-western-bulldogs',
+      asset: { originalClubId: null, pickId: expect.stringMatching(/^draft-pick:[a-f0-9]{64}$/) },
+    });
+    // The exchange is complete: both parties and the traded player are identified.
+    expect(deferred.content.transactions.map(({ status }) => status)).toEqual(['single_source']);
+    const scope = aflTradePickLineageDeferralScope(deferred.content);
+    expect(scope).toMatchObject({ deferredIssueCount: 2, blockingIssueCount: 0 });
+    expect([...scope.deferredTransferIds]).toEqual([pickTransfer.transferId]);
+    expect([...scope.deferredPickIds]).toEqual([(pickTransfer.asset as { pickId: string }).pickId]);
+    expect([...scope.deferredDraftKeys]).toEqual([]);
+    expect(aflTradePromotionWriteScope(deferred.content)).toMatchObject({
+      draftSelections: [],
+      pickCustody: [],
+      pickLineage: [],
+    });
+    expect(parseAflTradeExternalReconciliationCandidate(deferred).candidateId).toBe(
+      deferred.candidateId
+    );
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: deferred,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [],
+    });
+    expect(
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: deferred, proposal })
+    ).toMatchObject({
+      transactionCount: 1,
+      transferCount: 2,
+      pickCustodyCount: 0,
+      pickRealizationCount: 0,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 2 },
+    });
+  });
+
+  it('keeps the exchange clubs blocking: an unresolved sending club is not deferred', () => {
+    const unresolvedSender = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2023,
+      sourceBatches: [concessionTrade],
+      // No GWS resolution: the party, the sender of the pick and the receiver of the player.
+      identityResolutions: resolutions.slice(1),
+      sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+        ...sourceAuthority,
+        candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([concessionTrade.batchId]),
+      }),
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+      pickLineageDeferral: { decisionId },
+    });
+    const blocking = unresolvedSender.content.issues
+      .filter(({ severity }) => severity === 'blocking')
+      .map(({ code, subjectKey }) => ({ code, subjectKey }));
+    expect(blocking).toEqual([
+      { code: 'transaction_incomplete', subjectKey: 'transaction:2023-gws-bulldogs' },
+      { code: 'identity_unresolved', subjectKey: 'transaction:2023-gws-bulldogs:party:gws' },
+      {
+        code: 'identity_unresolved',
+        subjectKey: 'transfer:future-pick:2024:national:1:north-melbourne-concession-1:from',
+      },
+      { code: 'identity_unresolved', subjectKey: 'transfer:harry-kyle:to' },
+    ]);
+    expect(
+      unresolvedSender.content.issues
+        .filter(({ severity }) => severity === 'deferred')
+        .map(({ subjectKey }) => subjectKey)
+    ).toContain(originalClubSubject);
   });
 });
 
@@ -313,6 +516,31 @@ describe('candidate contract for deferred issues', () => {
         ],
       })
     ).toThrow(/Only a pick-side issue can be deferred/);
+    for (const role of ['from', 'to'] as const) {
+      expect(() =>
+        createAflTradeExternalReconciliationCandidate({
+          ...deferred,
+          issues: [
+            ...deferred.issues,
+            {
+              code: 'identity_unresolved',
+              severity: 'deferred',
+              subjectKey: `transfer:pick-14:${role}`,
+              detail: 'An exchange club marked deferred.',
+              evidenceIds: deferred.issues[0]!.evidenceIds,
+            },
+          ],
+        })
+      ).toThrow(/Only a pick-side issue can be deferred/);
+    }
+    // The original club of a traded pick is pick-side: the contract accepts it deferred.
+    const concessionDeferred = reconcileConcession(true);
+    expect(
+      concessionDeferred.content.issues.find(({ subjectKey }) => subjectKey === originalClubSubject)
+    ).toMatchObject({ severity: 'deferred' });
+    expect(
+      createAflTradeExternalReconciliationCandidate(concessionDeferred.content).candidateId
+    ).toBe(concessionDeferred.candidateId);
     const { sourceAuthority: _authority, ...legacy } = deferred;
     expect(() =>
       createAflTradeExternalReconciliationCandidate({
@@ -417,5 +645,905 @@ describe('promotion of a deferred-lineage candidate', () => {
         pickLineageDeferral: { decisionId, deferredIssueCount: 0 },
       })
     ).toThrow();
+  });
+});
+
+// A deferred candidate may carry a draft that an earlier session-keyed promotion already made
+// current canonical. The metadata-only path would create a second, session-less draft root with the
+// same selections, so such a draft is recorded on the candidate and left to its promotion (#869).
+describe('a deferred candidate whose draft is already current canonical', () => {
+  it('records the draft at reconciliation only when every selection in it is promoted, and only under the deferral', () => {
+    const recorded = reconcile(true, true, [selection14, 'external-draft-selection:other']);
+    expect(recorded.content.pickLineageDeferral).toEqual({
+      decisionId,
+      promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
+    });
+    expect(recorded.candidateId).not.toBe(reconcile(true).candidateId);
+    expect(
+      reconcile(true, true, ['external-draft-selection:other']).content.pickLineageDeferral
+    ).toEqual({ decisionId });
+    expect(reconcile(true, true, []).candidateId).toBe(reconcile(true).candidateId);
+    expect(() => reconcile(false, true, [selection14])).toThrow(/only under a pick-side deferral/);
+    expect(parseAflTradeExternalReconciliationCandidate(recorded).candidateId).toBe(
+      recorded.candidateId
+    );
+  });
+
+  it('derives promoted drafts by draft, sorted, from the selection set', () => {
+    const selections = [
+      { selectionId: 'b', draftYear: 2024, draftType: 'rookie' },
+      { selectionId: 'a', draftYear: 2024, draftType: 'national' },
+      { selectionId: 'c', draftYear: 2023, draftType: 'national' },
+      { selectionId: 'd', draftYear: 2023, draftType: 'national' },
+    ];
+    expect(aflTradePromotedDrafts(selections, new Set(['a', 'b', 'c']))).toEqual([
+      { draftYear: 2024, draftType: 'national' },
+      { draftYear: 2024, draftType: 'rookie' },
+    ]);
+    expect(aflTradePromotedDrafts(selections, new Set(['a', 'b', 'c', 'd']))).toEqual([
+      { draftYear: 2023, draftType: 'national' },
+      { draftYear: 2024, draftType: 'national' },
+      { draftYear: 2024, draftType: 'rookie' },
+    ]);
+    expect(aflTradePromotedDrafts(selections, new Set())).toEqual([]);
+  });
+
+  it('leaves the draft and the realizations into it unwritten, and counts both', () => {
+    // Hand-built content: one deferred pick (no custody) and one resolved pick whose lineage lands
+    // in the already-promoted 2024 draft; a third lineage lands in a draft this candidate writes.
+    const content = {
+      transactions: [
+        {
+          transactionId: 'transaction:a',
+          transferIds: ['transfer:deferred', 'transfer:resolved', 'transfer:written'],
+        },
+      ],
+      transfers: [
+        {
+          transferId: 'transfer:deferred',
+          transactionId: 'transaction:a',
+          asset: { kind: 'pick_entitlement', pickId: 'pick:x' },
+        },
+        {
+          transferId: 'transfer:resolved',
+          transactionId: 'transaction:a',
+          asset: { kind: 'pick_entitlement', pickId: 'pick:y' },
+        },
+        {
+          transferId: 'transfer:written',
+          transactionId: 'transaction:a',
+          asset: { kind: 'pick_entitlement', pickId: 'pick:z' },
+        },
+      ],
+      draftSelections: [
+        { selectionId: 'sel:2024:1', draftYear: 2024, draftType: 'national', pickId: 'pick:y' },
+        { selectionId: 'sel:2024:2', draftYear: 2024, draftType: 'national', pickId: 'pick:q' },
+        { selectionId: 'sel:2025:1', draftYear: 2025, draftType: 'national', pickId: 'pick:z' },
+      ],
+      pickCustody: [
+        { custodyId: 'custody:y', pickId: 'pick:y', status: 'single_source' },
+        { custodyId: 'custody:z', pickId: 'pick:z', status: 'single_source' },
+      ],
+      pickLineage: [
+        {
+          lineageId: 'lineage:y',
+          pickId: 'pick:y',
+          transferId: 'transfer:resolved',
+          selectionId: 'sel:2024:1',
+        },
+        {
+          lineageId: 'lineage:z',
+          pickId: 'pick:z',
+          transferId: 'transfer:written',
+          selectionId: 'sel:2025:1',
+        },
+      ],
+      issues: [
+        {
+          code: 'lineage_unresolved',
+          severity: 'deferred',
+          subjectKey: 'lineage:transfer:deferred',
+        },
+      ],
+      pickLineageDeferral: {
+        decisionId,
+        promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
+      },
+    };
+    const scope = aflTradePickLineageDeferralScope(content);
+    expect([...scope.promotedDraftKeys]).toEqual(['2024|national']);
+    const written = aflTradePromotionWriteScope(content);
+    expect(written.draftSelections.map(({ selectionId }) => selectionId)).toEqual(['sel:2025:1']);
+    // Custody of the resolved pick is still written: only the realization into the promoted draft
+    // is left out (its existing selection row keys the pick by slot, this candidate by custody).
+    expect(written.pickCustody.map(({ custodyId }) => custodyId)).toEqual([
+      'custody:y',
+      'custody:z',
+    ]);
+    expect(written.pickLineage.map(({ lineageId }) => lineageId)).toEqual(['lineage:z']);
+    expect(written.promotedDraftCount).toBe(1);
+    expect(written.skippedRealizationCount).toBe(1);
+    // Without the recorded draft the same content writes both drafts and both realizations.
+    const { promotedDrafts: _drafts, ...decisionOnly } = content.pickLineageDeferral;
+    const plain = aflTradePromotionWriteScope({ ...content, pickLineageDeferral: decisionOnly });
+    expect(plain.draftSelections.length).toBe(3);
+    expect(plain.pickLineage.length).toBe(2);
+    expect(plain).toMatchObject({ promotedDraftCount: 0, skippedRealizationCount: 0 });
+  });
+
+  it('is refused by the candidate contract when it names a draft the candidate has no selection in, is unsorted, or has no decision', () => {
+    const recorded = reconcile(true, true, [selection14]).content;
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded,
+        pickLineageDeferral: {
+          decisionId,
+          promotedDrafts: [{ draftYear: 2024, draftType: 'national' }],
+        },
+      })
+    ).toThrow(/one the candidate holds a selection in/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded,
+        pickLineageDeferral: {
+          decisionId,
+          promotedDrafts: [
+            { draftYear: 2025, draftType: 'national' },
+            { draftYear: 2025, draftType: 'national' },
+          ],
+        },
+      })
+    ).toThrow(/unique and sorted/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded,
+        pickLineageDeferral: { decisionId, promotedDrafts: [] },
+      })
+    ).toThrow();
+    const plain = reconcile(false).content;
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...plain,
+        pickLineageDeferral: {
+          decisionId,
+          promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
+        },
+      })
+    ).toThrow(/only by a candidate that deferred an issue/);
+  });
+
+  it('promotes through the metadata-only proposal with no coverage for the draft, and the receipt says so', () => {
+    const recorded = reconcile(true, true, [selection14]);
+    const proposedAt = '2026-08-09T07:31:00.000Z';
+    // The reviewer may not supply metadata for a draft left to its earlier promotion.
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate: recorded,
+        proposedAt,
+        draftEvents: [
+          {
+            draftYear: 2025,
+            draftType: 'national',
+            eventDate: '2025-11-19',
+            officialName: '2025 AFL National Draft',
+          },
+        ],
+      })
+    ).toThrow(/exactly match the candidate draft-event selection set/);
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: recorded,
+      proposedAt,
+      draftEvents: [],
+    });
+    expect(proposal.content.draftEventCoverage).toEqual([]);
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate: recorded,
+      proposal,
+    });
+    expect(authenticated).toMatchObject({
+      draftSelectionCount: 0,
+      pickRealizationCount: 0,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 2, promotedDraftCount: 1 },
+    });
+    expect('skippedRealizationCount' in authenticated.pickLineageDeferral!).toBe(false);
+    const base = {
+      candidateId: recorded.candidateId,
+      proposalId: proposal.proposalId,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+    };
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      ...base,
+      pickLineageDeferral: authenticated.pickLineageDeferral!,
+    });
+    expect(request.content.pickLineageDeferral).toEqual({
+      decisionId,
+      deferredIssueCount: 2,
+      promotedDraftCount: 1,
+    });
+    expect(request.promotionId).not.toBe(
+      createAflTradeExternalCanonicalPromotionRequest({
+        ...base,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 2 },
+      }).promotionId
+    );
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionRequest({
+        ...base,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 2, promotedDraftCount: 0 },
+      })
+    ).toThrow();
+  });
+});
+
+// A deferred candidate may carry a trade that an earlier promotion already made current canonical,
+// with every transfer a promoted asset on that version. Promoting it again would write a new trade
+// version over the current one and duplicate its assets, so such a transaction is recorded on the
+// candidate and left to its promotion: no trade version, no asset, no custody, no realization (#869,
+// owner decision 2026-10-11).
+const concessionRight = batch('draftguru', 'c', [
+  {
+    kind: 'transaction',
+    nativeEventId: '2019-geelong-gold-coast',
+    seasonYear: 2019,
+    occurredOn: '2019-10-16',
+    transactionType: 'trade',
+    title: 'Geelong and Gold Coast trade for draft picks',
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativePartyId: 'gws',
+    club: gws,
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativePartyId: 'western-bulldogs',
+    club: bulldogs,
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativeTransferId: 'harry-kyle',
+    fromClub: bulldogs,
+    toClub: gws,
+    asset: { kind: 'player', player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' } },
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2019-geelong-gold-coast',
+    nativeTransferId: 'special-pick:2020MIDR1',
+    fromClub: gws,
+    toClub: bulldogs,
+    asset: {
+      kind: 'special_pick',
+      entitlementType: 'assistance_concession',
+      draftYear: 2020,
+      selectionOrdinal: null,
+      sourceLabel: '2020MIDR1 (Gold Coast concession)',
+    },
+  },
+  // A second, ordinary trade the candidate writes.
+  {
+    kind: 'transaction',
+    nativeEventId: '2019-bulldogs-gws',
+    seasonYear: 2019,
+    occurredOn: '2019-10-14',
+    transactionType: 'trade',
+    title: 'Western Bulldogs and GWS trade',
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2019-bulldogs-gws',
+    nativePartyId: 'gws',
+    club: gws,
+  },
+  {
+    kind: 'transaction_party',
+    nativeEventId: '2019-bulldogs-gws',
+    nativePartyId: 'western-bulldogs',
+    club: bulldogs,
+  },
+  {
+    kind: 'directed_transfer',
+    nativeEventId: '2019-bulldogs-gws',
+    nativeTransferId: 'harry-kyle-back',
+    fromClub: gws,
+    toClub: bulldogs,
+    asset: { kind: 'player', player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' } },
+  },
+]);
+const concessionTransactionId = createAflTradeContentAddress('external-transaction', {
+  provider: 'draftguru',
+  nativeEventId: '2019-geelong-gold-coast',
+});
+const concessionTransferIds = ['harry-kyle', 'special-pick:2020MIDR1'].map((nativeTransferId) =>
+  createAflTradeContentAddress('external-transfer', {
+    transactionId: concessionTransactionId,
+    nativeTransferId,
+  })
+);
+
+function reconcileRight(
+  deferral: boolean,
+  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[]
+) {
+  return reconcileAflTradeExternalEvidence({
+    environment: 'test_fixture',
+    competition: 'AFLM',
+    anchorSeasonYear: 2019,
+    sourceBatches: [concessionRight],
+    identityResolutions: resolutions,
+    sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+      ...sourceAuthority,
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([concessionRight.batchId]),
+    }),
+    reconciledAt: '2026-08-09T05:00:00.000Z',
+    ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+    ...(promotedTransactions === undefined ? {} : { promotedTransactions }),
+  });
+}
+
+describe('a deferred candidate whose transaction is already current canonical', () => {
+  const proposedAt = '2026-08-09T07:31:00.000Z';
+  const promoted = [{ transactionId: concessionTransactionId, transferIds: concessionTransferIds }];
+
+  it('derives promoted transactions only when every transfer is promoted, sorted', () => {
+    const transactions = [
+      { transactionId: 'transaction:b', transferIds: ['t1', 't2'] },
+      { transactionId: 'transaction:a', transferIds: ['t3'] },
+      { transactionId: 'transaction:c', transferIds: ['t4'] },
+    ];
+    const current = new Map<string, ReadonlySet<string>>([
+      ['transaction:b', new Set(['t1', 't2', 't9'])],
+      ['transaction:a', new Set(['t3'])],
+      ['transaction:c', new Set(['t5'])],
+    ]);
+    expect(aflTradePromotedTransactions(transactions, current)).toEqual([
+      'transaction:a',
+      'transaction:b',
+    ]);
+    expect(aflTradePromotedTransactions(transactions, new Map())).toEqual([]);
+  });
+
+  it('records the transaction at reconciliation only under the deferral and only when fully promoted', () => {
+    const recorded = reconcileRight(true, promoted);
+    expect(recorded.content.pickLineageDeferral).toEqual({
+      decisionId,
+      promotedTransactions: [concessionTransactionId],
+    });
+    expect(recorded.candidateId).not.toBe(reconcileRight(true).candidateId);
+    expect(
+      reconcileRight(true, [
+        { transactionId: concessionTransactionId, transferIds: [concessionTransferIds[0]!] },
+      ]).content.pickLineageDeferral
+    ).toEqual({ decisionId });
+    expect(() => reconcileRight(false, promoted)).toThrow(/only under a pick-side deferral/);
+    expect(parseAflTradeExternalReconciliationCandidate(recorded).candidateId).toBe(
+      recorded.candidateId
+    );
+  });
+
+  it('is refused by the candidate contract when it names a transaction the candidate does not hold, or has no decision', () => {
+    const recorded = reconcileRight(true, promoted).content;
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded,
+        pickLineageDeferral: {
+          decisionId,
+          promotedTransactions: [`external-transaction:${digest('0')}`],
+        },
+      })
+    ).toThrow(/one the candidate holds/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...recorded,
+        pickLineageDeferral: { decisionId, promotedTransactions: [] },
+      })
+    ).toThrow();
+    const plain = reconcileRight(false).content;
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...plain,
+        pickLineageDeferral: { decisionId, promotedTransactions: [concessionTransactionId] },
+      })
+    ).toThrow(/only by a candidate that deferred an issue/);
+  });
+
+  it('leaves the transaction, its transfers and the special pick in it unwritten; the other trade is written', () => {
+    // Without the record the special pick in the first trade refuses promotion, deferral or not.
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate: reconcileRight(true),
+        proposedAt,
+        draftEvents: [],
+      })
+    ).toThrow(/Special entitlement must be resolved before canonical promotion/);
+    const recorded = reconcileRight(true, promoted);
+    const scope = aflTradePromotionWriteScope(recorded.content);
+    expect([...scope.deferral.promotedTransactionIds]).toEqual([concessionTransactionId]);
+    expect(scope.transactions.map(({ transactionId }) => transactionId)).toEqual(
+      recorded.content.transactions
+        .filter(({ transactionId }) => transactionId !== concessionTransactionId)
+        .map(({ transactionId }) => transactionId)
+    );
+    expect(scope.transfers.map(({ transactionId }) => transactionId)).toEqual(
+      scope.transactions.map(({ transactionId }) => transactionId)
+    );
+    expect(scope.promotedTransactionCount).toBe(1);
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: recorded,
+      proposedAt,
+      draftEvents: [],
+    });
+    // The reviewer supplies no date for a transaction left to its earlier promotion.
+    expect(
+      proposal.content.transactionDateCoverage.map(({ transactionId }) => transactionId)
+    ).toEqual(scope.transactions.map(({ transactionId }) => transactionId));
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate: recorded,
+      proposal,
+    });
+    expect(authenticated).toMatchObject({
+      transactionCount: 1,
+      transferCount: 1,
+      pickCustodyCount: 0,
+      pickRealizationCount: 0,
+      pickLineageDeferral: {
+        decisionId,
+        deferredIssueCount: 1,
+        promotedTransactionCount: 1,
+        promotedTransactionIds: [concessionTransactionId],
+      },
+    });
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      candidateId: recorded.candidateId,
+      proposalId: proposal.proposalId,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+      pickLineageDeferral: authenticated.pickLineageDeferral!,
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionRequest({
+        candidateId: recorded.candidateId,
+        proposalId: proposal.proposalId,
+        approvalDecisionId: `review-decision:${digest('a')}`,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 1, promotedTransactionCount: 1 },
+      })
+    ).toThrow(/counted exactly/);
+  });
+});
+
+// A custody observation without a usable status (an order page's holder-only special pick with no
+// original club, or a row behind a deferred pick_identity_conflict) is pick-side under the
+// deferral: recorded as deferred custody, counted on the receipt, written as nothing (#869, owner
+// decision 2026-10-11). Without a deferral nothing changes.
+describe('deferred custody observations', () => {
+  const custody = (custodyId: string, pickId: string, status: string) => ({
+    custodyId,
+    pickId,
+    status,
+  });
+
+  it('classifies usable statuses and lists the rest, sorted and unique', () => {
+    expect(['single_source', 'corroborated'].map(isAflTradeUsableCustodyStatus)).toEqual([
+      true,
+      true,
+    ]);
+    expect(['unresolved', 'disputed'].map(isAflTradeUsableCustodyStatus)).toEqual([false, false]);
+    expect(
+      aflTradeDeferredCustodyIds([
+        custody('custody:b', 'pick:1', 'unresolved'),
+        custody('custody:a', 'pick:2', 'disputed'),
+        custody('custody:c', 'pick:3', 'single_source'),
+        custody('custody:a', 'pick:2', 'disputed'),
+      ])
+    ).toEqual(['custody:a', 'custody:b']);
+    expect(aflTradeDeferredCustodyIds([custody('custody:c', 'pick:3', 'corroborated')])).toEqual(
+      []
+    );
+  });
+
+  it('leaves recorded custody unwritten and counts it; without the record the row is written', () => {
+    const content = {
+      transactions: [{ transactionId: 'transaction:a', transferIds: ['transfer:a'] }],
+      transfers: [
+        {
+          transferId: 'transfer:a',
+          transactionId: 'transaction:a',
+          asset: { kind: 'pick_entitlement', pickId: 'pick:a' },
+        },
+      ],
+      draftSelections: [],
+      pickCustody: [
+        custody('custody:holder-only', 'pick:special', 'unresolved'),
+        custody('custody:disputed', 'pick:d', 'disputed'),
+        custody('custody:good', 'pick:a', 'single_source'),
+      ],
+      pickLineage: [],
+      issues: [
+        { code: 'lineage_unresolved', severity: 'deferred', subjectKey: 'lineage:transfer:x' },
+      ],
+      pickLineageDeferral: {
+        decisionId,
+        deferredCustodyIds: ['custody:disputed', 'custody:holder-only'],
+      },
+    };
+    const written = aflTradePromotionWriteScope(content);
+    expect([...written.deferral.deferredCustodyIds]).toEqual([
+      'custody:disputed',
+      'custody:holder-only',
+    ]);
+    expect(written.pickCustody.map(({ custodyId }) => custodyId)).toEqual(['custody:good']);
+    expect(written.deferredCustodyCount).toBe(2);
+    const { deferredCustodyIds: _ids, ...decisionOnly } = content.pickLineageDeferral;
+    const unrecorded = aflTradePromotionWriteScope({
+      ...content,
+      pickLineageDeferral: decisionOnly,
+    });
+    expect(unrecorded.pickCustody.length).toBe(3);
+    expect(unrecorded.deferredCustodyCount).toBe(0);
+    expect(
+      aflTradePromotionWriteScope({ ...content, issues: [], pickLineageDeferral: undefined })
+    ).toMatchObject({ deferredCustodyCount: 0 });
+  });
+
+  it('records unusable custody at reconciliation only under the deferral, and the receipt counts it', () => {
+    // The 2025 trade's pick 14 with a holder-only custody observation nobody can resolve.
+    const holderOnly = batch('official_afl', 'd', [
+      {
+        kind: 'pick_custody',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        originalClub: null,
+        currentClub: bulldogs,
+        observedAt: '2025-10-01T00:00:00.000Z',
+      },
+    ]);
+    const reconcileCustody = (deferral: boolean) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [draftguru, holderOnly],
+        // The order page is an official_afl capture: its clubs resolve under that provider.
+        identityResolutions: [
+          ...resolutions,
+          resolution('official_afl', 'club', gws, 'club-gws'),
+          resolution('official_afl', 'club', bulldogs, 'club-western-bulldogs'),
+        ],
+        sourceAuthority: createAflTradeHistoricalCompletionReconciliationAuthority({
+          ...sourceAuthority,
+          candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson(
+            [draftguru.batchId, holderOnly.batchId].sort()
+          ),
+        }),
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+        ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+      });
+    const plain = reconcileCustody(false);
+    expect(plain.content.issues.map(({ code, subjectKey }) => `${code} ${subjectKey}`)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^lineage_unresolved /)])
+    );
+    expect(
+      plain.content.issues.every((issue) => isAflTradePickSideReconciliationIssue(issue))
+    ).toBe(true);
+    const unusable = plain.content.pickCustody.filter(
+      ({ status }) => !isAflTradeUsableCustodyStatus(status)
+    );
+    expect(unusable.length).toBeGreaterThan(0);
+    expect(plain.content.pickLineageDeferral).toBeUndefined();
+    const deferred = reconcileCustody(true);
+    expect(deferred.content.pickLineageDeferral).toEqual({
+      decisionId,
+      deferredCustodyIds: unusable.map(({ custodyId }) => custodyId).sort(),
+    });
+    expect(deferred.content.pickCustody).toEqual(plain.content.pickCustody);
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate: deferred,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [],
+    });
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate: deferred,
+      proposal,
+    });
+    expect(authenticated.pickCustodyCount).toBe(plain.content.pickCustody.length - unusable.length);
+    expect(authenticated.pickLineageDeferral).toMatchObject({
+      decisionId,
+      deferredCustodyCount: unusable.length,
+    });
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      candidateId: deferred.candidateId,
+      proposalId: proposal.proposalId,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+      pickLineageDeferral: authenticated.pickLineageDeferral!,
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+  });
+
+  it('is refused by the candidate contract without a deferral, or when it names a usable or unknown row', () => {
+    const deferred = reconcile(true).content;
+    const usable = {
+      ...deferred.pickCustody[0],
+      custodyId: `external-pick-custody:${digest('5')}`,
+    };
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...deferred,
+        pickLineageDeferral: { decisionId, deferredCustodyIds: [usable.custodyId] },
+      })
+    ).toThrow(/candidate custody row without a usable status/);
+    const plain = reconcile(false).content;
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...plain,
+        pickLineageDeferral: {
+          decisionId,
+          deferredCustodyIds: [`external-pick-custody:${digest('5')}`],
+        },
+      })
+    ).toThrow(/only by a candidate that deferred an issue/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...deferred,
+        pickLineageDeferral: { decisionId, deferredCustodyIds: [] },
+      })
+    ).toThrow();
+  });
+});
+
+// A pick the promotion would define that is already a canonical pick with different facts, or with
+// empty facts this candidate would fill without reviewed lineage, is retained under the deferral:
+// referenced unchanged, no facts written, listed on the receipt. Without a deferral it is the
+// immutable conflict it always was (#869).
+describe('retained pick definitions', () => {
+  it('retains only under the deferral and only without reviewed lineage; conflicts otherwise', () => {
+    const facts = { nominalRound: 1, nominalPick: 27, originalClubId: null };
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'conflict' },
+        deferred: false,
+        registrationId: undefined,
+      })
+    ).toBe('conflict');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'conflict' },
+        deferred: true,
+        registrationId: undefined,
+      })
+    ).toBe('retain');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'enrich', facts },
+        deferred: false,
+        registrationId: undefined,
+      })
+    ).toBe('conflict');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'enrich', facts },
+        deferred: true,
+        registrationId: undefined,
+      })
+    ).toBe('retain');
+    // Reviewed lineage still enriches, deferral or not; an exact match needs nothing.
+    for (const deferred of [true, false]) {
+      expect(
+        pickDefinitionDisposition({
+          plan: { kind: 'enrich', facts },
+          deferred,
+          registrationId: `reviewed-pick-lineage-registration:${digest('1')}`,
+        })
+      ).toBe('enrich');
+      expect(
+        pickDefinitionDisposition({ plan: { kind: 'exact' }, deferred, registrationId: undefined })
+      ).toBe('exact');
+      expect(pickDefinitionDisposition({ plan: null, deferred, registrationId: undefined })).toBe(
+        'conflict'
+      );
+    }
+  });
+
+  it('is recorded on the receipt sorted, unique and counted exactly', () => {
+    const base = {
+      candidateId: `external-reconciliation:${digest('c')}`,
+      proposalId: `external-canonical-promotion-proposal:${digest('b')}`,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+    };
+    const picks = [`draft-pick:${digest('1')}`, `draft-pick:${digest('2')}`];
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      ...base,
+      pickLineageDeferral: {
+        decisionId,
+        deferredIssueCount: 1,
+        retainedPickDefinitionCount: 2,
+        retainedPickDefinitionIds: picks,
+      },
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    expect(request.promotionId).not.toBe(
+      createAflTradeExternalCanonicalPromotionRequest({
+        ...base,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 1 },
+      }).promotionId
+    );
+    for (const deferral of [
+      {
+        decisionId,
+        deferredIssueCount: 1,
+        retainedPickDefinitionCount: 1,
+        retainedPickDefinitionIds: picks,
+      },
+      { decisionId, deferredIssueCount: 1, retainedPickDefinitionIds: picks },
+      {
+        decisionId,
+        deferredIssueCount: 1,
+        retainedPickDefinitionCount: 2,
+        retainedPickDefinitionIds: [picks[1]!, picks[0]!],
+      },
+    ]) {
+      expect(() =>
+        createAflTradeExternalCanonicalPromotionRequest({ ...base, pickLineageDeferral: deferral })
+      ).toThrow(/counted exactly/);
+    }
+  });
+});
+
+// A stable pick the written transfers number differently (a trade page's "Pick 46" and a later
+// trade's "Pick 56" for the same entitlement) is defined, under the deferral, from its one usable
+// custody observation; each asset keeps its trade-time number. No such single custody row, or more
+// than one, is the conflict it always was; without a deferral nothing changes (#869).
+describe('custody-defined pick definitions', () => {
+  const pickId = `draft-pick:${digest('e')}`;
+  const transfer = (nativeId: string, nominalPick: number) => ({
+    transferId: `external-transfer:${digest(nativeId)}`,
+    transactionId: `external-transaction:${digest('t')}`,
+    fromClubId: 'club-a',
+    toClubId: 'club-b',
+    status: 'single_source',
+    evidenceIds: [],
+    asset: {
+      kind: 'pick_entitlement',
+      pickId,
+      draftYear: 2019,
+      draftType: 'national',
+      nominalRound: null,
+      nominalPick,
+      originalClubId: 'club-collingwood',
+      recordedLabel: null,
+    },
+  });
+  const custody = (suffix: string, status: string) => ({
+    custodyId: `external-pick-custody:${digest(suffix)}`,
+    pickId,
+    observedAt: '2019-11-01T00:00:00.000Z',
+    draftYear: 2019,
+    draftType: 'national',
+    roundNumber: 3,
+    recordedPickNumber: 56,
+    originalClubId: 'club-collingwood',
+    currentClubId: 'club-b',
+    status,
+    evidenceIds: [],
+  });
+  const content = (pickCustody: ReturnType<typeof custody>[]) =>
+    ({
+      transfers: [transfer('1', 46), transfer('2', 56)],
+      draftSelections: [],
+      pickCustody,
+    }) as unknown as Parameters<typeof resolveWrittenPickDefinitions>[0];
+
+  it('defines the pick from its one usable custody row under the deferral and lists it', () => {
+    const resolved = resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
+      deferred: true,
+      definitionCustody: [custody('a', 'single_source')] as never,
+    });
+    expect(resolved.custodyDefinedPickIds).toEqual([pickId]);
+    expect(resolved.definitions.get(pickId)).toEqual({
+      pickId,
+      draftYear: 2019,
+      draftType: 'national',
+      nominalRound: 3,
+      nominalPick: 56,
+      originalClubId: 'club-collingwood',
+    });
+    // An unusable row does not count; a corroborated one does.
+    expect(
+      resolveWrittenPickDefinitions(
+        content([custody('a', 'corroborated'), custody('b', 'unresolved')]),
+        {
+          deferred: true,
+          definitionCustody: [custody('a', 'corroborated'), custody('b', 'unresolved')] as never,
+        }
+      ).custodyDefinedPickIds
+    ).toEqual([pickId]);
+  });
+
+  it('throws with no usable custody row, with two, and without the deferral', () => {
+    expect(() =>
+      resolveWrittenPickDefinitions(content([]), { deferred: true, definitionCustody: [] })
+    ).toThrow(/conflicting nominalPick/);
+    expect(() =>
+      resolveWrittenPickDefinitions(
+        content([custody('a', 'single_source'), custody('b', 'single_source')]),
+        {
+          deferred: true,
+          definitionCustody: [
+            custody('a', 'single_source'),
+            custody('b', 'single_source'),
+          ] as never,
+        }
+      )
+    ).toThrow(/conflicting nominalPick/);
+    expect(() =>
+      resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
+        deferred: false,
+        definitionCustody: [custody('a', 'single_source')] as never,
+      })
+    ).toThrow(/conflicting nominalPick/);
+    // Agreeing numbers never need custody and are never listed.
+    const agreeing = {
+      ...content([]),
+      transfers: [transfer('1', 46), transfer('2', 46)],
+    } as unknown as Parameters<typeof resolveWrittenPickDefinitions>[0];
+    const resolved = resolveWrittenPickDefinitions(agreeing, {
+      deferred: true,
+      definitionCustody: [],
+    });
+    expect(resolved.custodyDefinedPickIds).toEqual([]);
+    expect(resolved.definitions.get(pickId)?.nominalPick).toBe(46);
+  });
+
+  it('looks the custody row up in the candidate custody, so a deferred pick whose observation is not written still resolves', () => {
+    // The pick is deferred: its observation is out of the written custody but names the slot.
+    const written = content([]);
+    const resolved = resolveWrittenPickDefinitions(written, {
+      deferred: true,
+      definitionCustody: [custody('a', 'single_source')] as never,
+    });
+    expect(resolved.custodyDefinedPickIds).toEqual([pickId]);
+    expect(resolved.definitions.get(pickId)).toMatchObject({ nominalRound: 3, nominalPick: 56 });
+    // The written custody alone decides nothing: no row, or two rows, in the candidate still refuses.
+    expect(() =>
+      resolveWrittenPickDefinitions(content([custody('a', 'single_source')]), {
+        deferred: true,
+        definitionCustody: [],
+      })
+    ).toThrow(/conflicting nominalPick/);
+    expect(() =>
+      resolveWrittenPickDefinitions(written, {
+        deferred: true,
+        definitionCustody: [custody('a', 'single_source'), custody('b', 'corroborated')] as never,
+      })
+    ).toThrow(/conflicting nominalPick/);
+  });
+
+  it('is recorded on the receipt sorted, unique and counted exactly', () => {
+    const base = {
+      candidateId: `external-reconciliation:${digest('c')}`,
+      proposalId: `external-canonical-promotion-proposal:${digest('b')}`,
+      approvalDecisionId: `review-decision:${digest('a')}`,
+    };
+    const request = createAflTradeExternalCanonicalPromotionRequest({
+      ...base,
+      pickLineageDeferral: {
+        decisionId,
+        deferredIssueCount: 1,
+        custodyDefinedPickCount: 1,
+        custodyDefinedPickIds: [pickId],
+      },
+    });
+    expect(parseAflTradeExternalCanonicalPromotionRequest(request)).toEqual(request);
+    expect(() =>
+      createAflTradeExternalCanonicalPromotionRequest({
+        ...base,
+        pickLineageDeferral: { decisionId, deferredIssueCount: 1, custodyDefinedPickIds: [pickId] },
+      })
+    ).toThrow(/counted exactly/);
   });
 });

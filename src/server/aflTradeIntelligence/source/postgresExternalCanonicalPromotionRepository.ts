@@ -32,6 +32,7 @@ import {
   authenticateAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionRequest,
   type AflTradeExternalCanonicalPromotionProposal,
+  type AflTradePromotionPickLineageDeferralReceipt,
 } from './externalCanonicalPromotionContracts';
 import {
   parseAflTradeExternalReconciliationCandidate,
@@ -60,7 +61,7 @@ export interface PromotedAflTradeExternalCandidate {
    * deferred-lineage promotion writes no custody observation and no realization for a deferred pick
    * and is never admitted to a promotion-backed corpus or factual release.
    */
-  readonly pickLineageDeferral: { decisionId: string; deferredIssueCount: number } | null;
+  readonly pickLineageDeferral: AflTradePromotionPickLineageDeferralReceipt | null;
 }
 
 export class AflTradeExternalCanonicalPromotionError extends Error {
@@ -257,10 +258,60 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
   merge('originalClubId');
 }
 
-function pickDefinitions(content: CandidateContent): Map<string, PickDefinition> {
+/**
+ * The picks a promotion defines, from the written transfers, selections and custody (#869). Under a
+ * pick-side deferral a stable pick that the written transfers number differently (a trade page's
+ * "Pick 46" and a later trade's "Pick 56" for the same entitlement) is defined from its one usable
+ * custody observation, the slot it actually became, and listed as custody-defined; each asset keeps
+ * its own trade-time number as its recorded label. With no such single custody row, or more than
+ * one, the conflict throws as before. Without a deferral nothing changes.
+ */
+export function resolveWrittenPickDefinitions(
+  content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
+  options: {
+    deferred: boolean;
+    /**
+     * The candidate's full custody, for the single-usable-row lookup: a deferred pick's observation
+     * is left out of `content.pickCustody` (it is not written) but still names the slot it became.
+     */
+    definitionCustody: CandidateContent['pickCustody'];
+  }
+): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
   const definitions = new Map<string, PickDefinition>();
+  const custodyDefined = new Set<string>();
+  if (options.deferred) {
+    const numbersByPick = new Map<string, Set<number>>();
+    for (const transfer of content.transfers) {
+      if (transfer.asset.kind !== 'pick_entitlement' || transfer.asset.nominalPick === null)
+        continue;
+      const numbers = numbersByPick.get(transfer.asset.pickId) ?? new Set<number>();
+      numbers.add(transfer.asset.nominalPick);
+      numbersByPick.set(transfer.asset.pickId, numbers);
+    }
+    for (const [pickId, numbers] of numbersByPick) {
+      if (numbers.size < 2) continue;
+      const usable = options.definitionCustody.filter(
+        (custody) =>
+          custody.pickId === pickId &&
+          (custody.status === 'single_source' || custody.status === 'corroborated')
+      );
+      if (usable.length !== 1) continue;
+      const custody = usable[0]!;
+      definitions.set(pickId, {
+        pickId,
+        draftYear: custody.draftYear,
+        draftType: custody.draftType,
+        nominalRound: custody.roundNumber,
+        nominalPick: custody.recordedPickNumber,
+        originalClubId: custody.originalClubId,
+      });
+      custodyDefined.add(pickId);
+    }
+  }
   content.transfers.forEach((transfer) => {
     if (transfer.asset.kind !== 'pick_entitlement') return;
+    // A custody-defined pick keeps the custody slot; the transfers' numbers stay on their assets.
+    if (custodyDefined.has(transfer.asset.pickId)) return;
     mergePickDefinition(definitions, {
       pickId: transfer.asset.pickId,
       draftYear: transfer.asset.draftYear,
@@ -290,7 +341,7 @@ function pickDefinitions(content: CandidateContent): Map<string, PickDefinition>
       originalClubId: custody.originalClubId,
     })
   );
-  return definitions;
+  return { definitions, custodyDefinedPickIds: [...custodyDefined].sort() };
 }
 
 interface ResolvedPickRow {
@@ -340,6 +391,24 @@ export function planPickEnrichment(
     (facts as Record<string, unknown>)[key] = stored ?? incoming;
   }
   return enriched ? { kind: 'enrich', facts } : { kind: 'exact' };
+}
+
+/**
+ * What a promotion does with a pick it would define that is already a canonical pick (#869). A
+ * stored pick with different facts, or with empty facts this candidate would fill without a reviewed
+ * lineage registration, is an immutable conflict. Under a pick-side deferral such a pick is
+ * retained instead: referenced unchanged for the asset, no facts written, listed on the receipt.
+ * Without a deferral the conflict throws as before.
+ */
+export function pickDefinitionDisposition(input: {
+  plan: ReturnType<typeof planPickEnrichment> | null;
+  deferred: boolean;
+  registrationId: string | undefined;
+}): 'exact' | 'enrich' | 'retain' | 'conflict' {
+  if (input.plan === null) return 'conflict';
+  if (input.plan.kind === 'exact') return 'exact';
+  if (input.plan.kind === 'enrich' && input.registrationId !== undefined) return 'enrich';
+  return input.deferred ? 'retain' : 'conflict';
 }
 
 async function reviewedLineageRegistrationFor(
@@ -500,6 +569,75 @@ async function requireCurrentLineageDeferralDecision(
     throw new AflTradeExternalCanonicalPromotionError(
       'APPROVAL_UNAVAILABLE',
       'The pick-side deferral decision is absent, withdrawn, superseded, or names another completion.'
+    );
+  }
+}
+
+/**
+ * A draft the candidate records as already promoted must still be current canonical when the
+ * promotion runs: every candidate selection in it a current approved selection of a finalized
+ * promotion (the same test the candidate insert trigger applied, migration 0265).
+ */
+async function requireCurrentPromotedDrafts(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.promotedDrafts ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_drafts_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A draft the candidate leaves to an earlier promotion is no longer current canonical.'
+    );
+  }
+}
+
+/**
+ * A transaction the candidate records as already promoted must still be current canonical when the
+ * promotion runs: its trade event current under the same stable key from a finalized promotion and
+ * every candidate transfer a promoted asset on that version (the candidate insert test, 0267).
+ */
+async function requireCurrentPromotedTransactions(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.promotedTransactions ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_transactions_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A transaction the candidate leaves to an earlier promotion is no longer current canonical.'
+    );
+  }
+}
+
+/**
+ * Every custody id the candidate records as deferred must be one of its custody rows without a
+ * usable status (the candidate insert test, 0268); the stored candidate is immutable, so this is a
+ * re-check of the same fact in the promoter's transaction.
+ */
+async function requireDeferredCustodyRows(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.deferredCustodyIds ?? []).length === 0) return;
+  const result = await transaction.query<{ valid: boolean }>(
+    `SELECT outcome_external_candidate_deferred_custody_valid(candidate_json) AS valid
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.valid !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A custody observation the candidate records as deferred is not an unusable candidate custody row.'
     );
   }
 }
@@ -716,7 +854,8 @@ async function ensureEventRoot(
   }
 }
 
-type ReviewedTransactionDate = AflTradeExternalCanonicalPromotionProposal['content']['transactionDateCoverage'][number];
+type ReviewedTransactionDate =
+  AflTradeExternalCanonicalPromotionProposal['content']['transactionDateCoverage'][number];
 type PromotedTransactionRecord = TransactionRecord & {
   datePrecision?: Extract<ReviewedTransactionDate, { datePrecision?: unknown }>['datePrecision'];
 };
@@ -1128,8 +1267,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         proposal: approval.proposal,
       });
       await requireCurrentLineageDeferralDecision(transaction, candidate);
-      // The pick side a deferred candidate leaves unwritten: custody of deferred picks, realizations
-      // into them, and the selections of a draft holding a deferred selection (#869).
+      await requireCurrentPromotedDrafts(transaction, candidate);
+      await requireCurrentPromotedTransactions(transaction, candidate);
+      await requireDeferredCustodyRows(transaction, candidate);
+      // What a deferred candidate leaves unwritten: custody of deferred picks, realizations into
+      // them, the selections of a draft holding a deferred selection, a draft that is already
+      // current canonical with the realizations into it, and a transaction that is already current
+      // canonical with its transfers and the realizations into them (#869).
       const scope = aflTradePromotionWriteScope(candidate.content);
       if (
         'draftEventCoverage' in approval.proposal.content &&
@@ -1182,13 +1326,70 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         }
       }
       await authenticateRightSources();
+      // Pick definitions and assets come from what is written; candidate-level checks keep `content`.
+      const written = {
+        ...candidate.content,
+        transactions: scope.transactions,
+        transfers: scope.transfers,
+        pickCustody: scope.pickCustody,
+      };
+      const { definitions, custodyDefinedPickIds } = resolveWrittenPickDefinitions(written, {
+        deferred: authenticated.pickLineageDeferral !== null,
+        definitionCustody: candidate.content.pickCustody,
+      });
+      // Under the deferral a pick already defined with different facts, or with facts this candidate
+      // would fill without reviewed lineage, is retained: referenced unchanged, listed on the receipt.
+      // Decided before the receipt is addressed so a replay derives the same list from the same facts.
+      const retainedPickDefinitionIds = new Set<string>();
+      if (authenticated.pickLineageDeferral !== null) {
+        const registrationId =
+          candidate.content.reviewedCorrection?.registrationId ??
+          candidate.content.reviewedScope?.registrationId ??
+          (await reviewedLineageRegistrationFor(transaction, candidate.candidateId));
+        for (const definition of definitions.values()) {
+          const stored = await transaction.query<ResolvedPickRow>(
+            `SELECT pick_id,draft_season_year,draft_kind::text AS draft_kind,nominal_round,nominal_pick,
+                    original_club_id,status::text AS status,enrichment_id,enrichment_version
+               FROM outcome_draft_pick_facts(ARRAY[$1]::text[],NULL)`,
+            [definition.pickId]
+          );
+          const resolved = stored.rows[0];
+          if (resolved === undefined) continue;
+          const disposition = pickDefinitionDisposition({
+            plan: planPickEnrichment(resolved, {
+              ...definition,
+              draftKind: mapDraftKind(definition.draftType).eventKind,
+            }),
+            deferred: true,
+            registrationId,
+          });
+          if (disposition === 'retain') retainedPickDefinitionIds.add(definition.pickId);
+        }
+      }
+      const retainedPickDefinitions = [...retainedPickDefinitionIds].sort();
       const request = createAflTradeExternalCanonicalPromotionRequest({
         candidateId: candidate.candidateId,
         proposalId: approval.proposal.proposalId,
         approvalDecisionId: input.approvalDecisionId,
         ...(authenticated.pickLineageDeferral === null
           ? {}
-          : { pickLineageDeferral: authenticated.pickLineageDeferral }),
+          : {
+              pickLineageDeferral: {
+                ...authenticated.pickLineageDeferral,
+                ...(retainedPickDefinitions.length === 0
+                  ? {}
+                  : {
+                      retainedPickDefinitionCount: retainedPickDefinitions.length,
+                      retainedPickDefinitionIds: retainedPickDefinitions,
+                    }),
+                ...(custodyDefinedPickIds.length === 0
+                  ? {}
+                  : {
+                      custodyDefinedPickCount: custodyDefinedPickIds.length,
+                      custodyDefinedPickIds,
+                    }),
+              },
+            }),
       });
       const replay = await transaction.query<{
         promotion_id: string;
@@ -1249,7 +1450,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           coverage,
         ])
       );
-      const promotedTransactions = content.transactions.map((record) => {
+      const promotedTransactions = scope.transactions.map((record) => {
         const coverage = reviewedTransactionDateById.get(record.transactionId);
         if (coverage === undefined) {
           throw new AflTradeExternalCanonicalPromotionError(
@@ -1265,7 +1466,6 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         content
       );
       const evidence = await loadEvidenceSources(transaction, candidate.candidateId);
-      const definitions = pickDefinitions(content);
       const draftEventIds = approval.proposal.content.draftEventCoverage.map((coverage) =>
         createAflTradeContentAddress('draft-event', {
           competition: content.competition,
@@ -1312,8 +1512,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           content.environment,
           content.competition,
           content.anchorSeasonYear,
-          content.transactions.length,
-          content.transfers.length,
+          authenticated.transactionCount,
+          authenticated.transferCount,
           authenticated.draftSelectionCount,
           draftPlayerAssetCount,
           authenticated.pickCustodyCount,
@@ -1444,6 +1644,20 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       async function persistPickDefinitions(): Promise<void> {
         for (const definition of definitions.values()) {
           const kind = mapDraftKind(definition.draftType);
+          if (retainedPickDefinitionIds.has(definition.pickId)) {
+            // Retained under the deferral: the existing canonical pick is referenced unchanged.
+            const existing = await transaction.query(
+              `SELECT pick_id FROM outcome_draft_pick WHERE pick_id=$1 FOR SHARE`,
+              [definition.pickId]
+            );
+            if (existing.rows.length !== 1) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'IMMUTABLE_CONFLICT',
+                `Pick ${definition.pickId} retained under the deferral is no longer a canonical pick.`
+              );
+            }
+            continue;
+          }
           await transaction.query(
             `INSERT INTO outcome_draft_pick
             (pick_id,draft_season_year,draft_kind,nominal_round,nominal_pick,original_club_id,status)
@@ -1596,7 +1810,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await persistTransactionEvents();
 
       const assetByTransfer = new Map<string, string>();
-      const pendingTransfers = [...content.transfers];
+      // A transfer of an already-promoted transaction is written as nothing (#869).
+      const pendingTransfers = [...scope.transfers];
       const orderedTransfers: typeof pendingTransfers = [];
       const pendingIds = new Set(pendingTransfers.map((record) => record.transferId));
       while (pendingTransfers.length) {
@@ -2185,13 +2400,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         candidateId: candidate.candidateId,
         status: 'finalized',
         idempotentReplay: false,
-        transactionCount: content.transactions.length,
-        transferCount: content.transfers.length,
+        transactionCount: authenticated.transactionCount,
+        transferCount: authenticated.transferCount,
         draftSelectionCount: authenticated.draftSelectionCount,
         draftPlayerAssetCount,
         pickCustodyCount: authenticated.pickCustodyCount,
         pickRealizationCount: authenticated.pickRealizationCount,
-        pickLineageDeferral: authenticated.pickLineageDeferral,
+        pickLineageDeferral: request.content.pickLineageDeferral ?? null,
       };
     });
   }

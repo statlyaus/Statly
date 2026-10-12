@@ -195,10 +195,20 @@ interface AssetOccurrence {
   asset: ParsedAsset;
   sourceKey: string;
   disposition?: ParsedDisposition | { unsupported: string };
+  /** The giving side's outcome for a traded pick (v3): who was eventually selected with it. */
+  eventual?: ParsedDisposition | { unsupported: string };
 }
 
 /** Parser version whose recorded rights admit the received-pick disposition fields. */
 export const DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION = 'draftguru-trade-parser/v2';
+
+/**
+ * v3 (statlyaus/Statly#886) emits exactly v2's claims, then one `pick_eventual_selection` per traded
+ * pick: the player the giving side of the row names as eventually selected with it, or "Pick not
+ * used". The giving side names that player whatever the pick was numbered on this page, so it
+ * identifies one pick across pages numbered before and after draft-night renumbering.
+ */
+export const DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION = 'draftguru-trade-parser/v3';
 
 type ParsedDisposition =
   | { disposition: 'selected'; player: { nativeId: string | null; recordedName: string } }
@@ -357,7 +367,10 @@ export function parseDraftguruTradeDetail(
   const occurrences: AssetOccurrence[] = [];
   const issues: DraftguruParseIssue[] = [];
   // Only a v2 capture's recorded rights admit the disposition fields, so v1 replays stay exact.
+  const recordsEventualSelections =
+    input.capture.parserVersion === DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION;
   const recordsDispositions =
+    recordsEventualSelections ||
     input.capture.parserVersion === DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION;
   let currentClub: string | null = null;
   table.find('tr').each((rowIndex, row) => {
@@ -387,11 +400,17 @@ export function parseDraftguruTradeDetail(
     reportUnsupportedSide(0, 'gave');
     reportUnsupportedSide(5, 'got');
     if (gave) {
+      const eventual =
+        recordsEventualSelections &&
+        (gave.asset.kind === 'current_pick' || gave.asset.kind === 'future_pick')
+          ? parseSideDisposition(cells, 0)
+          : null;
       occurrences.push({
         ...gave,
         clubName: currentClub,
         direction: 'gave',
         sourceKey: `${eventId}:row-${rowIndex + 1}:gave`,
+        ...(eventual ? { eventual } : {}),
       });
     }
     if (got) {
@@ -452,6 +471,8 @@ export function parseDraftguruTradeDetail(
     values.push(occurrence);
     occurrencesByFingerprint.set(occurrence.fingerprint, values);
   });
+  // v3's eventual selections follow every v2 claim, so a v2 row keeps its ordinal and key.
+  const eventualSelections: Array<[string, AflTradeExternalEvidenceContent['claim']]> = [];
   [...occurrencesByFingerprint.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .forEach(([fingerprint, values]) => {
@@ -477,6 +498,33 @@ export function parseDraftguruTradeDetail(
           asset: giver.asset,
         })
       );
+      // Only a named player or "Pick not used" is an eventual outcome; anything else (a pick not yet
+      // drafted, "traded on") states none, and is not an issue, so a v3 batch's issues equal v2's.
+      const eventual = giver.eventual;
+      if (eventual !== undefined && !('unsupported' in eventual)) {
+        if (eventual.disposition === 'selected') {
+          eventualSelections.push([
+            `${eventId}:eventual:${fingerprint}`,
+            {
+              kind: 'pick_eventual_selection',
+              nativeEventId: eventId,
+              nativeTransferId: fingerprint,
+              outcome: 'selected',
+              player: eventual.player,
+            },
+          ]);
+        } else if (eventual.disposition === 'not_used') {
+          eventualSelections.push([
+            `${eventId}:eventual:${fingerprint}`,
+            {
+              kind: 'pick_eventual_selection',
+              nativeEventId: eventId,
+              nativeTransferId: fingerprint,
+              outcome: 'not_used',
+            },
+          ]);
+        }
+      }
       const stated = receiver.disposition;
       if (stated === undefined) return;
       if ('unsupported' in stated) {
@@ -497,6 +545,7 @@ export function parseDraftguruTradeDetail(
         })
       );
     });
+  for (const [sourceKey, claim] of eventualSelections) evidence.push(create(sourceKey, claim));
 
   return { evidence, issues };
 }
