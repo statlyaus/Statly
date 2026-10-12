@@ -2481,10 +2481,11 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
     });
   });
 
-  it('re-keys every "Pick N" hop of a chain when only the later hop is corroborated', () => {
+  it('re-keys only the "Pick N" hop the order corroborates, leaving the other on its own id', () => {
     // 2024 slot 54 on the grading VM: the order shows Essendon holding Footscray's pick. Nothing
-    // delivers the slot to Melbourne, so only Essendon -> Brisbane is corroborated on its own;
-    // re-keying it alone left Melbourne -> Essendon on the number key and orphaned its traded-on link.
+    // delivers the slot to Melbourne, so only Essendon -> Brisbane is corroborated. Spreading the
+    // chain's custody pick onto Melbourne -> Essendon joined picks by number alone (pick-identity
+    // rule 7); the eventual-selection statements join the hops when Draftguru states them.
     const candidate = reconcile(
       [
         ...trade('e1', 'Melbourne', 'Essendon', pick(54)),
@@ -2493,15 +2494,15 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
       [order(54, 'Essendon', 'Footscray')]
     );
     const custodyPickId = candidate.content.pickCustody[0]!.pickId;
-    expect(pickIds(candidate)).toEqual([
-      { pickId: custodyPickId, status: 'single_source' },
-      { pickId: custodyPickId, status: 'single_source' },
-    ]);
+    const [first, second] = pickIds(candidate);
+    expect(second).toEqual({ pickId: custodyPickId, status: 'single_source' });
+    expect(first).toEqual(expect.objectContaining({ status: 'unresolved' }));
+    expect(first?.pickId).not.toBe(custodyPickId);
   });
 
-  it('keeps a chain on its number key when its hops would map to two custody picks', () => {
+  it('keeps each hop on its own number id when its hops would map to two custody picks', () => {
     // Two order rows for slot 14 name different original clubs. Carlton -> GWS matches only the
-    // first; GWS -> Bulldogs matches both. Neither hop moves, so the chain stays linked.
+    // first; GWS -> Bulldogs matches both. Neither hop moves, and a shared number joins nothing.
     const candidate = reconcile(
       [
         ...trade('e1', 'Carlton', 'GWS', pick(14)),
@@ -2512,8 +2513,9 @@ describe('pre-draft order custody joined to numbered pick trades (issue 853)', (
     const [first, second] = pickIds(candidate);
     const custodyPickIds = candidate.content.pickCustody.map((custody) => custody.pickId);
     expect(new Set(custodyPickIds).size).toBe(2);
-    expect(first?.pickId).toBe(second?.pickId);
+    expect(first?.pickId).not.toBe(second?.pickId);
     expect(custodyPickIds).not.toContain(first?.pickId);
+    expect(custodyPickIds).not.toContain(second?.pickId);
   });
 
   it('joins only the transfer whose pick number is the slot when the sender is the original club', () => {
