@@ -257,6 +257,29 @@ describe('parseFootyinfoDraftBoard', () => {
     ).toMatch(/unreviewed origin or bid basis/);
   });
 
+  it('drops a hop that leaves the pick with the same club, as the live 2021 board draws it', () => {
+    const selfHops = SYNTHETIC_BOARD_PICKS.map((pick) =>
+      pick.id === 3
+        ? { ...pick, lineage: [['trade', 'STK', 'STK']] as Array<[string, string, string]> }
+        : pick.id === 4
+          ? {
+              ...pick,
+              lineage: [
+                ['pick_swap', 'NTH', 'GCS'],
+                ['trade', 'GCS', 'GCS'],
+                ['trade', 'GCS', 'RCH'],
+                ['live_pick_swap', 'RCH', 'NTH'],
+              ] as Array<[string, string, string]>,
+            }
+          : pick
+    );
+    const read = parse(footyinfoBoardPage(selfHops));
+    expect(read.issues).toEqual([]);
+    expect(read.evidence.map(({ content }) => content.claim)).toEqual(
+      parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS)).evidence.map(({ content }) => content.claim)
+    );
+  });
+
   it('emits exactly the reviewed field boundary', () => {
     const paths = new Set(
       parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS)).evidence.flatMap(({ content: { claim } }) =>

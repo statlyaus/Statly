@@ -342,7 +342,13 @@ export function parseFootyinfoDraftBoard(
       return invalid(`Board pick ${pick.id} has an unreviewed origin or bid basis.`);
     }
     const routeLabel = bid !== undefined ? 'matched_bid' : originLabel!;
-    const hops = (pick.lineage ?? []).filter(({ type }) => hopKinds.has(type.id));
+    // The board draws no route step for a hop that leaves the pick with the same club (the live
+    // 2021 board's Fremantle concession pick #21, "Will Brodie to Fremantle", is FRE → FRE).
+    const hops = (pick.lineage ?? []).filter(
+      ({ type, from, to }) =>
+        hopKinds.has(type.id) &&
+        !(from !== undefined && to !== undefined && from.abbrev === to.abbrev)
+    );
     if (hops.some((hop) => hop.from === undefined || hop.to === undefined)) {
       return invalid(`Board pick ${pick.id} has a route hop without both clubs.`);
     }
