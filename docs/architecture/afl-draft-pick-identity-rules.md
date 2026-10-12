@@ -10,25 +10,27 @@ state](#measured-across-stored-and-promoted-state)).
 
 The architecture already states the principle: a nominal pick number is not a stable entitlement
 identity ([source capability table](afl-trade-intelligence.md#source-capability-and-evidence-hierarchy)).
-Nothing enforces it: neither the finalize check nor any trigger or index on the candidate tables checks
-pick identity today.
+Nothing checks that one id names one pick: the finalize check only requires each lineage row's transfer
+and selection to share its pick id with a usable custody row, and no trigger or index on the candidate
+tables checks more.
 
 ## How pick ids are formed
 
 `externalEvidenceReconciliation.ts` forms five kinds of pick id. Batch ten's 878 pick transfers, classified
 by recomputing each kind's content address:
 
-| Kind                  | Formed from                                                                                                  | Transfers |
-| --------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
-| Entitlement (custody) | Draft year, draft type, round and original club, from an Official AFL order observation the transfer matched | 674       |
-| Entitlement, no order | The same fields for a future pick no order observation confirms                                              | 52        |
-| Eventual selection    | The player Draftguru states every hop of the pick was used on (#889); identified by elimination              | 90        |
-| Number only           | Draft year, type, pick number and round, when nothing else matched (`currentPickNumberKey`)                  | 61        |
-| Unresolved transfer   | The transfer's own evidence row, for a future pick with no resolved original club                            | 1         |
+| Kind                  | Formed from                                                                                                                                                                                                                                                             | Transfers |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| Entitlement (custody) | Draft year, draft type, round and original club; an Official AFL order observation carries the same id. The transfer matched it, except 157 of the 240 future picks here, whose own future-pick id coincides with it without a usable observation at the receiving club | 674       |
+| Entitlement, no order | The same fields for a future pick no order observation confirms                                                                                                                                                                                                         | 52        |
+| Eventual selection    | The player Draftguru states every hop of the pick was used on (#889); identified by elimination                                                                                                                                                                         | 90        |
+| Number only           | Draft year, type, pick number and round, when nothing else matched (`currentPickNumberKey`)                                                                                                                                                                             | 61        |
+| Unresolved transfer   | The transfer's own evidence row, for a future pick with no resolved original club                                                                                                                                                                                       | 1         |
 
 An entitlement id is the pick itself (a club's round-N pick of a year; two picks of one club in one round
 collapse to one id, which the reconciler already flags as `pick_identity_conflict` when one order page
-shows both). It legitimately carries different
+shows both; batch ten has three such disputed entitlements, none traded yet). It legitimately carries
+different
 numbers on different pages: Draftguru numbers each page as it then stood, and bids shift numbers on draft
 night (the reconciler's own note on the eventual-selection join). So "more than one number on an id" is
 not evidence of a merge: of 59 such ids, 19 are contradicted by any rule below.
@@ -67,15 +69,15 @@ traded-on links survive) and the shifted-slot join are candidates, not establish
 
 ## Rules
 
-| Rule | Statement                                                                                                                                                                 | Batch ten                     | Enforced                       |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------ |
-| 1    | One transaction moves an id at most once from one resolved club and at most once into one resolved club, and its numbered transfers of that id carry one number.          | 4 transactions, all merges    | Finalize: refuse               |
-| 2    | An id's transfers and custody rows name at most one original club (rows with none are ignored).                                                                           | 16 ids                        | Finalize: refuse               |
-| 3    | The stated outcomes on one id name at most one drafted player.                                                                                                            | 6 ids                         | Finalize: refuse               |
-| 4    | One selection per pick id, and a pick's lineage rows name at most one selection.                                                                                          | 0 in all 36 stored candidates | Unique index; finalize check   |
-| 5    | Where a staged Footyinfo route covers a selected pick, a transfer on the selection's pick id that is not a hop of the route is recorded as a conflict on that pick.       | 25 of 30 checkable picks      | Finalize: refuse if unrecorded |
-| 6    | A number-only id is a placeholder: no two transfers in different transactions, and no transfer and selection, share one.                                                  | 44 transfers                  | Finalize: refuse               |
-| 7    | When evidence cannot decide, the candidate records `pick_identity_conflict` under a `pick-custody:` subject key and leaves each transfer on its own id; it never chooses. | n/a                           | Reconciler; rules 1 to 6       |
+| Rule | Statement                                                                                                                                                                                              | Batch ten                     | Enforced                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------ |
+| 1    | One transaction moves an id at most once from one resolved club and at most once into one resolved club, and its numbered transfers of that id carry one number.                                       | 4 transactions, all merges    | Finalize: refuse               |
+| 2    | An id's transfers and custody rows name at most one original club (rows with none are ignored).                                                                                                        | 16 ids                        | Finalize: refuse               |
+| 3    | The stated outcomes on one id name at most one drafted player.                                                                                                                                         | 6 ids                         | Finalize: refuse               |
+| 4    | One selection per pick id, and a pick's lineage rows name at most one selection.                                                                                                                       | 0 in all 36 stored candidates | Unique index; finalize check   |
+| 5    | Where a staged Footyinfo route covers a selected pick, a transfer on the selection's pick id that is not a hop of the route is recorded as a conflict on that pick.                                    | 25 of 30 checkable picks      | Finalize: refuse if unrecorded |
+| 6    | A number-only id is a placeholder: no two transfers in different transactions, and no transfer and selection, share one.                                                                               | 44 transfers                  | Finalize: refuse               |
+| 7    | When evidence cannot decide, the candidate records `pick_identity_conflict` under a `pick-custody:<pick id>` subject key and leaves each transfer on the id its own evidence formed; it never chooses. | n/a                           | Reconciler; rules 1 to 6       |
 
 The four rule 1 transactions: Port Adelaide and West Coast 2021 (Pick 14 one way, Sydney's Pick 12 the
 other), the Starcevich trade (Picks 16 and 22), the Petracca trade (Picks 7 and 8) and Brisbane and
@@ -90,6 +92,9 @@ round-2 entitlement because the pre-draft order had that entitlement at 32 with 
 routes the pick Geelong used at 32 from Essendon. The other 17 are number-only collisions (rule 6). Of 253
 selected board picks with a route, rule 5 can check 30 today: for 211 no transfer carries the selection's
 pick id, and 12 are excluded because the selection's club differs or only Footyinfo states it.
+Recording a rule 5 conflict under a `pick-custody:` key defers that pick: under the pick-side deferral its
+custody and lineage rows are left out of promotion (`pickLineageDeferral.ts`). For a number-only id the
+key is `pick-custody:<pick id>` with no observation time, which the deferral parses as the whole pick id.
 
 How rule 6 is checked: eventual-selection ids legitimately span transactions, so the check must know an
 id's kind. The database can work it out: `outcome_afl_trade_canonical_json` with `sha256` recomputes the
@@ -98,7 +103,10 @@ classification exactly (674, 52, 90, 61 and 1), so no candidate contract change 
 61 number-only transfers, 41 share an id with a selection and 44 break the rule in all. Number-only ids
 affect no grade today: none of the 123 onward links uses one, and their 61 legs are graded without the pick
 id (50 unused picks, 10 blocked for missing access evidence, 1 selected pick). In the candidate this is an
-identity fix, not a grade fix; in promoted state it is not (below).
+identity fix, not a grade fix; in promoted state it is not (below). Scoping number-only ids to their
+transfer also means a number-only id can never carry an onward link (none does today), and the classifier
+must name every id form explicitly: an unrecognised form would otherwise fall into the eventual-selection
+bucket, which is identified by elimination.
 
 ## Measured across stored and promoted state
 
@@ -107,10 +115,12 @@ All 36 stored candidates, rules as stated above:
 - **Rule 1** breaks in four candidates: batch ten (4 transactions), batch nine (2) and two from 2026-10-10
   (13 and 11). Two earlier candidates whose pick transfers have no resolved clubs at all (878 and 31
   transfers) are not violations, which is why the rule compares resolved clubs only.
-- **Rule 2** breaks only in batch nine (12 ids) and batch ten (16), the first two candidates prepared with
-  the eventual-selection join: independent confirmation of the cause traced in the code.
+- **Rule 2** breaks only in batch nine (12 ids) and batch ten (16), the two candidates prepared with the
+  eventual-selection join (batch nine's run notes record #889 deployed before it was prepared): independent
+  confirmation of the cause traced in the code.
 - **Rule 3** breaks in every candidate since 2026-10-07: 29 ids at most, 17 in the promoted candidate
-  `external-reconciliation:819c3cd4â€¦`, 6 in batch ten. These merges predate the eventual-selection join.
+  `external-reconciliation:819c3cd4â€¦`, 6 in batch ten. These merges predate the eventual-selection join,
+  which merged 2026-10-11 at 21:33 UTC.
 - **Rule 4** holds in all 36. **Rule 5** applies only to batch ten, the one candidate with board picks.
 - **Rule 6** breaks in 23 of the 29 candidates that have pick transfers: 220 transfers in the promoted
   candidate, 44 in batch ten.
@@ -142,9 +152,9 @@ Promotion `external-canonical-promotion:0d44778câ€¦` (from candidate `819c3cd4â€
 - **Every sender held the pick (continuity) as a refusal.** 16 of 355 entitlement ids break it, only 3 of
   them proven merges; candidates start in 2019, so a pick acquired earlier breaks it legitimately. It is a
   review signal.
-- **Rule 1 as a unique index.** Four of the 36 stored candidates break it (15, 13, 1 and 2 duplicate
-  groups); finalization runs only on the open-to-finalized transition, so a finalize check binds new
-  candidates without touching stored ones.
+- **Rule 1 as a unique index.** An index on (candidate, transaction, sending club, pick) cannot be built:
+  four of the 36 stored candidates already hold 15, 13, 1 and 2 duplicate groups. Finalization runs only on
+  the open-to-finalized transition, so a finalize check binds new candidates without touching stored ones.
 - **Lineage as a unique index on pick.** Ten picks in batch ten legitimately have several lineage rows.
 
 ## Enforcement
@@ -156,8 +166,9 @@ Promotion `external-canonical-promotion:0d44778câ€¦` (from candidate `819c3cd4â€
 - The selection half of rule 4 is a unique index on
   `outcome_external_reconciliation_draft_selection (candidate_id, pick_id)`.
 - Each rule ships with an integration test that it refuses a violating candidate and accepts a lawful one:
-  a renumbered entitlement, a future pick numbered later, a pick with no original club, and a pick swapped
-  back on draft night.
+  a renumbered entitlement, a future pick numbered later, a pick with no original club, a pick swapped
+  back on draft night, a future-pick trade of a disputed entitlement, and one pick passed through three
+  clubs in one transaction.
 - The read-only measurement above is repeated with the migration's exact SQL before it merges, and the PR
   lists every stored candidate and pick it would refuse.
 
@@ -168,14 +179,20 @@ Promotion `external-canonical-promotion:0d44778câ€¦` (from candidate `819c3cd4â€
   conflict instead.
 - Each rule 1 and rule 3 failure is traced to the step that produced it before the slot-chain or
   shifted-slot join is changed.
+- A transfer of a disputed entitlement (two picks of one club in one round) takes a transfer-scoped id:
+  `futurePickTransferAsset` would otherwise give both picks the entitlement's id, and rules 1 and 3 would
+  refuse the candidate the first time one is traded.
 - Number-only ids are scoped to their transfer (rule 6).
 
 ## Owner decisions
 
+- **Sequencing.** The migration refuses every candidate today's reconciler produces: batch ten breaks rules
+  1, 2, 3 and 6 and records no rule 5 conflicts. So it ships with the reconciler change or after it; if it
+  merged first, no #853 candidate could be finalized until the reconciler change landed. Recommended: one
+  change set, migration and reconciler together.
 - **Repairing promoted state.** The rules bind new candidates only. Canonical state already holds 16
   merged pick ids, and number-only ids that join 125 assets to other trades and 145 to draft selections by
-  number alone. Repairing it means a new promotion that
-  supersedes the affected event versions, and 173 traded-player arrival spells start at events of the
+  number alone. Repairing it means a new promotion that supersedes the affected event versions, and 173 traded-player arrival spells start at events of the
   current promotion, so a repair must carry or re-register them. Whether and when to repair is the owner's
   decision; the rules and reconciler change come first so a repair promotes correct ids.
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
