@@ -342,23 +342,24 @@ export function parseFootyinfoDraftBoard(
       return invalid(`Board pick ${pick.id} has an unreviewed origin or bid basis.`);
     }
     const routeLabel = bid !== undefined ? 'matched_bid' : originLabel!;
-    // The board draws no route step for a hop that leaves the pick with the same club (the live
-    // 2021 board's Fremantle concession pick #21, "Will Brodie to Fremantle", is FRE → FRE).
-    const hops = (pick.lineage ?? []).filter(
-      ({ type, from, to }) =>
-        hopKinds.has(type.id) &&
-        !(from !== undefined && to !== undefined && from.abbrev === to.abbrev)
-    );
-    if (hops.some((hop) => hop.from === undefined || hop.to === undefined)) {
+    const allHops = (pick.lineage ?? []).filter(({ type }) => hopKinds.has(type.id));
+    if (allHops.some((hop) => hop.from === undefined || hop.to === undefined)) {
       return invalid(`Board pick ${pick.id} has a route hop without both clubs.`);
     }
-    const chain = hops.length === 0 ? [] : [hops[0]!.from!, ...hops.map(({ to }) => to!)];
+    // Continuity and the holder are checked over every hop, a same-club hop included, so a
+    // misplaced one still refuses.
     if (
-      hops.some((hop, index) => index > 0 && hop.from!.abbrev !== hops[index - 1]!.to!.abbrev) ||
-      (chain.length > 0 && chain.at(-1)!.abbrev !== pick.team.abbrev)
+      allHops.some(
+        (hop, index) => index > 0 && hop.from!.abbrev !== allHops[index - 1]!.to!.abbrev
+      ) ||
+      (allHops.length > 0 && allHops.at(-1)!.to!.abbrev !== pick.team.abbrev)
     ) {
       return invalid(`Board pick ${pick.id} has a route that does not end with its holder.`);
     }
+    // The board draws no route step for a hop that leaves the pick with the same club (the live
+    // 2021 board's Fremantle concession pick #21, "Will Brodie to Fremantle", is FRE → FRE).
+    const hops = allHops.filter(({ from, to }) => from!.abbrev !== to!.abbrev);
+    const chain = hops.length === 0 ? [] : [hops[0]!.from!, ...hops.map(({ to }) => to!)];
     // The board prints a leftover-points pick's label without its route, and a matched bid instead
     // of one.
     const route = routeLabel === 'leftover_points' || routeLabel === 'matched_bid' ? [] : chain;

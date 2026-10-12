@@ -278,6 +278,15 @@ describe('parseFootyinfoDraftBoard', () => {
     expect(read.evidence.map(({ content }) => content.claim)).toEqual(
       parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS)).evidence.map(({ content }) => content.claim)
     );
+    const withLineage = (lineage: Array<[string, string | null, string | null]>) =>
+      parse(
+        footyinfoBoardPage(
+          SYNTHETIC_BOARD_PICKS.map((pick) => (pick.id === 3 ? { ...pick, lineage } : pick))
+        )
+      ).issues[0]?.detail;
+    // A same-club hop at another club than the holder, or a hop missing a club, still refuses.
+    expect(withLineage([['trade', 'GCS', 'GCS']])).toMatch(/does not end with its holder/);
+    expect(withLineage([['trade', null, 'STK']])).toMatch(/without both clubs/);
   });
 
   it('emits exactly the reviewed field boundary', () => {
