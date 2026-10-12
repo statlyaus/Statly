@@ -2185,7 +2185,18 @@ export function reconcileAflTradeExternalEvidence(input: {
   const draftSelections: CanonicalDraftSelection[] = [...groupedSelections.values()]
     .map((rows) => {
       const first = rows[0].content.claim;
-      const resolvedRows = rows.map((row) => ({
+      // A Footyinfo row only corroborates another provider's selection (issue 853): when its player
+      // or club has no reviewed resolution it is cited but not counted, so it can neither unresolve
+      // nor null the selection the other provider states. Alone, it resolves like any provider.
+      const corroborationOnly = rows.some(({ content }) => content.provider !== 'footyinfo');
+      const counted = rows.filter(
+        ({ content }) =>
+          !corroborationOnly ||
+          content.provider !== 'footyinfo' ||
+          (lookup('footyinfo', 'player', content.claim.player) !== null &&
+            lookup('footyinfo', 'club', content.claim.selectedByClub) !== null)
+      );
+      const resolvedRows = counted.map((row) => ({
         row,
         playerId: resolve(
           row.content.provider,
@@ -2223,7 +2234,7 @@ export function reconcileAflTradeExternalEvidence(input: {
         });
       } else {
         [playerId, clubId] = resolvedPairs[0].split('|');
-        status = statusFromEvidence(new Set(rows.map((row) => row.content.provider)).size);
+        status = statusFromEvidence(new Set(counted.map((row) => row.content.provider)).size);
       }
 
       const detailSupport = detailClaims.filter((detail) => {
@@ -2269,7 +2280,7 @@ export function reconcileAflTradeExternalEvidence(input: {
         });
       }
       const supportingProviders = sortedUnique([
-        ...rows.map((row) => row.content.provider),
+        ...counted.map((row) => row.content.provider),
         ...detailSupport.map((row) => row.content.provider),
       ]) as Provider[];
       if (status === 'single_source' && supportingProviders.length >= 2) status = 'corroborated';

@@ -4346,6 +4346,10 @@ The remaining work proceeds through these independently verifiable gates:
        round, the number and player when selected, the club route the board prints, the route label
        and any matched bid, the points and the note. Each selection is also a `draft_selection`, so
        reconciliation already counts Footyinfo as a second provider for a selection's status.
+       A Footyinfo selection row only corroborates when another provider states the same selection.
+       If its player or club has no reviewed resolution, the row is cited on the selection but not
+       counted. It can then neither make the selection unresolved nor null its player. A Footyinfo-only
+       selection resolves like any provider's.
      - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row
        is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`
