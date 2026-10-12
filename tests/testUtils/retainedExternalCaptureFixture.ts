@@ -493,11 +493,14 @@ export async function createRetainedExternalCaptureFixture(
       capabilityId: content.acquisition.capabilityId,
       sourceUrl,
       capturedAt: at,
+      // A board states no as-of date: its claims are effective when captured (scope validator).
       effectiveAt: draftOrder
         ? orderEffectiveAt
-        : miniCapacity || playerDeparture
-          ? '2012-10-26T00:00:00.000Z'
-          : '2024-11-21T00:00:00.000Z',
+        : footyinfoBoard
+          ? at
+          : miniCapacity || playerDeparture
+            ? '2012-10-26T00:00:00.000Z'
+            : '2024-11-21T00:00:00.000Z',
       parserVersion: content.acquisition.clientVersion,
       fieldManifestSha256: sha(rights.content.fields),
       maximumBytes: 2097152,
