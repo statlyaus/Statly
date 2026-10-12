@@ -195,7 +195,7 @@ const draftguruSelection = (holder: string): Claim => ({
   draftYear: 2024,
   draftType: 'national',
   selectionNumber: 15,
-  roundNumber: 1,
+  roundNumber: null,
   player: { nativeId: joeBerry.draftguru, recordedName: 'Joe Berry' },
   selectedByClub: { nativeId: null, recordedName: holder },
 });
