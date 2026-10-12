@@ -85,8 +85,9 @@ BEGIN
             AND (issue.subject_key='pick-custody:'||selection.pick_id
                  OR starts_with(issue.subject_key,'pick-custody:'||selection.pick_id||'|'))))
   THEN RAISE EXCEPTION 'Pick-identity rule 5: a transfer off the Footyinfo route of a selected pick is not a recorded conflict'; END IF;
-  -- Rule 6: a number-only pick id (draft year, type, number and round, nothing else) is never shared
-  -- by transfers of two transactions, nor by a transfer and a selection.
+  -- Rule 6: a number-only pick id (draft year, type, number and round, nothing else, and no custody
+  -- observation of the candidate carrying it) is never shared by transfers of two transactions, nor by
+  -- a transfer and a selection.
   IF EXISTS (
     SELECT 1 FROM outcome_external_reconciliation_transfer transfer
      WHERE transfer.candidate_id=NEW.candidate_id
@@ -96,6 +97,8 @@ BEGIN
              'draftType',transfer.transfer_json#>'{asset,draftType}',
              'nominalPick',transfer.transfer_json#>'{asset,nominalPick}',
              'nominalRound',transfer.transfer_json#>'{asset,nominalRound}')),'UTF8')),'hex')
+       AND NOT EXISTS (SELECT 1 FROM outcome_external_reconciliation_pick_custody custody
+                        WHERE custody.candidate_id=NEW.candidate_id AND custody.pick_id=transfer.pick_id)
        AND (EXISTS (SELECT 1 FROM outcome_external_reconciliation_transfer other
                      WHERE other.candidate_id=NEW.candidate_id AND other.pick_id=transfer.pick_id
                        AND other.transaction_id<>transfer.transaction_id)

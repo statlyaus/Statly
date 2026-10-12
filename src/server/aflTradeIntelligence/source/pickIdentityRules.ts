@@ -217,12 +217,19 @@ export function aflTradePickIdentityViolations(
     }
   }
 
-  // Rule 6: a number-only id is never shared across transactions or with a selection.
+  // Rule 6: a number-only id is never shared across transactions or with a selection. An id a custody
+  // observation carries is a custody id, whatever its form (earlier reconcilers keyed some by number).
   const selectionPicks = new Set(content.draftSelections.map(({ pickId }) => pickId));
+  const custodyPicks = new Set(content.pickCustody.map(({ pickId }) => pickId));
   const reported = new Set<string>();
   for (const transfer of picks) {
     const pickId = pickIdOf(transfer);
-    if (reported.has(pickId) || pickId !== aflTradeNumberOnlyPickId(transfer.asset)) continue;
+    if (
+      reported.has(pickId) ||
+      custodyPicks.has(pickId) ||
+      pickId !== aflTradeNumberOnlyPickId(transfer.asset)
+    )
+      continue;
     const shared =
       selectionPicks.has(pickId) ||
       (transfersOnPick.get(pickId) ?? []).some(
