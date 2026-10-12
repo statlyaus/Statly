@@ -4277,7 +4277,10 @@ The remaining work proceeds through these independently verifiable gates:
        whatever the pick's own onward leg is. A bundle needs `received` and `givenUp`: `relative_value`
        also takes the pick's weight, and `equal_split` applies when `givenUp` is known to be 0. When the
        side it needs is unknown, the leg is `traded_on_return_blocked`. When it is known but the onward
-       trade is blocked elsewhere, the leg is valued with `traded_on_return_partial`.
+       trade is blocked elsewhere, the leg is valued with `traded_on_return_partial`. A holder that
+       received no leg at all in the onward trade has a known `received` of 0, as under v2 when the
+       onward trade is unblocked: a capture missing the holder's return side would value the pick at
+       0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
      - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
        allocation would need is known. A blocked side takes precedence, so it is
        `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
