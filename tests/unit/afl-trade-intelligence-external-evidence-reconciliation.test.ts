@@ -507,6 +507,20 @@ describe('external draft and trade evidence reconciliation', () => {
         pickId: before!.pickId,
       }),
     ]);
+
+    // With the order page's custody claim the two providers corroborate across the round difference.
+    expect(
+      reconcileFrom([draftguruNoRound, footyinfo, officialOrder]).content.draftSelections
+    ).toEqual([
+      expect.objectContaining({
+        selectionNumber: 14,
+        playerId: 'player-harry-kyle',
+        clubId: 'club-western-bulldogs',
+        status: 'corroborated',
+        supportingProviders: ['draftguru', 'footyinfo'],
+        roundNumber: null,
+      }),
+    ]);
   });
 
   it('cites an unresolved Footyinfo selection row without unresolving the selection it corroborates', () => {
