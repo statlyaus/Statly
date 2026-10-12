@@ -275,7 +275,8 @@ club can contradict the pick a walk settles on.
   decision; the rules and reconciler change come first so a repair promotes correct ids. The repair is
   an ordinary deferred-lineage promotion of a new candidate (migration 0274): a promoted trade counts
   as already promoted only when every pick transfer keeps its promoted asset's pick id, so exactly the
-  trades whose pick ids changed get a superseding version; custody already canonical with the
+  trades whose pick ids changed get a superseding version (a trade whose current version came from a
+  promotion of reviewed pick lineage keeps its reviewed ids); custody already canonical with the
   candidate's facts is recorded as `promotedCustodyIds` and left unwritten. The arrival spells that
   start at a superseded version are re-registered afterwards.
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence

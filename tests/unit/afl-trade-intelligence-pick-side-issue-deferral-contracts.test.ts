@@ -996,6 +996,7 @@ describe('a deferred candidate whose transaction is already current canonical', 
     {
       transactionId: concessionTransactionId,
       transferIds: concessionTransferIds,
+      reviewedLineage: false,
       transferPickIds: [],
     },
   ];
@@ -1011,9 +1012,24 @@ describe('a deferred candidate whose transaction is already current canonical', 
       asset: { kind: 'player' },
     }));
     const current = [
-      { transactionId: 'transaction:b', transferIds: ['t1', 't2', 't9'], transferPickIds: [] },
-      { transactionId: 'transaction:a', transferIds: ['t3'], transferPickIds: [] },
-      { transactionId: 'transaction:c', transferIds: ['t5'], transferPickIds: [] },
+      {
+        transactionId: 'transaction:b',
+        transferIds: ['t1', 't2', 't9'],
+        reviewedLineage: false,
+        transferPickIds: [],
+      },
+      {
+        transactionId: 'transaction:a',
+        transferIds: ['t3'],
+        reviewedLineage: false,
+        transferPickIds: [],
+      },
+      {
+        transactionId: 'transaction:c',
+        transferIds: ['t5'],
+        reviewedLineage: false,
+        transferPickIds: [],
+      },
     ];
     expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
       'transaction:a',
@@ -1034,6 +1050,7 @@ describe('a deferred candidate whose transaction is already current canonical', 
         {
           transactionId: concessionTransactionId,
           transferIds: [concessionTransferIds[0]!],
+          reviewedLineage: false,
           transferPickIds: [],
         },
       ]).content.pickLineageDeferral
@@ -1583,6 +1600,7 @@ describe('repairing promoted pick identity (#853)', () => {
       { transactionId: 'transaction:kept', transferIds: ['player', 'pick-kept'] },
       { transactionId: 'transaction:rekeyed', transferIds: ['pick-rekeyed'] },
       { transactionId: 'transaction:pickless', transferIds: ['pick-pickless'] },
+      { transactionId: 'transaction:reviewed', transferIds: ['pick-reviewed'] },
       { transactionId: 'transaction:unheld', transferIds: ['pick-unheld'] },
     ];
     const pick = (transferId: string, pickId: string) => ({
@@ -1594,33 +1612,46 @@ describe('repairing promoted pick identity (#853)', () => {
       pick('pick-kept', 'pick:a'),
       pick('pick-rekeyed', 'pick:new'),
       pick('pick-pickless', 'pick:c'),
+      pick('pick-reviewed', 'pick:reconciled'),
     ];
     const current = [
       {
         transactionId: 'transaction:kept',
         transferIds: ['pick-kept', 'player'],
+        reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-kept', pickId: 'pick:a' }],
       },
       {
         transactionId: 'transaction:rekeyed',
         transferIds: ['pick-rekeyed'],
+        reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-rekeyed', pickId: 'pick:old' }],
       },
       // A promoted asset that names no pick does not stand for a candidate pick transfer.
       {
         transactionId: 'transaction:pickless',
         transferIds: ['pick-pickless'],
+        reviewedLineage: false,
         transferPickIds: [],
+      },
+      // Reviewed pick lineage settled this trade's pick ids; reconciliation does not override them.
+      {
+        transactionId: 'transaction:reviewed',
+        transferIds: ['pick-reviewed'],
+        reviewedLineage: true,
+        transferPickIds: [{ transferId: 'pick-reviewed', pickId: 'pick:reviewed' }],
       },
       // A transfer the candidate does not hold is never matched.
       {
         transactionId: 'transaction:unheld',
         transferIds: ['pick-unheld'],
+        reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-unheld', pickId: 'pick:d' }],
       },
     ];
     expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
       'transaction:kept',
+      'transaction:reviewed',
     ]);
   });
 
@@ -1636,6 +1667,7 @@ describe('repairing promoted pick identity (#853)', () => {
       {
         transactionId: tradeId,
         transferIds: trade.transferIds,
+        reviewedLineage: false,
         transferPickIds: [{ transferId: pickTransfer.transferId, pickId }],
       },
     ];

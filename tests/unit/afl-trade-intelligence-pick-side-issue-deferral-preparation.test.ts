@@ -309,6 +309,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
         {
           transactionId,
           transferIds: [transferId, 'external-transfer:x'],
+          reviewedLineage: false,
           transferPickIds: [{ transferId, pickId }],
         },
       ],
@@ -329,7 +330,12 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     // A transaction with a transfer nobody promoted is not recorded.
     const partial = dependencies(approved, {
       promotedTransactions: [
-        { transactionId, transferIds: ['external-transfer:x'], transferPickIds: [] },
+        {
+          transactionId,
+          transferIds: ['external-transfer:x'],
+          reviewedLineage: false,
+          transferPickIds: [],
+        },
       ],
     });
     const unrecorded = await prepareAflTradeHistoricalReconciliation(
@@ -343,6 +349,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
         {
           transactionId,
           transferIds: [transferId],
+          reviewedLineage: false,
           transferPickIds: [{ transferId, pickId: `draft-pick:${digest('0')}` }],
         },
       ],
@@ -355,7 +362,12 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     // Without the flag the reader is never consulted.
     const plain = dependencies(null, {
       promotedTransactions: [
-        { transactionId, transferIds: [transferId], transferPickIds: [{ transferId, pickId }] },
+        {
+          transactionId,
+          transferIds: [transferId],
+          reviewedLineage: false,
+          transferPickIds: [{ transferId, pickId }],
+        },
       ],
     });
     await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);

@@ -49,6 +49,28 @@ RETURNS TABLE (transaction_id TEXT, transfer_id TEXT, pick_id TEXT) LANGUAGE sql
                       WHERE successor.supersedes_version_id=version.event_version_id)
 $$;
 
+-- Current canonical trade events whose current version came from a promotion of reviewed pick
+-- lineage: the promoted candidate carried a reviewed correction or a reviewed scope. A reviewer
+-- settled those pick ids, so reconciliation's ids do not supersede them.
+CREATE FUNCTION outcome_current_canonical_reviewed_lineage_transactions(target_competition TEXT)
+RETURNS TABLE (transaction_id TEXT) LANGUAGE sql STABLE AS $$
+  SELECT DISTINCT record.source_record_id
+    FROM outcome_external_canonical_promotion_record record
+    JOIN outcome_external_canonical_promotion promotion
+      ON promotion.promotion_id=record.promotion_id AND promotion.status='finalized'
+    JOIN outcome_external_reconciliation_candidate candidate
+      ON candidate.candidate_id=promotion.candidate_id
+    JOIN outcome_event_version version
+      ON version.event_version_id=record.canonical_record_id AND version.status='approved'
+     AND version.event_id=record.source_record_id
+    JOIN outcome_event event ON event.event_id=version.event_id AND event.competition=target_competition
+   WHERE record.record_kind='transaction'
+     AND (candidate.candidate_json#>'{content,reviewedCorrection}' IS NOT NULL
+          OR candidate.candidate_json#>'{content,reviewedScope}' IS NOT NULL)
+     AND NOT EXISTS (SELECT 1 FROM outcome_event_version successor
+                      WHERE successor.supersedes_version_id=version.event_version_id)
+$$;
+
 -- Every transaction the candidate records as already promoted is one it holds, is current canonical,
 -- has every one of its candidate transfers promoted on that version, and every candidate pick
 -- transfer among them carries its promoted asset's pick id. NULL (absent) is valid; an empty or
@@ -82,7 +104,8 @@ BEGIN
           WHERE NOT (transfer.value = ANY(promoted))) THEN
       RETURN FALSE;
     END IF;
-    IF EXISTS (
+    IF NOT EXISTS (SELECT 1 FROM outcome_current_canonical_reviewed_lineage_transactions(competition) reviewed
+                    WHERE reviewed.transaction_id=id#>>'{}') AND EXISTS (
          SELECT 1 FROM jsonb_array_elements_text(held->'transferIds') transfer
           WHERE (moved_by_id->transfer.value) IS NULL
              OR ((moved_by_id->transfer.value)#>>'{asset,kind}'='pick_entitlement'

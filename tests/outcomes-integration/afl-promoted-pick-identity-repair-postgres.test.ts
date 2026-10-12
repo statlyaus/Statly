@@ -153,6 +153,7 @@ describe('repairing promoted pick identity (migration 0274)', () => {
       {
         transactionId: trade.transactionId,
         transferIds: [...trade.transferIds].sort(),
+        reviewedLineage: false,
         transferPickIds: [{ transferId: pickTransfer.transferId, pickId: pickIdOf(pickTransfer) }],
       },
     ]);

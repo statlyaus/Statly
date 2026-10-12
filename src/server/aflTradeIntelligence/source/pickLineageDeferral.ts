@@ -84,12 +84,16 @@ export interface AflTradePickLineageDeferral {
 
 /**
  * A current canonical trade event as the repository reads it at preparation: the source transfer ids
- * promoted as assets on its current version, and the pick id of each of those assets that names one.
+ * promoted as assets on its current version, the pick id of each of those assets that names one, and
+ * whether that version came from a promotion of reviewed pick lineage (a candidate carrying a
+ * reviewed correction or reviewed scope), whose pick ids a reviewer settled and reconciliation does
+ * not override.
  */
 export interface AflTradeCurrentCanonicalTransaction {
   readonly transactionId: string;
   readonly transferIds: readonly string[];
   readonly transferPickIds: readonly { readonly transferId: string; readonly pickId: string }[];
+  readonly reviewedLineage: boolean;
 }
 
 /**
@@ -388,6 +392,7 @@ export function aflTradePromotedTransactions(
     current.map((entry) => [
       entry.transactionId,
       {
+        reviewedLineage: entry.reviewedLineage,
         transferIds: new Set(entry.transferIds),
         pickIdByTransfer: new Map(
           entry.transferPickIds.map(({ transferId, pickId }) => [transferId, pickId] as const)
@@ -407,6 +412,7 @@ export function aflTradePromotedTransactions(
               const transfer = transferById.get(transferId);
               if (transfer === undefined || !promoted.transferIds.has(transferId)) return false;
               return (
+                promoted.reviewedLineage ||
                 transfer.asset.kind !== 'pick_entitlement' ||
                 (transfer.asset.pickId !== undefined &&
                   transfer.asset.pickId === promoted.pickIdByTransfer.get(transferId))

@@ -2332,6 +2332,7 @@ export function reconcileAflTradeExternalEvidence(input: {
             transferPickIds: z.array(
               z.object({ transferId: z.string().min(1), pickId: z.string().min(1) }).strict()
             ),
+            reviewedLineage: z.boolean(),
           })
           .strict()
       )

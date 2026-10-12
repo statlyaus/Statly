@@ -48,10 +48,16 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
       listed.push({ transferId: transfer_id, pickId: pick_id });
       picksByTransaction.set(transaction_id, listed);
     }
+    const reviewed = await this.client.query<{ transaction_id: string }>(
+      'SELECT transaction_id FROM outcome_current_canonical_reviewed_lineage_transactions($1)',
+      [competition]
+    );
+    const reviewedIds = new Set(reviewed.rows.map(({ transaction_id }) => transaction_id));
     return result.rows.map(({ transaction_id, transfer_ids }) => ({
       transactionId: transaction_id,
       transferIds: [...transfer_ids].sort(),
       transferPickIds: picksByTransaction.get(transaction_id) ?? [],
+      reviewedLineage: reviewedIds.has(transaction_id),
     }));
   }
 
