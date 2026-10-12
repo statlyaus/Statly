@@ -394,7 +394,7 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.publicationEligible).toBe(false);
   });
 
-  it('counts a Footyinfo board selection as a second provider and leaves its board picks unread', () => {
+  it('counts a Footyinfo board selection as a second provider and records its board pick', () => {
     const footyinfo = batch('footyinfo', 'd', [
       {
         kind: 'draft_selection',
@@ -432,10 +432,20 @@ describe('external draft and trade evidence reconciliation', () => {
       identityResolutions: [
         ...resolutions,
         resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        resolution('footyinfo', 'club', 'GWS Giants', 'club-gws', 'GWS'),
         resolution('footyinfo', 'player', 'Harry Kyle', 'player-harry-kyle', 'harry-kyle'),
       ],
       reconciledAt: '2026-08-09T05:00:00.000Z',
     });
+    // The board pick is conserved as its own record, its route resolved club by club.
+    expect(candidate.content.draftBoardPicks).toEqual([
+      expect.objectContaining({
+        status: 'selected',
+        recordedPickNumber: 14,
+        clubId: 'club-western-bulldogs',
+        routeClubIds: ['club-gws', 'club-western-bulldogs'],
+      }),
+    ]);
     expect(candidate.content.draftSelections).toEqual([
       expect.objectContaining({
         selectionNumber: 14,
