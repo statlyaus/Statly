@@ -321,9 +321,11 @@ describe('Footyinfo board routes order an eventual-selection group (issue 853)',
     const leg = (candidate: Candidate) =>
       gradeLeg(candidate, transferOf(candidate, 'Port Adelaide', 'Richmond', 20).transferId);
     expect(leg(reconcile(loop([20]))).reasons).toEqual(['traded_on_return_unlinked']);
-    // Linked to Richmond → West Coast, whose own received pick has no stated outcome here.
+    // Linked to Richmond → West Coast. West Coast's received pick has no stated outcome here, so
+    // that trade is blocked; under rule v3 Richmond's own side (it received nothing) is known, so
+    // the leg is valued on it and partial.
     expect(leg(reconcile(loop([20]), { board: [loopRoute] })).reasons).toEqual([
-      'traded_on_return_blocked',
+      'traded_on_return_partial',
     ]);
   });
 
