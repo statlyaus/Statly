@@ -457,6 +457,58 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.issues).toEqual([]);
   });
 
+  it('joins a round-bearing Footyinfo selection to a Draftguru selection that writes no round', () => {
+    // Draftguru's year page writes no round; a Footyinfo board always writes one (issue 853).
+    const draftguruNoRound = batch(
+      'draftguru',
+      'a',
+      draftguru.content.evidence.map(({ content: { claim } }) =>
+        claim.kind === 'draft_selection' ? { ...claim, roundNumber: null } : claim
+      )
+    );
+    const footyinfo = batch('footyinfo', 'd', [
+      {
+        kind: 'draft_selection',
+        draftYear: 2025,
+        draftType: 'national',
+        selectionNumber: 14,
+        roundNumber: 1,
+        player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+        selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+      },
+    ]);
+    // No custody claim, so the selection's pick id falls back to one built from its round.
+    const reconcileFrom = (sourceBatches: (typeof draftguru)[]) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches,
+        identityResolutions: [
+          ...resolutions,
+          resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+          resolution('footyinfo', 'player', 'Harry Kyle', 'player-harry-kyle', 'harry-kyle'),
+        ],
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+      });
+    const [before] = reconcileFrom([draftguruNoRound]).content.draftSelections;
+    const { draftSelections } = reconcileFrom([draftguruNoRound, footyinfo]).content;
+
+    expect(draftSelections).toEqual([
+      expect.objectContaining({
+        selectionId: before!.selectionId,
+        selectionNumber: 14,
+        playerId: 'player-harry-kyle',
+        // Without a custody claim the status is the one Draftguru alone gets.
+        status: before!.status,
+        supportingProviders: ['draftguru', 'footyinfo'],
+        // Draftguru's round and pick id, so the board re-keys no pick.
+        roundNumber: null,
+        pickId: before!.pickId,
+      }),
+    ]);
+  });
+
   it('cites an unresolved Footyinfo selection row without unresolving the selection it corroborates', () => {
     const footyinfoSelection = (player: string, nativeId: string) =>
       batch('footyinfo', 'd', [

@@ -455,15 +455,6 @@ function sortedUnique(values: readonly string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function pickKey(
-  year: number,
-  draftType: string,
-  pick: number | null,
-  round: number | null
-): string {
-  return `${year}|${draftType}|${pick ?? 'unknown'}|${round ?? 'unknown'}`;
-}
-
 function pickId(
   year: number,
   draftType: string,
@@ -2176,7 +2167,10 @@ export function reconcileAflTradeExternalEvidence(input: {
   const groupedSelections = new Map<string, typeof selectionClaims>();
   selectionClaims.forEach((row) => {
     const claim = row.content.claim;
-    const key = pickKey(claim.draftYear, claim.draftType, claim.selectionNumber, claim.roundNumber);
+    // One selection per year, draft type and selection number, the same fields as its selectionId.
+    // Providers differ on the round (Draftguru's year page writes none, a Footyinfo board writes one),
+    // so the round must not split one pick into two selections with one id (issue 853).
+    const key = `${claim.draftYear}|${claim.draftType}|${claim.selectionNumber}`;
     const group = groupedSelections.get(key) ?? [];
     group.push(row);
     groupedSelections.set(key, group);
@@ -2185,6 +2179,11 @@ export function reconcileAflTradeExternalEvidence(input: {
   const draftSelections: CanonicalDraftSelection[] = [...groupedSelections.values()]
     .map((rows) => {
       const first = rows[0].content.claim;
+      // The round comes from a non-Footyinfo row when there is one, so a Footyinfo board never
+      // changes the round, or the fallback pick id built from it, of a selection another provider
+      // states. A Footyinfo-only selection keeps the board's round.
+      const roundNumber = (rows.find(({ content }) => content.provider !== 'footyinfo') ?? rows[0])
+        .content.claim.roundNumber;
       // A Footyinfo row only corroborates another provider's selection (issue 853): when its player
       // or club has no reviewed resolution it is cited but not counted, so it can neither unresolve
       // nor null the selection the other provider states. Alone, it resolves like any provider.
@@ -2295,7 +2294,7 @@ export function reconcileAflTradeExternalEvidence(input: {
       const selectionPickId =
         matchingCustody.length === 1
           ? matchingCustody[0].pickId
-          : pickId(first.draftYear, first.draftType, first.selectionNumber, first.roundNumber);
+          : pickId(first.draftYear, first.draftType, first.selectionNumber, roundNumber);
       // A completed selection is evidence of recruitment, not of the pick's prior owner.
       // Keep its slot identity when a dated session is retained and no custody claim
       // exists for that slot. Conflicting or incomplete custody remains unresolved.
@@ -2322,7 +2321,7 @@ export function reconcileAflTradeExternalEvidence(input: {
         draftYear: first.draftYear,
         draftType: first.draftType,
         selectionNumber: first.selectionNumber,
-        roundNumber: first.roundNumber,
+        roundNumber,
         pickId: selectionPickId,
         playerId,
         clubId,
