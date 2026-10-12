@@ -644,9 +644,12 @@ async function requireDeferredCustodyRows(
 }
 
 /**
- * Every custody id the candidate records as already promoted must still be a canonical custody
- * observation of a finalized promotion with the candidate row's facts (the candidate insert test,
- * 0274); the promotion writes nothing for it, so a second write of the same evidence never collides.
+ * Every custody row the candidate records as already promoted must still record an observation
+ * canonical under a finalized promotion: the same pick, observation time and holder (the canonical
+ * unique key) with the same draft, recorded round and pick and original club, and no predecessor on
+ * either side (the candidate insert test, 0274). Custody ids may differ, since a re-captured page
+ * gives the same observation new evidence; the promotion writes nothing for it, so it never collides
+ * with the canonical row.
  */
 async function requireCurrentPromotedCustody(
   transaction: AflOutcomeSqlTransaction,
@@ -661,7 +664,7 @@ async function requireCurrentPromotedCustody(
   if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
     throw new AflTradeExternalCanonicalPromotionError(
       'CANDIDATE_UNAVAILABLE',
-      'A custody observation the candidate leaves to an earlier promotion is no longer canonical with its facts.'
+      "A custody observation the candidate leaves to an earlier promotion is no longer canonical with the candidate row's facts."
     );
   }
 }

@@ -145,6 +145,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      */
     reciprocalFuturePickRekeyed?: boolean;
     /**
+     * The reciprocal future pick's custody row comes from a re-captured page: the same observation
+     * (pick, time, holder and facts) under a new custody id (#853). Needs
+     * `reciprocalFuturePickResolved`.
+     */
+    reciprocalFuturePickCustodyRecaptured?: boolean;
+    /**
      * The candidate records the reciprocal future pick's custody as already promoted
      * (`pickLineageDeferral.promotedCustodyIds`) whether or not it is. Needs
      * `reciprocalFuturePickResolved`.
@@ -228,10 +234,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
   )
     throw new Error('A resolved reciprocal pick is a pick-side profile with usable custody.');
   if (
-    (options.reciprocalFuturePickRekeyed || options.custodyAlreadyPromoted) &&
+    (options.reciprocalFuturePickRekeyed ||
+      options.custodyAlreadyPromoted ||
+      options.reciprocalFuturePickCustodyRecaptured) &&
     !options.reciprocalFuturePickResolved
   )
-    throw new Error('A re-keyed or already-promoted reciprocal pick needs it resolved.');
+    throw new Error(
+      'A re-keyed, re-captured or already-promoted reciprocal pick needs it resolved.'
+    );
   if (options.resolvePromotedRecords && options.pickSideIssues !== 'deferred')
     throw new Error('Resolving already-promoted records needs the deferral.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
@@ -378,6 +388,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     pickId: reciprocalFuturePickId,
     observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
     currentClubId: targets.fromClubId,
+    // A re-captured page states the same observation as new evidence, so a new custody id (#853).
+    ...(options.reciprocalFuturePickCustodyRecaptured ? { recapturedIn: fixtureNamespace } : {}),
   });
   const numberedPickId = createAflTradeContentAddress('draft-pick', {
     fixtureNamespace,

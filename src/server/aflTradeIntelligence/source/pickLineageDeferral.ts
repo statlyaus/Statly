@@ -75,9 +75,10 @@ export interface AflTradePickLineageDeferral {
    */
   readonly deferredCustodyIds?: string[];
   /**
-   * Usable custody observations already canonical under a finalized promotion with the candidate's
-   * facts (#853): a custody id addresses its evidence, so writing it again would collide. Left
-   * unwritten. Sorted unique custody ids, present only when non-empty.
+   * Usable candidate custody rows recording an observation already canonical under a finalized
+   * promotion with the same facts (#853), matched by pick, observation time and holder rather than
+   * custody id: writing one would collide with the canonical row. Left unwritten. Sorted unique
+   * candidate custody ids, present only when non-empty.
    */
   readonly promotedCustodyIds?: string[];
 }
@@ -455,42 +456,48 @@ export function aflTradeCanonicalDraftKind(draftType: string): string | null {
   );
 }
 
-function sameCustodyObservation(
-  observedAt: unknown,
-  current: AflTradeCurrentCanonicalPickCustody
-): boolean {
+/**
+ * The observation time as a comparable key: an instant as its UTC millisecond form, a partial date
+ * by its precision and value. Null when the value is neither.
+ */
+function custodyObservationTimeKey(observedAt: unknown): string | null {
   if (typeof observedAt === 'string') {
     const instant = Date.parse(observedAt);
-    return (
-      current.observedDate === null &&
-      !Number.isNaN(instant) &&
-      new Date(instant).toISOString() === current.observedAt
-    );
+    return Number.isNaN(instant) ? null : `at:${new Date(instant).toISOString()}`;
   }
-  if (
-    current.observedAt !== null ||
-    current.observedDate === null ||
-    typeof observedAt !== 'object' ||
-    observedAt === null
-  ) {
-    return false;
-  }
-  const candidate = observedAt as Readonly<Record<string, unknown>>;
-  const stored = current.observedDate;
-  const keys = Object.keys(candidate);
-  return (
-    keys.length === Object.keys(stored).length &&
-    keys.every((key) => candidate[key] === stored[key])
-  );
+  if (typeof observedAt !== 'object' || observedAt === null) return null;
+  const date = observedAt as Readonly<Record<string, unknown>>;
+  return `date:${JSON.stringify(
+    Object.keys(date)
+      .sort()
+      .map((key) => [key, date[key]])
+  )}`;
+}
+
+/** The observation a custody row records: pick, observation time and holder. */
+function custodyObservationKey(
+  pickId: string,
+  observedAt: unknown,
+  currentClubId: string | null
+): string | null {
+  const time = custodyObservationTimeKey(observedAt);
+  return time === null || currentClubId === null
+    ? null
+    : JSON.stringify([pickId, time, currentClubId]);
 }
 
 /**
- * Custody a deferred candidate leaves to an existing promotion: usable candidate custody rows whose
- * id is already a canonical custody observation of a finalized promotion with the same pick, date,
- * draft, recorded round and pick, original and current club and predecessor (`current`, resolved by
- * the repository at preparation; migration 0274 checks the same facts). A custody id addresses its
- * evidence, so a second promotion of it would collide with the first; one whose facts differ is not
- * listed and still refuses. Sorted unique ids; empty when nothing qualifies.
+ * Custody a deferred candidate leaves to an existing promotion: usable candidate custody rows that
+ * record an observation already canonical under a finalized promotion (`current`, resolved by the
+ * repository at preparation; migration 0274 checks the same rule). The observation is matched by
+ * pick, observation time and holder, which for an instant is the canonical unique key
+ * (`outcome_pick_custody_observation_key`), not by custody id: a custody id addresses its evidence,
+ * and a re-captured page gives the same observation new evidence. The matched row must then state
+ * the same draft, recorded round and pick and original club, and neither row may name a predecessor
+ * (a candidate predecessor names a candidate custody id, a canonical one a canonical id, so they
+ * cannot be compared). Writing a listed row would collide with the canonical one; a row whose facts
+ * differ is not listed and still refuses. Sorted unique candidate custody ids; empty when nothing
+ * qualifies.
  */
 export function aflTradePromotedCustodyIds(
   pickCustody: readonly {
@@ -508,24 +515,40 @@ export function aflTradePromotedCustodyIds(
   }[],
   current: readonly AflTradeCurrentCanonicalPickCustody[]
 ): string[] {
-  const currentById = new Map(current.map((custody) => [custody.custodyId, custody]));
+  const currentByObservation = new Map<string, AflTradeCurrentCanonicalPickCustody[]>();
+  for (const stored of current) {
+    const key = custodyObservationKey(
+      stored.pickId,
+      stored.observedAt ?? stored.observedDate,
+      stored.currentClubId
+    );
+    if (key === null) continue;
+    currentByObservation.set(key, [...(currentByObservation.get(key) ?? []), stored]);
+  }
   return [
     ...new Set(
       pickCustody
         .filter((custody) => {
-          const stored = currentById.get(custody.custodyId);
-          return (
-            stored !== undefined &&
-            isAflTradeUsableCustodyStatus(custody.status) &&
-            stored.pickId === custody.pickId &&
-            sameCustodyObservation(custody.observedAt, stored) &&
-            stored.draftSeasonYear === custody.draftYear &&
-            stored.draftKind === aflTradeCanonicalDraftKind(custody.draftType) &&
-            stored.recordedRound === custody.roundNumber &&
-            stored.recordedPick === custody.recordedPickNumber &&
-            stored.originalClubId === custody.originalClubId &&
-            stored.currentClubId === custody.currentClubId &&
-            stored.predecessorCustodyId === (custody.predecessorCustodyId ?? null)
+          if (
+            !isAflTradeUsableCustodyStatus(custody.status) ||
+            (custody.predecessorCustodyId ?? null) !== null
+          ) {
+            return false;
+          }
+          const key = custodyObservationKey(
+            custody.pickId,
+            custody.observedAt,
+            custody.currentClubId
+          );
+          const draftKind = aflTradeCanonicalDraftKind(custody.draftType);
+          return (key === null ? [] : (currentByObservation.get(key) ?? [])).some(
+            (stored) =>
+              stored.predecessorCustodyId === null &&
+              stored.draftSeasonYear === custody.draftYear &&
+              stored.draftKind === draftKind &&
+              stored.recordedRound === custody.roundNumber &&
+              stored.recordedPick === custody.recordedPickNumber &&
+              stored.originalClubId === custody.originalClubId
           );
         })
         .map(({ custodyId }) => custodyId)

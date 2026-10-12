@@ -1602,6 +1602,11 @@ describe('repairing promoted pick identity (#853)', () => {
       { transactionId: 'transaction:pickless', transferIds: ['pick-pickless'] },
       { transactionId: 'transaction:reviewed', transferIds: ['pick-reviewed'] },
       { transactionId: 'transaction:unheld', transferIds: ['pick-unheld'] },
+      { transactionId: 'transaction:reviewed-unheld', transferIds: ['pick-reviewed-unheld'] },
+      {
+        transactionId: 'transaction:reviewed-unpromoted',
+        transferIds: ['pick-reviewed', 'pick-unpromoted'],
+      },
     ];
     const pick = (transferId: string, pickId: string) => ({
       transferId,
@@ -1613,6 +1618,7 @@ describe('repairing promoted pick identity (#853)', () => {
       pick('pick-rekeyed', 'pick:new'),
       pick('pick-pickless', 'pick:c'),
       pick('pick-reviewed', 'pick:reconciled'),
+      pick('pick-unpromoted', 'pick:e'),
     ];
     const current = [
       {
@@ -1647,6 +1653,20 @@ describe('repairing promoted pick identity (#853)', () => {
         transferIds: ['pick-unheld'],
         reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-unheld', pickId: 'pick:d' }],
+      },
+      // Reviewed lineage exempts only the pick-id comparison: a transfer the candidate does not
+      // hold, or one not promoted on the current version, still refuses (as migration 0274 does).
+      {
+        transactionId: 'transaction:reviewed-unheld',
+        transferIds: ['pick-reviewed-unheld'],
+        reviewedLineage: true,
+        transferPickIds: [{ transferId: 'pick-reviewed-unheld', pickId: 'pick:f' }],
+      },
+      {
+        transactionId: 'transaction:reviewed-unpromoted',
+        transferIds: ['pick-reviewed'],
+        reviewedLineage: true,
+        transferPickIds: [{ transferId: 'pick-reviewed', pickId: 'pick:reviewed' }],
       },
     ];
     expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
@@ -1755,6 +1775,25 @@ describe('repairing promoted pick identity (#853)', () => {
 
   it('lists usable custody already canonical with the same facts, and nothing that differs', () => {
     expect(aflTradePromotedCustodyIds([row, row], [stored])).toEqual(['custody:a']);
+    // A re-captured page gives the same observation new evidence and so a new custody id: the
+    // observation is matched by pick, time and holder, and the candidate's own id is listed.
+    expect(
+      aflTradePromotedCustodyIds([{ ...row, custodyId: 'custody:recaptured' }, row], [stored])
+    ).toEqual(['custody:a', 'custody:recaptured']);
+    // Another canonical observation of the same pick by another holder or time does not match.
+    expect(
+      aflTradePromotedCustodyIds(
+        [{ ...row, custodyId: 'custody:recaptured' }],
+        [
+          { ...stored, currentClubId: 'club-gws' },
+          { ...stored, observedAt: '2025-10-16T00:00:00.000Z' },
+        ]
+      )
+    ).toEqual([]);
+    // Either side naming a predecessor is never matched: the ids name different stores.
+    expect(
+      aflTradePromotedCustodyIds([row], [{ ...stored, predecessorCustodyId: 'custody:z' }])
+    ).toEqual([]);
     // The same instant written with an offset is the same observation.
     expect(
       aflTradePromotedCustodyIds(
@@ -1780,7 +1819,6 @@ describe('repairing promoted pick identity (#853)', () => {
       )
     ).toEqual([]);
     for (const changed of [
-      { custodyId: 'custody:b' },
       { pickId: 'pick:b' },
       { observedAt: '2025-10-16T00:00:00.000Z' },
       { observedAt: { precision: 'year', year: 2025 } },
@@ -1790,10 +1828,17 @@ describe('repairing promoted pick identity (#853)', () => {
       { recordedPickNumber: null },
       { originalClubId: null },
       { currentClubId: 'club-gws' },
-      { predecessorCustodyId: 'custody:z' },
+      { predecessorCustodyId: 'custody:a' },
       { status: 'unresolved' },
     ]) {
       expect(aflTradePromotedCustodyIds([{ ...row, ...changed }], [stored])).toEqual([]);
+      // The same holds under a re-captured custody id.
+      expect(
+        aflTradePromotedCustodyIds(
+          [{ ...row, ...changed, custodyId: 'custody:recaptured' }],
+          [stored]
+        )
+      ).toEqual([]);
     }
     expect(aflTradePromotedCustodyIds([row], [])).toEqual([]);
   });

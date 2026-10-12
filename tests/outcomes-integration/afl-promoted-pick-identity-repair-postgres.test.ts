@@ -84,7 +84,12 @@ const seed = (ws: Workspace) =>
 const again = (
   ws: Workspace,
   namespace: string,
-  options: { rekeyed?: boolean; sameTrade?: boolean; custodyAlreadyPromoted?: boolean } = {}
+  options: {
+    rekeyed?: boolean;
+    recaptured?: boolean;
+    sameTrade?: boolean;
+    custodyAlreadyPromoted?: boolean;
+  } = {}
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
     reciprocalFuturePickYearOffset: 1,
@@ -109,6 +114,7 @@ const again = (
           },
         }),
     ...(options.rekeyed ? { reciprocalFuturePickRekeyed: true } : {}),
+    ...(options.recaptured ? { reciprocalFuturePickCustodyRecaptured: true } : {}),
     ...(options.custodyAlreadyPromoted ? { custodyAlreadyPromoted: true } : {}),
   });
 
@@ -234,24 +240,30 @@ describe('repairing promoted pick identity (migration 0274)', () => {
     expect(stored.rows).toEqual([{ unusable: 0, transactions: true, custody: true }]);
   }, 300_000);
 
-  it('writes a superseding version of a trade whose pick was re-keyed, and leaves its identical custody', async () => {
+  // The genuine repair: the order pages were re-captured, so the candidate states every promoted
+  // custody observation under a new custody id. Written, each would collide with its canonical row on
+  // `outcome_pick_custody_observation_key` (23505); matched by observation it is left unwritten.
+  it('writes a superseding version of a trade whose pick was re-keyed, and leaves its re-captured custody', async () => {
     const ws = await workspace();
     const seeded = await seed(ws);
     const trade = seeded.candidate.content.transactions[0]!;
     const custodyId = seeded.candidate.content.pickCustody[0]!.custodyId;
     const oldPickId = pickIdOf(pickTransferOf(seeded));
 
-    const deferred = await again(ws, 'rekeyed', { rekeyed: true });
+    const deferred = await again(ws, 'rekeyed', { rekeyed: true, recaptured: true });
+    const recapturedId = deferred.candidate.content.pickCustody[0]!.custodyId;
+    expect(recapturedId).not.toBe(custodyId);
     const rekeyedTransfer = deferred.candidate.content.transfers.find(
       ({ asset }) => asset.kind === 'pick_entitlement'
     )!;
     const newPickId = pickIdOf(rekeyedTransfer);
     expect(rekeyedTransfer.transferId).toBe(pickTransferOf(seeded).transferId);
     expect(newPickId).not.toBe(oldPickId);
-    // The trade is not left to the seed: its pick id changed. Its custody is.
+    // The trade is not left to the seed: its pick id changed. Its custody observation is, under
+    // the candidate's own custody id.
     expect(deferred.candidate.content.pickLineageDeferral).toEqual({
       decisionId: deferred.deferralDecisionId,
-      promotedCustodyIds: [custodyId],
+      promotedCustodyIds: [recapturedId],
     });
     expect(deferred.promotion.pickLineageDeferral).toEqual({
       decisionId: deferred.deferralDecisionId,
@@ -291,8 +303,13 @@ describe('repairing promoted pick identity (migration 0274)', () => {
         ({ transactionId }) => transactionId === trade.transactionId
       )?.transferPickIds
     ).toEqual([{ transferId: rekeyedTransfer.transferId, pickId: newPickId }]);
-    // The custody observation is still the seed's one row.
+    // The custody observation is still the seed's one row; the re-captured id was never written.
     expect(await count(ws, 'outcome_pick_custody_observation')).toBe(1);
+    expect(
+      await count(ws, 'outcome_pick_custody_observation WHERE custody_observation_id=$1', [
+        custodyId,
+      ])
+    ).toBe(1);
     expect(
       await count(
         ws,
@@ -393,8 +410,22 @@ describe('repairing promoted pick identity (migration 0274)', () => {
     }
     // An id that is not canonical, a canonical id the candidate does not hold, another competition,
     // and an empty list are all refused; no list is valid.
+    // A re-captured row (new custody id, same observation and facts) is canonical; the same new id
+    // with an observation nobody promoted is not, nor is a listed id the candidate does not hold.
     const unknown = `external-pick-custody:${'3'.repeat(64)}`;
-    expect(await custodyCurrent({ ...custody, custodyId: unknown }, [unknown])).toBe(false);
+    expect(await custodyCurrent({ ...custody, custodyId: unknown }, [unknown])).toBe(true);
+    expect(
+      await custodyCurrent(
+        { ...custody, custodyId: unknown, observedAt: '2024-10-17T00:00:00.000Z' },
+        [unknown]
+      )
+    ).toBe(false);
+    expect(
+      await custodyCurrent(
+        { ...custody, custodyId: unknown, predecessorCustodyId: custody.custodyId },
+        [unknown]
+      )
+    ).toBe(false);
     expect(await custodyCurrent({ ...custody, custodyId: unknown })).toBe(false);
     expect(await custodyCurrent(custody, undefined, 'VFL')).toBe(false);
     expect(await custodyCurrent(custody, [])).toBe(false);

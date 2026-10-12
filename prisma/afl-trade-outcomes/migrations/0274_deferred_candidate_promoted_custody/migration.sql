@@ -4,13 +4,16 @@
 -- promoted when its transfer ids were promoted, so a promotion would write nothing and leave the old
 -- ids current. From here a transaction counts as already promoted only when every candidate pick
 -- transfer also carries the pick id of its promoted asset; any other is written as a superseding
--- trade version. That promotion then cites custody observations an earlier promotion already wrote:
--- a custody id addresses its evidence, so writing it again collides with the first row's import row
--- and recorded time. A usable candidate custody row whose id is already a canonical custody
--- observation of a finalized promotion with the candidate row's facts is recorded on the candidate
--- (`content.pickLineageDeferral.promotedCustodyIds`, sorted unique, present only when non-empty);
--- the candidate insert checks it, the promoter re-checks it, nothing is written for it, and the
--- unusable-record count ignores it. Same shape as 0267 and 0268.
+-- trade version. That promotion then cites custody observations an earlier promotion already wrote,
+-- under new custody ids when the pages were re-captured (a custody id addresses its evidence), so
+-- writing them collides with the canonical row on `outcome_pick_custody_observation_key` (pick,
+-- observed instant, holder; migration 0014). A usable candidate custody row that records an
+-- observation already canonical under a finalized promotion, matched by that key (or the partial
+-- date in its place) with the same draft, recorded round and pick and original club and no
+-- predecessor on either side, is recorded on the candidate
+-- (`content.pickLineageDeferral.promotedCustodyIds`, its own custody ids, sorted unique, present only
+-- when non-empty); the candidate insert checks it, the promoter re-checks it, nothing is written for
+-- it, and the unusable-record count ignores it. Same shape as 0267 and 0268.
 
 -- The canonical draft kind a candidate draft type is promoted as (the promoter's mapping).
 CREATE FUNCTION outcome_external_draft_type_kind(draft_type TEXT)
@@ -72,9 +75,10 @@ RETURNS TABLE (transaction_id TEXT) LANGUAGE sql STABLE AS $$
 $$;
 
 -- Every transaction the candidate records as already promoted is one it holds, is current canonical,
--- has every one of its candidate transfers promoted on that version, and every candidate pick
--- transfer among them carries its promoted asset's pick id. NULL (absent) is valid; an empty or
--- malformed list is not.
+-- has every one of its transfers held by the candidate and promoted on that version, and every
+-- candidate pick transfer among them carries its promoted asset's pick id unless the current version
+-- came from reviewed pick lineage (only the pick-id comparison is exempt). NULL (absent) is valid; an
+-- empty or malformed list is not.
 CREATE OR REPLACE FUNCTION outcome_external_candidate_promoted_transactions_current(candidate JSONB)
 RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $$
 DECLARE ids JSONB := candidate#>'{content,pickLineageDeferral,promotedTransactions}';
@@ -101,18 +105,17 @@ BEGIN
      WHERE current.transaction_id=id#>>'{}';
     IF promoted IS NULL OR EXISTS (
          SELECT 1 FROM jsonb_array_elements_text(held->'transferIds') transfer
-          WHERE NOT (transfer.value = ANY(promoted))) THEN
+          WHERE NOT (transfer.value = ANY(promoted)) OR (moved_by_id->transfer.value) IS NULL) THEN
       RETURN FALSE;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM outcome_current_canonical_reviewed_lineage_transactions(competition) reviewed
                     WHERE reviewed.transaction_id=id#>>'{}') AND EXISTS (
          SELECT 1 FROM jsonb_array_elements_text(held->'transferIds') transfer
-          WHERE (moved_by_id->transfer.value) IS NULL
-             OR ((moved_by_id->transfer.value)#>>'{asset,kind}'='pick_entitlement'
-                 AND NOT EXISTS (
-                   SELECT 1 FROM outcome_current_canonical_transaction_picks(competition) picked
-                    WHERE picked.transaction_id=id#>>'{}' AND picked.transfer_id=transfer.value
-                      AND picked.pick_id=(moved_by_id->transfer.value)#>>'{asset,pickId}'))) THEN
+          WHERE (moved_by_id->transfer.value)#>>'{asset,kind}'='pick_entitlement'
+            AND NOT EXISTS (
+              SELECT 1 FROM outcome_current_canonical_transaction_picks(competition) picked
+               WHERE picked.transaction_id=id#>>'{}' AND picked.transfer_id=transfer.value
+                 AND picked.pick_id=(moved_by_id->transfer.value)#>>'{asset,pickId}')) THEN
       RETURN FALSE;
     END IF;
   END LOOP;
@@ -141,9 +144,11 @@ LANGUAGE sql STABLE AS $$
                   AND record.canonical_record_id=custody.custody_observation_id)
 $$;
 
--- Every custody id the candidate records as already promoted is a usable candidate custody row whose
--- pick, observation date, draft, recorded round and pick, original and current club and predecessor
--- equal a canonical custody observation's. NULL (absent) is valid; an empty or malformed list is not.
+-- Every custody id the candidate records as already promoted is a usable candidate custody row with no
+-- predecessor whose observation is canonical: a canonical custody observation with the same pick,
+-- observed instant (or partial date) and holder, the unique key of migration 0014, states the same
+-- draft, recorded round and pick and original club and has no predecessor either. The custody ids
+-- need not be equal (re-captured evidence). NULL (absent) is valid; an empty or malformed list is not.
 CREATE FUNCTION outcome_external_candidate_promoted_custody_current(candidate JSONB)
 RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $$
 DECLARE ids JSONB := candidate#>'{content,pickLineageDeferral,promotedCustodyIds}';
@@ -160,10 +165,10 @@ BEGIN
     SELECT value INTO held FROM jsonb_array_elements(candidate#>'{content,pickCustody}') value
      WHERE value->>'custodyId'=id#>>'{}' LIMIT 1;
     IF held IS NULL OR COALESCE(held->>'status' NOT IN ('single_source','corroborated'),TRUE)
+       OR held->>'predecessorCustodyId' IS NOT NULL
        OR NOT EXISTS (
          SELECT 1 FROM outcome_current_canonical_pick_custody(competition) current
-          WHERE current.custody_id=id#>>'{}'
-            AND current.pick_id=held->>'pickId'
+          WHERE current.pick_id=held->>'pickId'
             AND (CASE jsonb_typeof(held->'observedAt')
                    WHEN 'string' THEN current.observed_date IS NULL
                      AND current.observed_at=(held->>'observedAt')::TIMESTAMPTZ(3)
@@ -176,7 +181,7 @@ BEGIN
             AND current.recorded_pick IS NOT DISTINCT FROM (held->>'recordedPickNumber')::INTEGER
             AND current.original_club_id IS NOT DISTINCT FROM held->>'originalClubId'
             AND current.current_club_id=held->>'currentClubId'
-            AND current.predecessor_custody_id IS NOT DISTINCT FROM held->>'predecessorCustodyId') THEN
+            AND current.predecessor_custody_id IS NULL) THEN
       RETURN FALSE;
     END IF;
   END LOOP;
@@ -185,8 +190,8 @@ EXCEPTION WHEN invalid_text_representation OR invalid_datetime_format OR datetim
   OR numeric_value_out_of_range THEN RETURN FALSE;
 END $$;
 
--- The candidate insert guard (0264, 0265, 0267, 0268) also demands the already-promoted custody be
--- canonical with the candidate's facts, and only under the deferral decision.
+-- The candidate insert guard (0264, 0265, 0267, 0268) also demands the already-promoted custody record
+-- a canonical observation with the candidate's facts, and only under the deferral decision.
 CREATE OR REPLACE FUNCTION validate_outcome_external_reconciliation_lineage_deferral()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE decision_row outcome_review_decision%ROWTYPE;

@@ -4112,12 +4112,14 @@ The remaining work proceeds through these independently verifiable gates:
    the conflict. A custody observation without a usable status is recorded as
    `deferredCustodyIds` (migration 0268 checks each is an unusable candidate custody row, on insert
    and at promotion; the unusable-record count ignores it) and written as nothing, counted on the
-   receipt as `deferredCustodyCount`. A usable custody row whose id is already a canonical custody
-   observation of a finalized promotion with the same pick, date, draft, recorded round and pick,
-   original and current club and predecessor is recorded as `promotedCustodyIds` (migration 0274:
-   `outcome_current_canonical_pick_custody`, checked on insert and at promotion, ignored by the
-   unusable-record count) and written as nothing, counted as `promotedCustodyCount`: a custody id
-   addresses its evidence, so a second write would collide with the first row; one whose facts
+   receipt as `deferredCustodyCount`. A usable custody row that records an observation already
+   canonical under a finalized promotion, matched by pick, observation time and holder (the
+   `outcome_pick_custody_observation_key` unique key, not the custody id: a custody id addresses its
+   evidence and a re-captured page gives the same observation new evidence) with the same draft,
+   recorded round and pick and original club and no predecessor on either side, is recorded under its
+   own custody id as `promotedCustodyIds` (migration 0274: `outcome_current_canonical_pick_custody`,
+   checked on insert and at promotion, ignored by the unusable-record count) and written as nothing,
+   counted as `promotedCustodyCount`; writing it would collide with the canonical row. One whose facts
    differ is not recorded and still refuses. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
