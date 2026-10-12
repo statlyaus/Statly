@@ -457,6 +457,94 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.issues).toEqual([]);
   });
 
+  it('cites an unresolved Footyinfo selection row without unresolving the selection it corroborates', () => {
+    const footyinfoSelection = (player: string, nativeId: string) =>
+      batch('footyinfo', 'd', [
+        {
+          kind: 'draft_selection',
+          draftYear: 2025,
+          draftType: 'national',
+          selectionNumber: 14,
+          roundNumber: 1,
+          player: { nativeId, recordedName: player },
+          selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+        },
+      ]);
+    const reconcileWith = (footyinfo: ReturnType<typeof footyinfoSelection>, extra = resolutions) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [draftguru, footyinfo, officialOrder],
+        identityResolutions: [
+          ...extra,
+          resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        ],
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+      });
+    const without = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [draftguru, officialOrder],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    // No footyinfo player resolution: the row is cited, not counted.
+    const footyinfo = footyinfoSelection('H. Kyle', 'harry-kyle');
+    const candidate = reconcileWith(footyinfo);
+    const [selection] = candidate.content.draftSelections;
+    const [before] = without.content.draftSelections;
+    expect(selection).toMatchObject({
+      playerId: 'player-harry-kyle',
+      clubId: 'club-western-bulldogs',
+      status: before!.status,
+      supportingProviders: ['draftguru'],
+    });
+    expect(selection!.evidenceIds).toContain(footyinfo.content.evidence[0]!.evidenceId);
+    expect(candidate.content.issues).toEqual(without.content.issues);
+
+    // A resolved Footyinfo row naming another player still disputes the selection.
+    const disputed = reconcileWith(footyinfoSelection('Someone Else', 'someone-else'), [
+      ...resolutions,
+      resolution('footyinfo', 'player', 'Someone Else', 'player-someone-else', 'someone-else'),
+    ]);
+    expect(disputed.content.draftSelections[0]!.status).toBe('disputed');
+  });
+
+  it('resolves a Footyinfo-only selection like any provider, with its identity issue', () => {
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [
+        draftguru,
+        batch('footyinfo', 'd', [
+          {
+            kind: 'draft_selection',
+            draftYear: 2025,
+            draftType: 'national',
+            selectionNumber: 58,
+            roundNumber: 4,
+            player: { nativeId: 'ryan-byrnes', recordedName: 'Ryan Byrnes' },
+            selectedByClub: { nativeId: 'WBD', recordedName: 'Western Bulldogs' },
+          },
+        ]),
+      ],
+      identityResolutions: [
+        ...resolutions,
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    expect(
+      candidate.content.draftSelections.find(({ selectionNumber }) => selectionNumber === 58)
+    ).toMatchObject({ status: 'unresolved', playerId: null });
+    expect(candidate.content.issues.map(({ subjectKey }) => subjectKey)).toContain(
+      'selection:2025:national:58:player'
+    );
+  });
+
   it('preserves an incomplete transaction as unresolved blocking evidence', () => {
     const incompleteBatch = batch('draftguru', 'e', [
       {
