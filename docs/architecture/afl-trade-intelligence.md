@@ -2227,6 +2227,10 @@ same player-contribution value unit. Its observations and assets are source-nati
 clubs may hold draft entitlements, but no Statly user or fantasy league owns a player, pick,
 entitlement, observation, scenario, or result.
 
+What one `draft-pick:` identity in an external reconciliation candidate may join, and how the database
+enforces it, is specified in [Draft-pick identity rules](afl-draft-pick-identity-rules.md) (enforced
+at finalization by migration 0273, issue 853).
+
 The executable observation boundary requires complete, mature whole-draft cohorts at one fixed
 football-contribution horizon. Each observation retains actual selection number separately from
 nominal position and bid-match context and belongs to exactly one of six ordered, mutually exclusive
