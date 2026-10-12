@@ -467,6 +467,7 @@ describe('entitlement reconciliation binding', () => {
             candidateId: (candidate as typeof f.candidate).candidateId,
             status: 'finalized',
             blockingIssueCount: 1,
+            deferredIssueCount: 0,
             idempotentReplay: false,
           }),
         },
@@ -617,6 +618,9 @@ describe('resolved special custody candidates', () => {
               issueCount: candidate.content.issues.length,
               blockingIssueCount: candidate.content.issues.filter(
                 (issue) => issue.severity === 'blocking'
+              ).length,
+              deferredIssueCount: candidate.content.issues.filter(
+                (issue) => issue.severity === 'deferred'
               ).length,
             };
           },

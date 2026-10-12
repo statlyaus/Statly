@@ -36,7 +36,7 @@ import {
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import { PostgresAflTradePrivateValuationTradeEvidence } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationTradeEvidence';
 import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisitionPlayerPromotionFixture';
-import { bindTestEvidenceStore } from '../testUtils/testEvidenceStore';
+import { bindTestEvidenceStore, retainTestGateEvidence } from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
@@ -117,9 +117,8 @@ async function admitGate2(candidateId: string) {
     exclusions: ['Model, valuation, grading, publication and activation authority'],
   };
   const proposedAt = await now();
-  const evidenceId = createAflTradeContentAddress('artifact', {
-    historicalPilot: lineage.lineageId,
-  });
+  // The pilot approval is retained before the Gate decision cites it (migration 0253).
+  const evidenceId = await retainTestGateEvidence(pool, { historicalPilot: lineage.lineageId });
   const proposalContent = {
     schemaVersion: 'afl-trade-gate-proposal/v1' as const,
     gate: 'gate_2_corpus_lineage' as const,

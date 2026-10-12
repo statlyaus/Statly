@@ -19,7 +19,6 @@ import {
   prepareLocalAflTradeFitzRoyMatchEvidence,
 } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsal';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
@@ -43,6 +42,7 @@ import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagi
 import { registerSourceFirstHpnPlayerMapFixture } from '../testUtils/sourceFirstHpnPlayerMapFixture';
 import { registerSourceFirstHpnResultsMapFixture } from '../testUtils/sourceFirstHpnResultsMapFixture';
 import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -90,7 +90,6 @@ const instant = async () => {
 // Synthetic upstream bytes and reviews; all source, identity, factual, projection,
 // promotion, spell and HPN owners execute without replacing database guards.
 it('builds and reloads a source-first HPN input with a registered spell and rejects withdrawn current authority', async () => {
-  const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
   const sources = [];
   const primaryRuns: string[] = [];
   for (const provider of ['footywire', 'afl_tables'] as const) {
@@ -98,17 +97,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
       const options = { provider, profile: 'hpn_player_stats' as const, hpnPlayerSide };
       const fixture = createLocalAflTradeFitzRoyFactualRehearsalFixture(options);
       const source = fixture.command.capture;
-      if (hpnPlayerSide === 'home')
-        await ledger.appendBatch({
-          expectedRevision: (await ledger.load()).revision,
-          records: [
-            {
-              sourceRights: source.sourceRights,
-              proposal: source.ledger.proposals[0]!,
-              decision: source.ledger.decisions[0]!,
-            },
-          ],
-        });
+      if (hpnPlayerSide === 'home') await appendRehearsalSourceAuthority(client, source);
       const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
       const factual = await prepareLocalAflTradeFitzRoyFactualReleaseCandidate(client, {
         provider,
@@ -134,16 +123,7 @@ it('builds and reloads a source-first HPN input with a registered spell and reje
     provider: 'afl_tables',
     profile: 'match_only',
   }).command.capture;
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: resultSource.sourceRights,
-        proposal: resultSource.ledger.proposals[0]!,
-        decision: resultSource.ledger.decisions[0]!,
-      },
-    ],
-  });
+  await appendRehearsalSourceAuthority(client, resultSource);
   const results = await prepareLocalAflTradeFitzRoyMatchEvidence(client);
   const resultMap = await registerSourceFirstHpnResultsMapFixture(client, results);
   sources.push({

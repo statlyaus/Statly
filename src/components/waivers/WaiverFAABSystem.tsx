@@ -629,6 +629,12 @@ function MyClaimsPanel({
   );
 }
 
+function describeActivity(type: string, team: string, player: string): string {
+  if (type === 'waiver-successful') return `${team} claimed ${player}`;
+  if (type === 'waiver-failed') return `${team} missed out on ${player}`;
+  return `${team} updated ${player}`;
+}
+
 function ActivityPanel({
   activityItems,
   timeZone,
@@ -652,12 +658,13 @@ function ActivityPanel({
             return (
               <li key={item.id} className="py-3 text-sm">
                 <div className="font-medium text-foreground">
-                  {teamText} updated {playerText}
+                  {describeActivity(item.type, teamText, playerText)}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {formatInTimezone(item.timestamp, timeZone, 'PP p')}
                   {typeof item.bidAmount === 'number' ? ` - $${item.bidAmount}` : ''}
                   {item.dropPlayerName ? ` - drop ${item.dropPlayerName}` : ''}
+                  {item.type === 'waiver-failed' && item.reason ? ` - ${item.reason}` : ''}
                 </div>
               </li>
             );

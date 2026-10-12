@@ -74,6 +74,7 @@ describe('historical reconciliation preparation', () => {
       candidateId: (candidate as { candidateId: string }).candidateId,
       status: 'finalized' as const,
       blockingIssueCount: 2,
+      deferredIssueCount: 0,
       idempotentReplay: false,
     }));
 

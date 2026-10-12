@@ -1,4 +1,5 @@
-export type AflTradeExternalCaptureProvider = 'draftguru' | 'footywire' | 'official_afl';
+export type AflTradeExternalCaptureProvider =
+  'draftguru' | 'footywire' | 'official_afl' | 'footyinfo';
 
 export interface AflTradeExternalCaptureAdmissionRedis {
   acquire(input: {

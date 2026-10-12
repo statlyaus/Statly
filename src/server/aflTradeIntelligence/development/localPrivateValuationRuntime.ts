@@ -1,7 +1,9 @@
 import { resolve } from 'node:path';
 
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
+import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
 import { createPgAflOutcomeSqlClient, type AflOutcomePgPool } from '../outcomes/pgOutcomeSqlClient';
+import { openLocalAflTradePrivateDerivedRepository } from './localArtifactStoreBinding';
 import { stageAflTradeFitzRoySourceSnapshot } from '../source/fitzRoyCaptureToStaging';
 import { captureAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoyProviderIngestion';
 import { PostgresAflTradeProviderObservationRepository } from '../source/postgresProviderObservationRepository';
@@ -41,6 +43,23 @@ import {
 import { LOCAL_AFL_TRADE_FITZROY_RUNTIME } from './localFiveSeasonAflTablesStaging';
 
 const MAXIMUM_ARTIFACT_BYTES = 4 * 1024 * 1024;
+const PRIVATE_ARTIFACT_REPOSITORY_ID = 'governed-private-evaluation';
+
+/**
+ * Opens the private evaluation repository at `artifactRoot`, bound to the registered local store
+ * when the schema has one (whose root `artifactRoot` must then be), so staged artifacts, including
+ * the qualification an automated Gate 3 decision cites, are located.
+ */
+export function openLocalAflTradePrivateValuationArtifacts(
+  pool: AflOutcomePgPool,
+  artifactRoot: string
+): Promise<AflTradeImmutableArtifactRepository> {
+  return openLocalAflTradePrivateDerivedRepository(createPgAflOutcomeSqlClient(pool), {
+    rootDirectory: artifactRoot,
+    repositoryId: PRIVATE_ARTIFACT_REPOSITORY_ID,
+    maximumObjectBytes: MAXIMUM_ARTIFACT_BYTES,
+  });
+}
 const MAXIMUM_SOURCE_BYTES = 128 * 1024 * 1024;
 const MAXIMUM_METADATA_BYTES = 16 * 1024 * 1024;
 
@@ -96,6 +115,11 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
   readonly pool: AflOutcomePgPool;
   readonly artifactRoot: string;
   readonly workerId?: string;
+  /**
+   * The private evaluation repository, from {@link openLocalAflTradePrivateValuationArtifacts}.
+   * Commands pass it so custody is located; without it the plain local repository is used.
+   */
+  readonly privateArtifacts?: AflTradeImmutableArtifactRepository;
   readonly construction?: AflTradeLocalPrivateValuationConstruction;
   /** Why `construction` is absent, so the configuration failure names each missing authority. */
   readonly constructionBlockers?: readonly LocalPrivateValuationConstructionBlocker[];
@@ -288,11 +312,13 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     },
     factualRefresh: createAflTradeCurrentValuationRefresh({ client }),
   });
-  const artifacts = createLocalAflTradePrivateDerivedArtifactRepository({
-    rootDirectory: input.artifactRoot,
-    repositoryId: 'governed-private-evaluation',
-    maximumObjectBytes: MAXIMUM_ARTIFACT_BYTES,
-  });
+  const artifacts =
+    input.privateArtifacts ??
+    createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: input.artifactRoot,
+      repositoryId: PRIVATE_ARTIFACT_REPOSITORY_ID,
+      maximumObjectBytes: MAXIMUM_ARTIFACT_BYTES,
+    });
   const workspace = createPostgresGovernedPrivateEvaluationWorkspace({
     client,
     artifactRepository: artifacts,

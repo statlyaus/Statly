@@ -26,6 +26,7 @@ import {
   seedPrivateValuationAcquisitionSpellFixture,
 } from '../testUtils/privateValuationFactualPreparationFixture';
 import { registerSourceFirstHpnResultsMapFixture } from '../testUtils/sourceFirstHpnResultsMapFixture';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('An explicitly disposable PostgreSQL URL is required.');
@@ -107,16 +108,7 @@ it('admits retained primary, appearance and results sources under one request an
     const source = createLocalAflTradeFitzRoyFactualRehearsalFixture({
       ...options,
     }).command.capture;
-    await ledger.appendBatch({
-      expectedRevision: (await ledger.load()).revision,
-      records: [
-        {
-          sourceRights: source.sourceRights,
-          proposal: source.ledger.proposals[0]!,
-          decision: source.ledger.decisions[0]!,
-        },
-      ],
-    });
+    await appendRehearsalSourceAuthority(client, source);
   }
   const requestId = await client.transaction(async (transaction) => {
     await transaction.query('SET LOCAL ROLE afl_trade_private_valuation_scheduler_owner');

@@ -2,10 +2,10 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createLocalAflTradeFitzRoyFactualRehearsalFixture } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsalFixture';
 import { loadLocalHpnPavSeasonRows } from '@/server/aflTradeIntelligence/development/localHpnPavSeasonRows';
-import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { stageLocalAflTradeFitzRoyFixture } from '../testUtils/localFitzRoyStagingFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+import { appendRehearsalSourceAuthority } from '../testUtils/rehearsalSourceAuthority';
 
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
@@ -38,17 +38,7 @@ afterAll(async () => {
 it('loads each decoded row with the AFL Tables identity from its identity candidate', async () => {
   const options = { provider: 'afl_tables', profile: 'hpn_player_stats' } as const;
   const source = createLocalAflTradeFitzRoyFactualRehearsalFixture(options).command.capture;
-  const ledger = createPostgresAflTradeGateDecisionLedgerRepository(client);
-  await ledger.appendBatch({
-    expectedRevision: (await ledger.load()).revision,
-    records: [
-      {
-        sourceRights: source.sourceRights,
-        proposal: source.ledger.proposals[0]!,
-        decision: source.ledger.decisions[0]!,
-      },
-    ],
-  });
+  await appendRehearsalSourceAuthority(client, source);
   const staged = await stageLocalAflTradeFitzRoyFixture(client, options);
   const { normalizationRunId } = staged.staging.normalization;
   const run = await pool.query<{ capture_id: string; season_year: number }>(

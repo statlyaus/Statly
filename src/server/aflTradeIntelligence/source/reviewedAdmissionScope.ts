@@ -16,6 +16,7 @@ import type { AflOutcomeSqlTransaction } from '../outcomes/postgresOutcomeReleas
 import {
   createAflTradeExternalReconciliationCandidate,
   parseAflTradeExternalReconciliationCandidate,
+  retainAflTradePickOutcomes,
 } from './externalReconciliationCandidateContracts';
 import { bindReviewedPickLineage } from './reviewedPickLineage';
 import { reviewedPickLineageRegistrationSchema } from './reviewedPickLineageRegistrationContracts';
@@ -23,7 +24,9 @@ import { bindRegisteredLineageForPromotion } from './reviewedPickLineagePromotio
 
 /** Retain blocking issues and their transitive evidence without dropping ambiguous rows. */
 function retainConnectedScopeIssues(
-  sourceIssues: ReturnType<typeof parseAflTradeExternalReconciliationCandidate>['content']['issues'],
+  sourceIssues: ReturnType<
+    typeof parseAflTradeExternalReconciliationCandidate
+  >['content']['issues'],
   activeEvidence: Set<string>,
   transferIds: Set<string>
 ) {
@@ -131,8 +134,10 @@ export function buildReviewedAdmissionScope(input: {
     ].flatMap((r) => r.evidenceIds)
   );
   const deferredEvidenceIds = [...allEvidence].filter((id) => !activeEvidence.has(id)).sort();
+  const { pickOutcomes, ...retainedContent } = source.content;
   return createAflTradeExternalReconciliationCandidate({
-    ...source.content,
+    ...retainedContent,
+    ...retainAflTradePickOutcomes(pickOutcomes, { transfers, draftSelections }),
     transactions,
     transfers,
     draftSelections,
@@ -156,7 +161,9 @@ export async function authenticateReviewedAdmissionScope(
       environment: candidate.content.environment,
     });
     if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
-      throw new TypeError('Status correction differs from its authenticated parent and resolved dependencies.');
+      throw new TypeError(
+        'Status correction differs from its authenticated parent and resolved dependencies.'
+      );
     return;
   }
   if (candidate.content.reviewedSessionCorrection) {
@@ -167,7 +174,9 @@ export async function authenticateReviewedAdmissionScope(
       environment: candidate.content.environment,
     });
     if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
-      throw new TypeError('Session correction differs from its authenticated parent, sources or identities.');
+      throw new TypeError(
+        'Session correction differs from its authenticated parent, sources or identities.'
+      );
     return;
   }
   if (candidate.content.reviewedRookieCorrection) {
@@ -176,7 +185,9 @@ export async function authenticateReviewedAdmissionScope(
       environment: candidate.content.environment,
     });
     if (canonicalizeAflTradeJson(expected.candidate) !== canonicalizeAflTradeJson(candidate))
-      throw new TypeError('Rookie correction differs from its authenticated parent, review or retained evidence.');
+      throw new TypeError(
+        'Rookie correction differs from its authenticated parent, review or retained evidence.'
+      );
     return;
   }
   if (candidate.content.reviewedSpecialCorrection) {
@@ -420,10 +431,15 @@ export async function prepareReviewedRookieCorrection(
      FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 AND status='finalized' FOR SHARE`,
     [input.parentCandidateId]
   );
-  if (!loaded.rows[0]?.current) throw new TypeError('Rookie correction requires a current finalized parent.');
+  if (!loaded.rows[0]?.current)
+    throw new TypeError('Rookie correction requires a current finalized parent.');
   const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
-  if (!parent.content.reviewedCorrection || parent.content.reviewedRookieCorrection ||
-    parent.content.environment !== input.environment || input.environment === 'production')
+  if (
+    !parent.content.reviewedCorrection ||
+    parent.content.reviewedRookieCorrection ||
+    parent.content.environment !== input.environment ||
+    input.environment === 'production'
+  )
     throw new TypeError('Rookie correction requires its exact private reviewed parent.');
   await authenticateReviewedAdmissionScope(transaction, parent);
   const stored = await transaction.query<{ registration: unknown }>(
@@ -440,30 +456,54 @@ export async function prepareReviewedSessionCorrection(
   transaction: AflOutcomeSqlTransaction,
   input: { parentCandidateId: string; completionId: string; environment: string }
 ) {
-  if (input.environment === 'production') throw new TypeError('Session correction requires a private environment.');
+  if (input.environment === 'production')
+    throw new TypeError('Session correction requires a private environment.');
   const loaded = await transaction.query<{ candidate_json: unknown; current: boolean }>(
     `SELECT candidate_json,outcome_external_candidate_retained_sources_current(candidate_id,clock_timestamp()) AS current
      FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 AND status='finalized' FOR SHARE`,
     [input.parentCandidateId]
   );
-  if (!loaded.rows[0]?.current) throw new TypeError('Session correction requires a current finalized parent.');
+  if (!loaded.rows[0]?.current)
+    throw new TypeError('Session correction requires a current finalized parent.');
   const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
   if (!parent.content.reviewedCorrection || parent.content.environment !== input.environment)
     throw new TypeError('Session correction requires its exact private reviewed parent.');
   await authenticateReviewedAdmissionScope(transaction, parent);
-  const client = { query: transaction.query.bind(transaction), transaction: <T>(work: (tx: AflOutcomeSqlTransaction) => Promise<T>) => work(transaction) };
-  const source = await new PostgresAflTradeExternalHistoricalReconciliationSource(client).load(input.completionId);
-  if (source.environment !== parent.content.environment || source.competition !== parent.content.competition)
-    throw new TypeError('Session completion differs from parent scope.');
-  const current = await new PostgresAflTradeExternalIdentityReviewRepository(client).loadCurrentResolutions(buildAflTradeExternalIdentityReviewPackage(source));
-  const retained = await transaction.query<{resolution_json: unknown}>(
-    'SELECT resolution_json FROM outcome_external_reconciliation_identity_resolution WHERE candidate_id=$1 FOR SHARE', [parent.candidateId]
+  const client = {
+    query: transaction.query.bind(transaction),
+    transaction: <T>(work: (tx: AflOutcomeSqlTransaction) => Promise<T>) => work(transaction),
+  };
+  const source = await new PostgresAflTradeExternalHistoricalReconciliationSource(client).load(
+    input.completionId
   );
-  const ancestor = retained.rows.map(row => parseAflTradeExternalIdentityResolution(row.resolution_json));
-  if (canonicalizeAflTradeJson(ancestor.map(r=>r.resolutionId).sort()) !== canonicalizeAflTradeJson([...parent.content.identityResolutionIds].sort()))
+  if (
+    source.environment !== parent.content.environment ||
+    source.competition !== parent.content.competition
+  )
+    throw new TypeError('Session completion differs from parent scope.');
+  const current = await new PostgresAflTradeExternalIdentityReviewRepository(
+    client
+  ).loadCurrentResolutions(buildAflTradeExternalIdentityReviewPackage(source));
+  const retained = await transaction.query<{ resolution_json: unknown }>(
+    'SELECT resolution_json FROM outcome_external_reconciliation_identity_resolution WHERE candidate_id=$1 FOR SHARE',
+    [parent.candidateId]
+  );
+  const ancestor = retained.rows.map((row) =>
+    parseAflTradeExternalIdentityResolution(row.resolution_json)
+  );
+  if (
+    canonicalizeAflTradeJson(ancestor.map((r) => r.resolutionId).sort()) !==
+    canonicalizeAflTradeJson([...parent.content.identityResolutionIds].sort())
+  )
     throw new TypeError('Session correction is missing authenticated ancestor resolutions.');
-  return buildReviewedSessionCorrection({candidate:parent,sourceAuthority:source.sourceAuthority,sourceBatches:source.sourceBatches,
-    identityResolutions:[...new Map([...ancestor,...current].map(r=>[r.resolutionId,r])).values()]});
+  return buildReviewedSessionCorrection({
+    candidate: parent,
+    sourceAuthority: source.sourceAuthority,
+    sourceBatches: source.sourceBatches,
+    identityResolutions: [
+      ...new Map([...ancestor, ...current].map((r) => [r.resolutionId, r])).values(),
+    ],
+  });
 }
 
 /** Reconcile statuses only after authenticating the immutable parent and every current dependency. */
@@ -481,8 +521,12 @@ export async function prepareReviewedStatusCorrection(
   if (!loaded.rows[0]?.current)
     throw new TypeError('Status correction requires a current finalized parent.');
   const parent = parseAflTradeExternalReconciliationCandidate(loaded.rows[0].candidate_json);
-  if (parent.candidateId !== input.parentCandidateId || parent.content.environment !== input.environment ||
-      !parent.content.reviewedSessionCorrection || parent.content.reviewedStatusCorrection)
+  if (
+    parent.candidateId !== input.parentCandidateId ||
+    parent.content.environment !== input.environment ||
+    !parent.content.reviewedSessionCorrection ||
+    parent.content.reviewedStatusCorrection
+  )
     throw new TypeError('Status correction requires its exact private reviewed session parent.');
   await authenticateReviewedAdmissionScope(transaction, parent);
   // Reconstruction can retain ancestor resolutions; SQL verifies their current review authority.

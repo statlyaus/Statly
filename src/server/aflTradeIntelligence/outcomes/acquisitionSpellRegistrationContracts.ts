@@ -168,13 +168,15 @@ const appearanceSpellContent = z
   })
   .strict();
 
+// An arrival cites the promoted event's day, or, for a trade the source does not date, the
+// season's reviewed trade-period window exactly as the promoted event carries it.
 const arrivalSpellContent = z
   .object({
     schemaVersion: z.literal('afl-trade-acquisition-registration/v4'),
     ...scope,
     playerId: id,
     clubId: id,
-    entry: event,
+    entry: precisionEvent,
     ruleId: aflTradeContentAddressedIdSchema('acquisition-spell-rule'),
     version: z.number().int().positive(),
     supersedesSpellVersionId: aflTradeContentAddressedIdSchema(
@@ -237,7 +239,7 @@ function spellChronologyIssues(c: SpellContent): string[] {
 
 function arrivalIssues(c: z.infer<typeof arrivalSpellContent>): string[] {
   const valid =
-    c.entry.eventDate <= c.createdAt.slice(0, 10) &&
+    eventBounds(c.entry).latest <= c.createdAt.slice(0, 10) &&
     hasConsistentAncestry(c) &&
     c.entry.evidence.every((ref) => Date.parse(ref.createdAt) <= Date.parse(c.createdAt));
   return valid ? [] : ['Arrival chronology or version ancestry is invalid.'];

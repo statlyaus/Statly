@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { draftSessionDateWindowSchema } from './draftSessionDatePrecision';
 import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type {
   AflOutcomeSqlClient,
@@ -15,11 +17,23 @@ import {
   type AflTradeExternalCanonicalPromotionReviewRepository,
   type PersistAflTradeExternalCanonicalPromotionReviewInput,
   type PersistedAflTradeExternalCanonicalPromotionReview,
+  type AflTradeReviewedTradePeriodWindow,
 } from './externalCanonicalPromotionReviewService';
 import {
   parseAflTradeExternalReconciliationCandidate,
   type AflTradeExternalReconciliationCandidateRecord,
 } from './externalReconciliationCandidateContracts';
+
+const reviewedTradePeriodWindowSchema = z
+  .object({
+    seasonYear: z.number().int().min(1897).max(2200),
+    datePrecision: draftSessionDateWindowSchema,
+  })
+  .strict()
+  .refine(
+    (window) => Number(window.datePrecision.earliestDate.slice(0, 4)) === window.seasonYear,
+    'A reviewed trade-period window must lie in its season.'
+  );
 
 export class AflTradeExternalCanonicalPromotionReviewPersistenceError extends Error {
   constructor(
@@ -121,6 +135,35 @@ export class PostgresAflTradeExternalCanonicalPromotionReviewRepository implemen
   async loadCurrentDecision(candidateId: string) {
     const row = await selectHead(this.client, candidateId);
     return row ? parseAflTradeExternalCanonicalPromotionReviewDecision(row.decision_json) : null;
+  }
+
+  async loadReviewedTradePeriodWindows(input: {
+    environment: string;
+    competition: string;
+    seasons: readonly number[];
+  }): Promise<readonly AflTradeReviewedTradePeriodWindow[]> {
+    if (input.seasons.length === 0) return [];
+    const result = await this.client.query<{ season_year: number; date_precision: unknown }>(
+      `SELECT DISTINCT (row.evidence_json#>>'{content,claim,seasonYear}')::integer AS season_year,
+              row.evidence_json#>'{content,claim,datePrecision}' AS date_precision
+         FROM outcome_external_evidence_row row
+         JOIN outcome_external_evidence_batch batch ON batch.batch_id=row.batch_id
+         JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
+        WHERE row.claim_kind='trade_period_window'
+          AND batch.status='finalized' AND capture.status='approved'
+          AND capture.provider='official_afl'
+          AND capture.capability_id='official-afl-trade-period-dates'
+          AND capture.environment::text=$1 AND capture.competition=$2
+          AND (row.evidence_json#>>'{content,claim,seasonYear}')::integer=ANY($3::integer[])
+        ORDER BY 1`,
+      [input.environment, input.competition, [...input.seasons]]
+    );
+    return result.rows.map((row) =>
+      reviewedTradePeriodWindowSchema.parse({
+        seasonYear: Number(row.season_year),
+        datePrecision: row.date_precision,
+      })
+    );
   }
 
   async persistDecision(

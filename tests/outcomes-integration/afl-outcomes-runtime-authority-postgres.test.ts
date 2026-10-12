@@ -11,6 +11,7 @@ import { recordApprovedAflTradeFitzRoySources } from '@/server/aflTradeIntellige
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createPostgresAflTradeProjectionFreshnessHighWaterStore } from '@/server/aflTradeIntelligence/publication/postgresProjectionFreshnessHighWaterStore';
 import { createPostgresAflTradePublicationRepository } from '@/server/aflTradeIntelligence/publication/postgresPublicationRepository';
+import { retainTestGateEvidenceValues } from '../testUtils/testEvidenceStore';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
@@ -35,6 +36,10 @@ function scopedDatabaseUrl(): string {
 }
 
 const artifact = (letter: string) => `artifact:${letter.repeat(64)}`;
+/** Approval evidence the Gate records cite; each id is the SHA-256 of its stored canonical JSON. */
+const gateEvidenceValue = (marker: string) => ({ runtimeAuthorityEvidence: marker });
+const gateEvidence = (marker: string) =>
+  createAflTradeContentAddress('artifact', gateEvidenceValue(marker));
 const artifactReference = (letter: string) => ({
   artifactId: artifact(letter),
   contentSha256: letter.repeat(64),
@@ -93,22 +98,22 @@ const initialApproval = {
     },
     conditionEvidence: {
       'afl-tables-player-stats': {
-        'full-season-custody': artifact('e'),
-        'zero-provenance-review': artifact('f'),
+        'full-season-custody': gateEvidence('e'),
+        'zero-provenance-review': gateEvidence('f'),
       },
       'footywire-player-stats': {
-        'full-season-custody': artifact('1'),
-        'html-schema-fingerprint': artifact('2'),
+        'full-season-custody': gateEvidence('1'),
+        'html-schema-fingerprint': gateEvidence('2'),
       },
       'fryzigg-player-stats': {
-        'complete-rds-custody': artifact('3'),
-        'reconciliation-promotion-review': artifact('4'),
+        'complete-rds-custody': gateEvidence('3'),
+        'reconciliation-promotion-review': gateEvidence('4'),
       },
     },
     evidence: {
-      terms: artifact('a'),
-      authority: artifact('b'),
-      rateLimit: artifact('c'),
+      terms: gateEvidence('a'),
+      authority: gateEvidence('b'),
+      rateLimit: gateEvidence('c'),
     },
     termsEffectiveAt: '2026-08-08T00:00:00.000Z',
     termsExpireAt: '2027-08-08T00:00:00.000Z',
@@ -116,7 +121,7 @@ const initialApproval = {
     proposedBy: 'statly-data-governance-owner',
   },
   gate: {
-    environment: 'production' as const,
+    environment: 'non_production' as const,
     decidedAt: '2026-08-08T00:02:00.000Z',
     effectiveAt: '2026-08-08T00:02:00.000Z',
     revalidateAt: '2027-08-08T00:00:00.000Z',
@@ -124,10 +129,10 @@ const initialApproval = {
     reviewer: {
       id: 'independent-source-reviewer',
       role: 'source-governance-reviewer',
-      evidenceId: artifact('d'),
+      evidenceId: gateEvidence('d'),
     },
-    authorityEvidenceId: artifact('b'),
-    rateLimitEvidenceId: artifact('c'),
+    authorityEvidenceId: gateEvidence('b'),
+    rateLimitEvidenceId: gateEvidence('c'),
   },
 };
 
@@ -149,6 +154,11 @@ describe('PostgreSQL AFL trade runtime authority', () => {
     const repository = createPostgresAflTradeGateDecisionLedgerRepository(
       createPgAflOutcomeSqlClient(outcomesPool)
     );
+    // A non-production Gate record cites only retained evidence (migration 0253).
+    await retainTestGateEvidenceValues(
+      outcomesPool,
+      ['e', 'f', '1', '2', '3', '4', 'a', 'b', 'c', 'd'].map(gateEvidenceValue)
+    );
     const initial = await recordApprovedAflTradeFitzRoySources(repository, initialApproval);
 
     expect(initial.revision).toBe(3);
@@ -167,7 +177,7 @@ describe('PostgreSQL AFL trade runtime authority', () => {
       CREATE FUNCTION fail_footywire_gate_renewal() RETURNS trigger
       LANGUAGE plpgsql AS $$
       BEGIN
-        IF NEW.decision_key = 'footywire-player-stats-production' AND NEW.version = 2 THEN
+        IF NEW.decision_key = 'footywire-player-stats-non_production' AND NEW.version = 2 THEN
           RAISE EXCEPTION 'injected mid-batch renewal failure';
         END IF;
         RETURN NEW;

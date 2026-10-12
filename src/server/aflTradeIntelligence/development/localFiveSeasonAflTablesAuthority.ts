@@ -158,12 +158,32 @@ export const LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA = [
   integer('Round.Number'),
 ] satisfies readonly LocalAflTablesFieldDescriptor[];
 
-function artifact(label: string): string {
-  return `artifact:${sha256AflTradeCanonicalJson({
-    boundary: 'local-five-season-afl-tables',
-    label,
-  })}`;
+function evidenceValue(label: string) {
+  return { boundary: 'local-five-season-afl-tables', label };
 }
+
+function artifact(label: string): string {
+  return `artifact:${sha256AflTradeCanonicalJson(evidenceValue(label))}`;
+}
+
+/**
+ * The canonical JSON values whose SHA-256 digests are the evidence ids this authority cites. Outside
+ * test_fixture a Gate record may cite only retained evidence (migration 0253), so a caller appending
+ * these Gate records stores these bytes first.
+ */
+export const LOCAL_FIVE_SEASON_AFL_TABLES_GATE_EVIDENCE = [
+  'full-season-custody',
+  'local-user-approval',
+  'rate-limit',
+  'results-source-governance-review',
+  'source-governance-review',
+  'terms',
+  'unused-footywire-full-season-custody',
+  'unused-footywire-schema',
+  'unused-fryzigg-rds',
+  'unused-fryzigg-review',
+  'zero-provenance-review',
+].map(evidenceValue);
 
 function sourceFieldUse(sourceField: string, modelTraining = false) {
   return {

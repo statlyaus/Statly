@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   transaction: vi.fn(),
   convergeDraftSetup: vi.fn(),
+  countActions: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/lib/prisma', () => ({
       update: mocks.updateLeague,
     },
     leagueSettings: { update: mocks.updateSettings },
+    teamAction: { count: mocks.countActions },
     $transaction: mocks.transaction,
   },
 }));
@@ -84,6 +86,7 @@ describe('league settings route draft scheduling', () => {
     mocks.updateSettings.mockResolvedValue(league.settings);
     mocks.transaction.mockResolvedValue([]);
     mocks.convergeDraftSetup.mockResolvedValue(undefined);
+    mocks.countActions.mockResolvedValue(0);
   });
 
   it('clears a scheduled draft when the request explicitly sends null', async () => {
@@ -113,6 +116,34 @@ describe('league settings route draft scheduling', () => {
       where: { id: 'settings-1' },
       data: expect.objectContaining({ faabBudget }),
     });
+  });
+
+  it('refuses to change the FAAB budget once a waiver claim exists', async () => {
+    mocks.countActions.mockResolvedValue(1);
+
+    const response = await PUT(settingsRequest({ waiver: { faabBudget: 200 } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'FAAB budget is locked once waiver claims exist',
+    });
+    expect(mocks.countActions).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', actionType: 'WAIVER_CLAIM' },
+    });
+    expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('saves an unchanged FAAB budget without checking for claims', async () => {
+    mocks.countActions.mockResolvedValue(1);
+
+    const response = await PUT(settingsRequest({ waiver: { faabBudget: null } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.countActions).not.toHaveBeenCalled();
   });
 
   it.each([0, 1.5, '100'])(

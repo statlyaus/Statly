@@ -41,7 +41,7 @@ const legacyExecutionReceiptContentSchema = z
     gateDecisionKey: z.string().trim().min(1).max(200),
     ledgerRevision: z.number().int().nonnegative(),
     evaluatedAt: z.iso.datetime({ offset: true }),
-    provider: z.enum(['draftguru', 'footywire', 'official_afl']),
+    provider: z.enum(['draftguru', 'footywire', 'official_afl', 'footyinfo']),
     capabilityId: z.string().trim().min(1).max(240),
     parserVersion: z.string().trim().min(1).max(160),
     fieldManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -80,11 +80,13 @@ const localFixtureExecutionReceiptContentSchema = z
 const executionRequestSchema = z
   .object({
     environment: z.enum(['test_fixture', 'non_production', 'production']),
-    provider: z.enum(['draftguru', 'footywire', 'official_afl']),
+    provider: z.enum(['draftguru', 'footywire', 'official_afl', 'footyinfo']),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     discoveryFromSeasonYear: z.number().int().min(1988).max(2200).nullable().optional(),
-    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft']).nullable(),
+    draftPathway: z
+      .enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft'])
+      .nullable(),
     dataset: z.string().trim().min(1).max(160),
     datasetVersion: z.string().trim().min(1).max(160),
     accessMechanism: z.string().trim().min(1).max(160),
@@ -285,11 +287,14 @@ const ingestionRequestSchema = z
       'footywire',
       'official_afl',
       'fitzroy_official_afl_player_details',
+      'footyinfo',
     ]),
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     discoveryFromSeasonYear: z.number().int().min(1988).max(2200).nullable().optional(),
-    draftPathway: z.enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft']).nullable(),
+    draftPathway: z
+      .enum(['national', 'rookie', 'pre_season', 'mid_season', 'mini_draft'])
+      .nullable(),
     dataset: z.string().trim().min(1).max(160),
     datasetVersion: z.string().trim().min(1).max(160),
     accessMechanism: z.string().trim().min(1).max(160),
@@ -680,7 +685,18 @@ export async function ingestAflTradeExternalPage(
   if (parsed.evidence.length === 0) {
     throw new AflTradeExternalPageIngestionError(
       'EMPTY_EVIDENCE',
-      'A captured evidence page cannot finalize an empty factual batch.'
+      'A captured evidence page cannot finalize an empty factual batch.' +
+        (parsed.issues.length === 0
+          ? ''
+          : ` Parser issues: ${parsed.issues
+              .slice(0, 5)
+              .map(
+                (issue) =>
+                  `${issue.code} ${issue.sourceKey}: ${issue.detail.length > 200 ? `${issue.detail.slice(0, 200)}…` : issue.detail}`
+              )
+              .join(
+                '; '
+              )}${parsed.issues.length > 5 ? ` (+${parsed.issues.length - 5} more)` : ''}`)
     );
   }
   if (

@@ -5,6 +5,7 @@ import {
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import { recordAflTradeRepositoryLocations } from '../artifacts/artifactStoreLocation';
 import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
 import {
   aflTradeArtifactReadbackReceiptSchema,
@@ -263,6 +264,9 @@ export async function persistPostgresAflTradeProjectionRelease(
         canonicalizeAflTradeJson(readback),
       ]
     );
+    await recordAflTradeRepositoryLocations(transaction, dependencies.artifactRepository, [
+      releaseArtifact.artifactRef,
+    ]);
     const storedRow = await loadCustodyRow(transaction, releaseArtifact.artifactRef.artifactId);
     if (storedRow === null) {
       throw new AflTradeProjectionReleaseCustodyError(

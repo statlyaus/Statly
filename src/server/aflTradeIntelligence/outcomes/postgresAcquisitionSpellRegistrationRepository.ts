@@ -168,7 +168,11 @@ export class PostgresAflTradeAcquisitionSpellRegistrationRepository {
           c.clubId,
           c.entry.eventVersionId,
           c.entry.assetVersionId,
-          c.entry.eventDate,
+          // An arrival inside a reviewed trade-period window starts at the window's earliest day;
+          // a v2 window keeps no start date and is bounded by its own currency function.
+          c.schemaVersion === 'afl-trade-acquisition-registration/v4' && c.entry.eventDate === null
+            ? c.entry.datePrecision.earliestDate
+            : c.entry.eventDate,
           // An arrival-only (v4) spell records no departure; its stint is closed by season spells.
           'departure' in c ? (c.departure?.eventDate ?? null) : null,
           c.ruleId,
