@@ -34,7 +34,10 @@ class LiteralError extends Error {}
 /**
  * Reads one serialized value of the board's embedded router state: objects, arrays, strings,
  * numbers, `!0`/`!1`, `null` and `void 0`, each optionally introduced by a `$R[n]=` slot assignment.
- * Anything else (a back-reference, a function, a constructor) is refused, so nothing is evaluated.
+ * A bare `$R[n]` back-reference resolves only to a slot this same read has already completed (the
+ * live 2019 board writes `selected:$R[24]` for a period listed earlier in `periods`). A forward,
+ * unknown or still-open (cyclic) reference, a reassigned slot, a function or a constructor is
+ * refused, so nothing is evaluated.
  */
 export function readFootyinfoSerializedLiteral(
   text: string,
@@ -42,6 +45,7 @@ export function readFootyinfoSerializedLiteral(
 ): { value: unknown; end: number } {
   let index = start;
   let depth = 0;
+  const slots = new Map<number, unknown>();
   const fail = (what: string): never => {
     throw new LiteralError(`${what} at offset ${index}`);
   };
@@ -93,10 +97,18 @@ export function readFootyinfoSerializedLiteral(
   const readValue = (): unknown => {
     depth += 1;
     if (depth > 64) fail('Nesting too deep');
-    const slot = /^\$R\[\d{1,7}\]/.exec(text.slice(index, index + 12));
+    const slot = /^\$R\[(\d{1,7})\]/.exec(text.slice(index, index + 12));
+    let assigns: number | null = null;
     if (slot) {
+      const slotNumber = Number(slot[1]);
       index += slot[0].length;
-      if (text[index] !== '=') fail('Unsupported back-reference');
+      if (text[index] !== '=') {
+        if (!slots.has(slotNumber)) fail('Unsupported back-reference');
+        depth -= 1;
+        return slots.get(slotNumber);
+      }
+      if (slots.has(slotNumber)) fail(`Slot ${slotNumber} reassigned`);
+      assigns = slotNumber;
       index += 1;
     }
     let value: unknown;
@@ -151,6 +163,7 @@ export function readFootyinfoSerializedLiteral(
       value = Number(number![0]);
       index += number![0].length;
     }
+    if (assigns !== null) slots.set(assigns, value);
     depth -= 1;
     return value;
   };
@@ -173,7 +186,9 @@ const pickSchema = z.object({
   origin: z.object({ id: z.string() }),
   points: z.number().int().optional(),
   note: z.string().optional(),
-  bid: z.object({ team, match_reason: z.string() }).optional(),
+  // A bid without a bidding team is an academy or father-son selection no rival club bid on;
+  // the board prints no matched bid for it.
+  bid: z.object({ team: team.optional(), match_reason: z.string() }).optional(),
   lineage: z
     .array(
       z.object({ type: z.object({ id: z.string() }), from: team.optional(), to: team.optional() })
@@ -212,7 +227,10 @@ const BID_BASIS = {
 const HEADERS = ['Pick', 'Club', 'Player', 'Rtg', 'Age', 'Ht', 'From', 'Route', 'Pts', 'Note'];
 
 function normalize(value: string): string {
-  return value.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function club(value: z.infer<typeof team>) {
@@ -312,16 +330,18 @@ export function parseFootyinfoDraftBoard(
     const originLabel = Object.hasOwn(ORIGIN_LABEL, pick.origin.id)
       ? ORIGIN_LABEL[pick.origin.id]
       : undefined;
-    const basis =
-      pick.bid === undefined
-        ? undefined
-        : Object.hasOwn(BID_BASIS, pick.bid.match_reason)
-          ? BID_BASIS[pick.bid.match_reason as keyof typeof BID_BASIS]
-          : null;
-    if (basis === null || (pick.bid === undefined && originLabel === undefined)) {
+    if (pick.bid !== undefined && !Object.hasOwn(BID_BASIS, pick.bid.match_reason)) {
       return invalid(`Board pick ${pick.id} has an unreviewed origin or bid basis.`);
     }
-    const routeLabel = pick.bid !== undefined ? 'matched_bid' : originLabel!;
+    const bid =
+      pick.bid?.team === undefined
+        ? undefined
+        : { team: pick.bid.team, reason: pick.bid.match_reason };
+    const basis = bid === undefined ? undefined : BID_BASIS[bid.reason as keyof typeof BID_BASIS];
+    if (bid === undefined && originLabel === undefined) {
+      return invalid(`Board pick ${pick.id} has an unreviewed origin or bid basis.`);
+    }
+    const routeLabel = bid !== undefined ? 'matched_bid' : originLabel!;
     const hops = (pick.lineage ?? []).filter(({ type }) => hopKinds.has(type.id));
     if (hops.some((hop) => hop.from === undefined || hop.to === undefined)) {
       return invalid(`Board pick ${pick.id} has a route hop without both clubs.`);
@@ -354,10 +374,10 @@ export function parseFootyinfoDraftBoard(
         ...(route.length === 0 ? [] : [route.map(({ abbrev }) => abbrev).join(' → ')]),
       ];
       const routeMatches =
-        pick.bid !== undefined
+        bid !== undefined
           ? routeSpans.length === 2 &&
             routeSpans[0] === ROUTE_LABEL_TEXT.matched_bid &&
-            routeSpans[1]!.startsWith(`${pick.bid.team.abbrev} bid · `)
+            routeSpans[1]!.startsWith(`${bid.team.abbrev} bid · `)
           : routeSpans.length === expectedSpans.length &&
             routeSpans.every((text, index) => text === expectedSpans[index]);
       if (
@@ -393,7 +413,7 @@ export function parseFootyinfoDraftBoard(
         ...(player === undefined ? {} : { player }),
         route: route.map(club),
         routeLabel,
-        bid: pick.bid === undefined ? null : { club: club(pick.bid.team), basis: basis! },
+        bid: bid === undefined ? null : { club: club(bid.team), basis: basis! },
         points: pick.points ?? null,
         note: pick.note === undefined ? null : normalize(pick.note) || null,
       },

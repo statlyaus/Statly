@@ -685,7 +685,15 @@ export async function ingestAflTradeExternalPage(
   if (parsed.evidence.length === 0) {
     throw new AflTradeExternalPageIngestionError(
       'EMPTY_EVIDENCE',
-      'A captured evidence page cannot finalize an empty factual batch.'
+      'A captured evidence page cannot finalize an empty factual batch.' +
+        (parsed.issues.length === 0
+          ? ''
+          : ` Parser issues: ${parsed.issues
+              .slice(0, 5)
+              .map((issue) => `${issue.code} ${issue.sourceKey}: ${issue.detail}`)
+              .join(
+                '; '
+              )}${parsed.issues.length > 5 ? ` (+${parsed.issues.length - 5} more)` : ''}`)
     );
   }
   if (
