@@ -690,7 +690,10 @@ export async function ingestAflTradeExternalPage(
           ? ''
           : ` Parser issues: ${parsed.issues
               .slice(0, 5)
-              .map((issue) => `${issue.code} ${issue.sourceKey}: ${issue.detail}`)
+              .map(
+                (issue) =>
+                  `${issue.code} ${issue.sourceKey}: ${issue.detail.length > 200 ? `${issue.detail.slice(0, 200)}…` : issue.detail}`
+              )
               .join(
                 '; '
               )}${parsed.issues.length > 5 ? ` (+${parsed.issues.length - 5} more)` : ''}`)

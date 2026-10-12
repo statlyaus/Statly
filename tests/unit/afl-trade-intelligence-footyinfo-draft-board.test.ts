@@ -243,6 +243,18 @@ describe('parseFootyinfoDraftBoard', () => {
         )
       ).issues[0]?.detail
     ).toMatch(/unreviewed origin or bid basis/);
+    // A team-less bid never turns a points purchase into a plain row.
+    expect(
+      parse(
+        footyinfoBoardPage(
+          SYNTHETIC_BOARD_PICKS.map((pick) =>
+            pick.id === 2
+              ? { ...pick, bid: undefined, unbidReason: 'academy_nga', tableRoute: [] }
+              : pick
+          )
+        )
+      ).issues[0]?.detail
+    ).toMatch(/unreviewed origin or bid basis/);
   });
 
   it('emits exactly the reviewed field boundary', () => {
@@ -328,6 +340,16 @@ describe('parseFootyinfoDraftBoard', () => {
     expect(
       parse(page.replace('number_settled:!0', 'number_settled:$R[1]')).issues[0]?.detail
     ).toMatch(/Unreadable board data/);
+    // Slots resolve only within the loader's own value: a reference to a slot assigned before it
+    // (here the root match's `l`) still refuses.
+    expect(
+      parse(
+        footyinfoBoardPage(SYNTHETIC_BOARD_PICKS).replace(
+          /selected:\$R\[10\]=\{[^]*?isDraft:!0\}\}/,
+          'selected:$R[5]'
+        )
+      ).issues[0]?.detail
+    ).toMatch(/Unreadable board data: Unsupported back-reference/);
   });
 });
 
