@@ -4092,10 +4092,13 @@ The remaining work proceeds through these independently verifiable gates:
    spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
    so the session-less metadata path never creates a second root for a session-keyed draft. A
    transaction whose trade event is current canonical under the same stable key from a finalized
-   promotion, with every candidate transfer a promoted asset on that version, is recorded as
+   promotion, with every candidate transfer a promoted asset on that version and every pick
+   transfer under that asset's pick id, is recorded as
    `promotedTransactions` the same way (migration 0267: `outcome_current_canonical_transactions`,
    `outcome_external_candidate_promotable_transactions` behind the coverage validators and the
-   unusable-record count) and written as nothing, with the realizations into its transfers skipped;
+   unusable-record count; the pick-id condition is migration 0274's
+   `outcome_current_canonical_transaction_picks`, so a trade whose pick the identity rules re-keyed
+   is written again as a superseding version) and written as nothing, with the realizations into its transfers skipped;
    the special-entitlement gate applies only to the transfers written, and the receipt carries the
    skipped count and ids. A pick the promotion would define that is already canonical with
    different facts and no reviewed lineage registration is retained under the deferral, referenced
@@ -4105,11 +4108,19 @@ The remaining work proceeds through these independently verifiable gates:
    the written transfers number differently is defined, under the deferral, from its one usable
    custody observation in the candidate's full custody (a deferred pick's unwritten observation
    included) and listed as `custodyDefinedPickIds` with `custodyDefinedPickCount`, each
-   asset keeping its trade-time number; no such single custody row, or more than one, is still
-   the conflict. A custody observation without a usable status is recorded as
+   asset keeping its trade-time number; with no such single custody row, or more than one, the
+   pick is defined without a number (and without a round when the transfers disagree on it). A custody observation without a usable status is recorded as
    `deferredCustodyIds` (migration 0268 checks each is an unusable candidate custody row, on insert
    and at promotion; the unusable-record count ignores it) and written as nothing, counted on the
-   receipt as `deferredCustodyCount`. A deferred-lineage promotion is excluded from the
+   receipt as `deferredCustodyCount`. A usable custody row that records an observation already
+   canonical under a finalized promotion, matched by pick, observation time and holder (the
+   `outcome_pick_custody_observation_key` unique key, not the custody id: a custody id addresses its
+   evidence and a re-captured page gives the same observation new evidence) with the same draft,
+   recorded round and pick and original club and no predecessor on either side, is recorded under its
+   own custody id as `promotedCustodyIds` (migration 0274: `outcome_current_canonical_pick_custody`,
+   checked on insert and at promotion, ignored by the unusable-record count) and written as nothing,
+   counted as `promotedCustodyCount`; writing it would collide with the canonical row. One whose facts
+   differ is not recorded and still refuses. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
 

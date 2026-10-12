@@ -27,9 +27,12 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradeDeferredCustodyIds,
+  aflTradePromotedCustodyIds,
   aflTradePromotedDrafts,
   aflTradePromotedTransactions,
   isAflTradePickSideReconciliationIssue,
+  type AflTradeCurrentCanonicalPickCustody,
+  type AflTradeCurrentCanonicalTransaction,
   type AflTradePickLineageDeferral,
 } from './pickLineageDeferral';
 
@@ -2288,11 +2291,18 @@ export function reconcileAflTradeExternalEvidence(input: {
   promotedDraftSelectionIds?: readonly string[];
   /**
    * Transactions that are already current canonical, each with the transfer ids promoted as assets
-   * on its current trade version, as the repository resolved them at preparation. Only with the
-   * deferral: a candidate transaction whose every transfer is in its entry is recorded as already
-   * promoted and left unwritten.
+   * on its current trade version and the pick id of each such asset that names one, as the
+   * repository resolved them at preparation. Only with the deferral: a candidate transaction whose
+   * every transfer is in its entry, every pick transfer under the same pick id, is recorded as
+   * already promoted and left unwritten.
    */
-  promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[];
+  promotedTransactions?: readonly AflTradeCurrentCanonicalTransaction[];
+  /**
+   * Custody observations already canonical under finalized promotions, with their facts, as the
+   * repository resolved them at preparation. Only with the deferral: a usable candidate custody row
+   * whose id and facts match one is recorded as already promoted and left unwritten (#853).
+   */
+  promotedCustody?: readonly AflTradeCurrentCanonicalPickCustody[];
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -2310,20 +2320,52 @@ export function reconcileAflTradeExternalEvidence(input: {
   if (promotedDraftSelectionIds.size > 0 && pickLineageDeferral === undefined) {
     throw new TypeError('Already-promoted drafts are recorded only under a pick-side deferral.');
   }
-  const promotedTransferIds = new Map(
-    (
-      z
-        .array(
-          z.object({ transactionId: z.string().min(1), transferIds: z.array(z.string().min(1)) })
-        )
-        .optional()
-        .parse(input.promotedTransactions) ?? []
-    ).map(({ transactionId, transferIds }) => [transactionId, new Set(transferIds)] as const)
-  );
-  if (promotedTransferIds.size > 0 && pickLineageDeferral === undefined) {
+  const currentTransactions =
+    z
+      .array(
+        z
+          .object({
+            transactionId: z.string().min(1),
+            transferIds: z.array(z.string().min(1)),
+            // Required: without each promoted asset's pick id a re-keyed transaction would be
+            // listed and its corrected pick ids never written (#853).
+            transferPickIds: z.array(
+              z.object({ transferId: z.string().min(1), pickId: z.string().min(1) }).strict()
+            ),
+            reviewedLineage: z.boolean(),
+          })
+          .strict()
+      )
+      .optional()
+      .parse(input.promotedTransactions) ?? [];
+  if (currentTransactions.length > 0 && pickLineageDeferral === undefined) {
     throw new TypeError(
       'Already-promoted transactions are recorded only under a pick-side deferral.'
     );
+  }
+  const currentCustody =
+    z
+      .array(
+        z
+          .object({
+            custodyId: z.string().min(1),
+            pickId: z.string().min(1),
+            observedAt: z.string().min(1).nullable(),
+            observedDate: z.record(z.string(), z.union([z.string(), z.number()])).nullable(),
+            draftSeasonYear: z.number().int(),
+            draftKind: z.string().min(1),
+            recordedRound: z.number().int().nullable(),
+            recordedPick: z.number().int().nullable(),
+            originalClubId: z.string().min(1).nullable(),
+            currentClubId: z.string().min(1),
+            predecessorCustodyId: z.string().min(1).nullable(),
+          })
+          .strict()
+      )
+      .optional()
+      .parse(input.promotedCustody) ?? [];
+  if (currentCustody.length > 0 && pickLineageDeferral === undefined) {
+    throw new TypeError('Already-promoted custody is recorded only under a pick-side deferral.');
   }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
@@ -3216,9 +3258,15 @@ export function reconcileAflTradeExternalEvidence(input: {
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
   const promotedDrafts = aflTradePromotedDrafts(draftSelections, promotedDraftSelectionIds);
-  const promotedTransactions = aflTradePromotedTransactions(transactions, promotedTransferIds);
+  const promotedTransactions = aflTradePromotedTransactions(
+    transactions,
+    transfers,
+    currentTransactions
+  );
   // Custody without a usable status is pick-side: recorded as deferred and left unwritten.
   const deferredCustodyIds = aflTradeDeferredCustodyIds(pickCustody);
+  // Custody already canonical with the same facts is left to its promotion (#853).
+  const promotedCustodyIds = aflTradePromotedCustodyIds(pickCustody, currentCustody);
   const recordedDeferral =
     pickLineageDeferral === undefined
       ? undefined
@@ -3227,6 +3275,7 @@ export function reconcileAflTradeExternalEvidence(input: {
           ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
           ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
           ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
+          ...(promotedCustodyIds.length === 0 ? {} : { promotedCustodyIds }),
         };
 
   const content: AflTradeExternalReconciliationContent = {

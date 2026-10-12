@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
@@ -55,6 +58,24 @@ interface Workspace {
 }
 const workspaces: Workspace[] = [];
 let ordinal = 0;
+
+/** Applies every outcomes migration after `migration`, in order, to the workspace's schema. */
+async function applyMigrationsAfter(ws: Workspace, migration: string): Promise<void> {
+  const root = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'prisma',
+    'afl-trade-outcomes',
+    'migrations'
+  );
+  const later = (await readdir(root, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name > migration)
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of later)
+    await ws.pool.query(await readFile(join(root, name, 'migration.sql'), 'utf8'));
+}
 
 async function workspace(): Promise<Workspace> {
   const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}_${ordinal++}`;
@@ -824,6 +845,9 @@ it('keeps an unresolved custody observation blocking without the deferral', asyn
 it('reviews and promotes a deferred candidate whose retained session claims belong to an already-promoted draft, and still refuses one that would write that draft', async () => {
   const ws = await workspace();
   await ws.pool.query(ws.migrationSql);
+  // This case prepares through the current repository reader, which reads functions later
+  // migrations add (0274's current canonical transaction picks), so the schema takes them too.
+  await applyMigrationsAfter(ws, MIGRATION);
   const sql = createPgAflOutcomeSqlClient(ws.pool);
   const instant = async () =>
     (

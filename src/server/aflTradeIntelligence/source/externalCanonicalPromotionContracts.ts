@@ -487,6 +487,8 @@ const requestPickLineageDeferralSchema = z
     skippedRealizationCount: z.number().int().positive().optional(),
     /** Custody observations without a usable status, left unwritten; present only when any. */
     deferredCustodyCount: z.number().int().positive().optional(),
+    /** Custody observations already canonical with the candidate's facts, left unwritten (#853). */
+    promotedCustodyCount: z.number().int().positive().optional(),
     /** Transactions left to their existing current promotion; present only when any, with their ids. */
     promotedTransactionCount: z.number().int().positive().optional(),
     promotedTransactionIds: z
@@ -1163,6 +1165,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
             ...(scope.deferredCustodyCount === 0
               ? {}
               : { deferredCustodyCount: scope.deferredCustodyCount }),
+            ...(scope.promotedCustodyCount === 0
+              ? {}
+              : { promotedCustodyCount: scope.promotedCustodyCount }),
           },
   };
 }
