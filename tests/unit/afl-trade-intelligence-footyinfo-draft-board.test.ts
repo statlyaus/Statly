@@ -56,8 +56,26 @@ describe('readFootyinfoSerializedLiteral', () => {
     expect(text.slice(end)).toBe(',rest');
   });
 
-  it('refuses back-references, code and duplicate keys rather than evaluating them', () => {
+  it('resolves a back-reference only to a slot already read in the same value', () => {
+    const { value } = readFootyinfoSerializedLiteral(
+      '{periods:$R[1]=[$R[2]={id:164,year:2019}],selected:$R[2],n:$R[3]=7,m:$R[3]}',
+      0
+    );
+    expect(value).toEqual({
+      periods: [{ id: 164, year: 2019 }],
+      selected: { id: 164, year: 2019 },
+      n: 7,
+      m: 7,
+    });
+  });
+
+  it('refuses forward, cyclic and reassigned slots, code and duplicate keys rather than evaluating them', () => {
     expect(() => readFootyinfoSerializedLiteral('{a:$R[2]}', 0)).toThrow(/back-reference/);
+    expect(() => readFootyinfoSerializedLiteral('{a:$R[2],b:$R[2]=1}', 0)).toThrow(
+      /back-reference/
+    );
+    expect(() => readFootyinfoSerializedLiteral('$R[1]={a:$R[1]}', 0)).toThrow(/back-reference/);
+    expect(() => readFootyinfoSerializedLiteral('{a:$R[1]=1,b:$R[1]=2}', 0)).toThrow(/reassigned/);
     expect(() => readFootyinfoSerializedLiteral('{a:() => 1}', 0)).toThrow(/Unsupported value/);
     expect(() => readFootyinfoSerializedLiteral('{a:new Date(0)}', 0)).toThrow(/Unsupported/);
     expect(() => readFootyinfoSerializedLiteral('{a:1,a:2}', 0)).toThrow(/Duplicate key/);
@@ -187,6 +205,58 @@ describe('parseFootyinfoDraftBoard', () => {
     ]);
   });
 
+  it('reads a board whose selected period is a back-reference into periods, as the live 2019 page writes it', () => {
+    const inline = parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS));
+    const referenced = parse(
+      footyinfoBoardPage(SYNTHETIC_BOARD_PICKS, { selectedByReference: true })
+    );
+    expect(referenced.issues).toEqual([]);
+    expect(referenced.evidence.map(({ content }) => content.claim)).toEqual(
+      inline.evidence.map(({ content }) => content.claim)
+    );
+    expect(
+      parse(
+        footyinfoBoardPage(SYNTHETIC_BOARD_PICKS, {
+          selectedByReference: true,
+          selectedKey: 'rookie_draft',
+        })
+      ).issues[0]?.detail
+    ).toMatch(/reviewed shape/);
+  });
+
+  it('reads a bid without a bidding club as no matched bid, as the live 2019 board writes academy picks', () => {
+    const unbid = SYNTHETIC_BOARD_PICKS.map((pick) =>
+      pick.id === 1 ? { ...pick, unbidReason: 'academy_nga' } : pick
+    );
+    const inline = parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS));
+    const read = parse(footyinfoBoardPage(unbid));
+    expect(read.issues).toEqual([]);
+    expect(read.evidence.map(({ content }) => content.claim)).toEqual(
+      inline.evidence.map(({ content }) => content.claim)
+    );
+    expect(
+      parse(
+        footyinfoBoardPage(
+          SYNTHETIC_BOARD_PICKS.map((pick) =>
+            pick.id === 1 ? { ...pick, unbidReason: 'priority_access' } : pick
+          )
+        )
+      ).issues[0]?.detail
+    ).toMatch(/unreviewed origin or bid basis/);
+    // A team-less bid never turns a points purchase into a plain row.
+    expect(
+      parse(
+        footyinfoBoardPage(
+          SYNTHETIC_BOARD_PICKS.map((pick) =>
+            pick.id === 2
+              ? { ...pick, bid: undefined, unbidReason: 'academy_nga', tableRoute: [] }
+              : pick
+          )
+        )
+      ).issues[0]?.detail
+    ).toMatch(/unreviewed origin or bid basis/);
+  });
+
   it('emits exactly the reviewed field boundary', () => {
     const paths = new Set(
       parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS)).evidence.flatMap(({ content: { claim } }) =>
@@ -270,6 +340,16 @@ describe('parseFootyinfoDraftBoard', () => {
     expect(
       parse(page.replace('number_settled:!0', 'number_settled:$R[1]')).issues[0]?.detail
     ).toMatch(/Unreadable board data/);
+    // Slots resolve only within the loader's own value: a reference to a slot assigned before it
+    // (here the root match's `l`) still refuses.
+    expect(
+      parse(
+        footyinfoBoardPage(SYNTHETIC_BOARD_PICKS).replace(
+          /selected:\$R\[10\]=\{[^]*?isDraft:!0\}\}/,
+          'selected:$R[5]'
+        )
+      ).issues[0]?.detail
+    ).toMatch(/Unreadable board data: Unsupported back-reference/);
   });
 });
 

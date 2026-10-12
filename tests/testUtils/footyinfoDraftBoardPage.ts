@@ -38,6 +38,8 @@ export interface SyntheticBoardPick {
   points?: number;
   note?: string;
   bid?: { club: string; reason: string };
+  /** A bid record with no bidding team (an academy or father-son pick no rival club bid on). */
+  unbidReason?: string;
   /** Hops as [kind, from, to]; `created_from_points` and `removed` hops take one club. */
   lineage?: Array<[string, string | null, string | null]>;
   /** Overrides the rendered table's route cell spans. */
@@ -91,6 +93,7 @@ export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
           `points_used:100,consumed_picks:[{id:1,label:"R2 - Pick 40",number:null,original_number:40}]`,
           `bid:{team:${team(pick.bid.club)},match_reason:"${pick.bid.reason}",match_player:{id:1,known_as:"Parent Player",slug:"parent-player"}}`,
         ]),
+    ...(pick.unbidReason === undefined ? [] : [`bid:{match_reason:"${pick.unbidReason}"}`]),
     `original:{team:${team(pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
     ...(pick.lineage === undefined
       ? []
@@ -148,15 +151,25 @@ const HEADER =
 
 export function footyinfoBoardPage(
   picks: readonly SyntheticBoardPick[],
-  options: { year?: number; loaderYear?: number; selectedKey?: string; tableRows?: string } = {}
+  options: {
+    year?: number;
+    loaderYear?: number;
+    selectedKey?: string;
+    tableRows?: string;
+    /** Write `selected` as a back-reference to its entry in `periods`, as the live 2019 board does. */
+    selectedByReference?: boolean;
+  } = {}
 ): string {
   const year = options.year ?? 2024;
+  const selectedPeriod = `$R[10]={id:196,name:"${year} National Draft",key:"${options.selectedKey ?? 'national_draft'}",year:${year},type:$R[11]={id:"${options.selectedKey ?? 'national_draft'}",isDraft:!0}}`;
   const records = slotted(picks.map((pick) => boardRecord(pick, year)).join(','), 40);
   const router =
     `$_TSR.router=($R=>$R[0]={manifest:$R[1]={routes:$R[2]={}},matches:$R[3]=[` +
     `$R[4]={i:"__root__",u:1,s:"success",l:$R[5]={session:null,theme:"dark"},ssr:!0},` +
-    `$R[6]={i:"/draft/$year",u:1,s:"success",l:$R[7]={year:${options.loaderYear ?? year},periods:$R[8]=[],availableYears:$R[9]=[${year}],` +
-    `selected:$R[10]={id:196,name:"${year} National Draft",key:"${options.selectedKey ?? 'national_draft'}",year:${year},type:$R[11]={id:"${options.selectedKey ?? 'national_draft'}",isDraft:!0}},` +
+    `$R[6]={i:"/draft/$year",u:1,s:"success",l:$R[7]={year:${options.loaderYear ?? year},` +
+    (options.selectedByReference
+      ? `periods:$R[8]=[${selectedPeriod}],availableYears:$R[9]=[${year}],selected:$R[10],`
+      : `periods:$R[8]=[],availableYears:$R[9]=[${year}],selected:${selectedPeriod},`) +
     `defaultTypeId:"national_draft",content:$R[12]={kind:"picks",picks:$R[13]=[${records}]},team:null},ssr:!0}],` +
     `dehydratedData:$R[30]={}},$R[31]=($R[32]=() => {\n  const buffer = [];\n  return { flush() {} };\n})())($R["tsr"])`;
   const rounds = new Map<number, SyntheticBoardPick[]>();
