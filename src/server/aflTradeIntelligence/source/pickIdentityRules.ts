@@ -7,11 +7,12 @@ import { createAflTradeContentAddress } from '../artifacts/contentAddress';
  * would refuse. Every rule compares resolved clubs only and ignores records without a pick id.
  */
 
+/** A transfer asset; only a `pick_entitlement` carries the fields the rules read. */
 interface PickAssetLike {
   readonly kind: string;
   readonly pickId?: string;
-  readonly draftYear?: number;
-  readonly draftType?: string;
+  readonly draftYear?: number | null;
+  readonly draftType?: string | null;
   readonly nominalPick?: number | null;
   readonly nominalRound?: number | null;
   readonly originalClubId?: string | null;
@@ -38,7 +39,7 @@ export interface AflTradePickIdentityContentLike {
     readonly pickId: string;
     readonly originalClubId: string | null;
   }[];
-  readonly pickLineage: readonly { readonly pickId: string; readonly selectionId: string }[];
+  readonly pickLineage: readonly { readonly pickId: string; readonly selectionId: string | null }[];
   readonly pickOutcomes?: readonly {
     readonly transferId: string;
     readonly playerId: string | null;
@@ -67,7 +68,7 @@ export interface AflTradePickIdentityViolation {
  * draft type, pick number and round, with nothing scoping it to one transfer or entitlement.
  */
 export function aflTradeNumberOnlyPickId(asset: PickAssetLike): string | null {
-  if (asset.draftYear === undefined || asset.draftType === undefined) return null;
+  if (typeof asset.draftYear !== 'number' || typeof asset.draftType !== 'string') return null;
   return createAflTradeContentAddress('draft-pick', {
     draftYear: asset.draftYear,
     draftType: asset.draftType,
@@ -178,7 +179,10 @@ export function aflTradePickIdentityViolations(
     }
   });
   groupBy(content.pickLineage, ({ pickId }) => pickId).forEach((lineage, pickId) => {
-    if (new Set(lineage.map(({ selectionId }) => selectionId)).size > 1) {
+    const selections = lineage.flatMap(({ selectionId }) =>
+      selectionId === null ? [] : [selectionId]
+    );
+    if (new Set(selections).size > 1) {
       violations.push({ rule: 4, pickId, detail: 'The pick’s lineage names two selections.' });
     }
   });
