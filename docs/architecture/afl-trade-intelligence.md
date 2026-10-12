@@ -4230,7 +4230,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v2` (v1 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v3` (v1 and v2 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4248,11 +4248,15 @@ The remaining work proceeds through these independently verifiable gates:
      must equal the benchmark formula for its slot. Neither ever enters a total.
    - **States.** A trade is `blocked` if any leg carries a blocking reason (pending, unresolved or
      no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
-     head, or an unlinked or blocked onward trade). It is `provisional` if any leg carries a provisional
-     reason (open stint, unreviewed arrival, missing or unofficial PAV seasons, excluded nominee pick,
-     equal-split tiebreak, provisional onward trade, no appearances after the trade, or a single-source
-     pick outcome). Otherwise it is `complete`. Club totals are null when blocked, and are otherwise the
-     exact received and given-up sums of the valued legs, so equal legs always seal to the same batch.
+     head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
+     `provisional` if any leg carries a provisional reason (open stint, unreviewed arrival, missing or
+     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional or partial onward
+     trade, no appearances after the trade, or a single-source pick outcome). Otherwise it is
+     `complete`. Club totals are the exact received and given-up sums of the valued legs, so equal legs
+     always seal to the same batch. Under rule v3 a club's `received` is null only when a leg it
+     receives is blocked, and its `givenUp` only when a leg it sends is blocked; `net` is null when
+     either is. Rules v1 and v2 null every club's totals in a blocked trade, and their batches are still
+     checked that way.
    - **Single source (rule v2, owner decision 2026-10-12, issues 853 and 789).** Pick outcomes come from
      Draftguru. A valued or excluded pick leg carries `single_source_pick_outcome` unless a Footyinfo
      draft board corroborates its outcome. The leg then names `corroboratedBy: footyinfo` and drops the
@@ -4263,10 +4267,34 @@ The remaining work proceeds through these independently verifiable gates:
      - **Traded on:** exactly one board pick in the pick's draft routes it sender, receiver, onward
        receiver, with that sequence once in its route.
 
-     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated. The
-     rule is `afl-trade-realized-grade-rule/v2`, and the grader seals v2. The contract still accepts v1
-     batches, which name no corroborating provider, so earlier batches stay valid. Each version states
-     its own limitation text.
+     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated.
+     Rule v2 introduced this and rule v3 keeps it. The contract still accepts v1 batches, which name no
+     corroborating provider, so earlier batches stay valid. Each version states its own limitation
+     text.
+
+   - **Club-scoped totals (rule v3, issue 789).** Rule v2 blocked a traded-on leg whenever its onward
+     trade was blocked anywhere, so trades with no blocked leg of their own were blocked. A traded-on
+     leg's value depends only on its holding club's side of the onward trade, so v3 scopes both rules
+     to that side:
+     - **Club totals** are null per side, as in "States" above. The trade state rule is unchanged.
+     - **Traded-on leg.** A `sole_asset` (the holder gave only the pick) needs the holder's `received`,
+       whatever the pick's own onward leg is. A bundle needs `received` and `givenUp`: `relative_value`
+       also takes the pick's weight, and `equal_split` applies when `givenUp` is known to be 0. When the
+       side it needs is unknown, the leg is `traded_on_return_blocked`. When it is known but the onward
+       trade is blocked elsewhere, the leg is valued with `traded_on_return_partial`. A holder that
+       received no leg at all in the onward trade has a known `received` of 0, as under v2 when the
+       onward trade is unblocked: a capture missing the holder's return side would value the pick at
+       0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
+     - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
+       allocation would need is known. A blocked side takes precedence, so it is
+       `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
+       since it has no onward return.
+     - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
+       whose onward trade leads back to its own trade is `traded_on_return_blocked`, so the result
+       does not depend on the order the trades are graded in. Rule v2 blocked every leg in such a
+       cycle too.
+
+     The contract checks each batch's totals and onward links under the rule it names.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
@@ -4283,9 +4311,9 @@ The remaining work proceeds through these independently verifiable gates:
      in time order, the onward trade is the next transfer on that trail (issue 867: a pick that leaves the
      same club twice in one undated season). Otherwise it links to the one later trade in which its
      receiving club gave the same `pickId` away, never to an earlier one. No link, or more than one, is
-     `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
-     `traded_on_return_blocked`. A player's at-trade view is his PAV at the sending club in the trade
-     season.
+     `traded_on_return_unlinked`. A cycle, or an onward trade in which the side the leg needs is
+     unknown, is `traded_on_return_blocked` ("Club-scoped totals"). A player's at-trade view is his
+     PAV at the sending club in the trade season.
    - **Pick custody from the pre-draft order (issue 853).** A pick traded as a future pick is keyed
      by year, round and original club; once the order is published Draftguru records the same pick
      only as `Pick N`, so the onward trade never shared the first trade's `pickId` and the leg stayed
