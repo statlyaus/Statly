@@ -864,7 +864,9 @@ supersede production Gate authority, and production execution cannot reuse non-p
    promoted for the rest). The same holds for a trade whose event is current canonical under the
    same stable key from a finalized promotion with every one of the candidate's transfers a promoted
    asset on it under the candidate's pick id (migration 0274; a trade whose pick id changed is
-   written again as a superseding version): recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
+   written again as a superseding version) and, for a player transfer, naming the candidate's player
+   (migration 0275; a trade whose player an identity repair re-targeted is written again citing the
+   new decision; neither comparison applies to a version from reviewed pick lineage): recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
    promotion, left unwritten (no trade version, asset, special custody or realization), omitted from
    the reviewed transaction dates, and counted on the receipt with its ids. A custody observation
    without a usable status (`unresolved`, such as an order page's holder-only special pick with no

@@ -280,6 +280,19 @@ club can contradict the pick a walk settles on.
   canonical with the candidate's facts (matched by pick, time and holder, since the re-captured order
   pages give it new custody ids) is recorded as `promotedCustodyIds` and left unwritten. The arrival spells that
   start at a superseded version are re-registered afterwards.
+- **Repairing promoted players.** The same promotion carries a player identity repair (migration 0275).
+  When an external identity decision is re-targeted (a later revision of the same subject names the AFL
+  Tables twin of a Draftguru-created player), the next candidate names the new player under unchanged
+  transaction and transfer ids, which are keyed by the provider's native ids. A promoted trade counts as
+  already promoted only when every player transfer also names its promoted asset's player, so a trade
+  whose player was re-targeted gets a superseding version whose player asset cites the new decision. A
+  re-review that keeps the same player changes nothing. A trade whose current version came from reviewed
+  pick lineage is exempt here too, because rewriting it from the candidate would replace the reviewed pick
+  ids. Such a trade keeps the old player until a reviewed path re-versions it. Drafts are not covered:
+  `promotedDrafts` still compares selection ids only. Leaving a session-keyed draft out of that list would
+  make the deferred promotion's session-less proposal write the whole draft again under a second root. A
+  draftee whose player was re-targeted is repaired by a reviewed session correction, a scoped later
+  version of that draft night (migration 0256).
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
   allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured
   after the reconciler change, not predicted.

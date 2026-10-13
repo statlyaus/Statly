@@ -163,6 +163,13 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * (#853). Needs `pickSideIssues: 'deferred'`.
      */
     resolvePromotedRecords?: boolean;
+    /**
+     * An identity repair re-targets the player (#853): this promotion's identity decision, the next
+     * revision of the same native player's subject, names another canonical player (the AFL Tables
+     * twin of a Draftguru-created player), which the fixture inserts. Needs `existingTargets`, whose
+     * clubs must exist; its player is the one the earlier promotion named.
+     */
+    retargetedPlayer?: { playerId: string; playerName: string };
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -244,6 +251,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     );
   if (options.resolvePromotedRecords && options.pickSideIssues !== 'deferred')
     throw new Error('Resolving already-promoted records needs the deferral.');
+  if (options.retargetedPlayer && !options.existingTargets)
+    throw new Error('A re-targeted player re-targets the subject an earlier promotion resolved.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -1319,7 +1328,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       workItem.content.subject.content.identityScope.nativeId === nativePlayerId
   )?.workItem;
   if (!workItem) throw new Error('Missing exact synthetic player identity work item.');
-  const playerId = targets.playerId;
+  const playerId = options.retargetedPlayer?.playerId ?? targets.playerId;
+  const playerName = options.retargetedPlayer?.playerName ?? targets.playerName;
+  if (options.retargetedPlayer) {
+    await outcomesPool.query(
+      `INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')`,
+      [playerId, playerName]
+    );
+  }
   if (!options.existingTargets) {
     await outcomesPool.query(
       `INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')`,
@@ -1347,7 +1363,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     );
     if (
       player.rows.length !== 1 ||
-      player.rows[0].display_name !== targets.playerName ||
+      player.rows[0].display_name !== playerName ||
       player.rows[0].status !== 'approved' ||
       clubs.rows.length !== 2 ||
       !clubs.rows.every(
@@ -1384,7 +1400,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
       entityKind: 'player',
       canonicalId: playerId,
-      recordedLabel: targets.playerName,
+      recordedLabel: playerName,
     }),
     rationale: 'Synthetic acquisition identity review',
     authorityEvidenceId,

@@ -2332,6 +2332,11 @@ export function reconcileAflTradeExternalEvidence(input: {
             transferPickIds: z.array(
               z.object({ transferId: z.string().min(1), pickId: z.string().min(1) }).strict()
             ),
+            // Required likewise: without each promoted asset's player a transaction whose player an
+            // identity repair re-targeted would be listed and the new player never written (#853).
+            transferPlayerIds: z.array(
+              z.object({ transferId: z.string().min(1), playerId: z.string().min(1) }).strict()
+            ),
             reviewedLineage: z.boolean(),
           })
           .strict()

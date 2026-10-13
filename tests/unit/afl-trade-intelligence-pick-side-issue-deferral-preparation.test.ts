@@ -311,6 +311,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
           transferIds: [transferId, 'external-transfer:x'],
           reviewedLineage: false,
           transferPickIds: [{ transferId, pickId }],
+          transferPlayerIds: [],
         },
       ],
     });
@@ -335,6 +336,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
           transferIds: ['external-transfer:x'],
           reviewedLineage: false,
           transferPickIds: [],
+          transferPlayerIds: [],
         },
       ],
     });
@@ -351,6 +353,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
           transferIds: [transferId],
           reviewedLineage: false,
           transferPickIds: [{ transferId, pickId: `draft-pick:${digest('0')}` }],
+          transferPlayerIds: [],
         },
       ],
     });
@@ -367,6 +370,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
           transferIds: [transferId],
           reviewedLineage: false,
           transferPickIds: [{ transferId, pickId }],
+          transferPlayerIds: [],
         },
       ],
     });
