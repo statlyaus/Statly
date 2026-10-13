@@ -28,9 +28,10 @@ import {
 import {
   aflTradeDeferredCustodyIds,
   aflTradePromotedCustodyIds,
-  aflTradePromotedDrafts,
+  aflTradePromotedDraftState,
   aflTradePromotedTransactions,
   isAflTradePickSideReconciliationIssue,
+  type AflTradeCurrentCanonicalDraftSelection,
   type AflTradeCurrentCanonicalPickCustody,
   type AflTradeCurrentCanonicalTransaction,
   type AflTradePickLineageDeferral,
@@ -2284,11 +2285,13 @@ export function reconcileAflTradeExternalEvidence(input: {
    */
   pickLineageDeferral?: Pick<AflTradePickLineageDeferral, 'decisionId'>;
   /**
-   * Source selection ids that are already current canonical selections of finalized promotions, as
-   * the repository resolved them at preparation. Only with the deferral: a draft whose every
-   * candidate selection is in this set is recorded as already promoted and left unwritten.
+   * Current canonical selections of finalized promotions, each with its source selection id,
+   * selection number and player, as the repository resolved them at preparation (migration 0278).
+   * Only with the deferral: a draft whose every candidate selection is current under the candidate's
+   * own player is recorded as already promoted and left unwritten; one whose only differences are
+   * re-targeted draftees records those selections as re-synced (#853).
    */
-  promotedDraftSelectionIds?: readonly string[];
+  promotedDraftSelections?: readonly AflTradeCurrentCanonicalDraftSelection[];
   /**
    * Transactions that are already current canonical, each with the transfer ids promoted as assets
    * on its current trade version and the pick id of each such asset that names one, as the
@@ -2314,10 +2317,22 @@ export function reconcileAflTradeExternalEvidence(input: {
           .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
           .strict()
           .parse(input.pickLineageDeferral);
-  const promotedDraftSelectionIds = new Set(
-    z.array(z.string().min(1)).optional().parse(input.promotedDraftSelectionIds) ?? []
-  );
-  if (promotedDraftSelectionIds.size > 0 && pickLineageDeferral === undefined) {
+  // Each row requires its player: without it a draft whose draftee an identity repair re-targeted
+  // would be listed as promoted and the new player never written (#853).
+  const currentDraftSelections =
+    z
+      .array(
+        z
+          .object({
+            selectionId: z.string().min(1),
+            selectionNumber: z.number().int().positive(),
+            playerId: z.string().min(1),
+          })
+          .strict()
+      )
+      .optional()
+      .parse(input.promotedDraftSelections) ?? [];
+  if (currentDraftSelections.length > 0 && pickLineageDeferral === undefined) {
     throw new TypeError('Already-promoted drafts are recorded only under a pick-side deferral.');
   }
   const currentTransactions =
@@ -3262,7 +3277,10 @@ export function reconcileAflTradeExternalEvidence(input: {
       : issue
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
-  const promotedDrafts = aflTradePromotedDrafts(draftSelections, promotedDraftSelectionIds);
+  const { promotedDrafts, resyncedSelectionIds } = aflTradePromotedDraftState(
+    draftSelections,
+    currentDraftSelections
+  );
   const promotedTransactions = aflTradePromotedTransactions(
     transactions,
     transfers,
@@ -3278,6 +3296,7 @@ export function reconcileAflTradeExternalEvidence(input: {
       : {
           ...pickLineageDeferral,
           ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
+          ...(resyncedSelectionIds.length === 0 ? {} : { resyncedSelectionIds }),
           ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
           ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
           ...(promotedCustodyIds.length === 0 ? {} : { promotedCustodyIds }),

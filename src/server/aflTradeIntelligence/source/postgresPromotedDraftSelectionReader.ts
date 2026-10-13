@@ -1,6 +1,7 @@
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import type { AflTradePromotedDraftSelectionReader } from './externalHistoricalReconciliationPreparation';
 import type {
+  AflTradeCurrentCanonicalDraftSelection,
   AflTradeCurrentCanonicalPickCustody,
   AflTradeCurrentCanonicalTransaction,
 } from './pickLineageDeferral';
@@ -8,7 +9,7 @@ import type {
 /**
  * What is already current canonical (statlyaus/Statly#869, #853): source selection ids whose
  * selection row is approved under the current version of a draft event (migration 0265,
- * asset-scoped since 0266); source transaction ids whose trade event is current under the same
+ * asset-scoped since 0266), each with its selection number and player (migration 0278); source transaction ids whose trade event is current under the same
  * stable key from a finalized promotion, each with the source transfer ids promoted as assets on that
  * version (migration 0267), the pick id of each such asset that names one (migration 0274) and the
  * player id of each that names one (migration 0277); and custody observations canonical under a
@@ -19,12 +20,26 @@ import type {
 export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePromotedDraftSelectionReader {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
-  async loadCurrentCanonicalSelectionIds(competition: string): Promise<readonly string[]> {
-    const result = await this.client.query<{ selection_id: string }>(
-      'SELECT selection_id FROM outcome_current_canonical_draft_selection_ids($1) ORDER BY selection_id',
+  async loadCurrentCanonicalSelections(
+    competition: string
+  ): Promise<readonly AflTradeCurrentCanonicalDraftSelection[]> {
+    const result = await this.client.query<{
+      selection_id: string;
+      selection_number: number;
+      player_id: string;
+    }>(
+      // One row per current canonical selection row, so a source selection current under two
+      // roots shows twice and is never re-synced into one of them by guess.
+      `SELECT selection_id,selection_number,player_id
+         FROM outcome_current_canonical_draft_selection_players($1)
+        ORDER BY selection_id,event_version_id`,
       [competition]
     );
-    return result.rows.map(({ selection_id }) => selection_id);
+    return result.rows.map((row) => ({
+      selectionId: row.selection_id,
+      selectionNumber: Number(row.selection_number),
+      playerId: row.player_id,
+    }));
   }
 
   async loadCurrentCanonicalTransactions(

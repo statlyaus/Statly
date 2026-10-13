@@ -9,8 +9,11 @@
  * identities). Player-transfer and transaction-party issues stay blocking. These functions are pure:
  * they classify issues and derive, from candidate content alone, which records a promotion of a
  * deferred candidate writes and which it leaves for later reviewed lineage. A draft the candidate
- * carries that is already current canonical (`promotedDrafts`, resolved at preparation and checked
- * by the database) is left to that promotion rather than written again under a session-less root.
+ * carries that is already current canonical with the candidate's own players (`promotedDrafts`,
+ * resolved at preparation and checked by the database) is left to that promotion rather than written
+ * again under a session-less root. A draft that is current canonical except that an identity repair
+ * re-targeted some of its draftees (`resyncedSelectionIds`, #853) is not written whole either: only
+ * the changed slots are re-promoted, as one scoped later version of each session they sit in.
  * So is a transaction already current canonical with the candidate's own pick ids and players, and a
  * custody observation already canonical with the candidate's facts (`promotedCustodyIds`, #853).
  */
@@ -57,9 +60,20 @@ export interface AflTradePickLineageDeferral {
   /**
    * Drafts whose every candidate selection is already a current canonical selection of a finalized
    * promotion (the session-keyed draft promotions): a deferred-lineage promotion writes nothing of
-   * them, so no second draft root, selection or player asset is created. Present only when non-empty.
+   * them, so no second draft root, selection or player asset is created. Since migration 0278 every
+   * one of those selections must also name the candidate's own player. Present only when non-empty.
    */
   readonly promotedDrafts?: AflTradePromotedDraft[];
+  /**
+   * Candidate selections whose source selection is current canonical under another player: an
+   * identity repair re-targeted the draftee (#853, migration 0278). Every other candidate selection
+   * in the same draft is current canonical with its own player, and the draft is not in
+   * `promotedDrafts`. The promotion writes nothing else of such a draft: it re-promotes only these
+   * slots, as one superseding version of each session root they sit in that carries only them
+   * (additive under migration 0256, so every other draftee's dependents stay current). Sorted unique
+   * candidate selection ids, present only when non-empty.
+   */
+  readonly resyncedSelectionIds?: string[];
   /**
    * Transactions whose trade event is already current canonical under the same stable key from a
    * finalized promotion, with every one of their transfers a promoted asset on that current version,
@@ -97,6 +111,18 @@ export interface AflTradeCurrentCanonicalTransaction {
   readonly transferPickIds: readonly { readonly transferId: string; readonly pickId: string }[];
   readonly transferPlayerIds: readonly { readonly transferId: string; readonly playerId: string }[];
   readonly reviewedLineage: boolean;
+}
+
+/**
+ * A current canonical draft selection as the repository reads it at preparation
+ * (`outcome_current_canonical_draft_selection_players`, migration 0278): the source selection id of
+ * a finalized promotion's selection that is approved and current under asset-scoped supersession
+ * (0256, 0266), with its selection number and player.
+ */
+export interface AflTradeCurrentCanonicalDraftSelection {
+  readonly selectionId: string;
+  readonly selectionNumber: number;
+  readonly playerId: string;
 }
 
 /**
@@ -187,6 +213,10 @@ export interface AflTradePickLineageDeferralScope {
   readonly deferredDraftKeys: ReadonlySet<string>;
   /** Drafts (`draftYear|draftType`) already current canonical through an earlier promotion; left to it. */
   readonly promotedDraftKeys: ReadonlySet<string>;
+  /** Selections whose draftee an identity repair re-targeted; only these slots are re-promoted (#853). */
+  readonly resyncedSelectionIds: ReadonlySet<string>;
+  /** Drafts (`draftYear|draftType`) holding a re-synced selection; nothing else of them is written. */
+  readonly resyncedDraftKeys: ReadonlySet<string>;
   /** Transactions already current canonical through an earlier promotion; left to it. */
   readonly promotedTransactionIds: ReadonlySet<string>;
   /** Custody observations without a usable status, deferred rather than written. */
@@ -203,6 +233,7 @@ export function aflTradePickLineageDeferralScope(
   content: DeferralContentLike
 ): AflTradePickLineageDeferralScope {
   const deferredIssues = content.issues.filter((issue) => issue.severity === 'deferred');
+  const resyncedSelectionIds = new Set(content.pickLineageDeferral?.resyncedSelectionIds ?? []);
   const blockingIssueCount = content.issues.length - deferredIssues.length;
   const deferredTransferIds = new Set<string>();
   const deferredPickIds = new Set<string>();
@@ -245,6 +276,12 @@ export function aflTradePickLineageDeferralScope(
         draftCoverageKey(draftYear, draftType)
       )
     ),
+    resyncedSelectionIds,
+    resyncedDraftKeys: new Set(
+      content.draftSelections
+        .filter(({ selectionId }) => resyncedSelectionIds.has(selectionId))
+        .map(({ draftYear, draftType }) => draftCoverageKey(draftYear, draftType))
+    ),
     promotedTransactionIds: new Set(content.pickLineageDeferral?.promotedTransactions ?? []),
     deferredCustodyIds: new Set(content.pickLineageDeferral?.deferredCustodyIds ?? []),
     promotedCustodyIds: new Set(content.pickLineageDeferral?.promotedCustodyIds ?? []),
@@ -275,14 +312,24 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly transactions: Content['transactions'];
   /** Directed transfers this promotion writes as assets: none of an already-promoted transaction. */
   readonly transfers: Content['transfers'];
-  /** Draft selections in drafts this promotion writes (none of a deferred or already-promoted draft). */
+  /**
+   * Draft selections in drafts this promotion writes whole (none of a deferred, already-promoted or
+   * re-synced draft).
+   */
   readonly draftSelections: Content['draftSelections'];
+  /**
+   * Selections re-promoted alone because an identity repair re-targeted their draftee (#853): each
+   * is written into one scoped later version of the session it is current in, never a whole draft.
+   */
+  readonly resyncedSelections: Content['draftSelections'];
   /** Custody observations this promotion writes (none for a deferred pick, none already canonical). */
   readonly pickCustody: Content['pickCustody'];
   /** `exercised_as` realizations this promotion writes (none for a deferred pick or a deferred or already-promoted draft). */
   readonly pickLineage: Content['pickLineage'];
   /** Drafts left to their existing current promotion. */
   readonly promotedDraftCount: number;
+  /** Selections re-promoted alone under a changed player (`resyncedSelections.length`). */
+  readonly resyncedSelectionCount: number;
   /** Transactions left to their existing current promotion. */
   readonly promotedTransactionCount: number;
   /** Custody observations without a usable status, left unwritten under the deferral. */
@@ -290,7 +337,8 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   /** Custody observations already canonical with the candidate's facts, left unwritten. */
   readonly promotedCustodyCount: number;
   /**
-   * Resolved lineages whose selection sits in an already-promoted draft, or whose transfer belongs
+   * Resolved lineages whose selection sits in an already-promoted or re-synced draft, or whose
+   * transfer belongs
    * to an already-promoted transaction. Their realization is not written: the existing selection
    * row keys its pick by draft slot while this candidate keys it by custody, and a skipped transfer
    * has no asset of this promotion to bind. Reviewed lineage binds them.
@@ -313,9 +361,11 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       transactions: content.transactions,
       transfers: content.transfers,
       draftSelections: content.draftSelections,
+      resyncedSelections: content.draftSelections.filter(() => false) as Content['draftSelections'],
       pickCustody: content.pickCustody,
       pickLineage: content.pickLineage,
       promotedDraftCount: 0,
+      resyncedSelectionCount: 0,
       promotedTransactionCount: 0,
       deferredCustodyCount: 0,
       promotedCustodyCount: 0,
@@ -334,7 +384,10 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
         .map(({ selectionId }) => selectionId)
     );
   const deferredSelectionIds = selectionIdsIn(deferral.deferredDraftKeys);
-  const promotedSelectionIds = selectionIdsIn(deferral.promotedDraftKeys);
+  // A re-synced draft is left like an already-promoted one, apart from its re-synced slots.
+  const promotedSelectionIds = selectionIdsIn(
+    new Set([...deferral.promotedDraftKeys, ...deferral.resyncedDraftKeys])
+  );
   const deferredLineage = (lineage: Content['pickLineage'][number]) =>
     deferral.deferredPickIds.has(lineage.pickId) ||
     deferral.deferredTransferIds.has(lineage.transferId) ||
@@ -355,6 +408,9 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       ({ selectionId }) =>
         !deferredSelectionIds.has(selectionId) && !promotedSelectionIds.has(selectionId)
     ) as Content['draftSelections'],
+    resyncedSelections: content.draftSelections.filter(({ selectionId }) =>
+      deferral.resyncedSelectionIds.has(selectionId)
+    ) as Content['draftSelections'],
     pickCustody: content.pickCustody.filter(
       ({ pickId, custodyId }) =>
         !deferral.deferredPickIds.has(pickId) &&
@@ -365,6 +421,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       (lineage) => !deferredLineage(lineage) && !skippedLineage(lineage)
     ) as Content['pickLineage'],
     promotedDraftCount: deferral.promotedDraftKeys.size,
+    resyncedSelectionCount: deferral.resyncedSelectionIds.size,
     promotedTransactionCount: deferral.promotedTransactionIds.size,
     deferredCustodyCount: deferral.deferredCustodyIds.size,
     promotedCustodyCount: deferral.promotedCustodyIds.size,
@@ -579,33 +636,84 @@ export function aflTradePromotedCustodyIds(
 }
 
 /**
- * Drafts a deferred candidate leaves to an existing promotion: every one of its selections in the
- * draft is already a current canonical selection (`promotedSelectionIds`, resolved by the repository
- * at preparation). Sorted by year then type; empty when nothing qualifies.
+ * How a deferred candidate treats drafts that are already current canonical (`current`, resolved by
+ * the repository at preparation; migration 0278 checks the same rules):
+ *
+ * - `promotedDrafts`: every candidate selection in the draft is current canonical and names the
+ *   candidate's own player. The promotion writes nothing of it. A selection without a player (its
+ *   identity is an unresolved pick-side issue, so the draft is deferred anyway) compares its id
+ *   alone, as before migration 0278.
+ * - `resyncedSelectionIds`: every candidate selection in the draft is current canonical, but an
+ *   identity repair re-targeted some draftees (#853): a later revision of the same external identity
+ *   subject names another canonical player, such as the AFL Tables twin of a Draftguru-created
+ *   player. Source selection ids are keyed by draft slot, never by player, so only the player shows
+ *   the repair. The promotion re-promotes exactly those slots, as one scoped later version of each
+ *   session they are current in; every other selection of the draft must still name its own player.
+ *
+ * A draft holding a selection with no current canonical row is neither: the promotion writes it as
+ * before. A changed selection that is current more
+ * than once (under two roots) cannot be re-promoted into one session, so preparation refuses rather
+ * than guess. Drafts sorted by year then type, selection ids sorted; both empty when nothing
+ * qualifies.
  */
-export function aflTradePromotedDrafts(
+export function aflTradePromotedDraftState(
   draftSelections: readonly {
     readonly selectionId: string;
     readonly draftYear: number;
     readonly draftType: string;
+    readonly selectionNumber: number;
+    readonly playerId: string | null;
   }[],
-  promotedSelectionIds: ReadonlySet<string>
-): AflTradePromotedDraft[] {
-  const byDraft = new Map<string, { draft: AflTradePromotedDraft; promoted: boolean }>();
+  current: readonly AflTradeCurrentCanonicalDraftSelection[]
+): { promotedDrafts: AflTradePromotedDraft[]; resyncedSelectionIds: string[] } {
+  const currentBySelection = new Map<string, AflTradeCurrentCanonicalDraftSelection[]>();
+  for (const row of current) {
+    currentBySelection.set(row.selectionId, [
+      ...(currentBySelection.get(row.selectionId) ?? []),
+      row,
+    ]);
+  }
+  const byDraft = new Map<
+    string,
+    { draft: AflTradePromotedDraft; selections: (typeof draftSelections)[number][] }
+  >();
   for (const selection of draftSelections) {
     const key = draftCoverageKey(selection.draftYear, selection.draftType);
     const entry = byDraft.get(key) ?? {
       draft: { draftYear: selection.draftYear, draftType: selection.draftType },
-      promoted: true,
+      selections: [],
     };
-    entry.promoted &&= promotedSelectionIds.has(selection.selectionId);
+    entry.selections.push(selection);
     byDraft.set(key, entry);
   }
-  return [...byDraft.values()]
-    .filter(({ promoted }) => promoted)
-    .map(({ draft }) => draft)
-    .sort(
+  const promotedDrafts: AflTradePromotedDraft[] = [];
+  const resyncedSelectionIds: string[] = [];
+  for (const { draft, selections } of byDraft.values()) {
+    if (selections.some(({ selectionId }) => !currentBySelection.has(selectionId))) continue;
+    const changed = selections.filter(
+      ({ selectionId, playerId }) =>
+        playerId !== null &&
+        !(currentBySelection.get(selectionId) ?? []).some((row) => row.playerId === playerId)
+    );
+    if (changed.length === 0) {
+      promotedDrafts.push(draft);
+      continue;
+    }
+    for (const selection of changed) {
+      const rows = currentBySelection.get(selection.selectionId) ?? [];
+      if (rows.length !== 1 || rows[0]!.selectionNumber !== selection.selectionNumber) {
+        throw new TypeError(
+          `Draft ${draft.draftYear} ${draft.draftType} selection ${selection.selectionNumber} changed player but is current canonical ${rows.length} times or under another number; it cannot be re-promoted into one session.`
+        );
+      }
+      resyncedSelectionIds.push(selection.selectionId);
+    }
+  }
+  return {
+    promotedDrafts: promotedDrafts.sort(
       (left, right) =>
         left.draftYear - right.draftYear || left.draftType.localeCompare(right.draftType)
-    );
+    ),
+    resyncedSelectionIds: [...new Set(resyncedSelectionIds)].sort(),
+  };
 }

@@ -4103,7 +4103,22 @@ The remaining work proceeds through these independently verifiable gates:
    by the promoter; since 0266 a selection is current unless
    `outcome_event_version_superseded_for` retires it, the same asset-scoped rule that keeps draftee
    spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
-   so the session-less metadata path never creates a second root for a session-keyed draft. A
+   so the session-less metadata path never creates a second root for a session-keyed draft. Since
+   migration 0278 every one of those selections must also name the candidate's own player
+   (`outcome_current_canonical_draft_selection_players`; a selection with no player compares its id
+   alone). A draft current canonical except for draftees an identity repair re-targeted records those
+   selections as `resyncedSelectionIds` (checked on insert by
+   `outcome_external_candidate_resynced_selections_current`): nothing of the night is written as a
+   draft, and the v1 or v4 proposal carries one `promoted_session_resync` coverage entry per current
+   session version holding a changed slot, with that version's date, precision and official name read
+   from canonical state at review. The promoter writes one later version of that session root carrying
+   only the changed slots under the new player and current identity decision, refuses if the version
+   is no longer current, and refuses any draft version (re-sync or ordinary) that would retire a
+   recorded slot it does not carry under 0256 (the relaxed #721 guard: carry every slot, or change fewer
+   than half of the others). `outcome_external_draft_sessions_exact` checks that the re-sync entries
+   cover the re-synced selections exactly; such a version's draft asset is arrival evidence
+   (`outcome_external_promoted_session_resync_version`) and keeps the evidenced date bounds of the
+   version it supersedes; the receipt counts `resyncedSelectionCount`. A
    transaction whose trade event is current canonical under the same stable key from a finalized
    promotion, with every candidate transfer a promoted asset on that version, every pick
    transfer under that asset's pick id and every player transfer naming that asset's player, is
