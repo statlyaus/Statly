@@ -264,7 +264,9 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
  * "Pick 46" and a later trade's "Pick 56" for the same entitlement) is defined from its one usable
  * custody observation, the slot it actually became, and listed as custody-defined; each asset keeps
  * its own trade-time number as its recorded label. With no such single custody row, or more than
- * one, the conflict throws as before. Without a deferral nothing changes.
+ * one, the pick is defined without a number: since the pick-identity rules (migration 0273) a pick
+ * id names one pick whatever its pages numbered it, so differing numbers are renumbering, not two
+ * picks, and no number is the pick's own. Without a deferral nothing changes.
  */
 export function resolveWrittenPickDefinitions(
   content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
@@ -279,15 +281,24 @@ export function resolveWrittenPickDefinitions(
 ): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
   const definitions = new Map<string, PickDefinition>();
   const custodyDefined = new Set<string>();
+  const renumbered = new Set<string>();
+  const reRounded = new Set<string>();
   if (options.deferred) {
     const numbersByPick = new Map<string, Set<number>>();
+    const roundsByPick = new Map<string, Set<number>>();
     for (const transfer of content.transfers) {
-      if (transfer.asset.kind !== 'pick_entitlement' || transfer.asset.nominalPick === null)
-        continue;
+      if (transfer.asset.kind !== 'pick_entitlement') continue;
+      if (transfer.asset.nominalRound !== null) {
+        const rounds = roundsByPick.get(transfer.asset.pickId) ?? new Set<number>();
+        rounds.add(transfer.asset.nominalRound);
+        roundsByPick.set(transfer.asset.pickId, rounds);
+      }
+      if (transfer.asset.nominalPick === null) continue;
       const numbers = numbersByPick.get(transfer.asset.pickId) ?? new Set<number>();
       numbers.add(transfer.asset.nominalPick);
       numbersByPick.set(transfer.asset.pickId, numbers);
     }
+    for (const [pickId, rounds] of roundsByPick) if (rounds.size > 1) reRounded.add(pickId);
     for (const [pickId, numbers] of numbersByPick) {
       if (numbers.size < 2) continue;
       const usable = options.definitionCustody.filter(
@@ -295,7 +306,10 @@ export function resolveWrittenPickDefinitions(
           custody.pickId === pickId &&
           (custody.status === 'single_source' || custody.status === 'corroborated')
       );
-      if (usable.length !== 1) continue;
+      if (usable.length !== 1) {
+        renumbered.add(pickId);
+        continue;
+      }
       const custody = usable[0]!;
       definitions.set(pickId, {
         pickId,
@@ -316,8 +330,9 @@ export function resolveWrittenPickDefinitions(
       pickId: transfer.asset.pickId,
       draftYear: transfer.asset.draftYear,
       draftType: transfer.asset.draftType,
-      nominalRound: transfer.asset.nominalRound,
-      nominalPick: transfer.asset.nominalPick,
+      // A renumbered pick keeps each number (and a round its pages disagree on) on its own asset.
+      nominalRound: reRounded.has(transfer.asset.pickId) ? null : transfer.asset.nominalRound,
+      nominalPick: renumbered.has(transfer.asset.pickId) ? null : transfer.asset.nominalPick,
       originalClubId: transfer.asset.originalClubId,
     });
   });
@@ -599,7 +614,9 @@ async function requireCurrentPromotedDrafts(
 /**
  * A transaction the candidate records as already promoted must still be current canonical when the
  * promotion runs: its trade event current under the same stable key from a finalized promotion and
- * every candidate transfer a promoted asset on that version (the candidate insert test, 0267).
+ * every candidate transfer a promoted asset on that version, under the candidate's pick id for a
+ * pick transfer and the candidate's player for a player transfer (the candidate insert test, 0267,
+ * with pick ids since 0274 and players since 0277).
  */
 async function requireCurrentPromotedTransactions(
   transaction: AflOutcomeSqlTransaction,
@@ -638,6 +655,32 @@ async function requireDeferredCustodyRows(
     throw new AflTradeExternalCanonicalPromotionError(
       'CANDIDATE_UNAVAILABLE',
       'A custody observation the candidate records as deferred is not an unusable candidate custody row.'
+    );
+  }
+}
+
+/**
+ * Every custody row the candidate records as already promoted must still record an observation
+ * canonical under a finalized promotion: the same pick, observation time and holder (the canonical
+ * unique key) with the same draft, recorded round and pick and original club, and no predecessor on
+ * either side (the candidate insert test, 0274). Custody ids may differ, since a re-captured page
+ * gives the same observation new evidence; the promotion writes nothing for it, so it never collides
+ * with the canonical row.
+ */
+async function requireCurrentPromotedCustody(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.promotedCustodyIds ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_custody_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      "A custody observation the candidate leaves to an earlier promotion is no longer canonical with the candidate row's facts."
     );
   }
 }
@@ -1270,10 +1313,12 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await requireCurrentPromotedDrafts(transaction, candidate);
       await requireCurrentPromotedTransactions(transaction, candidate);
       await requireDeferredCustodyRows(transaction, candidate);
+      await requireCurrentPromotedCustody(transaction, candidate);
       // What a deferred candidate leaves unwritten: custody of deferred picks, realizations into
       // them, the selections of a draft holding a deferred selection, a draft that is already
-      // current canonical with the realizations into it, and a transaction that is already current
-      // canonical with its transfers and the realizations into them (#869).
+      // current canonical with the realizations into it, a transaction that is already current
+      // canonical with its transfers and the realizations into them (#869), and custody already
+      // canonical with the candidate's facts (#853).
       const scope = aflTradePromotionWriteScope(candidate.content);
       if (
         'draftEventCoverage' in approval.proposal.content &&

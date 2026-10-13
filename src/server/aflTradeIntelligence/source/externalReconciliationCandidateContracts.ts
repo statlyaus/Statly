@@ -375,6 +375,16 @@ const contentFieldsSchema = z
             z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
           )
           .optional(),
+        /**
+         * Usable custody observations already canonical under a finalized promotion with the
+         * candidate's facts (#853): left unwritten. Sorted unique, each a usable candidate custody
+         * row, present only when non-empty.
+         */
+        promotedCustodyIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
+          )
+          .optional(),
       })
       .strict()
       .optional(),
@@ -447,6 +457,16 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'deferredCustodyIds', index],
         message: 'Deferred custody must be a candidate custody row without a usable status.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.promotedCustodyIds ?? []).forEach((custodyId, index) => {
+    const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
+    if (row === undefined || !isAflTradeUsableCustodyStatus(row.status)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedCustodyIds', index],
+        message: 'Already-promoted custody must be a usable candidate custody row.',
       });
     }
   });

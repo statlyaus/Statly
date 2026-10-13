@@ -481,9 +481,14 @@ describe('MVP realized trade grader', () => {
       expect(
         legOf(gradeAflTradesOnRealizedValue(inputs(unlinked, chainData)), 'tr-A1').reasons
       ).toEqual(['traded_on_return_unlinked']);
-      const blockedOnward = gradeAflTradesOnRealizedValue(
-        inputs(chain(false, { disposition: 'not_used', outcomeStatus: 'pending' }), chainData)
+      // Rule v3: blocked when Hawthorn's own side is, here the player it received.
+      const unidentified = chain(false);
+      unidentified.transfers = unidentified.transfers.map((transfer) =>
+        transfer.transferId === 'tr-B3'
+          ? player('tr-B3', 'tx-B', 'st-kilda', 'hawthorn', null)
+          : transfer
       );
+      const blockedOnward = gradeAflTradesOnRealizedValue(inputs(unidentified, chainData));
       expect(legOf(blockedOnward, 'tr-A1').reasons).toEqual(['traded_on_return_blocked']);
     });
 
@@ -503,6 +508,137 @@ describe('MVP realized trade grader', () => {
         basis: 'pick_traded_on_return_unallocated',
         onwardTransactionId: 'tx-B',
         reasons: ['single_source_pick_outcome', 'traded_on_return_unallocated'],
+      });
+    });
+
+    describe('rule v3: only the holding club’s side of the onward trade counts', () => {
+      // Carlton sends St Kilda an unidentified player in tx-B: blocked, but not Hawthorn's.
+      const elsewhere = (candidate: Candidate): Candidate => ({
+        ...candidate,
+        transfers: [...candidate.transfers, player('tr-B9', 'tx-B', 'carlton', 'st-kilda', null)],
+      });
+      const withoutR = (candidate: Candidate): Candidate => ({
+        ...candidate,
+        transfers: candidate.transfers.map((transfer) =>
+          transfer.transferId === 'tr-B2'
+            ? player('tr-B2', 'tx-B', 'hawthorn', 'st-kilda', null)
+            : transfer
+        ),
+      });
+
+      it('values a sole asset whose own onward leg is blocked, and says the return is partial', () => {
+        const batch = gradeAflTradesOnRealizedValue(
+          inputs(chain(false, { disposition: 'not_used', outcomeStatus: 'pending' }), chainData)
+        );
+        expect(legOf(batch, 'tr-A1')).toMatchObject({
+          state: 'valued',
+          realizedValue: 40,
+          onward: { allocation: 'sole_asset', returnValue: 40, share: 1 },
+          reasons: ['single_source_pick_outcome', 'traded_on_return_partial'],
+        });
+        expect(gradeOf(batch, 'tx-A').state).toBe('provisional');
+        expect(gradeOf(batch, 'tx-B')).toMatchObject({
+          state: 'blocked',
+          clubs: [
+            { clubId: 'hawthorn', received: 40, givenUp: null, net: null },
+            { clubId: 'st-kilda', received: null, givenUp: 40, net: null },
+          ],
+        });
+      });
+
+      it('values a bundle share when the blocked leg is between other clubs', () => {
+        const batch = gradeAflTradesOnRealizedValue(inputs(elsewhere(chain(true)), chainData));
+        expect(legOf(batch, 'tr-A1')).toMatchObject({
+          state: 'valued',
+          realizedValue: (12 / 40) * 40,
+          onward: { allocation: 'relative_value', weight: 12, weightTotal: 40 },
+          reasons: ['single_source_pick_outcome', 'traded_on_return_partial'],
+        });
+        expect(gradeOf(batch, 'tx-B').clubs).toEqual([
+          { clubId: 'carlton', received: 0, givenUp: null, net: null },
+          { clubId: 'hawthorn', received: 40, givenUp: 40, net: 0 },
+          { clubId: 'st-kilda', received: null, givenUp: 40, net: null },
+        ]);
+      });
+
+      it('splits evenly when what the club gave is known to be 0', () => {
+        const leg = legOf(
+          gradeAflTradesOnRealizedValue(
+            inputs(elsewhere(chain(true)), {
+              ...chainData,
+              pav: pavRows('q', [[2022, 'hawthorn', 40]]),
+            })
+          ),
+          'tr-A1'
+        );
+        expect(leg).toMatchObject({
+          state: 'valued',
+          realizedValue: 20,
+          onward: { allocation: 'equal_split', share: 0.5 },
+          reasons: [
+            'equal_split_tiebreak',
+            'single_source_pick_outcome',
+            'traded_on_return_partial',
+          ],
+        });
+      });
+
+      it('blocks a bundle share when another asset the club gave is blocked', () => {
+        expect(
+          legOf(gradeAflTradesOnRealizedValue(inputs(withoutR(chain(true)), chainData)), 'tr-A1')
+            .reasons
+        ).toEqual(['traded_on_return_blocked']);
+      });
+
+      it('excludes a nominee-spent pick only when the side it would be valued on is known', () => {
+        const nominee = chain(true, {
+          disposition: 'not_used',
+          nominationBasis: 'club_took_nominated_player',
+          receivingClubNominatedSelections: 1,
+        });
+        expect(
+          legOf(gradeAflTradesOnRealizedValue(inputs(elsewhere(nominee), chainData)), 'tr-A1')
+        ).toMatchObject({
+          state: 'excluded',
+          reasons: ['single_source_pick_outcome', 'traded_on_return_unallocated'],
+        });
+        expect(
+          legOf(gradeAflTradesOnRealizedValue(inputs(withoutR(nominee), chainData)), 'tr-A1')
+            .reasons
+        ).toEqual(['traded_on_return_blocked']);
+      });
+
+      it('blocks a three-club cycle whatever order its trades are graded in', () => {
+        // Pick K goes Adelaide → Brisbane → Carlton → Adelaide in three undated 2021 trades. Every
+        // rotation chains, so each hop links by club to the next, and the onward trades form a ring.
+        const ring = (ids: [string, string, string]): Candidate => ({
+          transactions: ids.map((id) => trade(id, 2021)),
+          transfers: [
+            pick('tr-ab', ids[0], 'adelaide', 'brisbane', 'pick-K', 2021, 30),
+            pick('tr-bc', ids[1], 'brisbane', 'carlton', 'pick-K', 2021, 30),
+            pick('tr-ca', ids[2], 'carlton', 'adelaide', 'pick-K', 2021, 30),
+          ],
+          pickOutcomes: ['tr-ab', 'tr-bc', 'tr-ca'].map((id) =>
+            outcome(id, { disposition: 'traded_on' })
+          ),
+        });
+        // Trades are graded in id order, so each rotation enters the ring at a different trade.
+        const [first, ...others] = (
+          [
+            ['tx-1', 'tx-2', 'tx-3'],
+            ['tx-2', 'tx-3', 'tx-1'],
+            ['tx-3', 'tx-1', 'tx-2'],
+          ] as [string, string, string][]
+        ).map((ids) => {
+          const batch = gradeAflTradesOnRealizedValue(inputs(ring(ids)));
+          return ['tr-ab', 'tr-bc', 'tr-ca'].map((id) => legOf(batch, id));
+        });
+        for (const legs of others) expect(legs).toEqual(first);
+        expect(first!.map(({ reasons }) => reasons)).toEqual([
+          ['traded_on_return_blocked'],
+          ['traded_on_return_blocked'],
+          ['traded_on_return_blocked'],
+        ]);
       });
     });
 
@@ -1004,14 +1140,15 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v2 and its limitation', () => {
+  it('seals rule v3 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v2');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v3');
     expect(batch.content.limitation).toContain('unless a Footyinfo draft board corroborates');
+    expect(batch.content.limitation).toContain('only the club totals it enters');
   });
 });

@@ -238,7 +238,7 @@ export function StandingsLadder({
                             </span>
                             {liveResult ? (
                               <span className="block text-xs text-foreground">
-                                <span className="font-bold uppercase text-result-loss">Live</span>{' '}
+                                <span className="font-bold uppercase text-status-live">Live</span>{' '}
                                 <span className="tabular-nums">
                                   {liveResult.categoriesFor}–{liveResult.categoriesAgainst}
                                 </span>

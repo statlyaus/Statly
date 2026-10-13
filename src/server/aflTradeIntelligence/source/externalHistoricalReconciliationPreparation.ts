@@ -9,6 +9,11 @@ import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityRe
 import { parseAflTradeExternalReconciliationCandidate } from './externalReconciliationCandidateContracts';
 import type { AflTradeHistoricalCompletionReconciliationAuthority } from './externalReconciliationSourceAuthorityContracts';
 import type {
+  AflTradeCurrentCanonicalPickCustody,
+  AflTradeCurrentCanonicalTransaction,
+  AflTradePickLineageDeferral,
+} from './pickLineageDeferral';
+import type {
   PersistAflTradeExternalReconciliationInput,
   PersistedAflTradeExternalReconciliation,
 } from './postgresExternalReconciliationRepository';
@@ -59,13 +64,20 @@ export interface AflTradeReconciliationScopeDecisionReader {
   loadDecision(decisionId: string): Promise<AflTradeReconciliationScopeDecision | null>;
 }
 
-/** Current canonical selections and transactions of finalized promotions, by source id. */
+/** Current canonical selections, transactions and custody of finalized promotions, by source id. */
 export interface AflTradePromotedDraftSelectionReader {
   loadCurrentCanonicalSelectionIds(competition: string): Promise<readonly string[]>;
-  /** Each current canonical trade event with the source transfer ids promoted as assets on it. */
+  /**
+   * Each current canonical trade event with the source transfer ids promoted as assets on it and
+   * the pick id of each such asset that names one.
+   */
   loadCurrentCanonicalTransactions(
     competition: string
-  ): Promise<readonly { transactionId: string; transferIds: readonly string[] }[]>;
+  ): Promise<readonly AflTradeCurrentCanonicalTransaction[]>;
+  /** Each custody observation canonical under a finalized promotion, with its facts (#853). */
+  loadCurrentCanonicalPickCustody(
+    competition: string
+  ): Promise<readonly AflTradeCurrentCanonicalPickCustody[]>;
 }
 
 export interface PrepareAflTradeHistoricalReconciliationDependencies {
@@ -75,8 +87,9 @@ export interface PrepareAflTradeHistoricalReconciliationDependencies {
   /** Required only to prepare with `pickLineageDeferral`. */
   scopeDecisionRepository?: AflTradeReconciliationScopeDecisionReader;
   /**
-   * Required only to prepare with `pickLineageDeferral`: a draft whose every selection is already
-   * current canonical is recorded on the candidate and left to that promotion.
+   * Required only to prepare with `pickLineageDeferral`: a draft whose every selection, a
+   * transaction whose every transfer and pick id, and a custody observation whose facts are already
+   * current canonical are recorded on the candidate and left to that promotion.
    */
   promotedSelectionRepository?: AflTradePromotedDraftSelectionReader;
 }
@@ -87,11 +100,7 @@ export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTr
   promotionEligible: false;
   publicationEligible: false;
   /** The deferral the candidate carries, or null when nothing was deferred. */
-  pickLineageDeferral: {
-    decisionId: string;
-    promotedDrafts?: { draftYear: number; draftType: string }[];
-    promotedTransactions?: string[];
-  } | null;
+  pickLineageDeferral: AflTradePickLineageDeferral | null;
 }
 
 export class AflTradeReconciliationScopeDecisionError extends Error {
@@ -189,6 +198,12 @@ export async function prepareAflTradeHistoricalReconciliation(
       : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalTransactions(
           source.competition
         );
+  const promotedCustody =
+    deferralDecision === null
+      ? []
+      : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalPickCustody(
+          source.competition
+        );
   const candidate = parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
       environment: source.environment,
@@ -204,6 +219,7 @@ export async function prepareAflTradeHistoricalReconciliation(
             pickLineageDeferral: input.pickLineageDeferral,
             promotedDraftSelectionIds,
             promotedTransactions,
+            promotedCustody,
           }),
     })
   );

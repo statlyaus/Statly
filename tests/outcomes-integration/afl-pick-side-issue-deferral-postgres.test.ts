@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
@@ -55,6 +58,24 @@ interface Workspace {
 }
 const workspaces: Workspace[] = [];
 let ordinal = 0;
+
+/** Applies every outcomes migration after `migration`, in order, to the workspace's schema. */
+async function applyMigrationsAfter(ws: Workspace, migration: string): Promise<void> {
+  const root = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'prisma',
+    'afl-trade-outcomes',
+    'migrations'
+  );
+  const later = (await readdir(root, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name > migration)
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of later)
+    await ws.pool.query(await readFile(join(root, name, 'migration.sql'), 'utf8'));
+}
 
 async function workspace(): Promise<Workspace> {
   const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}_${ordinal++}`;
@@ -824,6 +845,9 @@ it('keeps an unresolved custody observation blocking without the deferral', asyn
 it('reviews and promotes a deferred candidate whose retained session claims belong to an already-promoted draft, and still refuses one that would write that draft', async () => {
   const ws = await workspace();
   await ws.pool.query(ws.migrationSql);
+  // This case prepares through the current repository reader, which reads functions later
+  // migrations add (0274's current canonical transaction picks), so the schema takes them too.
+  await applyMigrationsAfter(ws, MIGRATION);
   const sql = createPgAflOutcomeSqlClient(ws.pool);
   const instant = async () =>
     (
@@ -1133,8 +1157,9 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
     [leaving.candidateId, canonicalizeAflTradeJson(leavingProposal.content)]
   );
   expect(exact.rows).toEqual([{ exact: true }]);
-  // The trade's pick is already a canonical pick from the draft promotion, keyed by draft slot
-  // with facts the custody-keyed trade would change: retained unchanged, listed on the receipt.
+  // The trade's "Pick N" has no custody, so it is its own pick, scoped to its transfer: it no longer
+  // shares the draft promotion's slot-keyed pick by number (pick-identity rule 6). The promotion
+  // writes it as a new canonical pick and retains nothing.
   const tradePick = leavingCandidate.content.transfers.find(
     ({ asset }) => asset.kind === 'pick_entitlement'
   )!.asset as { pickId: string };
@@ -1146,8 +1171,7 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
         [tradePick.pickId]
       )
     ).rows;
-  const factsBefore = await pickFacts();
-  expect(factsBefore).toHaveLength(1);
+  expect(await pickFacts()).toEqual([]);
   const result = await promotions.promote({
     candidateId: leaving.candidateId,
     approvalDecisionId: await approve(leaving.candidateId, leavingProposal),
@@ -1162,11 +1186,10 @@ it('reviews and promotes a deferred candidate whose retained session claims belo
       decisionId: scope.decisionId,
       deferredIssueCount: 1,
       promotedDraftCount: 1,
-      retainedPickDefinitionCount: 1,
-      retainedPickDefinitionIds: [tradePick.pickId],
     },
   });
-  expect(await pickFacts()).toEqual(factsBefore);
+  expect(result.pickLineageDeferral).not.toHaveProperty('retainedPickDefinitionIds');
+  expect(await pickFacts()).toHaveLength(1);
   expect(await count(ws, 'outcome_draft_pick_enrichment')).toBe(0);
   expect(await draftVersions()).toBe(1);
   // The receipt replays byte-identically from the same facts.
