@@ -51,7 +51,7 @@ const FALLBACK_VIRTUALIZED_ROW_HEIGHT = 112;
 const VIRTUALIZED_ROW_OVERSCAN = 6;
 const VIRTUALIZED_ROW_THRESHOLD = 120;
 const ACTION_BUTTON_BASE_CLASS =
-  'inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'inline-flex h-11 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ACTION_BUTTON_DISABLED_CLASS =
   'cursor-not-allowed border border-border bg-muted/70 text-muted-foreground';
 const ACTION_BUTTON_OUTLINE_CLASS =
@@ -313,7 +313,7 @@ function PlayerRowActions({
             aria-label={`Cancel pick: ${player.name}`}
           >
             <X className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden 2xl:inline">Cancel</span>
+            <span>Cancel</span>
           </button>
         ) : (
           <button
@@ -331,7 +331,7 @@ function PlayerRowActions({
               aria-hidden="true"
               fill={isWatched ? 'currentColor' : 'none'}
             />
-            <span className="hidden 2xl:inline">{isWatched ? 'Watched' : 'Watch'}</span>
+            <span>{isWatched ? 'Watched' : 'Watch'}</span>
           </button>
         )}
         <button
@@ -345,7 +345,7 @@ function PlayerRowActions({
           aria-label={isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`}
         >
           <ListPlus className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden 2xl:inline">{isQueued ? 'Queued' : 'Queue'}</span>
+          <span>{isQueued ? 'Queued' : 'Queue'}</span>
         </button>
         <button
           type="button"
@@ -362,7 +362,7 @@ function PlayerRowActions({
           aria-label={isArmed ? `Confirm pick: ${player.name}` : `Select ${player.name}`}
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          <span className={isArmed ? 'inline' : 'hidden 2xl:inline'}>
+          <span>
             {isLoading || pendingSelectionId === player.id
               ? 'Selecting'
               : isArmed

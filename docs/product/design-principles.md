@@ -62,6 +62,8 @@ dashboard patterns.
 - Identity beside every team name: logo or initials, and the record where it is known.
 - Tables and ladders: fixed row heights, a position column, the user's row highlighted, the key
   column emphasised, and short condensed section titles.
+- LIVE status uses the `status-live` token, never a result token, so a live match is not read as a loss.
+  Unread counts use the navy `primary` token.
 - Results use the `result-win`, `result-loss` and `result-draw` tokens and always carry a letter or
   symbol (W, L, D) so meaning never depends on colour.
 - Show real state only. Omit a module rather than fill it with estimates or placeholder numbers.
