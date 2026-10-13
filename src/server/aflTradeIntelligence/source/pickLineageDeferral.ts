@@ -650,8 +650,10 @@ export function aflTradePromotedCustodyIds(
  *   the repair. The promotion re-promotes exactly those slots, as one scoped later version of each
  *   session they are current in; every other selection of the draft must still name its own player.
  *
- * A draft holding a selection with no current canonical row is neither: the promotion writes it as
- * before. A changed selection that is current more
+ * A re-sync repairs the player alone: it keeps the promoted row's pick id and club, so a changed
+ * selection may be `unresolved` on the pick side (its pick custody not uniquely resolved) but needs
+ * its club and must not be disputed. A draft holding a selection with no current canonical row is
+ * neither: the promotion writes it as before. A changed selection that is current more
  * than once (under two roots) cannot be re-promoted into one session, so preparation refuses rather
  * than guess. Drafts sorted by year then type, selection ids sorted; both empty when nothing
  * qualifies.
@@ -663,6 +665,8 @@ export function aflTradePromotedDraftState(
     readonly draftType: string;
     readonly selectionNumber: number;
     readonly playerId: string | null;
+    readonly clubId: string | null;
+    readonly status: string;
   }[],
   current: readonly AflTradeCurrentCanonicalDraftSelection[]
 ): { promotedDrafts: AflTradePromotedDraft[]; resyncedSelectionIds: string[] } {
@@ -704,6 +708,13 @@ export function aflTradePromotedDraftState(
       if (rows.length !== 1 || rows[0]!.selectionNumber !== selection.selectionNumber) {
         throw new TypeError(
           `Draft ${draft.draftYear} ${draft.draftType} selection ${selection.selectionNumber} changed player but is current canonical ${rows.length} times or under another number; it cannot be re-promoted into one session.`
+        );
+      }
+      // A re-sync repairs the player alone and keeps the promoted pick id (migration 0279), so a
+      // selection unresolved only on the pick side qualifies; one with no club or in dispute does not.
+      if (selection.clubId === null || selection.status === 'disputed') {
+        throw new TypeError(
+          `Draft ${draft.draftYear} ${draft.draftType} selection ${selection.selectionNumber} changed player but its club is unresolved or its providers disagree; it cannot be re-promoted.`
         );
       }
       resyncedSelectionIds.push(selection.selectionId);

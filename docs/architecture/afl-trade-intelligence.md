@@ -4112,7 +4112,10 @@ The remaining work proceeds through these independently verifiable gates:
    draft, and the v1 or v4 proposal carries one `promoted_session_resync` coverage entry per current
    session version holding a changed slot, with that version's date, precision and official name read
    from canonical state at review. The promoter writes one later version of that session root carrying
-   only the changed slots under the new player and current identity decision. It refuses if the
+   only the changed slots under the new player and current identity decision, keeping each
+   re-versioned row's pick id and club (migration 0279: a re-sync repairs the player alone, so a
+   selection `unresolved` only on the pick side is written, and the unusable-record count refuses
+   only a disputed one or one without a player or club). It refuses if the
    version is no longer current or its root is not session-keyed, and refuses a re-sync version that
    would retire a recorded slot it does not carry under 0256 (it must change fewer than half of the
    other slots). An ordinary draft write keeps #721's rule and must carry every recorded slot of its

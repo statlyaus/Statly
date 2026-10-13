@@ -870,7 +870,10 @@ supersede production Gate authority, and production execution cannot reuse non-p
    `pickLineageDeferral.resyncedSelectionIds` (migration 0278) instead: the review command reads the
    current session version holding each such slot from canonical state and proposes a
    `promoted_session_resync` entry for it (the operator supplies no metadata for it), and the
-   promotion writes one later version of that session carrying only the changed slots. It refuses if
+   promotion writes one later version of that session carrying only the changed slots, with the new
+   player and the re-versioned row's pick id and club (migration 0279). A changed selection that is
+   `unresolved` only because its pick custody is not uniquely resolved is still reviewed and written;
+   a disputed one, or one with no club, refuses preparation. It refuses if
    that version is no longer current, if its root is not session-keyed, or if the new version would
    retire another draftee's slot (change fewer than half of the night's other slots, never re-list a
    night). Do not use a reviewed session correction for this: it cannot change a selection's player.

@@ -359,8 +359,9 @@ const contentFieldsSchema = z
         /**
          * Selections current canonical under another player because an identity repair
          * re-targeted the draftee (#853, migration 0278): the promotion re-promotes only these
-         * slots, one scoped later version per session root. Sorted unique, each a candidate
-         * selection with a player outside every already-promoted draft, present only when non-empty.
+         * slots, one scoped later version per session root, repairing the player alone (0279).
+         * Sorted unique, each an undisputed candidate selection with a player and club outside every
+         * already-promoted draft, present only when non-empty.
          */
         resyncedSelectionIds: sortedUniqueIdsSchema
           .pipe(
@@ -466,6 +467,8 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
     if (
       selection === undefined ||
       selection.playerId === null ||
+      selection.clubId === null ||
+      selection.status === 'disputed' ||
       promotedDrafts.some(
         ({ draftYear, draftType }) =>
           draftYear === selection.draftYear && draftType === selection.draftType
@@ -475,7 +478,7 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'resyncedSelectionIds', index],
         message:
-          'A re-synced selection must be a candidate selection with a player, outside every already-promoted draft.',
+          'A re-synced selection must be an undisputed candidate selection with a player and club, outside every already-promoted draft.',
       });
     }
   });
