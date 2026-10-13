@@ -397,7 +397,7 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('onClick={() => onSortChange(getCategorySortKey(category))}');
     expect(source).not.toContain('className="max-h-[680px] overflow-auto"');
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
-    expect(source).toContain('h-10 w-full justify-center');
+    expect(source).toContain('h-11 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
     expect(source).not.toContain('font-mono');
     expect(source).not.toMatch(/\btracking-\[-/);

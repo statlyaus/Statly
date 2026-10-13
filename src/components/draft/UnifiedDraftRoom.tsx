@@ -436,7 +436,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]',
       COUNTDOWN:
         'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
-      LIVE: 'bg-result-loss text-result-loss-foreground ring-1 ring-result-loss',
+      LIVE: 'bg-status-live text-status-live-foreground ring-1 ring-status-live',
       PAUSED:
         'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
       COMPLETED:

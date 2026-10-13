@@ -284,6 +284,22 @@ export default function LeagueWaiversContainer({
     [ACTIVITY_PAGE_SIZE, leagueId]
   );
 
+  // Claims resolve overnight and other managers' moves land without a click here, so
+  // refresh the list whenever the tab comes back into view.
+  useEffect(() => {
+    if (!effectiveUserId || !leagueId) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadWaiverSnapshot({ includePlayers: false }).catch((error: unknown) => {
+        console.error('Waiver refresh failed', error);
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => document.removeEventListener('visibilitychange', refreshWhenVisible);
+  }, [effectiveUserId, leagueId, loadWaiverSnapshot]);
+
   useEffect(() => {
     if (!effectiveUserId) return;
 
@@ -481,13 +497,16 @@ export default function LeagueWaiversContainer({
         effectiveUserId
       );
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
         console.error('Cancel claim failed', j);
+        setSubmitError(j.error || 'The claim was not cancelled. It is still active.');
         return;
       }
+      setSubmitError(null);
       await loadWaiverSnapshot({ includePlayers: false });
     } catch (err) {
       console.error('Failed to cancel waiver claim', err);
+      setSubmitError('The claim was not cancelled. It is still active.');
     }
   };
 
