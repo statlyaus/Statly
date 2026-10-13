@@ -25,7 +25,7 @@ const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 /**
  * One disposable schema per case: the history deployed just before 0274, then 0274 applied as
  * `prisma migrate deploy` will, then every later migration: the repository reader these cases
- * prepare through reads functions they add (0275's current canonical transaction players). Two
+ * prepare through reads functions they add (0277's current canonical transaction players). Two
  * promotions share a schema only under different namespaces.
  */
 interface Workspace {

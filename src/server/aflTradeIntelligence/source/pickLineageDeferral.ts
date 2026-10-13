@@ -87,7 +87,7 @@ export interface AflTradePickLineageDeferral {
 /**
  * A current canonical trade event as the repository reads it at preparation: the source transfer ids
  * promoted as assets on its current version, the pick id of each of those assets that names one, the
- * player id of each that names one (migration 0275), and whether that version came from a promotion
+ * player id of each that names one (migration 0277), and whether that version came from a promotion
  * of reviewed pick lineage (a candidate carrying a reviewed correction or reviewed scope), whose pick
  * ids a reviewer settled and reconciliation does not override.
  */
@@ -382,7 +382,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
  * candidate writes a superseding version with the new ids. Transfer ids are keyed by the provider's
  * native ids, never by the resolved pick or player, so the ids alone cannot show either change. A
  * version from reviewed pick lineage is exempt from both comparisons: rewriting it from the
- * candidate would replace the pick ids a reviewer settled (migrations 0274 and 0275 check the same
+ * candidate would replace the pick ids a reviewer settled (migrations 0274 and 0277 check the same
  * rule). Sorted unique ids; empty when nothing qualifies.
  */
 export function aflTradePromotedTransactions(

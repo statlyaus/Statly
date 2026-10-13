@@ -280,7 +280,7 @@ club can contradict the pick a walk settles on.
   canonical with the candidate's facts (matched by pick, time and holder, since the re-captured order
   pages give it new custody ids) is recorded as `promotedCustodyIds` and left unwritten. The arrival spells that
   start at a superseded version are re-registered afterwards.
-- **Repairing promoted players.** The same promotion carries a player identity repair (migration 0275).
+- **Repairing promoted players.** The same promotion carries a player identity repair (migration 0277).
   When an external identity decision is re-targeted (a later revision of the same subject names the AFL
   Tables twin of a Draftguru-created player), the next candidate names the new player under unchanged
   transaction and transfer ids, which are keyed by the provider's native ids. A promoted trade counts as

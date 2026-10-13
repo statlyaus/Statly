@@ -616,7 +616,7 @@ async function requireCurrentPromotedDrafts(
  * promotion runs: its trade event current under the same stable key from a finalized promotion and
  * every candidate transfer a promoted asset on that version, under the candidate's pick id for a
  * pick transfer and the candidate's player for a player transfer (the candidate insert test, 0267,
- * with pick ids since 0274 and players since 0275).
+ * with pick ids since 0274 and players since 0277).
  */
 async function requireCurrentPromotedTransactions(
   transaction: AflOutcomeSqlTransaction,

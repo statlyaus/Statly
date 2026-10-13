@@ -7,7 +7,7 @@ import { createSyntheticAcquisitionPlayerPromotion } from '../testUtils/acquisit
 import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 
 /**
- * Migration 0275 (statlyaus/Statly#853, docs/architecture/afl-draft-pick-identity-rules.md, "Repairing
+ * Migration 0277 (statlyaus/Statly#853, docs/architecture/afl-draft-pick-identity-rules.md, "Repairing
  * promoted state"): an identity repair re-targets a player's external identity decision, and the next
  * deferred candidate names the new player under unchanged transaction and transfer ids. Such a trade
  * is no longer left to its earlier promotion: it is written again as a superseding version whose
@@ -16,7 +16,7 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL ?? '';
 if (!databaseUrl) throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
 
-const MIGRATION = '0275_deferred_candidate_promoted_players';
+const MIGRATION = '0277_deferred_candidate_promoted_players';
 const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 interface Workspace {
@@ -26,7 +26,7 @@ interface Workspace {
 const workspaces: Workspace[] = [];
 let ordinal = 0;
 
-/** One disposable schema per case: the history just before 0275, then 0275 as deploy applies it. */
+/** One disposable schema per case: the history just before 0277, then 0277 as deploy applies it. */
 async function workspace(): Promise<Workspace> {
   const schemaName = `afl_promoted_player_identity_${process.pid}_${Date.now()}_${ordinal++}`;
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
@@ -130,7 +130,7 @@ async function tradeVersions(ws: Workspace, transactionId: string) {
   ).rows;
 }
 
-describe('repairing promoted player identity (migration 0275)', () => {
+describe('repairing promoted player identity (migration 0277)', () => {
   it('reads each current trade with the player of every promoted player asset', async () => {
     const ws = await workspace();
     const seeded = await seed(ws);

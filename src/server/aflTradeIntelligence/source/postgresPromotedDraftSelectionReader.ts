@@ -11,7 +11,7 @@ import type {
  * asset-scoped since 0266); source transaction ids whose trade event is current under the same
  * stable key from a finalized promotion, each with the source transfer ids promoted as assets on that
  * version (migration 0267), the pick id of each such asset that names one (migration 0274) and the
- * player id of each that names one (migration 0275); and custody observations canonical under a
+ * player id of each that names one (migration 0277); and custody observations canonical under a
  * finalized promotion, with their facts (migration 0274).
  * The same SQL functions back the candidate insert guards and the promoter's re-checks, so what
  * preparation records is what the database later demands.

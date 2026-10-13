@@ -457,8 +457,21 @@ and current scoped technical reviewer authority. The explicit `create` or `reuse
 separate from the later identity assignment. Creation leaves unavailable biography and club
 metadata null; reuse requires the exact existing record. Conflicting current reviews for one native
 subject cannot create a second canonical target. Source withdrawal blocks registration and replay
-while preserving historical canonical records. Normalization-backed v1 registration is unchanged.
-Both entry points take the identity, sorted target/review and Gate locks in the same order.
+while preserving historical canonical records. Migration 0145 left normalization-backed v1
+registration unchanged. Both entry points take the identity, sorted target/review and Gate locks
+in the same order.
+
+Neither registration version mints a second person under a name the canonical store already holds
+(statlyaus/Statly#853, migration 0276). About 92 people had been minted twice, once by an external
+v2 review and again by an AFL Tables v1 review, because neither owner looked for an existing
+player. Both SQL owners now refuse to insert a player while an approved `outcome_player` has the
+same normalised display name (lower case, every non-alphanumeric character removed), unless both
+birth dates are known and differ. The error names each colliding player. A review that found a
+different person lists each colliding id in its optional `distinctFromPlayerIds`: unique, in
+ascending order, player-only (v2: `create` only), never the new id, and each an approved player with
+the same normalised name. The check runs under one advisory lock per normalised name, taken last,
+so two concurrent same-name creations cannot both pass. Replay and `reuse` insert nothing and skip
+the check, so the existing duplicates stay as they are until an explicit reviewed repair.
 
 Draft promotion proposal v2 assigns exact selection IDs to evidenced sessions, with consecutive
 session ordinals within each draft year/type. Typed `draft_session` claims retain the official
@@ -4099,7 +4112,7 @@ The remaining work proceeds through these independently verifiable gates:
    `outcome_external_candidate_promotable_transactions` behind the coverage validators and the
    unusable-record count; the pick-id condition is migration 0274's
    `outcome_current_canonical_transaction_picks`, so a trade whose pick the identity rules re-keyed
-   is written again as a superseding version; the player condition is migration 0275's
+   is written again as a superseding version; the player condition is migration 0277's
    `outcome_current_canonical_transaction_players`, so a trade whose player an identity repair
    re-targeted is written again with the new player and the decision that names it; a version from
    reviewed pick lineage is exempt from both conditions, so its reviewed pick ids are never replaced
