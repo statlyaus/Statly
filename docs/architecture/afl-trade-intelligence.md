@@ -4105,13 +4105,18 @@ The remaining work proceeds through these independently verifiable gates:
    spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
    so the session-less metadata path never creates a second root for a session-keyed draft. A
    transaction whose trade event is current canonical under the same stable key from a finalized
-   promotion, with every candidate transfer a promoted asset on that version and every pick
-   transfer under that asset's pick id, is recorded as
+   promotion, with every candidate transfer a promoted asset on that version, every pick
+   transfer under that asset's pick id and every player transfer naming that asset's player, is
+   recorded as
    `promotedTransactions` the same way (migration 0267: `outcome_current_canonical_transactions`,
    `outcome_external_candidate_promotable_transactions` behind the coverage validators and the
    unusable-record count; the pick-id condition is migration 0274's
    `outcome_current_canonical_transaction_picks`, so a trade whose pick the identity rules re-keyed
-   is written again as a superseding version) and written as nothing, with the realizations into its transfers skipped;
+   is written again as a superseding version; the player condition is migration 0277's
+   `outcome_current_canonical_transaction_players`, so a trade whose player an identity repair
+   re-targeted is written again with the new player and the decision that names it; a version from
+   reviewed pick lineage is exempt from both conditions, so its reviewed pick ids are never replaced
+   by reconciliation's) and written as nothing, with the realizations into its transfers skipped;
    the special-entitlement gate applies only to the transfers written, and the receipt carries the
    skipped count and ids. A pick the promotion would define that is already canonical with
    different facts and no reviewed lineage registration is retained under the deferral, referenced

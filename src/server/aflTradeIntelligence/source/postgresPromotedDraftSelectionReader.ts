@@ -10,8 +10,9 @@ import type {
  * selection row is approved under the current version of a draft event (migration 0265,
  * asset-scoped since 0266); source transaction ids whose trade event is current under the same
  * stable key from a finalized promotion, each with the source transfer ids promoted as assets on that
- * version (migration 0267) and the pick id of each such asset that names one (migration 0274); and
- * custody observations canonical under a finalized promotion, with their facts (migration 0274).
+ * version (migration 0267), the pick id of each such asset that names one (migration 0274) and the
+ * player id of each that names one (migration 0277); and custody observations canonical under a
+ * finalized promotion, with their facts (migration 0274).
  * The same SQL functions back the candidate insert guards and the promoter's re-checks, so what
  * preparation records is what the database later demands.
  */
@@ -48,6 +49,21 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
       listed.push({ transferId: transfer_id, pickId: pick_id });
       picksByTransaction.set(transaction_id, listed);
     }
+    const players = await this.client.query<{
+      transaction_id: string;
+      transfer_id: string;
+      player_id: string;
+    }>(
+      `SELECT transaction_id,transfer_id,player_id FROM outcome_current_canonical_transaction_players($1)
+        ORDER BY transaction_id,transfer_id`,
+      [competition]
+    );
+    const playersByTransaction = new Map<string, { transferId: string; playerId: string }[]>();
+    for (const { transaction_id, transfer_id, player_id } of players.rows) {
+      const listed = playersByTransaction.get(transaction_id) ?? [];
+      listed.push({ transferId: transfer_id, playerId: player_id });
+      playersByTransaction.set(transaction_id, listed);
+    }
     const reviewed = await this.client.query<{ transaction_id: string }>(
       'SELECT transaction_id FROM outcome_current_canonical_reviewed_lineage_transactions($1)',
       [competition]
@@ -57,6 +73,7 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
       transactionId: transaction_id,
       transferIds: [...transfer_ids].sort(),
       transferPickIds: picksByTransaction.get(transaction_id) ?? [],
+      transferPlayerIds: playersByTransaction.get(transaction_id) ?? [],
       reviewedLineage: reviewedIds.has(transaction_id),
     }));
   }

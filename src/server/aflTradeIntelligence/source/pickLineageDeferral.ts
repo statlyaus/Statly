@@ -11,8 +11,8 @@
  * deferred candidate writes and which it leaves for later reviewed lineage. A draft the candidate
  * carries that is already current canonical (`promotedDrafts`, resolved at preparation and checked
  * by the database) is left to that promotion rather than written again under a session-less root.
- * So is a transaction already current canonical with the candidate's own pick ids, and a custody
- * observation already canonical with the candidate's facts (`promotedCustodyIds`, #853).
+ * So is a transaction already current canonical with the candidate's own pick ids and players, and a
+ * custody observation already canonical with the candidate's facts (`promotedCustodyIds`, #853).
  */
 
 export const AFL_TRADE_PICK_SIDE_ISSUE_CODES = [
@@ -62,11 +62,12 @@ export interface AflTradePickLineageDeferral {
   readonly promotedDrafts?: AflTradePromotedDraft[];
   /**
    * Transactions whose trade event is already current canonical under the same stable key from a
-   * finalized promotion, with every one of their transfers a promoted asset on that current version
-   * and every pick transfer's pick id that asset's pick id: a deferred-lineage promotion writes
-   * nothing of them (no trade version, asset, custody or realization). A transaction whose pick ids
-   * changed (#853) is not listed, so its promotion writes a superseding version. Sorted unique
-   * transaction ids, present only when non-empty.
+   * finalized promotion, with every one of their transfers a promoted asset on that current version,
+   * every pick transfer's pick id that asset's pick id and every player transfer's player that
+   * asset's player: a deferred-lineage promotion writes nothing of them (no trade version, asset,
+   * custody or realization). A transaction whose pick ids or players changed (#853) is not listed,
+   * so its promotion writes a superseding version. Sorted unique transaction ids, present only when
+   * non-empty.
    */
   readonly promotedTransactions?: string[];
   /**
@@ -85,15 +86,16 @@ export interface AflTradePickLineageDeferral {
 
 /**
  * A current canonical trade event as the repository reads it at preparation: the source transfer ids
- * promoted as assets on its current version, the pick id of each of those assets that names one, and
- * whether that version came from a promotion of reviewed pick lineage (a candidate carrying a
- * reviewed correction or reviewed scope), whose pick ids a reviewer settled and reconciliation does
- * not override.
+ * promoted as assets on its current version, the pick id of each of those assets that names one, the
+ * player id of each that names one (migration 0277), and whether that version came from a promotion
+ * of reviewed pick lineage (a candidate carrying a reviewed correction or reviewed scope), whose pick
+ * ids a reviewer settled and reconciliation does not override.
  */
 export interface AflTradeCurrentCanonicalTransaction {
   readonly transactionId: string;
   readonly transferIds: readonly string[];
   readonly transferPickIds: readonly { readonly transferId: string; readonly pickId: string }[];
+  readonly transferPlayerIds: readonly { readonly transferId: string; readonly playerId: string }[];
   readonly reviewedLineage: boolean;
 }
 
@@ -373,10 +375,15 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
 /**
  * Transactions a deferred candidate leaves to an existing promotion: the transaction's trade event
  * is current canonical and every one of the candidate's transfers in it is a promoted asset on that
- * current version whose pick id, for a pick transfer, is the candidate's own (`current`, resolved by
- * the repository at preparation). A player or special transfer compares nothing more. A transaction
- * whose pick ids changed since it was promoted (#853) is not listed, so a promotion of the candidate
- * writes a superseding version with the new ids. Sorted unique ids; empty when nothing qualifies.
+ * current version whose pick id, for a pick transfer, is the candidate's own and whose player, for a
+ * player transfer, is the candidate's own (`current`, resolved by the repository at preparation). A
+ * special transfer compares nothing more. A transaction whose pick ids changed since it was promoted,
+ * or whose player an identity repair re-targeted (#853), is not listed, so a promotion of the
+ * candidate writes a superseding version with the new ids. Transfer ids are keyed by the provider's
+ * native ids, never by the resolved pick or player, so the ids alone cannot show either change. A
+ * version from reviewed pick lineage is exempt from both comparisons: rewriting it from the
+ * candidate would replace the pick ids a reviewer settled (migrations 0274 and 0277 check the same
+ * rule). Sorted unique ids; empty when nothing qualifies.
  */
 export function aflTradePromotedTransactions(
   transactions: readonly {
@@ -385,7 +392,11 @@ export function aflTradePromotedTransactions(
   }[],
   transfers: readonly {
     readonly transferId: string;
-    readonly asset: { readonly kind: string; readonly pickId?: string };
+    readonly asset: {
+      readonly kind: string;
+      readonly pickId?: string;
+      readonly playerId?: string | null;
+    };
   }[],
   current: readonly AflTradeCurrentCanonicalTransaction[]
 ): string[] {
@@ -397,6 +408,9 @@ export function aflTradePromotedTransactions(
         transferIds: new Set(entry.transferIds),
         pickIdByTransfer: new Map(
           entry.transferPickIds.map(({ transferId, pickId }) => [transferId, pickId] as const)
+        ),
+        playerIdByTransfer: new Map(
+          entry.transferPlayerIds.map(({ transferId, playerId }) => [transferId, playerId] as const)
         ),
       },
     ])
@@ -412,12 +426,20 @@ export function aflTradePromotedTransactions(
             transferIds.every((transferId) => {
               const transfer = transferById.get(transferId);
               if (transfer === undefined || !promoted.transferIds.has(transferId)) return false;
-              return (
-                promoted.reviewedLineage ||
-                transfer.asset.kind !== 'pick_entitlement' ||
-                (transfer.asset.pickId !== undefined &&
-                  transfer.asset.pickId === promoted.pickIdByTransfer.get(transferId))
-              );
+              if (promoted.reviewedLineage) return true;
+              if (transfer.asset.kind === 'pick_entitlement') {
+                return (
+                  transfer.asset.pickId !== undefined &&
+                  transfer.asset.pickId === promoted.pickIdByTransfer.get(transferId)
+                );
+              }
+              if (transfer.asset.kind === 'player') {
+                return (
+                  typeof transfer.asset.playerId === 'string' &&
+                  transfer.asset.playerId === promoted.playerIdByTransfer.get(transferId)
+                );
+              }
+              return true;
             })
           );
         })

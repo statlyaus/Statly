@@ -1,3 +1,6 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -21,7 +24,9 @@ const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 
 /**
  * One disposable schema per case: the history deployed just before 0274, then 0274 applied as
- * `prisma migrate deploy` will. Two promotions share a schema only under different namespaces.
+ * `prisma migrate deploy` will, then every later migration: the repository reader these cases
+ * prepare through reads functions they add (0277's current canonical transaction players). Two
+ * promotions share a schema only under different namespaces.
  */
 interface Workspace {
   pool: Pool;
@@ -53,6 +58,20 @@ async function workspace(): Promise<Workspace> {
   };
   workspaces.push(built);
   await pool.query(history.migrationSql);
+  const root = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'prisma',
+    'afl-trade-outcomes',
+    'migrations'
+  );
+  const later = (await readdir(root, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name > MIGRATION)
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of later)
+    await pool.query(await readFile(join(root, name, 'migration.sql'), 'utf8'));
   return built;
 }
 
@@ -161,6 +180,14 @@ describe('repairing promoted pick identity (migration 0274)', () => {
         transferIds: [...trade.transferIds].sort(),
         reviewedLineage: false,
         transferPickIds: [{ transferId: pickTransfer.transferId, pickId: pickIdOf(pickTransfer) }],
+        transferPlayerIds: [
+          {
+            transferId: seeded.candidate.content.transfers.find(
+              ({ asset }) => asset.kind === 'player'
+            )!.transferId,
+            playerId: 'synthetic-acquisition-player',
+          },
+        ],
       },
     ]);
     expect(await reader.loadCurrentCanonicalPickCustody('AFLM')).toEqual([

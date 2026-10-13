@@ -998,6 +998,7 @@ describe('a deferred candidate whose transaction is already current canonical', 
       transferIds: concessionTransferIds,
       reviewedLineage: false,
       transferPickIds: [],
+      transferPlayerIds: [{ transferId: concessionTransferIds[0]!, playerId: 'player-harry-kyle' }],
     },
   ];
 
@@ -1009,26 +1010,31 @@ describe('a deferred candidate whose transaction is already current canonical', 
     ];
     const transfers = ['t1', 't2', 't3', 't4'].map((transferId) => ({
       transferId,
-      asset: { kind: 'player' },
+      asset: { kind: 'player', playerId: `player:${transferId}` },
     }));
+    const named = (...transferIds: string[]) =>
+      transferIds.map((transferId) => ({ transferId, playerId: `player:${transferId}` }));
     const current = [
       {
         transactionId: 'transaction:b',
         transferIds: ['t1', 't2', 't9'],
         reviewedLineage: false,
         transferPickIds: [],
+        transferPlayerIds: named('t1', 't2', 't9'),
       },
       {
         transactionId: 'transaction:a',
         transferIds: ['t3'],
         reviewedLineage: false,
         transferPickIds: [],
+        transferPlayerIds: named('t3'),
       },
       {
         transactionId: 'transaction:c',
         transferIds: ['t5'],
         reviewedLineage: false,
         transferPickIds: [],
+        transferPlayerIds: named('t5'),
       },
     ];
     expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
@@ -1052,6 +1058,9 @@ describe('a deferred candidate whose transaction is already current canonical', 
           transferIds: [concessionTransferIds[0]!],
           reviewedLineage: false,
           transferPickIds: [],
+          transferPlayerIds: [
+            { transferId: concessionTransferIds[0]!, playerId: 'player-harry-kyle' },
+          ],
         },
       ]).content.pickLineageDeferral
     ).toEqual({ decisionId });
@@ -1628,7 +1637,7 @@ describe('repairing promoted pick identity (#853)', () => {
       asset: { kind: 'pick_entitlement', pickId },
     });
     const transfers = [
-      { transferId: 'player', asset: { kind: 'player' } },
+      { transferId: 'player', asset: { kind: 'player', playerId: 'player:kept' } },
       pick('pick-kept', 'pick:a'),
       pick('pick-rekeyed', 'pick:new'),
       pick('pick-pickless', 'pick:c'),
@@ -1641,12 +1650,14 @@ describe('repairing promoted pick identity (#853)', () => {
         transferIds: ['pick-kept', 'player'],
         reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-kept', pickId: 'pick:a' }],
+        transferPlayerIds: [{ transferId: 'player', playerId: 'player:kept' }],
       },
       {
         transactionId: 'transaction:rekeyed',
         transferIds: ['pick-rekeyed'],
         reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-rekeyed', pickId: 'pick:old' }],
+        transferPlayerIds: [],
       },
       // A promoted asset that names no pick does not stand for a candidate pick transfer.
       {
@@ -1654,6 +1665,7 @@ describe('repairing promoted pick identity (#853)', () => {
         transferIds: ['pick-pickless'],
         reviewedLineage: false,
         transferPickIds: [],
+        transferPlayerIds: [],
       },
       // Reviewed pick lineage settled this trade's pick ids; reconciliation does not override them.
       {
@@ -1661,6 +1673,7 @@ describe('repairing promoted pick identity (#853)', () => {
         transferIds: ['pick-reviewed'],
         reviewedLineage: true,
         transferPickIds: [{ transferId: 'pick-reviewed', pickId: 'pick:reviewed' }],
+        transferPlayerIds: [],
       },
       // A transfer the candidate does not hold is never matched.
       {
@@ -1668,6 +1681,7 @@ describe('repairing promoted pick identity (#853)', () => {
         transferIds: ['pick-unheld'],
         reviewedLineage: false,
         transferPickIds: [{ transferId: 'pick-unheld', pickId: 'pick:d' }],
+        transferPlayerIds: [],
       },
       // Reviewed lineage exempts only the pick-id comparison: a transfer the candidate does not
       // hold, or one not promoted on the current version, still refuses (as migration 0274 does).
@@ -1676,12 +1690,14 @@ describe('repairing promoted pick identity (#853)', () => {
         transferIds: ['pick-reviewed-unheld'],
         reviewedLineage: true,
         transferPickIds: [{ transferId: 'pick-reviewed-unheld', pickId: 'pick:f' }],
+        transferPlayerIds: [],
       },
       {
         transactionId: 'transaction:reviewed-unpromoted',
         transferIds: ['pick-reviewed'],
         reviewedLineage: true,
         transferPickIds: [{ transferId: 'pick-reviewed', pickId: 'pick:reviewed' }],
+        transferPlayerIds: [],
       },
     ];
     expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
@@ -1698,12 +1714,19 @@ describe('repairing promoted pick identity (#853)', () => {
     const pickTransfer = unrecorded.content.transfers.find(
       ({ asset }) => asset.kind === 'pick_entitlement'
     )!;
-    const promotedUnder = (pickId: string) => [
+    const playerTransfer = unrecorded.content.transfers.find(
+      ({ asset, transactionId }) => asset.kind === 'player' && transactionId === tradeId
+    )!;
+    const promotedUnder = (
+      pickId: string,
+      playerId = (playerTransfer.asset as { playerId: string }).playerId
+    ) => [
       {
         transactionId: tradeId,
         transferIds: trade.transferIds,
         reviewedLineage: false,
         transferPickIds: [{ transferId: pickTransfer.transferId, pickId }],
+        transferPlayerIds: [{ transferId: playerTransfer.transferId, playerId }],
       },
     ];
     const kept = reconcile(
@@ -1733,6 +1756,87 @@ describe('repairing promoted pick identity (#853)', () => {
         { transactionId: tradeId, transferIds: trade.transferIds } as never,
       ])
     ).toThrow();
+    // Nor without each promoted asset's player.
+    const [promotedEntry] = promotedUnder((pickTransfer.asset as { pickId: string }).pickId);
+    const { transferPlayerIds: _players, ...withoutPlayers } = promotedEntry!;
+    expect(() => reconcile(true, true, undefined, [withoutPlayers as never])).toThrow();
+  });
+
+  // An identity repair re-targets the player's external identity decision (a later revision names
+  // the AFL Tables twin of a Draftguru-created player). Transaction and transfer ids are keyed by
+  // the provider's native ids, so only the player shows the change.
+  it('writes a trade again when its promoted player is not the player the candidate names', () => {
+    const unrecorded = reconcile(true);
+    const trade = unrecorded.content.transactions.find(
+      ({ transactionId }) => transactionId === tradeId
+    )!;
+    const pickTransfer = unrecorded.content.transfers.find(
+      ({ asset }) => asset.kind === 'pick_entitlement'
+    )!;
+    const playerTransfer = unrecorded.content.transfers.find(
+      ({ asset, transactionId }) => asset.kind === 'player' && transactionId === tradeId
+    )!;
+    const pickId = (pickTransfer.asset as { pickId: string }).pickId;
+    const playerId = (playerTransfer.asset as { playerId: string }).playerId;
+    const promotedNaming = (promotedPlayerId: string, reviewedLineage = false) => [
+      {
+        transactionId: tradeId,
+        transferIds: trade.transferIds,
+        reviewedLineage,
+        transferPickIds: [{ transferId: pickTransfer.transferId, pickId }],
+        transferPlayerIds: [{ transferId: playerTransfer.transferId, playerId: promotedPlayerId }],
+      },
+    ];
+    expect(
+      reconcile(true, true, undefined, promotedNaming(playerId)).content.pickLineageDeferral
+        ?.promotedTransactions
+    ).toEqual([tradeId]);
+    const retargeted = reconcile(true, true, undefined, promotedNaming('draftguru-duplicate'));
+    expect(retargeted.content.pickLineageDeferral?.promotedTransactions).toBeUndefined();
+    expect(retargeted.candidateId).toBe(unrecorded.candidateId);
+    expect(
+      aflTradePromotionWriteScope(retargeted.content).transfers.map(({ transferId }) => transferId)
+    ).toEqual(expect.arrayContaining([playerTransfer.transferId, pickTransfer.transferId]));
+    // A promoted asset that names no player does not stand for a candidate player transfer.
+    expect(
+      reconcile(true, true, undefined, [{ ...promotedNaming(playerId)[0]!, transferPlayerIds: [] }])
+        .content.pickLineageDeferral?.promotedTransactions
+    ).toBeUndefined();
+    // Reviewed pick lineage is exempt: rewriting it would replace the pick ids a reviewer settled.
+    expect(
+      reconcile(true, true, undefined, promotedNaming('draftguru-duplicate', true)).content
+        .pickLineageDeferral?.promotedTransactions
+    ).toEqual([tradeId]);
+  });
+
+  it('compares players only on player transfers, and a candidate player transfer with no player never matches', () => {
+    const transactions = [
+      { transactionId: 'transaction:unresolved', transferIds: ['player-unresolved'] },
+      { transactionId: 'transaction:special', transferIds: ['special'] },
+    ];
+    const transfers = [
+      { transferId: 'player-unresolved', asset: { kind: 'player', playerId: null } },
+      { transferId: 'special', asset: { kind: 'special_pick' } },
+    ];
+    const current = [
+      {
+        transactionId: 'transaction:unresolved',
+        transferIds: ['player-unresolved'],
+        reviewedLineage: false,
+        transferPickIds: [],
+        transferPlayerIds: [{ transferId: 'player-unresolved', playerId: 'player:any' }],
+      },
+      {
+        transactionId: 'transaction:special',
+        transferIds: ['special'],
+        reviewedLineage: false,
+        transferPickIds: [],
+        transferPlayerIds: [],
+      },
+    ];
+    expect(aflTradePromotedTransactions(transactions, transfers, current)).toEqual([
+      'transaction:special',
+    ]);
   });
 
   it('maps candidate draft types to the canonical kind the promoter writes', () => {
