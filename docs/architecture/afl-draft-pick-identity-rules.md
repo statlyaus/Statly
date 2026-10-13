@@ -301,7 +301,13 @@ club can contradict the pick a walk settles on.
   re-synced slot, with that version's date, precision and official name read from canonical state when
   the proposal is derived. The promoter writes one later version of that session root carrying only the
   changed slots, each naming the new player and citing its current identity decision, and refuses if
-  the approved version is no longer current or its root is not session-keyed. Whole nights are never
+  the approved version is no longer current or its root is not session-keyed. A re-sync repairs the
+  player alone (migration 0279). It keeps the pick id of the selection it re-versions and refuses a
+  club change. So a changed selection needs its player and club resolved and must not be `disputed`,
+  but it may be `unresolved` on the pick side, where its pick custody is not uniquely resolved. In the
+  first rehearsal, 38 of 73 re-synced selections were in that state, and the candidate's pick id
+  differed from the promoted one for 45 of them. Re-keying a promoted selection's pick is left to the
+  pick identity repair, exactly as for the unchanged selections of the same night. Whole nights are never
   re-listed: under asset-scoped supersession (migration 0256) a version carrying fewer than half of the
   other slots is additive, so every other draftee's selection, asset and the spells that start at them
   stay current. This holds when the changed slot sits on version 1 of a night whose current version is a
