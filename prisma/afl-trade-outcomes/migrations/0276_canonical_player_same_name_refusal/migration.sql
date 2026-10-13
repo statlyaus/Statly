@@ -62,7 +62,7 @@ REVOKE ALL ON FUNCTION outcome_require_canonical_player_name_reviewed(TEXT,TEXT,
 
 -- Both owner bodies were assembled by fragment replacement (0126, 0128, 0145, 0232), so the deployed
 -- definition is the only accurate source. Each fragment must occur exactly once.
-CREATE FUNCTION outcome_0275_replace_fragment(signature TEXT,old_fragment TEXT,new_fragment TEXT)
+CREATE FUNCTION outcome_0276_replace_fragment(signature TEXT,old_fragment TEXT,new_fragment TEXT)
 RETURNS VOID LANGUAGE plpgsql AS $$ DECLARE definition TEXT; occurrences INTEGER; BEGIN
   SELECT pg_get_functiondef(to_regprocedure(signature)) INTO definition;
   occurrences:=(length(definition)-length(replace(definition,old_fragment,'')))/length(old_fragment);
@@ -72,23 +72,23 @@ RETURNS VOID LANGUAGE plpgsql AS $$ DECLARE definition TEXT; occurrences INTEGER
 END $$;
 
 -- v1 (normalization-backed): admit the optional key for players only, then check before inserting.
-SELECT outcome_0275_replace_fragment('register_outcome_reviewed_canonical_target(text,text,text,text)',
+SELECT outcome_0276_replace_fragment('register_outcome_reviewed_canonical_target(text,text,text,text)',
   $old$OR body IS DISTINCT FROM jsonb_build_object('schemaVersion'$old$,
   $new$OR (body ? 'distinctFromPlayerIds' AND kind IS DISTINCT FROM 'player')
     OR (body-'distinctFromPlayerIds') IS DISTINCT FROM jsonb_build_object('schemaVersion'$new$);
-SELECT outcome_0275_replace_fragment('register_outcome_reviewed_canonical_target(text,text,text,text)',
+SELECT outcome_0276_replace_fragment('register_outcome_reviewed_canonical_target(text,text,text,text)',
   $old$INSERT INTO outcome_player(player_id,display_name,birth_date,status) VALUES(identifier,record->>'displayName',(record->>'birthDate')::DATE,'approved')$old$,
   $new$PERFORM outcome_require_canonical_player_name_reviewed(identifier,record->>'displayName',(record->>'birthDate')::DATE,body->'distinctFromPlayerIds');
       INSERT INTO outcome_player(player_id,display_name,birth_date,status) VALUES(identifier,record->>'displayName',(record->>'birthDate')::DATE,'approved')$new$);
 
 -- v2 (external identity): admit the optional key for player creation only, then check before inserting.
-SELECT outcome_0275_replace_fragment('register_outcome_external_reviewed_canonical_target(text,text,text,text)',
+SELECT outcome_0276_replace_fragment('register_outcome_external_reviewed_canonical_target(text,text,text,text)',
   $old$'supportingEvidence','rationale','decidedAt']) IS DISTINCT FROM '{}'::JSONB$old$,
   $new$'supportingEvidence','rationale','decidedAt','distinctFromPlayerIds']) IS DISTINCT FROM '{}'::JSONB
  OR (body ? 'distinctFromPlayerIds' AND (kind IS DISTINCT FROM 'player' OR body->>'action' IS DISTINCT FROM 'create'))$new$);
-SELECT outcome_0275_replace_fragment('register_outcome_external_reviewed_canonical_target(text,text,text,text)',
+SELECT outcome_0276_replace_fragment('register_outcome_external_reviewed_canonical_target(text,text,text,text)',
   $old$INSERT INTO outcome_player(player_id,display_name,birth_date,status) VALUES(identifier,record->>'displayName',NULL,'approved')$old$,
   $new$PERFORM outcome_require_canonical_player_name_reviewed(identifier,record->>'displayName',NULL,body->'distinctFromPlayerIds');
    INSERT INTO outcome_player(player_id,display_name,birth_date,status) VALUES(identifier,record->>'displayName',NULL,'approved')$new$);
 
-DROP FUNCTION outcome_0275_replace_fragment(TEXT,TEXT,TEXT);
+DROP FUNCTION outcome_0276_replace_fragment(TEXT,TEXT,TEXT);

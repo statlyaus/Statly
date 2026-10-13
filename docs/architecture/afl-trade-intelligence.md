@@ -462,7 +462,7 @@ registration unchanged. Both entry points take the identity, sorted target/revie
 in the same order.
 
 Neither registration version mints a second person under a name the canonical store already holds
-(statlyaus/Statly#853, migration 0275). About 92 people had been minted twice, once by an external
+(statlyaus/Statly#853, migration 0276). About 92 people had been minted twice, once by an external
 v2 review and again by an AFL Tables v1 review, because neither owner looked for an existing
 player. Both SQL owners now refuse to insert a player while an approved `outcome_player` has the
 same normalised display name (lower case, every non-alphanumeric character removed), unless both
