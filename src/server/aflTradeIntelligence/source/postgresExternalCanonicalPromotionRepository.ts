@@ -2120,9 +2120,14 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           );
         }
       }
+      /**
+       * `pickId` overrides the candidate's: a session re-sync repairs the player only, so it keeps
+       * the pick id of the selection it re-versions (#853, migration 0279).
+       */
       async function persistSelectedPlayer(
         selection: DraftSelection,
-        eventVersionId: string
+        eventVersionId: string,
+        pickId: string | null = selection.pickId
       ): Promise<void> {
         if (!selection.playerId || !selection.clubId) {
           throw new AflTradeExternalCanonicalPromotionError(
@@ -2154,7 +2159,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             canonicalSelectionId,
             eventVersionId,
             selection.selectionNumber,
-            selection.pickId,
+            pickId,
             selection.playerId,
             identityDecision,
             selection.clubId,
@@ -2384,31 +2389,45 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               'Promotion cannot backdate a draft-session re-sync.'
             );
           }
-          // Each slot is current canonical once, on this root, at its number, under another player.
+          // Each slot is current canonical once, on this root, at its number, under another player
+          // and the candidate's club. A re-sync repairs the player alone (migration 0279): it keeps
+          // the re-versioned row's pick id, which the candidate may state differently or leave
+          // unresolved on the pick side, and refuses a club change.
           const placed = await transaction.query<{
             selection_id: string;
             event_id: string;
             selection_number: number;
             player_id: string;
+            pick_id: string | null;
+            club_id: string | null;
           }>(
-            `SELECT selection_id,event_id,selection_number,player_id
-               FROM outcome_current_canonical_draft_selection_players($1)
-              WHERE selection_id=ANY($2::text[])`,
+            `SELECT current.selection_id,current.event_id,current.selection_number,current.player_id,
+                    stored.pick_id,stored.club_id
+               FROM outcome_current_canonical_draft_selection_players($1) current
+               JOIN outcome_draft_selection stored
+                 ON stored.event_version_id=current.event_version_id
+                AND stored.selection_number=current.selection_number
+                AND stored.player_id=current.player_id
+              WHERE current.selection_id=ANY($2::text[])`,
             [content.competition, [...coverage.selectionIds]]
           );
+          const promotedPickBySelection = new Map<string, string | null>();
           for (const selection of selections) {
             const rows = placed.rows.filter((row) => row.selection_id === selection.selectionId);
             if (
               rows.length !== 1 ||
               rows[0]!.event_id !== eventId ||
               Number(rows[0]!.selection_number) !== selection.selectionNumber ||
-              rows[0]!.player_id === selection.playerId
+              rows[0]!.player_id === selection.playerId ||
+              rows[0]!.club_id !== selection.clubId ||
+              selection.status === 'disputed'
             ) {
               throw new AflTradeExternalCanonicalPromotionError(
                 'CANDIDATE_UNAVAILABLE',
-                `Selection ${selection.selectionId} is no longer current canonical once on draft session ${eventId} under another player.`
+                `Selection ${selection.selectionId} is no longer current canonical once on draft session ${eventId} under another player and the same club.`
               );
             }
+            promotedPickBySelection.set(selection.selectionId, rows[0]!.pick_id);
           }
           const carriedNumbers = selections.map(({ selectionNumber }) => selectionNumber);
           const carriedPlayers = selections.flatMap(({ playerId }) => (playerId ? [playerId] : []));
@@ -2456,8 +2475,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             ]
           );
           await persistSelectingClubs(selections, eventVersionId);
-          for (const selection of selections)
-            await persistSelectedPlayer(selection, eventVersionId);
+          for (const selection of selections) {
+            await persistSelectedPlayer(
+              selection,
+              eventVersionId,
+              promotedPickBySelection.get(selection.selectionId) ?? null
+            );
+          }
           await requireOtherDraftSlotsCurrent(
             transaction,
             eventId,

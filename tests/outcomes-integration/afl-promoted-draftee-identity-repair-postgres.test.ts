@@ -1,3 +1,6 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -27,7 +30,10 @@ interface Workspace {
 const workspaces: Workspace[] = [];
 let ordinal = 0;
 
-/** One disposable schema per case: the history just before 0278, then 0278 as deploy applies it. */
+/**
+ * One disposable schema per case: the history just before 0278, then 0278 as deploy applies it, then
+ * every later migration (0279 makes a re-sync repair the player alone).
+ */
 async function workspace(): Promise<Workspace> {
   const schemaName = `afl_promoted_draftee_identity_${process.pid}_${Date.now()}_${ordinal++}`;
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
@@ -49,6 +55,20 @@ async function workspace(): Promise<Workspace> {
   };
   workspaces.push(built);
   await pool.query(history.migrationSql);
+  const root = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'prisma',
+    'afl-trade-outcomes',
+    'migrations'
+  );
+  const later = (await readdir(root, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name > MIGRATION)
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of later)
+    await pool.query(await readFile(join(root, name, 'migration.sql'), 'utf8'));
   return built;
 }
 
@@ -80,9 +100,11 @@ const seed = (ws: Workspace) =>
 const again = (
   ws: Workspace,
   namespace: string,
-  retarget: { playerId: string; playerName: string }
+  retarget: { playerId: string; playerName: string },
+  pickUnresolved = false
 ) =>
   createSyntheticAcquisitionPlayerPromotion(ws.pool, {
+    ...(pickUnresolved ? { yearPageSelectionPickUnresolved: true } : {}),
     reciprocalFuturePickYearOffset: 1,
     fixtureNamespace: namespace,
     providerEventId: `2024-${namespace}-alpha`,
@@ -468,6 +490,49 @@ describe('re-promoting a draftee whose player identity changed (migration 0278)'
         )
       ).rows[0]!.current
     ).toBe(true);
+  }, 600_000);
+
+  // The genuine rehearsal (2026-10-14): 38 of 73 re-synced selections were `unresolved` only on the
+  // pick side (player and club resolve, pick custody does not), and the review refused the candidate
+  // as holding unusable records. A re-sync repairs the player alone, so it keeps the promoted row's
+  // pick id and club and needs only its player and club resolved (migration 0279).
+  it('reviews and promotes a re-sync whose selection is unresolved only on the pick side, keeping the promoted pick id', async () => {
+    const ws = await workspace();
+    await seed(ws);
+    const session = await sessionTwo(ws);
+    const promotedRow = (
+      await ws.pool.query<{ pick_id: string | null; club_id: string }>(
+        `SELECT pick_id,club_id FROM outcome_draft_selection
+          WHERE event_version_id=$1 AND selection_number=2`,
+        [session.event_version_id]
+      )
+    ).rows[0]!;
+    const deferred = await again(ws, 'pick-unresolved', TWIN, true);
+    const selection = deferred.candidate.content.draftSelections[0]!;
+    expect(selection).toMatchObject({ status: 'unresolved', playerId: TWIN.playerId });
+    expect(selection.pickId).not.toBe(promotedRow.pick_id);
+    expect(deferred.candidate.content.pickLineageDeferral).toMatchObject({
+      resyncedSelectionIds: [selection.selectionId],
+    });
+    expect(deferred.proposal.content.draftEventCoverage).toEqual([
+      expect.objectContaining({
+        kind: 'promoted_session_resync',
+        selectionIds: [selection.selectionId],
+      }),
+    ]);
+    expect(deferred.promotion).toMatchObject({ draftSelectionCount: 1, draftPlayerAssetCount: 1 });
+    const written = (
+      await ws.pool.query<{ pick_id: string | null; club_id: string; player_id: string }>(
+        `SELECT selection.pick_id,selection.club_id,selection.player_id
+           FROM outcome_draft_selection selection
+           JOIN outcome_event_version version ON version.event_version_id=selection.event_version_id
+          WHERE version.supersedes_version_id=$1`,
+        [session.event_version_id]
+      )
+    ).rows;
+    expect(written).toEqual([
+      { pick_id: promotedRow.pick_id, club_id: promotedRow.club_id, player_id: TWIN.playerId },
+    ]);
   }, 600_000);
 
   it('leaves a draft whose re-reviewed draftee is unchanged to the earlier promotion', async () => {

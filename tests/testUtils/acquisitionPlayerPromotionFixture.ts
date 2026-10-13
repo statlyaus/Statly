@@ -121,6 +121,12 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      */
     yearPageDraftRetarget?: { playerId: string; playerName: string };
     /**
+     * The year page's selection is `unresolved` on the pick side only (#853): its player and club
+     * resolve, but its pick custody does not, so the candidate names a fallback slot pick id that is
+     * not the promoted selection's. Needs `yearPageDraftAlreadyPromoted`.
+     */
+    yearPageSelectionPickUnresolved?: boolean;
+    /**
      * The trade is already current canonical: an earlier promotion in the same schema with the same
      * `providerEventId` and `nativePlayerId` promoted it with every transfer (statlyaus/Statly#869).
      * The candidate records it under `pickLineageDeferral.promotedTransactions` and leaves it, and
@@ -237,6 +243,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('An unreviewed original club is a pick-side issue profile.');
   if (options.yearPageDraftAlreadyPromoted && !options.pickSideIssues)
     throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
+  if (options.yearPageSelectionPickUnresolved && !options.yearPageDraftAlreadyPromoted)
+    throw new Error(
+      'A pick-side unresolved year-page selection is an already-promoted draft profile.'
+    );
   if (options.yearPageDraftRetarget && !options.yearPageDraftAlreadyPromoted)
     throw new Error('A re-reviewed year-page draftee re-targets an already-promoted draft.');
   if (options.transactionAlreadyPromoted && (!options.pickSideIssues || options.lifecycle))
@@ -2556,11 +2566,16 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       draftType: claim.draftType,
       selectionNumber: claim.selectionNumber,
       roundNumber: claim.roundNumber,
-      pickId: createAflTradeContentAddress('draft-pick', { selectionId }),
+      pickId: options.yearPageSelectionPickUnresolved
+        ? createAflTradeContentAddress('draft-pick', { selectionId, unresolvedCustody: true })
+        : createAflTradeContentAddress('draft-pick', { selectionId }),
       playerId,
       // The session profile that seeded the draft wrote the selection with the trade's receiving club.
       clubId: playerId === null ? null : targets.toClubId,
-      status: playerId === null ? ('unresolved' as const) : ('single_source' as const),
+      status:
+        playerId === null || options.yearPageSelectionPickUnresolved
+          ? ('unresolved' as const)
+          : ('single_source' as const),
       supportingProviders: ['draftguru' as const],
       evidenceIds: [row.evidenceId],
     };
