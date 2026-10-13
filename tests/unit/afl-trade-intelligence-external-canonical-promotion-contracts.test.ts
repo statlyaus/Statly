@@ -16,6 +16,7 @@ import {
   deriveDraftSessionCanonicalPromotionProposal,
   deriveReviewedSessionCanonicalPromotionProposal,
   deriveCombinedDraftSessionCanonicalPromotionProposal,
+  isAflTradePromotedSessionResyncCoverage,
 } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionContracts';
 
 const evidenceId = `external-evidence:${'e'.repeat(64)}`;
@@ -349,14 +350,16 @@ describe('external canonical promotion contracts', () => {
     const derived = deriveAflTradeExternalCanonicalPromotionProposal({
       candidate: source,
       proposedAt: datedProposal.content.proposedAt,
-      draftEvents: datedProposal.content.draftEventCoverage.map(
-        ({ draftYear, draftType, eventDate, officialName }) => ({
+      draftEvents: datedProposal.content.draftEventCoverage
+        .flatMap((coverage) =>
+          isAflTradePromotedSessionResyncCoverage(coverage) ? [] : [coverage]
+        )
+        .map(({ draftYear, draftType, eventDate, officialName }) => ({
           draftYear,
           draftType,
           eventDate,
           officialName,
-        })
-      ),
+        })),
       transactionDates: [{ transactionId, occurredOn: null }],
     });
     expect(derived.content).toEqual(partial.content);
@@ -364,14 +367,16 @@ describe('external canonical promotion contracts', () => {
       deriveAflTradeExternalCanonicalPromotionProposal({
         candidate: candidate(),
         proposedAt: datedProposal.content.proposedAt,
-        draftEvents: datedProposal.content.draftEventCoverage.map(
-          ({ draftYear, draftType, eventDate, officialName }) => ({
+        draftEvents: datedProposal.content.draftEventCoverage
+          .flatMap((coverage) =>
+            isAflTradePromotedSessionResyncCoverage(coverage) ? [] : [coverage]
+          )
+          .map(({ draftYear, draftType, eventDate, officialName }) => ({
             draftYear,
             draftType,
             eventDate,
             officialName,
-          })
-        ),
+          })),
         transactionDates: [{ transactionId, occurredOn: null }],
       })
     ).toThrow(/conflicts with exact source evidence/);
@@ -735,12 +740,16 @@ describe('trade-period window coverage', () => {
     latestDate: '2025-10-15',
   };
   const draftEvents = () =>
-    proposal().content.draftEventCoverage.map(({ draftYear, draftType, eventDate, officialName }) => ({
-      draftYear,
-      draftType,
-      eventDate,
-      officialName,
-    }));
+    proposal()
+      .content.draftEventCoverage.flatMap((coverage) =>
+        isAflTradePromotedSessionResyncCoverage(coverage) ? [] : [coverage]
+      )
+      .map(({ draftYear, draftType, eventDate, officialName }) => ({
+        draftYear,
+        draftType,
+        eventDate,
+        officialName,
+      }));
 
   it('carries a reviewed window through to the coverage of an undated transaction', () => {
     const source = candidate({ undated: true });
@@ -757,7 +766,10 @@ describe('trade-period window coverage', () => {
       { transactionId, seasonYear: 2025, occurredOn: null, datePrecision: tradeWindow },
     ]);
     expect(
-      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: source, proposal: derived })
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate: source,
+        proposal: derived,
+      })
     ).toMatchObject({ transactionCount: 1 });
     const yearOnly = deriveAflTradeExternalCanonicalPromotionProposal({
       candidate: source,

@@ -288,11 +288,46 @@ club can contradict the pick a walk settles on.
   whose player was re-targeted gets a superseding version whose player asset cites the new decision. A
   re-review that keeps the same player changes nothing. A trade whose current version came from reviewed
   pick lineage is exempt here too, because rewriting it from the candidate would replace the reviewed pick
-  ids. Such a trade keeps the old player until a reviewed path re-versions it. Drafts are not covered:
-  `promotedDrafts` still compares selection ids only. Leaving a session-keyed draft out of that list would
-  make the deferred promotion's session-less proposal write the whole draft again under a second root. A
-  draftee whose player was re-targeted is repaired by a reviewed session correction, a scoped later
-  version of that draft night (migration 0256).
+  ids. Such a trade keeps the old player until a reviewed path re-versions it.
+- **Repairing promoted draftees.** The same promotion re-promotes a re-targeted draftee (migration 0278).
+  A reviewed session correction cannot do it: it conserves every selection fact except evidence, so it
+  can never change who was drafted. A draft counts as already promoted (`promotedDrafts`) only when every
+  candidate selection is current canonical under the candidate's own player (a selection with no player,
+  an unresolved and deferred identity, still compares its id alone). A draft that is current canonical
+  except for re-targeted draftees records those selections as `resyncedSelectionIds`. The deferred
+  promotion writes nothing of such a draft as a draft night, because its proposal has no session and
+  writing the night again would create a second, session-less root (migration 0265). Instead the
+  proposal carries one `promoted_session_resync` coverage entry per current session version holding a
+  re-synced slot, with that version's date, precision and official name read from canonical state when
+  the proposal is derived. The promoter writes one later version of that session root carrying only the
+  changed slots, each naming the new player and citing its current identity decision, and refuses if
+  the approved version is no longer current or its root is not session-keyed. Whole nights are never
+  re-listed: under asset-scoped supersession (migration 0256) a version carrying fewer than half of the
+  other slots is additive, so every other draftee's selection, asset and the spells that start at them
+  stay current. This holds when the changed slot sits on version 1 of a night whose current version is a
+  small scoped version 2 (the 2019 to 2021 nights the Cameron promotion re-versioned): the re-sync
+  supersedes version 2 and retires only its own slot. The promoter checks this before it commits and
+  refuses any re-sync version that would retire a slot it does not carry. Only the re-sync is relaxed
+  this way; an ordinary draft write must still carry every recorded slot of its predecessor (#721). A
+  re-review that keeps the same player changes nothing.
+
+  What the re-sync leaves behind:
+  - **The old draftee's selection** at that number is retired (0256 judges a selection by number). **The
+    old draftee's asset** is not: 0256 retires an asset only when a later version carries an asset for
+    the same player, and the re-sync carries the twin's. So the old asset stays current. It is excluded
+    from arrival evidence only through identity currency: its decision was superseded by one naming
+    another player, and `outcome_external_identity_current_decision` follows only same-target successors
+    (migration 0254). A release-membership or archive reader that lists the current assets of a night
+    sees both the old draftee's asset and the twin's at number N.
+  - **Special entitlements.** An exercise that cites the old selection is no longer current, because
+    the selection is retired. A special-entitlement custody edge that cites the old player's asset stays
+    current, because the asset is not. Either needs its own reviewed special correction.
+  - **Arrivals.** The twin's draft asset is evidence for a reviewed arrival-only (v4) spell, with the
+    session's date bounds (`outcome_acquisition_arrival_event_current` accepts a re-sync version through
+    `outcome_external_promoted_session_resync_version`). The v1 to v3 check
+    (`outcome_acquisition_promoted_event_current`) has no such clause: a v1 to v3 spell cannot start at
+    a re-sync version.
+
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
   allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured
   after the reconciler change, not predicted.

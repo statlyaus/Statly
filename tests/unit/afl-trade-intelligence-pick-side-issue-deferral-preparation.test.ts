@@ -161,7 +161,14 @@ function dependencies(
     },
     scopeDecisionRepository: { loadDecision: vi.fn(async () => decision) },
     promotedSelectionRepository: {
-      loadCurrentCanonicalSelectionIds: vi.fn(async () => options.promotedSelectionIds ?? []),
+      // The year page's draftee is unreviewed, so the candidate compares each selection's id alone.
+      loadCurrentCanonicalSelections: vi.fn(async () =>
+        (options.promotedSelectionIds ?? []).map((selectionId) => ({
+          selectionId,
+          selectionNumber: 14,
+          playerId: 'player-canonical-draftee',
+        }))
+      ),
       loadCurrentCanonicalTransactions: vi.fn(async () => options.promotedTransactions ?? []),
       loadCurrentCanonicalPickCustody: vi.fn(async () => options.promotedCustody ?? []),
     },
@@ -252,9 +259,9 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
       { completionId, pickLineageDeferral: { decisionId } },
       built
     );
-    expect(
-      built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
-    ).toHaveBeenCalledWith('AFLM');
+    expect(built.promotedSelectionRepository!.loadCurrentCanonicalSelections).toHaveBeenCalledWith(
+      'AFLM'
+    );
     expect(result.pickLineageDeferral).toEqual({
       decisionId,
       promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
@@ -280,7 +287,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     const plain = dependencies(null, { withSelection: true, promotedSelectionIds: [selectionId] });
     await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
     expect(
-      plain.built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
+      plain.built.promotedSelectionRepository!.loadCurrentCanonicalSelections
     ).not.toHaveBeenCalled();
   });
 

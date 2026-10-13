@@ -9,6 +9,7 @@ import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityRe
 import { parseAflTradeExternalReconciliationCandidate } from './externalReconciliationCandidateContracts';
 import type { AflTradeHistoricalCompletionReconciliationAuthority } from './externalReconciliationSourceAuthorityContracts';
 import type {
+  AflTradeCurrentCanonicalDraftSelection,
   AflTradeCurrentCanonicalPickCustody,
   AflTradeCurrentCanonicalTransaction,
   AflTradePickLineageDeferral,
@@ -66,7 +67,13 @@ export interface AflTradeReconciliationScopeDecisionReader {
 
 /** Current canonical selections, transactions and custody of finalized promotions, by source id. */
 export interface AflTradePromotedDraftSelectionReader {
-  loadCurrentCanonicalSelectionIds(competition: string): Promise<readonly string[]>;
+  /**
+   * Each current canonical selection with its source selection id, selection number and player
+   * (migration 0278), so a re-targeted draftee is re-synced rather than left (#853).
+   */
+  loadCurrentCanonicalSelections(
+    competition: string
+  ): Promise<readonly AflTradeCurrentCanonicalDraftSelection[]>;
   /**
    * Each current canonical trade event with the source transfer ids promoted as assets on it and
    * the pick id of each such asset that names one.
@@ -184,14 +191,12 @@ export async function prepareAflTradeHistoricalReconciliation(
   );
   // Drafts already current canonical are left to their promotion; resolved once, before the
   // candidate is built, so the stored candidate says which drafts it leaves and the database checks it.
-  const promotedDraftSelectionIds =
+  const promotedDraftSelections =
     deferralDecision === null
       ? []
-      : [
-          ...(await dependencies.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds(
-            source.competition
-          )),
-        ].sort();
+      : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalSelections(
+          source.competition
+        );
   const promotedTransactions =
     deferralDecision === null
       ? []
@@ -217,7 +222,7 @@ export async function prepareAflTradeHistoricalReconciliation(
         ? {}
         : {
             pickLineageDeferral: input.pickLineageDeferral,
-            promotedDraftSelectionIds,
+            promotedDraftSelections,
             promotedTransactions,
             promotedCustody,
           }),

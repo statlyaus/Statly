@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   canonicalizeAflTradeJson,
@@ -7,10 +7,15 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   authenticateAflTradeExternalCanonicalPromotionProposal,
+  createAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionRequest,
   deriveAflTradeExternalCanonicalPromotionProposal,
   parseAflTradeExternalCanonicalPromotionRequest,
 } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionContracts';
+import {
+  recordAflTradeExternalCanonicalPromotionReview,
+  type AflTradeExternalCanonicalPromotionReviewRepository,
+} from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionReviewService';
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
@@ -41,11 +46,12 @@ import {
   aflTradeDeferredCustodyIds,
   aflTradePickLineageDeferralScope,
   aflTradePromotedCustodyIds,
-  aflTradePromotedDrafts,
+  aflTradePromotedDraftState,
   aflTradePromotedTransactions,
   aflTradePromotionWriteScope,
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
+  type AflTradeCurrentCanonicalDraftSelection,
   type AflTradeCurrentCanonicalPickCustody,
   type AflTradeCurrentCanonicalTransaction,
 } from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
@@ -187,22 +193,36 @@ const sourceAuthority = createAflTradeHistoricalCompletionReconciliationAuthorit
   completedAt: '2026-08-09T04:30:00.000Z',
 });
 
+/**
+ * A current canonical selection as the reader returns it. A bare id stands for a row under some
+ * player: the year page's draftee is unreviewed, so the candidate compares its id alone.
+ */
+const currentSelection = (
+  value: string | AflTradeCurrentCanonicalDraftSelection
+): AflTradeCurrentCanonicalDraftSelection =>
+  typeof value === 'string'
+    ? { selectionId: value, selectionNumber: 14, playerId: 'player-canonical-draftee' }
+    : value;
+
 function reconcile(
   deferral: boolean,
   authority: boolean = true,
-  promotedDraftSelectionIds?: readonly string[],
-  promotedTransactions?: readonly AflTradeCurrentCanonicalTransaction[]
+  promotedDraftSelections?: readonly (string | AflTradeCurrentCanonicalDraftSelection)[],
+  promotedTransactions?: readonly AflTradeCurrentCanonicalTransaction[],
+  identityResolutions: typeof resolutions = resolutions
 ) {
   return reconcileAflTradeExternalEvidence({
     environment: 'test_fixture',
     competition: 'AFLM',
     anchorSeasonYear: 2025,
     sourceBatches: [draftguru],
-    identityResolutions: resolutions,
+    identityResolutions,
     ...(authority ? { sourceAuthority } : {}),
     reconciledAt: '2026-08-09T05:00:00.000Z',
     ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
-    ...(promotedDraftSelectionIds === undefined ? {} : { promotedDraftSelectionIds }),
+    ...(promotedDraftSelections === undefined
+      ? {}
+      : { promotedDraftSelections: promotedDraftSelections.map(currentSelection) }),
     ...(promotedTransactions === undefined ? {} : { promotedTransactions }),
   });
 }
@@ -673,23 +693,130 @@ describe('a deferred candidate whose draft is already current canonical', () => 
     );
   });
 
-  it('derives promoted drafts by draft, sorted, from the selection set', () => {
+  it('derives promoted drafts by draft, sorted, from the current selections and their players', () => {
     const selections = [
-      { selectionId: 'b', draftYear: 2024, draftType: 'rookie' },
-      { selectionId: 'a', draftYear: 2024, draftType: 'national' },
-      { selectionId: 'c', draftYear: 2023, draftType: 'national' },
-      { selectionId: 'd', draftYear: 2023, draftType: 'national' },
+      {
+        selectionId: 'b',
+        draftYear: 2024,
+        draftType: 'rookie',
+        selectionNumber: 1,
+        playerId: 'p-b',
+      },
+      {
+        selectionId: 'a',
+        draftYear: 2024,
+        draftType: 'national',
+        selectionNumber: 1,
+        playerId: 'p-a',
+      },
+      {
+        selectionId: 'c',
+        draftYear: 2023,
+        draftType: 'national',
+        selectionNumber: 1,
+        playerId: 'p-c',
+      },
+      {
+        selectionId: 'd',
+        draftYear: 2023,
+        draftType: 'national',
+        selectionNumber: 2,
+        playerId: 'p-d',
+      },
     ];
-    expect(aflTradePromotedDrafts(selections, new Set(['a', 'b', 'c']))).toEqual([
-      { draftYear: 2024, draftType: 'national' },
-      { draftYear: 2024, draftType: 'rookie' },
-    ]);
-    expect(aflTradePromotedDrafts(selections, new Set(['a', 'b', 'c', 'd']))).toEqual([
+    const row = (selectionId: string, selectionNumber = 1, playerId = `p-${selectionId}`) => ({
+      selectionId,
+      selectionNumber,
+      playerId,
+    });
+    expect(aflTradePromotedDraftState(selections, [row('a'), row('b'), row('c')])).toEqual({
+      promotedDrafts: [
+        { draftYear: 2024, draftType: 'national' },
+        { draftYear: 2024, draftType: 'rookie' },
+      ],
+      resyncedSelectionIds: [],
+    });
+    expect(
+      aflTradePromotedDraftState(selections, [row('a'), row('b'), row('c'), row('d', 2)])
+        .promotedDrafts
+    ).toEqual([
       { draftYear: 2023, draftType: 'national' },
       { draftYear: 2024, draftType: 'national' },
       { draftYear: 2024, draftType: 'rookie' },
     ]);
-    expect(aflTradePromotedDrafts(selections, new Set())).toEqual([]);
+    expect(aflTradePromotedDraftState(selections, [])).toEqual({
+      promotedDrafts: [],
+      resyncedSelectionIds: [],
+    });
+  });
+
+  it('re-syncs a draftee whose current canonical player differs and leaves the rest of the draft', () => {
+    const selections = [
+      {
+        selectionId: 'a',
+        draftYear: 2024,
+        draftType: 'national',
+        selectionNumber: 1,
+        playerId: 'twin',
+      },
+      {
+        selectionId: 'b',
+        draftYear: 2024,
+        draftType: 'national',
+        selectionNumber: 2,
+        playerId: 'p-b',
+      },
+      {
+        selectionId: 'c',
+        draftYear: 2024,
+        draftType: 'national',
+        selectionNumber: 3,
+        playerId: null,
+      },
+      {
+        selectionId: 'r',
+        draftYear: 2024,
+        draftType: 'rookie',
+        selectionNumber: 1,
+        playerId: 'p-r',
+      },
+    ];
+    const current = [
+      { selectionId: 'a', selectionNumber: 1, playerId: 'draftguru-created' },
+      { selectionId: 'b', selectionNumber: 2, playerId: 'p-b' },
+      // An unresolved draftee (no player) compares its id alone, as before migration 0278.
+      { selectionId: 'c', selectionNumber: 3, playerId: 'someone' },
+      { selectionId: 'r', selectionNumber: 1, playerId: 'p-r' },
+    ];
+    expect(aflTradePromotedDraftState(selections, current)).toEqual({
+      promotedDrafts: [{ draftYear: 2024, draftType: 'rookie' }],
+      resyncedSelectionIds: ['a'],
+    });
+    // A draft with a selection nobody promoted is neither: the promotion writes it as before.
+    expect(aflTradePromotedDraftState(selections, current.slice(1))).toEqual({
+      promotedDrafts: [{ draftYear: 2024, draftType: 'rookie' }],
+      resyncedSelectionIds: [],
+    });
+    // A changed selection current under two roots cannot be re-synced into one of them.
+    expect(() =>
+      aflTradePromotedDraftState(selections, [
+        ...current,
+        { selectionId: 'a', selectionNumber: 1, playerId: 'another' },
+      ])
+    ).toThrow(/current canonical 2 times/);
+    // The same player under a later identity revision is unchanged.
+    expect(
+      aflTradePromotedDraftState(selections, [
+        { selectionId: 'a', selectionNumber: 1, playerId: 'twin' },
+        ...current.slice(1),
+      ])
+    ).toEqual({
+      promotedDrafts: [
+        { draftYear: 2024, draftType: 'national' },
+        { draftYear: 2024, draftType: 'rookie' },
+      ],
+      resyncedSelectionIds: [],
+    });
   });
 
   it('leaves the draft and the realizations into it unwritten, and counts both', () => {
@@ -2094,5 +2221,205 @@ describe('repairing promoted pick identity (#853)', () => {
         pickLineageDeferral: { decisionId, promotedCustodyIds: [] },
       })
     ).toThrow();
+  });
+});
+
+// An identity repair re-targets a draftee (#853): a later revision of the same external identity
+// subject names another canonical player. The source selection id is keyed by slot, so only the
+// player shows it. The draft is no longer left whole to its earlier promotion; the changed slot is
+// recorded as re-synced and re-promoted alone into a later version of its session (migration 0278).
+describe('a deferred candidate whose draftee an identity repair re-targeted', () => {
+  const reviewed = [
+    ...resolutions,
+    resolution(
+      'draftguru',
+      'player',
+      { nativeId: 'unreviewed-draftee', recordedName: 'Unreviewed Draftee' },
+      'player-afl-tables-twin'
+    ),
+  ];
+  const promotedUnder = (playerId: string) => [
+    { selectionId: selection14, selectionNumber: 14, playerId },
+  ];
+  const resynced = () =>
+    reconcile(true, true, promotedUnder('player-draftguru-created'), undefined, reviewed);
+
+  it('records the slot as re-synced, not the draft as promoted, and only under the deferral', () => {
+    const candidate = resynced();
+    expect(candidate.content.pickLineageDeferral).toEqual({
+      decisionId,
+      resyncedSelectionIds: [selection14],
+    });
+    // A same-target re-review leaves the draft to its earlier promotion as before.
+    expect(
+      reconcile(true, true, promotedUnder('player-afl-tables-twin'), undefined, reviewed).content
+        .pickLineageDeferral
+    ).toEqual({ decisionId, promotedDrafts: [{ draftYear: 2025, draftType: 'national' }] });
+    expect(() =>
+      reconcile(false, true, promotedUnder('player-draftguru-created'), undefined, reviewed)
+    ).toThrow(/only under a pick-side deferral/);
+    expect(parseAflTradeExternalReconciliationCandidate(candidate).candidateId).toBe(
+      candidate.candidateId
+    );
+  });
+
+  it('writes only the re-synced slot and nothing else of its draft', () => {
+    const written = aflTradePromotionWriteScope(resynced().content);
+    expect(written.draftSelections).toEqual([]);
+    expect(written.resyncedSelections.map(({ selectionId }) => selectionId)).toEqual([selection14]);
+    expect(written).toMatchObject({ resyncedSelectionCount: 1, promotedDraftCount: 0 });
+    expect([...written.deferral.resyncedDraftKeys]).toEqual(['2025|national']);
+  });
+
+  it('is refused by the candidate contract for a selection without a player or in a promoted draft', () => {
+    const content = resynced().content;
+    const unresolved = reconcile(true, true, [selection14]).content;
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...unresolved,
+        pickLineageDeferral: { decisionId, resyncedSelectionIds: [selection14] },
+      })
+    ).toThrow(/re-synced selection must be a candidate selection with a player/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...content,
+        pickLineageDeferral: {
+          decisionId,
+          promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
+          resyncedSelectionIds: [selection14],
+        },
+      })
+    ).toThrow(/outside every already-promoted draft/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...content,
+        pickLineageDeferral: { decisionId, resyncedSelectionIds: [] },
+      })
+    ).toThrow();
+  });
+
+  it('proposes one session re-sync per current version, read from canonical state, and counts it', () => {
+    const candidate = resynced();
+    const proposedAt = '2026-08-09T07:31:00.000Z';
+    const resync = {
+      selectionId: selection14,
+      supersedesVersionId: 'event-version:session-2',
+      eventDate: '2025-11-20',
+      datePrecision: null,
+      officialName: '2025 AFL National Draft',
+    };
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({ candidate, proposedAt, draftEvents: [] })
+    ).toThrow(/needs the current session version/);
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate,
+        proposedAt,
+        draftEvents: [],
+        promotedSessionResyncs: [resync, resync],
+      })
+    ).toThrow(/exactly once/);
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate,
+      proposedAt,
+      draftEvents: [],
+      promotedSessionResyncs: [resync],
+    });
+    expect(proposal.content.draftEventCoverage).toEqual([
+      {
+        kind: 'promoted_session_resync',
+        draftYear: 2025,
+        draftType: 'national',
+        supersedesVersionId: 'event-version:session-2',
+        eventDate: '2025-11-20',
+        officialName: '2025 AFL National Draft',
+        expectedSelectionCount: 1,
+        selectionIds: [selection14],
+        status: 'complete',
+      },
+    ]);
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate,
+      proposal,
+    });
+    expect(authenticated).toMatchObject({
+      draftSelectionCount: 1,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 1, resyncedSelectionCount: 1 },
+    });
+    // A proposal whose re-syncs do not cover the re-synced slot exactly is refused.
+    const uncovered = createAflTradeExternalCanonicalPromotionProposal({
+      ...proposal.content,
+      draftEventCoverage: [],
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate, proposal: uncovered })
+    ).toThrow(/cover exactly the candidate re-synced selections/);
+    // A candidate with nothing re-synced accepts no re-sync coverage.
+    const plain = reconcile(true, true, [selection14]);
+    const stray = createAflTradeExternalCanonicalPromotionProposal({
+      ...proposal.content,
+      candidateId: plain.candidateId,
+      candidateSha256: plain.candidateId.split(':')[1]!,
+    });
+    expect(() =>
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate: plain, proposal: stray })
+    ).toThrow(/cover exactly the candidate re-synced selections/);
+  });
+
+  it('reads where each re-synced slot is current when the review records its proposal', async () => {
+    const candidate = resynced();
+    const resync = {
+      selectionId: selection14,
+      supersedesVersionId: 'event-version:session-2',
+      eventDate: '2025-11-20',
+      datePrecision: null,
+      officialName: '2025 AFL National Draft',
+    };
+    const persistDecision = vi.fn<
+      AflTradeExternalCanonicalPromotionReviewRepository['persistDecision']
+    >(async ({ decision }) => ({
+      candidateId: decision.content.candidateId,
+      proposalId: decision.content.proposalId,
+      decisionId: decision.decisionId,
+      revision: decision.content.revision,
+      status: decision.content.decision,
+      idempotentReplay: false,
+    }));
+    const repository: AflTradeExternalCanonicalPromotionReviewRepository = {
+      loadCandidate: async () => candidate,
+      loadCurrentDecision: async () => null,
+      loadReviewedTradePeriodWindows: async () => [],
+      persistDecision,
+    };
+    const input = {
+      candidateId: candidate.candidateId,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [],
+      decision: 'approved' as const,
+      rationale: 'Re-promote the re-targeted draftee.',
+      authorityEvidenceId: `reviewer-authority-evidence:${digest('e')}`,
+      decidedBy: 'synthetic-reviewer',
+      decidedAt: '2026-08-09T07:32:00.000Z',
+    };
+    // A repository that cannot read canonical session state cannot review a re-sync.
+    await expect(recordAflTradeExternalCanonicalPromotionReview(input, repository)).rejects.toThrow(
+      /needs canonical session state/
+    );
+    const loadPromotedSessionResyncs = vi.fn(async () => [resync]);
+    await recordAflTradeExternalCanonicalPromotionReview(input, {
+      ...repository,
+      loadPromotedSessionResyncs,
+    });
+    expect(loadPromotedSessionResyncs).toHaveBeenCalledWith({
+      competition: 'AFLM',
+      selectionIds: [selection14],
+    });
+    expect(persistDecision.mock.calls[0]![0].proposal.content.draftEventCoverage).toEqual([
+      expect.objectContaining({
+        kind: 'promoted_session_resync',
+        supersedesVersionId: 'event-version:session-2',
+        selectionIds: [selection14],
+      }),
+    ]);
   });
 });

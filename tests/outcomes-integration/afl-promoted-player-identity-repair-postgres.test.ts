@@ -1,3 +1,6 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -26,7 +29,11 @@ interface Workspace {
 const workspaces: Workspace[] = [];
 let ordinal = 0;
 
-/** One disposable schema per case: the history just before 0277, then 0277 as deploy applies it. */
+/**
+ * One disposable schema per case: the history just before 0277, then 0277 as deploy applies it, then
+ * every later migration: the repository reader these cases prepare through reads functions they add
+ * (0278's current canonical selection players).
+ */
 async function workspace(): Promise<Workspace> {
   const schemaName = `afl_promoted_player_identity_${process.pid}_${Date.now()}_${ordinal++}`;
   await admin.query(`CREATE SCHEMA "${schemaName}"`);
@@ -48,6 +55,20 @@ async function workspace(): Promise<Workspace> {
   };
   workspaces.push(built);
   await pool.query(history.migrationSql);
+  const root = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'prisma',
+    'afl-trade-outcomes',
+    'migrations'
+  );
+  const later = (await readdir(root, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name > MIGRATION)
+    .map((entry) => entry.name)
+    .sort();
+  for (const name of later)
+    await pool.query(await readFile(join(root, name, 'migration.sql'), 'utf8'));
   return built;
 }
 

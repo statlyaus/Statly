@@ -357,6 +357,17 @@ const contentFieldsSchema = z
           .max(100)
           .optional(),
         /**
+         * Selections current canonical under another player because an identity repair
+         * re-targeted the draftee (#853, migration 0278): the promotion re-promotes only these
+         * slots, one scoped later version per session root. Sorted unique, each a candidate
+         * selection with a player outside every already-promoted draft, present only when non-empty.
+         */
+        resyncedSelectionIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-draft-selection')).min(1).max(10_000)
+          )
+          .optional(),
+        /**
          * Transactions whose trade event is already current canonical with every transfer a
          * promoted asset on it; the promotion writes nothing of them. Sorted unique, each a
          * candidate transaction, present only when non-empty.
@@ -447,6 +458,24 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'promotedDrafts', index],
         message: 'An already-promoted draft must be one the candidate holds a selection in.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.resyncedSelectionIds ?? []).forEach((selectionId, index) => {
+    const selection = content.draftSelections.find((value) => value.selectionId === selectionId);
+    if (
+      selection === undefined ||
+      selection.playerId === null ||
+      promotedDrafts.some(
+        ({ draftYear, draftType }) =>
+          draftYear === selection.draftYear && draftType === selection.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'resyncedSelectionIds', index],
+        message:
+          'A re-synced selection must be a candidate selection with a player, outside every already-promoted draft.',
       });
     }
   });
