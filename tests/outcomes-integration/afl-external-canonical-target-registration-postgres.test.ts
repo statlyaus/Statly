@@ -185,7 +185,8 @@ it('registers an explicitly reviewed absent native person, then replays and reus
   async function retain(
     action: 'create' | 'reuse',
     inputSnapshot: unknown = snapshot,
-    selectedAuthority = authority
+    selectedAuthority = authority,
+    distinctFromPlayerIds?: string[]
   ) {
     const selected = aflTradeExternalCanonicalTargetSnapshotSchema.parse(inputSnapshot);
     const selectedRef =
@@ -205,6 +206,7 @@ it('registers an explicitly reviewed absent native person, then replays and reus
       supportingEvidence: fixture.scopeEvidence,
       rationale: 'Synthetic source native ID reviewed; no existing matching person.',
       decidedAt: at,
+      ...(distinctFromPlayerIds ? { distinctFromPlayerIds } : {}),
     };
     const registration = aflTradeExternalCanonicalTargetRegistrationSchema.parse({
       registrationDecisionId: address('canonical-target-registration', content),
@@ -231,7 +233,49 @@ it('registers an explicitly reviewed absent native person, then replays and reus
   }
   const owner = new PostgresAflTradeProviderResolutionRepository(sql);
   const execution = { principalRef: 'synthetic-reviewer', environment: 'non_production' as const };
-  const create = await retain('create');
+  // The same person already minted from another source (#853). The name key ignores case,
+  // whitespace and punctuation; a differing known birth date is the only implicit distinction.
+  await pool.query(
+    `INSERT INTO outcome_player(player_id,display_name,birth_date,status)
+     VALUES('player:afl-tables-same',' synthetic  PLAYER.','2001-02-03','approved')`
+  );
+  const nameCheck = (birthDate: string | null, distinctFrom: string[] | null = null) =>
+    pool.query('SELECT outcome_require_canonical_player_name_reviewed($1,$2,$3::date,$4::jsonb)', [
+      'player:probe',
+      'Synthetic Player',
+      birthDate,
+      distinctFrom === null ? null : JSON.stringify(distinctFrom),
+    ]);
+  await expect(nameCheck(null)).rejects.toThrow('player:afl-tables-same');
+  await expect(nameCheck('2001-02-03')).rejects.toThrow('player:afl-tables-same');
+  await expect(nameCheck('1999-09-09')).resolves.toMatchObject({ rowCount: 1 });
+  await expect(nameCheck(null, ['player:afl-tables-same'])).resolves.toMatchObject({
+    rowCount: 1,
+  });
+  await expect(nameCheck('1999-09-09', ['player:unrelated'])).rejects.toThrow('player:unrelated');
+  await expect(nameCheck(null, ['player:z', 'player:afl-tables-same'])).rejects.toThrow(
+    'ascending'
+  );
+  const unreviewed = await retain('create');
+  await expect(owner.registerCanonicalTarget(unreviewed, execution)).rejects.toThrow(
+    'player:afl-tables-same'
+  );
+  await expect(
+    pool.query('SELECT * FROM register_outcome_reviewed_canonical_target($1,$2,$3,$4)', [
+      unreviewed.registrationDecisionId,
+      unreviewed.targetSnapshotReferenceId,
+      execution.principalRef,
+      execution.environment,
+    ])
+  ).rejects.toThrow('not reviewed as distinct');
+  expect(
+    (
+      await pool.query(
+        "SELECT count(*)::int n FROM outcome_player WHERE player_id='player:synthetic-new'"
+      )
+    ).rows[0].n
+  ).toBe(0);
+  const create = await retain('create', snapshot, authority, ['player:afl-tables-same']);
   await expect(owner.registerCanonicalTarget(create, execution)).resolves.toEqual({
     entityKind: 'player',
     canonicalId: 'player:synthetic-new',
