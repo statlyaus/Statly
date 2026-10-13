@@ -457,8 +457,21 @@ and current scoped technical reviewer authority. The explicit `create` or `reuse
 separate from the later identity assignment. Creation leaves unavailable biography and club
 metadata null; reuse requires the exact existing record. Conflicting current reviews for one native
 subject cannot create a second canonical target. Source withdrawal blocks registration and replay
-while preserving historical canonical records. Normalization-backed v1 registration is unchanged.
-Both entry points take the identity, sorted target/review and Gate locks in the same order.
+while preserving historical canonical records. Migration 0145 left normalization-backed v1
+registration unchanged. Both entry points take the identity, sorted target/review and Gate locks
+in the same order.
+
+Neither registration version mints a second person under a name the canonical store already holds
+(statlyaus/Statly#853, migration 0276). About 92 people had been minted twice, once by an external
+v2 review and again by an AFL Tables v1 review, because neither owner looked for an existing
+player. Both SQL owners now refuse to insert a player while an approved `outcome_player` has the
+same normalised display name (lower case, every non-alphanumeric character removed), unless both
+birth dates are known and differ. The error names each colliding player. A review that found a
+different person lists each colliding id in its optional `distinctFromPlayerIds`: unique, in
+ascending order, player-only (v2: `create` only), never the new id, and each an approved player with
+the same normalised name. The check runs under one advisory lock per normalised name, taken last,
+so two concurrent same-name creations cannot both pass. Replay and `reuse` insert nothing and skip
+the check, so the existing duplicates stay as they are until an explicit reviewed repair.
 
 Draft promotion proposal v2 assigns exact selection IDs to evidenced sessions, with consecutive
 session ordinals within each draft year/type. Typed `draft_session` claims retain the official
@@ -2226,6 +2239,10 @@ Draft-pick and future-pick distributions use a separate content-addressed protoc
 same player-contribution value unit. Its observations and assets are source-native public AFL records:
 clubs may hold draft entitlements, but no Statly user or fantasy league owns a player, pick,
 entitlement, observation, scenario, or result.
+
+What one `draft-pick:` identity in an external reconciliation candidate may join, and how the database
+enforces it, is specified in [Draft-pick identity rules](afl-draft-pick-identity-rules.md) (enforced
+at finalization by migration 0273, issue 853).
 
 The executable observation boundary requires complete, mature whole-draft cohorts at one fixed
 football-contribution horizon. Each observation retains actual selection number separately from
@@ -4088,10 +4105,18 @@ The remaining work proceeds through these independently verifiable gates:
    spells current against a scoped later version) and left to that promotion, with the realizations into it skipped and counted,
    so the session-less metadata path never creates a second root for a session-keyed draft. A
    transaction whose trade event is current canonical under the same stable key from a finalized
-   promotion, with every candidate transfer a promoted asset on that version, is recorded as
+   promotion, with every candidate transfer a promoted asset on that version, every pick
+   transfer under that asset's pick id and every player transfer naming that asset's player, is
+   recorded as
    `promotedTransactions` the same way (migration 0267: `outcome_current_canonical_transactions`,
    `outcome_external_candidate_promotable_transactions` behind the coverage validators and the
-   unusable-record count) and written as nothing, with the realizations into its transfers skipped;
+   unusable-record count; the pick-id condition is migration 0274's
+   `outcome_current_canonical_transaction_picks`, so a trade whose pick the identity rules re-keyed
+   is written again as a superseding version; the player condition is migration 0277's
+   `outcome_current_canonical_transaction_players`, so a trade whose player an identity repair
+   re-targeted is written again with the new player and the decision that names it; a version from
+   reviewed pick lineage is exempt from both conditions, so its reviewed pick ids are never replaced
+   by reconciliation's) and written as nothing, with the realizations into its transfers skipped;
    the special-entitlement gate applies only to the transfers written, and the receipt carries the
    skipped count and ids. A pick the promotion would define that is already canonical with
    different facts and no reviewed lineage registration is retained under the deferral, referenced
@@ -4101,11 +4126,19 @@ The remaining work proceeds through these independently verifiable gates:
    the written transfers number differently is defined, under the deferral, from its one usable
    custody observation in the candidate's full custody (a deferred pick's unwritten observation
    included) and listed as `custodyDefinedPickIds` with `custodyDefinedPickCount`, each
-   asset keeping its trade-time number; no such single custody row, or more than one, is still
-   the conflict. A custody observation without a usable status is recorded as
+   asset keeping its trade-time number; with no such single custody row, or more than one, the
+   pick is defined without a number (and without a round when the transfers disagree on it). A custody observation without a usable status is recorded as
    `deferredCustodyIds` (migration 0268 checks each is an unusable candidate custody row, on insert
    and at promotion; the unusable-record count ignores it) and written as nothing, counted on the
-   receipt as `deferredCustodyCount`. A deferred-lineage promotion is excluded from the
+   receipt as `deferredCustodyCount`. A usable custody row that records an observation already
+   canonical under a finalized promotion, matched by pick, observation time and holder (the
+   `outcome_pick_custody_observation_key` unique key, not the custody id: a custody id addresses its
+   evidence and a re-captured page gives the same observation new evidence) with the same draft,
+   recorded round and pick and original club and no predecessor on either side, is recorded under its
+   own custody id as `promotedCustodyIds` (migration 0274: `outcome_current_canonical_pick_custody`,
+   checked on insert and at promotion, ignored by the unusable-record count) and written as nothing,
+   counted as `promotedCustodyCount`; writing it would collide with the canonical row. One whose facts
+   differ is not recorded and still refuses. A deferred-lineage promotion is excluded from the
    promotion-backed corpus scope and refused as a member, so nothing deferred is ever published.
    Reversal is later reviewed lineage or a new candidate without the deferral.
 
@@ -4226,7 +4259,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v2` (v1 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v3` (v1 and v2 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4244,11 +4277,15 @@ The remaining work proceeds through these independently verifiable gates:
      must equal the benchmark formula for its slot. Neither ever enters a total.
    - **States.** A trade is `blocked` if any leg carries a blocking reason (pending, unresolved or
      no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
-     head, or an unlinked or blocked onward trade). It is `provisional` if any leg carries a provisional
-     reason (open stint, unreviewed arrival, missing or unofficial PAV seasons, excluded nominee pick,
-     equal-split tiebreak, provisional onward trade, no appearances after the trade, or a single-source
-     pick outcome). Otherwise it is `complete`. Club totals are null when blocked, and are otherwise the
-     exact received and given-up sums of the valued legs, so equal legs always seal to the same batch.
+     head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
+     `provisional` if any leg carries a provisional reason (open stint, unreviewed arrival, missing or
+     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional or partial onward
+     trade, no appearances after the trade, or a single-source pick outcome). Otherwise it is
+     `complete`. Club totals are the exact received and given-up sums of the valued legs, so equal legs
+     always seal to the same batch. Under rule v3 a club's `received` is null only when a leg it
+     receives is blocked, and its `givenUp` only when a leg it sends is blocked; `net` is null when
+     either is. Rules v1 and v2 null every club's totals in a blocked trade, and their batches are still
+     checked that way.
    - **Single source (rule v2, owner decision 2026-10-12, issues 853 and 789).** Pick outcomes come from
      Draftguru. A valued or excluded pick leg carries `single_source_pick_outcome` unless a Footyinfo
      draft board corroborates its outcome. The leg then names `corroboratedBy: footyinfo` and drops the
@@ -4259,10 +4296,34 @@ The remaining work proceeds through these independently verifiable gates:
      - **Traded on:** exactly one board pick in the pick's draft routes it sender, receiver, onward
        receiver, with that sequence once in its route.
 
-     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated. The
-     rule is `afl-trade-realized-grade-rule/v2`, and the grader seals v2. The contract still accepts v1
-     batches, which name no corroborating provider, so earlier batches stay valid. Each version states
-     its own limitation text.
+     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated.
+     Rule v2 introduced this and rule v3 keeps it. The contract still accepts v1 batches, which name no
+     corroborating provider, so earlier batches stay valid. Each version states its own limitation
+     text.
+
+   - **Club-scoped totals (rule v3, issue 789).** Rule v2 blocked a traded-on leg whenever its onward
+     trade was blocked anywhere, so trades with no blocked leg of their own were blocked. A traded-on
+     leg's value depends only on its holding club's side of the onward trade, so v3 scopes both rules
+     to that side:
+     - **Club totals** are null per side, as in "States" above. The trade state rule is unchanged.
+     - **Traded-on leg.** A `sole_asset` (the holder gave only the pick) needs the holder's `received`,
+       whatever the pick's own onward leg is. A bundle needs `received` and `givenUp`: `relative_value`
+       also takes the pick's weight, and `equal_split` applies when `givenUp` is known to be 0. When the
+       side it needs is unknown, the leg is `traded_on_return_blocked`. When it is known but the onward
+       trade is blocked elsewhere, the leg is valued with `traded_on_return_partial`. A holder that
+       received no leg at all in the onward trade has a known `received` of 0, as under v2 when the
+       onward trade is unblocked: a capture missing the holder's return side would value the pick at
+       0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
+     - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
+       allocation would need is known. A blocked side takes precedence, so it is
+       `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
+       since it has no onward return.
+     - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
+       whose onward trade leads back to its own trade is `traded_on_return_blocked`, so the result
+       does not depend on the order the trades are graded in. Rule v2 blocked every leg in such a
+       cycle too.
+
+     The contract checks each batch's totals and onward links under the rule it names.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
@@ -4279,9 +4340,9 @@ The remaining work proceeds through these independently verifiable gates:
      in time order, the onward trade is the next transfer on that trail (issue 867: a pick that leaves the
      same club twice in one undated season). Otherwise it links to the one later trade in which its
      receiving club gave the same `pickId` away, never to an earlier one. No link, or more than one, is
-     `traded_on_return_unlinked`. A cycle, or a blocked onward trade, is
-     `traded_on_return_blocked`. A player's at-trade view is his PAV at the sending club in the trade
-     season.
+     `traded_on_return_unlinked`. A cycle, or an onward trade in which the side the leg needs is
+     unknown, is `traded_on_return_blocked` ("Club-scoped totals"). A player's at-trade view is his
+     PAV at the sending club in the trade season.
    - **Pick custody from the pre-draft order (issue 853).** A pick traded as a future pick is keyed
      by year, round and original club; once the order is published Draftguru records the same pick
      only as `Pick N`, so the onward trade never shared the first trade's `pickId` and the leg stayed

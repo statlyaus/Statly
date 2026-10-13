@@ -269,10 +269,10 @@ function MatchupHeadToHeadCard({ matchup }: { matchup: MatchupModel }) {
     <div className="border-b border-[color:var(--league-border)] pb-4">
       <p className="mb-3 flex items-center gap-2 text-xs text-[color:var(--league-text-muted)]">
         {matchup.status === 'LIVE' ? (
-          <span aria-hidden="true" className="size-2 rounded-full bg-result-loss" />
+          <span aria-hidden="true" className="size-2 rounded-full bg-status-live" />
         ) : null}
         <span
-          className={matchup.status === 'LIVE' ? 'font-bold text-result-loss' : 'font-semibold'}
+          className={matchup.status === 'LIVE' ? 'font-bold text-status-live' : 'font-semibold'}
         >
           {matchupStatusLabel(matchup)}
         </span>

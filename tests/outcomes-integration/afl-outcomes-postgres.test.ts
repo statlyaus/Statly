@@ -1343,6 +1343,10 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0270_pick_eventual_selection_claim_kind',
       '0271_footyinfo_draft_board',
       '0272_board_pick_evidence_conservation',
+      '0273_draft_pick_identity_rules',
+      '0274_deferred_candidate_promoted_custody',
+      '0276_canonical_player_same_name_refusal',
+      '0277_deferred_candidate_promoted_players',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
@@ -3534,8 +3538,46 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
         principalRef: 'not-the-reviewer',
       })
     ).rejects.toMatchObject({ code: 'EVIDENCE_MISSING' });
+    // An approved same-name person minted from another source blocks creation until the
+    // review lists that person as distinct (#853).
+    const sameNamePlayerId = 'afl-player:same-name-elsewhere';
+    await query(
+      `INSERT INTO outcome_player (player_id, display_name, status) VALUES ($1, $2, 'approved')`,
+      [sameNamePlayerId, `${scenario.candidate.recordedName.toUpperCase()}.`]
+    );
     await expect(
       scenario.repository.registerCanonicalTarget(request, scenario.execution)
+    ).rejects.toThrow(sameNamePlayerId);
+    const distinctContent = { ...content, distinctFromPlayerIds: [sameNamePlayerId] };
+    const distinctRegistration = aflTradeCanonicalTargetRegistrationSchema.parse({
+      registrationDecisionId: createAflTradeContentAddress(
+        'canonical-target-registration',
+        distinctContent
+      ),
+      content: distinctContent,
+    });
+    await query(
+      `INSERT INTO outcome_review_decision(decision_id,subject_type,subject_id,decision,
+      canonical_record_type,canonical_record_id,rationale,evidence_json,decided_by,decided_at)
+      VALUES($1,'canonical_target_creation',$2,'approved','player',$3,$4,$5::jsonb,$6,$7)`,
+      [
+        distinctRegistration.registrationDecisionId,
+        reference.id,
+        canonicalId,
+        decision.content.rationale,
+        canonicalizeAflTradeJson(distinctRegistration),
+        scenario.execution.principalRef,
+        decision.content.decidedAt,
+      ]
+    );
+    await expect(
+      scenario.repository.registerCanonicalTarget(
+        {
+          registrationDecisionId: distinctRegistration.registrationDecisionId,
+          targetSnapshotReferenceId: reference.id,
+        },
+        scenario.execution
+      )
     ).resolves.toEqual({
       entityKind: 'player',
       canonicalId,

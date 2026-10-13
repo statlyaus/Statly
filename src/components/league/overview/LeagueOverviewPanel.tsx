@@ -568,8 +568,8 @@ function ThisRoundCard({
     const closes = formatLeagueDateTime(snapshot.roundEndsAt, timeZone);
     statusLine = (
       <>
-        <span className="inline-flex items-center gap-1.5 font-bold text-result-loss">
-          <span aria-hidden="true" className="size-2 rounded-full bg-result-loss" />
+        <span className="inline-flex items-center gap-1.5 font-bold text-status-live">
+          <span aria-hidden="true" className="size-2 rounded-full bg-status-live" />
           Live
         </span>
         {closes ? <span>Closes {closes}</span> : null}

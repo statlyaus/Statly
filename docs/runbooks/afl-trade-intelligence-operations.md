@@ -753,6 +753,10 @@ supersede production Gate authority, and production execution cannot reuse non-p
    Bind the complete native-ID work item from the current retained completion, the exact governed
    snapshot, supporting evidence and the actual scoped technical reviewer. Choose `create` only
    after checking existing canonical provenance; choose `reuse` for an exact existing record.
+   A player `create` is refused while an approved player has the same normalised display name
+   (case, whitespace and punctuation ignored) and no differing known birth date; the error names
+   each such player. Reuse that player, or, when review shows a different person, list each id in
+   the review's sorted `distinctFromPlayerIds`.
    Keep unsupported biography and club metadata null on creation. This operation creates no
    normalization record or identity assignment; continue through the identity-review command above.
    An internal owner-delegated technical reviewer must be recorded as such, without asserting
@@ -863,13 +867,21 @@ supersede production Gate authority, and production execution cannot reuse non-p
    selections it cites or re-lists, so a session re-versioned for a few players still counts as
    promoted for the rest). The same holds for a trade whose event is current canonical under the
    same stable key from a finalized promotion with every one of the candidate's transfers a promoted
-   asset on it: recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
+   asset on it under the candidate's pick id (migration 0274; a trade whose pick id changed is
+   written again as a superseding version) and, for a player transfer, naming the candidate's player
+   (migration 0277; a trade whose player an identity repair re-targeted is written again citing the
+   new decision; neither comparison applies to a version from reviewed pick lineage): recorded as `promotedTransactions`, checked by migration 0267 on insert and again at
    promotion, left unwritten (no trade version, asset, special custody or realization), omitted from
    the reviewed transaction dates, and counted on the receipt with its ids. A custody observation
    without a usable status (`unresolved`, such as an order page's holder-only special pick with no
    original club, or `disputed` behind a deferred `pick_identity_conflict`) is pick-side too: recorded
    as `deferredCustodyIds`, checked by migration 0268 on insert and at promotion, written as nothing
    and counted on the receipt as `deferredCustodyCount`; without a deferral it blocks as before. A
+   usable custody row recording an observation already canonical under a finalized promotion (same
+   pick, observation time and holder, same facts, no predecessor; the custody id may be new when the
+   page was re-captured) is recorded as `promotedCustodyIds`, checked by migration 0274 on insert and
+   at promotion, written as nothing and counted as `promotedCustodyCount`; one with different facts
+   still refuses (it would collide on the canonical unique key). A
    retained `draft_session` claim in the candidate's sources refuses the metadata-only proposal only
    for a draft the candidate writes (migration 0269): a session claim for a draft left to its earlier
    promotion or holding a deferred selection proves nothing the promotion needs. A pick the
@@ -883,7 +895,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
    observation in the candidate's full custody (the slot it became; a deferred pick's observation
    counts here though it is not written) and listed as `custodyDefinedPickIds` with
    `custodyDefinedPickCount`, each asset keeping its trade-time number as its label; with no such
-   single custody row, or more than one, it is still the conflict,
+   single custody row, or more than one, it is defined without a number or, when its transfers also
+   disagree on the round, without a round (a pick id names one pick since the identity rules),
    and the promotion writes nothing of it and no realization into it (the receipt counts
    `promotedDraftCount` and `skippedRealizationCount`; reviewed lineage binds those picks later). The
    promoter re-checks the deferral decision in its transaction, materializes every transaction and

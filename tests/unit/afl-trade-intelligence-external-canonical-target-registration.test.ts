@@ -139,3 +139,51 @@ it('binds reviewed external native identity and explicit create/reuse without fi
       .action
   ).toBe('reuse');
 });
+it('lets a player creation review name same-name players it found distinct, and nothing else', () => {
+  const registration = fixture();
+  const changed = (change: Record<string, unknown>) => {
+    const content = { ...registration.content, ...change };
+    return { registrationDecisionId: address('canonical-target-registration', content), content };
+  };
+  const parses = (change: Record<string, unknown>) =>
+    aflTradeExternalCanonicalTargetRegistrationSchema.safeParse(changed(change)).success;
+  expect(
+    aflTradeExternalCanonicalTargetRegistrationSchema.parse(
+      changed({ distinctFromPlayerIds: ['player:afl-tables-a', 'player:afl-tables-b'] })
+    ).content.distinctFromPlayerIds
+  ).toEqual(['player:afl-tables-a', 'player:afl-tables-b']);
+  expect(parses({ distinctFromPlayerIds: [] })).toBe(false);
+  expect(parses({ distinctFromPlayerIds: null })).toBe(false);
+  expect(parses({ distinctFromPlayerIds: ['player:b', 'player:a'] })).toBe(false);
+  expect(parses({ distinctFromPlayerIds: ['player:a', 'player:a'] })).toBe(false);
+  expect(parses({ distinctFromPlayerIds: ['player:synthetic-absent'] })).toBe(false);
+  expect(parses({ action: 'reuse', distinctFromPlayerIds: ['player:a'] })).toBe(false);
+  const content = registration.content.targetSnapshot.source.workItem.content;
+  const club = {
+    ...registration.content.targetSnapshot,
+    source: {
+      ...registration.content.targetSnapshot.source,
+      workItem: createAflTradeExternalIdentityReviewWorkItem({
+        subject: createAflTradeExternalIdentitySubject({
+          ...content.subject.content,
+          entityKind: 'club',
+        }),
+        observations: content.observations,
+      }),
+    },
+    record: {
+      entityKind: 'club',
+      canonicalId: 'club:synthetic',
+      currentName: 'Synthetic Club',
+      abbreviation: null,
+      activeFromYear: null,
+      activeThroughYear: null,
+    },
+  };
+  const clubChange = {
+    targetSnapshot: club,
+    targetSnapshotReferenceId: address('canonical-target-snapshot', club),
+  };
+  expect(parses(clubChange)).toBe(true);
+  expect(parses({ ...clubChange, distinctFromPlayerIds: ['player:a'] })).toBe(false);
+});

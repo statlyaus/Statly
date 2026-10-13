@@ -795,6 +795,41 @@ export const aflTradeCanonicalTargetSnapshotSchema = z
     'Canonical target evidence environment must match its source.'
   );
 
+/**
+ * Approved players a creation review found to be different people despite sharing the new player's
+ * normalised display name. The SQL owner refuses a player creation while any same-name approved
+ * player (without a differing known birth date) is unlisted, and refuses a listed id that is not
+ * such a player. Ordered and unique so one reviewed set has one content address.
+ */
+const distinctFromPlayerIdsSchema = z
+  .array(publicIdSchema)
+  .min(1)
+  .max(50)
+  .refine(
+    (ids) => ids.every((id, index) => index === 0 || ids[index - 1]! < id),
+    'distinctFromPlayerIds must be unique and in ascending order.'
+  );
+
+function addDistinctFromPlayerIdsIssue(
+  distinctFromPlayerIds: readonly string[] | undefined,
+  record: { entityKind: string; canonicalId: string },
+  creates: boolean,
+  context: z.RefinementCtx
+): void {
+  if (
+    distinctFromPlayerIds !== undefined &&
+    (record.entityKind !== 'player' ||
+      !creates ||
+      distinctFromPlayerIds.includes(record.canonicalId))
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message:
+        'distinctFromPlayerIds belongs only to a player creation and lists other approved players.',
+    });
+  }
+}
+
 /** Parses an already retained explicit creation review; this does not issue or approve that review. */
 export const aflTradeCanonicalTargetRegistrationSchema = z
   .object({
@@ -805,6 +840,7 @@ export const aflTradeCanonicalTargetRegistrationSchema = z
         authorityBoundary: z.literal('reviewed_canonical_creation_no_provider_assignment'),
         targetSnapshot: aflTradeCanonicalTargetSnapshotSchema,
         resolutionDecision: aflTradeProviderResolutionDecisionSchema,
+        distinctFromPlayerIds: distinctFromPlayerIdsSchema.optional(),
       })
       .strict(),
   })
@@ -820,6 +856,12 @@ export const aflTradeCanonicalTargetRegistrationSchema = z
     const { targetSnapshot: snapshot, resolutionDecision: decision } = registration.content;
     const proposal = decision.content.proposal.content;
     const record = snapshot.record;
+    addDistinctFromPlayerIdsIssue(
+      registration.content.distinctFromPlayerIds,
+      record,
+      true,
+      context
+    );
     const target = proposal.proposedTarget;
     const expectedId = createAflTradeContentAddress('canonical-target-snapshot', snapshot);
     const targetMatches =
@@ -910,6 +952,7 @@ export const aflTradeExternalCanonicalTargetRegistrationSchema = z
         supportingEvidence: z.array(aflTradeArtifactRefSchema).min(1).max(50),
         rationale: z.string().trim().min(1).max(4000),
         decidedAt: utcIsoInstantSchema,
+        distinctFromPlayerIds: distinctFromPlayerIdsSchema.optional(),
       })
       .strict(),
   })
@@ -950,6 +993,12 @@ export const aflTradeExternalCanonicalTargetRegistrationSchema = z
       });
     }
     const record = content.targetSnapshot.record;
+    addDistinctFromPlayerIdsIssue(
+      content.distinctFromPlayerIds,
+      record,
+      content.action === 'create',
+      context
+    );
     if (
       content.action === 'create' &&
       ((record.entityKind === 'player' && record.birthDate !== null) ||
