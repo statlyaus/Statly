@@ -643,9 +643,10 @@ async function requireCurrentResyncedSelections(
  * neither one the new version carries nor one an earlier version recorded at a carried number (the
  * player being replaced), each as long as it is current under asset-scoped supersession (migration
  * 0256). Read before and after the new version is written; whatever was current before must still
- * be. A successor that carries every slot of the night re-lists it; one that changes fewer than half
- * of the other slots is additive and retires only what it carries; anything between would silently
- * retire other draftees' selections, assets and the spells that start at them.
+ * be. A session re-sync (#853) changes fewer than half of the other slots, so it is additive and
+ * retires only what it carries; anything more would silently retire other draftees' selections,
+ * assets and the spells that start at them. Only the re-sync path uses this relaxed rule: an
+ * ordinary draft write must still carry every recorded slot of its predecessor (#721).
  */
 async function currentOtherDraftSlots(
   transaction: AflOutcomeSqlTransaction,
@@ -2239,14 +2240,23 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               'Promotion cannot backdate a draft-event correction.'
             );
           }
-          // A new version must keep every recorded slot it does not carry current (#721): it
-          // either carries every slot of the night, or changes so few that it is additive under
-          // migration 0256. Reviewed corrections may change who holds a slot, never drop one.
-          const carriedNumbers = selections.map(({ selectionNumber }) => selectionNumber);
-          const carriedPlayers = selections.flatMap(({ playerId }) => (playerId ? [playerId] : []));
-          const otherSlots = predecessor
-            ? await currentOtherDraftSlots(transaction, eventId, carriedNumbers, carriedPlayers)
-            : [];
+          if (predecessor) {
+            // A new version replaces the whole session, so it must keep every recorded selection
+            // slot (#721). Reviewed corrections may change who holds a slot, but never drop one.
+            // Only a session re-sync (#853, below) may carry fewer slots, and only additively.
+            const proposed = new Set(selections.map(({ selectionNumber }) => selectionNumber));
+            const recorded = await transaction.query<{ selection_number: number }>(
+              `SELECT selection_number FROM outcome_draft_selection WHERE event_version_id=$1`,
+              [predecessor.eventVersionId]
+            );
+            const dropped = recorded.rows.filter((row) => !proposed.has(row.selection_number));
+            if (dropped.length > 0) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'IMMUTABLE_CONFLICT',
+                `Draft event ${eventId} correction would drop ${dropped.length} recorded selection(s).`
+              );
+            }
+          }
           const version = (predecessor?.version ?? 0) + 1;
           const eventVersionId = createAflTradeContentAddress('event-version', {
             promotionId: request.promotionId,
@@ -2281,15 +2291,6 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           await persistSelectingClubs(selections, eventVersionId);
           for (const selection of selections)
             await persistSelectedPlayer(selection, eventVersionId);
-          if (predecessor) {
-            await requireOtherDraftSlotsCurrent(
-              transaction,
-              eventId,
-              carriedNumbers,
-              carriedPlayers,
-              otherSlots
-            );
-          }
           promotionRecords.push({
             recordKind: 'draft_event',
             sourceRecordId: coverageId,
@@ -2321,6 +2322,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             .sort((left, right) => left.selectionNumber - right.selectionNumber);
           const stored = await transaction.query<{
             event_id: string;
+            stable_key: string;
             status: string;
             kind: string;
             mechanism: string;
@@ -2330,7 +2332,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             competition: string;
             season_year: number;
           }>(
-            `SELECT version.event_id,version.status::text AS status,version.kind::text AS kind,
+            `SELECT version.event_id,root.stable_key,version.status::text AS status,
+                    version.kind::text AS kind,
                     version.acquisition_mechanism::text AS mechanism,
                     version.event_date::text AS event_date,version.official_name,
                     version.date_precision,root.competition,root.season_year
@@ -2347,6 +2350,15 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             );
           }
           const eventId = superseded.event_id;
+          // Only a session-keyed root: a re-sync version's draft asset is arrival evidence only
+          // there (outcome_external_promoted_session_resync_version, migration 0278), and a
+          // session-less draft root is no arrival evidence at all.
+          if (!/^external-draft:.*:session:\d+$/.test(superseded.stable_key)) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              `Draft event ${eventId} is not a session-keyed root; a re-sync re-promotes only a session.`
+            );
+          }
           await lockKeys(transaction, [`outcome-event:${eventId}`]);
           const current = await currentEventVersion(transaction, eventId);
           const draftKind = mapDraftKind(coverage.draftType);

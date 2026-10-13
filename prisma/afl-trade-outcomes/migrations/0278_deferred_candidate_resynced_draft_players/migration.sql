@@ -1,5 +1,5 @@
 -- Re-promoting a draftee whose player identity changed (statlyaus/Statly#853,
--- docs/architecture/afl-draft-pick-identity-rules.md, "Repairing promoted players").
+-- docs/architecture/afl-draft-pick-identity-rules.md, "Repairing promoted draftees").
 -- An identity repair re-targets an external identity decision: a later revision of the same subject
 -- names another canonical player, such as the AFL Tables twin of a Draftguru-created player. 0277
 -- re-promotes the trade side. The draft side was still left alone: a deferred candidate listed the

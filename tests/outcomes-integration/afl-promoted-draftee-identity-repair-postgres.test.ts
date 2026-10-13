@@ -162,6 +162,62 @@ async function addNightSlots(ws: Workspace, eventVersionId: string, numbers: rea
   }
 }
 
+/**
+ * A scoped later version of a night, the way the 2020 Cameron promotion re-versioned the 2019 to 2021
+ * nights for two or three draftees: version 2 of the root carries copies of the given slots of
+ * `originVersionId` and nothing else, so under migration 0256 it retires only those slots there.
+ * Written with the insert guards off; only its slots matter here.
+ */
+async function scopedSuccessor(
+  ws: Workspace,
+  originVersionId: string,
+  numbers: readonly number[]
+): Promise<string> {
+  const eventVersionId = 'event-version:synthetic-scoped-successor';
+  const client = await ws.pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL session_replication_role = replica');
+    await client.query(
+      `INSERT INTO outcome_event_version
+         (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,official_name,status,
+          source_import_row_id,supersedes_version_id,recorded_at,date_precision)
+       SELECT $1,event_id,version+1,kind,acquisition_mechanism,event_date,official_name,'approved',
+              source_import_row_id,event_version_id,clock_timestamp(),date_precision
+         FROM outcome_event_version WHERE event_version_id=$2`,
+      [eventVersionId, originVersionId]
+    );
+    await client.query(
+      `INSERT INTO outcome_draft_selection
+       SELECT (jsonb_populate_record(NULL::outcome_draft_selection, to_jsonb(selection)
+                || jsonb_build_object('selection_id','synthetic-scoped-selection:'||selection.selection_number,
+                                      'event_version_id',$1::text))).*
+         FROM outcome_draft_selection selection
+        WHERE selection.event_version_id=$2 AND selection.selection_number=ANY($3::integer[])`,
+      [eventVersionId, originVersionId, [...numbers]]
+    );
+    await client.query(
+      `INSERT INTO outcome_event_asset
+       SELECT (jsonb_populate_record(NULL::outcome_event_asset, to_jsonb(asset)
+                || jsonb_build_object('asset_version_id','synthetic-scoped-asset:'||asset.player_id,
+                                      'asset_key','selected-player:synthetic-scoped-'||asset.player_id,
+                                      'event_version_id',$1::text))).*
+         FROM outcome_event_asset asset
+        WHERE asset.event_version_id=$2
+          AND asset.player_id IN (SELECT player_id FROM outcome_draft_selection
+                                   WHERE event_version_id=$2 AND selection_number=ANY($3::integer[]))`,
+      [eventVersionId, originVersionId, [...numbers]]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return eventVersionId;
+}
+
 /** Every version of a draft session root, oldest first, with its selections and their decisions. */
 async function sessionVersions(ws: Workspace, eventId: string) {
   return (
@@ -343,6 +399,75 @@ describe('re-promoting a draftee whose player identity changed (migration 0278)'
     expect(await arrivalCurrent(twinEntry.entry, TWIN.playerId)).toBe(true);
     const seededEntry = seeded.draftEntries.find(({ player_id }) => player_id === SEEDED_DRAFTEE)!;
     expect(await arrivalCurrent(seededEntry.entry, SEEDED_DRAFTEE)).toBe(false);
+  }, 600_000);
+
+  // The genuine 2019-11-28, 2020-12-09 and 2021-11-25 nights: the re-targeted draftee's current row
+  // is on version 1, whose root's current version is a two- or three-slot scoped version 2.
+  it('re-syncs a slot on the origin version of a night whose current version is a small scoped successor', async () => {
+    const ws = await workspace();
+    await seed(ws);
+    const session = await sessionTwo(ws);
+    await addNightSlots(ws, session.event_version_id, [3, 4, 5, 6, 7]);
+    const scoped = await scopedSuccessor(ws, session.event_version_id, [6, 7]);
+    // Before the re-sync: version 1 keeps selection 2 to 5 current, version 2 holds 6 and 7.
+    expect(await retired(ws, session.event_version_id, SEEDED_DRAFTEE, 2)).toBe(false);
+    expect(await retired(ws, session.event_version_id, 'night-player-6', 6)).toBe(true);
+    expect(await retired(ws, scoped, 'night-player-6', 6)).toBe(false);
+
+    const deferred = await again(ws, 'scoped-night', TWIN);
+    expect(deferred.proposal.content.draftEventCoverage).toEqual([
+      expect.objectContaining({ kind: 'promoted_session_resync', supersedesVersionId: scoped }),
+    ]);
+    const versions = await sessionVersions(ws, session.event_id);
+    expect(versions.map(({ version, superseded }) => ({ version, superseded }))).toEqual([
+      { version: 1, superseded: true },
+      { version: 2, superseded: true },
+      { version: 3, superseded: false },
+    ]);
+    expect(versions[1]!.selections.map(({ number }) => number)).toEqual([6, 7]);
+    expect(versions[2]).toMatchObject({
+      selections: [{ number: 2, player_id: TWIN.playerId }],
+      assets: [TWIN.playerId],
+    });
+    const resync = (
+      await ws.pool.query<{ event_version_id: string }>(
+        'SELECT event_version_id FROM outcome_event_version WHERE supersedes_version_id=$1',
+        [scoped]
+      )
+    ).rows[0]!.event_version_id;
+
+    // Only the re-synced slot is retired. Version 1's other selections and assets, and version 2's
+    // selections and assets, stay current: the predicate the spells starting at them are held to.
+    expect(await retired(ws, session.event_version_id, SEEDED_DRAFTEE, 2)).toBe(true);
+    for (const number of [3, 4, 5]) {
+      expect(await retired(ws, session.event_version_id, `night-player-${number}`, number)).toBe(
+        false
+      );
+      expect(await retired(ws, session.event_version_id, `night-player-${number}`, null)).toBe(
+        false
+      );
+    }
+    for (const number of [6, 7]) {
+      expect(await retired(ws, scoped, `night-player-${number}`, number)).toBe(false);
+      expect(await retired(ws, scoped, `night-player-${number}`, null)).toBe(false);
+    }
+    expect(await retired(ws, resync, TWIN.playerId, 2)).toBe(false);
+    expect(await retired(ws, resync, TWIN.playerId, null)).toBe(false);
+    expect(
+      (await reader(ws).loadCurrentCanonicalSelections('AFLM')).find(
+        ({ playerId }) => playerId === TWIN.playerId
+      )
+    ).toMatchObject({ selectionNumber: 2 });
+    const twinEntry = deferred.draftEntries.find(({ player_id }) => player_id === TWIN.playerId)!;
+    expect(
+      (
+        await ws.pool.query<{ current: boolean }>(
+          `SELECT outcome_acquisition_arrival_event_current($1::jsonb,$2,$3,'test_fixture','AFLM',TRUE,
+                    clock_timestamp(),clock_timestamp()) AS current`,
+          [JSON.stringify(twinEntry.entry), TWIN.playerId, 'club-western-bulldogs']
+        )
+      ).rows[0]!.current
+    ).toBe(true);
   }, 600_000);
 
   it('leaves a draft whose re-reviewed draftee is unchanged to the earlier promotion', async () => {

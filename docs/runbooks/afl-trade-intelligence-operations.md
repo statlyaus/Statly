@@ -871,9 +871,13 @@ supersede production Gate authority, and production execution cannot reuse non-p
    current session version holding each such slot from canonical state and proposes a
    `promoted_session_resync` entry for it (the operator supplies no metadata for it), and the
    promotion writes one later version of that session carrying only the changed slots. It refuses if
-   that version is no longer current, or if the new version would retire another draftee's slot
-   (change fewer than half of the night's other slots, never re-list a night). Do not use a reviewed
-   session correction for this: it cannot change a selection's player. The same holds for a trade whose event is current canonical under the
+   that version is no longer current, if its root is not session-keyed, or if the new version would
+   retire another draftee's slot (change fewer than half of the night's other slots, never re-list a
+   night). Do not use a reviewed session correction for this: it cannot change a selection's player.
+   Afterwards the old draftee's asset still counts as a current asset of the night (0256), next to the
+   twin's at the same number. It is not arrival evidence, because its identity decision is no longer
+   current. Only arrival-only (v4) spells can start at the twin's asset. Special entitlements that
+   cite the old selection or asset need their own reviewed special correction. The same holds for a trade whose event is current canonical under the
    same stable key from a finalized promotion with every one of the candidate's transfers a promoted
    asset on it under the candidate's pick id (migration 0274; a trade whose pick id changed is
    written again as a superseding version) and, for a player transfer, naming the candidate's player

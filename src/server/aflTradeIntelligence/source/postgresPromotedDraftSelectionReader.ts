@@ -32,6 +32,7 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
       // roots shows twice and is never re-synced into one of them by guess.
       `SELECT selection_id,selection_number,player_id
          FROM outcome_current_canonical_draft_selection_players($1)
+        WHERE player_id IS NOT NULL
         ORDER BY selection_id,event_version_id`,
       [competition]
     );

@@ -4112,13 +4112,19 @@ The remaining work proceeds through these independently verifiable gates:
    draft, and the v1 or v4 proposal carries one `promoted_session_resync` coverage entry per current
    session version holding a changed slot, with that version's date, precision and official name read
    from canonical state at review. The promoter writes one later version of that session root carrying
-   only the changed slots under the new player and current identity decision, refuses if the version
-   is no longer current, and refuses any draft version (re-sync or ordinary) that would retire a
-   recorded slot it does not carry under 0256 (the relaxed #721 guard: carry every slot, or change fewer
-   than half of the others). `outcome_external_draft_sessions_exact` checks that the re-sync entries
-   cover the re-synced selections exactly; such a version's draft asset is arrival evidence
-   (`outcome_external_promoted_session_resync_version`) and keeps the evidenced date bounds of the
-   version it supersedes; the receipt counts `resyncedSelectionCount`. A
+   only the changed slots under the new player and current identity decision. It refuses if the
+   version is no longer current or its root is not session-keyed, and refuses a re-sync version that
+   would retire a recorded slot it does not carry under 0256 (it must change fewer than half of the
+   other slots). An ordinary draft write keeps #721's rule and must carry every recorded slot of its
+   predecessor. `outcome_external_draft_sessions_exact` checks that the re-sync entries cover the
+   re-synced selections exactly. Such a version's draft asset is evidence for an arrival-only (v4)
+   spell (`outcome_external_promoted_session_resync_version`; the v1 to v3
+   `outcome_acquisition_promoted_event_current` has no such clause) and keeps the evidenced date
+   bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. The old
+   draftee's selection is retired by number, but its asset stays current under 0256. It is excluded
+   from arrivals only because its identity decision is no longer current (0254), and a reader of a
+   night's current assets sees both players at that number. See "Repairing promoted draftees" in
+   `afl-draft-pick-identity-rules.md` for the special-entitlement caveat. A
    transaction whose trade event is current canonical under the same stable key from a finalized
    promotion, with every candidate transfer a promoted asset on that version, every pick
    transfer under that asset's pick id and every player transfer naming that asset's player, is
