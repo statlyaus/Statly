@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
@@ -698,6 +699,7 @@ export default function WaiverFAABSystem({
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<WaiverSortKey>('statlyZ');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [dropPlayerId, setDropPlayerId] = useState('');
   const [bidAmount, setBidAmount] = useState(minimumBid);
   const visibleCategories = useMemo(
@@ -760,7 +762,22 @@ export default function WaiverFAABSystem({
     setBidAmount(minimumBid);
   }, [availablePlayers, initialPlayerId, minimumBid, selectedPlayerId]);
 
-  const handleSubmitClaim = (player: PlayerOption) => {
+  const handleSubmitClaim = async (player: PlayerOption) => {
+    const dropPlayerName = rosterDropOptions.find((option) => option.id === dropPlayerId)?.name;
+    const balanceAfterBid = typeof currentBalance === 'number' ? currentBalance - bidAmount : null;
+    const confirmed = await confirm({
+      title: `Bid $${bidAmount} on ${player.name}?`,
+      description: [
+        dropPlayerName ? `${dropPlayerName} will be dropped if the claim succeeds.` : 'No player will be dropped.',
+        balanceAfterBid === null ? null : `FAAB left after this bid: $${balanceAfterBid}.`,
+        'Claims are processed automatically at 6 am Melbourne time.',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      confirmLabel: 'Place bid',
+    });
+    if (!confirmed) return;
+
     onSubmitClaim?.({
       playerId: player.id,
       playerName: player.name,
@@ -768,7 +785,7 @@ export default function WaiverFAABSystem({
       playerTeam: readPlayerTeam(player),
       action: 'add',
       dropPlayerId: dropPlayerId || undefined,
-      dropPlayerName: rosterDropOptions.find((option) => option.id === dropPlayerId)?.name,
+      dropPlayerName,
       bidAmount,
       priority: userClaims.length + 1,
       status: 'pending',
@@ -835,7 +852,7 @@ export default function WaiverFAABSystem({
             onSelectPlayer={handleSelectPlayer}
             onBidChange={setBidAmount}
             onDropChange={setDropPlayerId}
-            onSubmitClaim={onSubmitClaim ? handleSubmitClaim : undefined}
+            onSubmitClaim={onSubmitClaim ? (player) => void handleSubmitClaim(player) : undefined}
           />
         )}
 
@@ -857,6 +874,7 @@ export default function WaiverFAABSystem({
         <MyClaimsPanel claims={userClaims} timeZone={timeZone} onCancelClaim={onCancelClaim} />
         <ActivityPanel activityItems={activityItems} timeZone={timeZone} />
       </div>
+      {confirmDialog}
     </div>
   );
 }

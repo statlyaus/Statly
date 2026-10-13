@@ -357,6 +357,17 @@ const contentFieldsSchema = z
           .max(100)
           .optional(),
         /**
+         * Selections current canonical under another player because an identity repair
+         * re-targeted the draftee (#853, migration 0278): the promotion re-promotes only these
+         * slots, one scoped later version per session root. Sorted unique, each a candidate
+         * selection with a player outside every already-promoted draft, present only when non-empty.
+         */
+        resyncedSelectionIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-draft-selection')).min(1).max(10_000)
+          )
+          .optional(),
+        /**
          * Transactions whose trade event is already current canonical with every transfer a
          * promoted asset on it; the promotion writes nothing of them. Sorted unique, each a
          * candidate transaction, present only when non-empty.
@@ -371,6 +382,16 @@ const contentFieldsSchema = z
          * left unwritten. Sorted unique, each a candidate custody row, present only when non-empty.
          */
         deferredCustodyIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
+          )
+          .optional(),
+        /**
+         * Usable custody observations already canonical under a finalized promotion with the
+         * candidate's facts (#853): left unwritten. Sorted unique, each a usable candidate custody
+         * row, present only when non-empty.
+         */
+        promotedCustodyIds: sortedUniqueIdsSchema
           .pipe(
             z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
           )
@@ -440,6 +461,24 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
       });
     }
   });
+  (content.pickLineageDeferral?.resyncedSelectionIds ?? []).forEach((selectionId, index) => {
+    const selection = content.draftSelections.find((value) => value.selectionId === selectionId);
+    if (
+      selection === undefined ||
+      selection.playerId === null ||
+      promotedDrafts.some(
+        ({ draftYear, draftType }) =>
+          draftYear === selection.draftYear && draftType === selection.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'resyncedSelectionIds', index],
+        message:
+          'A re-synced selection must be a candidate selection with a player, outside every already-promoted draft.',
+      });
+    }
+  });
   (content.pickLineageDeferral?.deferredCustodyIds ?? []).forEach((custodyId, index) => {
     const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
     if (row === undefined || isAflTradeUsableCustodyStatus(row.status)) {
@@ -447,6 +486,16 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'deferredCustodyIds', index],
         message: 'Deferred custody must be a candidate custody row without a usable status.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.promotedCustodyIds ?? []).forEach((custodyId, index) => {
+    const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
+    if (row === undefined || !isAflTradeUsableCustodyStatus(row.status)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedCustodyIds', index],
+        message: 'Already-promoted custody must be a usable candidate custody row.',
       });
     }
   });

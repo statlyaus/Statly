@@ -52,7 +52,8 @@ interface Stint {
   status: 'closed' | 'open';
   seasonsValued: number[];
   seasonsMissingPav: number[];
-  value: number;
+  /** The signed HPN PAV sum of the valued seasons (rule v4: the leg is worth it floored at 0). */
+  pavSum: number;
   appearedAfter: boolean;
 }
 
@@ -86,7 +87,7 @@ type Index = ReturnType<typeof indexInputs>;
  * appears for another club (that season's PAV at this club still counts, since he left during it) or
  * before a later reviewed arrival at the same club (delisted and redrafted is a new stint). Uncovered
  * seasons cannot show a departure, so the stint runs through them with their PAV listed as missing. A
- * stint that never ends inside the covered seasons is open.
+ * stint that never ends inside the covered seasons is open. HPN PAV is signed, so the sum may be below 0.
  */
 function firstStint(
   index: Index,
@@ -99,7 +100,7 @@ function firstStint(
     status: 'open',
     seasonsValued: [],
     seasonsMissingPav: [],
-    value: 0,
+    pavSum: 0,
     appearedAfter: false,
   };
   // A later reviewed arrival at the same club starts a new stint, but only once this move's own arrival
@@ -124,7 +125,7 @@ function firstStint(
     if (!departed || playedHere) {
       if (index.official.has(season)) {
         stint.seasonsValued.push(season);
-        stint.value += index.pav.get(`${playerId}|${season}|${clubId}`) ?? 0;
+        stint.pavSum += index.pav.get(`${playerId}|${season}|${clubId}`) ?? 0;
       } else {
         stint.seasonsMissingPav.push(season);
       }
@@ -136,6 +137,20 @@ function firstStint(
   }
   return stint;
 }
+
+/**
+ * Rule v4: a first stint is worth its signed PAV sum floored at 0, since a player cannot return less
+ * than nothing; the leg keeps the signed sum for audit.
+ */
+const stintLeg = (stint: Stint) => ({
+  realizedValue: Math.max(0, stint.pavSum),
+  stint: {
+    status: stint.status,
+    seasonsValued: stint.seasonsValued,
+    seasonsMissingPav: stint.seasonsMissingPav,
+    pavSum: stint.pavSum,
+  },
+});
 
 /** A stint none of whose seasons has a pinned PAV calculation has no known value at all. */
 const noPavCoverage = (stint: Stint) =>
@@ -276,6 +291,46 @@ export function gradeAflTradesOnRealizedValue(
   const outcomes = new Map<string, PickOutcome>(
     (inputs.candidate.pickOutcomes ?? []).map((outcome) => [outcome.transferId, outcome])
   );
+  // A traded-on pick follows its unique trail, else into the one later trade where its club gave it
+  // away. More than one, or none, leaves it unlinked.
+  function onwardTransferOf(transfer: Transfer, transaction: Transaction): Transfer | undefined {
+    if (transfer.asset.kind !== 'pick_entitlement') return undefined;
+    const onwardTransfers =
+      onwardByTrail(transfer.asset.pickId, transfer) ??
+      (transfersByPick.get(transfer.asset.pickId) ?? []).filter(
+        (candidate) =>
+          candidate.fromClubId === transfer.toClubId &&
+          candidate.transactionId !== transfer.transactionId &&
+          notBefore(transactions.get(candidate.transactionId)!, transaction)
+      );
+    return onwardTransfers.length === 1 ? onwardTransfers[0] : undefined;
+  }
+  // Rule v3: the onward trades each trade's traded-on legs read. A leg whose onward trade leads back to
+  // its own trade is blocked before any grading, so no grade depends on the order trades are graded in.
+  const reads = new Map<string, string[]>();
+  for (const [transactionId, transaction] of transactions)
+    reads.set(
+      transactionId,
+      transfersByTransaction.get(transactionId)!.flatMap((transfer) => {
+        const outcome = outcomes.get(transfer.transferId);
+        const tradedOn = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'traded_on';
+        const onward = tradedOn ? onwardTransferOf(transfer, transaction) : undefined;
+        return onward ? [onward.transactionId] : [];
+      })
+    );
+  const leadsTo = (from: string, to: string) => {
+    const queue = [from];
+    const seen = new Set(queue);
+    for (let at = 0; at < queue.length; at++) {
+      if (queue[at] === to) return true;
+      for (const next of reads.get(queue[at]!)!) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+    return false;
+  };
   const selections = new Map(
     (inputs.candidate.draftSelections ?? []).map((selection) => [selection.selectionId, selection])
   );
@@ -316,7 +371,7 @@ export function gradeAflTradesOnRealizedValue(
     reasons: AflTradeRealizedGradeReason[]
   ): Leg => ({ ...base, state: 'blocked', basis: 'unavailable', reasons: sorted(reasons) }) as Leg;
 
-  function gradeLeg(transfer: Transfer, transaction: Transaction, stack: readonly string[]): Leg {
+  function gradeLeg(transfer: Transfer, transaction: Transaction): Leg {
     const asset = transfer.asset;
     const tradeYear = transaction.seasonYear;
     const receiving = transfer.toClubId!;
@@ -338,12 +393,7 @@ export function gradeAflTradesOnRealizedValue(
         ...base,
         state: 'valued',
         basis: 'player_first_stint',
-        realizedValue: stint.value,
-        stint: {
-          status: stint.status,
-          seasonsValued: stint.seasonsValued,
-          seasonsMissingPav: stint.seasonsMissingPav,
-        },
+        ...stintLeg(stint),
         reasons: sorted(reasons),
       };
     }
@@ -374,12 +424,7 @@ export function gradeAflTradesOnRealizedValue(
         ...source,
         state: 'valued',
         basis: 'pick_selected_first_stint',
-        realizedValue: stint.value,
-        stint: {
-          status: stint.status,
-          seasonsValued: stint.seasonsValued,
-          seasonsMissingPav: stint.seasonsMissingPav,
-        },
+        ...stintLeg(stint),
         reasons: sorted(reasons),
       };
     }
@@ -412,25 +457,19 @@ export function gradeAflTradesOnRealizedValue(
         };
       return blocked(base, ['not_used_no_access_evidence']);
     }
-    // Traded on: follow the pick along its unique trail, else into the one later trade where its club
-    // gave it away.
-    const onwardTransfers =
-      onwardByTrail(asset.pickId, transfer) ??
-      (transfersByPick.get(asset.pickId) ?? []).filter((candidate) => {
-        const onwardTransaction = transactions.get(candidate.transactionId)!;
-        return (
-          candidate.fromClubId === receiving &&
-          candidate.transactionId !== transfer.transactionId &&
-          notBefore(onwardTransaction, transaction)
-        );
-      });
-    if (onwardTransfers.length !== 1) return blocked(base, ['traded_on_return_unlinked']);
-    const onwardTransfer = onwardTransfers[0]!;
-    if (stack.includes(onwardTransfer.transactionId))
+    const onwardTransfer = onwardTransferOf(transfer, transaction);
+    if (!onwardTransfer) return blocked(base, ['traded_on_return_unlinked']);
+    if (leadsTo(onwardTransfer.transactionId, transaction.transactionId))
       return blocked(base, ['traded_on_return_blocked']);
-    const onward = gradeTrade(onwardTransfer.transactionId, stack);
-    if (onward.state === 'blocked') return blocked(base, ['traded_on_return_blocked']);
+    const onward = gradeTrade(onwardTransfer.transactionId);
     const pickLeg = onward.legs.find((leg) => leg.transferId === onwardTransfer.transferId)!;
+    const club = onward.clubs.find(({ clubId }) => clubId === receiving)!;
+    const given = onward.legs.filter((leg) => leg.sendingClubId === receiving);
+    // Rule v3: the leg reads only its club's side of the onward trade. A sole asset needs what the club
+    // received; a bundle also needs what it gave up (its pick's weight, or that the total is 0). That
+    // side must be known even to exclude the pick, so a blocked side outranks an excluded pick.
+    if (club.received === null || (given.length > 1 && club.givenUp === null))
+      return blocked(base, ['traded_on_return_blocked']);
     const { single, ...source } = sourceOf(routeCorroborated(transfer, onwardTransfer));
     if (pickLeg.state === 'excluded')
       return {
@@ -441,10 +480,9 @@ export function gradeAflTradesOnRealizedValue(
         onwardTransactionId: onward.transactionId,
         reasons: sorted([...single, 'traded_on_return_unallocated']),
       };
-    const club = onward.clubs.find(({ clubId }) => clubId === receiving)!;
-    const given = onward.legs.filter((leg) => leg.sendingClubId === receiving);
-    const returnValue = club.received!;
-    const givenUp = club.givenUp!;
+    const returnValue = club.received;
+    // A sole asset's pick leg may itself be blocked there, leaving givenUp unknown and unused.
+    const givenUp = club.givenUp ?? 0;
     const weight = pickLeg.state === 'valued' ? pickLeg.realizedValue : 0;
     const allocation =
       given.length === 1 ? 'sole_asset' : givenUp > 0 ? 'relative_value' : ('equal_split' as const);
@@ -457,6 +495,8 @@ export function gradeAflTradesOnRealizedValue(
     const reasons: AflTradeRealizedGradeReason[] = [...single];
     if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
     if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
+    // Rule v3: exact on the club's side, but the onward trade is blocked elsewhere.
+    if (onward.state === 'blocked') reasons.push('traded_on_return_partial');
     return {
       ...base,
       ...source,
@@ -476,16 +516,13 @@ export function gradeAflTradesOnRealizedValue(
     };
   }
 
-  function gradeTrade(
-    transactionId: string,
-    stack: readonly string[] = []
-  ): AflTradeRealizedTradeGrade {
+  function gradeTrade(transactionId: string): AflTradeRealizedTradeGrade {
     const done = graded.get(transactionId);
     if (done) return done;
     const transaction = transactions.get(transactionId)!;
     const legs = [...transfersByTransaction.get(transactionId)!]
       .sort((left, right) => (left.transferId < right.transferId ? -1 : 1))
-      .map((transfer) => gradeLeg(transfer, transaction, [...stack, transactionId]));
+      .map((transfer) => gradeLeg(transfer, transaction));
     const reasons = sorted(legs.flatMap((leg) => leg.reasons));
     const trade: AflTradeRealizedTradeGrade = {
       transactionId,
@@ -496,7 +533,10 @@ export function gradeAflTradesOnRealizedValue(
           ? 'provisional'
           : 'complete',
       reasons,
-      clubs: expectedAflTradeRealizedTradeGradeClubs(legs),
+      clubs: expectedAflTradeRealizedTradeGradeClubs(
+        legs,
+        AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION
+      ),
       legs,
     };
     graded.set(transactionId, trade);

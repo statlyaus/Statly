@@ -78,6 +78,66 @@ const draftEventCoverageSchema = z
   });
 
 /**
+ * A promoted session re-sync (statlyaus/Statly#853, migration 0278): the slots of one current draft
+ * session root whose draftee an identity repair re-targeted, re-promoted as one later version of
+ * that root. Only a deferred-lineage (v1 or v4) proposal carries it. The version it supersedes and
+ * the session metadata it repeats are read from canonical state when the proposal is derived, so
+ * the reviewer approves exactly which version is superseded; the promoter refuses if that version is
+ * no longer current or its metadata differs. It carries only the candidate's re-synced selections.
+ */
+export const AFL_TRADE_PROMOTED_SESSION_RESYNC_KIND = 'promoted_session_resync' as const;
+
+const promotedSessionResyncCoverageSchema = z
+  .object({
+    kind: z.literal(AFL_TRADE_PROMOTED_SESSION_RESYNC_KIND),
+    draftYear: z.number().int().min(1897).max(2200),
+    draftType: z.string().trim().min(1).max(80),
+    supersedesVersionId: z.string().trim().min(1).max(200),
+    eventDate: z.iso.date().nullable(),
+    datePrecision: draftSessionDatePrecisionSchema.optional(),
+    officialName: z.string().trim().min(1).max(1_000),
+    expectedSelectionCount: z.number().int().positive().max(500),
+    selectionIds: sortedUniqueSelectionIdsSchema,
+    status: z.literal('complete'),
+  })
+  .strict()
+  .superRefine((coverage, context) => {
+    if (coverage.expectedSelectionCount !== coverage.selectionIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expectedSelectionCount'],
+        message: 'A session re-sync count must equal its exact selection membership.',
+      });
+    }
+  });
+
+export type AflTradePromotedSessionResyncCoverage = z.infer<
+  typeof promotedSessionResyncCoverageSchema
+>;
+
+/** Whether a draft-event coverage entry is a promoted session re-sync rather than a draft write. */
+export function isAflTradePromotedSessionResyncCoverage(
+  coverage: object
+): coverage is AflTradePromotedSessionResyncCoverage {
+  return (
+    'kind' in coverage &&
+    (coverage as { kind?: unknown }).kind === AFL_TRADE_PROMOTED_SESSION_RESYNC_KIND
+  );
+}
+
+/**
+ * One re-synced candidate selection as canonical state places it: the current version of the
+ * session root its one current canonical selection row sits on, with that version's metadata.
+ */
+export interface AflTradePromotedSessionResync {
+  readonly selectionId: string;
+  readonly supersedesVersionId: string;
+  readonly eventDate: string | null;
+  readonly datePrecision: unknown;
+  readonly officialName: string;
+}
+
+/**
  * A reviewed transaction date: the source day repeated exactly, or `occurredOn: null` for a
  * transaction the source does not date. A null day may carry the season's reviewed trade-period
  * window as `datePrecision`; the window is explicit precision, never a substituted day.
@@ -122,7 +182,11 @@ const proposalBaseSchema = z
     environment: environmentSchema,
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
-    draftEventCoverage: z.array(draftEventCoverageSchema).max(100),
+    // A deferred-lineage proposal may also re-sync promoted sessions (#853); every session-keyed
+    // schema version below replaces this list with its own session coverage.
+    draftEventCoverage: z
+      .array(z.union([draftEventCoverageSchema, promotedSessionResyncCoverageSchema]))
+      .max(100),
     transactionDateCoverage: z
       .array(
         transactionDateCoverageFields.safeExtend({
@@ -347,9 +411,10 @@ const proposalContentSchema = proposalFieldsSchema.superRefine((proposal, contex
       message: 'Candidate digest must equal the candidate content address.',
     });
   }
-  const keys = proposal.draftEventCoverage.map(
-    (coverage) =>
-      `${coverage.draftYear}|${coverage.draftType}${'sessionOrdinal' in coverage ? `|${String(coverage.sessionOrdinal).padStart(3, '0')}` : ''}`
+  const keys = proposal.draftEventCoverage.map((coverage) =>
+    isAflTradePromotedSessionResyncCoverage(coverage)
+      ? `${coverage.draftYear}|${coverage.draftType}|resync|${coverage.supersedesVersionId}`
+      : `${coverage.draftYear}|${coverage.draftType}${'sessionOrdinal' in coverage ? `|${String(coverage.sessionOrdinal).padStart(3, '0')}` : ''}`
   );
   if (new Set(keys).size !== keys.length) {
     context.addIssue({
@@ -483,10 +548,14 @@ const requestPickLineageDeferralSchema = z
     deferredIssueCount: z.number().int().positive(),
     /** Drafts left to their existing current promotion; present only when any. */
     promotedDraftCount: z.number().int().positive().optional(),
+    /** Selections re-promoted alone under a re-targeted draftee (#853); present only when any. */
+    resyncedSelectionCount: z.number().int().positive().optional(),
     /** Resolved lineages into those drafts whose realization is not written; present only when any. */
     skippedRealizationCount: z.number().int().positive().optional(),
     /** Custody observations without a usable status, left unwritten; present only when any. */
     deferredCustodyCount: z.number().int().positive().optional(),
+    /** Custody observations already canonical with the candidate's facts, left unwritten (#853). */
+    promotedCustodyCount: z.number().int().positive().optional(),
     /** Transactions left to their existing current promotion; present only when any, with their ids. */
     promotedTransactionCount: z.number().int().positive().optional(),
     promotedTransactionIds: z
@@ -580,7 +649,10 @@ export interface AuthenticatedAflTradeExternalCanonicalPromotion {
   readonly proposalId: string;
   readonly transactionCount: number;
   readonly transferCount: number;
-  /** Selections the promotion writes: none of a draft holding a deferred selection. */
+  /**
+   * Selections the promotion writes: none of a draft holding a deferred selection, and only the
+   * re-synced slots of a draft whose draftee an identity repair re-targeted.
+   */
   readonly draftSelectionCount: number;
   /** Custody observations the promotion writes: none for a deferred pick. */
   readonly pickCustodyCount: number;
@@ -664,11 +736,88 @@ function deriveTransactionDateCoverage(
   return transactionDateCoverage;
 }
 
+/**
+ * The re-sync coverage of a deferred candidate's re-synced selections (#853): one entry per current
+ * session version, carrying that version's metadata and exactly the candidate selections whose one
+ * current canonical row sits on its root. `resyncs` is read from canonical state when the proposal
+ * is derived; every re-synced selection needs exactly one, and none other is accepted.
+ */
+export function aflTradePromotedSessionResyncCoverage(
+  content: AflTradeExternalReconciliationCandidateRecord['content'],
+  resyncs: readonly AflTradePromotedSessionResync[]
+): AflTradePromotedSessionResyncCoverage[] {
+  const resynced = aflTradePromotionWriteScope(content).resyncedSelections;
+  const selectionById = new Map(resynced.map((selection) => [selection.selectionId, selection]));
+  const resyncById = new Map<string, AflTradePromotedSessionResync>();
+  for (const resync of resyncs) {
+    if (!selectionById.has(resync.selectionId) || resyncById.has(resync.selectionId)) {
+      throw new TypeError(
+        'Each promoted session re-sync must name one re-synced candidate selection exactly once.'
+      );
+    }
+    resyncById.set(resync.selectionId, resync);
+  }
+  if (resyncById.size !== selectionById.size) {
+    throw new TypeError(
+      'Every re-synced candidate selection needs the current session version it sits on.'
+    );
+  }
+  const byVersion = new Map<string, AflTradePromotedSessionResyncCoverage>();
+  for (const selection of resynced) {
+    const resync = resyncById.get(selection.selectionId)!;
+    const datePrecision =
+      resync.datePrecision === null || resync.datePrecision === undefined
+        ? undefined
+        : draftSessionDatePrecisionSchema.parse(resync.datePrecision);
+    const entry = byVersion.get(resync.supersedesVersionId) ?? {
+      kind: AFL_TRADE_PROMOTED_SESSION_RESYNC_KIND,
+      draftYear: selection.draftYear,
+      draftType: selection.draftType,
+      supersedesVersionId: resync.supersedesVersionId,
+      eventDate: resync.eventDate,
+      ...(datePrecision === undefined ? {} : { datePrecision }),
+      officialName: resync.officialName,
+      expectedSelectionCount: 0,
+      selectionIds: [],
+      status: 'complete' as const,
+    };
+    if (
+      entry.draftYear !== selection.draftYear ||
+      entry.draftType !== selection.draftType ||
+      entry.eventDate !== resync.eventDate ||
+      entry.officialName !== resync.officialName ||
+      canonicalizeAflTradeJson(entry.datePrecision ?? null) !==
+        canonicalizeAflTradeJson(datePrecision ?? null)
+    ) {
+      throw new TypeError(
+        'One session version must give its re-synced slots one draft and metadata.'
+      );
+    }
+    entry.selectionIds = [...entry.selectionIds, selection.selectionId].sort();
+    entry.expectedSelectionCount = entry.selectionIds.length;
+    byVersion.set(resync.supersedesVersionId, entry);
+  }
+  return [...byVersion.values()]
+    .map((entry) => promotedSessionResyncCoverageSchema.parse(entry))
+    .sort((left, right) => draftCoverageSortKey(left).localeCompare(draftCoverageSortKey(right)));
+}
+
+function draftCoverageSortKey(coverage: { draftYear: number; draftType: string }): string {
+  return isAflTradePromotedSessionResyncCoverage(coverage)
+    ? `${coverage.draftYear}|${coverage.draftType}|resync|${coverage.supersedesVersionId}`
+    : `${coverage.draftYear}|${coverage.draftType}`;
+}
+
 export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   candidate: unknown;
   proposedAt: string;
   draftEvents: readonly z.input<typeof draftEventMetadataSchema>[];
   transactionDates?: readonly z.input<typeof reviewedTransactionDateSchema>[];
+  /**
+   * Where each re-synced selection is current (#853), read from canonical state. Required exactly
+   * when the candidate records re-synced selections; never supplied by a reviewer.
+   */
+  promotedSessionResyncs?: readonly AflTradePromotedSessionResync[];
 }): AflTradeExternalCanonicalPromotionProposal {
   const candidate = parseAflTradeExternalReconciliationCandidate(input.candidate);
   const proposedAt = instantSchema.parse(input.proposedAt);
@@ -702,6 +851,10 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   }
 
   const transactionDateCoverage = deriveTransactionDateCoverage(candidate, input.transactionDates);
+  const resyncCoverage = aflTradePromotedSessionResyncCoverage(
+    candidate.content,
+    input.promotedSessionResyncs ?? []
+  );
 
   const proposal = createAflTradeExternalCanonicalPromotionProposal(
     proposalContentSchema.parse({
@@ -713,17 +866,23 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
       environment: candidate.content.environment,
       competition: candidate.content.competition,
       anchorSeasonYear: candidate.content.anchorSeasonYear,
-      draftEventCoverage: expectedKeys.map((key) => {
-        const event = eventByKey.get(key);
-        const selectionIds = selectionIdsByKey.get(key);
-        if (!event || !selectionIds) throw new TypeError('Draft-event coverage derivation failed.');
-        return {
-          ...event,
-          expectedSelectionCount: selectionIds.length,
-          selectionIds,
-          status: 'complete' as const,
-        };
-      }),
+      draftEventCoverage: [
+        ...expectedKeys.map((key) => {
+          const event = eventByKey.get(key);
+          const selectionIds = selectionIdsByKey.get(key);
+          if (!event || !selectionIds)
+            throw new TypeError('Draft-event coverage derivation failed.');
+          return {
+            ...event,
+            expectedSelectionCount: selectionIds.length,
+            selectionIds,
+            status: 'complete' as const,
+          };
+        }),
+        ...resyncCoverage,
+      ].sort((left, right) =>
+        draftCoverageSortKey(left).localeCompare(draftCoverageSortKey(right))
+      ),
       transactionDateCoverage,
       proposedAt,
       publicationEligible: false,
@@ -1009,6 +1168,8 @@ function reviewedDraftCoverage(
 ): Map<string, string[]> {
   const expectedCoverage = new Map<string, string[]>();
   for (const coverage of proposal.content.draftEventCoverage) {
+    // A session re-sync writes no draft; assertPromotionResyncCoverage checks it.
+    if (isAflTradePromotedSessionResyncCoverage(coverage)) continue;
     const key = coverageKey(coverage.draftYear, coverage.draftType);
     expectedCoverage.set(
       key,
@@ -1083,6 +1244,46 @@ function assertPromotionDraftCoverage(
   }
 }
 
+/**
+ * The session re-syncs of a proposal cover exactly the candidate's re-synced selections (#853), each
+ * once, each in an entry of its own draft. Whether each entry's version is still current, and on the
+ * right root, is canonical state: the promoter checks it when it writes.
+ */
+function assertPromotionResyncCoverage(
+  content: PromotionCandidateContent,
+  proposal: ParsedPromotionProposal
+): void {
+  const resynced = new Map(
+    aflTradePromotionWriteScope(content).resyncedSelections.map((selection) => [
+      selection.selectionId,
+      selection,
+    ])
+  );
+  const covered = new Set<string>();
+  for (const coverage of proposal.content.draftEventCoverage) {
+    if (!isAflTradePromotedSessionResyncCoverage(coverage)) continue;
+    for (const selectionId of coverage.selectionIds) {
+      const selection = resynced.get(selectionId);
+      if (
+        selection === undefined ||
+        covered.has(selectionId) ||
+        selection.draftYear !== coverage.draftYear ||
+        selection.draftType !== coverage.draftType
+      ) {
+        throw new TypeError(
+          'Promoted session re-syncs must cover exactly the candidate re-synced selections, each once.'
+        );
+      }
+      covered.add(selectionId);
+    }
+  }
+  if (covered.size !== resynced.size) {
+    throw new TypeError(
+      'Promoted session re-syncs must cover exactly the candidate re-synced selections, each once.'
+    );
+  }
+}
+
 export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   candidate: unknown;
   proposal: unknown;
@@ -1121,6 +1322,7 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   const expectedCoverage = reviewedDraftCoverage(content, proposal);
   assertPromotionTransactionDates(content, proposal);
   assertPromotionDraftCoverage(content, expectedCoverage);
+  assertPromotionResyncCoverage(content, proposal);
   const scope = aflTradePromotionWriteScope(content);
   if (
     scope.deferral.deferredIssueCount > 0 &&
@@ -1138,7 +1340,7 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
     proposalId: proposal.proposalId,
     transactionCount: scope.transactions.length,
     transferCount: scope.transfers.length,
-    draftSelectionCount: scope.draftSelections.length,
+    draftSelectionCount: scope.draftSelections.length + scope.resyncedSelections.length,
     pickCustodyCount: scope.pickCustody.length,
     pickRealizationCount: scope.pickLineage.length,
     pickLineageDeferral:
@@ -1151,6 +1353,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
             ...(scope.promotedDraftCount === 0
               ? {}
               : { promotedDraftCount: scope.promotedDraftCount }),
+            ...(scope.resyncedSelectionCount === 0
+              ? {}
+              : { resyncedSelectionCount: scope.resyncedSelectionCount }),
             ...(scope.skippedRealizationCount === 0
               ? {}
               : { skippedRealizationCount: scope.skippedRealizationCount }),
@@ -1163,6 +1368,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
             ...(scope.deferredCustodyCount === 0
               ? {}
               : { deferredCustodyCount: scope.deferredCustodyCount }),
+            ...(scope.promotedCustodyCount === 0
+              ? {}
+              : { promotedCustodyCount: scope.promotedCustodyCount }),
           },
   };
 }

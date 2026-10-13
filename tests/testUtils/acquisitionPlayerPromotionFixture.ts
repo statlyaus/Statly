@@ -12,6 +12,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
+  aflTradePromotedSessionResyncCoverage,
   createAflTradeExternalCanonicalPromotionProposal,
   AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
 } from '@/server/aflTradeIntelligence/source/externalCanonicalPromotionContracts';
@@ -43,6 +44,12 @@ import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/se
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
 import { AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
 import { PostgresAflTradeReconciliationScopeDecisionRepository } from '@/server/aflTradeIntelligence/source/postgresReconciliationScopeDecisionRepository';
+import { PostgresAflTradePromotedDraftSelectionReader } from '@/server/aflTradeIntelligence/source/postgresPromotedDraftSelectionReader';
+import {
+  aflTradePromotedCustodyIds,
+  aflTradePromotedDraftState,
+  aflTradePromotedTransactions,
+} from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
 
 // Synthetic source parents only. Candidate, review and canonical promotion use public owners.
 export async function createSyntheticAcquisitionPlayerPromotion(
@@ -106,6 +113,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      */
     yearPageDraftAlreadyPromoted?: boolean;
     /**
+     * An identity repair re-reviews the year page's draftee before this candidate is built (#853):
+     * a new revision of the draftee's subject names this player, inserted when it does not exist
+     * (the AFL Tables twin of a Draftguru-created draftee), or the same player for a same-target
+     * re-review. Needs `yearPageDraftAlreadyPromoted`; with `resolvePromotedRecords` the candidate
+     * then records the selection as re-synced when the player changed.
+     */
+    yearPageDraftRetarget?: { playerId: string; playerName: string };
+    /**
      * The trade is already current canonical: an earlier promotion in the same schema with the same
      * `providerEventId` and `nativePlayerId` promoted it with every transfer (statlyaus/Statly#869).
      * The candidate records it under `pickLineageDeferral.promotedTransactions` and leaves it, and
@@ -127,6 +142,44 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * on the receipt as custody-defined. Needs `pickSideIssues`.
      */
     custodyDefinedPick?: boolean | 'deferred';
+    /**
+     * The reciprocal future pick is resolved under the pick-side profile (statlyaus/Statly#853): a
+     * usable custody observation, a usable transfer and no lineage issue, so only the year page stays
+     * pick-side. Its custody row is the one a plain promotion of the same trade writes.
+     */
+    reciprocalFuturePickResolved?: boolean;
+    /**
+     * The reciprocal future pick's transfer carries a different pick id than the one an earlier
+     * promotion of the same trade gave its asset, as the identity rules re-key a promoted pick
+     * (#853). Its custody row keeps the earlier id. Needs `reciprocalFuturePickResolved`.
+     */
+    reciprocalFuturePickRekeyed?: boolean;
+    /**
+     * The reciprocal future pick's custody row comes from a re-captured page: the same observation
+     * (pick, time, holder and facts) under a new custody id (#853). Needs
+     * `reciprocalFuturePickResolved`.
+     */
+    reciprocalFuturePickCustodyRecaptured?: boolean;
+    /**
+     * The candidate records the reciprocal future pick's custody as already promoted
+     * (`pickLineageDeferral.promotedCustodyIds`) whether or not it is. Needs
+     * `reciprocalFuturePickResolved`.
+     */
+    custodyAlreadyPromoted?: boolean;
+    /**
+     * Already-promoted trades and custody are resolved as preparation resolves them: the promoted
+     * draft-selection reader's current canonical trades and custody, compared by the same rules,
+     * replace `transactionAlreadyPromoted`'s and `custodyAlreadyPromoted`'s unconditional listing
+     * (#853). Needs `pickSideIssues: 'deferred'`.
+     */
+    resolvePromotedRecords?: boolean;
+    /**
+     * An identity repair re-targets the player (#853): this promotion's identity decision, the next
+     * revision of the same native player's subject, names another canonical player (the AFL Tables
+     * twin of a Draftguru-created player), which the fixture inserts. Needs `existingTargets`, whose
+     * clubs must exist; its player is the one the earlier promotion named.
+     */
+    retargetedPlayer?: { playerId: string; playerName: string };
     environment?: 'test_fixture' | 'non_production';
     existingTargets?: {
       playerId: string;
@@ -184,12 +237,34 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     throw new Error('An unreviewed original club is a pick-side issue profile.');
   if (options.yearPageDraftAlreadyPromoted && !options.pickSideIssues)
     throw new Error('An already-promoted year-page draft is a pick-side issue profile.');
+  if (options.yearPageDraftRetarget && !options.yearPageDraftAlreadyPromoted)
+    throw new Error('A re-reviewed year-page draftee re-targets an already-promoted draft.');
   if (options.transactionAlreadyPromoted && (!options.pickSideIssues || options.lifecycle))
     throw new Error('An already-promoted trade is a pick-side issue profile without a lifecycle.');
   if (options.deferredCustody && !options.pickSideIssues)
     throw new Error('Deferred custody is a pick-side issue profile.');
   if (options.custodyDefinedPick && !options.pickSideIssues)
     throw new Error('A custody-defined pick is a pick-side issue profile.');
+  if (
+    options.reciprocalFuturePickResolved &&
+    (!options.pickSideIssues ||
+      options.deferredCustody ||
+      options.reciprocalFuturePickOriginalClubUnresolved)
+  )
+    throw new Error('A resolved reciprocal pick is a pick-side profile with usable custody.');
+  if (
+    (options.reciprocalFuturePickRekeyed ||
+      options.custodyAlreadyPromoted ||
+      options.reciprocalFuturePickCustodyRecaptured) &&
+    !options.reciprocalFuturePickResolved
+  )
+    throw new Error(
+      'A re-keyed, re-captured or already-promoted reciprocal pick needs it resolved.'
+    );
+  if (options.resolvePromotedRecords && options.pickSideIssues !== 'deferred')
+    throw new Error('Resolving already-promoted records needs the deferral.');
+  if (options.retargetedPlayer && !options.existingTargets)
+    throw new Error('A re-targeted player re-targets the subject an earlier promotion resolved.');
   if (options.official2017CombinedDraft && options.officialCombinedDraftYear)
     throw new Error('Choose one reviewed Official combined-draft profile.');
   const officialCombinedDraftYear =
@@ -334,6 +409,8 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     pickId: reciprocalFuturePickId,
     observedAt: `${seasonYear}-10-15T00:00:00.000Z`,
     currentClubId: targets.fromClubId,
+    // A re-captured page states the same observation as new evidence, so a new custody id (#853).
+    ...(options.reciprocalFuturePickCustodyRecaptured ? { recapturedIn: fixtureNamespace } : {}),
   });
   const numberedPickId = createAflTradeContentAddress('draft-pick', {
     fixtureNamespace,
@@ -1263,7 +1340,14 @@ export async function createSyntheticAcquisitionPlayerPromotion(
       workItem.content.subject.content.identityScope.nativeId === nativePlayerId
   )?.workItem;
   if (!workItem) throw new Error('Missing exact synthetic player identity work item.');
-  const playerId = targets.playerId;
+  const playerId = options.retargetedPlayer?.playerId ?? targets.playerId;
+  const playerName = options.retargetedPlayer?.playerName ?? targets.playerName;
+  if (options.retargetedPlayer) {
+    await outcomesPool.query(
+      `INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')`,
+      [playerId, playerName]
+    );
+  }
   if (!options.existingTargets) {
     await outcomesPool.query(
       `INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')`,
@@ -1291,7 +1375,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     );
     if (
       player.rows.length !== 1 ||
-      player.rows[0].display_name !== targets.playerName ||
+      player.rows[0].display_name !== playerName ||
       player.rows[0].status !== 'approved' ||
       clubs.rows.length !== 2 ||
       !clubs.rows.every(
@@ -1328,7 +1412,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
       entityKind: 'player',
       canonicalId: playerId,
-      recordedLabel: targets.playerName,
+      recordedLabel: playerName,
     }),
     rationale: 'Synthetic acquisition identity review',
     authorityEvidenceId,
@@ -2321,9 +2405,51 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         throw new Error(
           `The year page's draftee ${claim.player.recordedName} has no current resolution; promote the draft sessions first.`
         );
-      yearPageResolutions.set(claim.player.nativeId ?? '', resolution.content.canonicalId);
-      if (!allResolutions.some((value) => value.resolutionId === resolution.resolutionId))
-        allResolutions.push(resolution);
+      let chosen = resolution;
+      if (options.yearPageDraftRetarget) {
+        // An identity repair (#853): the next revision of the draftee's subject names the target.
+        const retarget = options.yearPageDraftRetarget;
+        await outcomesPool.query(
+          `INSERT INTO outcome_player(player_id,display_name,status) VALUES($1,$2,'approved')
+           ON CONFLICT (player_id) DO NOTHING`,
+          [retarget.playerId, retarget.playerName]
+        );
+        const item = reviewPackage.content.items.find(
+          ({ workItem }) =>
+            workItem.content.subject.content.entityKind === 'player' &&
+            workItem.content.subject.content.identityScope.kind === 'provider_native_id' &&
+            workItem.content.subject.content.identityScope.nativeId === claim.player.nativeId
+        )?.workItem;
+        if (!item) throw new Error('Missing the year-page draftee identity work item.');
+        const decision = createAflTradeExternalIdentityReviewDecision({
+          ...identityDecision.content,
+          ...(await nextIdentityRevision(item.content.subject.subjectId)),
+          subject: item.content.subject,
+          workItemId: item.workItemId,
+          workItemSha256: item.workItemId.split(':')[1]!,
+          workItem: item,
+          canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
+            entityKind: 'player',
+            canonicalId: retarget.playerId,
+            recordedLabel: retarget.playerName,
+          }),
+          rationale: 'Synthetic identity repair of a promoted draftee',
+          decidedAt: await databaseNow(),
+        });
+        await identities.persistDecision({ reviewPackage, decision });
+        const repaired = (await identities.loadCurrentResolutions(reviewPackage)).find(
+          (value) =>
+            value.content.reviewDecisionId === decision.decisionId &&
+            value.content.canonicalId === retarget.playerId
+        );
+        if (!repaired) throw new Error('The re-reviewed draftee identity did not become current.');
+        chosen = repaired;
+        // The candidate is reconciled no earlier than the decision it relies on.
+        reviewedAt = await databaseNow();
+      }
+      yearPageResolutions.set(claim.player.nativeId ?? '', chosen.content.canonicalId);
+      if (!allResolutions.some((value) => value.resolutionId === chosen.resolutionId))
+        allResolutions.push(chosen);
     }
   }
   const reciprocalPickEvidenceIds = playerBatch.batch.content.evidence
@@ -2343,18 +2469,36 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         }),
         originalClubId: null,
       }
-    : { pickId: reciprocalFuturePickId, originalClubId: targets.toClubId };
+    : {
+        // The identity rules re-key the entitlement (#853); its custody keeps the promoted id.
+        pickId: options.reciprocalFuturePickRekeyed
+          ? createAflTradeContentAddress('draft-pick', {
+              draftYear: seasonYear + (options.reciprocalFuturePickYearOffset ?? 1),
+              draftType: 'national',
+              roundNumber: 1,
+              originalClubId: targets.toClubId,
+              repairedIdentity: true,
+            })
+          : reciprocalFuturePickId,
+        originalClubId: targets.toClubId,
+      };
   const pickSideIssues = (
     pickSide === null
       ? []
       : [
-          {
-            code: 'lineage_unresolved' as const,
-            severity: pickSideSeverity,
-            subjectKey: `lineage:${reciprocalFuturePickTransferId}`,
-            detail: 'The transferred pick entitlement is not uniquely resolved to stable custody.',
-            evidenceIds: reciprocalPickEvidenceIds,
-          },
+          // A resolved reciprocal pick (#853) has its custody, so its lineage is not at issue.
+          ...(options.reciprocalFuturePickResolved
+            ? []
+            : [
+                {
+                  code: 'lineage_unresolved' as const,
+                  severity: pickSideSeverity,
+                  subjectKey: `lineage:${reciprocalFuturePickTransferId}`,
+                  detail:
+                    'The transferred pick entitlement is not uniquely resolved to stable custody.',
+                  evidenceIds: reciprocalPickEvidenceIds,
+                },
+              ]),
           // A deferred numbered pick: both transfers carry a deferred lineage issue, so the pick's
           // custody observation is not written while it still names the slot the pick became.
           ...(options.custodyDefinedPick === 'deferred'
@@ -2490,6 +2634,9 @@ export async function createSyntheticAcquisitionPlayerPromotion(
             ...(options.deferredCustody
               ? { deferredCustodyIds: [reciprocalFuturePickCustodyId] }
               : {}),
+            ...(options.custodyAlreadyPromoted
+              ? { promotedCustodyIds: [reciprocalFuturePickCustodyId] }
+              : {}),
           },
         }),
     identityResolutionIds: allResolutions.map((value) => value.resolutionId).sort(),
@@ -2609,7 +2756,10 @@ export async function createSyntheticAcquisitionPlayerPromotion(
                 originalClubId: reciprocalFuturePickAsset.originalClubId,
                 recordedLabel: null,
               },
-              status: pickSide === null ? ('single_source' as const) : ('unresolved' as const),
+              status:
+                pickSide === null || options.reciprocalFuturePickResolved
+                  ? ('single_source' as const)
+                  : ('unresolved' as const),
               evidenceIds: playerBatch.batch.content.evidence
                 .filter(
                   (row) =>
@@ -2720,7 +2870,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
           ]
         : []),
       ...(options.reciprocalFuturePickYearOffset === undefined ||
-      (pickSide !== null && !options.deferredCustody)
+      (pickSide !== null && !options.deferredCustody && !options.reciprocalFuturePickResolved)
         ? []
         : [
             {
@@ -2752,6 +2902,50 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     reconciledAt: reviewedAt,
     publicationEligible: false as const,
   };
+  // Already-promoted drafts, trades and custody as preparation resolves them (#853): the reader's
+  // current canonical state compared by the same rules, in place of the unconditional listing.
+  async function resolvedCandidateContent() {
+    if (!options.resolvePromotedRecords) return syntheticCandidateContent;
+    const reader = new PostgresAflTradePromotedDraftSelectionReader(sql);
+    const draftState = aflTradePromotedDraftState(
+      syntheticCandidateContent.draftSelections,
+      await reader.loadCurrentCanonicalSelections('AFLM')
+    );
+    const promotedTransactions = aflTradePromotedTransactions(
+      syntheticCandidateContent.transactions,
+      syntheticCandidateContent.transfers,
+      await reader.loadCurrentCanonicalTransactions('AFLM')
+    );
+    const promotedCustodyIds = aflTradePromotedCustodyIds(
+      syntheticCandidateContent.pickCustody,
+      await reader.loadCurrentCanonicalPickCustody('AFLM')
+    );
+    const {
+      promotedDrafts: _listedDrafts,
+      promotedTransactions: _listedTransactions,
+      promotedCustodyIds: _listedCustody,
+      ...deferral
+    } = syntheticCandidateContent.pickLineageDeferral as {
+      decisionId: string;
+      promotedDrafts?: unknown;
+      promotedTransactions?: string[];
+      promotedCustodyIds?: string[];
+    };
+    return {
+      ...syntheticCandidateContent,
+      pickLineageDeferral: {
+        ...deferral,
+        ...(draftState.promotedDrafts.length === 0
+          ? {}
+          : { promotedDrafts: draftState.promotedDrafts }),
+        ...(draftState.resyncedSelectionIds.length === 0
+          ? {}
+          : { resyncedSelectionIds: draftState.resyncedSelectionIds }),
+        ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
+        ...(promotedCustodyIds.length === 0 ? {} : { promotedCustodyIds }),
+      },
+    };
+  }
   const candidate = reviewedOfficialCombinedDraft
     ? reconcileAflTradeExternalEvidence({
         environment,
@@ -2761,7 +2955,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         identityResolutions: allResolutions,
         reconciledAt: reviewedAt,
       })
-    : createAflTradeExternalReconciliationCandidate(syntheticCandidateContent);
+    : createAflTradeExternalReconciliationCandidate(await resolvedCandidateContent());
   if (reviewedOfficialCombinedDraft && candidate.content.issues.length !== 0) {
     throw new Error(
       `Official ${seasonYear} public reconciliation failed: ${candidate.content.issues
@@ -2836,7 +3030,17 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         : createAflTradeExternalCanonicalPromotionProposal({
             ...proposalInput,
             schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
-            draftEventCoverage: [],
+            // Re-synced draftees (#853) are re-promoted into the session version they are current
+            // on, read from canonical state as the review service reads it.
+            draftEventCoverage: aflTradePromotedSessionResyncCoverage(
+              candidate.content,
+              await new PostgresAflTradeExternalCanonicalPromotionReviewRepository(
+                sql
+              ).loadPromotedSessionResyncs({
+                competition: 'AFLM',
+                selectionIds: candidate.content.pickLineageDeferral?.resyncedSelectionIds ?? [],
+              })
+            ),
           });
   const approvalDecisionId = await seedPromotionAuthority(candidate.candidateId, proposal);
   const receipt = await new PostgresAflTradeExternalCanonicalPromotionRepository(sql).promote({

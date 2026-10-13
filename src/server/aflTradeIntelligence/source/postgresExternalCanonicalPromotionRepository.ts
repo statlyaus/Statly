@@ -31,7 +31,9 @@ import {
   aflTradeExternalCanonicalPromotionApprovalEvidenceSchema,
   authenticateAflTradeExternalCanonicalPromotionProposal,
   createAflTradeExternalCanonicalPromotionRequest,
+  isAflTradePromotedSessionResyncCoverage,
   type AflTradeExternalCanonicalPromotionProposal,
+  type AflTradePromotedSessionResyncCoverage,
   type AflTradePromotionPickLineageDeferralReceipt,
 } from './externalCanonicalPromotionContracts';
 import {
@@ -264,7 +266,9 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
  * "Pick 46" and a later trade's "Pick 56" for the same entitlement) is defined from its one usable
  * custody observation, the slot it actually became, and listed as custody-defined; each asset keeps
  * its own trade-time number as its recorded label. With no such single custody row, or more than
- * one, the conflict throws as before. Without a deferral nothing changes.
+ * one, the pick is defined without a number: since the pick-identity rules (migration 0273) a pick
+ * id names one pick whatever its pages numbered it, so differing numbers are renumbering, not two
+ * picks, and no number is the pick's own. Without a deferral nothing changes.
  */
 export function resolveWrittenPickDefinitions(
   content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
@@ -279,15 +283,24 @@ export function resolveWrittenPickDefinitions(
 ): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
   const definitions = new Map<string, PickDefinition>();
   const custodyDefined = new Set<string>();
+  const renumbered = new Set<string>();
+  const reRounded = new Set<string>();
   if (options.deferred) {
     const numbersByPick = new Map<string, Set<number>>();
+    const roundsByPick = new Map<string, Set<number>>();
     for (const transfer of content.transfers) {
-      if (transfer.asset.kind !== 'pick_entitlement' || transfer.asset.nominalPick === null)
-        continue;
+      if (transfer.asset.kind !== 'pick_entitlement') continue;
+      if (transfer.asset.nominalRound !== null) {
+        const rounds = roundsByPick.get(transfer.asset.pickId) ?? new Set<number>();
+        rounds.add(transfer.asset.nominalRound);
+        roundsByPick.set(transfer.asset.pickId, rounds);
+      }
+      if (transfer.asset.nominalPick === null) continue;
       const numbers = numbersByPick.get(transfer.asset.pickId) ?? new Set<number>();
       numbers.add(transfer.asset.nominalPick);
       numbersByPick.set(transfer.asset.pickId, numbers);
     }
+    for (const [pickId, rounds] of roundsByPick) if (rounds.size > 1) reRounded.add(pickId);
     for (const [pickId, numbers] of numbersByPick) {
       if (numbers.size < 2) continue;
       const usable = options.definitionCustody.filter(
@@ -295,7 +308,10 @@ export function resolveWrittenPickDefinitions(
           custody.pickId === pickId &&
           (custody.status === 'single_source' || custody.status === 'corroborated')
       );
-      if (usable.length !== 1) continue;
+      if (usable.length !== 1) {
+        renumbered.add(pickId);
+        continue;
+      }
       const custody = usable[0]!;
       definitions.set(pickId, {
         pickId,
@@ -316,8 +332,9 @@ export function resolveWrittenPickDefinitions(
       pickId: transfer.asset.pickId,
       draftYear: transfer.asset.draftYear,
       draftType: transfer.asset.draftType,
-      nominalRound: transfer.asset.nominalRound,
-      nominalPick: transfer.asset.nominalPick,
+      // A renumbered pick keeps each number (and a round its pages disagree on) on its own asset.
+      nominalRound: reRounded.has(transfer.asset.pickId) ? null : transfer.asset.nominalRound,
+      nominalPick: renumbered.has(transfer.asset.pickId) ? null : transfer.asset.nominalPick,
       originalClubId: transfer.asset.originalClubId,
     });
   });
@@ -597,9 +614,98 @@ async function requireCurrentPromotedDrafts(
 }
 
 /**
+ * Every selection the candidate records as re-synced (#853) must still be current canonical once,
+ * at its number, under another player, with every other candidate selection of its draft current
+ * under its own player (the candidate insert test, migration 0278). Checked only before a first
+ * write: once the re-sync is written the selection is current under the candidate's player.
+ */
+async function requireCurrentResyncedSelections(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.resyncedSelectionIds ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_resynced_selections_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A selection the candidate re-syncs is no longer current canonical under another player.'
+    );
+  }
+}
+
+/**
+ * The slots of a draft event root that a new version must leave current: every selection on any of
+ * its versions at a number the new version does not carry, and every player asset whose player is
+ * neither one the new version carries nor one an earlier version recorded at a carried number (the
+ * player being replaced), each as long as it is current under asset-scoped supersession (migration
+ * 0256). Read before and after the new version is written; whatever was current before must still
+ * be. A session re-sync (#853) changes fewer than half of the other slots, so it is additive and
+ * retires only what it carries; anything more would silently retire other draftees' selections,
+ * assets and the spells that start at them. Only the re-sync path uses this relaxed rule: an
+ * ordinary draft write must still carry every recorded slot of its predecessor (#721).
+ */
+async function currentOtherDraftSlots(
+  transaction: AflOutcomeSqlTransaction,
+  eventId: string,
+  carriedNumbers: readonly number[],
+  carriedPlayers: readonly string[]
+): Promise<string[]> {
+  const result = await transaction.query<{ slot: string }>(
+    `SELECT 'selection:'||selection.event_version_id||':'||selection.selection_number AS slot
+       FROM outcome_draft_selection selection
+       JOIN outcome_event_version version ON version.event_version_id=selection.event_version_id
+      WHERE version.event_id=$1 AND NOT (selection.selection_number=ANY($2::integer[]))
+        AND NOT outcome_event_version_superseded_for(
+              selection.event_version_id,selection.player_id,selection.selection_number)
+     UNION ALL
+     SELECT 'asset:'||asset.event_version_id||':'||asset.player_id
+       FROM outcome_event_asset asset
+       JOIN outcome_event_version version ON version.event_version_id=asset.event_version_id
+      WHERE version.event_id=$1 AND asset.player_id IS NOT NULL
+        AND NOT (asset.player_id=ANY($3::text[]))
+        AND NOT EXISTS (SELECT 1 FROM outcome_draft_selection replaced
+                          JOIN outcome_event_version replaced_version
+                            ON replaced_version.event_version_id=replaced.event_version_id
+                         WHERE replaced_version.event_id=$1
+                           AND replaced.selection_number=ANY($2::integer[])
+                           AND replaced.player_id=asset.player_id)
+        AND NOT outcome_event_version_superseded_for(asset.event_version_id,asset.player_id,NULL)
+      ORDER BY 1`,
+    [eventId, [...carriedNumbers], [...carriedPlayers]]
+  );
+  return result.rows.map(({ slot }) => slot);
+}
+
+/** Refuses a new draft version that retired a slot it does not carry (see currentOtherDraftSlots). */
+async function requireOtherDraftSlotsCurrent(
+  transaction: AflOutcomeSqlTransaction,
+  eventId: string,
+  carriedNumbers: readonly number[],
+  carriedPlayers: readonly string[],
+  before: readonly string[]
+): Promise<void> {
+  const after = new Set(
+    await currentOtherDraftSlots(transaction, eventId, carriedNumbers, carriedPlayers)
+  );
+  const retired = before.filter((slot) => !after.has(slot));
+  if (retired.length > 0) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'IMMUTABLE_CONFLICT',
+      `Draft event ${eventId}: the new version would retire ${retired.length} recorded slot(s) it does not carry. A later version must carry every slot of the night or change fewer than half of the other slots (migration 0256).`
+    );
+  }
+}
+
+/**
  * A transaction the candidate records as already promoted must still be current canonical when the
  * promotion runs: its trade event current under the same stable key from a finalized promotion and
- * every candidate transfer a promoted asset on that version (the candidate insert test, 0267).
+ * every candidate transfer a promoted asset on that version, under the candidate's pick id for a
+ * pick transfer and the candidate's player for a player transfer (the candidate insert test, 0267,
+ * with pick ids since 0274 and players since 0277).
  */
 async function requireCurrentPromotedTransactions(
   transaction: AflOutcomeSqlTransaction,
@@ -638,6 +744,32 @@ async function requireDeferredCustodyRows(
     throw new AflTradeExternalCanonicalPromotionError(
       'CANDIDATE_UNAVAILABLE',
       'A custody observation the candidate records as deferred is not an unusable candidate custody row.'
+    );
+  }
+}
+
+/**
+ * Every custody row the candidate records as already promoted must still record an observation
+ * canonical under a finalized promotion: the same pick, observation time and holder (the canonical
+ * unique key) with the same draft, recorded round and pick and original club, and no predecessor on
+ * either side (the candidate insert test, 0274). Custody ids may differ, since a re-captured page
+ * gives the same observation new evidence; the promotion writes nothing for it, so it never collides
+ * with the canonical row.
+ */
+async function requireCurrentPromotedCustody(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.promotedCustodyIds ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_promoted_custody_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      "A custody observation the candidate leaves to an earlier promotion is no longer canonical with the candidate row's facts."
     );
   }
 }
@@ -1270,10 +1402,12 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await requireCurrentPromotedDrafts(transaction, candidate);
       await requireCurrentPromotedTransactions(transaction, candidate);
       await requireDeferredCustodyRows(transaction, candidate);
+      await requireCurrentPromotedCustody(transaction, candidate);
       // What a deferred candidate leaves unwritten: custody of deferred picks, realizations into
       // them, the selections of a draft holding a deferred selection, a draft that is already
-      // current canonical with the realizations into it, and a transaction that is already current
-      // canonical with its transfers and the realizations into them (#869).
+      // current canonical with the realizations into it, a transaction that is already current
+      // canonical with its transfers and the realizations into them (#869), and custody already
+      // canonical with the candidate's facts (#853).
       const scope = aflTradePromotionWriteScope(candidate.content);
       if (
         'draftEventCoverage' in approval.proposal.content &&
@@ -1443,6 +1577,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         };
       }
 
+      // Only before a first write: a written re-sync makes its selection current under the
+      // candidate's own player, so a replay above never re-checks it.
+      await requireCurrentResyncedSelections(transaction, candidate);
       const content = candidate.content;
       const reviewedTransactionDateById = new Map(
         approval.proposal.content.transactionDateCoverage.map((coverage) => [
@@ -1466,13 +1603,16 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         content
       );
       const evidence = await loadEvidenceSources(transaction, candidate.candidateId);
-      const draftEventIds = approval.proposal.content.draftEventCoverage.map((coverage) =>
-        createAflTradeContentAddress('draft-event', {
-          competition: content.competition,
-          draftYear: coverage.draftYear,
-          draftType: coverage.draftType,
-        })
-      );
+      // A session re-sync (#853) locks the root of the version it supersedes when it writes.
+      const draftEventIds = approval.proposal.content.draftEventCoverage
+        .filter((coverage) => !isAflTradePromotedSessionResyncCoverage(coverage))
+        .map((coverage) =>
+          createAflTradeContentAddress('draft-event', {
+            competition: content.competition,
+            draftYear: coverage.draftYear,
+            draftType: coverage.draftType,
+          })
+        );
       await lockKeys(transaction, [
         ...content.transactions.map(({ transactionId }) => `outcome-event:${transactionId}`),
         ...draftEventIds.map((eventId) => `outcome-event:${eventId}`),
@@ -1935,8 +2075,18 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       const canonicalSelectionBySource = new Map<string, string>();
       type DraftCoverage = (typeof approval.proposal.content.draftEventCoverage)[number];
+      type DraftWriteCoverage = Exclude<DraftCoverage, AflTradePromotedSessionResyncCoverage>;
+      type DraftSelection = (typeof content.draftSelections)[number];
+      // Coverage that writes a draft night, and session re-syncs that re-promote changed slots (#853).
+      const draftWriteCoverage = approval.proposal.content.draftEventCoverage.filter(
+        (coverage): coverage is DraftWriteCoverage =>
+          !isAflTradePromotedSessionResyncCoverage(coverage)
+      );
+      const resyncCoverage = approval.proposal.content.draftEventCoverage.filter(
+        isAflTradePromotedSessionResyncCoverage
+      );
       function draftCoverageEvidence(
-        selections: typeof content.draftSelections,
+        selections: readonly DraftSelection[],
         coverage: DraftCoverage
       ): string[] {
         return sortedUnique([
@@ -1944,8 +2094,115 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           ...('evidenceIds' in coverage ? coverage.evidenceIds : []),
         ]);
       }
+      async function persistSelectingClubs(
+        selections: readonly DraftSelection[],
+        eventVersionId: string
+      ): Promise<void> {
+        const selectingClubs = sortedUnique(
+          selections.flatMap(({ clubId }) => (clubId ? [clubId] : []))
+        );
+        for (const [ordinal, clubId] of selectingClubs.entries()) {
+          const selection = selections.find((value) => value.clubId === clubId);
+          if (!selection) throw new TypeError('Draft party source selection is missing.');
+          const row = await sourceRow({
+            key: `selection:${selection.selectionId}`,
+            recordKind: 'external_draft_selection',
+            sourceRecordId: selection.selectionId,
+            seasonYear: selection.draftYear,
+            evidenceIds: selection.evidenceIds,
+            record: selection,
+          });
+          await transaction.query(
+            `INSERT INTO outcome_event_party
+            (event_version_id,club_id,source_import_row_id,role,ordinal)
+           VALUES ($1,$2,$3,'selecting_club',$4)`,
+            [eventVersionId, clubId, row.importRowId, ordinal + 1]
+          );
+        }
+      }
+      async function persistSelectedPlayer(
+        selection: DraftSelection,
+        eventVersionId: string
+      ): Promise<void> {
+        if (!selection.playerId || !selection.clubId) {
+          throw new AflTradeExternalCanonicalPromotionError(
+            'CANDIDATE_UNAVAILABLE',
+            `Selection ${selection.selectionId} has incomplete identities.`
+          );
+        }
+        const row = await sourceRow({
+          key: `selection:${selection.selectionId}`,
+          recordKind: 'external_draft_selection',
+          sourceRecordId: selection.selectionId,
+          seasonYear: selection.draftYear,
+          evidenceIds: selection.evidenceIds,
+          record: selection,
+        });
+        const identityDecision = identityDecisionByPlayer.get(selection.playerId);
+        if (!identityDecision) throw new TypeError('Selection identity decision is missing.');
+        const canonicalSelectionId = createAflTradeContentAddress('draft-selection', {
+          promotionId: request.promotionId,
+          eventVersionId,
+          sourceSelectionId: selection.selectionId,
+        });
+        await transaction.query(
+          `INSERT INTO outcome_draft_selection
+          (selection_id,event_version_id,selection_number,pick_id,player_id,player_identity_id,
+           external_identity_decision_id,club_id,source_import_row_id,status)
+         VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,'approved'::"OutcomeRecordStatus")`,
+          [
+            canonicalSelectionId,
+            eventVersionId,
+            selection.selectionNumber,
+            selection.pickId,
+            selection.playerId,
+            identityDecision,
+            selection.clubId,
+            row.importRowId,
+          ]
+        );
+        const playerAssetVersionId = createAflTradeContentAddress('event-asset-version', {
+          promotionId: request.promotionId,
+          eventVersionId,
+          sourceSelectionId: selection.selectionId,
+          kind: 'selected_player',
+        });
+        await transaction.query(
+          `INSERT INTO outcome_event_asset
+          (asset_version_id,event_version_id,asset_key,kind,player_id,player_identity_id,
+           external_identity_decision_id,pick_id,from_club_id,to_club_id,source_import_row_id,
+           raw_description,status)
+         VALUES ($1,$2,$3,'player'::"OutcomeAssetKind",$4,NULL,$5,NULL,NULL,$6,$7,$8,
+                 'approved'::"OutcomeRecordStatus")`,
+          [
+            playerAssetVersionId,
+            eventVersionId,
+            `selected-player:${selection.selectionId}`,
+            selection.playerId,
+            identityDecision,
+            selection.clubId,
+            row.importRowId,
+            `Selected with pick ${selection.selectionNumber}`,
+          ]
+        );
+        canonicalSelectionBySource.set(selection.selectionId, canonicalSelectionId);
+        promotionRecords.push(
+          {
+            recordKind: 'draft_selection',
+            sourceRecordId: selection.selectionId,
+            canonicalRecordId: canonicalSelectionId,
+            sourceRow: row,
+          },
+          {
+            recordKind: 'draft_player_asset',
+            sourceRecordId: selection.selectionId,
+            canonicalRecordId: playerAssetVersionId,
+            sourceRow: row,
+          }
+        );
+      }
       async function persistDraftEventsAndSelections(): Promise<void> {
-        for (const coverage of approval.proposal.content.draftEventCoverage) {
+        for (const coverage of draftWriteCoverage) {
           const selections = content.draftSelections
             .filter(
               ({ draftYear, draftType, selectionId }) =>
@@ -1985,7 +2242,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           }
           if (predecessor) {
             // A new version replaces the whole session, so it must keep every recorded selection
-            // slot. Reviewed corrections may change who holds a slot, but never drop one.
+            // slot (#721). Reviewed corrections may change who holds a slot, but never drop one.
+            // Only a session re-sync (#853, below) may carry fewer slots, and only additively.
             const proposed = new Set(selections.map(({ selectionNumber }) => selectionNumber));
             const recorded = await transaction.query<{ selection_number: number }>(
               `SELECT selection_number FROM outcome_draft_selection WHERE event_version_id=$1`,
@@ -2030,108 +2288,9 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
                 : null,
             ]
           );
-          const selectingClubs = sortedUnique(
-            selections.flatMap(({ clubId }) => (clubId ? [clubId] : []))
-          );
-          for (const [ordinal, clubId] of selectingClubs.entries()) {
-            const selection = selections.find((value) => value.clubId === clubId);
-            if (!selection) throw new TypeError('Draft party source selection is missing.');
-            const row = await sourceRow({
-              key: `selection:${selection.selectionId}`,
-              recordKind: 'external_draft_selection',
-              sourceRecordId: selection.selectionId,
-              seasonYear: selection.draftYear,
-              evidenceIds: selection.evidenceIds,
-              record: selection,
-            });
-            await transaction.query(
-              `INSERT INTO outcome_event_party
-              (event_version_id,club_id,source_import_row_id,role,ordinal)
-             VALUES ($1,$2,$3,'selecting_club',$4)`,
-              [eventVersionId, clubId, row.importRowId, ordinal + 1]
-            );
-          }
-          async function persistSelectedPlayer(
-            selection: (typeof content.draftSelections)[number]
-          ): Promise<void> {
-            if (!selection.playerId || !selection.clubId) {
-              throw new AflTradeExternalCanonicalPromotionError(
-                'CANDIDATE_UNAVAILABLE',
-                `Selection ${selection.selectionId} has incomplete identities.`
-              );
-            }
-            const row = await sourceRow({
-              key: `selection:${selection.selectionId}`,
-              recordKind: 'external_draft_selection',
-              sourceRecordId: selection.selectionId,
-              seasonYear: selection.draftYear,
-              evidenceIds: selection.evidenceIds,
-              record: selection,
-            });
-            const identityDecision = identityDecisionByPlayer.get(selection.playerId);
-            if (!identityDecision) throw new TypeError('Selection identity decision is missing.');
-            const canonicalSelectionId = createAflTradeContentAddress('draft-selection', {
-              promotionId: request.promotionId,
-              eventVersionId,
-              sourceSelectionId: selection.selectionId,
-            });
-            await transaction.query(
-              `INSERT INTO outcome_draft_selection
-              (selection_id,event_version_id,selection_number,pick_id,player_id,player_identity_id,
-               external_identity_decision_id,club_id,source_import_row_id,status)
-             VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,'approved'::"OutcomeRecordStatus")`,
-              [
-                canonicalSelectionId,
-                eventVersionId,
-                selection.selectionNumber,
-                selection.pickId,
-                selection.playerId,
-                identityDecision,
-                selection.clubId,
-                row.importRowId,
-              ]
-            );
-            const playerAssetVersionId = createAflTradeContentAddress('event-asset-version', {
-              promotionId: request.promotionId,
-              eventVersionId,
-              sourceSelectionId: selection.selectionId,
-              kind: 'selected_player',
-            });
-            await transaction.query(
-              `INSERT INTO outcome_event_asset
-              (asset_version_id,event_version_id,asset_key,kind,player_id,player_identity_id,
-               external_identity_decision_id,pick_id,from_club_id,to_club_id,source_import_row_id,
-               raw_description,status)
-             VALUES ($1,$2,$3,'player'::"OutcomeAssetKind",$4,NULL,$5,NULL,NULL,$6,$7,$8,
-                     'approved'::"OutcomeRecordStatus")`,
-              [
-                playerAssetVersionId,
-                eventVersionId,
-                `selected-player:${selection.selectionId}`,
-                selection.playerId,
-                identityDecision,
-                selection.clubId,
-                row.importRowId,
-                `Selected with pick ${selection.selectionNumber}`,
-              ]
-            );
-            canonicalSelectionBySource.set(selection.selectionId, canonicalSelectionId);
-            promotionRecords.push(
-              {
-                recordKind: 'draft_selection',
-                sourceRecordId: selection.selectionId,
-                canonicalRecordId: canonicalSelectionId,
-                sourceRow: row,
-              },
-              {
-                recordKind: 'draft_player_asset',
-                sourceRecordId: selection.selectionId,
-                canonicalRecordId: playerAssetVersionId,
-                sourceRow: row,
-              }
-            );
-          }
-          for (const selection of selections) await persistSelectedPlayer(selection);
+          await persistSelectingClubs(selections, eventVersionId);
+          for (const selection of selections)
+            await persistSelectedPlayer(selection, eventVersionId);
           promotionRecords.push({
             recordKind: 'draft_event',
             sourceRecordId: coverageId,
@@ -2141,6 +2300,180 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         }
       }
       await persistDraftEventsAndSelections();
+
+      /**
+       * Re-promotes the slots whose draftee an identity repair re-targeted (#853): one later version
+       * of the session root each sits on, superseding exactly the version the reviewer approved,
+       * repeating its date, precision and official name, and carrying only the changed slots with
+       * the new player's current identity decision. Additive under migration 0256, so every other
+       * draftee's selection, asset and the spells that start at them stay current.
+       */
+      async function persistPromotedSessionResyncs(): Promise<void> {
+        const resyncedById = new Map(
+          scope.resyncedSelections.map((selection) => [selection.selectionId, selection])
+        );
+        for (const coverage of resyncCoverage) {
+          const selections = coverage.selectionIds
+            .map((selectionId) => {
+              const selection = resyncedById.get(selectionId);
+              if (!selection) throw new TypeError('Re-synced selection is missing.');
+              return selection;
+            })
+            .sort((left, right) => left.selectionNumber - right.selectionNumber);
+          const stored = await transaction.query<{
+            event_id: string;
+            stable_key: string;
+            status: string;
+            kind: string;
+            mechanism: string;
+            event_date: string | null;
+            official_name: string;
+            date_precision: unknown;
+            competition: string;
+            season_year: number;
+          }>(
+            `SELECT version.event_id,root.stable_key,version.status::text AS status,
+                    version.kind::text AS kind,
+                    version.acquisition_mechanism::text AS mechanism,
+                    version.event_date::text AS event_date,version.official_name,
+                    version.date_precision,root.competition,root.season_year
+               FROM outcome_event_version version
+               JOIN outcome_event root ON root.event_id=version.event_id
+              WHERE version.event_version_id=$1`,
+            [coverage.supersedesVersionId]
+          );
+          const superseded = stored.rows[0];
+          if (!superseded) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'CANDIDATE_UNAVAILABLE',
+              `Draft session version ${coverage.supersedesVersionId} does not exist.`
+            );
+          }
+          const eventId = superseded.event_id;
+          // Only a session-keyed root: a re-sync version's draft asset is arrival evidence only
+          // there (outcome_external_promoted_session_resync_version, migration 0278), and a
+          // session-less draft root is no arrival evidence at all.
+          if (!/^external-draft:.*:session:\d+$/.test(superseded.stable_key)) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              `Draft event ${eventId} is not a session-keyed root; a re-sync re-promotes only a session.`
+            );
+          }
+          await lockKeys(transaction, [`outcome-event:${eventId}`]);
+          const current = await currentEventVersion(transaction, eventId);
+          const draftKind = mapDraftKind(coverage.draftType);
+          if (
+            current?.eventVersionId !== coverage.supersedesVersionId ||
+            superseded.status !== 'approved' ||
+            superseded.competition !== content.competition ||
+            Number(superseded.season_year) !== coverage.draftYear ||
+            superseded.kind !== draftKind.eventKind ||
+            superseded.mechanism !== draftKind.mechanism ||
+            superseded.event_date !== coverage.eventDate ||
+            superseded.official_name !== coverage.officialName ||
+            !exactJson(superseded.date_precision ?? null, coverage.datePrecision ?? null)
+          ) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              `Draft session ${eventId} is no longer the current version, or the metadata, the re-sync was approved against.`
+            );
+          }
+          if (current.recordedAt > approval.promotedAt) {
+            throw new AflTradeExternalCanonicalPromotionError(
+              'IMMUTABLE_CONFLICT',
+              'Promotion cannot backdate a draft-session re-sync.'
+            );
+          }
+          // Each slot is current canonical once, on this root, at its number, under another player.
+          const placed = await transaction.query<{
+            selection_id: string;
+            event_id: string;
+            selection_number: number;
+            player_id: string;
+          }>(
+            `SELECT selection_id,event_id,selection_number,player_id
+               FROM outcome_current_canonical_draft_selection_players($1)
+              WHERE selection_id=ANY($2::text[])`,
+            [content.competition, [...coverage.selectionIds]]
+          );
+          for (const selection of selections) {
+            const rows = placed.rows.filter((row) => row.selection_id === selection.selectionId);
+            if (
+              rows.length !== 1 ||
+              rows[0]!.event_id !== eventId ||
+              Number(rows[0]!.selection_number) !== selection.selectionNumber ||
+              rows[0]!.player_id === selection.playerId
+            ) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'CANDIDATE_UNAVAILABLE',
+                `Selection ${selection.selectionId} is no longer current canonical once on draft session ${eventId} under another player.`
+              );
+            }
+          }
+          const carriedNumbers = selections.map(({ selectionNumber }) => selectionNumber);
+          const carriedPlayers = selections.flatMap(({ playerId }) => (playerId ? [playerId] : []));
+          const otherSlots = await currentOtherDraftSlots(
+            transaction,
+            eventId,
+            carriedNumbers,
+            carriedPlayers
+          );
+          const coverageId = createAflTradeContentAddress('draft-event-coverage', coverage);
+          const eventRow = await sourceRow({
+            key: `draft-event:${coverageId}`,
+            recordKind: 'external_draft_event',
+            sourceRecordId: coverageId,
+            seasonYear: coverage.draftYear,
+            evidenceIds: draftCoverageEvidence(selections, coverage),
+            record: coverage,
+          });
+          const version = current.version + 1;
+          const eventVersionId = createAflTradeContentAddress('event-version', {
+            promotionId: request.promotionId,
+            eventId,
+            version,
+            supersedesVersionId: current.eventVersionId,
+            coverage,
+          });
+          await transaction.query(
+            `INSERT INTO outcome_event_version
+            (event_version_id,event_id,version,kind,acquisition_mechanism,event_date,
+             official_name,status,source_import_row_id,supersedes_version_id,recorded_at,date_precision)
+           VALUES ($1,$2,$3,$4::"OutcomeEventKind",$5::"OutcomeAcquisitionMechanism",$6,$7,
+                   'approved'::"OutcomeRecordStatus",$8,$9,$10,$11::jsonb)`,
+            [
+              eventVersionId,
+              eventId,
+              version,
+              draftKind.eventKind,
+              draftKind.mechanism,
+              coverage.eventDate,
+              coverage.officialName,
+              eventRow.importRowId,
+              current.eventVersionId,
+              approval.promotedAt,
+              coverage.datePrecision ? JSON.stringify(coverage.datePrecision) : null,
+            ]
+          );
+          await persistSelectingClubs(selections, eventVersionId);
+          for (const selection of selections)
+            await persistSelectedPlayer(selection, eventVersionId);
+          await requireOtherDraftSlotsCurrent(
+            transaction,
+            eventId,
+            carriedNumbers,
+            carriedPlayers,
+            otherSlots
+          );
+          promotionRecords.push({
+            recordKind: 'draft_event',
+            sourceRecordId: coverageId,
+            canonicalRecordId: eventVersionId,
+            sourceRow: eventRow,
+          });
+        }
+      }
+      await persistPromotedSessionResyncs();
 
       async function persistPickCustody(): Promise<void> {
         for (const record of scope.pickCustody) {

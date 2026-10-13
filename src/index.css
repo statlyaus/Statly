@@ -35,6 +35,8 @@
   --color-result-win-foreground: var(--result-win-foreground);
   --color-result-loss: var(--result-loss);
   --color-result-loss-foreground: var(--result-loss-foreground);
+  --color-status-live: var(--status-live);
+  --color-status-live-foreground: var(--status-live-foreground);
   --color-result-draw: var(--result-draw);
   --color-result-draw-foreground: var(--result-draw-foreground);
   --color-brand-bar: var(--brand-bar);
@@ -115,6 +117,8 @@
   --result-win-foreground: #fff;
   --result-loss: #c81e1e;
   --result-loss-foreground: #fff;
+  --status-live: #c81e1e; /* LIVE is a status, not a loss: same hue, its own token */
+  --status-live-foreground: #fff;
   --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
   --result-draw-foreground: #fff;
   --brand-bar: #0f2a44;
@@ -296,6 +300,8 @@
   --result-win-foreground: #fff;
   --result-loss: #c81e1e;
   --result-loss-foreground: #fff;
+  --status-live: #c81e1e; /* LIVE is a status, not a loss: same hue, its own token */
+  --status-live-foreground: #fff;
   --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
   --result-draw-foreground: #fff;
   --brand-bar: #0b1f33;

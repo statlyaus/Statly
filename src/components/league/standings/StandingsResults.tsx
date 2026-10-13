@@ -62,7 +62,7 @@ export function StandingsResults({
                 <th key={round.round} scope="col" className="px-1 py-2 text-center font-semibold">
                   R{round.round}
                   {round.status === 'LIVE' ? (
-                    <span className="block text-[0.625rem] font-bold uppercase text-result-loss">
+                    <span className="block text-[0.625rem] font-bold uppercase text-status-live">
                       Live
                     </span>
                   ) : round.phase === 'FINALS' ? (
@@ -168,7 +168,7 @@ function ResultCell({
         <span className="text-xs font-bold tabular-nums text-foreground">
           {result.categoriesFor}–{result.categoriesAgainst}
         </span>
-        <span className="text-[0.625rem] font-bold uppercase text-result-loss">Live</span>
+        <span className="text-[0.625rem] font-bold uppercase text-status-live">Live</span>
       </span>
     ) : (
       <span className="text-xs text-muted-foreground">

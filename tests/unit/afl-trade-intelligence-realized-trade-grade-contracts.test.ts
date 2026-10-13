@@ -5,6 +5,7 @@ import {
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
   parseAflTradeRealizedTradeGradeBatch,
+  type AflTradeRealizedGradeRuleVersion,
   type AflTradeRealizedTradeGradeBatchContent,
   type AflTradeRealizedTradeGradeLeg,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeGradeContracts';
@@ -23,6 +24,16 @@ const closed = (seasons: number[]) => ({
   seasonsMissingPav: [],
 });
 const SINGLE = 'single_source_pick_outcome' as const;
+const V1 = 'afl-trade-realized-grade-rule/v1' as const;
+const V3 = 'afl-trade-realized-grade-rule/v3' as const;
+const V4 = 'afl-trade-realized-grade-rule/v4' as const;
+const LIMITATIONS = {
+  [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
+  'afl-trade-realized-grade-rule/v2':
+    'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; not public factual, publication, production or activation authority.',
+  [V3]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; not public factual, publication, production or activation authority.',
+  [V4]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
+} as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
 const player = (
@@ -45,7 +56,12 @@ const player = (
   atTrade: { kind: 'player_trade_season_pav', season, value: 9 },
 });
 
-function trade(transactionId: string, tradeYear: number, legs: Leg[]) {
+function trade(
+  transactionId: string,
+  tradeYear: number,
+  legs: Leg[],
+  ruleVersion: AflTradeRealizedGradeRuleVersion = V1
+) {
   const reasons = [...new Set(legs.flatMap((leg) => leg.reasons))].sort();
   const state = legs.some((leg) => leg.state === 'blocked')
     ? ('blocked' as const)
@@ -57,7 +73,7 @@ function trade(transactionId: string, tradeYear: number, legs: Leg[]) {
     tradeYear,
     state,
     reasons,
-    clubs: expectedAflTradeRealizedTradeGradeClubs(legs),
+    clubs: expectedAflTradeRealizedTradeGradeClubs(legs, ruleVersion),
     legs,
   };
 }
@@ -68,7 +84,9 @@ function trade(transactionId: string, tradeYear: number, legs: Leg[]) {
 // tx-5 / tx-6: Hawthorn receives pick 20 from Melbourne (tx-5), then trades it with a player to St Kilda
 //   for a player worth 40 (tx-6). The pick became a draftee worth 12 there, the player 28: the pick's
 //   share of Hawthorn's return is 12/40 of 40.
-function content(): AflTradeRealizedTradeGradeBatchContent {
+function content(
+  ruleVersion: AflTradeRealizedGradeRuleVersion = V1
+): AflTradeRealizedTradeGradeBatchContent {
   const weight = 12;
   const weightTotal = 40;
   const share = weight / weightTotal;
@@ -160,10 +178,13 @@ function content(): AflTradeRealizedTradeGradeBatchContent {
       player('tr-6b', 'hawthorn', 'st-kilda', 28, 2020, [2021, 2022]),
       player('tr-6c', 'st-kilda', 'hawthorn', 40, 2020, [2021, 2022]),
     ]),
-  ];
+  ].map((row) => ({
+    ...row,
+    clubs: expectedAflTradeRealizedTradeGradeClubs(row.legs, ruleVersion),
+  }));
   return {
     schemaVersion: 'afl-trade-realized-trade-grade-batch/v1',
-    ruleVersion: 'afl-trade-realized-grade-rule/v1',
+    ruleVersion,
     environment: 'non_production',
     valueUnit: 'career_pav',
     inputs: {
@@ -181,8 +202,7 @@ function content(): AflTradeRealizedTradeGradeBatchContent {
     summary: { complete: 1, provisional: 4, blocked: 1, ungraded: 0 },
     publicationEligible: false,
     publicationProhibited: true,
-    limitation:
-      'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
+    limitation: LIMITATIONS[ruleVersion],
   };
 }
 
@@ -193,7 +213,10 @@ const tradeOf = (value: Content, id: string) =>
 function withLeg(value: Content, id: string, index: number, change: (leg: Leg) => Leg) {
   const target = tradeOf(value, id);
   target.legs[index] = change(structuredClone(target.legs[index]!));
-  Object.assign(target, trade(target.transactionId, target.tradeYear, target.legs));
+  Object.assign(
+    target,
+    trade(target.transactionId, target.tradeYear, target.legs, value.ruleVersion)
+  );
   value.summary = {
     complete: value.trades.filter((row) => row.state === 'complete').length,
     provisional: value.trades.filter((row) => row.state === 'provisional').length,
@@ -263,8 +286,8 @@ describe('realized trade grade batch contract', () => {
   });
 
   // St Kilda spends pick 20 on a nominee (tx-6), so Hawthorn's traded-on pick in tx-5 has no weight.
-  const unallocated = () => {
-    const value = withLeg(content(), 'tx-6', 0, (leg) => ({
+  const unallocated = (base = content()) => {
+    const value = withLeg(base, 'tx-6', 0, (leg) => ({
       transferId: leg.transferId,
       assetKind: 'pick',
       sendingClubId: leg.sendingClubId,
@@ -720,5 +743,169 @@ describe('realized trade grade batch contract', () => {
         createAflTradeRealizedTradeGradeBatch({ ...content(), ruleVersion: V2.ruleVersion })
       ).toThrow(/limitation must be the one its rule version states/);
     });
+  });
+
+  describe('rule v3 club-scoped totals', () => {
+    const V2 = {
+      ruleVersion: 'afl-trade-realized-grade-rule/v2' as const,
+      limitation: LIMITATIONS['afl-trade-realized-grade-rule/v2'],
+    };
+    const blockedPlayer = (transferId: string, from: string, to: string): Leg => ({
+      transferId,
+      assetKind: 'player',
+      sendingClubId: from,
+      receivingClubId: to,
+      state: 'blocked',
+      basis: 'unavailable',
+      reasons: ['player_identity_unresolved'],
+      atTrade: { kind: 'unavailable', reason: 'trade_season_pav_missing' },
+    });
+    // Essendon sends St Kilda an unidentified player in tx-6: the trade is blocked, Hawthorn's side is not.
+    const blockedElsewhere = (value: Content) =>
+      withLeg(value, 'tx-6', 3, () => blockedPlayer('tr-6d', 'essendon', 'st-kilda'));
+    const partial = (value: Content) =>
+      withLeg(blockedElsewhere(value), 'tx-5', 0, (leg) => ({
+        ...leg,
+        reasons: [SINGLE, 'traded_on_return_partial'],
+      }));
+
+    it('still parses a sealed v2 batch whose blocked trade nulls every club total', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch({ ...content(), ...V2 });
+      expect(tradeOf(batch.content as Content, 'tx-3').clubs).toEqual([
+        { clubId: 'hawthorn', received: null, givenUp: null, net: null },
+        { clubId: 'richmond', received: null, givenUp: null, net: null },
+      ]);
+      expect(() =>
+        createAflTradeRealizedTradeGradeBatch({
+          ...content(),
+          ruleVersion: V3,
+          limitation: LIMITATIONS[V3],
+        })
+      ).toThrow(/Club totals must be exactly/);
+    });
+
+    it('nulls only the sides a blocked leg enters under v3, and refuses them under v2', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(content(V3));
+      expect(tradeOf(batch.content as Content, 'tx-3').clubs).toEqual([
+        { clubId: 'hawthorn', received: 0, givenUp: null, net: null },
+        { clubId: 'richmond', received: null, givenUp: 0, net: null },
+      ]);
+      expect(() => createAflTradeRealizedTradeGradeBatch({ ...content(V3), ...V2 })).toThrow(
+        /Club totals must be exactly/
+      );
+    });
+
+    it('accepts a traded-on pick valued on its club’s known side of a blocked onward trade', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(partial(content(V3)));
+      expect(tradeOf(batch.content as Content, 'tx-6')).toMatchObject({
+        state: 'blocked',
+        clubs: [
+          { clubId: 'essendon', received: 0, givenUp: null, net: null },
+          { clubId: 'hawthorn', received: 40, givenUp: 40, net: 0 },
+          { clubId: 'st-kilda', received: null, givenUp: 40, net: null },
+        ],
+      });
+      expect(tradeOf(batch.content as Content, 'tx-5').state).toBe('provisional');
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      [
+        'a traded-on pick that hides its blocked onward trade',
+        () =>
+          withLeg(blockedElsewhere(content(V3)), 'tx-5', 0, (leg) => ({
+            ...leg,
+            reasons: [SINGLE],
+          })),
+        /partial exactly when its onward trade is blocked/,
+      ],
+      [
+        'a partial traded-on pick whose onward trade is not blocked',
+        () =>
+          withLeg(content(V3), 'tx-5', 0, (leg) => ({
+            ...leg,
+            reasons: [SINGLE, 'traded_on_return_partial', 'traded_on_return_provisional'],
+          })),
+        /partial exactly when its onward trade is blocked/,
+      ],
+      [
+        'a partial traded-on pick under v2',
+        () => partial({ ...content(), ...V2 }),
+        /names another graded trade/,
+      ],
+      [
+        'a bundle share whose club’s given-up side is blocked',
+        () =>
+          withLeg(partial(content(V3)), 'tx-6', 1, (leg) =>
+            blockedPlayer(leg.transferId, leg.sendingClubId, leg.receivingClubId)
+          ),
+        /weights total what its club gave up/,
+      ],
+      [
+        'an onward-trade reason on another leg',
+        () =>
+          withLeg(content(V3), 'tx-1', 1, (leg) => ({
+            ...leg,
+            reasons: [SINGLE, 'traded_on_return_partial'],
+          })),
+        /Only a traded-on pick/,
+      ],
+      [
+        'an unallocated traded-on pick whose club’s onward side is blocked',
+        () =>
+          withLeg(unallocated(content(V3)), 'tx-6', 1, (leg) =>
+            blockedPlayer(leg.transferId, leg.sendingClubId, leg.receivingClubId)
+          ),
+        /needs its club’s side of the onward trade/,
+      ],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v4 signed PAV sums', () => {
+    /** A v4 batch: every stint records its signed PAV sum, here equal to its (non-negative) value. */
+    const v4 = () => {
+      const value = content(V4);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    const withStint = (value: Content, realizedValue: number, pavSum: number) =>
+      withLeg(value, 'tx-4', 0, (leg) => {
+        const valued = leg as Extract<Leg, { stint: unknown }>;
+        return { ...valued, realizedValue, stint: { ...valued.stint, pavSum } };
+      });
+
+    it('accepts a stint whose signed sum is below 0 at a value of 0, and a signed at-trade view', () => {
+      const value = withLeg(withStint(v4(), 0, -0.25), 'tx-4', 1, (leg) => ({
+        ...leg,
+        atTrade: { kind: 'player_trade_season_pav', season: 2020, value: -0.045 },
+      }));
+      const batch = createAflTradeRealizedTradeGradeBatch(value);
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      expect(tradeOf(batch.content as Content, 'tx-4')).toMatchObject({
+        state: 'complete',
+        clubs: [
+          { clubId: 'fremantle', received: 10, givenUp: 0, net: 10 },
+          { clubId: 'gws', received: 0, givenUp: 10, net: -10 },
+        ],
+      });
+    });
+
+    it('still parses sealed v1 to v3 batches, whose stints record no sum', () => {
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['a v4 stint without its signed sum', () => content(V4), /records its signed PAV sum/],
+      [
+        'a signed sum under v3',
+        () => withStint(content(V3), 8, 8),
+        /records its signed PAV sum exactly under rule v4/,
+      ],
+      ['a value that is not the floored sum', () => withStint(v4(), 1, -0.25), /floored at 0/],
+      ['a value below a positive sum', () => withStint(v4(), 8, 9), /floored at 0/],
+      ['a negative value', () => withStint(v4(), -0.25, -0.25), /expected number to be >=0/],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });
 });
