@@ -753,6 +753,10 @@ supersede production Gate authority, and production execution cannot reuse non-p
    Bind the complete native-ID work item from the current retained completion, the exact governed
    snapshot, supporting evidence and the actual scoped technical reviewer. Choose `create` only
    after checking existing canonical provenance; choose `reuse` for an exact existing record.
+   A player `create` is refused while an approved player has the same normalised display name
+   (case, whitespace and punctuation ignored) and no differing known birth date; the error names
+   each such player. Reuse that player, or, when review shows a different person, list each id in
+   the review's sorted `distinctFromPlayerIds`.
    Keep unsupported biography and club metadata null on creation. This operation creates no
    normalization record or identity assignment; continue through the identity-review command above.
    An internal owner-delegated technical reviewer must be recorded as such, without asserting
