@@ -4259,7 +4259,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v3` (v1 and v2 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v4` (v1 to v3 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4270,11 +4270,12 @@ The remaining work proceeds through these independently verifiable gates:
      first stint, traded-on pick's share of its onward return, or a not-used pick worth 0), `excluded`
      (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
      nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
-     valued and any season with no PAV calculation. A traded-on leg names its onward trade, the
+     valued and any season with no PAV calculation, and under rule v4 its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
      allocation (`sole_asset`, `relative_value` or `equal_split`), its share and the return. The batch
      checks that return, weight total and asset count against the onward trade it contains.
-   - **At-trade view.** Each leg reports a player's trade-season PAV or a pick's HPN projection, which
-     must equal the benchmark formula for its slot. Neither ever enters a total.
+   - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
+     pick's HPN projection, which must equal the benchmark formula for its slot. Neither ever enters a
+     total.
    - **States.** A trade is `blocked` if any leg carries a blocking reason (pending, unresolved or
      no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
      head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
@@ -4325,6 +4326,16 @@ The remaining work proceeds through these independently verifiable gates:
 
      The contract checks each batch's totals and onward links under the rule it names.
 
+   - **Signed PAV (rule v4, issue 789).** HPN PAV is signed: 10 of the 7,351 player-season rows on the
+     grading database on 2026-10-13 are slightly below 0 (the lowest is −0.045), so a first stint can sum below 0.
+     Under rule v4 a first-stint leg (player or selected pick) is worth its stint's PAV sum floored at
+     0, since a player cannot return less than nothing to the club. The stint records the signed sum
+     as `pavSum` for audit, and the contract checks `realizedValue = max(0, pavSum)`. A sum of 0 or
+     more is unchanged. Every realized value and club total therefore stays at 0 or more, and a
+     bundle's relative-value shares stay between 0 and 1: a floored asset weighs 0, and a bundle
+     whose assets all floor to 0 is an `equal_split_tiebreak`. Rules v1 to v3 record no `pavSum`, and
+     a v4 stint must record one.
+
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
      starts the season after the trade (or after the draft, for a selected pick). It ends at the first
@@ -4332,7 +4343,8 @@ The remaining work proceeds through these independently verifiable gates:
      this club if he played for it. Once the move's own arrival is reviewed, it also ends before a later
      reviewed arrival at the same club, which is a delisted-and-redrafted second stint. Seasons the spells do not cover (2020) cannot show a
      departure, so the stint runs through them and they are listed as missing PAV. A season with spells
-     but no PAV row for the club is worth 0. A stint none of whose seasons has a pinned PAV calculation
+     but no PAV row for the club is worth 0. The stint's value is its signed PAV sum floored at 0
+     ("Signed PAV"). A stint none of whose seasons has a pinned PAV calculation
      has no known value and blocks the leg (`hpn_pav_head_missing`), as does a selected pick whose draft
      year is before the trade. A candidate with no trades at all is refused. A move without a reviewed arrival in the trade or draft
      season or the season after is `arrival_unreviewed`. A traded-on pick follows the trail its `pickId`'s
