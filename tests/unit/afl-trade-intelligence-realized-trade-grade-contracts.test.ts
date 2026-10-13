@@ -26,11 +26,13 @@ const closed = (seasons: number[]) => ({
 const SINGLE = 'single_source_pick_outcome' as const;
 const V1 = 'afl-trade-realized-grade-rule/v1' as const;
 const V3 = 'afl-trade-realized-grade-rule/v3' as const;
+const V4 = 'afl-trade-realized-grade-rule/v4' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; not public factual, publication, production or activation authority.',
   [V3]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; not public factual, publication, production or activation authority.',
+  [V4]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -855,6 +857,55 @@ describe('realized trade grade batch contract', () => {
           ),
         /needs its club’s side of the onward trade/,
       ],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v4 signed PAV sums', () => {
+    /** A v4 batch: every stint records its signed PAV sum, here equal to its (non-negative) value. */
+    const v4 = () => {
+      const value = content(V4);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    const withStint = (value: Content, realizedValue: number, pavSum: number) =>
+      withLeg(value, 'tx-4', 0, (leg) => {
+        const valued = leg as Extract<Leg, { stint: unknown }>;
+        return { ...valued, realizedValue, stint: { ...valued.stint, pavSum } };
+      });
+
+    it('accepts a stint whose signed sum is below 0 at a value of 0, and a signed at-trade view', () => {
+      const value = withLeg(withStint(v4(), 0, -0.25), 'tx-4', 1, (leg) => ({
+        ...leg,
+        atTrade: { kind: 'player_trade_season_pav', season: 2020, value: -0.045 },
+      }));
+      const batch = createAflTradeRealizedTradeGradeBatch(value);
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      expect(tradeOf(batch.content as Content, 'tx-4')).toMatchObject({
+        state: 'complete',
+        clubs: [
+          { clubId: 'fremantle', received: 10, givenUp: 0, net: 10 },
+          { clubId: 'gws', received: 0, givenUp: 10, net: -10 },
+        ],
+      });
+    });
+
+    it('still parses sealed v1 to v3 batches, whose stints record no sum', () => {
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['a v4 stint without its signed sum', () => content(V4), /records its signed PAV sum/],
+      [
+        'a signed sum under v3',
+        () => withStint(content(V3), 8, 8),
+        /records its signed PAV sum exactly under rule v4/,
+      ],
+      ['a value that is not the floored sum', () => withStint(v4(), 1, -0.25), /floored at 0/],
+      ['a value below a positive sum', () => withStint(v4(), 8, 9), /floored at 0/],
+      ['a negative value', () => withStint(v4(), -0.25, -0.25), /expected number to be >=0/],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });
 });

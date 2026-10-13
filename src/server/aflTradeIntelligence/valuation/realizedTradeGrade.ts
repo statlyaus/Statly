@@ -52,7 +52,8 @@ interface Stint {
   status: 'closed' | 'open';
   seasonsValued: number[];
   seasonsMissingPav: number[];
-  value: number;
+  /** The signed HPN PAV sum of the valued seasons (rule v4: the leg is worth it floored at 0). */
+  pavSum: number;
   appearedAfter: boolean;
 }
 
@@ -86,7 +87,7 @@ type Index = ReturnType<typeof indexInputs>;
  * appears for another club (that season's PAV at this club still counts, since he left during it) or
  * before a later reviewed arrival at the same club (delisted and redrafted is a new stint). Uncovered
  * seasons cannot show a departure, so the stint runs through them with their PAV listed as missing. A
- * stint that never ends inside the covered seasons is open.
+ * stint that never ends inside the covered seasons is open. HPN PAV is signed, so the sum may be below 0.
  */
 function firstStint(
   index: Index,
@@ -99,7 +100,7 @@ function firstStint(
     status: 'open',
     seasonsValued: [],
     seasonsMissingPav: [],
-    value: 0,
+    pavSum: 0,
     appearedAfter: false,
   };
   // A later reviewed arrival at the same club starts a new stint, but only once this move's own arrival
@@ -124,7 +125,7 @@ function firstStint(
     if (!departed || playedHere) {
       if (index.official.has(season)) {
         stint.seasonsValued.push(season);
-        stint.value += index.pav.get(`${playerId}|${season}|${clubId}`) ?? 0;
+        stint.pavSum += index.pav.get(`${playerId}|${season}|${clubId}`) ?? 0;
       } else {
         stint.seasonsMissingPav.push(season);
       }
@@ -136,6 +137,20 @@ function firstStint(
   }
   return stint;
 }
+
+/**
+ * Rule v4: a first stint is worth its signed PAV sum floored at 0, since a player cannot return less
+ * than nothing; the leg keeps the signed sum for audit.
+ */
+const stintLeg = (stint: Stint) => ({
+  realizedValue: Math.max(0, stint.pavSum),
+  stint: {
+    status: stint.status,
+    seasonsValued: stint.seasonsValued,
+    seasonsMissingPav: stint.seasonsMissingPav,
+    pavSum: stint.pavSum,
+  },
+});
 
 /** A stint none of whose seasons has a pinned PAV calculation has no known value at all. */
 const noPavCoverage = (stint: Stint) =>
@@ -378,12 +393,7 @@ export function gradeAflTradesOnRealizedValue(
         ...base,
         state: 'valued',
         basis: 'player_first_stint',
-        realizedValue: stint.value,
-        stint: {
-          status: stint.status,
-          seasonsValued: stint.seasonsValued,
-          seasonsMissingPav: stint.seasonsMissingPav,
-        },
+        ...stintLeg(stint),
         reasons: sorted(reasons),
       };
     }
@@ -414,12 +424,7 @@ export function gradeAflTradesOnRealizedValue(
         ...source,
         state: 'valued',
         basis: 'pick_selected_first_stint',
-        realizedValue: stint.value,
-        stint: {
-          status: stint.status,
-          seasonsValued: stint.seasonsValued,
-          seasonsMissingPav: stint.seasonsMissingPav,
-        },
+        ...stintLeg(stint),
         reasons: sorted(reasons),
       };
     }

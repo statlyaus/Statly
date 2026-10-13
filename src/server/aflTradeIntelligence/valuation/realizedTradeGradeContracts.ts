@@ -31,12 +31,16 @@ import {
  * sends is blocked; `net` is null when either is. A traded-on pick then needs only its club's side of
  * the onward trade, which may be blocked elsewhere (`traded_on_return_partial`).
  *
+ * HPN PAV is signed: a few player-seasons are slightly negative. Under rule v4 (issue 789) a first-stint
+ * leg is worth its stint's PAV sum floored at 0, since a player cannot return less than nothing, and the
+ * stint records that signed sum as `pavSum` for audit. Rules v1 to v3 record no `pavSum`.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v3' as const;
+  'afl-trade-realized-grade-rule/v4' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -45,12 +49,20 @@ const RULE_LIMITATIONS = {
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v3':
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; not public factual, publication, production or activation authority.',
+  'afl-trade-realized-grade-rule/v4':
+    'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
 const UNSCOPED_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   'afl-trade-realized-grade-rule/v1',
   'afl-trade-realized-grade-rule/v2',
+]);
+/** Rules whose stints record no signed PAV sum; later rules record it and floor the value at 0. */
+const UNRECORDED_PAV_SUM_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  'afl-trade-realized-grade-rule/v1',
+  'afl-trade-realized-grade-rule/v2',
+  'afl-trade-realized-grade-rule/v3',
 ]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
@@ -106,7 +118,8 @@ const atTradeSchema = z.discriminatedUnion('kind', [
     .object({
       kind: z.literal('player_trade_season_pav'),
       season: seasonSchema,
-      value: valueSchema,
+      // HPN PAV is signed, and this view is reported as it is: it never enters a total.
+      value: z.number().finite(),
     })
     .strict(),
   z
@@ -134,6 +147,8 @@ const stintSchema = z
     status: z.enum(['closed', 'open']),
     seasonsValued: seasonsSchema,
     seasonsMissingPav: seasonsSchema,
+    /** Rule v4: the signed HPN PAV sum of the valued seasons; the leg is worth it floored at 0. */
+    pavSum: z.number().finite().optional(),
   })
   .strict();
 
@@ -293,6 +308,13 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
       'stint' in leg &&
       leg.stint.seasonsValued.some((season) => leg.stint.seasonsMissingPav.includes(season)),
     'A stint season is either valued or missing, not both.',
+  ],
+  [
+    (leg) =>
+      'stint' in leg &&
+      leg.stint.pavSum !== undefined &&
+      leg.realizedValue !== Math.max(0, leg.stint.pavSum),
+    'A first stint is worth its signed PAV sum floored at 0.',
   ],
   [
     (leg, has) =>
@@ -528,10 +550,14 @@ function batchShapeIssues(content: BatchContent): Issue[] {
   return issues;
 }
 
-/** A leg's PAV seasons must be the batch's pinned calculations, and its reasons must say so. */
+/**
+ * A leg's PAV seasons must be the batch's pinned calculations, and its reasons must say so. Its stint
+ * records the signed PAV sum exactly when its rule does.
+ */
 function legSeasonIssues(
   leg: AflTradeRealizedTradeGradeLeg,
-  official: ReadonlyMap<number, boolean>
+  official: ReadonlyMap<number, boolean>,
+  ruleVersion: AflTradeRealizedGradeRuleVersion
 ): string[] {
   const has = (reason: AflTradeRealizedGradeReason) => leg.reasons.includes(reason);
   if (!('stint' in leg))
@@ -539,6 +565,8 @@ function legSeasonIssues(
       ? ['Only a leg with a stint carries PAV season reasons.']
       : [];
   const issues: string[] = [];
+  if ((leg.stint.pavSum === undefined) !== UNRECORDED_PAV_SUM_RULES.has(ruleVersion))
+    issues.push('A stint records its signed PAV sum exactly under rule v4 and later.');
   if (leg.stint.seasonsValued.some((season) => !official.has(season)))
     issues.push('Every valued stint season must have a pinned PAV calculation.');
   if (leg.stint.seasonsMissingPav.some((season) => official.has(season)))
@@ -632,7 +660,8 @@ function batchIssues(content: BatchContent): Issue[] {
         leg.atTrade.benchmarkId !== content.inputs.pickProjectionBenchmarkId
       )
         issues.push(['trades', 'Every pick projection must cite the batch’s pinned benchmark.']);
-      for (const message of legSeasonIssues(leg, official)) issues.push(['trades', message]);
+      for (const message of legSeasonIssues(leg, official, content.ruleVersion))
+        issues.push(['trades', message]);
       const linkIssue =
         leg.basis === 'pick_traded_on_return_unallocated'
           ? unallocatedIssue(leg, trade, trades, content.ruleVersion)
