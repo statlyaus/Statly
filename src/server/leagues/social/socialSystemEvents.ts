@@ -48,17 +48,27 @@ export async function publishLeagueSystemMessage({
       if (existingMessage) return toSocialMessage(existingMessage, '');
     }
 
-    const command = await tx.socialCommand.create({
-      data: {
+    // The unique key has no season, so a command left from an earlier season must be reused, not re-created.
+    const requestHash = createHash('sha256')
+      .update(`${eventType}:${relatedEntityId}:${normalizedContent}`)
+      .digest('hex');
+    const command = await tx.socialCommand.upsert({
+      where: {
+        leagueId_actorUserId_idempotencyKey: {
+          leagueId,
+          actorUserId: '__system__',
+          idempotencyKey: commandKey,
+        },
+      },
+      create: {
         leagueId,
         seasonId,
         actorUserId: '__system__',
         idempotencyKey: commandKey,
         commandType: 'PUBLISH_SYSTEM_MESSAGE',
-        requestHash: createHash('sha256')
-          .update(`${eventType}:${relatedEntityId}:${normalizedContent}`)
-          .digest('hex'),
+        requestHash,
       },
+      update: { seasonId, requestHash },
     });
     const record = await tx.socialMessage.create({
       data: {
