@@ -1029,7 +1029,11 @@ Prerequisites:
      recorded but are never retained: v2 recorded each special pick as a parse issue, and a retained
      plan admits only issue-free batches. The `-order-v3` decisions and captures stay recorded too;
      v4 emits the same claims on 2019-2024 and adds the 2025 page, but the runner reads only the
-     current parser's key, so a v4 capture of any season needs its `-order-v4` decision; and
+     current parser's key, so a v4 capture of any season needs its `-order-v4` decision. 2026
+     (issue 789) is the one season on `official-afl-draft-order-parser/v5`: it needs
+     `official-afl-indicative-draft-order-issue579-private-2026-order-v5`, whose rights name v5 and
+     the same fields. Each scope entry names its parser, so the 2019-2025 `-order-v4` decisions and
+     captures stay current; and
    - one `official-afl-trade-period-dates-issue869-private-<season>-period-v2` decision per
      captured season, for example `official-afl-trade-period-dates-issue869-private-2023-period-v2`
      (statlyaus/Statly#869). Parser `official-afl-trade-period-parser/v2` reads the AFL's
@@ -1052,7 +1056,8 @@ Prerequisites:
      capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
-   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` or
+   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` (2026:
+   `official-afl-draft-order-parser/v5`) or
    `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
@@ -1087,11 +1092,13 @@ recapture one night without fetching the other again.
 `--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
 refused before anything is fetched. `--season` is still required.
 
-Capture the Official AFL pre-draft orders for 2019 to 2025 (issue 853). Each `--season` is the one
-reviewed order page as it stood after that season's last pick-swap deadline; 2023 to 2025 fetch the
-reviewed Internet Archive snapshots (raw `id_` form, no redirect; the archive declares
-`content-encoding: gzip` and the fetch decodes it). Every claim is observed at the page's stated
-as-of date, for 2025 the close of the pick-swap window on 7 November:
+Capture the Official AFL pre-draft orders for 2019 to 2026 (issues 853 and 789). For 2019 to 2025,
+each `--season` is the one reviewed order page as it stood after that season's last pick-swap
+deadline. 2026 is the live order as it stood on 14 October 2026, before its pick-swap deadline: rule
+v6 values a pick not yet selected from its slot there. 2023 to 2026 fetch the reviewed Internet
+Archive snapshots (raw `id_` form, no redirect; the archive declares `content-encoding: gzip` and the
+fetch decodes it). Every claim is observed at the page's stated date: for 2025 the close of the
+pick-swap window on 7 November, for 2026 the page's "Updated: October 14, 2026":
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
@@ -1100,13 +1107,13 @@ npm run outcomes:sources:capture-local-external -- \
   --artifact-root '<durable-artifact-root>' \
   --capability official-afl-indicative-draft-order \
   --season 2019 --season 2020 --season 2021 --season 2022 --season 2023 --season 2024 \
-  --season 2025
+  --season 2025 --season 2026
 ```
 
 Expect `issueCount` 0 on every page; a nonzero count means an annotation form the parser has not
 seen, and the page cannot enter a retained plan until the parser is revised under a new version.
-Compensation, assistance, concession and priority picks (41 across the seven pages, 7 of them in
-2025's 115 slots) are claims with
+Compensation, assistance, concession and priority picks (48 across the eight pages: 7 of 2025's 115
+slots and 7 of 2026's 97, which run in five rounds of 20, 22, 19, 18 and 18) are claims with
 no original club; they are custody observations of their holder only and never link a traded-on
 pick. After capture, the order's club
 spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need current
