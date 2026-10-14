@@ -194,10 +194,12 @@ describe('WaiverProcessingService', () => {
       },
     });
     tx.leagueRosterPlayer.findFirst.mockImplementation(
-      async ({ where }: { where: { playerId?: { in: string[] }; memberId?: string } }) =>
-        where.playerId?.in.includes('retired-old-player') && where.memberId === 'member-1'
+      async ({ where }: { where: { playerId?: unknown; memberId?: string } }) => {
+        const ids = (where.playerId as { in?: string[] } | undefined)?.in ?? [];
+        return ids.includes('retired-old-player') && where.memberId === 'member-1'
           ? { playerId: 'retired-old-player', memberId: 'member-1' }
-          : null
+          : null;
+      }
     );
     const claimStore = createClaimStoreMock();
     const projection = { projectLeague: vi.fn().mockResolvedValue({ owned: 2, available: 10 }) };
