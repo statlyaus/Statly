@@ -60,6 +60,12 @@ function createSocket(userId: string | null = 'user-1') {
   };
 }
 
+function localIo(sockets: SocketIOSocket[]) {
+  return {
+    local: { in: () => ({ fetchSockets: async () => sockets }) },
+  } as unknown as SocketIOServer;
+}
+
 function attachSocket(socket: SocketIOSocket) {
   let connectionHandler: EventHandler | undefined;
   const emit = vi.fn();
@@ -267,6 +273,65 @@ describe('league social socket sidecar', () => {
 
     expect(socketState.leave).toHaveBeenCalledWith('social:league:league-1');
     expect(socketState.emit).not.toHaveBeenCalled();
+  });
+
+  it('keeps delivering to other sockets when one membership lookup fails', async () => {
+    const failing = createSocket('user-1');
+    const healthy = createSocket('user-2');
+    mocks.getLeagueMembershipAccess
+      .mockRejectedValueOnce(new Error('db down'))
+      .mockResolvedValueOnce({
+        leagueId: 'league-1',
+        userId: 'user-2',
+        isMember: true,
+        canManage: false,
+      });
+    const envelope: SocialRealtimeEnvelope = {
+      id: 'event-3',
+      sequence: 9,
+      leagueId: 'league-1',
+      seasonId: 'season-2026',
+      channel: 'chat',
+      event: 'social:message',
+      payload: { messageId: 'message-3' },
+      occurredAt: '2026-07-19T10:00:02.000Z',
+    };
+
+    await expect(
+      broadcastLeagueSocialEvent(localIo([failing.socket, healthy.socket]), envelope)
+    ).resolves.toBeUndefined();
+
+    expect(healthy.emit).toHaveBeenCalledWith('social:message', envelope);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      'Failed to deliver league social event to a socket',
+      expect.objectContaining({ leagueId: 'league-1', error: 'db down' })
+    );
+  });
+
+  it('publishes to other instances even when local delivery throws', async () => {
+    const envelope: SocialRealtimeEnvelope = {
+      id: 'event-4',
+      sequence: 10,
+      leagueId: 'league-1',
+      seasonId: 'season-2026',
+      channel: 'chat',
+      event: 'social:message',
+      payload: { messageId: 'message-4' },
+      occurredAt: '2026-07-19T10:00:03.000Z',
+    };
+    const io = {
+      local: {
+        in: () => ({
+          fetchSockets: async () => {
+            throw new Error('adapter down');
+          },
+        }),
+      },
+    } as unknown as SocketIOServer;
+
+    await expect(publishLeagueSocialRealtimeEvent(io, envelope)).rejects.toThrow('adapter down');
+
+    expect(mocks.pubSubPublish).toHaveBeenCalledWith(envelope);
   });
 
   it('fans published events out locally and through shared pubsub', async () => {
