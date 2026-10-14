@@ -2386,8 +2386,39 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
           }),
         ],
         [
+          'a board pick number is held by two clubs',
+          () => ({
+            page: yearPage('academy'),
+            board: board({
+              extra: [
+                {
+                  kind: 'draft_board_pick',
+                  draftYear: 2025,
+                  draftType: 'national',
+                  roundNumber: 1,
+                  recordedPickNumber: 5,
+                  status: 'selected',
+                  club: footyinfoClub(14),
+                  player: footyinfoPlayer(5),
+                  route: [],
+                  routeLabel: null,
+                  bid: null,
+                  points: null,
+                  note: 'Second holder',
+                },
+              ],
+            }),
+          }),
+        ],
+        [
           'the year page omits the receiving club’s row',
           () => ({ page: yearPage('academy', [14]) }),
+        ],
+        [
+          // An official session decides by the earlier all-selections rule alone, even with every
+          // club resolved through the board.
+          'an official-proven draft’s year page omits another club’s row',
+          () => ({ page: yearPage('academy', [3]), session: officialSession(allFourteen) }),
         ],
         [
           'another club’s uncategorized selection names no resolved club',
@@ -2402,21 +2433,23 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
         expect(outcome).not.toHaveProperty('draftProvenBy');
       });
 
+      // The Bulldogs' passed round-1 pick, handed from GWS.
+      const passed: BoardPick = {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: null,
+        status: 'passed',
+        club: footyinfoClub(14),
+        route: [footyinfoClub(1), footyinfoClub(14)],
+        routeLabel: null,
+        bid: null,
+        points: null,
+        note: 'Not used',
+      };
+
       it('settles a not-used pick by its passed board pick before the board-proven count', () => {
-        const passed: BoardPick = {
-          kind: 'draft_board_pick',
-          draftYear: 2025,
-          draftType: 'national',
-          roundNumber: 1,
-          recordedPickNumber: null,
-          status: 'passed',
-          club: footyinfoClub(14),
-          route: [footyinfoClub(1), footyinfoClub(14)],
-          routeLabel: null,
-          bid: null,
-          points: null,
-          note: 'Not used',
-        };
         const candidate = proveByBoard({
           page: yearPage('academy'),
           board: board({ extra: [passed] }),
@@ -2432,6 +2465,20 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
         );
         expect(outcome).not.toHaveProperty('draftProvenBy');
         expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
+      });
+
+      it('keeps an official-proven partial year page on the board fallback, as before', () => {
+        const outcome = basisOf(
+          proveByBoard({
+            page: yearPage('academy', [3]),
+            session: officialSession(allFourteen),
+            board: board({ extra: [passed] }),
+          })
+        );
+        expect(outcome).toEqual(
+          expect.objectContaining({ nominationBasis: 'board_pick_passed_or_removed' })
+        );
+        expect(outcome).not.toHaveProperty('draftProvenBy');
       });
 
       it('refuses a board-proven draft on an outcome that rests on no count', () => {

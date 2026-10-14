@@ -2009,9 +2009,11 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
  *   club.
  *
- * The candidate's selections in the draft must be exactly those numbers. Then either every one
- * carries exactly one stated category (the rule before 2026-10-14, kept so an official count never
- * changes), or every one names a resolved club and each of the receiving club's carries exactly one.
+ * The candidate's selections in the draft must be exactly those numbers, and every one must carry
+ * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
+ * draft, so its outcomes are unchanged. A board-proven draft may instead have every selection name a
+ * resolved club and each of the receiving club's carry exactly one. A board makes no completeness
+ * claim of its own: only the 1-to-N run and the equality with the candidate's selections guard it.
  * A partial or disputed year page therefore proves nothing about a club whose rows it omits.
  */
 function createNominatedSelectionCounter(
@@ -2095,9 +2097,12 @@ function createNominatedSelectionCounter(
       inDraft.map(({ selectionNumber }) => selectionNumber)
     );
     const clubs = inDraft.filter((selection) => selection.clubId === clubId);
+    // The receiving-club-only rule applies to a board-proven draft alone, so an official-proven
+    // draft is decided exactly as before 2026-10-14.
     const accessComplete =
       inDraft.every((selection) => accessOf(selection) !== null) ||
-      (inDraft.every((selection) => selection.clubId !== null) &&
+      (provenBy === 'footyinfo' &&
+        inDraft.every((selection) => selection.clubId !== null) &&
         clubs.every((selection) => accessOf(selection) !== null));
     if (provenBy === null || !accessComplete) return null;
     const membershipEvidence =

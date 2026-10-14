@@ -4221,10 +4221,11 @@ The remaining work proceeds through these independently verifiable gates:
    selections 1 to N with no gap. For the 2025 national draft only, which has no official session
    page, a reviewed Footyinfo board may prove it instead (owner decision 2026-10-14, issue 789; see
    "Footyinfo national draft boards"); the outcome then names `draftProvenBy: footyinfo`. Another draft
-   needs a new owner decision. Within a proven draft, either every selection carries exactly one stated
-   category (the rule before 2026-10-14, kept so no official count changes), or every selection names
-   a resolved club and each of the receiving club's selections carries exactly one. A partial or
-   disputed page therefore never yields a negative for a club whose rows it omits. The outcome cites
+   needs a new owner decision. Within a draft an official session proves, every selection must carry
+   exactly one stated category: the rule before 2026-10-14, applied alone, so every official-proven
+   outcome is unchanged by construction. Within a board-proven draft, it is enough instead that every
+   selection names a resolved club and each of the receiving club's selections carries exactly one.
+   A partial or disputed page therefore never yields a negative for a club whose rows it omits. The outcome cites
    the receiving club's year-page rows and, for the proof, its official session rows or its Footyinfo
    board `draft_selection` rows, never the board-pick rows. Categories match
    the reviewed forms exactly (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`); any other
@@ -4503,7 +4504,12 @@ The remaining work proceeds through these independently verifiable gates:
          no gap, every selected board pick names one resolved club, and the candidate's selections in
          the draft are exactly those numbers. The access categories still come from the Draftguru
          year page, and the outcome names `draftProvenBy: footyinfo` and cites the receiving club's
-         board `draft_selection` rows. Where an official session exists it alone proves the draft.
+         board `draft_selection` rows. Only for a board-proven draft may the categories be complete
+         for the receiving club alone (every selection naming a resolved club); an official-proven
+         draft keeps the earlier all-selections rule, so its outcomes are unchanged by construction.
+         A board makes no claim that it is complete: the 1-to-N run and the equality with the
+         candidate's selections are the only guards. Where an official session exists it alone
+         proves the draft.
 
        Rule v2 of the grade (below, "Single source") lifts `single_source_pick_outcome` for
        outcomes that Draftguru and Footyinfo corroborate.
