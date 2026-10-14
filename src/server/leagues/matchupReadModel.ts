@@ -809,6 +809,37 @@ export async function recalculateLeagueRoundMatchups({
       },
     };
   }
+  // A finalized round with an unscored matchup is left as it is. Recalculating it would demote the
+  // FINAL scores of its other matchups, and filling the missing lineup would score that matchup silently.
+  const hasPlayers = (memberId: string) =>
+    (initialLineups.find((lineup) => lineup.memberId === memberId)?.players.length ?? 0) > 0;
+  const unscoredMatchupIds = matchups
+    .filter(
+      (matchup) =>
+        matchup.homeMemberId &&
+        matchup.awayMemberId &&
+        matchup.status !== 'FINAL' &&
+        !(hasPlayers(matchup.homeMemberId) && hasPlayers(matchup.awayMemberId))
+    )
+    .map((matchup) => matchup.id);
+  if (unscoredMatchupIds.length > 0 && matchups.some((matchup) => matchup.status === 'FINAL')) {
+    return {
+      round,
+      status: 'FINAL' as const,
+      recalculated: 0,
+      scores: [],
+      blocked: 'UNSCORED_MATCHUP_IN_FINAL_ROUND' as const,
+      unscoredMatchupIds,
+      roundStatus: {
+        earliestStartAt: null,
+        latestEndAt: null,
+        anyLive: false,
+        allFinal: false,
+        hasUnavailableStatus: true,
+        matches: [],
+      },
+    };
+  }
   // Managers only confirm changes: anyone without a saved lineup for this round gets their
   // default (last round's team, gaps filled by position, or a team picked by position).
   const participantMemberIds = matchups.flatMap((matchup) =>
