@@ -28,6 +28,7 @@ const V1 = 'afl-trade-realized-grade-rule/v1' as const;
 const V3 = 'afl-trade-realized-grade-rule/v3' as const;
 const V4 = 'afl-trade-realized-grade-rule/v4' as const;
 const V5 = 'afl-trade-realized-grade-rule/v5' as const;
+const V6 = 'afl-trade-realized-grade-rule/v6' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -35,6 +36,7 @@ const LIMITATIONS = {
   [V3]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; not public factual, publication, production or activation authority.',
   [V4]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
   [V5]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; not public factual, publication, production or activation authority.',
+  [V6]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -957,6 +959,200 @@ describe('realized trade grade batch contract', () => {
         'a board-proven player leg',
         () => withLeg(signed(V5), 'tx-4', 0, (leg) => ({ ...leg, draftProvenBy: 'footyinfo' })),
         /board-proven draft/,
+      ],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v6 picks projected from the live draft order', () => {
+    const signed = (ruleVersion: AflTradeRealizedGradeRuleVersion) => {
+      const value = content(ruleVersion);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    const LIVE = 'pick_projected_from_live_order' as const;
+    const PROXY = 'pick_projected_from_prior_order_proxy' as const;
+    /** A pending 2026 pick valued at the HPN DPVC v3 value of its slot in the 2026 order. */
+    const projectedLeg = (leg: Leg, selectionNumber = 7, proxy = false): Leg => ({
+      transferId: leg.transferId,
+      assetKind: 'pick',
+      sendingClubId: leg.sendingClubId,
+      receivingClubId: leg.receivingClubId,
+      state: 'valued',
+      basis: 'pick_projected_from_order',
+      realizedValue: hpnDpv3ValueForPick(selectionNumber),
+      projection: {
+        benchmarkId,
+        selectionNumber,
+        orderDraftYear: proxy ? 2026 : 2027,
+        pickDraftYear: 2027,
+        custodyId: `external-pick-custody:${hex('c')}`,
+        observedAt: { precision: 'day', date: '2026-10-10' },
+        proxy,
+      },
+      reasons: [proxy ? PROXY : LIVE],
+      atTrade: { kind: 'unavailable', reason: 'future_pick_slot_unknown' },
+    });
+    // tx-3's pending future pick, now valued from the order.
+    const projected = (value: Content, change: (leg: Leg) => Leg = (leg) => leg, proxy = false) =>
+      withLeg(value, 'tx-3', 0, (leg) => change(projectedLeg(leg, 7, proxy)));
+    /** Typed access to a projected leg's projection while mutating it. */
+    const reprojected = (fields: Record<string, unknown>) => (leg: Leg) =>
+      ({ ...leg, projection: { ...(leg as { projection: object }).projection, ...fields } }) as Leg;
+
+    it('accepts a provisional pick valued at its order slot, live or as a proxy', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(projected(signed(V6)));
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      expect(tradeOf(batch.content as Content, 'tx-3')).toMatchObject({
+        state: 'provisional',
+        reasons: [LIVE],
+        clubs: [
+          { clubId: 'hawthorn', received: 0, givenUp: hpnDpv3ValueForPick(7) },
+          { clubId: 'richmond', received: hpnDpv3ValueForPick(7), givenUp: 0 },
+        ],
+      });
+      const proxy = createAflTradeRealizedTradeGradeBatch(
+        projected(signed(V6), (leg) => leg, true)
+      );
+      expect(tradeOf(proxy.content as Content, 'tx-3').legs[0]).toMatchObject({
+        projection: { orderDraftYear: 2026, pickDraftYear: 2027, proxy: true },
+        reasons: [PROXY],
+      });
+    });
+
+    it('seals v6 with its limitation, which says DPVC is whole-career, not first-stint', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(signed(V6));
+      expect(batch.content.limitation).toBe(LIMITATIONS[V6]);
+      expect(batch.content.limitation).toContain(
+        'HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order'
+      );
+    });
+
+    it('still parses sealed v1 to v5 batches, which project no pick', () => {
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+      for (const ruleVersion of [V4, V5] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(signed(ruleVersion))).not.toThrow();
+    });
+
+    // Hawthorn's return in tx-6 (St Kilda's tr-6c) becomes a pending pick projected to slot 3, so
+    // Hawthorn's traded-on pick in tx-5 rests on that projection.
+    const projectedReturn = (withReason: boolean) => {
+      const value = withLeg(signed(V6), 'tx-6', 2, (leg) => projectedLeg(leg, 3));
+      const returnValue = hpnDpv3ValueForPick(3);
+      return withLeg(value, 'tx-5', 0, (leg) => {
+        const onward = (leg as Extract<Leg, { basis: 'pick_traded_on_return' }>).onward;
+        return {
+          ...leg,
+          realizedValue: onward.share * returnValue,
+          onward: { ...onward, returnValue },
+          reasons: [
+            SINGLE,
+            ...(withReason ? (['traded_on_return_projected'] as const) : []),
+            'traded_on_return_provisional',
+          ],
+        } as Leg;
+      });
+    };
+
+    it('accepts a traded-on return that rests on a projection, and says so', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(projectedReturn(true));
+      expect(tradeOf(batch.content as Content, 'tx-5').legs[0]!.reasons).toContain(
+        'traded_on_return_projected'
+      );
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['a projected pick under v5', () => projected(signed(V5)), /Only rule v6 and later/],
+      [
+        'a projection reason under v5',
+        () => withLeg(signed(V5), 'tx-4', 0, (leg) => ({ ...leg, reasons: [LIVE] }) as Leg),
+        /Only rule v6 and later/,
+      ],
+      [
+        'a value that is not the HPN DPVC v3 value of its slot',
+        () => projected(signed(V6), (leg) => ({ ...leg, realizedValue: 50 }) as Leg),
+        /HPN DPVC v3 value of its order slot/,
+      ],
+      [
+        'a proxy flag without the proxy reason',
+        () => projected(signed(V6), reprojected({ proxy: true, orderDraftYear: 2026 })),
+        /proxy the order of the draft before it/,
+      ],
+      [
+        'a live reason on an earlier draft’s order',
+        () => projected(signed(V6), reprojected({ orderDraftYear: 2026 })),
+        /proxy the order of the draft before it/,
+      ],
+      [
+        'a proxy reading its own draft’s order',
+        () => projected(signed(V6), reprojected({ orderDraftYear: 2027 }), true),
+        /proxy the order of the draft before it/,
+      ],
+      [
+        'both projection reasons',
+        () => projected(signed(V6), (leg) => ({ ...leg, reasons: [LIVE, PROXY] })),
+        /exactly one projection reason/,
+      ],
+      [
+        'a projected pick without a projection reason',
+        () => projected(signed(V6), (leg) => ({ ...leg, reasons: [] })),
+        /exactly one projection reason/,
+      ],
+      [
+        'a projection reason on another leg',
+        () => withLeg(signed(V6), 'tx-4', 0, (leg) => ({ ...leg, reasons: [LIVE] })),
+        /exactly one projection reason/,
+      ],
+      [
+        'a single-source reason on a projected pick',
+        () => projected(signed(V6), (leg) => ({ ...leg, reasons: [LIVE, SINGLE] })),
+        /rests on a draft order/,
+      ],
+      [
+        'a corroborated projected pick',
+        () => projected(signed(V6), (leg) => ({ ...leg, corroboratedBy: 'footyinfo' })),
+        /rests on a draft order/,
+      ],
+      [
+        'a projected player leg',
+        () =>
+          withLeg(signed(V6), 'tx-4', 0, (leg) => ({
+            ...projectedLeg(leg),
+            assetKind: 'player',
+          })),
+        /player first-stint basis/,
+      ],
+      [
+        'another benchmark',
+        () => projected(signed(V6), reprojected({ benchmarkId: `hpn-pick-benchmark:${hex('d')}` })),
+        /A projected pick must cite the batch’s pinned benchmark/,
+      ],
+      [
+        'a slot beyond 90',
+        () =>
+          projected(signed(V6), (leg) =>
+            reprojected({ selectionNumber: 91 })({
+              ...leg,
+              realizedValue: 0,
+            } as Leg)
+          ),
+        /expected number to be <=90/,
+      ],
+      [
+        'a traded-on return resting on a projection without saying so',
+        () => projectedReturn(false),
+        /rests on a projection exactly when/,
+      ],
+      [
+        'the projected reason on a leg that is not traded on',
+        () =>
+          withLeg(signed(V6), 'tx-4', 0, (leg) => ({
+            ...leg,
+            reasons: ['traded_on_return_projected'],
+          })),
+        /onward-trade reasons/,
       ],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });

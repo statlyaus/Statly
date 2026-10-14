@@ -4256,6 +4256,10 @@ The remaining work proceeds through these independently verifiable gates:
 
    A not-used pick is never credited with any player's value. The rule applies to realized value only.
 
+   A `pending` not-used pick, whose draft lies after the candidate's anchor season, is no longer
+   blocked when the live draft order holds its slot. Under rule v6 it is valued provisionally from
+   that slot; see "Projected picks (rule v6)" under the contract below.
+
    **Traded-on picks and bundled trades (owner decision, 2026-10-08, statlyaus/Statly#789).** A pick a
    club received and then traded on is worth what the club got back for it. When it was the only asset
    the club gave in the onward trade, it is worth that trade's whole realized return. If a returned pick
@@ -4269,8 +4273,11 @@ The remaining work proceeds through these independently verifiable gates:
    reports what the club finally landed and gave up.
 
    **Pick projection (owner decision, 2026-10-08, replacing the 2026-10-06 "no projection in the MVP"
-   rule).** The MVP has a pick projection. It is the at-trade view of a pick only. It never feeds the
-   realized grade or the bundle allocation, so a change of projection never changes a grade. The MVP
+   rule).** The MVP has a pick projection. It is the at-trade view of a pick. It never feeds the
+   realized grade or the bundle allocation, so a change of projection never changes a grade, with one
+   exception the owner directed on 2026-10-14 (issue 789): a pick whose draft is not yet in evidence
+   is valued at the projection of its slot in the live draft order, because "careers run
+   continuously" and every grade is provisional ("Projected picks (rule v6)" below). The MVP
    uses the HPN Draft Pick Value Chart v3.0 (https://www.hpnfooty.com/?page_id=22741): pick value =
    −30.36 × ln(pick number) + 146.95, in career PAV, fitted on the 1993-2006 drafts excluding father-son
    picks (R² 0.73). Pick 1 is about 147, pick 10 about 77 and pick 30 about 44. It is the existing HPN
@@ -4295,7 +4302,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v5` (v1 to v4 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v6` (v1 to v5 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4303,7 +4310,8 @@ The remaining work proceeds through these independently verifiable gates:
    listed as ungraded with its reason, never dropped.
    - **Legs.** Each transfer leg has one realized value at its receiving club, which counts as received
      for that club and given up by the sender. A leg is `valued` (player first stint, selected pick's
-     first stint, traded-on pick's share of its onward return, or a not-used pick worth 0), `excluded`
+     first stint, traded-on pick's share of its onward return, a not-used pick worth 0, or under rule
+     v6 a pending pick projected from its slot in the live draft order), `excluded`
      (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
      nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
      valued and any season with no PAV calculation, and under rule v4 and later its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
@@ -4312,12 +4320,14 @@ The remaining work proceeds through these independently verifiable gates:
    - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
      pick's HPN projection, which must equal the benchmark formula for its slot. Neither ever enters a
      total.
-   - **States.** A trade is `blocked` if any leg carries a blocking reason (pending, unresolved or
+   - **States.** A trade is `blocked` if any leg carries a blocking reason (a pending pick outcome the
+     live order cannot place, an unresolved or
      no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
      head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
      `provisional` if any leg carries a provisional reason (open stint, unreviewed arrival, missing or
-     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional or partial onward
-     trade, no appearances after the trade, or a single-source pick outcome). Otherwise it is
+     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional, partial or
+     projected onward trade, no appearances after the trade, a single-source pick outcome, or a pick
+     projected from the live order or a prior-order proxy). Otherwise it is
      `complete`. Club totals are the exact received and given-up sums of the valued legs, so equal legs
      always seal to the same batch. Under rule v3 a club's `received` is null only when a leg it
      receives is blocked, and its `givenUp` only when a leg it sends is blocked; `net` is null when
@@ -4333,7 +4343,9 @@ The remaining work proceeds through these independently verifiable gates:
      - **Traded on:** exactly one board pick in the pick's draft routes it sender, receiver, onward
        receiver, with that sequence once in its route.
 
-     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated.
+     Every other pick leg keeps the reason, except a pick projected from the live draft order (rule
+     v6), which rests on the order, not on a pick outcome: it carries neither the reason nor
+     `corroboratedBy`. A nominee-excluded not-used pick is never corroborated.
      Rule v2 introduced this and rule v3 keeps it. The contract still accepts v1 batches, which name no
      corroborating provider, so earlier batches stay valid. Each version states its own limitation
      text.
@@ -4382,7 +4394,51 @@ The remaining work proceeds through these independently verifiable gates:
      name it, and rules v1 to v4 never do. The v5 limitation text says that the membership of the 2025
      national draft is proven by a reviewed Footyinfo board, no official session being reviewed.
 
-   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
+   - **Projected picks (rule v6, owner direction 2026-10-14, issue 789).** The owner's direction:
+     "it's always going to be a provisional grade of sorts because careers run continuously, if the
+     picks havent been selected, just find the live draft order and attribute the picks accordingly".
+     Until then a `pending` pick outcome (its draft after the candidate's anchor season) blocked its
+     trade. Under rule v6 the grader reads the candidate's `pickCustody`, the reviewed Official AFL
+     indicative order rows ("Pick custody from the pre-draft order" below), to find the pick's slot:
+     - **Slot.** Among usable (`single_source` or `corroborated`) national custody rows of the pick's
+       draft, those with the pick's `pickId`, else those with its draft year, `nominalRound` and
+       `originalClubId`. The slot is the `recordedPickNumber` of the one row observed after every
+       other: a day or year observation spans that whole period, so two overlapping latest
+       observations have no slot.
+     - **Proxy.** When the pick's draft has no national custody row at all (a 2027 pick before any
+       2027 order exists), the usable row of the previous draft with the same round and original
+       club stands in, and the leg is flagged as a proxy. A draft that has an order but not this pick
+       is never proxied.
+     - **Value.** The leg is `valued` on basis `pick_projected_from_order` at the raw HPN DPVC v3
+       value of the slot (`hpnDpv3ValueForPick`, no scaling), and names its `projection`: the batch's
+       benchmark, the slot, the order's and the pick's draft years, the custody row and its
+       observation, and whether it is a proxy. It carries exactly one reason,
+       `pick_projected_from_live_order` or `pick_projected_from_prior_order_proxy`, both provisional,
+       and neither `single_source_pick_outcome` nor `corroboratedBy`: it rests on the order, not on
+       a pick outcome. DPVC is whole-career expected PAV, while every other leg realizes first-stint
+       PAV, so a projected value is not like for like with a realized one, and the limitation says so.
+     - **Still pending.** No unique slot, a slot with no number or beyond HPN's 1 to 90, or a
+       non-national pick stays `pick_outcome_pending`, which still blocks.
+     - **Totals and chains.** A projected leg is valued like any other: it enters the club's
+       `received` and `givenUp`, and weighs its value in a relative-value bundle. A traded-on pick
+       whose onward trade holds one is valued as `pick_traded_on_return` with
+       `traded_on_return_provisional`, and also `traded_on_return_projected` when a projected leg, or
+       a return resting on one, sits on the side its value reads: a leg its club received there, or
+       for a bundle a leg it gave. A pick traded twice before its draft is projected to the same slot
+       on both hops, so the middle club's received and given-up values for it cancel.
+     - **At-trade view.** Unchanged: a future pick's at-trade view stays `future_pick_slot_unknown`.
+     - **After the draft.** Once the pick is drafted and the candidate is re-reconciled, its outcome
+       is `selected` and the leg becomes the draftee's realized first stint, which is 0 until he plays.
+       A trade's value therefore drops sharply after draft night and climbs back as the draftee plays.
+     - **Versions.** Rules v1 to v5 never project a pick, so their batches still parse. The contract
+       checks the value against the slot, the proxy flag against its reason and the year before, and
+       the benchmark against the batch's. The v6 limitation adds that a pick whose draft is not yet in
+       evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not
+       first-stint) of its slot in the live Official AFL indicative order, and that a pick of a draft
+       with no order yet uses its original club's slot in the latest order.
+
+   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades and pick
+     custody (rule v6), v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
      starts the season after the trade (or after the draft, for a selected pick). It ends at the first
      season covered by spells in which the player appears for another club; that season still counts at
