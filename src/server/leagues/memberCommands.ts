@@ -305,6 +305,19 @@ export async function findPrismaLeagueIdByInviteCode(
   return league?.id ?? null;
 }
 
+// The default "<league> Team n" for a joiner, counting up from their slot. Removing a member frees a
+// number but keeps the others' names, so the slot alone can repeat a name an active member still holds.
+function nextDefaultTeamName(
+  leagueName: string,
+  activeMembers: ReadonlyArray<{ teamName: string }>,
+  startingNumber: number
+): string {
+  const taken = new Set(activeMembers.map((member) => member.teamName.trim().toLowerCase()));
+  let number = startingNumber;
+  while (taken.has(`${leagueName} Team ${number}`.toLowerCase())) number += 1;
+  return `${leagueName} Team ${number}`;
+}
+
 /**
  * Adds a manager to a league that is still forming. The league row is locked before membership is
  * read, so concurrent joins queue behind each other and cannot both take the last slot.
@@ -365,7 +378,8 @@ export async function joinLeague(
     }
 
     const draftSlot = activeMembers.length + 1;
-    const teamName = input.teamName?.trim() || `${league.name} Team ${draftSlot}`;
+    const teamName =
+      input.teamName?.trim() || nextDefaultTeamName(league.name, activeMembers, draftSlot);
     const normalizedTeamName = teamName.toLowerCase();
     if (
       activeMembers.some((member) => member.teamName.trim().toLowerCase() === normalizedTeamName)
