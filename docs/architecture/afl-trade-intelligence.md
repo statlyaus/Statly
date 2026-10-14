@@ -4122,7 +4122,10 @@ The remaining work proceeds through these independently verifiable gates:
    predecessor. `outcome_external_draft_sessions_exact` checks that the re-sync entries cover the
    re-synced selections exactly. Such a version's draft asset is evidence for an arrival-only (v4)
    spell (`outcome_external_promoted_session_resync_version`; the v1 to v3
-   `outcome_acquisition_promoted_event_current` has no such clause) and keeps the evidenced date
+   `outcome_acquisition_promoted_event_current` has no such clause; since migration 0280 that check
+   relies on the promotion insert guard's proof of exact coverage for a deferred candidate instead of
+   re-running it, because the candidate facts and proposal it read cannot change, and the candidate's
+   promotable and re-synced selections read its lists once) and keeps the evidenced date
    bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. The old
    draftee's selection is retired by number, but its asset stays current under 0256. It is excluded
    from arrivals only because its identity decision is no longer current (0254), and a reader of a

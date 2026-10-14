@@ -332,7 +332,12 @@ club can contradict the pick a walk settles on.
     session's date bounds (`outcome_acquisition_arrival_event_current` accepts a re-sync version through
     `outcome_external_promoted_session_resync_version`). The v1 to v3 check
     (`outcome_acquisition_promoted_event_current`) has no such clause: a v1 to v3 spell cannot start at
-    a re-sync version.
+    a re-sync version. Since migration 0280 the arrival check does not re-run
+    `outcome_external_draft_sessions_exact` for a deferred candidate. It reads the re-sync version's
+    stored coverage entry instead. The promotion insert guard already proved the exact coverage, and the
+    candidate facts and proposal it read cannot change once the promotion exists. On the grading
+    database one such check took 9 min 38 s before 0280. A migration that tightens the deferred branch
+    of `outcome_external_draft_sessions_exact` must re-check existing deferred promotions explicitly.
 
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
   allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured
