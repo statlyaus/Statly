@@ -4138,7 +4138,10 @@ The remaining work proceeds through these independently verifiable gates:
    completion with no pick-side issue, such as 2018) keeps its deferral decision when it lists
    something under it and writes no draft whole. Its receipt records `deferredIssueCount: 0`, and the
    database chooses the deferred coverage branch by `lineage_deferral_decision_id` rather than by
-   `deferred_issue_count`. Such a version's draft asset is evidence for an arrival-only (v4)
+   `deferred_issue_count`. Since migration 0283 a session proof's boundary identity check accepts a
+   cited decision that leads through approved same-subject revisions, re-targets included, to the
+   subject's approved current head. A later reviewed identity repair of a boundary draftee no longer
+   voids an already-finalized promotion's proof; a rejection or withdrawal still does. Such a version's draft asset is evidence for an arrival-only (v4)
    spell (`outcome_external_promoted_session_resync_version`; the v1 to v3
    `outcome_acquisition_promoted_event_current` has no such clause; since migration 0280 that check
    relies on the promotion insert guard's proof of exact coverage for a deferred candidate instead of

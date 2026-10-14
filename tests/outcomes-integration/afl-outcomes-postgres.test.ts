@@ -1352,6 +1352,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0280_resync_arrival_stored_coverage',
       '0281_undated_lineage_trade_arrival_window',
       '0282_issueless_deferral_resync',
+      '0283_boundary_identity_reviewed_successors',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(
