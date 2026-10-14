@@ -199,12 +199,20 @@ describe('a re-synced draftee arrival reads the promotion stored coverage (migra
         // The twin's draft asset never starts an arrival at the club it did not join.
         arrivalCurrent(client, twinEntry.entry, SEEDED_DRAFTEE),
       ]);
-    const twinArrival = (client: PoolClient) =>
-      arrivalCurrent(client, twinEntry.entry, TWIN.playerId);
+    // The arrival path's re-sync test for the twin's version, counted on its own: the call count of
+    // the whole arrival check depends on the plan the synthetic fixture gets, and CI recorded calls
+    // there that a run on the grading copy (no calls) does not show.
+    const twinResync = async (client: PoolClient) =>
+      (
+        await client.query<{ resync: boolean }>(
+          'SELECT outcome_external_promoted_session_resync_version($1,$2) AS resync',
+          [deferred.promotion.promotionId, twinEntry.event_version_id]
+        )
+      ).rows[0]!.resync;
 
     const before = await answers(ws, candidateIds, versionChecks);
     const arrivalsBefore = await counted(ws, arrivals);
-    const twinBefore = await counted(ws, twinArrival);
+    const twinBefore = await counted(ws, twinResync);
     expect(before.versions).toEqual([true, false, false, false]);
     expect(arrivalsBefore.value).toEqual([true, false, false]);
     expect(before.selections[1]).toEqual({
@@ -215,14 +223,15 @@ describe('a re-synced draftee arrival reads the promotion stored coverage (migra
     expect(before.selections[0]!.promotable).toHaveLength(
       seeded.candidate.content.draftSelections.length
     );
-    // Under 0278 the twin's arrival re-validates the deferred candidate's draft coverage.
+    // Under 0278 the re-sync test re-validates the deferred candidate's draft coverage.
+    expect(twinBefore).toMatchObject({ value: true });
     expect(twinBefore.sessionChecks).toBeGreaterThan(0);
 
     await ws.migrate();
 
     expect(await answers(ws, candidateIds, versionChecks)).toEqual(before);
     expect((await counted(ws, arrivals)).value).toEqual(arrivalsBefore.value);
-    expect(await counted(ws, twinArrival)).toEqual({ value: true, sessionChecks: 0 });
+    expect(await counted(ws, twinResync)).toEqual({ value: true, sessionChecks: 0 });
   }, 600_000);
 
   it('keeps the promotable selections of a draft left whole to its earlier promotion', async () => {
