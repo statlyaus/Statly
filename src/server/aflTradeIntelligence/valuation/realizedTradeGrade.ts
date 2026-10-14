@@ -429,6 +429,10 @@ export function gradeAflTradesOnRealizedValue(
       };
     }
     if (outcome.disposition === 'not_used') {
+      // Rule v5: a count whose draft membership a reviewed Footyinfo board proved says so. The
+      // outcome stays single-source: the board proves the draft, not this pick's fate.
+      const proven =
+        outcome.draftProvenBy === undefined ? {} : { draftProvenBy: outcome.draftProvenBy };
       // A board-stated passed or removed pick was not spent matching a bid: worth 0, like a pick of
       // a club that took no nominee.
       if (
@@ -442,6 +446,7 @@ export function gradeAflTradesOnRealizedValue(
         return {
           ...base,
           ...source,
+          ...proven,
           state: 'valued',
           basis: 'pick_not_used_no_nominee',
           realizedValue: 0,
@@ -451,6 +456,7 @@ export function gradeAflTradesOnRealizedValue(
       if (outcome.nominationBasis === 'club_took_nominated_player')
         return {
           ...base,
+          ...proven,
           state: 'excluded',
           basis: 'pick_not_used_nominee_excluded',
           reasons: sorted([SINGLE, 'not_used_nominee_excluded']),
