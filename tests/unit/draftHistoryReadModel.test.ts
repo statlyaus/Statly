@@ -76,6 +76,6 @@ describe('draft history read model helpers', () => {
     expect(source).toContain('leagueId?: string');
     expect(source).toContain('options.leagueId');
     expect(source).toContain('...(leagueId ? { leagueId } : {})');
-    expect(source).toContain('some: { userId }');
+    expect(source).toContain('some: { userId, isActive: true }');
   });
 });
