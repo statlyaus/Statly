@@ -272,6 +272,83 @@ describe('re-syncing a re-targeted draftee from a completion with no pick-side i
     ).rows[0]!;
     expect(checks).toEqual({ is_resync: true, arrival: true });
 
+    // The deferred coverage branch for a decision with no deferred issue: the stored proposal is
+    // exact, a session (v3) proposal is not, and neither is any proposal while the candidate holds a
+    // selection it would write whole.
+    const sessionsExact = async (proposal: unknown) =>
+      (
+        await ws.pool.query<{ valid: boolean }>(
+          'SELECT outcome_external_draft_sessions_exact($1,$2::jsonb) AS valid',
+          [repaired.candidate.candidateId, JSON.stringify(proposal)]
+        )
+      ).rows[0]!.valid;
+    expect(await sessionsExact(repaired.proposal.content)).toBe(true);
+    expect(
+      await sessionsExact({
+        ...repaired.proposal.content,
+        schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v3',
+      })
+    ).toBe(false);
+    const promotable = `external-draft-selection:${'e'.repeat(64)}`;
+    const reconciledRow = async (statement: string) => {
+      const client = await ws.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SET LOCAL session_replication_role = replica');
+        await client.query(statement, [repaired.candidate.candidateId, promotable]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+    // A selection of another draft, which the candidate would write whole, inserted with the
+    // candidate guards off: the insert guard refuses such a candidate outright.
+    await reconciledRow(
+      `INSERT INTO outcome_external_reconciliation_draft_selection
+       SELECT (jsonb_populate_record(NULL::outcome_external_reconciliation_draft_selection,
+                to_jsonb(selection) || jsonb_build_object('selection_id',$2::text,'draft_type','rookie',
+                  'ordinal',selection.ordinal+1000,
+                  'pick_id','draft-pick:'||repeat('f',64),
+                  'selection_json',selection.selection_json||jsonb_build_object(
+                    'pickId','draft-pick:'||repeat('f',64),'selectionId',$2::text,'draftType','rookie')))).*
+         FROM outcome_external_reconciliation_draft_selection selection
+        WHERE selection.candidate_id=$1 LIMIT 1`
+    );
+    expect(
+      (
+        await ws.pool.query<{ count: number }>(
+          'SELECT count(*)::integer AS count FROM outcome_external_candidate_promotable_selections($1)',
+          [repaired.candidate.candidateId]
+        )
+      ).rows[0]!.count
+    ).toBe(1);
+    expect(await sessionsExact(repaired.proposal.content)).toBe(false);
+    expect(
+      await sessionsExact({
+        ...repaired.proposal.content,
+        draftEventCoverage: [
+          ...repaired.proposal.content.draftEventCoverage,
+          {
+            draftYear: 2024,
+            draftType: 'rookie',
+            eventDate: '2024-11-22',
+            officialName: 'Synthetic rookie draft',
+            expectedSelectionCount: 1,
+            selectionIds: [promotable],
+            status: 'complete',
+          },
+        ],
+      })
+    ).toBe(false);
+    await reconciledRow(
+      `DELETE FROM outcome_external_reconciliation_draft_selection
+        WHERE candidate_id=$1 AND selection_id=$2`
+    );
+    expect(await sessionsExact(repaired.proposal.content)).toBe(true);
+
     // The review needs no draft events: no draft is written whole, only the session re-sync, which
     // it reads from canonical state. Read now, the slot is current on the re-sync version itself.
     const derived = deriveAflTradeExternalCanonicalPromotionProposal({

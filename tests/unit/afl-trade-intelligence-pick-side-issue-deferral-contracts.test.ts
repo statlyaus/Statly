@@ -38,6 +38,7 @@ import {
   createAflTradeHistoricalCompletionReconciliationAuthority,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
 import {
+  aflTradePickDefinitionsDeferred,
   pickDefinitionDisposition,
   resolveWrittenPickDefinitions,
 } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
@@ -2638,5 +2639,47 @@ describe('a completion with no pick-side issue whose draftee an identity repair 
       resyncedSelections: [],
       promotedDraftCount: 1,
     });
+  });
+
+  it('holds a pick it writes to the conflict rule: nothing deferred justifies retaining one', () => {
+    const candidate = resynced();
+    const authenticated = authenticateAflTradeExternalCanonicalPromotionProposal({
+      candidate,
+      proposal: deriveAflTradeExternalCanonicalPromotionProposal({
+        candidate,
+        proposedAt: '2026-08-09T07:31:00.000Z',
+        draftEvents: [],
+        promotedSessionResyncs: [
+          {
+            selectionId: selection14,
+            supersedesVersionId: 'event-version:session-2',
+            eventDate: '2025-11-20',
+            datePrecision: null,
+            officialName: '2025 AFL National Draft',
+          },
+        ],
+      }),
+    });
+    expect(authenticated.pickLineageDeferral).toMatchObject({ deferredIssueCount: 0 });
+    const deferred = aflTradePickDefinitionsDeferred(authenticated.pickLineageDeferral);
+    expect(deferred).toBe(false);
+    // A stored definition that conflicts with the written one refuses, as without a decision.
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'conflict' },
+        deferred,
+        registrationId: undefined,
+      })
+    ).toBe('conflict');
+    expect(
+      pickDefinitionDisposition({
+        plan: { kind: 'enrich', facts: { nominalRound: 1, nominalPick: 27, originalClubId: null } },
+        deferred,
+        registrationId: undefined,
+      })
+    ).toBe('conflict');
+    // A decision that deferred an issue still retains, and no decision never does.
+    expect(aflTradePickDefinitionsDeferred({ deferredIssueCount: 1 })).toBe(true);
+    expect(aflTradePickDefinitionsDeferred(null)).toBe(false);
   });
 });

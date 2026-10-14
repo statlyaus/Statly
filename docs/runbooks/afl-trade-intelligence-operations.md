@@ -916,7 +916,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
    promotions key a pick by its slot, a trade by its custody) and no reviewed lineage registration
    is retained under the deferral: the asset references the existing pick unchanged, no facts are
    written, and the receipt lists it as `retainedPickDefinitionIds` with
-   `retainedPickDefinitionCount`; without a deferral that is still the immutable conflict. A stable
+   `retainedPickDefinitionCount`; without a deferral, or under a decision that deferred no issue
+   (migration 0282), that is still the immutable conflict, and such a pick is never custody-defined. A stable
    pick the written transfers number differently (a trade page's "Pick 46" and a later trade's
    "Pick 56" for the same entitlement) is defined, under the deferral, from its one usable custody
    observation in the candidate's full custody (the slot it became; a deferred pick's observation
