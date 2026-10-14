@@ -1140,14 +1140,17 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v6 and its limitation', () => {
+  it('seals rule v7 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v6');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v7');
+    expect(batch.content.limitation).toContain(
+      "a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return"
+    );
     expect(batch.content.limitation).toContain(
       'a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order'
     );
@@ -1635,5 +1638,210 @@ describe('rule v6: a pick not yet drafted is valued from the live draft order (o
         reasons: ['single_source_pick_outcome', 'traded_on_return_provisional'],
       });
     });
+  });
+});
+
+describe('rule v7: a special entitlement follows its reviewed custody chain (issue 789)', () => {
+  const entitlementId = `special-draft-entitlement:${hex('e')}`;
+  const concession = (transferId: string, transactionId: string, from: string, to: string) =>
+    ({
+      ...pick(transferId, transactionId, from, to, 'unused', 2020, null),
+      asset: {
+        kind: 'special_pick',
+        entitlementType: 'assistance_concession',
+        draftYear: 2020,
+        selectionOrdinal: null,
+        sourceLabel: '2020MIDR1 (Gold Coast concession)',
+      },
+    }) as unknown as Transfer;
+  // tx-S (2019): Gold Coast sends Geelong its 2020 concession for player g. tx-C (2020): Geelong
+  // trades it on, as ordinary pick 15 (draftee d15, GWS), to GWS for player cam.
+  const geelong = (): Candidate => ({
+    transactions: [trade('tx-S', 2019), trade('tx-C', 2020)],
+    transfers: [
+      concession('tr-S1', 'tx-S', 'gold-coast', 'geelong'),
+      player('tr-S2', 'tx-S', 'geelong', 'gold-coast', 'g'),
+      pick('tr-C1', 'tx-C', 'geelong', 'gws', 'pick-15', 2020, 15),
+      player('tr-C2', 'tx-C', 'gws', 'geelong', 'cam'),
+    ],
+    pickOutcomes: [outcome('tr-C1', { disposition: 'selected', playerId: 'd15' })],
+  });
+  const chain = [
+    { transferId: 'tr-S1', entitlementId, predecessorTransferId: null },
+    { transferId: 'tr-C1', entitlementId, predecessorTransferId: 'tr-S1' },
+  ];
+  const data = {
+    seasonSpells: [
+      ...spells('g', [
+        [2021, 'gold-coast'],
+        [2022, 'gold-coast'],
+      ]),
+      ...spells('d15', [
+        [2021, 'gws'],
+        [2022, 'gws'],
+      ]),
+      ...spells('cam', [
+        [2021, 'geelong'],
+        [2022, 'geelong'],
+        [2023, 'carlton'],
+      ]),
+    ],
+    pav: [
+      ...pavRows('g', [[2021, 'gold-coast', 6]]),
+      ...pavRows('d15', [[2022, 'gws', 8.597]]),
+      ...pavRows('cam', [
+        [2021, 'geelong', 30],
+        [2022, 'geelong', 25],
+      ]),
+    ],
+    reviewedArrivals: [{ playerId: 'cam', clubId: 'geelong', season: 2021 }],
+    specialEntitlementCustody: chain,
+  };
+
+  it('values a special entitlement at its share of the return its successor brought back', () => {
+    const batch = gradeAflTradesOnRealizedValue(inputs(geelong(), data));
+    expect(legOf(batch, 'tr-S1')).toMatchObject({
+      state: 'valued',
+      basis: 'pick_traded_on_return',
+      realizedValue: 55,
+      onward: { transactionId: 'tx-C', allocation: 'sole_asset', returnValue: 55, share: 1 },
+      specialEntitlement: { entitlementId, successorTransferId: 'tr-C1' },
+      reasons: [
+        'single_source_pick_outcome',
+        'special_entitlement_custody_linked',
+        'traded_on_return_provisional',
+      ],
+    });
+    expect(legOf(batch, 'tr-S1')).not.toHaveProperty('corroboratedBy');
+    expect(gradeOf(batch, 'tx-S')).toMatchObject({
+      state: 'provisional',
+      clubs: [
+        { clubId: 'geelong', received: 55 },
+        { clubId: 'gold-coast', givenUp: 55 },
+      ],
+    });
+    expect(legOf(batch, 'tr-C1')).toMatchObject({
+      basis: 'pick_selected_first_stint',
+      realizedValue: 8.597,
+    });
+    expect(legOf(batch, 'tr-C1')).not.toHaveProperty('specialEntitlement');
+  });
+
+  it.each<[string, Partial<AflTradeRealizedTradeGradeInputs>, (candidate: Candidate) => void]>([
+    ['no custody chain is loaded', { specialEntitlementCustody: undefined }, () => {}],
+    ['the chain has no successor', { specialEntitlementCustody: chain.slice(0, 1) }, () => {}],
+    [
+      'the successor is another entitlement’s',
+      {
+        specialEntitlementCustody: [
+          chain[0]!,
+          { ...chain[1]!, entitlementId: `special-draft-entitlement:${hex('f')}` },
+        ],
+      },
+      () => {},
+    ],
+    [
+      'the successor is given by another club',
+      {},
+      (candidate) => {
+        candidate.transfers[2] = pick('tr-C1', 'tx-C', 'carlton', 'gws', 'pick-15', 2020, 15);
+      },
+    ],
+    [
+      'the successor’s trade comes first',
+      {},
+      (candidate) => {
+        candidate.transactions[1] = trade('tx-C', 2018);
+      },
+    ],
+    [
+      'a resolved special entitlement names another entitlement',
+      {},
+      (candidate) => {
+        candidate.transfers[0] = {
+          ...candidate.transfers[0]!,
+          asset: {
+            kind: 'special_entitlement',
+            entitlementId: `special-draft-entitlement:${hex('f')}`,
+          },
+        } as unknown as Transfer;
+      },
+    ],
+  ])('stays unsupported when %s', (_label, extra, change) => {
+    const candidate = geelong();
+    change(candidate);
+    const batch = gradeAflTradesOnRealizedValue(inputs(candidate, { ...data, ...extra }));
+    expect(legOf(batch, 'tr-S1')).toMatchObject({
+      state: 'blocked',
+      reasons: ['special_entitlement_unsupported'],
+    });
+    expect(legOf(batch, 'tr-S1')).not.toHaveProperty('specialEntitlement');
+  });
+
+  it('follows a resolved special entitlement whose id is its chain’s', () => {
+    const candidate = geelong();
+    candidate.transfers[0] = {
+      ...candidate.transfers[0]!,
+      asset: { kind: 'special_entitlement', entitlementId },
+    } as unknown as Transfer;
+    const batch = gradeAflTradesOnRealizedValue(inputs(candidate, data));
+    expect(legOf(batch, 'tr-S1')).toMatchObject({ state: 'valued', realizedValue: 55 });
+  });
+
+  it('blocks a custody link whose onward trade leads back to its own trade', () => {
+    // Same season, undated: Geelong receives pick Z from GWS in tx-C and gives it on in tx-S.
+    const candidate = geelong();
+    candidate.transactions = [trade('tx-S', 2020), trade('tx-C', 2020)];
+    candidate.transfers.push(
+      pick('tr-C3', 'tx-C', 'gws', 'geelong', 'pick-Z', 2021, 30),
+      pick('tr-S4', 'tx-S', 'geelong', 'gold-coast', 'pick-Z', 2021, 30)
+    );
+    candidate.pickOutcomes = [
+      ...candidate.pickOutcomes!,
+      outcome('tr-C3', { disposition: 'traded_on' }),
+      outcome('tr-S4', { disposition: 'selected', playerId: 'dz' }),
+    ];
+    const batch = gradeAflTradesOnRealizedValue(inputs(candidate, data));
+    expect(legOf(batch, 'tr-S1')).toMatchObject({
+      state: 'blocked',
+      reasons: ['traded_on_return_blocked'],
+    });
+    expect(legOf(batch, 'tr-C3').reasons).toEqual(['traded_on_return_blocked']);
+  });
+
+  it('unblocks a traded-on pick bundled with the special entitlement in its onward trade', () => {
+    // tx-K (2019): West Coast sends Gold Coast pick K for player k; Gold Coast gives Geelong pick K
+    // (draftee dk) with the concession in tx-S.
+    const candidate = geelong();
+    candidate.transactions.push(trade('tx-K', 2019));
+    candidate.transfers.push(
+      pick('tr-K1', 'tx-K', 'west-coast', 'gold-coast', 'pick-K', 2019, 10),
+      player('tr-K2', 'tx-K', 'gold-coast', 'west-coast', 'k'),
+      pick('tr-S3', 'tx-S', 'gold-coast', 'geelong', 'pick-K', 2019, 10)
+    );
+    candidate.pickOutcomes = [
+      ...candidate.pickOutcomes!,
+      outcome('tr-K1', { disposition: 'traded_on' }),
+      outcome('tr-S3', { disposition: 'selected', playerId: 'dk' }),
+    ];
+    const kData = {
+      ...data,
+      seasonSpells: [...data.seasonSpells, ...spells('dk', [[2021, 'geelong']])],
+      pav: [...data.pav, ...pavRows('dk', [[2021, 'geelong', 5]])],
+    };
+    const before = gradeAflTradesOnRealizedValue(
+      inputs(candidate, { ...kData, specialEntitlementCustody: undefined })
+    );
+    expect(legOf(before, 'tr-K1').reasons).toEqual(['traded_on_return_blocked']);
+    const after = gradeAflTradesOnRealizedValue(inputs(candidate, kData));
+    expect(legOf(after, 'tr-S1')).toMatchObject({ state: 'valued', realizedValue: 55 });
+    // Gold Coast gave the concession (55) and pick K (dk's 5) for g (6): pick K takes 5 / 60.
+    expect(legOf(after, 'tr-K1')).toMatchObject({
+      state: 'valued',
+      basis: 'pick_traded_on_return',
+      onward: { transactionId: 'tx-S', allocation: 'relative_value', weight: 5, weightTotal: 60 },
+      realizedValue: (5 / 60) * 6,
+    });
+    expect(gradeOf(after, 'tx-K').state).toBe('provisional');
   });
 });

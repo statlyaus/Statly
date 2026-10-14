@@ -29,6 +29,7 @@ const V3 = 'afl-trade-realized-grade-rule/v3' as const;
 const V4 = 'afl-trade-realized-grade-rule/v4' as const;
 const V5 = 'afl-trade-realized-grade-rule/v5' as const;
 const V6 = 'afl-trade-realized-grade-rule/v6' as const;
+const V7 = 'afl-trade-realized-grade-rule/v7' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -37,6 +38,7 @@ const LIMITATIONS = {
   [V4]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
   [V5]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; not public factual, publication, production or activation authority.',
   [V6]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; not public factual, publication, production or activation authority.",
+  [V7]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -1153,6 +1155,131 @@ describe('realized trade grade batch contract', () => {
             reasons: ['traded_on_return_projected'],
           })),
         /onward-trade reasons/,
+      ],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v7 special entitlements followed through their custody chain', () => {
+    const signed = (ruleVersion: AflTradeRealizedGradeRuleVersion) => {
+      const value = content(ruleVersion);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    const LINKED = 'special_entitlement_custody_linked' as const;
+    const entitlementId = `special-draft-entitlement:${hex('e')}`;
+    // tx-5's tr-5a becomes a special entitlement Hawthorn traded on in tx-6 as pick tr-6a.
+    const special = (
+      value: Content,
+      fields: Partial<Leg> & Record<string, unknown> = {},
+      { reason = true, successorTransferId = 'tr-6a' } = {}
+    ) =>
+      withLeg(
+        value,
+        'tx-5',
+        0,
+        (leg) =>
+          ({
+            ...leg,
+            atTrade: { kind: 'unavailable', reason: 'pick_outside_projection_domain' },
+            specialEntitlement: { entitlementId, successorTransferId },
+            reasons: [SINGLE, ...(reason ? [LINKED] : []), 'traded_on_return_provisional'],
+            ...fields,
+          }) as Leg
+      );
+
+    it('accepts a traded-on special entitlement that names its entitlement and successor', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(special(signed(V7)));
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      expect(tradeOf(batch.content as Content, 'tx-5')).toMatchObject({
+        state: 'provisional',
+        reasons: [SINGLE, LINKED, 'traded_on_return_provisional'],
+        legs: [
+          {
+            basis: 'pick_traded_on_return',
+            specialEntitlement: { entitlementId, successorTransferId: 'tr-6a' },
+          },
+        ],
+      });
+    });
+
+    it('seals v7 with its limitation and still parses sealed v1 to v6 batches', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(signed(V7));
+      expect(batch.content.limitation).toBe(LIMITATIONS[V7]);
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+      for (const ruleVersion of [V4, V5, V6] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(signed(ruleVersion))).not.toThrow();
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['a special entitlement under v6', () => special(signed(V6)), /Only rule v7 and later/],
+      [
+        'the custody reason under v6',
+        () =>
+          withLeg(signed(V6), 'tx-5', 0, (leg) => ({
+            ...leg,
+            reasons: [SINGLE, LINKED, 'traded_on_return_provisional'],
+          })),
+        /Only rule v7 and later/,
+      ],
+      [
+        'a special entitlement without its reason',
+        () => special(signed(V7), {}, { reason: false }),
+        /followed through its custody chain, and only that/,
+      ],
+      [
+        'the custody reason without a special entitlement',
+        () =>
+          withLeg(signed(V7), 'tx-5', 0, (leg) => ({
+            ...leg,
+            reasons: [SINGLE, LINKED, 'traded_on_return_provisional'],
+          })),
+        /followed through its custody chain, and only that/,
+      ],
+      [
+        'a special entitlement on a selected pick',
+        () =>
+          withLeg(
+            signed(V7),
+            'tx-6',
+            0,
+            (leg) =>
+              ({
+                ...leg,
+                specialEntitlement: { entitlementId, successorTransferId: 'tr-6b' },
+                reasons: [SINGLE, LINKED],
+              }) as Leg
+          ),
+        /Only a single-source traded-on pick leg follows/,
+      ],
+      [
+        'a corroborated special entitlement',
+        () =>
+          special(signed(V7), {
+            corroboratedBy: 'footyinfo',
+            reasons: [LINKED, 'traded_on_return_provisional'],
+          }),
+        /Only a single-source traded-on pick leg follows/,
+      ],
+      [
+        'a successor its club did not give',
+        () => special(signed(V7), {}, { successorTransferId: 'tr-6c' }),
+        /successor is the leg its club gave in the onward trade/,
+      ],
+      [
+        'a successor outside the onward trade',
+        () => special(signed(V7), {}, { successorTransferId: 'tr-4a' }),
+        /successor is the leg its club gave in the onward trade/,
+      ],
+      [
+        'an entitlement id that is not a special entitlement address',
+        () =>
+          special(signed(V7), {
+            specialEntitlement: { entitlementId: 'draft-pick:x', successorTransferId: 'tr-6a' },
+          }),
+        /special-draft-entitlement/,
       ],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });
