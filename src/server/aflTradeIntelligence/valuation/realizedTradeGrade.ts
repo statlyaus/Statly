@@ -303,6 +303,28 @@ function notBefore(later: Transaction, earlier: Transaction) {
   return true;
 }
 
+/**
+ * How a traded-on pick shares its club's onward return: all of it as the sole asset given, by its
+ * realized weight over the bundle's total, or evenly when everything given was worth 0.
+ */
+function allocateOnwardReturn(givenCount: number, givenUp: number, weight: number) {
+  if (givenCount === 1)
+    return { allocation: 'sole_asset' as const, share: 1, weight: null, weightTotal: null };
+  if (givenUp > 0)
+    return {
+      allocation: 'relative_value' as const,
+      share: weight / givenUp,
+      weight,
+      weightTotal: givenUp,
+    };
+  return {
+    allocation: 'equal_split' as const,
+    share: 1 / givenCount,
+    weight: null,
+    weightTotal: null,
+  };
+}
+
 /** Grades every trade in the candidate into one sealed private batch. */
 export function gradeAflTradesOnRealizedValue(
   inputs: AflTradeRealizedTradeGradeInputs
@@ -669,18 +691,10 @@ export function gradeAflTradesOnRealizedValue(
       };
     const returnValue = club.received;
     // A sole asset's pick leg may itself be blocked there, leaving givenUp unknown and unused.
-    const givenUp = club.givenUp ?? 0;
     const weight = pickLeg.state === 'valued' ? pickLeg.realizedValue : 0;
-    const allocation =
-      given.length === 1 ? 'sole_asset' : givenUp > 0 ? 'relative_value' : ('equal_split' as const);
-    const share =
-      allocation === 'sole_asset'
-        ? 1
-        : allocation === 'relative_value'
-          ? weight / givenUp
-          : 1 / given.length;
+    const allocated = allocateOnwardReturn(given.length, club.givenUp ?? 0, weight);
     const reasons: AflTradeRealizedGradeReason[] = [...single];
-    if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
+    if (allocated.allocation === 'equal_split') reasons.push('equal_split_tiebreak');
     if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
     // Rule v3: exact on the club's side, but the onward trade is blocked elsewhere.
     if (onward.state === 'blocked') reasons.push('traded_on_return_partial');
@@ -693,15 +707,15 @@ export function gradeAflTradesOnRealizedValue(
       ...special,
       state: 'valued',
       basis: 'pick_traded_on_return',
-      realizedValue: share * returnValue,
+      realizedValue: allocated.share * returnValue,
       onward: {
         transactionId: onward.transactionId,
-        allocation,
+        allocation: allocated.allocation,
         returnValue,
         givenAssetCount: given.length,
-        weight: allocation === 'relative_value' ? weight : null,
-        weightTotal: allocation === 'relative_value' ? givenUp : null,
-        share,
+        weight: allocated.weight,
+        weightTotal: allocated.weightTotal,
+        share: allocated.share,
       },
       reasons: sorted(reasons),
     };
