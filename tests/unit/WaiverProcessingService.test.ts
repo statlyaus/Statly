@@ -180,6 +180,41 @@ describe('WaiverProcessingService', () => {
     expect(projection.projectLeague).toHaveBeenCalledWith({ leagueId: 'league-1' });
   });
 
+  it('drops a player whose roster row is still stored under an alias id', async () => {
+    const { db, tx } = createDbMock();
+    Object.assign(tx, {
+      playerExternalIdentity: {
+        findUnique: vi.fn(({ where }: { where: { provider_externalId: { externalId: string } } }) =>
+          Promise.resolve(
+            where.provider_externalId.externalId === 'retired-old-player'
+              ? { playerId: 'old-player' }
+              : null
+          )
+        ),
+      },
+    });
+    tx.leagueRosterPlayer.findFirst.mockImplementation(
+      async ({ where }: { where: { playerId?: { in: string[] }; memberId?: string } }) =>
+        where.playerId?.in.includes('retired-old-player') && where.memberId === 'member-1'
+          ? { playerId: 'retired-old-player', memberId: 'member-1' }
+          : null
+    );
+    const claimStore = createClaimStoreMock();
+    const projection = { projectLeague: vi.fn().mockResolvedValue({ owned: 2, available: 10 }) };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ dropPlayerId: 'retired-old-player' })],
+    });
+
+    expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+    expect(tx.leagueRosterPlayer.deleteMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1', playerId: 'retired-old-player' },
+    });
+  });
+
   it('drops canonical ownership when a pending claim contains a retired alias', async () => {
     const { db, tx } = createDbMock();
     Object.assign(tx, {
@@ -770,13 +805,39 @@ describe('PrismaWaiverClaimStore', () => {
     });
   });
 
+  it('refuses to cancel a claim settled after the route read it, and releases no FAAB', async () => {
+    const db = {
+      teamAction: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      waiverPriority: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
+    };
+    const { firestore, waiverDoc } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.cancelPendingClaim({
+        leagueId: 'league-1',
+        claimId: 'action-1',
+        claim: claim({ id: 'action-1', bidAmount: 7 }),
+        cancelledBy: 'user-1',
+      })
+    ).rejects.toMatchObject({ code: 'CLAIM_NOT_PENDING' });
+
+    expect(db.waiverPriority.updateMany).not.toHaveBeenCalled();
+    expect(waiverDoc.update).not.toHaveBeenCalled();
+  });
+
   it('cancels canonical pending claims and releases reserved FAAB before mirroring cancellation', async () => {
     const db = {
       leagueMember: {
         findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
       },
       teamAction: {
-        update: vi.fn().mockResolvedValue({ id: 'action-1' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       waiverPriority: {
         findMany: vi
@@ -798,8 +859,8 @@ describe('PrismaWaiverClaimStore', () => {
       cancelledBy: 'user-1',
     });
 
-    expect(db.teamAction.update).toHaveBeenCalledWith({
-      where: { id: 'action-1' },
+    expect(db.teamAction.updateMany).toHaveBeenCalledWith({
+      where: { id: 'action-1', leagueId: 'league-1', status: 'PENDING' },
       data: expect.objectContaining({
         status: 'CANCELLED',
         processedAt: expect.any(Date),
