@@ -351,8 +351,8 @@ interface CanonicalPickCustody {
 /**
  * The provider's stated outcome for one received pick. It is single-source evidence kept apart from
  * governed lineage, which needs a proven custody chain: a `selected` outcome names the selection by
- * the stated player and the receiving club, never by pick number. `pending` is a pick whose draft
- * lies after the candidate's anchor season.
+ * the stated player and the receiving club, never by pick number. `pending` is a "not used" pick
+ * whose draft the candidate holds no selection or board pick in, at or after its anchor season.
  */
 interface CanonicalPickOutcome {
   outcomeId: string;
@@ -2120,21 +2120,47 @@ function createNominatedSelectionCounter(
 }
 
 /**
- * A "not used" pick in a draft after the anchor season is pending. Otherwise it is stated, and a
- * national pick also records whether the receiving club took a nominated player in that draft: the
- * only sourceable fact about a pick spent matching a bid or passed. Without complete access
- * evidence the count is left unknown.
+ * Whether a pick's draft is still to be held, judged by the evidence (owner direction 2026-10-14,
+ * issue 789): the candidate holds no selection, and no Footyinfo board pick, in that draft year and
+ * type. A board prints a pick only as selected, passed or removed, all outcomes of a held draft. The
+ * anchor season alone cannot say, since a capture of the next draft's indicative order raises the
+ * anchor to that draft's year before anyone is selected. A draft before the anchor season has been
+ * held, so a draft there with no selections stays a gap in the evidence, never pending.
+ */
+export function isAflTradeDraftPending(
+  held: {
+    draftSelections: readonly DraftKey[];
+    draftBoardPicks?: readonly DraftKey[] | undefined;
+  },
+  anchorSeasonYear: number,
+  draft: DraftKey
+): boolean {
+  const inDraft = (record: DraftKey) =>
+    record.draftYear === draft.draftYear && record.draftType === draft.draftType;
+  return (
+    draft.draftYear >= anchorSeasonYear &&
+    !held.draftSelections.some(inDraft) &&
+    !(held.draftBoardPicks ?? []).some(inDraft)
+  );
+}
+type DraftKey = { draftYear: number; draftType: string };
+
+/**
+ * A "not used" pick whose draft is pending (see `isAflTradeDraftPending`) is pending. Otherwise it
+ * is stated, and a national pick also records whether the receiving club took a nominated player in
+ * that draft: the only sourceable fact about a pick spent matching a bid or passed. Without complete
+ * access evidence the count is left unknown.
  */
 function classifyNotUsedPick(
   asset: { draftYear: number; draftType: string },
-  anchorSeasonYear: number,
+  draftPending: boolean,
   countNominated: () => NominatedSelectionCount | null
 ): {
   status: CanonicalPickOutcome['outcomeStatus'];
   nomination: NominationFacts;
   evidenceIds: string[];
 } {
-  if (asset.draftYear > anchorSeasonYear) {
+  if (draftPending) {
     return { status: 'pending', nomination: {}, evidenceIds: [] };
   }
   if (asset.draftType !== 'national') return { status: 'stated', nomination: {}, evidenceIds: [] };
@@ -2280,7 +2306,12 @@ function reconcilePickDispositions(input: {
       continue;
     }
     if (claim.disposition === 'not_used') {
-      const outcome = classifyNotUsedPick(asset, input.anchorSeasonYear, () =>
+      const draftPending = isAflTradeDraftPending(
+        { draftSelections: input.draftSelections, draftBoardPicks: input.boardPicks },
+        input.anchorSeasonYear,
+        asset
+      );
+      const outcome = classifyNotUsedPick(asset, draftPending, () =>
         nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
       );
       // The board's own passed or removed pick comes before a count the board's membership proved,
@@ -3283,7 +3314,15 @@ export function reconcileAflTradeExternalEvidence(input: {
       (value) => value.pickId === transferredPick.pickId
     );
     if (matchingSelections.length !== 1) {
-      if (matchingSelections.length === 0 && transferredPick.draftYear > anchorSeasonYear) {
+      // A pick in a draft still to be held has no selection yet, so it has no lineage to resolve.
+      if (
+        matchingSelections.length === 0 &&
+        isAflTradeDraftPending(
+          { draftSelections, draftBoardPicks: draftBoard.records },
+          anchorSeasonYear,
+          transferredPick
+        )
+      ) {
         return;
       }
       issues.push({

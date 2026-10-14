@@ -4075,7 +4075,8 @@ The remaining work proceeds through these independently verifiable gates:
 3. **Reconcile and promote canonical facts.** Resolve provider identities and clubs without display-name
    joins; conserve every source row and issue; promote reviewed transactions, directed assets, draft
    selections, pick entitlements, and stable pick lineage. A future pick remains unresolved until its
-   exact selection and player are authenticated.
+   exact selection and player are authenticated; while its draft has no selection in evidence it is
+   pending and raises no lineage issue (see provider-stated pick outcomes below).
 
    **Pick-side deferral** (statlyaus/Statly#869, migration 0264, `source/pickLineageDeferral.ts`).
    Every reconciliation issue is `blocking` unless the candidate was prepared under an approved owner
@@ -4173,9 +4174,18 @@ The remaining work proceeds through these independently verifiable gates:
    from governed lineage. For each received pick, Draftguru states the player the receiving club used
    it on, "traded on", or "not used". A candidate records these as `pickOutcomes`: a `selected`
    outcome names the receiving club's one undisputed selection of the stated player in the pick's
-   draft, a "not used" pick whose draft lies after the candidate's anchor season is `pending`, and
-   anything that does not match is `unresolved` with a blocking issue. Each disposition's evidence
-   rides on its transfer, so the candidate's child tables conserve it. Outcomes are single-source
+   draft, a "not used" pick whose draft is still to be held is `pending`, and anything that does not
+   match is `unresolved` with a blocking issue. Whether a draft is still to be held is read from the
+   evidence, not the anchor season (`isAflTradeDraftPending`, statlyaus/Statly#789, 2026-10-14): the
+   draft is pending when it is at or after the candidate's anchor season and the candidate holds no
+   draft selection and no Footyinfo board pick in that draft year and type (a board prints only
+   selected, passed or removed picks, all outcomes of a held draft). A capture of the next draft's
+   indicative order raises the anchor to that draft's year before anyone is selected, so the anchor
+   alone would turn those picks `stated` and their lineage unresolved. A draft before the anchor
+   season has been held, so missing selections there stay a gap, never pending. The same predicate
+   excuses a pending draft's transferred pick from `lineage_unresolved`, and the candidate contract
+   refuses a `pending` outcome in a draft that has a selection or board pick. Each disposition's
+   evidence rides on its transfer, so the candidate's child tables conserve it. Outcomes are single-source
    and may feed only `provisional` grades (owner decision D, statlyaus/Statly#789); governed lineage
    still requires a proven custody chain. A pick's endpoint is never inferred from pick numbers:
    measured against Draftguru's stated outcomes, same-club number matching misattributed about one
