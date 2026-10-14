@@ -80,7 +80,7 @@ describe('league detail Prisma member projection', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.league.status).toBe(leagueStatus);
+    expect(result.league?.status).toBe(leagueStatus);
   });
 
   it('excludes retained inactive members from teams and league capacity', async () => {
