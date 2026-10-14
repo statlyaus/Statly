@@ -1879,9 +1879,22 @@ transaction-date coverage accepts `occurredOn: null` plus a `datePrecision` wind
 `outcome_event_evidenced_date_bounds` proves a trade window from the finalized promotion's
 transaction member and coverage. A v4 arrival entry may then be a window (as a v2 `windowEvent` is);
 it is current only against an event of exactly that precision, and the spell starts at the window's
-earliest day, so the grader's season rule places an October arrival in the following season. A
-year-only trade, an exact-day trade and every draftee arrival are unchanged; a window is reviewed
-precision from a stated source, never a substituted day.
+earliest day, so the grader's season rule places an October arrival in the following season. An
+exact-day trade and every draftee arrival are unchanged; a window is reviewed precision from a
+stated source, never a substituted day. A year-only trade keeps its meaning with one exception
+(migration 0281): a trade promoted before 0261 whose current version came from reviewed pick
+lineage (`outcome_current_canonical_reviewed_lineage_transactions`, 0274) cannot gain a window,
+because the deferred promotions skip it and a reviewed re-version would retire its reviewed pick
+realizations and change reviewed pick ids (the 2020 Jeremy Cameron trade). For a v4 arrival only,
+`outcome_reviewed_lineage_trade_arrival_window` gives such a current, approved trade version with
+no day and no precision the one window that the season's approved, finalized
+`official-afl-trade-period-dates` claims in its environment and competition state (the
+capture-only rule of 0263). Distinct windows are counted, as the review command's
+`loadReviewedTradePeriodWindows` reads them: a recapture restating the same window keeps it, while no
+claim or two different windows give none, and an arrival registered on one window stops being
+current once a capture states another. The event row stays undated, and
+`outcome_event_evidenced_date_bounds` and every other reader keep their meaning. Any other undated
+trade stays year-only.
 
 A promoted event binds its entry evidence to the exact source captures behind it, so a v1 spell whose
 capture bytes were lost could not be re-made: a re-fetched page is never byte-identical. A _source
@@ -4432,9 +4445,10 @@ The remaining work proceeds through these independently verifiable gates:
      - **Proxy.** When the pick's draft has no national custody row at all (a 2027 pick before any
        2027 order exists), the latest row of the previous draft with the same round and original
        club stands in, on the same usable-and-numbered terms, and the leg is flagged as a proxy. A
-       draft that has an order but not this pick is never proxied. Until a 2026 order is reviewed
-       (the reviewed pages cover 2019 to 2025), every 2026 pick is projected by this proxy from the
-       13 November 2025 order, and a 2027 pick, with no order for either year, stays pending.
+       draft that has an order but not this pick is never proxied. Until a 2026 order capture is
+       retained, every 2026 pick is projected by this proxy from the 13 November 2025 order. The
+       reviewed 14 October 2026 order (parser v5, below) then gives each 2026 pick its own slot, and
+       a 2027 pick is proxied from it.
      - **No original club.** A compensation, assistance, concession or priority pick has no
        resolvable original club, so it matches only a row with its own `pickId` and never proxies.
        In practice such a pick stays pending: an order row without an original club is `unresolved`.
@@ -4515,7 +4529,16 @@ The remaining work proceeds through these independently verifiable gates:
      the capture and ingestion URL gates admit by exact match only. 2025 is the 13 November 2025
      snapshot, the first after the pick-swap window closed on 7 November (115 slots); later 2025
      snapshots show a shorter order and are not reviewed. Post-night-one order pages carry no origin
-     and are not captured. A custody row with no original club is `unresolved` in reconciliation and
+     and are not captured. 2026 (issue 789) is the 14 October 2026 snapshot of the live page, the
+     order as it stood that day, before the season's pick-swap deadline, read by
+     `official-afl-draft-order-parser/v5`; 2019-2025 stay on v4, and each scope entry names its
+     parser, which the ingestion gate, the capture runner and the per-season decision key follow. v4
+     reads nothing from the 2026 page: each `ROUND <n>` heading is an `h4` just before its own
+     table, the club lists are headed "EVERY CLUB'S PICKS", and the page states its date only as
+     "Updated: October 14, 2026". v5 keeps v4's rules and accepts those three forms. It also
+     requires a stated date, and every stated date must be the observation date. The page has 97
+     slots in five rounds (20, 22, 19, 18 and 18). Seven of them, all compensation picks, have no
+     original club. A custody row with no original club is `unresolved` in reconciliation and
      no join path below reads it.
      Reconciliation (`source/externalEvidenceReconciliation.ts`) then joins a `Pick N` transfer to a
      custody row with that slot number. A numbered pick joins a slot with the same number, or a
