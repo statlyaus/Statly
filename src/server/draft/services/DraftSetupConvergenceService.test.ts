@@ -39,6 +39,8 @@ function buildMembers() {
     role: LeagueRole.MANAGER,
     teamName: `Team ${slot}`,
     draftSlot: slot,
+    isActive: true,
+    status: 'ACTIVE',
     joinedAt: new Date('2026-05-01T00:00:00.000Z'),
   }));
 }
