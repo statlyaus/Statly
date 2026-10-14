@@ -16,17 +16,11 @@ const idempotencyKeySchema = z
   .max(128)
   .regex(/^[A-Za-z0-9._:-]+$/);
 
+// Trim before the length check so padding does not count against the limit.
 const nonEmptyText = (maxLength: number) =>
-  z
-    .string()
-    .max(maxLength)
-    .refine((value) => value.trim().length > 0, 'Content cannot be empty')
-    .transform((value) => value.trim());
+  z.string().trim().min(1, 'Content cannot be empty').max(maxLength);
 
-const socialMessageText = z
-  .string()
-  .max(SOCIAL_MESSAGE_MAX_LENGTH)
-  .transform((value) => value.trim());
+const socialMessageText = z.string().trim().max(SOCIAL_MESSAGE_MAX_LENGTH);
 
 export const socialGifSchema = z
   .object({
