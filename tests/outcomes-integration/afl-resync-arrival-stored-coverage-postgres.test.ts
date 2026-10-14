@@ -98,21 +98,26 @@ const again = (ws: Workspace, namespace: string, retarget: typeof TWIN) =>
 
 /**
  * Runs `work` in a rolled-back transaction with function tracking on and returns its result with
- * the number of `outcome_external_draft_sessions_exact` calls it made.
+ * the number of `outcome_external_draft_sessions_exact` calls it made. The counter is read before
+ * and after: it holds the backend's unflushed counts, which can include an earlier transaction's.
  */
 async function counted<T>(ws: Workspace, work: (client: PoolClient) => Promise<T>) {
   const client = await ws.pool.connect();
+  const sessionCheckCalls = async () =>
+    Number(
+      (
+        await client.query<{ calls: string | null }>(
+          `SELECT pg_stat_get_xact_function_calls(
+                    'outcome_external_draft_sessions_exact(text,jsonb)'::regprocedure) AS calls`
+        )
+      ).rows[0]!.calls ?? 0
+    );
   try {
     await client.query('BEGIN');
     await client.query("SET LOCAL track_functions = 'all'");
+    const start = await sessionCheckCalls();
     const value = await work(client);
-    const calls = (
-      await client.query<{ calls: string | null }>(
-        `SELECT pg_stat_get_xact_function_calls(
-                  'outcome_external_draft_sessions_exact(text,jsonb)'::regprocedure) AS calls`
-      )
-    ).rows[0]!.calls;
-    return { value, sessionChecks: Number(calls ?? 0) };
+    return { value, sessionChecks: (await sessionCheckCalls()) - start };
   } finally {
     await client.query('ROLLBACK');
     client.release();
@@ -199,9 +204,9 @@ describe('a re-synced draftee arrival reads the promotion stored coverage (migra
         // The twin's draft asset never starts an arrival at the club it did not join.
         arrivalCurrent(client, twinEntry.entry, SEEDED_DRAFTEE),
       ]);
-    // The arrival path's re-sync test for the twin's version, counted on its own: the call count of
-    // the whole arrival check depends on the plan the synthetic fixture gets, and CI recorded calls
-    // there that a run on the grading copy (no calls) does not show.
+    // The twin's arrival check, and the re-sync test it makes for the twin's version.
+    const twinArrival = (client: PoolClient) =>
+      arrivalCurrent(client, twinEntry.entry, TWIN.playerId);
     const twinResync = async (client: PoolClient) =>
       (
         await client.query<{ resync: boolean }>(
@@ -213,6 +218,9 @@ describe('a re-synced draftee arrival reads the promotion stored coverage (migra
     const before = await answers(ws, candidateIds, versionChecks);
     const arrivalsBefore = await counted(ws, arrivals);
     const twinBefore = await counted(ws, twinResync);
+    const twinArrivalBefore = await counted(ws, twinArrival);
+    expect(twinArrivalBefore.value).toBe(true);
+    expect(twinArrivalBefore.sessionChecks).toBeGreaterThan(0);
     expect(before.versions).toEqual([true, false, false, false]);
     expect(arrivalsBefore.value).toEqual([true, false, false]);
     expect(before.selections[1]).toEqual({
@@ -232,6 +240,7 @@ describe('a re-synced draftee arrival reads the promotion stored coverage (migra
     expect(await answers(ws, candidateIds, versionChecks)).toEqual(before);
     expect((await counted(ws, arrivals)).value).toEqual(arrivalsBefore.value);
     expect(await counted(ws, twinResync)).toEqual({ value: true, sessionChecks: 0 });
+    expect(await counted(ws, twinArrival)).toEqual({ value: true, sessionChecks: 0 });
   }, 600_000);
 
   it('keeps the promotable selections of a draft left whole to its earlier promotion', async () => {
