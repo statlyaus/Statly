@@ -244,17 +244,18 @@ interface OrderSlot {
 
 /**
  * Rule v6 (owner direction 2026-10-14): the slot a pending national pick holds in the live Official
- * AFL indicative order. Its draft's usable custody rows with its `pickId`, else with its draft, round
- * and original club, give the slot of the latest observation. When its draft has no order at all, the
- * same round and original club in the previous draft's order stand in as a proxy (a 2027 pick before
- * the 2027 order exists). No unique slot, or a slot beyond HPN's 1 to 90, projects nothing.
+ * AFL indicative order. Its draft's custody rows with its `pickId` or with its draft, round and
+ * original club, whatever their status, give the latest observation of the pick; that row must be
+ * usable and name a slot from 1 to 90, so a newer disputed or unnumbered capture is never overridden
+ * by an older usable one. When its draft has no order at all, the same round and original club in the
+ * previous draft's order stand in as a proxy (a 2027 pick before the 2027 order exists). A pick with no
+ * original club (a compensation or assistance pick) matches only by `pickId`, so it never proxies.
  */
 function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot | undefined {
   if (asset.draftType !== 'national') return undefined;
   const national = (draftYear: number) =>
     custody.filter((row) => row.draftYear === draftYear && row.draftType === 'national');
   const sameEntitlement = (row: Custody) =>
-    isAflTradeUsableCustodyStatus(row.status) &&
     asset.nominalRound !== null &&
     asset.originalClubId !== null &&
     row.roundNumber === asset.nominalRound &&
@@ -263,16 +264,22 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
   let found: Custody | undefined;
   let proxy = false;
   if (own.length > 0) {
-    const byPick = own.filter(
-      (row) => isAflTradeUsableCustodyStatus(row.status) && row.pickId === asset.pickId
+    // Every capture of the pick: under its `pickId`, or re-keyed under another for the same entitlement.
+    found = latestObservation(
+      own.filter((row) => row.pickId === asset.pickId || sameEntitlement(row))
     );
-    found = latestObservation(byPick.length > 0 ? byPick : own.filter(sameEntitlement));
   } else {
     proxy = true;
     found = latestObservation(national(asset.draftYear - 1).filter(sameEntitlement));
   }
   const selectionNumber = found?.recordedPickNumber;
-  if (!found || selectionNumber == null || selectionNumber > 90) return undefined;
+  if (
+    !found ||
+    !isAflTradeUsableCustodyStatus(found.status) ||
+    selectionNumber == null ||
+    selectionNumber > 90
+  )
+    return undefined;
   return { custody: found, selectionNumber, proxy };
 }
 

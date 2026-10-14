@@ -4256,9 +4256,13 @@ The remaining work proceeds through these independently verifiable gates:
 
    A not-used pick is never credited with any player's value. The rule applies to realized value only.
 
-   A `pending` not-used pick, whose draft lies after the candidate's anchor season, is no longer
+   A `pending` not-used pick, one whose draft is not yet in evidence (its year is at or after the
+   candidate's anchor season and the candidate holds no `draft_selection` and no Footyinfo
+   `draft_board_pick` for that (draftYear, draftType), `isAflTradeDraftPending`,
+   statlyaus/Statly#927), is no longer
    blocked when the live draft order holds its slot. Under rule v6 it is valued provisionally from
-   that slot; see "Projected picks (rule v6)" under the contract below.
+   that slot; see "Projected picks (rule v6)" under the contract below. A pick with no resolvable
+   original club (a compensation or assistance pick) stays pending.
 
    **Traded-on picks and bundled trades (owner decision, 2026-10-08, statlyaus/Statly#789).** A pick a
    club received and then traded on is worth what the club got back for it. When it was the only asset
@@ -4397,18 +4401,29 @@ The remaining work proceeds through these independently verifiable gates:
    - **Projected picks (rule v6, owner direction 2026-10-14, issue 789).** The owner's direction:
      "it's always going to be a provisional grade of sorts because careers run continuously, if the
      picks havent been selected, just find the live draft order and attribute the picks accordingly".
-     Until then a `pending` pick outcome (its draft after the candidate's anchor season) blocked its
-     trade. Under rule v6 the grader reads the candidate's `pickCustody`, the reviewed Official AFL
-     indicative order rows ("Pick custody from the pre-draft order" below), to find the pick's slot:
-     - **Slot.** Among usable (`single_source` or `corroborated`) national custody rows of the pick's
-       draft, those with the pick's `pickId`, else those with its draft year, `nominalRound` and
-       `originalClubId`. The slot is the `recordedPickNumber` of the one row observed after every
-       other: a day or year observation spans that whole period, so two overlapping latest
-       observations have no slot.
+     Until then a `pending` pick outcome blocked its trade. A pick is `pending` while its draft is
+     not yet in evidence: a draft is pending if and only if its year is at or after the candidate's
+     anchor season and the candidate holds no `draft_selection` and no Footyinfo `draft_board_pick`
+     for that (draftYear, draftType) (`isAflTradeDraftPending` in
+     `source/externalEvidenceReconciliation.ts`, statlyaus/Statly#927). Under rule v6 the
+     grader reads the candidate's `pickCustody`, the reviewed Official AFL indicative order rows
+     ("Pick custody from the pre-draft order" below), to find the pick's slot:
+     - **Slot.** Every national custody row of the pick's draft that captures this pick, whatever
+       its status: rows with the pick's `pickId`, and rows with its draft year, `nominalRound` and
+       `originalClubId` (a capture re-keyed under another `pickId`). The latest of them decides: the
+       one row observed after every other, where a day or year observation spans that whole period,
+       so two overlapping latest observations have no slot. That row must be usable (`single_source`
+       or `corroborated`) and name a `recordedPickNumber` from 1 to 90. A newer disputed or
+       unnumbered capture is never overridden by an older usable one; the pick stays pending.
      - **Proxy.** When the pick's draft has no national custody row at all (a 2027 pick before any
-       2027 order exists), the usable row of the previous draft with the same round and original
-       club stands in, and the leg is flagged as a proxy. A draft that has an order but not this pick
-       is never proxied.
+       2027 order exists), the latest row of the previous draft with the same round and original
+       club stands in, on the same usable-and-numbered terms, and the leg is flagged as a proxy. A
+       draft that has an order but not this pick is never proxied. Until a 2026 order is reviewed
+       (the reviewed pages cover 2019 to 2025), every 2026 pick is projected by this proxy from the
+       13 November 2025 order, and a 2027 pick, with no order for either year, stays pending.
+     - **No original club.** A compensation, assistance, concession or priority pick has no
+       resolvable original club, so it matches only a row with its own `pickId` and never proxies.
+       In practice such a pick stays pending: an order row without an original club is `unresolved`.
      - **Value.** The leg is `valued` on basis `pick_projected_from_order` at the raw HPN DPVC v3
        value of the slot (`hpnDpv3ValueForPick`, no scaling), and names its `projection`: the batch's
        benchmark, the slot, the order's and the pick's draft years, the custody row and its
@@ -4417,7 +4432,8 @@ The remaining work proceeds through these independently verifiable gates:
        and neither `single_source_pick_outcome` nor `corroboratedBy`: it rests on the order, not on
        a pick outcome. DPVC is whole-career expected PAV, while every other leg realizes first-stint
        PAV, so a projected value is not like for like with a realized one, and the limitation says so.
-     - **Still pending.** No unique slot, a slot with no number or beyond HPN's 1 to 90, or a
+     - **Still pending.** No unique latest capture, a latest capture that is not usable, has no
+       number or is beyond HPN's 1 to 90, a pick with no original club and no own-`pickId` row, or a
        non-national pick stays `pick_outcome_pending`, which still blocks.
      - **Totals and chains.** A projected leg is valued like any other: it enters the club's
        `received` and `givenUp`, and weighs its value in a relative-value bundle. A traded-on pick

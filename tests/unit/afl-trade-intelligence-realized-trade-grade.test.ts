@@ -1404,9 +1404,10 @@ describe('rule v6: a pick not yet drafted is valued from the live draft order (o
   });
   const legFor = (pickCustody: Custody[], draftYear?: number) =>
     legOf(gradeAflTradesOnRealizedValue(inputs(future(pickCustody, draftYear))), 'tr-Fa');
+  const later = { precision: 'day', date: '2026-10-12' } as const;
 
   it('values a pending pick at the HPN DPVC v3 value of the slot its pickId holds', () => {
-    // Another original club on the row: the pickId match is read first.
+    // Another original club on the row: the pickId alone makes it this pick's capture.
     const batch = gradeAflTradesOnRealizedValue(
       inputs(future([order('1', { originalClubId: 'carlton' })]))
     );
@@ -1493,10 +1494,69 @@ describe('rule v6: a pick not yet drafted is valued from the live draft order (o
     ['a slot with no number', [order('1', { recordedPickNumber: null })]],
     ['a disputed slot', [order('1', { status: 'disputed' })]],
     ['only a rookie-draft order', [order('1', { draftType: 'rookie' })]],
+    // The latest capture decides, whatever its status: an older usable slot never overrides it.
+    [
+      'a newer disputed capture over an older usable one',
+      [order('1'), order('2', { recordedPickNumber: 9, status: 'disputed', observedAt: later })],
+    ],
+    [
+      'a newer disputed capture re-keyed under another pickId',
+      [order('1'), order('2', { pickId: 'pick-rekeyed', status: 'disputed', observedAt: later })],
+    ],
+    [
+      'a newer unnumbered capture over an older numbered one',
+      [order('1'), order('2', { recordedPickNumber: null, observedAt: later })],
+    ],
   ])('stays pending, and blocking, with %s', (_label, pickCustody) => {
     expect(legFor(pickCustody)).toMatchObject({
       state: 'blocked',
       basis: 'unavailable',
+      reasons: ['pick_outcome_pending'],
+    });
+  });
+
+  it('reads a newer capture of the pick re-keyed under another pickId', () => {
+    expect(
+      legFor([
+        order('1'),
+        order('2', { pickId: 'pick-rekeyed', recordedPickNumber: 9, observedAt: later }),
+      ])
+    ).toMatchObject({
+      basis: 'pick_projected_from_order',
+      projection: { selectionNumber: 9, custodyId: custodyId('2') },
+    });
+  });
+
+  it('keeps a 2027 proxy pending when the latest prior-order capture is disputed', () => {
+    expect(
+      legFor(
+        [
+          order('1', { pickId: 'pick-2026' }),
+          order('2', { pickId: 'pick-2026', status: 'disputed', observedAt: later }),
+        ],
+        2027
+      )
+    ).toMatchObject({ state: 'blocked', reasons: ['pick_outcome_pending'] });
+  });
+
+  it('keeps a pick with no original club (a compensation pick) pending unless its pickId is captured', () => {
+    const compensation = future([order('1', { pickId: 'pick-other', originalClubId: null })]);
+    compensation.transfers[0] = {
+      ...compensation.transfers[0]!,
+      asset: { ...compensation.transfers[0]!.asset, originalClubId: null },
+    } as Transfer;
+    expect(legOf(gradeAflTradesOnRealizedValue(inputs(compensation)), 'tr-Fa')).toMatchObject({
+      state: 'blocked',
+      reasons: ['pick_outcome_pending'],
+    });
+    // Nor does it proxy: with no 2027 order, a 2027 compensation pick has no entitlement to match.
+    const proxied = future([order('1', { originalClubId: null })], 2027);
+    proxied.transfers[0] = {
+      ...proxied.transfers[0]!,
+      asset: { ...proxied.transfers[0]!.asset, originalClubId: null },
+    } as Transfer;
+    expect(legOf(gradeAflTradesOnRealizedValue(inputs(proxied)), 'tr-Fa')).toMatchObject({
+      state: 'blocked',
       reasons: ['pick_outcome_pending'],
     });
   });
