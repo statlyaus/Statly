@@ -3,19 +3,22 @@
 -- before migration 0261 has no day and no window, and it cannot be re-versioned: the deferred
 -- promotions skip a reviewed-lineage transaction (0274), and a reviewed re-version would retire its
 -- reviewed pick realizations and change reviewed pick ids. Its arrival may cite the window that the
--- season's single approved Official AFL trade-period capture states (the capture-only rule of 0263).
+-- season's approved Official AFL trade-period captures state, when they state exactly one (the
+-- capture-only rule of 0263).
 -- The event row stays undated: `outcome_event_evidenced_date_bounds` and every other reader keep
 -- their meaning. Any other undated trade is unchanged.
 
 -- 1. The window an arrival may cite for one undated reviewed-lineage trade version, or NULL. The
 --    version is a current (unsuperseded) approved trade with no day and no precision, its event is
---    a current reviewed-lineage transaction, and exactly one finalized claim of an approved
---    `official-afl-trade-period-dates` capture in that environment and competition states a valid
---    window for the event's season. Zero or several claims give NULL.
+--    a current reviewed-lineage transaction, and the finalized claims of approved
+--    `official-afl-trade-period-dates` captures in that environment and competition state exactly
+--    one distinct valid window for the event's season. Distinct windows are counted, not claim
+--    rows, as the promotion review command reads them (`loadReviewedTradePeriodWindows`): a
+--    recapture restating the same window keeps it, no claim or two different windows give NULL.
 CREATE FUNCTION outcome_reviewed_lineage_trade_arrival_window(target_event_version TEXT,
   target_environment TEXT)
 RETURNS JSONB LANGUAGE sql STABLE AS $$
-  SELECT (array_agg(window_row.evidence_json#>'{content,claim,datePrecision}'))[1]
+  SELECT (array_agg(DISTINCT window_row.evidence_json#>'{content,claim,datePrecision}'))[1]
     FROM outcome_event_version event
     JOIN outcome_event root ON root.event_id=event.event_id
     JOIN outcome_source_capture window_capture
@@ -35,9 +38,9 @@ RETURNS JSONB LANGUAGE sql STABLE AS $$
                       WHERE successor.supersedes_version_id=event.event_version_id)
      AND EXISTS (SELECT 1 FROM outcome_current_canonical_reviewed_lineage_transactions(root.competition) reviewed
                   WHERE reviewed.transaction_id=root.event_id)
-   HAVING count(*)=1
+   HAVING count(DISTINCT window_row.evidence_json#>'{content,claim,datePrecision}')=1
       AND outcome_session_precision_bounds(jsonb_build_object('eventDate',NULL,
-            'datePrecision',(array_agg(window_row.evidence_json#>'{content,claim,datePrecision}'))[1],
+            'datePrecision',(array_agg(DISTINCT window_row.evidence_json#>'{content,claim,datePrecision}'))[1],
             'draftYear',min(root.season_year)),TRUE) IS NOT NULL
 $$;
 

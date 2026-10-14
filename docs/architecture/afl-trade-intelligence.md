@@ -1887,10 +1887,12 @@ lineage (`outcome_current_canonical_reviewed_lineage_transactions`, 0274) cannot
 because the deferred promotions skip it and a reviewed re-version would retire its reviewed pick
 realizations and change reviewed pick ids (the 2020 Jeremy Cameron trade). For a v4 arrival only,
 `outcome_reviewed_lineage_trade_arrival_window` gives such a current, approved trade version with
-no day and no precision the window that the season's single approved, finalized
-`official-afl-trade-period-dates` claim in its environment and competition states (the
-capture-only rule of 0263); zero or several claims give none, and a second approved capture makes an
-arrival registered on the first no longer current. The event row stays undated, and
+no day and no precision the one window that the season's approved, finalized
+`official-afl-trade-period-dates` claims in its environment and competition state (the
+capture-only rule of 0263). Distinct windows are counted, as the review command's
+`loadReviewedTradePeriodWindows` reads them: a recapture restating the same window keeps it, while no
+claim or two different windows give none, and an arrival registered on one window stops being
+current once a capture states another. The event row stays undated, and
 `outcome_event_evidenced_date_bounds` and every other reader keep their meaning. Any other undated
 trade stays year-only.
 

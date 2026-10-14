@@ -145,36 +145,47 @@ async function markReviewedLineage(ws: Workspace, promoted: Promoted) {
   expect(reviewed.rows).toEqual([{ listed: 1 }]);
 }
 
-// A second approved capture of the season's trade period, stating a different window.
-async function stageSecondTradePeriodCapture(ws: Workspace) {
+// Another approved capture of the season's trade period, copied from the fixture's own capture. It
+// restates the same window, or states one ending on `latestDate` instead.
+async function stageTradePeriodRecapture(ws: Workspace, copy: string, latestDate?: string) {
+  const suffix = `:copy-${copy}`;
   await seeded(ws, async (client) => {
     await client.query(
       `INSERT INTO outcome_source_capture
          (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,dataset_version,
           access_mechanism,capability_id,competition,anchor_season_year,effective_at,captured_at,status,manifest_json)
-       SELECT capture_id||'-second',attempt_id||'-second',source_snapshot_id||'-second',source_artifact_id,
+       SELECT capture_id||$1,attempt_id||$1,source_snapshot_id||$1,source_artifact_id,
               environment,provider,dataset,dataset_version,access_mechanism,capability_id,competition,
               anchor_season_year,effective_at,captured_at,status,manifest_json
-         FROM outcome_source_capture WHERE capability_id='official-afl-trade-period-dates'`
+         FROM outcome_source_capture
+        WHERE capability_id='official-afl-trade-period-dates' AND capture_id NOT LIKE '%:copy-%'`,
+      [suffix]
     );
     await client.query(
       `INSERT INTO outcome_external_evidence_batch
          (batch_id,capture_id,provider,evidence_count,issue_count,row_set_sha256,issue_set_sha256,status,finalized_at,batch_json)
-       SELECT 'external-evidence-batch:'||encode(sha256(convert_to(batch.batch_id||':second','UTF8')),'hex'),
-              batch.capture_id||'-second',batch.provider,batch.evidence_count,
+       SELECT 'external-evidence-batch:'||encode(sha256(convert_to(batch.batch_id||$1,'UTF8')),'hex'),
+              batch.capture_id||$1,batch.provider,batch.evidence_count,
               batch.issue_count,batch.row_set_sha256,batch.issue_set_sha256,batch.status,batch.finalized_at,batch.batch_json
          FROM outcome_external_evidence_batch batch
          JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
-        WHERE capture.capability_id='official-afl-trade-period-dates'`
+        WHERE capture.capability_id='official-afl-trade-period-dates'
+          AND capture.capture_id NOT LIKE '%:copy-%'`,
+      [suffix]
     );
     await client.query(
       `INSERT INTO outcome_external_evidence_row
          (evidence_id,batch_id,ordinal,source_key,claim_kind,evidence_json)
-       SELECT 'external-evidence:'||encode(sha256(convert_to(evidence_id||':second','UTF8')),'hex'),
-              'external-evidence-batch:'||encode(sha256(convert_to(batch_id||':second','UTF8')),'hex'),
-              ordinal,source_key,claim_kind,
-              jsonb_set(evidence_json,'{content,claim,datePrecision,latestDate}','"2024-10-15"')
-         FROM outcome_external_evidence_row WHERE claim_kind='trade_period_window'`
+       SELECT 'external-evidence:'||encode(sha256(convert_to(row.evidence_id||$1,'UTF8')),'hex'),
+              'external-evidence-batch:'||encode(sha256(convert_to(row.batch_id||$1,'UTF8')),'hex'),
+              row.ordinal,row.source_key,row.claim_kind,
+              CASE WHEN $2::text IS NULL THEN row.evidence_json
+                   ELSE jsonb_set(row.evidence_json,'{content,claim,datePrecision,latestDate}',to_jsonb($2::text)) END
+         FROM outcome_external_evidence_row row
+         JOIN outcome_external_evidence_batch batch ON batch.batch_id=row.batch_id
+         JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
+        WHERE row.claim_kind='trade_period_window' AND capture.capture_id NOT LIKE '%:copy-%'`,
+      [suffix, latestDate ?? null]
     );
   });
 }
@@ -208,28 +219,36 @@ async function arrivalRule(ws: Workspace, promoted: Promoted) {
   return { spells, ruleId: rule.ruleId };
 }
 
-// A null-day entry citing the season window, or the promoted event's own day.
+// The 0212 full-year binding of the fixture's 2024 trade season.
+const yearPrecision = {
+  precision: 'window' as const,
+  eventDate: null,
+  earliestDate: '2024-01-01',
+  latestDate: '2024-12-31',
+};
+
+// A null-day entry citing the season window (or the 0212 full year), or the promoted event's day.
 async function arrivalFor(
   ws: Workspace,
   promoted: Promoted,
   ruleId: string,
-  entry: 'window' | 'day'
+  entry: 'window' | 'year' | 'day'
 ) {
   const arrival = createAflTradeArrivalSpell({
     ...scope,
     playerId: promoted.playerId,
     clubId: promoted.clubId,
     entry:
-      entry === 'window'
-        ? {
+      entry === 'day'
+        ? promoted.entry
+        : {
             promotionId: promoted.entry.promotionId,
             eventVersionId: promoted.entry.eventVersionId,
             assetVersionId: promoted.entry.assetVersionId,
             eventDate: null,
-            datePrecision: windowPrecision,
+            datePrecision: entry === 'window' ? windowPrecision : yearPrecision,
             evidence: promoted.entry.evidence,
-          }
-        : promoted.entry,
+          },
     ruleId,
     version: 1,
     supersedesSpellVersionId: null,
@@ -243,6 +262,12 @@ async function arrivalFor(
   );
   return { arrival, approval };
 }
+
+// The registration trigger's refusal (0142) when `outcome_acquisition_spell_registration_current`
+// does not hold the new spell current: the arrival test itself refused it, not a fixture, evidence
+// or custody failure on the way.
+const NOT_CURRENT =
+  /Acquisition spell registration requires exact current review and retained ancestry/;
 
 const spellVersions = async (ws: Workspace) =>
   (
@@ -268,8 +293,9 @@ const undatedTrade = {
 };
 
 // An undated trade promoted before migration 0261 carries no window and cannot be re-versioned once
-// its pick lineage is reviewed (statlyaus/Statly#869). Its arrival takes the season's single
-// approved trade-period window; the event row stays undated and every other undated trade is unchanged.
+// its pick lineage is reviewed (statlyaus/Statly#869). Its arrival takes the one window the season's
+// approved trade-period captures state; the event row stays undated and every other undated trade
+// is unchanged.
 it('registers an undated reviewed-lineage trade arrival inside its season window, and only that', async () => {
   const ws = await workspace(false);
   // A year-only trade under the deployed rules, with the season's approved trade-period capture.
@@ -287,7 +313,7 @@ it('registers an undated reviewed-lineage trade arrival inside its season window
   const { arrival, approval } = await arrivalFor(ws, promoted, ruleId, 'window');
   const versionsBefore = await spellVersions(ws);
   // Before the migration the window is not the event's precision.
-  await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow();
+  await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow(NOT_CURRENT);
   expect(await spellVersions(ws)).toBe(versionsBefore);
 
   // The migration edits definitions and writes no row.
@@ -308,16 +334,26 @@ it('registers an undated reviewed-lineage trade arrival inside its season window
   );
   expect(event.rows).toEqual([{ event_date: null, date_precision: null, bounds: null }]);
 
-  // A second approved capture for the season makes the window ambiguous: the arrival is no longer
-  // current, and a new one is refused.
-  await stageSecondTradePeriodCapture(ws);
+  // A recapture restating the same window keeps it: distinct windows are counted, as the review
+  // command reads them.
+  await stageTradePeriodRecapture(ws, 'same');
+  expect(await currentness(ws, arrival.spellVersionId)).toBe(true);
+
+  const seasonWindow = async () =>
+    (
+      await ws.pool.query<{ window: unknown }>(
+        `SELECT outcome_reviewed_lineage_trade_arrival_window($1,'non_production') AS window`,
+        [promoted.entry.eventVersionId]
+      )
+    ).rows[0]!.window;
+  expect(await seasonWindow()).toEqual(windowPrecision);
+
+  // A capture stating a different window makes the season ambiguous: no window is given and the
+  // arrival is no longer current. (A new registration for this player and club would meet the
+  // stint overlap guard first; the no-capture case below proves the refusal at registration.)
+  await stageTradePeriodRecapture(ws, 'other', '2024-10-15');
+  expect(await seasonWindow()).toBeNull();
   expect(await currentness(ws, arrival.spellVersionId)).toBe(false);
-  const again = await arrivalFor(ws, promoted, ruleId, 'window');
-  const versionsAfter = await spellVersions(ws);
-  await expect(
-    spells.registerReviewedSpell(again.arrival, again.approval, scope)
-  ).rejects.toThrow();
-  expect(await spellVersions(ws)).toBe(versionsAfter);
 }, 300_000);
 
 it('refuses the season window for an undated trade that is not reviewed lineage', async () => {
@@ -331,8 +367,13 @@ it('refuses the season window for an undated trade that is not reviewed lineage'
   const { spells, ruleId } = await arrivalRule(ws, promoted);
   const { arrival, approval } = await arrivalFor(ws, promoted, ruleId, 'window');
   const versionsBefore = await spellVersions(ws);
-  await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow();
+  await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow(NOT_CURRENT);
   expect(await spellVersions(ws)).toBe(versionsBefore);
+
+  // Positive control: the same arrival registers once the trade is reviewed lineage.
+  await markReviewedLineage(ws, promoted);
+  await expect(spells.registerReviewedSpell(arrival, approval, scope)).resolves.toEqual(arrival);
+  expect(await currentness(ws, arrival.spellVersionId)).toBe(true);
 }, 300_000);
 
 it('refuses the window for an undated reviewed-lineage trade with no approved capture', async () => {
@@ -342,8 +383,15 @@ it('refuses the window for an undated reviewed-lineage trade with no approved ca
   const { spells, ruleId } = await arrivalRule(ws, promoted);
   const { arrival, approval } = await arrivalFor(ws, promoted, ruleId, 'window');
   const versionsBefore = await spellVersions(ws);
-  await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow();
+  await expect(spells.registerReviewedSpell(arrival, approval, scope)).rejects.toThrow(NOT_CURRENT);
   expect(await spellVersions(ws)).toBe(versionsBefore);
+
+  // Positive control: the same promotion, rule and evidence register the 0212 full-year arrival.
+  const year = await arrivalFor(ws, promoted, ruleId, 'year');
+  await expect(spells.registerReviewedSpell(year.arrival, year.approval, scope)).resolves.toEqual(
+    year.arrival
+  );
+  expect(await currentness(ws, year.arrival.spellVersionId)).toBe(true);
 }, 300_000);
 
 it('leaves a dated reviewed-lineage trade to its own day', async () => {
@@ -363,7 +411,7 @@ it('leaves a dated reviewed-lineage trade to its own day', async () => {
   const versionsBefore = await spellVersions(ws);
   await expect(
     spells.registerReviewedSpell(windowed.arrival, windowed.approval, scope)
-  ).rejects.toThrow();
+  ).rejects.toThrow(NOT_CURRENT);
   expect(await spellVersions(ws)).toBe(versionsBefore);
   const day = await arrivalFor(ws, promoted, ruleId, 'day');
   await expect(spells.registerReviewedSpell(day.arrival, day.approval, scope)).resolves.toEqual(
