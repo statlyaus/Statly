@@ -524,7 +524,7 @@ describe('candidate contract for deferred issues', () => {
         ...plain,
         pickLineageDeferral: { decisionId },
       })
-    ).toThrow(/only by a candidate that deferred an issue/);
+    ).toThrow(/every pick-side issue is deferred/);
   });
 
   it('refuses a deferred player-side issue and a deferral on a legacy candidate', () => {
@@ -667,10 +667,21 @@ describe('promotion of a deferred-lineage candidate', () => {
     expect(deferred.content.pickLineageDeferral).toEqual({ decisionId, deferredIssueCount: 2 });
     expect(deferred.promotionId).not.toBe(plain.promotionId);
     expect(parseAflTradeExternalCanonicalPromotionRequest(plain)).toEqual(plain);
+    // A deferral that deferred no issue but re-syncs (#853) records a zero count.
+    const issueless = createAflTradeExternalCanonicalPromotionRequest({
+      ...base,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 0, resyncedSelectionCount: 1 },
+    });
+    expect(issueless.content.pickLineageDeferral).toEqual({
+      decisionId,
+      deferredIssueCount: 0,
+      resyncedSelectionCount: 1,
+    });
+    expect(issueless.promotionId).not.toBe(deferred.promotionId);
     expect(() =>
       createAflTradeExternalCanonicalPromotionRequest({
         ...base,
-        pickLineageDeferral: { decisionId, deferredIssueCount: 0 },
+        pickLineageDeferral: { decisionId, deferredIssueCount: -1 },
       })
     ).toThrow();
   });
@@ -995,7 +1006,7 @@ describe('a deferred candidate whose draft is already current canonical', () => 
           promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
         },
       })
-    ).toThrow(/only by a candidate that deferred an issue/);
+    ).toThrow(/every pick-side issue is deferred/);
   });
 
   it('promotes through the metadata-only proposal with no coverage for the draft, and the receipt says so', () => {
@@ -1275,7 +1286,7 @@ describe('a deferred candidate whose transaction is already current canonical', 
         ...plain,
         pickLineageDeferral: { decisionId, promotedTransactions: [concessionTransactionId] },
       })
-    ).toThrow(/only by a candidate that deferred an issue/);
+    ).toThrow(/every pick-side issue is deferred/);
   });
 
   it('leaves the transaction, its transfers and the special pick in it unwritten; the other trade is written', () => {
@@ -1513,7 +1524,7 @@ describe('deferred custody observations', () => {
           deferredCustodyIds: [`external-pick-custody:${digest('5')}`],
         },
       })
-    ).toThrow(/only by a candidate that deferred an issue/);
+    ).toThrow(/every pick-side issue is deferred/);
     expect(() =>
       createAflTradeExternalReconciliationCandidate({
         ...deferred,
@@ -2478,5 +2489,154 @@ describe('a deferred candidate whose draftee an identity repair re-targeted', ()
         selectionIds: [selection14],
       }),
     ]);
+  });
+});
+
+// The 2018 completion has no pick-side issue (#853): prepared under its deferral decision the
+// candidate defers nothing, yet the draftees an identity repair re-targeted are re-synced only under
+// that decision. The decision is kept for what it lists, never over a draft written whole.
+describe('a completion with no pick-side issue whose draftee an identity repair re-targeted', () => {
+  // The same 2025 trade without the pick, so nothing is pick-side once the draftee is reviewed.
+  const issueless = batch(
+    'draftguru',
+    'b',
+    draftguru.content.evidence
+      .map(({ content }) => content.claim)
+      .filter(
+        (claim) => !(claim.kind === 'directed_transfer' && claim.nativeTransferId === 'pick-14')
+      )
+  );
+  const issuelessAuthority = createAflTradeHistoricalCompletionReconciliationAuthority({
+    schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
+    kind: 'historical_plan_completion',
+    completionId,
+    completionSha256: digest('9'),
+    planId: `external-historical-capture-plan:${digest('8')}`,
+    planSha256: digest('7'),
+    targetSetSha256: digest('6'),
+    resultSetSha256: digest('5'),
+    completionSourceBatchSetSha256: digest('4'),
+    candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([issueless.batchId]),
+    completedAt: '2026-08-09T04:30:00.000Z',
+  });
+  const reviewed = [
+    ...resolutions,
+    resolution(
+      'draftguru',
+      'player',
+      { nativeId: 'unreviewed-draftee', recordedName: 'Unreviewed Draftee' },
+      'player-afl-tables-twin'
+    ),
+  ];
+  const promotedUnder = (playerId: string) => [
+    { selectionId: selection14, selectionNumber: 14, playerId },
+  ];
+  const reconcileIssueless = (
+    deferral: boolean,
+    promotedDraftSelections?: readonly AflTradeCurrentCanonicalDraftSelection[]
+  ) =>
+    reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [issueless],
+      identityResolutions: reviewed,
+      sourceAuthority: issuelessAuthority,
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+      ...(deferral ? { pickLineageDeferral: { decisionId } } : {}),
+      ...(promotedDraftSelections === undefined ? {} : { promotedDraftSelections }),
+    });
+  const resynced = () => reconcileIssueless(true, promotedUnder('player-draftguru-created'));
+
+  it('keeps the decision with the re-synced slot although nothing is deferred', () => {
+    const candidate = resynced();
+    expect(candidate.content.issues).toEqual([]);
+    expect(candidate.content.pickLineageDeferral).toEqual({
+      decisionId,
+      resyncedSelectionIds: [selection14],
+    });
+    expect(parseAflTradeExternalReconciliationCandidate(candidate).candidateId).toBe(
+      candidate.candidateId
+    );
+    expect(aflTradePickLineageDeferralScope(candidate.content)).toMatchObject({
+      deferredIssueCount: 0,
+      blockingIssueCount: 0,
+    });
+    // A same-target re-review leaves the draft to its earlier promotion, under the decision too.
+    expect(
+      reconcileIssueless(true, promotedUnder('player-afl-tables-twin')).content.pickLineageDeferral
+    ).toEqual({ decisionId, promotedDrafts: [{ draftYear: 2025, draftType: 'national' }] });
+    // Without the decision the listing is refused, as before.
+    expect(() => reconcileIssueless(false, promotedUnder('player-draftguru-created'))).toThrow(
+      /only under a pick-side deferral/
+    );
+  });
+
+  it('drops the decision when nothing is listed or a draft would be written whole', () => {
+    const plain = reconcileIssueless(false);
+    // Nothing current canonical: the draft is written whole, so the decision is not carried.
+    const unlisted = reconcileIssueless(true);
+    expect(unlisted.content.pickLineageDeferral).toBeUndefined();
+    expect(unlisted.candidateId).toBe(plain.candidateId);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...plain.content,
+        pickLineageDeferral: { decisionId },
+      })
+    ).toThrow(/no deferred issue is carried only by a candidate that lists/);
+    expect(() =>
+      createAflTradeExternalReconciliationCandidate({
+        ...plain.content,
+        pickLineageDeferral: {
+          decisionId,
+          promotedTransactions: [plain.content.transactions[0]!.transactionId],
+        },
+      })
+    ).toThrow(/writes no draft whole/);
+  });
+
+  it('writes only the re-synced slot and promotes it through the metadata-only proposal', () => {
+    const candidate = resynced();
+    const written = aflTradePromotionWriteScope(candidate.content);
+    expect(written.draftSelections).toEqual([]);
+    expect(written.resyncedSelections.map(({ selectionId }) => selectionId)).toEqual([selection14]);
+    expect(written.transactions).toHaveLength(1);
+    const resync = {
+      selectionId: selection14,
+      supersedesVersionId: 'event-version:session-2',
+      eventDate: '2025-11-20',
+      datePrecision: null,
+      officialName: '2025 AFL National Draft',
+    };
+    // The reviewer supplies no draft events: no draft is written whole.
+    const proposal = deriveAflTradeExternalCanonicalPromotionProposal({
+      candidate,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [],
+      promotedSessionResyncs: [resync],
+    });
+    expect(proposal.content.schemaVersion).toBe(
+      'afl-trade-external-canonical-promotion-proposal/v1'
+    );
+    expect(proposal.content.draftEventCoverage).toEqual([
+      expect.objectContaining({
+        kind: 'promoted_session_resync',
+        supersedesVersionId: 'event-version:session-2',
+        selectionIds: [selection14],
+      }),
+    ]);
+    expect(
+      authenticateAflTradeExternalCanonicalPromotionProposal({ candidate, proposal })
+    ).toMatchObject({
+      draftSelectionCount: 1,
+      pickLineageDeferral: { decisionId, deferredIssueCount: 0, resyncedSelectionCount: 1 },
+    });
+    // A same-target candidate writes nothing of the draft.
+    const unchanged = reconcileIssueless(true, promotedUnder('player-afl-tables-twin'));
+    expect(aflTradePromotionWriteScope(unchanged.content)).toMatchObject({
+      draftSelections: [],
+      resyncedSelections: [],
+      promotedDraftCount: 1,
+    });
   });
 });

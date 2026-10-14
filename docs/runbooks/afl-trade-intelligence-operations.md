@@ -803,7 +803,14 @@ supersede production Gate authority, and production execution cannot reuse non-p
    deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
    candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds
    `deferred_issue_count` and `lineage_deferral_decision_id`, which the database checks against the
-   decision. Without the flag the candidate is byte-identical to today's. A `special_pick` transfer
+   decision. Without the flag the candidate is byte-identical to today's. A completion with no
+   pick-side issue keeps the decision too when the candidate lists something under it (already
+   promoted drafts, transactions or custody, re-synced selections, deferred custody) and every
+   draft it holds is already promoted or re-synced (#853, migration 0282): the 2018 completion
+   re-syncs its re-targeted draftees this way with `deferredIssueCount: 0`. If such a candidate
+   would write any draft whole, the decision is dropped and the candidate is the one the flag
+   would not have changed, because a draft is written under the decision only through the
+   metadata-only proposal, without its session proof. A `special_pick` transfer
    is not deferrable: the special-entitlement gate still refuses it, applied to the transfers the
    promotion writes. Candidate four's one special pick sits in the 2019 Geelong and Gold Coast trade,
    which the Cameron promotion already made current canonical with every transfer; preparation
@@ -918,7 +925,9 @@ supersede production Gate authority, and production execution cannot reuse non-p
    directed asset (a deferred pick keeps its stable `pick_id` on the asset), writes no custody
    observation and no `exercised_as` realization for a deferred pick, and records
    `pickLineageDeferral: { decisionId, deferredIssueCount }` on the receipt, so the promotion id
-   differs from an undeferred promotion of the same candidate. Deferred issues stay on the candidate;
+   differs from an undeferred promotion of the same candidate (`deferredIssueCount` is 0 for a
+   decision that deferred nothing; the draft-events file is then `[]`, since no draft is written
+   whole). Deferred issues stay on the candidate;
    the grader keeps reporting those legs exactly as now. Nothing deferred is ever published: the
    promotion-backed corpus excludes a deferred-lineage promotion from its scope and the database
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick

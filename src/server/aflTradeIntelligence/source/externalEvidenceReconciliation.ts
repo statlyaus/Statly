@@ -27,6 +27,7 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradeDeferredCustodyIds,
+  aflTradeIssuelessDeferralKept,
   aflTradePromotedCustodyIds,
   aflTradePromotedDraftState,
   aflTradePromotedTransactions,
@@ -3429,9 +3430,12 @@ export function reconcileAflTradeExternalEvidence(input: {
     // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
-    // Only a candidate that actually deferred something carries the decision, so a candidate prepared
-    // with the option but no pick-side issue is byte-identical to one prepared without it.
-    ...(deferredIssueCount === 0 || recordedDeferral === undefined
+    // A candidate carries the decision when it deferred something, or when it deferred nothing but
+    // lists records left to an earlier promotion or re-synced and writes no draft whole (#853, a
+    // re-targeted draftee in a completion with no pick-side issue). Otherwise a candidate prepared
+    // with the option is byte-identical to one prepared without it.
+    ...(recordedDeferral === undefined ||
+    (deferredIssueCount === 0 && !aflTradeIssuelessDeferralKept(recordedDeferral, draftSelections))
       ? {}
       : { pickLineageDeferral: recordedDeferral }),
     issues: severed

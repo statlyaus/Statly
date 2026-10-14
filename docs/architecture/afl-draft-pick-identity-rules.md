@@ -317,7 +317,32 @@ club can contradict the pick a walk settles on.
   this way; an ordinary draft write must still carry every recorded slot of its predecessor (#721). A
   re-review that keeps the same player changes nothing.
 
+  A completion with no pick-side issue re-syncs the same way (migration 0282). The 2018 completion is
+  one: its candidate deferred nothing, so the reconciler used to drop the deferral decision with the
+  `resyncedSelectionIds` it carries, and the 2018 draftees re-targeted to their AFL Tables twins had
+  no path back. A candidate that deferred no issue now keeps the decision when it lists something
+  under it and writes no draft whole: every draft it holds is recorded as already promoted or holds
+  a re-synced selection (`aflTradeIssuelessDeferralKept`, and
+  `outcome_external_candidate_issueless_deferral_kept` on insert). Its review needs no draft events
+  and its receipt records `deferredIssueCount: 0`. A candidate that would write a draft whole drops
+  the decision as before, because a draft written under it gets the metadata-only proposal and loses
+  its session proof. The database now chooses the deferred branch of
+  `outcome_external_draft_sessions_exact` by `lineage_deferral_decision_id`, not by
+  `deferred_issue_count`. Before 0282 the two picked out the same candidates, so every existing
+  promotion keeps the branch its insert guard took. For a decision with no deferred issue the branch
+  also refuses while a promotable selection exists. 0280's stored-coverage skip follows the same
+  column, so its soundness argument is unchanged.
+
   What the re-sync leaves behind:
+  - **Combined-session nights (2016 to 2018).** A promotion proved by `combined_session_facts` (the v3
+    proposal) is re-checked on every arrival by `outcome_external_combined_draft_sessions_exact`. That
+    check requires the identity decision behind each session boundary draftee to have no successor.
+    Re-targeting a boundary draftee therefore makes the proof false for the whole draft, and every v4
+    spell that starts at that promotion's draft assets stops being current, not only the re-targeted
+    one. On the grading database the official AFL re-target of Will Hayes (the last pick of 2018
+    session 2, 2026-10-14) did this to all 20 v4 spells on the two 2018 nights. A re-sync does not
+    restore them. It writes a new version for the changed slots only, and the other spells still
+    start at the old promotion, whose proof stays false. Restoring them needs a change to that rule.
   - **The old draftee's selection** at that number is retired (0256 judges a selection by number). **The
     old draftee's asset** is not: 0256 retires an asset only when a later version carries an asset for
     the same player, and the re-sync carries the twin's. So the old asset stays current. It is excluded
