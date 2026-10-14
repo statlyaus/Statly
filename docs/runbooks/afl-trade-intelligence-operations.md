@@ -3345,6 +3345,11 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   values are whole-career DPVC expectations, not realized first stints, so the trades are
   `provisional`. A pick with no unique slot still blocks as `pick_outcome_pending`. After draft night,
   re-reconcile and regrade: the leg becomes the draftee's first stint, which is 0 until he plays.
+- Under rule v7 a special draft entitlement (such as the 2020 Gold Coast concession) whose approved
+  canonical `outcome_special_entitlement_custody` row has a successor is valued as a traded-on pick
+  through the successor's trade (`special_entitlement_custody_linked`, provisional and single-source).
+  The run reads that chain itself; no flag is needed. A special entitlement with no reviewed successor
+  still blocks as `special_entitlement_unsupported`: review its custody before regrading.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

@@ -38,6 +38,15 @@ export interface AflTradeRealizedTradeGradeInputs {
   spellSeasons: readonly number[];
   /** Current reviewed (v4) arrivals: a player's first season at a club. */
   reviewedArrivals: readonly { playerId: string; clubId: string; season: number }[];
+  /**
+   * Rule v7: the approved canonical special entitlement custody chain. Each row is one transfer of a
+   * special draft entitlement; its successor is the row naming it as `predecessorTransferId`.
+   */
+  specialEntitlementCustody?: readonly {
+    transferId: string;
+    entitlementId: string;
+    predecessorTransferId: string | null;
+  }[];
   pickProjectionBenchmarkId: string;
   spellCutoffAt: string;
   gradedAt: string;
@@ -294,6 +303,28 @@ function notBefore(later: Transaction, earlier: Transaction) {
   return true;
 }
 
+/**
+ * How a traded-on pick shares its club's onward return: all of it as the sole asset given, by its
+ * realized weight over the bundle's total, or evenly when everything given was worth 0.
+ */
+function allocateOnwardReturn(givenCount: number, givenUp: number, weight: number) {
+  if (givenCount === 1)
+    return { allocation: 'sole_asset' as const, share: 1, weight: null, weightTotal: null };
+  if (givenUp > 0)
+    return {
+      allocation: 'relative_value' as const,
+      share: weight / givenUp,
+      weight,
+      weightTotal: givenUp,
+    };
+  return {
+    allocation: 'equal_split' as const,
+    share: 1 / givenCount,
+    weight: null,
+    weightTotal: null,
+  };
+}
+
 /** Grades every trade in the candidate into one sealed private batch. */
 export function gradeAflTradesOnRealizedValue(
   inputs: AflTradeRealizedTradeGradeInputs
@@ -362,6 +393,45 @@ export function gradeAflTradesOnRealizedValue(
     }
     return trails.get(pickId)?.get(transfer.transferId);
   }
+  // Rule v7: a special entitlement's reviewed custody chain, keyed by transfer and by predecessor.
+  const custodyRows = inputs.specialEntitlementCustody ?? [];
+  const specialCustody = new Map(custodyRows.map((row) => [row.transferId, row]));
+  const successorOf = new Map(
+    custodyRows.flatMap((row) =>
+      row.predecessorTransferId === null ? [] : [[row.predecessorTransferId, row] as const]
+    )
+  );
+  const transfersById = new Map(
+    inputs.candidate.transfers.map((transfer) => [transfer.transferId, transfer])
+  );
+  /**
+   * Rule v7: the transfer a special entitlement was traded on as. Its custody row's successor must be a
+   * transfer of the same entitlement in another graded trade, given by the club that received this one,
+   * no earlier than this trade. Anything else leaves it unlinked.
+   */
+  function onwardOfSpecial(transfer: Transfer, transaction: Transaction) {
+    const asset = transfer.asset;
+    if (asset.kind === 'player' || asset.kind === 'pick_entitlement') return undefined;
+    const own = specialCustody.get(transfer.transferId);
+    const successor = successorOf.get(transfer.transferId);
+    if (
+      !own ||
+      !successor ||
+      successor.entitlementId !== own.entitlementId ||
+      (asset.kind === 'special_entitlement' && asset.entitlementId !== own.entitlementId)
+    )
+      return undefined;
+    const onward = transfersById.get(successor.transferId);
+    if (
+      !onward ||
+      !transactions.has(onward.transactionId) ||
+      onward.transactionId === transfer.transactionId ||
+      onward.fromClubId !== transfer.toClubId ||
+      !notBefore(transactions.get(onward.transactionId)!, transaction)
+    )
+      return undefined;
+    return { transfer: onward, entitlementId: own.entitlementId };
+  }
   const outcomes = new Map<string, PickOutcome>(
     (inputs.candidate.pickOutcomes ?? []).map((outcome) => [outcome.transferId, outcome])
   );
@@ -386,6 +456,8 @@ export function gradeAflTradesOnRealizedValue(
     reads.set(
       transactionId,
       transfersByTransaction.get(transactionId)!.flatMap((transfer) => {
+        const special = onwardOfSpecial(transfer, transaction);
+        if (special) return [special.transfer.transactionId];
         const outcome = outcomes.get(transfer.transferId);
         const tradedOn = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'traded_on';
         const onward = tradedOn ? onwardTransferOf(transfer, transaction) : undefined;
@@ -471,8 +543,16 @@ export function gradeAflTradesOnRealizedValue(
         reasons: sorted(reasons),
       };
     }
-    if (asset.kind !== 'pick_entitlement')
-      return blocked(base, ['special_entitlement_unsupported']);
+    if (asset.kind !== 'pick_entitlement') {
+      // Rule v7: a special entitlement traded on as an ordinary pick, by its reviewed custody chain, is
+      // worth that pick's traded-on return. Without a successor it stays unsupported.
+      const special = onwardOfSpecial(transfer, transaction);
+      if (!special) return blocked(base, ['special_entitlement_unsupported']);
+      return tradedOnReturnLeg(base, transaction, special.transfer, false, {
+        entitlementId: special.entitlementId,
+        successorTransferId: special.transfer.transferId,
+      });
+    }
     const outcome = outcomes.get(transfer.transferId);
     if (!outcome || outcome.outcomeStatus === 'unresolved')
       return blocked(base, ['pick_outcome_unresolved']);
@@ -562,6 +642,27 @@ export function gradeAflTradesOnRealizedValue(
     }
     const onwardTransfer = onwardTransferOf(transfer, transaction);
     if (!onwardTransfer) return blocked(base, ['traded_on_return_unlinked']);
+    return tradedOnReturnLeg(
+      base,
+      transaction,
+      onwardTransfer,
+      routeCorroborated(transfer, onwardTransfer)
+    );
+  }
+
+  /**
+   * A pick its club traded on is worth its share of what the club got back in the onward trade. Rule
+   * v7: a special entitlement reaches here through its custody chain, naming the entitlement and the
+   * successor transfer.
+   */
+  function tradedOnReturnLeg(
+    base: Omit<Leg, 'state' | 'basis' | 'reasons'>,
+    transaction: Transaction,
+    onwardTransfer: Transfer,
+    corroborated: boolean,
+    specialEntitlement?: { entitlementId: string; successorTransferId: string }
+  ): Leg {
+    const receiving = base.receivingClubId;
     if (leadsTo(onwardTransfer.transactionId, transaction.transactionId))
       return blocked(base, ['traded_on_return_blocked']);
     const onward = gradeTrade(onwardTransfer.transactionId);
@@ -573,11 +674,16 @@ export function gradeAflTradesOnRealizedValue(
     // side must be known even to exclude the pick, so a blocked side outranks an excluded pick.
     if (club.received === null || (given.length > 1 && club.givenUp === null))
       return blocked(base, ['traded_on_return_blocked']);
-    const { single, ...source } = sourceOf(routeCorroborated(transfer, onwardTransfer));
+    const { single: singleSource, ...source } = sourceOf(corroborated);
+    const special = specialEntitlement ? { specialEntitlement } : {};
+    const single: AflTradeRealizedGradeReason[] = specialEntitlement
+      ? [...singleSource, 'special_entitlement_custody_linked']
+      : singleSource;
     if (pickLeg.state === 'excluded')
       return {
         ...base,
         ...source,
+        ...special,
         state: 'excluded',
         basis: 'pick_traded_on_return_unallocated',
         onwardTransactionId: onward.transactionId,
@@ -585,18 +691,10 @@ export function gradeAflTradesOnRealizedValue(
       };
     const returnValue = club.received;
     // A sole asset's pick leg may itself be blocked there, leaving givenUp unknown and unused.
-    const givenUp = club.givenUp ?? 0;
     const weight = pickLeg.state === 'valued' ? pickLeg.realizedValue : 0;
-    const allocation =
-      given.length === 1 ? 'sole_asset' : givenUp > 0 ? 'relative_value' : ('equal_split' as const);
-    const share =
-      allocation === 'sole_asset'
-        ? 1
-        : allocation === 'relative_value'
-          ? weight / givenUp
-          : 1 / given.length;
+    const allocated = allocateOnwardReturn(given.length, club.givenUp ?? 0, weight);
     const reasons: AflTradeRealizedGradeReason[] = [...single];
-    if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
+    if (allocated.allocation === 'equal_split') reasons.push('equal_split_tiebreak');
     if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
     // Rule v3: exact on the club's side, but the onward trade is blocked elsewhere.
     if (onward.state === 'blocked') reasons.push('traded_on_return_partial');
@@ -606,17 +704,18 @@ export function gradeAflTradesOnRealizedValue(
     return {
       ...base,
       ...source,
+      ...special,
       state: 'valued',
       basis: 'pick_traded_on_return',
-      realizedValue: share * returnValue,
+      realizedValue: allocated.share * returnValue,
       onward: {
         transactionId: onward.transactionId,
-        allocation,
+        allocation: allocated.allocation,
         returnValue,
         givenAssetCount: given.length,
-        weight: allocation === 'relative_value' ? weight : null,
-        weightTotal: allocation === 'relative_value' ? givenUp : null,
-        share,
+        weight: allocated.weight,
+        weightTotal: allocated.weightTotal,
+        share: allocated.share,
       },
       reasons: sorted(reasons),
     };

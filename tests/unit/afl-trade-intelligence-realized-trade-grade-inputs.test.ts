@@ -109,6 +109,18 @@ const rows = (): AflTradeRealizedTradeGradeRows => ({
     spell('sv-a', 'p1', 'carlton', 2021, V4),
     spell('sv-2', 'p2', 'geelong', 2021),
   ],
+  specialCustody: [
+    {
+      transfer_id: `external-transfer:${hex('d')}`,
+      entitlement_id: `special-draft-entitlement:${hex('e')}`,
+      predecessor_transfer_id: `external-transfer:${hex('c')}`,
+    },
+    {
+      transfer_id: `external-transfer:${hex('c')}`,
+      entitlement_id: `special-draft-entitlement:${hex('e')}`,
+      predecessor_transfer_id: null,
+    },
+  ],
 });
 
 describe('realized trade grade inputs from PostgreSQL rows', () => {
@@ -128,6 +140,23 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
     expect(inputs.reviewedArrivals).toEqual([{ playerId: 'p1', clubId: 'carlton', season: 2021 }]);
     expect(inputs.candidate.pickCustody).toEqual(candidate.content.pickCustody);
     expect(inputs.candidate.pickCustody).toHaveLength(1);
+    // Rule v7: the special entitlement custody chain, ordered by transfer.
+    expect(inputs.specialEntitlementCustody).toEqual([
+      {
+        transferId: `external-transfer:${hex('c')}`,
+        entitlementId: `special-draft-entitlement:${hex('e')}`,
+        predecessorTransferId: null,
+      },
+      {
+        transferId: `external-transfer:${hex('d')}`,
+        entitlementId: `special-draft-entitlement:${hex('e')}`,
+        predecessorTransferId: `external-transfer:${hex('c')}`,
+      },
+    ]);
+    const { specialCustody: _unloaded, ...withoutCustody } = rows();
+    expect(
+      buildAflTradeRealizedTradeGradeInputs(options, withoutCustody).specialEntitlementCustody
+    ).toEqual([]);
   });
 
   it.each<
@@ -218,6 +247,7 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
       if (sql.includes('FROM outcome_hpn_pav_calculation_head')) return data.heads;
       if (sql.includes('FROM outcome_hpn_pav_calculation_player')) return data.pav;
       if (sql.includes('FROM outcome_acquisition_spell_version')) return data.spells;
+      if (sql.includes('FROM outcome_special_entitlement_custody')) return data.specialCustody;
       return [];
     };
     let transactions = 0;
@@ -241,5 +271,9 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
     expect(statements[4]!.sql).toMatch(/r ->> 'environment' = 'non_production'/);
     expect(statements[4]!.sql).toMatch(/extract\(month FROM s\.start_date\) >= 10 THEN 1/);
     expect(inputs.reviewedArrivals).toHaveLength(1);
+    expect(statements[5]!.sql).toMatch(/JOIN outcome_event_asset a USING \(asset_version_id\)/);
+    expect(statements[5]!.sql).toMatch(/a\.status::text = 'approved'/);
+    expect(statements[5]!.sql).toMatch(/w\.environment::text = 'non_production'/);
+    expect(inputs.specialEntitlementCustody).toHaveLength(2);
   });
 });

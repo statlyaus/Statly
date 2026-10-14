@@ -4336,7 +4336,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v6` (v1 to v5 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v7` (v1 to v6 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4344,8 +4344,9 @@ The remaining work proceeds through these independently verifiable gates:
    listed as ungraded with its reason, never dropped.
    - **Legs.** Each transfer leg has one realized value at its receiving club, which counts as received
      for that club and given up by the sender. A leg is `valued` (player first stint, selected pick's
-     first stint, traded-on pick's share of its onward return, a not-used pick worth 0, or under rule
-     v6 a pending pick projected from its slot in the live draft order), `excluded`
+     first stint, traded-on pick's share of its onward return, a not-used pick worth 0, under rule
+     v6 a pending pick projected from its slot in the live draft order, or under rule v7 a special
+     entitlement traded on through its reviewed custody chain), `excluded`
      (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
      nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
      valued and any season with no PAV calculation, and under rule v4 and later its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
@@ -4356,12 +4357,14 @@ The remaining work proceeds through these independently verifiable gates:
      total.
    - **States.** A trade is `blocked` if any leg carries a blocking reason (a pending pick outcome the
      live order cannot place, an unresolved or
-     no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
+     no-access-evidence pick outcome, unresolved identity, a special entitlement with no reviewed
+     custody successor, missing PAV
      head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
      `provisional` if any leg carries a provisional reason (open stint, unreviewed arrival, missing or
      unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional, partial or
-     projected onward trade, no appearances after the trade, a single-source pick outcome, or a pick
-     projected from the live order or a prior-order proxy). Otherwise it is
+     projected onward trade, no appearances after the trade, a single-source pick outcome, a pick
+     projected from the live order or a prior-order proxy, or a special entitlement followed through
+     its custody chain). Otherwise it is
      `complete`. Club totals are the exact received and given-up sums of the valued legs, so equal legs
      always seal to the same batch. Under rule v3 a club's `received` is null only when a leg it
      receives is blocked, and its `givenUp` only when a leg it sends is blocked; `net` is null when
@@ -4484,8 +4487,42 @@ The remaining work proceeds through these independently verifiable gates:
        first-stint) of its slot in the live Official AFL indicative order, and that a pick of a draft
        with no order yet uses its original club's slot in the latest order.
 
+   - **Special entitlements through their custody chain (rule v7, issue 789).** Until rule v7 a
+     special draft entitlement leg (a `special_pick`, such as the 2020 Gold Coast concession
+     `2020MIDR1`, or a resolved `special_entitlement`) was always `special_entitlement_unsupported`,
+     which blocked its trade and any traded-on pick whose onward side it entered. The grader now also
+     reads the approved canonical `outcome_special_entitlement_custody` chain: the rows whose custody
+     asset is `approved` and whose award is `non_production` AFLM, loaded by
+     `development/postgresRealizedTradeGradeInputs.ts` in the same repeatable-read transaction. Each
+     row is one transfer of the entitlement, and its successor is the row naming it as
+     `predecessor_transfer_id`.
+     - **Link.** A special leg follows its successor when the leg's transfer has a custody row, the
+       successor row is the same entitlement (and, for a resolved `special_entitlement`, the asset's
+       own `entitlementId`), and the successor's transfer is in another graded trade, given by the
+       club that received the special leg, no earlier than the special leg's trade. The successor's
+       transfer may be an ordinary `pick_entitlement` in the graded candidate: the pick the
+       entitlement was traded on as.
+     - **Value.** The leg is then a traded-on pick: `pick_traded_on_return` (or
+       `pick_traded_on_return_unallocated` when the successor is excluded there), worth its share of
+       what its club received in the successor's trade, by the same sole-asset, relative-value and
+       equal-split rules. It names `specialEntitlement` (the entitlement and the successor transfer)
+       and carries `special_entitlement_custody_linked`, which is provisional. It always keeps
+       `single_source_pick_outcome` and never names `corroboratedBy`: the chain is reviewed custody,
+       not a corroborating draft board.
+     - **Cycles and gaps.** The link enters the rule v3 cycle guard like any traded-on hop, so a
+       custody link whose onward trade leads back to its own trade is `traded_on_return_blocked`, as
+       is one whose club's side of the onward trade is unknown. A special leg with no custody row, no
+       successor, a successor of another entitlement or club, or a successor trade before its own
+       stays `special_entitlement_unsupported`.
+     - **Versions.** Rules v1 to v6 never follow the chain, so their batches still parse and the
+       contract refuses `specialEntitlement` or the reason under them. Under rule v7 the field and
+       the reason go together, only on a single-source traded-on pick leg, and the successor must be
+       the leg its club gave in the onward trade the leg names. The v7 limitation adds that a special
+       draft entitlement is followed through its reviewed canonical custody chain to the ordinary
+       pick it was traded on as, and valued as that pick's traded-on return.
+
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades and pick
-     custody (rule v6), v3 season
+     custody (rule v6), the special entitlement custody chain (rule v7), v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
      starts the season after the trade (or after the draft, for a selected pick). It ends at the first
      season covered by spells in which the player appears for another club; that season still counts at

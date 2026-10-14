@@ -49,12 +49,19 @@ import {
  * A traded-on pick whose club's onward side rests on such a projection says so
  * (`traded_on_return_projected`). Rules v1 to v5 never project a pick.
  *
+ * Under rule v7 (issue 789) a special draft entitlement (a concession or other special pick) whose
+ * reviewed canonical custody chain names a successor transfer, the ordinary pick it was traded on as,
+ * is valued as a traded-on pick through that successor's trade. It names the entitlement and the
+ * successor (`specialEntitlement`) and says so (`special_entitlement_custody_linked`). It stays
+ * single-source: the chain is reviewed custody, not a corroborating draft board. A special entitlement
+ * with no successor stays `special_entitlement_unsupported`. Rules v1 to v6 never follow the chain.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v6' as const;
+  'afl-trade-realized-grade-rule/v7' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -69,6 +76,8 @@ const RULE_LIMITATIONS = {
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v6':
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; not public factual, publication, production or activation authority.",
+  'afl-trade-realized-grade-rule/v7':
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; not public factual, publication, production or activation authority.",
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -93,6 +102,11 @@ const UNPROVEN_DRAFT_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
 const UNPROJECTED_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   ...UNPROVEN_DRAFT_RULES,
   'afl-trade-realized-grade-rule/v5',
+]);
+/** Rules under which no special entitlement is followed through its custody chain; rule v7 may. */
+const NO_SPECIAL_CUSTODY_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  ...UNPROJECTED_RULES,
+  'afl-trade-realized-grade-rule/v6',
 ]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
@@ -120,6 +134,7 @@ export const AFL_TRADE_REALIZED_GRADE_PROVISIONAL_REASONS = [
   'pick_projected_from_live_order',
   'pick_projected_from_prior_order_proxy',
   'single_source_pick_outcome',
+  'special_entitlement_custody_linked',
   'stint_open',
   'traded_on_return_partial',
   'traded_on_return_projected',
@@ -254,6 +269,17 @@ const legBase = {
   corroboratedBy: z.literal('footyinfo').optional(),
   /** Rule v5: the not-used pick's nominee count rests on a draft membership a Footyinfo board proved. */
   draftProvenBy: z.literal('footyinfo').optional(),
+  /**
+   * Rule v7: a special draft entitlement followed through its reviewed canonical custody chain to the
+   * successor transfer, the ordinary pick it was traded on as in its onward trade.
+   */
+  specialEntitlement: z
+    .object({
+      entitlementId: aflTradeContentAddressedIdSchema('special-draft-entitlement'),
+      successorTransferId: aflTradePublicIdSchema,
+    })
+    .strict()
+    .optional(),
 };
 
 const legUnionSchema = z.union([
@@ -388,6 +414,20 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
         (leg.basis !== 'pick_not_used_no_nominee' &&
           leg.basis !== 'pick_not_used_nominee_excluded')),
     'Only a not-used pick leg valued on its nominee count rests on a board-proven draft.',
+  ],
+  [
+    (leg, has) =>
+      (leg.specialEntitlement !== undefined) !== has('special_entitlement_custody_linked'),
+    'A special entitlement followed through its custody chain, and only that, is stated as a reason.',
+  ],
+  [
+    (leg) =>
+      leg.specialEntitlement !== undefined &&
+      (leg.assetKind !== 'pick' ||
+        leg.corroboratedBy !== undefined ||
+        (leg.basis !== 'pick_traded_on_return' &&
+          leg.basis !== 'pick_traded_on_return_unallocated')),
+    'Only a single-source traded-on pick leg follows a special entitlement’s custody chain.',
   ],
   [
     (leg, has) => leg.assetKind === 'player' && has('single_source_pick_outcome'),
@@ -665,6 +705,17 @@ function batchShapeIssues(content: BatchContent): Issue[] {
     )
   )
     issues.push(['trades', 'Only rule v6 and later project a pick from a draft order.']);
+  if (
+    NO_SPECIAL_CUSTODY_RULES.has(content.ruleVersion) &&
+    content.trades.some(({ legs }) =>
+      legs.some(
+        (leg) =>
+          leg.specialEntitlement !== undefined ||
+          leg.reasons.includes('special_entitlement_custody_linked')
+      )
+    )
+  )
+    issues.push(['trades', 'Only rule v7 and later follow a special entitlement’s custody chain.']);
   const summary = content.summary;
   if (
     summary.complete !== count('complete') ||
@@ -794,6 +845,33 @@ function onwardIssue(
   return null;
 }
 
+/**
+ * Rule v7: a special entitlement leg's successor transfer is the leg its club gave in the onward trade
+ * the leg reads.
+ */
+function specialSuccessorIssue(
+  leg: AflTradeRealizedTradeGradeLeg,
+  trades: ReadonlyMap<string, AflTradeRealizedTradeGrade>
+): string | null {
+  if (leg.specialEntitlement === undefined) return null;
+  const onwardTransactionId =
+    leg.basis === 'pick_traded_on_return'
+      ? leg.onward.transactionId
+      : leg.basis === 'pick_traded_on_return_unallocated'
+        ? leg.onwardTransactionId
+        : undefined;
+  const successor = onwardTransactionId
+    ? trades
+        .get(onwardTransactionId)
+        ?.legs.find(
+          (onwardLeg) => onwardLeg.transferId === leg.specialEntitlement!.successorTransferId
+        )
+    : undefined;
+  if (!successor || successor.sendingClubId !== leg.receivingClubId)
+    return 'A special entitlement’s successor is the leg its club gave in the onward trade.';
+  return null;
+}
+
 function batchIssues(content: BatchContent): Issue[] {
   const issues = batchShapeIssues(content);
   const official = new Map(content.inputs.pavCalculations.map((row) => [row.season, row.official]));
@@ -824,6 +902,8 @@ function batchIssues(content: BatchContent): Issue[] {
             ? onwardIssue(leg, trade, trades, content.ruleVersion)
             : null;
       if (linkIssue) issues.push(['trades', linkIssue]);
+      const successorIssue = specialSuccessorIssue(leg, trades);
+      if (successorIssue) issues.push(['trades', successorIssue]);
     }
   }
   return issues;
