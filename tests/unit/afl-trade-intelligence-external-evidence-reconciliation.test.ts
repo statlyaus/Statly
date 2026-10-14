@@ -11,6 +11,7 @@ import {
 import {
   AFL_TRADE_EXTERNAL_IDENTITY_RESOLUTION_SCHEMA_VERSION,
   createAflTradeExternalIdentityResolution,
+  isAflTradeDraftPending,
   reconcileAflTradeExternalEvidence,
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import {
@@ -960,12 +961,43 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.issues).toEqual([]);
   });
 
-  it('still blocks a matured pick entitlement whose selection is missing', () => {
+  it('keeps a pick open at its own anchor season while its draft has no selections (issue 789)', () => {
+    // A capture of the 2026 indicative order raises the anchor to 2026 before anyone is selected.
     const candidate = reconcileAflTradeExternalEvidence({
       environment: 'test_fixture',
       competition: 'AFLM',
       anchorSeasonYear: 2026,
       sourceBatches: [futureDraftguru, futureOrder],
+      identityResolutions: resolutions,
+      reconciledAt: '2026-10-14T00:00:00.000Z',
+    });
+
+    expect(candidate.content.draftSelections).toEqual([]);
+    expect(candidate.content.pickLineage).toEqual([]);
+    expect(candidate.content.issues).toEqual([]);
+  });
+
+  it('still blocks a matured pick entitlement whose selection is missing', () => {
+    // Once the 2026 draft has any selection in evidence, it has been held.
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2026,
+      sourceBatches: [
+        futureDraftguru,
+        futureOrder,
+        batch('draftguru', '4', [
+          {
+            kind: 'draft_selection',
+            draftYear: 2026,
+            draftType: 'national',
+            selectionNumber: 1,
+            roundNumber: 1,
+            player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+            selectedByClub: { nativeId: null, recordedName: 'GWS' },
+          },
+        ]),
+      ],
       identityResolutions: resolutions,
       reconciledAt: '2026-12-01T00:00:00.000Z',
     });
@@ -974,6 +1006,30 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.issues).toContainEqual(
       expect.objectContaining({ code: 'lineage_unresolved', severity: 'blocking' })
     );
+  });
+
+  it('dates a draft by its selections, never as pending before the anchor season', () => {
+    const held = {
+      draftSelections: [{ draftYear: 2025, draftType: 'national' }],
+      // A board prints only selected, passed or removed picks: outcomes of a held draft.
+      draftBoardPicks: [{ draftYear: 2024, draftType: 'rookie' }],
+    };
+    const pending = (draftYear: number, draftType: string, anchorSeasonYear: number) =>
+      isAflTradeDraftPending(held, anchorSeasonYear, { draftYear, draftType });
+    // A draft with selections in evidence was held, at, before or after the anchor.
+    expect(pending(2025, 'national', 2024)).toBe(false);
+    expect(pending(2025, 'national', 2025)).toBe(false);
+    expect(pending(2025, 'national', 2026)).toBe(false);
+    // A draft with none is pending at or after the anchor, whatever the type.
+    expect(pending(2026, 'national', 2025)).toBe(true);
+    expect(pending(2026, 'national', 2026)).toBe(true);
+    expect(pending(2025, 'rookie', 2025)).toBe(true);
+    // Before the anchor season a draft has been held, so missing selections stay a gap.
+    expect(pending(2024, 'national', 2025)).toBe(false);
+    expect(pending(2025, 'rookie', 2026)).toBe(false);
+    // A board pick alone shows the draft was held.
+    expect(pending(2024, 'rookie', 2024)).toBe(false);
+    expect(pending(2024, 'rookie', 2023)).toBe(false);
   });
 
   it('quarantines conflicting selection claims instead of selecting a majority winner', () => {
@@ -2523,6 +2579,121 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
     expect(candidate.content.pickOutcomes).toEqual([
       expect.objectContaining({ disposition: 'not_used', outcomeStatus: 'pending' }),
     ]);
+  });
+
+  describe('a not-used pick at an anchor season whose draft has no selections (issue 789)', () => {
+    const futureClaims = futureDraftguru.content.evidence.map(({ content }) => content.claim);
+    const futureNotUsed = disposition({
+      nativeEventId: '2025-gws-bulldogs-future',
+      nativeTransferId: 'gws-2026-round-2',
+      disposition: 'not_used',
+      player: undefined,
+    });
+    const reconcileAt2026 = (extra: AflTradeExternalEvidenceContent['claim'][] = []) =>
+      parseAflTradeExternalReconciliationCandidate(
+        reconcileAflTradeExternalEvidence({
+          environment: 'test_fixture',
+          competition: 'AFLM',
+          // The 2026 indicative order raises the anchor; the 2026 draft is still to be held.
+          anchorSeasonYear: 2026,
+          sourceBatches: [
+            batch('draftguru', '8', [
+              ...draftguruClaims,
+              disposition({ disposition: 'not_used', player: undefined }),
+              ...futureClaims,
+              futureNotUsed,
+              ...extra,
+            ]),
+            futureOrder,
+          ],
+          identityResolutions: resolutions,
+          reconciledAt: '2026-10-14T00:00:00.000Z',
+        })
+      );
+    const outcomeOf = (
+      candidate: ReturnType<typeof reconcileAt2026>,
+      draftYear: number
+    ): NonNullable<typeof candidate.content.pickOutcomes>[number] => {
+      const transfer = candidate.content.transfers.find(
+        ({ asset }) => asset.kind === 'pick_entitlement' && asset.draftYear === draftYear
+      )!;
+      return candidate.content.pickOutcomes!.find(
+        ({ transferId }) => transferId === transfer.transferId
+      )!;
+    };
+
+    it('keeps the 2026 pick pending and its lineage open, and the 2025 pick stated as before', () => {
+      const candidate = reconcileAt2026();
+      expect(outcomeOf(candidate, 2026)).toEqual(
+        expect.objectContaining({ disposition: 'not_used', outcomeStatus: 'pending' })
+      );
+      expect(outcomeOf(candidate, 2026)).not.toHaveProperty('nominationBasis');
+      // The 2025 draft holds a selection, so the anchor rise changes nothing there.
+      const anchoredAt2025 = reconcileWith(
+        [disposition({ disposition: 'not_used', player: undefined })],
+        '7'
+      ).content.pickOutcomes![0]!;
+      // Ids are content addresses of a different batch; the facts must match.
+      const {
+        outcomeId: _id,
+        transferId: _transfer,
+        evidenceIds: _evidence,
+        ...expected2025
+      } = anchoredAt2025;
+      expect(outcomeOf(candidate, 2025)).toEqual(expect.objectContaining(expected2025));
+      const futureTransfer = candidate.content.transfers.find(
+        ({ asset }) => asset.kind === 'pick_entitlement' && asset.draftYear === 2026
+      )!;
+      expect(candidate.content.issues).not.toContainEqual(
+        expect.objectContaining({
+          code: 'lineage_unresolved',
+          subjectKey: `lineage:${futureTransfer.transferId}`,
+        })
+      );
+    });
+
+    it('states the 2026 pick once its draft has a selection in evidence', () => {
+      const candidate = reconcileAt2026([
+        {
+          kind: 'draft_selection',
+          draftYear: 2026,
+          draftType: 'national',
+          selectionNumber: 1,
+          roundNumber: 1,
+          player: { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' },
+          selectedByClub: { nativeId: null, recordedName: 'GWS' },
+        },
+      ]);
+      expect(outcomeOf(candidate, 2026)).toEqual(
+        expect.objectContaining({
+          outcomeStatus: 'stated',
+          nominationBasis: 'no_access_evidence',
+        })
+      );
+      const futureTransfer = candidate.content.transfers.find(
+        ({ asset }) => asset.kind === 'pick_entitlement' && asset.draftYear === 2026
+      )!;
+      expect(candidate.content.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'lineage_unresolved',
+          subjectKey: `lineage:${futureTransfer.transferId}`,
+        })
+      );
+    });
+
+    it('refuses a pending outcome in a draft the candidate holds selections in', () => {
+      const { content } = reconcileWith(
+        [disposition({ disposition: 'not_used', player: undefined })],
+        '7'
+      );
+      const { nominationBasis: _basis, ...outcome } = content.pickOutcomes![0]!;
+      expect(() =>
+        createAflTradeExternalReconciliationCandidate({
+          ...content,
+          pickOutcomes: [{ ...outcome, outcomeStatus: 'pending' }],
+        })
+      ).toThrow(/pending pick outcome needs a draft/);
+    });
   });
 
   it('leaves a stated player with no matching selection unresolved, with a blocking issue', () => {

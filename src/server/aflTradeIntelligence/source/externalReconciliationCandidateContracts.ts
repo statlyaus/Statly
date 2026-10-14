@@ -14,7 +14,10 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
-import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from './externalEvidenceReconciliation';
+import {
+  AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
+  isAflTradeDraftPending,
+} from './externalEvidenceReconciliation';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
@@ -851,6 +854,18 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         path: ['pickOutcomes', index],
         message:
           'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
+      });
+    }
+    // Pending is decided by the evidence: only a pick whose draft the candidate holds no selection
+    // or board pick in, at or after its anchor season, may wait on that draft.
+    if (
+      outcome.outcomeStatus === 'pending' &&
+      (!asset || !isAflTradeDraftPending(content, content.anchorSeasonYear, asset))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'outcomeStatus'],
+        message: 'A pending pick outcome needs a draft the candidate holds no selection in.',
       });
     }
     if (
