@@ -826,6 +826,11 @@ supersede production Gate authority, and production execution cannot reuse non-p
    environment and competition and attaches it to every `occurredOn: null` transaction of that
    season; a season with no reviewed window stays year-only. From migration 0263 the database refuses
    a window that no such capture states, on the review decision and again on promotion.
+   A year-only trade promoted before 0261 whose current version came from reviewed pick lineage is
+   not re-promoted to gain a window: from migration 0281 its v4 arrival entry cites the window of the
+   season's single approved trade-period capture directly (`eventDate: null` plus that exact
+   `datePrecision`), and the event row stays undated. Zero or several approved captures for the
+   season refuse it.
    A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not

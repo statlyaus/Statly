@@ -1879,9 +1879,20 @@ transaction-date coverage accepts `occurredOn: null` plus a `datePrecision` wind
 `outcome_event_evidenced_date_bounds` proves a trade window from the finalized promotion's
 transaction member and coverage. A v4 arrival entry may then be a window (as a v2 `windowEvent` is);
 it is current only against an event of exactly that precision, and the spell starts at the window's
-earliest day, so the grader's season rule places an October arrival in the following season. A
-year-only trade, an exact-day trade and every draftee arrival are unchanged; a window is reviewed
-precision from a stated source, never a substituted day.
+earliest day, so the grader's season rule places an October arrival in the following season. An
+exact-day trade and every draftee arrival are unchanged; a window is reviewed precision from a
+stated source, never a substituted day. A year-only trade keeps its meaning with one exception
+(migration 0281): a trade promoted before 0261 whose current version came from reviewed pick
+lineage (`outcome_current_canonical_reviewed_lineage_transactions`, 0274) cannot gain a window,
+because the deferred promotions skip it and a reviewed re-version would retire its reviewed pick
+realizations and change reviewed pick ids (the 2020 Jeremy Cameron trade). For a v4 arrival only,
+`outcome_reviewed_lineage_trade_arrival_window` gives such a current, approved trade version with
+no day and no precision the window that the season's single approved, finalized
+`official-afl-trade-period-dates` claim in its environment and competition states (the
+capture-only rule of 0263); zero or several claims give none, and a second approved capture makes an
+arrival registered on the first no longer current. The event row stays undated, and
+`outcome_event_evidenced_date_bounds` and every other reader keep their meaning. Any other undated
+trade stays year-only.
 
 A promoted event binds its entry evidence to the exact source captures behind it, so a v1 spell whose
 capture bytes were lost could not be re-made: a re-fetched page is never byte-identical. A _source
