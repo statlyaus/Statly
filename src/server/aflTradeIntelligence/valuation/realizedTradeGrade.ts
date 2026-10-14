@@ -1,9 +1,11 @@
 import type { AflTradeExternalReconciliationCandidateRecord } from '../source/externalReconciliationCandidateContracts';
+import { isAflTradeUsableCustodyStatus } from '../source/pickLineageDeferral';
 import { hpnDpv3ValueForPick } from '../modeling/hpnPickValueBenchmark';
 import {
   AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION,
+  aflTradeRealizedOnwardSideProjected,
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
   type AflTradeRealizedGradeReason,
@@ -17,12 +19,15 @@ type CandidateContent = AflTradeExternalReconciliationCandidateRecord['content']
 type Transaction = CandidateContent['transactions'][number];
 type Transfer = CandidateContent['transfers'][number];
 type PickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
+type Custody = CandidateContent['pickCustody'][number];
+type PickAsset = Extract<Transfer['asset'], { kind: 'pick_entitlement' }>;
 
 /** Everything the MVP grader reads, already loaded; the grader itself does no I/O. */
 export interface AflTradeRealizedTradeGradeInputs {
   candidateId: string;
+  /** Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick. */
   candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
-    Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks'>>;
+    Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks' | 'pickCustody'>>;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */
   pavCalculations: readonly { season: number; calculationId: string; official: boolean }[];
   /** HPN PAV per player per season at one club, from the pinned calculations. */
@@ -207,6 +212,75 @@ function atTradeView(
     selectionNumber: asset.nominalPick,
     value: hpnDpv3ValueForPick(asset.nominalPick),
   };
+}
+
+/** The span an observation covers, in ms: an instant, or the whole of a recorded day or year. */
+function observedSpan(observedAt: Custody['observedAt']): readonly [number, number] {
+  if (typeof observedAt === 'string') {
+    const at = Date.parse(observedAt);
+    return [at, at];
+  }
+  if (observedAt.precision === 'day') {
+    const start = Date.parse(`${observedAt.date}T00:00:00.000Z`);
+    return [start, start + 86_400_000 - 1];
+  }
+  return [Date.UTC(observedAt.year, 0, 1), Date.UTC(observedAt.year + 1, 0, 1) - 1];
+}
+
+/** The one row observed strictly after every other; none when the latest observations overlap. */
+function latestObservation(rows: readonly Custody[]): Custody | undefined {
+  const spans = rows.map((row) => [row, observedSpan(row.observedAt)] as const);
+  const latest = spans.filter(([row, [start]]) =>
+    spans.every(([other, [, end]]) => other === row || start > end)
+  );
+  return latest.length === 1 ? latest[0]![0] : undefined;
+}
+
+interface OrderSlot {
+  custody: Custody;
+  selectionNumber: number;
+  proxy: boolean;
+}
+
+/**
+ * Rule v6 (owner direction 2026-10-14): the slot a pending national pick holds in the live Official
+ * AFL indicative order. Its draft's custody rows with its `pickId` or with its draft, round and
+ * original club, whatever their status, give the latest observation of the pick; that row must be
+ * usable and name a slot from 1 to 90, so a newer disputed or unnumbered capture is never overridden
+ * by an older usable one. When its draft has no order at all, the same round and original club in the
+ * previous draft's order stand in as a proxy (a 2027 pick before the 2027 order exists). A pick with no
+ * original club (a compensation or assistance pick) matches only by `pickId`, so it never proxies.
+ */
+function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot | undefined {
+  if (asset.draftType !== 'national') return undefined;
+  const national = (draftYear: number) =>
+    custody.filter((row) => row.draftYear === draftYear && row.draftType === 'national');
+  const sameEntitlement = (row: Custody) =>
+    asset.nominalRound !== null &&
+    asset.originalClubId !== null &&
+    row.roundNumber === asset.nominalRound &&
+    row.originalClubId === asset.originalClubId;
+  const own = national(asset.draftYear);
+  let found: Custody | undefined;
+  let proxy = false;
+  if (own.length > 0) {
+    // Every capture of the pick: under its `pickId`, or re-keyed under another for the same entitlement.
+    found = latestObservation(
+      own.filter((row) => row.pickId === asset.pickId || sameEntitlement(row))
+    );
+  } else {
+    proxy = true;
+    found = latestObservation(national(asset.draftYear - 1).filter(sameEntitlement));
+  }
+  const selectionNumber = found?.recordedPickNumber;
+  if (
+    !found ||
+    !isAflTradeUsableCustodyStatus(found.status) ||
+    selectionNumber == null ||
+    selectionNumber > 90
+  )
+    return undefined;
+  return { custody: found, selectionNumber, proxy };
 }
 
 // The batch's club id format (aflTradePublicIdSchema). A club the batch cannot name is unresolved.
@@ -402,7 +476,30 @@ export function gradeAflTradesOnRealizedValue(
     const outcome = outcomes.get(transfer.transferId);
     if (!outcome || outcome.outcomeStatus === 'unresolved')
       return blocked(base, ['pick_outcome_unresolved']);
-    if (outcome.outcomeStatus === 'pending') return blocked(base, ['pick_outcome_pending']);
+    if (outcome.outcomeStatus === 'pending') {
+      // Rule v6: careers run on, so every grade is provisional; a pick not yet drafted is valued at
+      // the HPN DPVC v3 value of its slot in the live order, never a first stint. Unknown stays blocked.
+      const slot = orderSlotOf(inputs.candidate.pickCustody ?? [], asset);
+      if (!slot) return blocked(base, ['pick_outcome_pending']);
+      return {
+        ...base,
+        state: 'valued',
+        basis: 'pick_projected_from_order',
+        realizedValue: hpnDpv3ValueForPick(slot.selectionNumber),
+        projection: {
+          benchmarkId: inputs.pickProjectionBenchmarkId,
+          selectionNumber: slot.selectionNumber,
+          orderDraftYear: slot.custody.draftYear,
+          pickDraftYear: asset.draftYear,
+          custodyId: slot.custody.custodyId,
+          observedAt: slot.custody.observedAt,
+          proxy: slot.proxy,
+        },
+        reasons: [
+          slot.proxy ? 'pick_projected_from_prior_order_proxy' : 'pick_projected_from_live_order',
+        ],
+      };
+    }
     if (outcome.disposition === 'selected') {
       if (!outcome.playerId) return blocked(base, ['player_identity_unresolved']);
       // A pick is drafted at or after the trade; an earlier draft year cannot be this pick's outcome.
@@ -429,6 +526,10 @@ export function gradeAflTradesOnRealizedValue(
       };
     }
     if (outcome.disposition === 'not_used') {
+      // Rule v5: a count whose draft membership a reviewed Footyinfo board proved says so. The
+      // outcome stays single-source: the board proves the draft, not this pick's fate.
+      const proven =
+        outcome.draftProvenBy === undefined ? {} : { draftProvenBy: outcome.draftProvenBy };
       // A board-stated passed or removed pick was not spent matching a bid: worth 0, like a pick of
       // a club that took no nominee.
       if (
@@ -442,6 +543,7 @@ export function gradeAflTradesOnRealizedValue(
         return {
           ...base,
           ...source,
+          ...proven,
           state: 'valued',
           basis: 'pick_not_used_no_nominee',
           realizedValue: 0,
@@ -451,6 +553,7 @@ export function gradeAflTradesOnRealizedValue(
       if (outcome.nominationBasis === 'club_took_nominated_player')
         return {
           ...base,
+          ...proven,
           state: 'excluded',
           basis: 'pick_not_used_nominee_excluded',
           reasons: sorted([SINGLE, 'not_used_nominee_excluded']),
@@ -497,6 +600,9 @@ export function gradeAflTradesOnRealizedValue(
     if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
     // Rule v3: exact on the club's side, but the onward trade is blocked elsewhere.
     if (onward.state === 'blocked') reasons.push('traded_on_return_partial');
+    // Rule v6: the club's side of the onward trade rests on a pick projected from an order.
+    if (aflTradeRealizedOnwardSideProjected(onward.legs, receiving))
+      reasons.push('traded_on_return_projected');
     return {
       ...base,
       ...source,

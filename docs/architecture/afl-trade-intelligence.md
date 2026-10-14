@@ -4075,7 +4075,8 @@ The remaining work proceeds through these independently verifiable gates:
 3. **Reconcile and promote canonical facts.** Resolve provider identities and clubs without display-name
    joins; conserve every source row and issue; promote reviewed transactions, directed assets, draft
    selections, pick entitlements, and stable pick lineage. A future pick remains unresolved until its
-   exact selection and player are authenticated.
+   exact selection and player are authenticated; while its draft has no selection in evidence it is
+   pending and raises no lineage issue (see provider-stated pick outcomes below).
 
    **Pick-side deferral** (statlyaus/Statly#869, migration 0264, `source/pickLineageDeferral.ts`).
    Every reconciliation issue is `blocking` unless the candidate was prepared under an approved owner
@@ -4122,7 +4123,10 @@ The remaining work proceeds through these independently verifiable gates:
    predecessor. `outcome_external_draft_sessions_exact` checks that the re-sync entries cover the
    re-synced selections exactly. Such a version's draft asset is evidence for an arrival-only (v4)
    spell (`outcome_external_promoted_session_resync_version`; the v1 to v3
-   `outcome_acquisition_promoted_event_current` has no such clause) and keeps the evidenced date
+   `outcome_acquisition_promoted_event_current` has no such clause; since migration 0280 that check
+   relies on the promotion insert guard's proof of exact coverage for a deferred candidate instead of
+   re-running it, because the candidate facts and proposal it read cannot change, and the candidate's
+   promotable and re-synced selections read its lists once) and keeps the evidenced date
    bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. The old
    draftee's selection is retired by number, but its asset stays current under 0256. It is excluded
    from arrivals only because its identity decision is no longer current (0254), and a reader of a
@@ -4170,9 +4174,18 @@ The remaining work proceeds through these independently verifiable gates:
    from governed lineage. For each received pick, Draftguru states the player the receiving club used
    it on, "traded on", or "not used". A candidate records these as `pickOutcomes`: a `selected`
    outcome names the receiving club's one undisputed selection of the stated player in the pick's
-   draft, a "not used" pick whose draft lies after the candidate's anchor season is `pending`, and
-   anything that does not match is `unresolved` with a blocking issue. Each disposition's evidence
-   rides on its transfer, so the candidate's child tables conserve it. Outcomes are single-source
+   draft, a "not used" pick whose draft is still to be held is `pending`, and anything that does not
+   match is `unresolved` with a blocking issue. Whether a draft is still to be held is read from the
+   evidence, not the anchor season (`isAflTradeDraftPending`, statlyaus/Statly#789, 2026-10-14): the
+   draft is pending when it is at or after the candidate's anchor season and the candidate holds no
+   draft selection and no Footyinfo board pick in that draft year and type (a board prints only
+   selected, passed or removed picks, all outcomes of a held draft). A capture of the next draft's
+   indicative order raises the anchor to that draft's year before anyone is selected, so the anchor
+   alone would turn those picks `stated` and their lineage unresolved. A draft before the anchor
+   season has been held, so missing selections there stay a gap, never pending. The same predicate
+   excuses a pending draft's transferred pick from `lineage_unresolved`, and the candidate contract
+   refuses a `pending` outcome in a draft that has a selection or board pick. Each disposition's
+   evidence rides on its transfer, so the candidate's child tables conserve it. Outcomes are single-source
    and may feed only `provisional` grades (owner decision D, statlyaus/Statly#789); governed lineage
    still requires a proven custody chain. A pick's endpoint is never inferred from pick numbers:
    measured against Draftguru's stated outcomes, same-club number matching misattributed about one
@@ -4216,10 +4229,18 @@ The remaining work proceeds through these independently verifiable gates:
    count), took none (`club_took_no_nominated_player`), or the draft lacks complete access evidence
    (`no_access_evidence`, with no count, because unknown is not zero). Only `draftguru` evidence
    captured at `draftguru-national-year-page/v2` or `/v3` counts. A draft is covered only when its membership
-   is proven independently of that page: the reviewed official AFL completed-session claims list
-   selections 1 to N with no gap, the candidate's selections in the draft are exactly those numbers,
-   and each carries exactly one stated category. A partial or disputed page therefore never yields a
-   negative. The outcome cites the receiving club's year-page and official session rows it read. Categories match
+   is proven independently of that page, and the candidate's selections in the draft are exactly the
+   proven numbers. Membership is proven by the reviewed official AFL completed-session claims listing
+   selections 1 to N with no gap. For the 2025 national draft only, which has no official session
+   page, a reviewed Footyinfo board may prove it instead (owner decision 2026-10-14, issue 789; see
+   "Footyinfo national draft boards"); the outcome then names `draftProvenBy: footyinfo`. Another draft
+   needs a new owner decision. Within a draft an official session proves, every selection must carry
+   exactly one stated category: the rule before 2026-10-14, applied alone, so every official-proven
+   outcome is unchanged by construction. Within a board-proven draft, it is enough instead that every
+   selection names a resolved club and each of the receiving club's selections carries exactly one.
+   A partial or disputed page therefore never yields a negative for a club whose rows it omits. The outcome cites
+   the receiving club's year-page rows and, for the proof, its official session rows or its Footyinfo
+   board `draft_selection` rows, never the board-pick rows. Categories match
    the reviewed forms exactly (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`); any other
    text quarantines the row. Parser v3 also reads the 2019 page's club-qualified forms
    (`Academy(<club>)`, `Academy (NG)(<club>)`): an academy nomination only when the named club is the
@@ -4240,9 +4261,18 @@ The remaining work proceeds through these independently verifiable gates:
    - `board_pick_passed_or_removed`: **0 realized value**, as for a club that took no nominee. A
      Footyinfo board pick states this pick was passed or removed (issue 853). The board lists a pick
      spent matching a bid as points, never as a board pick, so this pick funded no nominee. It is
-     read only where the access evidence is missing; see "Footyinfo national draft boards".
+     read where the access evidence is missing, and before a count whose draft membership the board
+     itself proved; see "Footyinfo national draft boards".
 
    A not-used pick is never credited with any player's value. The rule applies to realized value only.
+
+   A `pending` not-used pick, one whose draft is not yet in evidence (its year is at or after the
+   candidate's anchor season and the candidate holds no `draft_selection` and no Footyinfo
+   `draft_board_pick` for that (draftYear, draftType), `isAflTradeDraftPending`,
+   statlyaus/Statly#927), is no longer
+   blocked when the live draft order holds its slot. Under rule v6 it is valued provisionally from
+   that slot; see "Projected picks (rule v6)" under the contract below. A pick with no resolvable
+   original club (a compensation or assistance pick) stays pending.
 
    **Traded-on picks and bundled trades (owner decision, 2026-10-08, statlyaus/Statly#789).** A pick a
    club received and then traded on is worth what the club got back for it. When it was the only asset
@@ -4257,8 +4287,11 @@ The remaining work proceeds through these independently verifiable gates:
    reports what the club finally landed and gave up.
 
    **Pick projection (owner decision, 2026-10-08, replacing the 2026-10-06 "no projection in the MVP"
-   rule).** The MVP has a pick projection. It is the at-trade view of a pick only. It never feeds the
-   realized grade or the bundle allocation, so a change of projection never changes a grade. The MVP
+   rule).** The MVP has a pick projection. It is the at-trade view of a pick. It never feeds the
+   realized grade or the bundle allocation, so a change of projection never changes a grade, with one
+   exception the owner directed on 2026-10-14 (issue 789): a pick whose draft is not yet in evidence
+   is valued at the projection of its slot in the live draft order, because "careers run
+   continuously" and every grade is provisional ("Projected picks (rule v6)" below). The MVP
    uses the HPN Draft Pick Value Chart v3.0 (https://www.hpnfooty.com/?page_id=22741): pick value =
    −30.36 × ln(pick number) + 146.95, in career PAV, fitted on the 1993-2006 drafts excluding father-son
    picks (R² 0.73). Pick 1 is about 147, pick 10 about 77 and pick 30 about 44. It is the existing HPN
@@ -4283,7 +4316,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v4` (v1 to v3 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v6` (v1 to v5 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4291,21 +4324,24 @@ The remaining work proceeds through these independently verifiable gates:
    listed as ungraded with its reason, never dropped.
    - **Legs.** Each transfer leg has one realized value at its receiving club, which counts as received
      for that club and given up by the sender. A leg is `valued` (player first stint, selected pick's
-     first stint, traded-on pick's share of its onward return, or a not-used pick worth 0), `excluded`
+     first stint, traded-on pick's share of its onward return, a not-used pick worth 0, or under rule
+     v6 a pending pick projected from its slot in the live draft order), `excluded`
      (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
      nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
-     valued and any season with no PAV calculation, and under rule v4 its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
+     valued and any season with no PAV calculation, and under rule v4 and later its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
      allocation (`sole_asset`, `relative_value` or `equal_split`), its share and the return. The batch
      checks that return, weight total and asset count against the onward trade it contains.
    - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
      pick's HPN projection, which must equal the benchmark formula for its slot. Neither ever enters a
      total.
-   - **States.** A trade is `blocked` if any leg carries a blocking reason (pending, unresolved or
+   - **States.** A trade is `blocked` if any leg carries a blocking reason (a pending pick outcome the
+     live order cannot place, an unresolved or
      no-access-evidence pick outcome, unresolved identity, unsupported special entitlement, missing PAV
      head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
      `provisional` if any leg carries a provisional reason (open stint, unreviewed arrival, missing or
-     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional or partial onward
-     trade, no appearances after the trade, or a single-source pick outcome). Otherwise it is
+     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional, partial or
+     projected onward trade, no appearances after the trade, a single-source pick outcome, or a pick
+     projected from the live order or a prior-order proxy). Otherwise it is
      `complete`. Club totals are the exact received and given-up sums of the valued legs, so equal legs
      always seal to the same batch. Under rule v3 a club's `received` is null only when a leg it
      receives is blocked, and its `givenUp` only when a leg it sends is blocked; `net` is null when
@@ -4321,7 +4357,9 @@ The remaining work proceeds through these independently verifiable gates:
      - **Traded on:** exactly one board pick in the pick's draft routes it sender, receiver, onward
        receiver, with that sequence once in its route.
 
-     Every other pick leg keeps the reason. A nominee-excluded not-used pick is never corroborated.
+     Every other pick leg keeps the reason, except a pick projected from the live draft order (rule
+     v6), which rests on the order, not on a pick outcome: it carries neither the reason nor
+     `corroboratedBy`. A nominee-excluded not-used pick is never corroborated.
      Rule v2 introduced this and rule v3 keeps it. The contract still accepts v1 batches, which name no
      corroborating provider, so earlier batches stay valid. Each version states its own limitation
      text.
@@ -4358,9 +4396,75 @@ The remaining work proceeds through these independently verifiable gates:
      more is unchanged. Every realized value and club total therefore stays at 0 or more, and a
      bundle's relative-value shares stay between 0 and 1: a floored asset weighs 0, and a bundle
      whose assets all floor to 0 is an `equal_split_tiebreak`. Rules v1 to v3 record no `pavSum`, and
-     a v4 stint must record one.
+     a v4 or later stint must record one.
 
-   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, v3 season
+   - **Board-proven draft (rule v5, owner decision 2026-10-14, issue 789).** The 2025 national draft
+     has no reviewed official completed session, so its not-used picks were `no_access_evidence` and
+     blocked. Under rule v5 a not-used pick whose nominee count rests on a draft membership a reviewed
+     Footyinfo board proved (the outcome's `draftProvenBy: footyinfo`, "Not used" picks above) is
+     valued or excluded as any count is, and the leg names `draftProvenBy: footyinfo`. It keeps
+     `single_source_pick_outcome`: the board proves the draft's selections, not this pick's fate. Only
+     a `pick_not_used_no_nominee` or `pick_not_used_nominee_excluded` leg without `corroboratedBy` may
+     name it, and rules v1 to v4 never do. The v5 limitation text says that the membership of the 2025
+     national draft is proven by a reviewed Footyinfo board, no official session being reviewed.
+
+   - **Projected picks (rule v6, owner direction 2026-10-14, issue 789).** The owner's direction:
+     "it's always going to be a provisional grade of sorts because careers run continuously, if the
+     picks havent been selected, just find the live draft order and attribute the picks accordingly".
+     Until then a `pending` pick outcome blocked its trade. A pick is `pending` while its draft is
+     not yet in evidence: a draft is pending if and only if its year is at or after the candidate's
+     anchor season and the candidate holds no `draft_selection` and no Footyinfo `draft_board_pick`
+     for that (draftYear, draftType) (`isAflTradeDraftPending` in
+     `source/externalEvidenceReconciliation.ts`, statlyaus/Statly#927). Under rule v6 the
+     grader reads the candidate's `pickCustody`, the reviewed Official AFL indicative order rows
+     ("Pick custody from the pre-draft order" below), to find the pick's slot:
+     - **Slot.** Every national custody row of the pick's draft that captures this pick, whatever
+       its status: rows with the pick's `pickId`, and rows with its draft year, `nominalRound` and
+       `originalClubId` (a capture re-keyed under another `pickId`). The latest of them decides: the
+       one row observed after every other, where a day or year observation spans that whole period,
+       so two overlapping latest observations have no slot. That row must be usable (`single_source`
+       or `corroborated`) and name a `recordedPickNumber` from 1 to 90. A newer disputed or
+       unnumbered capture is never overridden by an older usable one; the pick stays pending.
+     - **Proxy.** When the pick's draft has no national custody row at all (a 2027 pick before any
+       2027 order exists), the latest row of the previous draft with the same round and original
+       club stands in, on the same usable-and-numbered terms, and the leg is flagged as a proxy. A
+       draft that has an order but not this pick is never proxied. Until a 2026 order is reviewed
+       (the reviewed pages cover 2019 to 2025), every 2026 pick is projected by this proxy from the
+       13 November 2025 order, and a 2027 pick, with no order for either year, stays pending.
+     - **No original club.** A compensation, assistance, concession or priority pick has no
+       resolvable original club, so it matches only a row with its own `pickId` and never proxies.
+       In practice such a pick stays pending: an order row without an original club is `unresolved`.
+     - **Value.** The leg is `valued` on basis `pick_projected_from_order` at the raw HPN DPVC v3
+       value of the slot (`hpnDpv3ValueForPick`, no scaling), and names its `projection`: the batch's
+       benchmark, the slot, the order's and the pick's draft years, the custody row and its
+       observation, and whether it is a proxy. It carries exactly one reason,
+       `pick_projected_from_live_order` or `pick_projected_from_prior_order_proxy`, both provisional,
+       and neither `single_source_pick_outcome` nor `corroboratedBy`: it rests on the order, not on
+       a pick outcome. DPVC is whole-career expected PAV, while every other leg realizes first-stint
+       PAV, so a projected value is not like for like with a realized one, and the limitation says so.
+     - **Still pending.** No unique latest capture, a latest capture that is not usable, has no
+       number or is beyond HPN's 1 to 90, a pick with no original club and no own-`pickId` row, or a
+       non-national pick stays `pick_outcome_pending`, which still blocks.
+     - **Totals and chains.** A projected leg is valued like any other: it enters the club's
+       `received` and `givenUp`, and weighs its value in a relative-value bundle. A traded-on pick
+       whose onward trade holds one is valued as `pick_traded_on_return` with
+       `traded_on_return_provisional`, and also `traded_on_return_projected` when a projected leg, or
+       a return resting on one, sits on the side its value reads: a leg its club received there, or
+       for a bundle a leg it gave. A pick traded twice before its draft is projected to the same slot
+       on both hops, so the middle club's received and given-up values for it cancel.
+     - **At-trade view.** Unchanged: a future pick's at-trade view stays `future_pick_slot_unknown`.
+     - **After the draft.** Once the pick is drafted and the candidate is re-reconciled, its outcome
+       is `selected` and the leg becomes the draftee's realized first stint, which is 0 until he plays.
+       A trade's value therefore drops sharply after draft night and climbs back as the draftee plays.
+     - **Versions.** Rules v1 to v5 never project a pick, so their batches still parse. The contract
+       checks the value against the slot, the proxy flag against its reason and the year before, and
+       the benchmark against the batch's. The v6 limitation adds that a pick whose draft is not yet in
+       evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not
+       first-stint) of its slot in the live Official AFL indicative order, and that a pick of a draft
+       with no order yet uses its original club's slot in the latest order.
+
+   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades and pick
+     custody (rule v6), v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
      starts the season after the trade (or after the draft, for a selected pick). It ends at the first
      season covered by spells in which the player appears for another club; that season still counts at
@@ -4452,7 +4556,7 @@ The remaining work proceeds through these independently verifiable gates:
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`
        club resolutions. A club with no resolution leaves the record unusable and is one
        `board-pick:club:<code>` identity issue, which is pick-side and so deferrable. The key is
-       present only when a board is reconciled, so earlier candidate ids are unchanged. Two uses
+       present only when a board is reconciled, so earlier candidate ids are unchanged. Three uses
        follow.
        - **Onward hops.** Some eventual-selection groups are refused by the walk above: a closed loop,
          a merge or two possible orders. Some reach two custody picks with nothing to choose between
@@ -4469,12 +4573,28 @@ The remaining work proceeds through these independently verifiable gates:
          unchanged: the re-keyed hops share one `pickId`, so the existing trail or later-trade link
          finds the onward trade. Nothing is inferred from a pick number. The number only joins two
          statements about one named player's selection.
-       - **Not-used evidence.** A stated not-used national pick with `no_access_evidence` takes
+       - **Not-used evidence.** A stated not-used national pick with `no_access_evidence`, or with a
+         count whose draft membership the board itself proved (below), takes
          `board_pick_passed_or_removed` (citing `boardPickId`) when exactly one board pick matches:
          same draft and round, held by the receiving club, with a route that hands it from the
          sending club to the receiving club once. When the transfer names the original club, the
          route must start there. That pick must be passed or removed. A selected match, a pick with
-         no round, or two matches leave the pick as it was.
+         no round, or two matches leave the pick as it was. The board pick is read before a
+         board-proven count because it states the pick's own fate; a count an official session
+         proved is never replaced, so official-proven outcomes are unchanged.
+       - **Draft membership (owner decision 2026-10-14).** The 2025 national draft has no reviewed
+         official completed session. For it alone (`FOOTYINFO_BOARD_PROVEN_DRAFTS`, `2025|national`;
+         another year needs a new decision), a board proves which selections the draft had when no
+         official AFL `draft_session` claim exists for that draft, its selected picks run 1 to N with
+         no gap, every selected board pick names one resolved club, and the candidate's selections in
+         the draft are exactly those numbers. The access categories still come from the Draftguru
+         year page, and the outcome names `draftProvenBy: footyinfo` and cites the receiving club's
+         board `draft_selection` rows. Only for a board-proven draft may the categories be complete
+         for the receiving club alone (every selection naming a resolved club); an official-proven
+         draft keeps the earlier all-selections rule, so its outcomes are unchanged by construction.
+         A board makes no claim that it is complete: the 1-to-N run and the equality with the
+         candidate's selections are the only guards. Where an official session exists it alone
+         proves the draft.
 
        Rule v2 of the grade (below, "Single source") lifts `single_source_pick_outcome` for
        outcomes that Draftguru and Footyinfo corroborate.

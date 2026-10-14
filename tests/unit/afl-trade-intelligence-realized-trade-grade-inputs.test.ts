@@ -46,7 +46,22 @@ const candidate = createAflTradeExternalReconciliationCandidate({
     },
   ],
   draftSelections: [],
-  pickCustody: [],
+  // Rule v6 projects a pending pick from the live order's custody rows.
+  pickCustody: [
+    {
+      custodyId: `external-pick-custody:${hex('7')}`,
+      pickId: `draft-pick:${hex('8')}`,
+      observedAt: { precision: 'day', date: '2025-11-13' },
+      draftYear: 2026,
+      draftType: 'national',
+      roundNumber: 1,
+      recordedPickNumber: 7,
+      originalClubId: 'carlton',
+      currentClubId: 'geelong',
+      status: 'single_source',
+      evidenceIds,
+    },
+  ],
   pickLineage: [],
   issues: [],
   reconciledAt: '2026-10-08T00:00:00.000Z',
@@ -111,6 +126,8 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
     ]);
     expect(inputs.spellSeasons).toEqual([2021, 2022]);
     expect(inputs.reviewedArrivals).toEqual([{ playerId: 'p1', clubId: 'carlton', season: 2021 }]);
+    expect(inputs.candidate.pickCustody).toEqual(candidate.content.pickCustody);
+    expect(inputs.candidate.pickCustody).toHaveLength(1);
   });
 
   it.each<

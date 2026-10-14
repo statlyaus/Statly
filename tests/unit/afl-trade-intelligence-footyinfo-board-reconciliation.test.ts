@@ -529,9 +529,13 @@ describe('Footyinfo passed and removed picks as not-used evidence (issue 853)', 
   };
   const outcomeOf = (board: BoardPick[], round = 2) =>
     reconcile([futureTrade(round)], { board: board.map(claim) }).pickOutcomes![0]!;
+  // Without a board, a selection in the 2024 draft shows it was held, so the pick is not pending.
+  const heldDraft = [draftguruSelection('West Coast')];
 
   it('settles a not-used pick with no access evidence from its one passed board pick', () => {
-    expect(reconcile([futureTrade()]).pickOutcomes![0]!.nominationBasis).toBe('no_access_evidence');
+    expect(reconcile([futureTrade(), heldDraft]).pickOutcomes![0]!.nominationBasis).toBe(
+      'no_access_evidence'
+    );
     const candidate = reconcile([futureTrade()], { board: [claim(passed())] });
     const [board] = candidate.draftBoardPicks!;
     const outcome = candidate.pickOutcomes![0]!;
@@ -581,7 +585,7 @@ describe('Footyinfo passed and removed picks as not-used evidence (issue 853)', 
 
   it('values the board-settled not-used pick at 0 in the grade', () => {
     const transferIdOf = (candidate: Candidate) => candidate.transfers[0]!.transferId;
-    const blocked = reconcile([futureTrade()]);
+    const blocked = reconcile([futureTrade(), heldDraft]);
     expect(gradeLeg(blocked, transferIdOf(blocked)).reasons).toEqual([
       'not_used_no_access_evidence',
     ]);

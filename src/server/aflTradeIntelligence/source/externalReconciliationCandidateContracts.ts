@@ -14,7 +14,10 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
-import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from './externalEvidenceReconciliation';
+import {
+  AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
+  isAflTradeDraftPending,
+} from './externalEvidenceReconciliation';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
@@ -161,12 +164,24 @@ const pickOutcomeSchema = z
     receivingClubNominatedSelections: z.number().int().nonnegative().max(90).optional(),
     /** The Footyinfo board pick stating the pick was passed or removed (issue 853). */
     boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
+    /**
+     * A reviewed Footyinfo board, not an official session, proved the draft's membership behind a
+     * count (owner decision 2026-10-14, issue 789). Absent when an official session proved it.
+     */
+    draftProvenBy: z.literal('footyinfo').optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine((record) => {
     const { nominationBasis: basis, receivingClubNominatedSelections: count } = record;
     if ((basis === 'board_pick_passed_or_removed') !== (record.boardPickId !== undefined))
+      return false;
+    // Only a count rests on a proven membership; a board pick or unknown access is no count.
+    if (
+      record.draftProvenBy !== undefined &&
+      basis !== 'club_took_nominated_player' &&
+      basis !== 'club_took_no_nominated_player'
+    )
       return false;
     if (basis === undefined) return count === undefined;
     if (record.disposition !== 'not_used' || record.outcomeStatus !== 'stated') return false;
@@ -839,6 +854,18 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         path: ['pickOutcomes', index],
         message:
           'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
+      });
+    }
+    // Pending is decided by the evidence: only a pick whose draft the candidate holds no selection
+    // or board pick in, at or after its anchor season, may wait on that draft.
+    if (
+      outcome.outcomeStatus === 'pending' &&
+      (!asset || !isAflTradeDraftPending(content, content.anchorSeasonYear, asset))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'outcomeStatus'],
+        message: 'A pending pick outcome needs a draft the candidate holds no selection in.',
       });
     }
     if (
