@@ -1140,17 +1140,20 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v4 and its limitation', () => {
+  it('seals rule v5 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v4');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v5');
     expect(batch.content.limitation).toContain('unless a Footyinfo draft board corroborates');
     expect(batch.content.limitation).toContain('only the club totals it enters');
     expect(batch.content.limitation).toContain('signed HPN PAV sum floored at 0');
+    expect(batch.content.limitation).toContain(
+      'the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed'
+    );
   });
 });
 
@@ -1312,5 +1315,53 @@ describe('rule v4: a first stint is worth its signed PAV sum floored at 0 (issue
         net: 40,
       });
     });
+  });
+});
+
+describe('rule v5: a Footyinfo board proves the 2025 national draft (owner decision 2026-10-14)', () => {
+  // Richmond's 2025 pick to Hawthorn, not used; the nominee count rests on a board-proven draft.
+  const notUsed = (fields: Partial<Outcome>): Candidate => ({
+    transactions: [trade('tx-5', 2025)],
+    transfers: [pick('tr-5a', 'tx-5', 'richmond', 'hawthorn', 'pick-Z', 2025, 30)],
+    pickOutcomes: [outcome('tr-5a', { disposition: 'not_used', ...fields })],
+  });
+  const legFor = (fields: Partial<Outcome>) =>
+    legOf(gradeAflTradesOnRealizedValue(inputs(notUsed(fields))), 'tr-5a');
+
+  it('names the board on a no-nominee or excluded leg and keeps it single-source', () => {
+    expect(
+      legFor({
+        nominationBasis: 'club_took_no_nominated_player',
+        receivingClubNominatedSelections: 0,
+        draftProvenBy: 'footyinfo',
+      })
+    ).toMatchObject({
+      state: 'valued',
+      basis: 'pick_not_used_no_nominee',
+      realizedValue: 0,
+      draftProvenBy: 'footyinfo',
+      reasons: ['single_source_pick_outcome'],
+    });
+    const excluded = legFor({
+      nominationBasis: 'club_took_nominated_player',
+      receivingClubNominatedSelections: 1,
+      draftProvenBy: 'footyinfo',
+    });
+    expect(excluded).toMatchObject({
+      state: 'excluded',
+      basis: 'pick_not_used_nominee_excluded',
+      draftProvenBy: 'footyinfo',
+      reasons: ['not_used_nominee_excluded', 'single_source_pick_outcome'],
+    });
+    expect(excluded).not.toHaveProperty('corroboratedBy');
+  });
+
+  it('names nothing when an official session proved the draft', () => {
+    expect(
+      legFor({
+        nominationBasis: 'club_took_no_nominated_player',
+        receivingClubNominatedSelections: 0,
+      })
+    ).not.toHaveProperty('draftProvenBy');
   });
 });

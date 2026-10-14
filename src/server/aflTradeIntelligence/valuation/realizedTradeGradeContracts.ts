@@ -35,12 +35,17 @@ import {
  * leg is worth its stint's PAV sum floored at 0, since a player cannot return less than nothing, and the
  * stint records that signed sum as `pavSum` for audit. Rules v1 to v3 record no `pavSum`.
  *
+ * Under rule v5 (owner decision 2026-10-14, issue 789) a reviewed Footyinfo board may prove which
+ * selections the 2025 national draft had, no official completed session being reviewed for it. A
+ * not-used pick leg whose nominee count rests on that board says so (`draftProvenBy: 'footyinfo'`) and
+ * stays single-source: the board proves the draft, not the pick's fate. Rules v1 to v4 never name it.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v4' as const;
+  'afl-trade-realized-grade-rule/v5' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -51,6 +56,8 @@ const RULE_LIMITATIONS = {
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v4':
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
+  'afl-trade-realized-grade-rule/v5':
+    'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; not public factual, publication, production or activation authority.',
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -63,6 +70,13 @@ const UNRECORDED_PAV_SUM_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   'afl-trade-realized-grade-rule/v1',
   'afl-trade-realized-grade-rule/v2',
   'afl-trade-realized-grade-rule/v3',
+]);
+/** Rules under which no leg names a board-proven draft; rule v5 may. */
+const UNPROVEN_DRAFT_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  'afl-trade-realized-grade-rule/v1',
+  'afl-trade-realized-grade-rule/v2',
+  'afl-trade-realized-grade-rule/v3',
+  'afl-trade-realized-grade-rule/v4',
 ]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
@@ -197,6 +211,8 @@ const legBase = {
   atTrade: atTradeSchema,
   /** Rule v2: the second provider whose evidence agrees with the pick outcome this leg rests on. */
   corroboratedBy: z.literal('footyinfo').optional(),
+  /** Rule v5: the not-used pick's nominee count rests on a draft membership a Footyinfo board proved. */
+  draftProvenBy: z.literal('footyinfo').optional(),
 };
 
 const legUnionSchema = z.union([
@@ -279,6 +295,15 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
       leg.state !== 'blocked' &&
       has('single_source_pick_outcome') === (leg.corroboratedBy !== undefined),
     'A valued or excluded pick leg is single-source exactly when no second provider corroborates it.',
+  ],
+  [
+    (leg) =>
+      leg.draftProvenBy !== undefined &&
+      (leg.assetKind !== 'pick' ||
+        leg.corroboratedBy !== undefined ||
+        (leg.basis !== 'pick_not_used_no_nominee' &&
+          leg.basis !== 'pick_not_used_nominee_excluded')),
+    'Only a not-used pick leg valued on its nominee count rests on a board-proven draft.',
   ],
   [
     (leg, has) => leg.assetKind === 'player' && has('single_source_pick_outcome'),
@@ -539,6 +564,11 @@ function batchShapeIssues(content: BatchContent): Issue[] {
     content.trades.some(({ legs }) => legs.some((leg) => leg.corroboratedBy !== undefined))
   )
     issues.push(['trades', 'Rule v1 treats every pick outcome as single-source.']);
+  if (
+    UNPROVEN_DRAFT_RULES.has(content.ruleVersion) &&
+    content.trades.some(({ legs }) => legs.some((leg) => leg.draftProvenBy !== undefined))
+  )
+    issues.push(['trades', 'Only rule v5 and later name a board-proven draft.']);
   const summary = content.summary;
   if (
     summary.complete !== count('complete') ||
