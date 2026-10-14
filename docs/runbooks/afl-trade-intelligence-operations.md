@@ -3317,6 +3317,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   - the candidate holds no trades.
 - A trade the batch cannot represent (no transfers, or an unusable club) is listed as `ungraded`.
   Read the printed `summary` before citing a batch.
+- Under rule v6 a pick not yet drafted is valued from its slot in the candidate's live Official AFL
+  indicative order (`pick_projected_from_order`), or from its original club's slot in the previous
+  draft's order when its own draft has no order yet (`pick_projected_from_prior_order_proxy`). These
+  values are whole-career DPVC expectations, not realized first stints, so the trades are
+  `provisional`. A pick with no unique slot still blocks as `pick_outcome_pending`. After draft night,
+  re-reconcile and regrade: the leg becomes the draftee's first stint, which is 0 until he plays.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
