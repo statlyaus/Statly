@@ -336,13 +336,20 @@ club can contradict the pick a walk settles on.
   What the re-sync leaves behind:
   - **Combined-session nights (2016 to 2018).** A promotion proved by `combined_session_facts` (the v3
     proposal) is re-checked on every arrival by `outcome_external_combined_draft_sessions_exact`. That
-    check requires the identity decision behind each session boundary draftee to have no successor.
-    Re-targeting a boundary draftee therefore makes the proof false for the whole draft, and every v4
-    spell that starts at that promotion's draft assets stops being current, not only the re-targeted
-    one. On the grading database the official AFL re-target of Will Hayes (the last pick of 2018
-    session 2, 2026-10-14) did this to all 20 v4 spells on the two 2018 nights. A re-sync does not
-    restore them. It writes a new version for the changed slots only, and the other spells still
-    start at the old promotion, whose proof stays false. Restoring them needs a change to that rule.
+    check joins each session boundary claim to the candidate selection at that number through the
+    candidate's identity resolutions. Until migration 0283 it also required each boundary decision
+    to have no successor, so re-targeting one boundary draftee made the proof false for the whole
+    draft and every v4 spell on that promotion stopped being current. On the grading database the
+    official AFL re-target of Will Hayes (the last pick of 2018 session 2, 2026-10-14) did this to all
+    20 v4 spells on the two 2018 nights, and a re-sync could not restore them. Since 0283 a boundary
+    decision may lead, through approved revisions of the same subject and entity kind, to the
+    subject's approved current head, even when a revision names another canonical player
+    (`outcome_external_boundary_identity_decision_current`). A re-target changes neither the boundary
+    claim nor the candidate selection at its number, so which selections bound each session is
+    unchanged. A rejection, a withdrawal or any other successor still voids the proof. The same rule
+    applies to the other session-proof functions with boundary checks and to
+    `outcome_session_identity_observation_current`. Measured on the repair copy of the grading
+    database (2026-10-14), 0283 brings all 20 of those spells back to registration-current.
   - **The old draftee's selection** at that number is retired (0256 judges a selection by number). **The
     old draftee's asset** is not: 0256 retires an asset only when a later version carries an asset for
     the same player, and the re-sync carries the twin's. So the old asset stays current. It is excluded
