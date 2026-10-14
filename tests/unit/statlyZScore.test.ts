@@ -81,7 +81,7 @@ describe('calculateStatlyZScores', () => {
           games: 10,
           dataThrough: '2025-07-18',
           stats: { goals },
-          basisByStat: { goals: 'TOTAL' },
+          basisByStat: { goals: 'TOTAL' as const },
         },
       },
     });
