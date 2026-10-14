@@ -143,6 +143,31 @@ describe('publishCompetition', () => {
     expect(txMocks.leagueCompetitionRound.deleteMany).not.toHaveBeenCalled();
   });
 
+  it('loads official round timings for the season year, not the calendar year', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settingsId: 'settings-1',
+      activeSeasonId: 'season-1',
+      activeSeason: { year: 2025 },
+      categoriesJson: JSON.stringify(['goals']),
+      settings: {
+        competitionRulesVersion: 4,
+        competitionRulesJson: null,
+        lineupSlotsJson: null,
+        rosterSize: 30,
+      },
+      members: ['a', 'b', 'c', 'd'].map((id) => ({ id })),
+    });
+
+    await publishCompetition({
+      leagueId: 'league-1',
+      actorMemberId: 'member-owner',
+      rules: { ...rules, fixtureGenerationMode: 'MANUAL' },
+    });
+
+    expect(etlMocks.getRoundMatches).toHaveBeenCalledWith(2025, 1);
+  });
+
   it('publishes editable manual round shells without generating round-robin matchups', async () => {
     const result = await publishCompetition({
       leagueId: 'league-1',
