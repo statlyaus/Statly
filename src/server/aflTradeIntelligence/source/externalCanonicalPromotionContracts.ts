@@ -541,11 +541,15 @@ export type AflTradeExternalCanonicalPromotionApprovalEvidence = z.infer<
   typeof aflTradeExternalCanonicalPromotionApprovalEvidenceSchema
 >;
 
-/** Recorded on the receipt of a promotion whose candidate deferred pick-side issues (#869). */
+/**
+ * Recorded on the receipt of a promotion whose candidate carries a pick-side deferral (#869): one
+ * that deferred pick-side issues, or since migration 0282 one that deferred none but re-syncs or
+ * leaves records to an earlier promotion (#853, `deferredIssueCount` 0).
+ */
 const requestPickLineageDeferralSchema = z
   .object({
     decisionId: reviewDecisionIdSchema,
-    deferredIssueCount: z.number().int().positive(),
+    deferredIssueCount: z.number().int().nonnegative(),
     /** Drafts left to their existing current promotion; present only when any. */
     promotedDraftCount: z.number().int().positive().optional(),
     /** Selections re-promoted alone under a re-targeted draftee (#853); present only when any. */
@@ -1324,8 +1328,10 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   assertPromotionDraftCoverage(content, expectedCoverage);
   assertPromotionResyncCoverage(content, proposal);
   const scope = aflTradePromotionWriteScope(content);
+  // Any deferral, even one that deferred no issue (#853), promotes through the metadata-only proposal:
+  // the database takes its deferred draft-coverage branch for every candidate with the decision.
   if (
-    scope.deferral.deferredIssueCount > 0 &&
+    scope.deferral.deferral !== null &&
     proposal.content.schemaVersion !==
       AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION &&
     proposal.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4'

@@ -4134,7 +4134,11 @@ The remaining work proceeds through these independently verifiable gates:
    would retire a recorded slot it does not carry under 0256 (it must change fewer than half of the
    other slots). An ordinary draft write keeps #721's rule and must carry every recorded slot of its
    predecessor. `outcome_external_draft_sessions_exact` checks that the re-sync entries cover the
-   re-synced selections exactly. Such a version's draft asset is evidence for an arrival-only (v4)
+   re-synced selections exactly. Since migration 0282 a candidate that deferred no issue (a
+   completion with no pick-side issue, such as 2018) keeps its deferral decision when it lists
+   something under it and writes no draft whole. Its receipt records `deferredIssueCount: 0`, and the
+   database chooses the deferred coverage branch by `lineage_deferral_decision_id` rather than by
+   `deferred_issue_count`. Such a version's draft asset is evidence for an arrival-only (v4)
    spell (`outcome_external_promoted_session_resync_version`; the v1 to v3
    `outcome_acquisition_promoted_event_current` has no such clause; since migration 0280 that check
    relies on the promotion insert guard's proof of exact coverage for a deferred candidate instead of

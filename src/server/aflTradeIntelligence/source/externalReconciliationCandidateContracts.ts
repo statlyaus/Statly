@@ -23,6 +23,7 @@ import {
   aflTradeExternalReconciliationSourceAuthoritySchema,
 } from './externalReconciliationSourceAuthorityContracts';
 import {
+  aflTradeIssuelessDeferralKept,
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
@@ -432,11 +433,33 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
       message: 'A deferred issue requires the approved reconciliation-scope decision.',
     });
   }
-  if (deferred.length === 0 && content.pickLineageDeferral !== undefined) {
+  // Under the decision the reconciler defers every pick-side issue, so a decision that deferred none
+  // (#853) has none blocking either. Before migration 0282 no candidate carried such a decision.
+  if (
+    deferred.length === 0 &&
+    content.pickLineageDeferral !== undefined &&
+    content.issues.some(
+      (issue) => issue.severity === 'blocking' && isAflTradePickSideReconciliationIssue(issue)
+    )
+  ) {
     context.addIssue({
       code: 'custom',
       path: ['pickLineageDeferral'],
-      message: 'A deferral decision is carried only by a candidate that deferred an issue.',
+      message: 'Under the deferral decision every pick-side issue is deferred.',
+    });
+  }
+  // With nothing deferred the decision is carried only for what it lists, and never over a draft
+  // the promotion would write whole (#853, `aflTradeIssuelessDeferralKept`).
+  if (
+    deferred.length === 0 &&
+    content.pickLineageDeferral !== undefined &&
+    !aflTradeIssuelessDeferralKept(content.pickLineageDeferral, content.draftSelections)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message:
+        'A deferral decision with no deferred issue is carried only by a candidate that lists already-promoted or re-synced records and writes no draft whole.',
     });
   }
   if (
