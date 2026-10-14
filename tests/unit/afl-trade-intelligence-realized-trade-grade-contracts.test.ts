@@ -27,12 +27,14 @@ const SINGLE = 'single_source_pick_outcome' as const;
 const V1 = 'afl-trade-realized-grade-rule/v1' as const;
 const V3 = 'afl-trade-realized-grade-rule/v3' as const;
 const V4 = 'afl-trade-realized-grade-rule/v4' as const;
+const V5 = 'afl-trade-realized-grade-rule/v5' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
     'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; not public factual, publication, production or activation authority.',
   [V3]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; not public factual, publication, production or activation authority.',
   [V4]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; not public factual, publication, production or activation authority.',
+  [V5]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; not public factual, publication, production or activation authority.',
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -906,6 +908,56 @@ describe('realized trade grade batch contract', () => {
       ['a value that is not the floored sum', () => withStint(v4(), 1, -0.25), /floored at 0/],
       ['a value below a positive sum', () => withStint(v4(), 8, 9), /floored at 0/],
       ['a negative value', () => withStint(v4(), -0.25, -0.25), /expected number to be >=0/],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v5 board-proven drafts', () => {
+    /** A batch under a rule that records signed PAV sums, each equal to its (non-negative) value. */
+    const signed = (ruleVersion: typeof V4 | typeof V5) => {
+      const value = content(ruleVersion);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    // tx-1's tr-1c is a not-used pick whose club took no nominee; tr-1b a selected pick.
+    const proven = (value: Content, index = 2, extra: Partial<Leg> = {}) =>
+      withLeg(
+        value,
+        'tx-1',
+        index,
+        (leg) => ({ ...leg, draftProvenBy: 'footyinfo', ...extra }) as Leg
+      );
+
+    it('accepts a single-source not-used leg whose draft a Footyinfo board proved', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(proven(signed(V5)));
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      expect(tradeOf(batch.content as Content, 'tx-1').legs[2]).toMatchObject({
+        basis: 'pick_not_used_no_nominee',
+        draftProvenBy: 'footyinfo',
+        reasons: [SINGLE],
+      });
+    });
+
+    it('still parses sealed v1 to v4 batches, which name no board-proven draft', () => {
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+      expect(() => createAflTradeRealizedTradeGradeBatch(signed(V4))).not.toThrow();
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['a board-proven draft under v4', () => proven(signed(V4)), /Only rule v5 and later/],
+      ['a board-proven selected pick', () => proven(signed(V5), 1), /board-proven draft/],
+      [
+        'a board-proven leg a board also corroborates',
+        () => proven(signed(V5), 2, { corroboratedBy: 'footyinfo', reasons: [] }),
+        /board-proven draft/,
+      ],
+      [
+        'a board-proven player leg',
+        () => withLeg(signed(V5), 'tx-4', 0, (leg) => ({ ...leg, draftProvenBy: 'footyinfo' })),
+        /board-proven draft/,
+      ],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });
 });

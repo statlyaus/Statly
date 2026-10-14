@@ -14,6 +14,7 @@ import {
   reconcileAflTradeExternalEvidence,
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import {
+  createAflTradeExternalReconciliationCandidate,
   parseAflTradeExternalReconciliationCandidate,
   retainAflTradePickOutcomes,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
@@ -2113,11 +2114,18 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
       parserVersion = YEAR_PAGE_V2,
       session = officialSession(allFourteen),
       outcome = notUsed,
+      board = null,
+      trade = tradeClaims,
+      extraResolutions = [],
     }: {
       page: AflTradeExternalEvidenceContent['claim'][];
       parserVersion?: string;
       session?: ReturnType<typeof officialSession> | null;
       outcome?: AflTradeExternalEvidenceContent['claim'];
+      /** A Footyinfo national draft board batch (owner decision 2026-10-14). */
+      board?: ReturnType<typeof batch> | null;
+      trade?: AflTradeExternalEvidenceContent['claim'][];
+      extraResolutions?: typeof resolutions;
     }) =>
       parseAflTradeExternalReconciliationCandidate(
         reconcileAflTradeExternalEvidence({
@@ -2125,11 +2133,12 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
           competition: 'AFLM',
           anchorSeasonYear: 2025,
           sourceBatches: [
-            batch('draftguru', 'a', [...tradeClaims, outcome]),
+            batch('draftguru', 'a', [...trade, outcome]),
             batch('draftguru', 'b', page, undefined, { parserVersion }),
             ...(session ? [session] : []),
+            ...(board ? [board] : []),
           ],
-          identityResolutions: resolutions,
+          identityResolutions: [...resolutions, ...extraResolutions],
           reconciledAt: '2026-08-09T05:00:00.000Z',
         })
       );
@@ -2195,6 +2204,299 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
     it('carries no nomination basis on selected or traded-on picks', () => {
       const candidate = reconcileDraft({ page: yearPage('academy'), outcome: disposition({}) });
       expect(basisOf(candidate)).not.toHaveProperty('nominationBasis');
+    });
+
+    describe('a reviewed Footyinfo board proves the 2025 draft (owner decision 2026-10-14)', () => {
+      type Claim = AflTradeExternalEvidenceContent['claim'];
+      type BoardPick = Extract<Claim, { kind: 'draft_board_pick' }>;
+      type DraftInput = Partial<Parameters<typeof reconcileDraft>[0]> & { page: Claim[] };
+      const footyinfoClub = (number: number) =>
+        number === 14
+          ? { nativeId: 'WBD', recordedName: 'Western Bulldogs' }
+          : { nativeId: 'GWS', recordedName: 'GWS' };
+      const footyinfoPlayer = (number: number) =>
+        number === 14
+          ? { nativeId: 'harry-kyle', recordedName: 'Harry Kyle' }
+          : { nativeId: `synthetic-${number}`, recordedName: `Synthetic Player ${number}` };
+      // The board as its parser emits it: per selection, a board pick and a draft selection.
+      const boardClaims = (
+        options: {
+          omit?: number[];
+          club?: (number: number) => { nativeId: string; recordedName: string };
+          extra?: BoardPick[];
+        } = {}
+      ): Claim[] => [
+        ...allFourteen
+          .filter((number) => !(options.omit ?? []).includes(number))
+          .flatMap((number): Claim[] => {
+            const club = (options.club ?? footyinfoClub)(number);
+            const player = footyinfoPlayer(number);
+            return [
+              {
+                kind: 'draft_board_pick',
+                draftYear: 2025,
+                draftType: 'national',
+                roundNumber: 1,
+                recordedPickNumber: number,
+                status: 'selected',
+                club,
+                player,
+                route: [],
+                routeLabel: null,
+                bid: null,
+                points: null,
+                note: null,
+              },
+              {
+                kind: 'draft_selection',
+                draftYear: 2025,
+                draftType: 'national',
+                selectionNumber: number,
+                roundNumber: 1,
+                player,
+                selectedByClub: club,
+              },
+            ];
+          }),
+        ...(options.extra ?? []),
+      ];
+      const board = (options: Parameters<typeof boardClaims>[0] = {}) =>
+        batch('footyinfo', 'e', boardClaims(options));
+      // Footyinfo's clubs and players, then Draftguru's synthetic players, so every selection
+      // names a resolved club.
+      const boardResolutions = [
+        resolution('footyinfo', 'club', 'GWS', 'club-gws', 'GWS'),
+        resolution('footyinfo', 'club', 'Western Bulldogs', 'club-western-bulldogs', 'WBD'),
+        resolution('footyinfo', 'player', 'Harry Kyle', 'player-harry-kyle', 'harry-kyle'),
+        ...allFourteen
+          .slice(0, 13)
+          .map((number) =>
+            resolution(
+              'footyinfo',
+              'player',
+              `Synthetic Player ${number}`,
+              `player-synthetic-${number}`,
+              `synthetic-${number}`
+            )
+          ),
+        ...allFourteen
+          .slice(0, 13)
+          .map((number) =>
+            resolution(
+              'draftguru',
+              'player',
+              `Synthetic Player ${number}`,
+              `player-synthetic-${number}`
+            )
+          ),
+      ];
+      const proveByBoard = (input: DraftInput) =>
+        reconcileDraft({
+          session: null,
+          board: board(),
+          extraResolutions: boardResolutions,
+          ...input,
+        });
+      const rowOf = (source: ReturnType<typeof batch>, kind: Claim['kind'], number: number) =>
+        source.content.evidence.find(
+          ({ content: { claim } }) =>
+            (claim.kind === 'draft_selection' &&
+              kind === claim.kind &&
+              claim.selectionNumber === number) ||
+            (claim.kind === 'draft_board_pick' &&
+              kind === claim.kind &&
+              claim.recordedPickNumber === number)
+        )!.evidenceId;
+
+      it('counts the receiving club’s nominees with no official session, citing its board selection', () => {
+        const footyinfoBoard = board();
+        const outcome = basisOf(proveByBoard({ page: yearPage('academy'), board: footyinfoBoard }));
+        expect(outcome).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_nominated_player',
+            receivingClubNominatedSelections: 1,
+            draftProvenBy: 'footyinfo',
+          })
+        );
+        // The disposition row, the Bulldogs' year-page row and the Bulldogs' board selection row,
+        // never the board-pick row.
+        expect(outcome.evidenceIds).toHaveLength(3);
+        expect(outcome.evidenceIds).toContain(rowOf(footyinfoBoard, 'draft_selection', 14));
+        expect(outcome.evidenceIds).not.toContain(rowOf(footyinfoBoard, 'draft_board_pick', 14));
+        expect(basisOf(proveByBoard({ page: yearPage('open') }))).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_no_nominated_player',
+            receivingClubNominatedSelections: 0,
+            draftProvenBy: 'footyinfo',
+          })
+        );
+      });
+
+      it('still counts the receiving club when the year page omits another club’s row', () => {
+        expect(basisOf(proveByBoard({ page: yearPage('academy', [3]) }))).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_nominated_player',
+            draftProvenBy: 'footyinfo',
+          })
+        );
+      });
+
+      it('lets an official session prove the draft over a board, naming no board', () => {
+        const outcome = basisOf(
+          proveByBoard({ page: yearPage('academy'), session: officialSession(allFourteen) })
+        );
+        expect(outcome).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_nominated_player',
+            receivingClubNominatedSelections: 1,
+          })
+        );
+        expect(outcome).not.toHaveProperty('draftProvenBy');
+      });
+
+      // The 2024 national draft, which no owner decision lets a board prove.
+      const in2024 = (claims: Claim[]) =>
+        claims.map((claim): Claim => {
+          if (claim.kind === 'directed_transfer' && claim.asset.kind === 'current_pick')
+            return { ...claim, asset: { ...claim.asset, draftYear: 2024 } };
+          return 'draftYear' in claim ? ({ ...claim, draftYear: 2024 } as Claim) : claim;
+        });
+
+      it.each<[string, () => DraftInput]>([
+        [
+          'the board skips a selection number',
+          () => ({ page: yearPage('academy', [3]), board: board({ omit: [3] }) }),
+        ],
+        [
+          'a board selection’s club has no reviewed resolution',
+          () => ({
+            page: yearPage('academy'),
+            board: board({
+              club: (number) =>
+                number === 5 ? { nativeId: 'CAR', recordedName: 'Carlton' } : footyinfoClub(number),
+            }),
+          }),
+        ],
+        [
+          'the draft is outside the owner decision',
+          () => ({
+            page: in2024(yearPage('academy')),
+            trade: in2024(tradeClaims),
+            board: batch('footyinfo', 'e', in2024(boardClaims())),
+          }),
+        ],
+        [
+          'a board pick number is held by two clubs',
+          () => ({
+            page: yearPage('academy'),
+            board: board({
+              extra: [
+                {
+                  kind: 'draft_board_pick',
+                  draftYear: 2025,
+                  draftType: 'national',
+                  roundNumber: 1,
+                  recordedPickNumber: 5,
+                  status: 'selected',
+                  club: footyinfoClub(14),
+                  player: footyinfoPlayer(5),
+                  route: [],
+                  routeLabel: null,
+                  bid: null,
+                  points: null,
+                  note: 'Second holder',
+                },
+              ],
+            }),
+          }),
+        ],
+        [
+          'the year page omits the receiving club’s row',
+          () => ({ page: yearPage('academy', [14]) }),
+        ],
+        [
+          // An official session decides by the earlier all-selections rule alone, even with every
+          // club resolved through the board.
+          'an official-proven draft’s year page omits another club’s row',
+          () => ({ page: yearPage('academy', [3]), session: officialSession(allFourteen) }),
+        ],
+        [
+          'another club’s uncategorized selection names no resolved club',
+          () => ({
+            page: yearPage('academy', [3]),
+            extraResolutions: boardResolutions.slice(0, 3),
+          }),
+        ],
+      ])('leaves the count unknown when %s', (_label, input) => {
+        const outcome = basisOf(proveByBoard(input()));
+        expect(outcome).toEqual(expect.objectContaining({ nominationBasis: 'no_access_evidence' }));
+        expect(outcome).not.toHaveProperty('draftProvenBy');
+      });
+
+      // The Bulldogs' passed round-1 pick, handed from GWS.
+      const passed: BoardPick = {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: null,
+        status: 'passed',
+        club: footyinfoClub(14),
+        route: [footyinfoClub(1), footyinfoClub(14)],
+        routeLabel: null,
+        bid: null,
+        points: null,
+        note: 'Not used',
+      };
+
+      it('settles a not-used pick by its passed board pick before the board-proven count', () => {
+        const candidate = proveByBoard({
+          page: yearPage('academy'),
+          board: board({ extra: [passed] }),
+        });
+        const outcome = basisOf(candidate);
+        expect(outcome).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'board_pick_passed_or_removed',
+            boardPickId: candidate.content.draftBoardPicks!.find(
+              ({ status }) => status === 'passed'
+            )!.boardPickId,
+          })
+        );
+        expect(outcome).not.toHaveProperty('draftProvenBy');
+        expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
+      });
+
+      it('keeps an official-proven partial year page on the board fallback, as before', () => {
+        const outcome = basisOf(
+          proveByBoard({
+            page: yearPage('academy', [3]),
+            session: officialSession(allFourteen),
+            board: board({ extra: [passed] }),
+          })
+        );
+        expect(outcome).toEqual(
+          expect.objectContaining({ nominationBasis: 'board_pick_passed_or_removed' })
+        );
+        expect(outcome).not.toHaveProperty('draftProvenBy');
+      });
+
+      it('refuses a board-proven draft on an outcome that rests on no count', () => {
+        const { content } = proveByBoard({ page: yearPage('academy') });
+        const {
+          nominationBasis: _basis,
+          receivingClubNominatedSelections: _count,
+          ...outcome
+        } = content.pickOutcomes![0]!;
+        for (const nomination of [{ nominationBasis: 'no_access_evidence' as const }, {}]) {
+          expect(() =>
+            createAflTradeExternalReconciliationCandidate({
+              ...content,
+              pickOutcomes: [{ ...outcome, ...nomination }],
+            })
+          ).toThrow(/nomination basis belongs only/);
+        }
+      });
     });
   });
 

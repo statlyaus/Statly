@@ -195,6 +195,13 @@ uses:
 2. not-used evidence for passed and removed picks; and
 3. a second pick-outcome source next to Draftguru.
 
+On 2026-10-14 the owner approved a fourth use, as a documented rule change for issue 789:
+
+4. draft membership for the 2025 national draft only. A reviewed Footyinfo board proves which
+   selections that draft had, because no official AFL completed-session page exists for it. Until
+   then only official completed sessions proved a draft. The board proves membership only; the
+   access categories still come from the Draftguru year page. Another year needs a new decision.
+
 Like the Draftguru and Official AFL decisions, this is an internal source-use risk assumption, not a
 claim of a provider licence. It is private, non-production, not for training and not for public
 output. Handling is the same as those providers: attribution, original URLs, byte custody and
