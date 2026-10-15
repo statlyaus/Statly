@@ -169,7 +169,9 @@ const appearanceSpellContent = z
   .strict();
 
 // An arrival cites the promoted event's day, or, for a trade the source does not date, the
-// season's reviewed trade-period window exactly as the promoted event carries it.
+// season's reviewed trade-period window exactly as the promoted event carries it. An undated
+// reviewed-lineage trade promoted before that window existed carries none; its arrival cites the
+// one window the season's approved trade-period captures state instead (migration 0281, #869).
 const arrivalSpellContent = z
   .object({
     schemaVersion: z.literal('afl-trade-acquisition-registration/v4'),

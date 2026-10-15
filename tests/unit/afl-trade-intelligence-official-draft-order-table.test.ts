@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5,
   OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+  officialAflDraftOrderTableParser,
   parseOfficialAflDraftOrderTable,
+  parseOfficialAflDraftOrderTableV5,
 } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
 
 const digest = (character: string) => character.repeat(64);
@@ -336,5 +339,183 @@ describe('parseOfficialAflDraftOrderTable on the 2025 live-page layout (parser v
   it('still reads the v3 form with a "<next year> DRAFT SELECTIONS TRADED" block', () => {
     const html = page2025({ traded: '2026 DRAFT SELECTIONS TRADED' });
     expect(claims2025(html).claims).toHaveLength(115);
+  });
+});
+
+describe('parseOfficialAflDraftOrderTableV5 on the 2026 live-page layout (issue 789)', () => {
+  // Each club's slots as the 14 October 2026 snapshot lists them under "EVERY CLUB'S PICKS".
+  const CLUB_PICKS: Array<[string, number[]]> = [
+    ['Adelaide', [15, 34, 35, 43, 56, 92]],
+    ['Brisbane', [25, 28, 79, 97]],
+    ['Carlton', [13, 18, 31, 50, 61, 72, 90]],
+    ['Collingwood', [11, 30, 67, 68, 70, 88]],
+    ['Essendon', [1, 17, 21, 27, 80]],
+    ['Fremantle', [19, 40, 60, 63, 78, 96]],
+    ['Geelong', [36, 57, 62, 75, 93]],
+    ['Gold Coast', [8, 81, 85]],
+    ['Greater Western Sydney', [9, 20, 26, 59, 77, 86]],
+    ['Hawthorn', [29, 37, 71, 94]],
+    ['Melbourne', [4, 14, 48, 52]],
+    ['North Melbourne', [33, 49, 66, 74, 84]],
+    ['Port Adelaide', [7, 12, 22, 24, 32, 46, 65]],
+    ['Richmond', [2, 5, 44]],
+    ['St Kilda', [10, 16, 41, 51, 69, 87]],
+    ['Sydney', [6, 38, 39, 47, 54, 76, 95]],
+    ['West Coast', [3, 23, 45, 58, 64, 73, 82]],
+    ['Western Bulldogs', [42, 53, 55, 83, 89, 91]],
+  ];
+  // The first slot of each of the page's five rounds.
+  const ROUNDS: Array<[number, string]> = [
+    [1, 'ONE'],
+    [21, 'TWO'],
+    [43, 'THREE'],
+    [62, 'FOUR'],
+    [80, 'FIVE'],
+  ];
+  // Synthetic notes in the page's grammar; every other slot is the holder's own pick.
+  const NOTES: Record<number, string> = {
+    4: 'received from Port Adelaide in a trade',
+    5: 'received from Port Adelaide in pick swap, PA received as Example Player compensation',
+    7: 'received from Melbourne in a trade, tied to Gold Coast',
+    8: 'Example Player compensation',
+  };
+  const observedAt2026 = '2026-10-14T00:00:00.000Z';
+  const capture2026 = {
+    ...capture,
+    sourceUrl:
+      'https://web.archive.org/web/20261014083707id_/https://www.afl.com.au/draft/draft-order',
+    capturedAt: '2026-10-14T09:00:00.000Z',
+    effectiveAt: observedAt2026,
+    parserVersion: OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5,
+  };
+
+  // Synthetic HTML in the 2026 markup: each round heading is an `h4` just before its own table, the
+  // club lists are headed "EVERY CLUB'S PICKS", the page states only "Updated: <date>", and no
+  // "INDICATIVE DRAFT ORDER" heading appears.
+  function page2026(
+    options: {
+      lists?: Array<[string, number[]]>;
+      updated?: string | null;
+      between?: string;
+      listTitle?: string;
+    } = {}
+  ): string {
+    const lists = options.lists ?? CLUB_PICKS;
+    const holders = new Map(
+      CLUB_PICKS.flatMap(([club, picks]) => picks.map((pick) => [pick, club]))
+    );
+    const rounds = ROUNDS.map(([start, name], index) => {
+      const end = ROUNDS[index + 1]?.[0] ?? 98;
+      const rows = Array.from({ length: end - start }, (_value, offset) => start + offset)
+        .map((pick) => {
+          const note = NOTES[pick] ? ` (<a href="#">${NOTES[pick]}</a>)` : '';
+          return `<tr><td>${pick}</td><td>${holders.get(pick)}${note}</td></tr>`;
+        })
+        .join('');
+      return `<h4>ROUND ${name}</h4>${options.between ?? ''}<table><tbody>${rows}</tbody></table>`;
+    }).join('');
+    const updated =
+      options.updated === null ? '' : `<p>Updated: ${options.updated ?? 'October 14, 2026'}</p>`;
+    return `<html><body><div class="article__body">${updated}
+      <h4>${options.listTitle ?? "EVERY CLUB'S PICKS"}</h4>
+      <p>${lists.map(([club, picks]) => `<strong>${club}: </strong>${picks.join(', ')}`).join('<br>')}</p>
+      ${rounds}
+      <h4>FUTURE SELECTIONS TRADED</h4>
+      <table><tbody><tr><td></td><td>IN</td><td>OUT</td></tr>
+      <tr><td>Brisbane</td><td>- 2027 first-round pick from StK</td><td></td></tr></tbody></table>
+      <h4>2026 Draft Value Index</h4>
+      <table><tbody><tr><th>Round One</th><th>Round Two</th><th>Round Three</th></tr>
+      <tr><th>Pick/Pts</th><th>Pick/Pts</th><th>Pick/Pts</th></tr>
+      <tr><td>1. 3000</td><td>19. 796</td><td>37. 297</td></tr></tbody></table>
+      </div></body></html>`;
+  }
+
+  function claims2026(html: string, parse = parseOfficialAflDraftOrderTableV5) {
+    const result = parse(html, {
+      capture: capture2026,
+      draftYear: 2026,
+      observedAt: observedAt2026,
+    });
+    return {
+      issues: result.issues,
+      claims: result.evidence.map(({ content }) => {
+        if (content.claim.kind !== 'pick_custody') throw new Error('Expected pick custody.');
+        return content.claim;
+      }),
+    };
+  }
+
+  it('reads all 97 slots in five rounds with the holders and original clubs', () => {
+    const { claims, issues } = claims2026(page2026());
+    expect(issues).toEqual([]);
+    expect(claims.map(({ recordedPickNumber }) => recordedPickNumber)).toEqual(
+      Array.from({ length: 97 }, (_value, index) => index + 1)
+    );
+    const perRound = new Map<number, number>();
+    claims.forEach(({ roundNumber }) =>
+      perRound.set(roundNumber!, (perRound.get(roundNumber!) ?? 0) + 1)
+    );
+    expect([...perRound]).toEqual([
+      [1, 20],
+      [2, 22],
+      [3, 19],
+      [4, 18],
+      [5, 18],
+    ]);
+    expect(claims.every(({ observedAt }) => observedAt === observedAt2026)).toBe(true);
+    const at = (pick: number) => {
+      const claim = claims[pick - 1]!;
+      return [
+        claim.roundNumber,
+        claim.currentClub.recordedName,
+        claim.originalClub?.recordedName ?? null,
+      ];
+    };
+    expect(at(1)).toEqual([1, 'Essendon', 'Essendon']);
+    expect(at(4)).toEqual([1, 'Melbourne', 'Port Adelaide']);
+    // A compensation pick swapped on keeps no original club, like every special pick.
+    expect(at(5)).toEqual([1, 'Richmond', null]);
+    expect(at(7)).toEqual([1, 'Port Adelaide', 'Gold Coast']);
+    expect(at(8)).toEqual([1, 'Gold Coast', null]);
+    expect(at(9)).toEqual([1, 'Greater Western Sydney', 'Greater Western Sydney']);
+    expect(at(21)).toEqual([2, 'Essendon', 'Essendon']);
+    expect(at(43)).toEqual([3, 'Adelaide', 'Adelaide']);
+    expect(at(62)).toEqual([4, 'Geelong', 'Geelong']);
+    expect(at(97)).toEqual([5, 'Brisbane', 'Brisbane']);
+  });
+
+  it('is the parser a v5 capture names, and v4 reads nothing from the 2026 layout', () => {
+    expect(officialAflDraftOrderTableParser(OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5)).toBe(
+      parseOfficialAflDraftOrderTableV5
+    );
+    expect(officialAflDraftOrderTableParser(OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION)).toBe(
+      parseOfficialAflDraftOrderTable
+    );
+    const { claims, issues } = claims2026(page2026(), parseOfficialAflDraftOrderTable);
+    expect(claims).toEqual([]);
+    expect(issues.map(({ code }) => code)).toEqual(['invalid_page']);
+  });
+
+  const moved: Array<[string, number[]]> = CLUB_PICKS.map(([club, picks]) =>
+    club === 'Adelaide'
+      ? [club, [...picks, 25]]
+      : club === 'Brisbane'
+        ? [club, picks.filter((pick) => pick !== 25)]
+        : [club, picks]
+  );
+  it.each([
+    ['no stated date', { updated: null }],
+    ['an updated date other than the observation date', { updated: 'October 15, 2026' }],
+    ['an updated date in an unknown month', { updated: 'Octobr 14, 2026' }],
+    ['a club list that disagrees with the table holder', { lists: moved }],
+    ['round headings that are not just before their tables', { between: '<p>Note.</p>' }],
+  ])('refuses the whole page for %s', (_label, options) => {
+    const { claims, issues } = claims2026(page2026(options));
+    expect(claims).toEqual([]);
+    expect(issues.map(({ code }) => code)).toEqual(['invalid_page']);
+  });
+
+  it('still reads the 2025 "YOUR CLUB\'S PICKS" heading', () => {
+    expect(claims2026(page2026({ listTitle: "YOUR CLUB'S PICKS" })).claims).toHaveLength(97);
   });
 });
