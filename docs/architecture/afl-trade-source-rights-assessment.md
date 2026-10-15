@@ -178,7 +178,10 @@ For 2023 and 2024 the AFL published the pre-draft order only on its live `/draft
 since overwritten. On 2026-10-09 the owner also approved exactly two Internet Archive snapshots of
 that page as the pre-draft order evidence: `web.archive.org/web/20231119230530/` ("Draft Order as of
 November 16, 2023") and `web.archive.org/web/20241119043700/` (modified 2024-11-12, after the
-November 8 pick-swap deadline). The Internet Archive is the custodian of those bytes, not the
+November 8 pick-swap deadline). On 2026-10-14 the owner directed that a pick not yet selected be
+valued from the live draft order (issue 789) and had the live page archived:
+`web.archive.org/web/20261014083707/` ("Updated: October 14, 2026"), the 2026 order as it stood
+that day, before the season's pick-swap deadline. The Internet Archive is the custodian of those bytes, not the
 author; the content remains Official AFL and carries that provider's restrictions. No other
 archive.org use is approved.
 
@@ -194,6 +197,13 @@ uses:
 1. pick lineage: the route per eventual selection;
 2. not-used evidence for passed and removed picks; and
 3. a second pick-outcome source next to Draftguru.
+
+On 2026-10-14 the owner approved a fourth use, as a documented rule change for issue 789:
+
+4. draft membership for the 2025 national draft only. A reviewed Footyinfo board proves which
+   selections that draft had, because no official AFL completed-session page exists for it. Until
+   then only official completed sessions proved a draft. The board proves membership only; the
+   access categories still come from the Draftguru year page. Another year needs a new decision.
 
 Like the Draftguru and Official AFL decisions, this is an internal source-use risk assumption, not a
 claim of a provider licence. It is private, non-production, not for training and not for public
