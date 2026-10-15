@@ -28,6 +28,7 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradeDeferredCustodyIds,
+  aflTradeDeferredPicks,
   aflTradeIssuelessDeferralKept,
   aflTradePromotedCustodyIds,
   aflTradePromotedDraftState,
@@ -37,6 +38,7 @@ import {
   type AflTradeCurrentCanonicalPickCustody,
   type AflTradeCurrentCanonicalTransaction,
   type AflTradePickLineageDeferral,
+  type AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
@@ -2415,6 +2417,14 @@ export function reconcileAflTradeExternalEvidence(input: {
    * whose id and facts match one is recorded as already promoted and left unwritten (#853).
    */
   promotedCustody?: readonly AflTradeCurrentCanonicalPickCustody[];
+  /**
+   * Current canonical selections with their stored pick, club, root and version, and the recorded
+   * slots of every version of those roots, as the repository resolved them at preparation (migration
+   * 0284). Only with the deferral: a selection whose current row carries the slot's number-only pick
+   * id while this candidate names a pick with usable custody is recorded as re-keyed (#853), as many
+   * per session root as keep its re-sync version additive.
+   */
+  promotedSelectionPicks?: AflTradePromotedSelectionPickState;
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -2495,6 +2505,41 @@ export function reconcileAflTradeExternalEvidence(input: {
       .parse(input.promotedCustody) ?? [];
   if (currentCustody.length > 0 && pickLineageDeferral === undefined) {
     throw new TypeError('Already-promoted custody is recorded only under a pick-side deferral.');
+  }
+  const currentSelectionPicks = z
+    .object({
+      selections: z.array(
+        z
+          .object({
+            selectionId: z.string().min(1),
+            selectionNumber: z.number().int().positive(),
+            playerId: z.string().min(1).nullable(),
+            pickId: z.string().min(1).nullable(),
+            clubId: z.string().min(1),
+            eventId: z.string().min(1),
+            eventVersionId: z.string().min(1),
+            specialEntitlementCited: z.boolean(),
+          })
+          .strict()
+      ),
+      rootSlots: z.array(
+        z
+          .object({
+            eventId: z.string().min(1),
+            eventVersionId: z.string().min(1),
+            kind: z.enum(['selection', 'asset']),
+            selectionNumber: z.number().int().positive().nullable(),
+            playerId: z.string().min(1).nullable(),
+            current: z.boolean(),
+          })
+          .strict()
+      ),
+    })
+    .strict()
+    .optional()
+    .parse(input.promotedSelectionPicks);
+  if (currentSelectionPicks !== undefined && pickLineageDeferral === undefined) {
+    throw new TypeError('Re-keyed selections are recorded only under a pick-side deferral.');
   }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
@@ -3394,9 +3439,16 @@ export function reconcileAflTradeExternalEvidence(input: {
       : issue
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
-  const { promotedDrafts, resyncedSelectionIds } = aflTradePromotedDraftState(
+  const { promotedDrafts, resyncedSelectionIds, rekeyedSelectionIds } = aflTradePromotedDraftState(
     draftSelections,
-    currentDraftSelections
+    currentDraftSelections,
+    currentSelectionPicks === undefined
+      ? undefined
+      : {
+          pickCustody,
+          deferredPickIds: aflTradeDeferredPicks(severed, transfers).deferredPickIds,
+          state: currentSelectionPicks,
+        }
   );
   const promotedTransactions = aflTradePromotedTransactions(
     transactions,
@@ -3414,6 +3466,7 @@ export function reconcileAflTradeExternalEvidence(input: {
           ...pickLineageDeferral,
           ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
           ...(resyncedSelectionIds.length === 0 ? {} : { resyncedSelectionIds }),
+          ...(rekeyedSelectionIds.length === 0 ? {} : { rekeyedSelectionIds }),
           ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
           ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
           ...(promotedCustodyIds.length === 0 ? {} : { promotedCustodyIds }),

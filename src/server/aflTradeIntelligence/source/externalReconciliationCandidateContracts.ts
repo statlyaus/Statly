@@ -24,6 +24,7 @@ import {
 } from './externalReconciliationSourceAuthorityContracts';
 import {
   aflTradeIssuelessDeferralKept,
+  aflTradeNumberOnlyPickIds,
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
@@ -385,6 +386,19 @@ const contentFieldsSchema = z
           )
           .optional(),
         /**
+         * Selections whose current canonical row carries the slot's number-only pick id while the
+         * candidate names a pick with usable custody (#853, migration 0284): re-promoted with the
+         * re-synced slots under the candidate's pick. Sorted unique, each a `single_source` or
+         * `corroborated` candidate selection with a player and club outside every already-promoted
+         * draft, whose pick has a usable custody row and is not its number-only address; present
+         * only when non-empty.
+         */
+        rekeyedSelectionIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-draft-selection')).min(1).max(10_000)
+          )
+          .optional(),
+        /**
          * Transactions whose trade event is already current canonical with every transfer a
          * promoted asset on it; the promotion writes nothing of them. Sorted unique, each a
          * candidate transaction, present only when non-empty.
@@ -517,6 +531,46 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         path: ['pickLineageDeferral', 'resyncedSelectionIds', index],
         message:
           'A re-synced selection must be an undisputed candidate selection with a player and club, outside every already-promoted draft.',
+      });
+    }
+  });
+  const rekeyedPickIds = (content.pickLineageDeferral?.rekeyedSelectionIds ?? []).map(
+    (selectionId) =>
+      content.draftSelections.find((value) => value.selectionId === selectionId)?.pickId
+  );
+  (content.pickLineageDeferral?.rekeyedSelectionIds ?? []).forEach((selectionId, index) => {
+    // Two re-keyed slots never take one pick (pick-identity rule 4).
+    if (
+      rekeyedPickIds[index] !== undefined &&
+      rekeyedPickIds.indexOf(rekeyedPickIds[index]) !== index
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'rekeyedSelectionIds', index],
+        message: 'Two re-keyed selections cannot take the same pick.',
+      });
+    }
+    const selection = content.draftSelections.find((value) => value.selectionId === selectionId);
+    if (
+      selection === undefined ||
+      selection.playerId === null ||
+      selection.clubId === null ||
+      !isAflTradeUsableCustodyStatus(selection.status) ||
+      aflTradeNumberOnlyPickIds(selection).includes(selection.pickId) ||
+      !content.pickCustody.some(
+        (custody) =>
+          custody.pickId === selection.pickId && isAflTradeUsableCustodyStatus(custody.status)
+      ) ||
+      promotedDrafts.some(
+        ({ draftYear, draftType }) =>
+          draftYear === selection.draftYear && draftType === selection.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'rekeyedSelectionIds', index],
+        message:
+          'A re-keyed selection must be a usable candidate selection with a player and club whose pick has usable custody and is not a number-only address, outside every already-promoted draft.',
       });
     }
   });
