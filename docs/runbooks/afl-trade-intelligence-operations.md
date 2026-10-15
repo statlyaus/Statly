@@ -939,6 +939,30 @@ supersede production Gate authority, and production execution cannot reuse non-p
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
    lineage or a new candidate without the deferral, which supersedes it.
 
+   **Re-keying number-only selection picks (#853, migration 0284).** A selection promoted before the
+   pick-identity rules carries its slot's number-only pick id. When the candidate names the pick
+   with usable custody, preparation records the slot under `pickLineageDeferral.rekeyedSelectionIds`
+   and the review proposes it in the same `promoted_session_resync` entries as a re-synced slot; the
+   promotion writes it under the candidate's pick with the same player and club. Preparation takes,
+   per session root, only the slots that keep the re-sync version from retiring any other slot, so
+   re-run the cycle until a preparation lists none:
+   1. `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion> --defer-pick-lineage <scope decision>`.
+      Read `pickLineageDeferral.rekeyedSelectionIds` (and `resyncedSelectionIds`) on the result.
+   2. Review with an empty draft-events file (`[]`) and the transaction dates the candidate writes,
+      then promote, exactly as above. The receipt shows `rekeyedSelectionCount`.
+   3. Re-register the draft-start spells (below), then prepare again. Stop when the candidate lists
+      no re-keyed selection.
+
+   A re-keyed slot's draftee asset is re-versioned (same player), so every reviewed spell that starts
+   at the old asset stops being current. Re-register each as a superseding arrival-only (v4) version
+   citing the re-sync version and its new asset, with the promotion's captures for that asset and
+   event as entry evidence and the predecessor's rule. The Phase E trade driver
+   (`reregister-arrivals-853.ts`) reads only trade events, so use a draft-start variant that reads
+   the promotion's `draft_player_asset` members and finds the current v4 spell citing the same
+   player's asset on the superseded session version. A slot on a small scoped version whose other
+   slot is not re-keyed never fits (re-keying it alone would retire that sibling) and stays on its
+   number-only id.
+
 8. Register each immutable reviewed URL schedule once with
    `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
    schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
