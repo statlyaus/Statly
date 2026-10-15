@@ -1381,7 +1381,8 @@ append-only; when a later reviewed-lineage promotion knows facts that an earlier
 empty (round, nominal pick number, original club), migration 0237 records them as a gap-free,
 append-only `outcome_draft_pick_enrichment` version bound to that promotion, its approval and the
 current reviewed pick-lineage registration. Enrichment fills empty facts only; a differing known
-value is still an immutable conflict. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
+value is still an immutable conflict. A pick only draft selections define asserts no facts (a draft
+session states none) and references a stored pick of the same draft unchanged. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
 current facts, and release-bound readers pass the release cutoff. Recurring production still requires
 deployment scheduling, execution and monitoring of the reviewed discovery plan, missed-period monitoring, reviewed
 promotion of the historical candidate set, and a completed non-production backfill and reconciliation
