@@ -1,4 +1,5 @@
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
+import { OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION } from './officialAflDraft2025Sessions';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
@@ -27,6 +28,7 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradeDeferredCustodyIds,
+  aflTradeDeferredPicks,
   aflTradeIssuelessDeferralKept,
   aflTradePromotedCustodyIds,
   aflTradePromotedDraftState,
@@ -36,6 +38,7 @@ import {
   type AflTradeCurrentCanonicalPickCustody,
   type AflTradeCurrentCanonicalTransaction,
   type AflTradePickLineageDeferral,
+  type AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
@@ -1995,8 +1998,9 @@ type NominatedSelectionCount = {
 
 /**
  * Drafts whose membership a reviewed Footyinfo board may prove when no official AFL completed
- * session is reviewed for them. Owner decision 2026-10-14 (issue 789): the 2025 national draft has no
- * official session page. Another draft needs a new owner decision, never just a new entry here.
+ * session lists their selections. Owner decision 2026-10-14 (issue 789): no official page enumerates
+ * the 2025 national draft's selections; its night reports state only session boundaries (parser
+ * v20). Another draft needs a new owner decision, never just a new entry here.
  */
 const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|national']);
 
@@ -2006,9 +2010,13 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  * null unless the draft's membership is proven independently of that page, by either:
  *
  * - the reviewed official AFL completed-session claims, which must list selections 1 to N with no gap;
- * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no official session claim at all, a
+ * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no such official session claim, a
  *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
  *   club.
+ *
+ * A session claim read from a night report's boundary sentences (parser v20, the 2025 national
+ * draft) states a number range, not a list of selections, so it proves the session and never the
+ * membership: it is not counted here, and the board still proves that draft (decision 2026-10-16).
  *
  * The candidate's selections in the draft must be exactly those numbers, and every one must carry
  * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
@@ -2028,7 +2036,11 @@ function createNominatedSelectionCounter(
   const boardSelectionEvidence = new Set<string>();
   for (const row of evidence) {
     const claim = row.content.claim;
-    if (row.content.provider === 'official_afl' && claim.kind === 'draft_session') {
+    if (
+      row.content.provider === 'official_afl' &&
+      claim.kind === 'draft_session' &&
+      row.content.capture.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION
+    ) {
       const key = `${claim.draftYear}|${claim.draftType}`;
       const numbers = sessionNumbers.get(key) ?? new Set<number>();
       claim.selectionNumbers.forEach((number) => numbers.add(number));
@@ -2405,6 +2417,14 @@ export function reconcileAflTradeExternalEvidence(input: {
    * whose id and facts match one is recorded as already promoted and left unwritten (#853).
    */
   promotedCustody?: readonly AflTradeCurrentCanonicalPickCustody[];
+  /**
+   * Current canonical selections with their stored pick, club, root and version, and the recorded
+   * slots of every version of those roots, as the repository resolved them at preparation (migration
+   * 0284). Only with the deferral: a selection whose current row carries the slot's number-only pick
+   * id while this candidate names a pick with usable custody is recorded as re-keyed (#853), as many
+   * per session root as keep its re-sync version additive.
+   */
+  promotedSelectionPicks?: AflTradePromotedSelectionPickState;
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -2485,6 +2505,41 @@ export function reconcileAflTradeExternalEvidence(input: {
       .parse(input.promotedCustody) ?? [];
   if (currentCustody.length > 0 && pickLineageDeferral === undefined) {
     throw new TypeError('Already-promoted custody is recorded only under a pick-side deferral.');
+  }
+  const currentSelectionPicks = z
+    .object({
+      selections: z.array(
+        z
+          .object({
+            selectionId: z.string().min(1),
+            selectionNumber: z.number().int().positive(),
+            playerId: z.string().min(1).nullable(),
+            pickId: z.string().min(1).nullable(),
+            clubId: z.string().min(1),
+            eventId: z.string().min(1),
+            eventVersionId: z.string().min(1),
+            specialEntitlementCited: z.boolean(),
+          })
+          .strict()
+      ),
+      rootSlots: z.array(
+        z
+          .object({
+            eventId: z.string().min(1),
+            eventVersionId: z.string().min(1),
+            kind: z.enum(['selection', 'asset']),
+            selectionNumber: z.number().int().positive().nullable(),
+            playerId: z.string().min(1).nullable(),
+            current: z.boolean(),
+          })
+          .strict()
+      ),
+    })
+    .strict()
+    .optional()
+    .parse(input.promotedSelectionPicks);
+  if (currentSelectionPicks !== undefined && pickLineageDeferral === undefined) {
+    throw new TypeError('Re-keyed selections are recorded only under a pick-side deferral.');
   }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
@@ -3384,9 +3439,16 @@ export function reconcileAflTradeExternalEvidence(input: {
       : issue
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
-  const { promotedDrafts, resyncedSelectionIds } = aflTradePromotedDraftState(
+  const { promotedDrafts, resyncedSelectionIds, rekeyedSelectionIds } = aflTradePromotedDraftState(
     draftSelections,
-    currentDraftSelections
+    currentDraftSelections,
+    currentSelectionPicks === undefined
+      ? undefined
+      : {
+          pickCustody,
+          deferredPickIds: aflTradeDeferredPicks(severed, transfers).deferredPickIds,
+          state: currentSelectionPicks,
+        }
   );
   const promotedTransactions = aflTradePromotedTransactions(
     transactions,
@@ -3404,6 +3466,7 @@ export function reconcileAflTradeExternalEvidence(input: {
           ...pickLineageDeferral,
           ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
           ...(resyncedSelectionIds.length === 0 ? {} : { resyncedSelectionIds }),
+          ...(rekeyedSelectionIds.length === 0 ? {} : { rekeyedSelectionIds }),
           ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
           ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
           ...(promotedCustodyIds.length === 0 ? {} : { promotedCustodyIds }),

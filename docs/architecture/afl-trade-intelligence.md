@@ -486,7 +486,7 @@ ordinal, so corrections append versions of the same session. Existing v1 receipt
 Canonical import idempotency includes the reviewed promotion request, allowing a revised candidate
 to reuse retained captures while preserving each prior import. Other import kinds retain their
 capture/kind/parser uniqueness. The database binds new canonical imports to the exact open request.
-The bounded completed-session parser supports exact reviewed 2016–2024 sources. It verifies
+The bounded completed-session parser supports exact reviewed 2016–2025 sources. It verifies
 the contextual article date and the specific completed event statements assigned to each source.
 For the one-night 2016 national draft, the completed 25 November report supplies the event-night
 context, completion, Andrew McGrath/Essendon first boundary at pick 1, and Jake Waterman/West Coast
@@ -508,6 +508,21 @@ Official AFL pages do not establish the intervening selection membership, and th
 `Cameron Rayner` as recorded rather than normalizing it to Draftguru's `Cam Rayner`. A combined proof
 therefore still requires the complete contiguous Draftguru inventory and a reviewed identity decision.
 The 2019–2024 full-session reports additionally verify contiguous selection membership.
+The 2025 national draft has no Official AFL page that enumerates its selections. For it alone
+(coordinator decision 2026-10-16, issue 853), completed-session parser v20
+(`source/officialAflDraft2025Sessions.ts`; every other season stays on v19) reads the two dated night
+reports, each an exact reviewed Internet Archive snapshot, from their boundary sentences: night one
+names the draft and its No.1 pick, a first round of 25 picks on Wednesday night, the last club in at
+No.25 closing out the first round, and the draft continuing on Thursday night at No.26; night two
+opens night two of the same draft, holds No.26 over from Wednesday night, and saw 35 players drafted
+for a total of 60. Each statement must appear exactly once and agree with the reviewed range, the
+contextual date must match in either the AMP or non-AMP template, and the night-two arithmetic
+(60 − 35 = 25) must meet night one's last selection. The emitted `draft_session` claims (session 1,
+19 November, selections 1 to 25; session 2, 20 November, 26 to 60) feed the direct session proof
+unchanged. This is a weaker standard than a numbered list: the range is inferred from boundaries,
+so these claims prove the sessions and never the membership. Reconciliation does not count a v20
+session toward a draft's membership proof, and the 2025 draft's membership stays proven by the
+Footyinfo board and the Draftguru year page (grade rule v5).
 The 2018 national draft uses a combined-proof boundary because no retained Official AFL article
 asserts the complete session membership by itself. Narrow claims retain their own source ancestry:
 the 22/23 November schedule supplies calendar corroboration only; the first-night report supplies the
@@ -1366,7 +1381,8 @@ append-only; when a later reviewed-lineage promotion knows facts that an earlier
 empty (round, nominal pick number, original club), migration 0237 records them as a gap-free,
 append-only `outcome_draft_pick_enrichment` version bound to that promotion, its approval and the
 current reviewed pick-lineage registration. Enrichment fills empty facts only; a differing known
-value is still an immutable conflict. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
+value is still an immutable conflict. A pick only draft selections define asserts no facts (a draft
+session states none) and references a stored pick of the same draft unchanged. `outcome_draft_pick_facts(pick_ids, as_of)` resolves the
 current facts, and release-bound readers pass the release cutoff. Recurring production still requires
 deployment scheduling, execution and monitoring of the reviewed discovery plan, missed-period monitoring, reviewed
 promotion of the historical candidate set, and a completed non-production backfill and reconciliation
@@ -4147,7 +4163,15 @@ The remaining work proceeds through these independently verifiable gates:
    relies on the promotion insert guard's proof of exact coverage for a deferred candidate instead of
    re-running it, because the candidate facts and proposal it read cannot change, and the candidate's
    promotable and re-synced selections read its lists once) and keeps the evidenced date
-   bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. The old
+   bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. Since migration
+   0284 a selection whose one current row carries its slot's number-only pick id (promoted before
+   the pick-identity rules) while the candidate names a pick with usable, undeferred custody that no
+   other current selection carries is recorded as `rekeyedSelectionIds` (checked on insert by
+   `outcome_external_candidate_rekeyed_selections_current`; a special-entitlement-cited row is never
+   re-keyed). It is re-promoted in the same re-sync version under the candidate's pick, same player
+   and club, so its draftee asset is re-versioned and a spell starting at it must be re-registered.
+   Preparation lists per session root only the slots that keep the version additive, so a large
+   repair takes several passes. The receipt counts `rekeyedSelectionCount`. The old
    draftee's selection is retired by number, but its asset stays current under 0256. It is excluded
    from arrivals only because its identity decision is no longer current (0254), and a reader of a
    night's current assets sees both players at that number. See "Repairing promoted draftees" in
@@ -4251,8 +4275,10 @@ The remaining work proceeds through these independently verifiable gates:
    captured at `draftguru-national-year-page/v2` or `/v3` counts. A draft is covered only when its membership
    is proven independently of that page, and the candidate's selections in the draft are exactly the
    proven numbers. Membership is proven by the reviewed official AFL completed-session claims listing
-   selections 1 to N with no gap. For the 2025 national draft only, which has no official session
-   page, a reviewed Footyinfo board may prove it instead (owner decision 2026-10-14, issue 789; see
+   selections 1 to N with no gap. For the 2025 national draft only, which has no official page that
+   lists its selections (its v20 session claims are read from night-report boundaries and never
+   count toward membership), a reviewed Footyinfo board may prove it instead (owner decision
+   2026-10-14, issue 789; see
    "Footyinfo national draft boards"); the outcome then names `draftProvenBy: footyinfo`. Another draft
    needs a new owner decision. Within a draft an official session proves, every selection must carry
    exactly one stated category: the rule before 2026-10-14, applied alone, so every official-proven
@@ -4622,9 +4648,17 @@ The remaining work proceeds through these independently verifiable gates:
        is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`
        club resolutions. A club with no resolution leaves the record unusable and is one
-       `board-pick:club:<code>` identity issue, which is pick-side and so deferrable. The key is
-       present only when a board is reconciled, so earlier candidate ids are unchanged. Three uses
-       follow.
+       `board-pick:club:<code>` identity issue, which is pick-side and so deferrable. The
+       completion's identity-review package (`externalIdentityReviewWorkBuilder.ts`) holds every
+       board row's holder, route clubs and selected player as subjects, so a club that appears only
+       in a route or as the holder of a passed or removed pick still loads its current reviewed
+       decision. Before this, a 2025 completion left Port Adelaide's routes unresolved because it
+       made no 2025 selection. Migration 0285 teaches the database's two copies of the observation
+       rule the board-pick claim: the identity-review insert guard and canonical-target
+       registration's rebuilt work item. Rule 5 skips a record whose route did not resolve
+       (migration 0286).
+       The key is present only when a board is reconciled, so earlier candidate ids are unchanged.
+       Three uses follow.
        - **Onward hops.** Some eventual-selection groups are refused by the walk above: a closed loop,
          a merge or two possible orders. Some reach two custody picks with nothing to choose between
          them. For these groups only, reconciliation reads the board route of the pick the player was
@@ -4649,10 +4683,11 @@ The remaining work proceeds through these independently verifiable gates:
          no round, or two matches leave the pick as it was. The board pick is read before a
          board-proven count because it states the pick's own fate; a count an official session
          proved is never replaced, so official-proven outcomes are unchanged.
-       - **Draft membership (owner decision 2026-10-14).** The 2025 national draft has no reviewed
-         official completed session. For it alone (`FOOTYINFO_BOARD_PROVEN_DRAFTS`, `2025|national`;
+       - **Draft membership (owner decision 2026-10-14).** No reviewed official page lists the 2025
+         national draft's selections. For it alone (`FOOTYINFO_BOARD_PROVEN_DRAFTS`, `2025|national`;
          another year needs a new decision), a board proves which selections the draft had when no
-         official AFL `draft_session` claim exists for that draft, its selected picks run 1 to N with
+         official AFL `draft_session` claim that lists selections exists for that draft (a parser
+         v20 claim, read from night-report boundaries, does not count), its selected picks run 1 to N with
          no gap, every selected board pick names one resolved club, and the candidate's selections in
          the draft are exactly those numbers. The access categories still come from the Draftguru
          year page, and the outcome names `draftProvenBy: footyinfo` and cites the receiving club's
