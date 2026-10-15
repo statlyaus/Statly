@@ -76,6 +76,7 @@ export function resolveSpecialEntitlementCustody(input: {
     ...retainedContent,
     // A transfer resolved as a special entitlement is no longer an ordinary pick with an outcome.
     ...retainAflTradePickOutcomes(pickOutcomes, {
+      transactions: source.content.transactions,
       transfers,
       draftSelections: source.content.draftSelections,
     }),

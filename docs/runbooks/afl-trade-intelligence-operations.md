@@ -3402,6 +3402,10 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   hindsight, not what the clubs knew, and changes no value or total. A future pick with no usable
   slot from 1 to 90 still shows `future_pick_slot_unknown`; confirm its selection or order capture
   before regrading.
+- Under rule v9 a pick hop Draftguru stated "not used", whose club the candidate shows trading the
+  same pick on later, is valued by its traded-on return (`stated_not_used_traded_on`). The
+  reconciler records it (`statedDisposition: 'not_used'`), so re-reconcile before regrading; a
+  candidate reconciled before this rule still values those hops at 0.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

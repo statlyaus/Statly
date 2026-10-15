@@ -28,6 +28,7 @@ import {
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
+import { createAflTradePickOnwardTransfers } from './pickOnwardTransfer';
 
 const instantSchema = z.iso.datetime({ offset: true });
 const statusSchema = z.enum(['single_source', 'corroborated', 'disputed', 'unresolved']);
@@ -171,6 +172,11 @@ const pickOutcomeSchema = z
      * count (owner decision 2026-10-14, issue 789). Absent when an official session proved it.
      */
     draftProvenBy: z.literal('footyinfo').optional(),
+    /**
+     * Issue 789: Draftguru stated this hop "not used", but the candidate holds the receiving club's
+     * onward transfer of the same pick in a later trade, so the outcome is traded on.
+     */
+    statedDisposition: z.literal('not_used').optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
@@ -202,6 +208,12 @@ const pickOutcomeSchema = z
   .refine(
     (record) => record.outcomeStatus !== 'pending' || record.disposition === 'not_used',
     'Only a not-used pick can be pending.'
+  )
+  .refine(
+    (record) =>
+      record.statedDisposition === undefined ||
+      (record.disposition === 'traded_on' && record.outcomeStatus === 'stated'),
+    'Only a stated traded-on outcome overrides a stated not-used pick.'
   );
 
 /** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
@@ -863,8 +875,28 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
       });
     }
   });
+  // The rule the reconciler applies to a stated not-used pick its club traded on (issue 789).
+  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+    new Map(
+      content.transactions
+        .filter(({ transactionType }) => transactionType === 'trade')
+        .map((transaction) => [transaction.transactionId, transaction])
+    ),
+    content.transfers
+  );
   (content.pickOutcomes ?? []).forEach((outcome, index) => {
     const transfer = content.transfers.find(({ transferId }) => transferId === outcome.transferId);
+    if (
+      outcome.statedDisposition !== undefined &&
+      (!transfer || onwardTransfersOf(transfer).length === 0)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'statedDisposition'],
+        message:
+          'A stated not-used pick is traded on only when its club gave the same pick away in a later trade.',
+      });
+    }
     const selection = content.draftSelections.find(
       ({ selectionId }) => selectionId === outcome.selectionId
     );
@@ -1039,24 +1071,36 @@ export function parseAflTradeExternalReconciliationCandidate(
 
 /**
  * The stated pick outcomes a derived candidate can keep: those whose transfer is still a pick
- * transfer in it and whose named selection, if any, it still holds. Returns no key when none remain,
- * so the derived candidate's id matches one built without dispositions.
+ * transfer in it, whose named selection, if any, it still holds, and, for a stated not-used pick
+ * kept as traded on (issue 789), whose club's onward transfer it still holds. Returns no key when
+ * none remain, so the derived candidate's id matches one built without dispositions.
  */
 export function retainAflTradePickOutcomes(
   pickOutcomes: CandidateContent['pickOutcomes'],
-  kept: Pick<CandidateContent, 'transfers' | 'draftSelections'>
+  kept: Pick<CandidateContent, 'transactions' | 'transfers' | 'draftSelections'>
 ): Pick<CandidateContent, 'pickOutcomes'> {
-  const pickTransfers = new Set(
+  const pickTransfers = new Map(
     kept.transfers
       .filter(({ asset }) => asset.kind === 'pick_entitlement')
-      .map(({ transferId }) => transferId)
+      .map((transfer) => [transfer.transferId, transfer])
   );
   const selections = new Set(kept.draftSelections.map(({ selectionId }) => selectionId));
-  const retained = (pickOutcomes ?? []).filter(
-    (outcome) =>
-      pickTransfers.has(outcome.transferId) &&
-      (outcome.selectionId === null || selections.has(outcome.selectionId))
+  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+    new Map(
+      kept.transactions
+        .filter(({ transactionType }) => transactionType === 'trade')
+        .map((transaction) => [transaction.transactionId, transaction])
+    ),
+    kept.transfers
   );
+  const retained = (pickOutcomes ?? []).filter((outcome) => {
+    const transfer = pickTransfers.get(outcome.transferId);
+    return (
+      transfer !== undefined &&
+      (outcome.selectionId === null || selections.has(outcome.selectionId)) &&
+      (outcome.statedDisposition === undefined || onwardTransfersOf(transfer).length > 0)
+    );
+  });
   return retained.length === 0 ? {} : { pickOutcomes: retained };
 }
 

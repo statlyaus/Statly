@@ -4312,6 +4312,24 @@ The remaining work proceeds through these independently verifiable gates:
 
    A not-used pick is never credited with any player's value. The rule applies to realized value only.
 
+   **A stated not-used pick its club traded on (issue 789, 2026-10-16).** Draftguru reports a pick's
+   final fate (such as "removed - not enough list spots") on every trade page the pick passed
+   through, so each intermediate hop of a pick traded several times is stated "not used". On the
+   genuine candidate five such hops were valued 0: Melbourne to Adelaide (2021 fourth round),
+   Brisbane to Hawthorn (2023), and Collingwood to Hawthorn, Hawthorn to Essendon and Essendon to
+   Richmond (2024). When the candidate holds a transfer of the same pick id from the receiving club
+   in a later trade, that transfer is direct evidence the club traded the pick on, so the
+   reconciler records the outcome as a stated `traded_on` with `statedDisposition: 'not_used'`; only
+   the final holder's hop stays not used. The onward transfer is found by the rule the grader
+   follows (`source/pickOnwardTransfer.ts`): the next edge of the pick's unique trail, else the
+   receiving club's transfers of the pick in another trade no earlier than this one. A transfer of
+   the same pick by another club, or by this club before it received the pick, changes nothing. The
+   contradiction stays auditable on the outcome and blocks nothing. The candidate contract refuses
+   `statedDisposition` on anything but a stated traded-on outcome whose club gave the pick away in
+   a later trade, and a derived candidate (a reviewed scope or a special entitlement resolution)
+   keeps such an outcome only while it holds that onward transfer. Two same-day trades cannot be ordered, so a hop whose onward trade falls on the
+   same day stays not used unless the pick's trail orders it.
+
    A `pending` not-used pick, one whose draft is not yet in evidence (its year is at or after the
    candidate's anchor season and the candidate holds no `draft_selection` and no Footyinfo
    `draft_board_pick` for that (draftYear, draftType), `isAflTradeDraftPending`,
@@ -4364,7 +4382,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v8` (v1 to v7 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v9` (v1 to v8 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4580,6 +4598,16 @@ The remaining work proceeds through these independently verifiable gates:
        or blocked). The v8 limitation adds that a future pick's at-trade view is valued at the slot
        it eventually took, known only after the trade (hindsight, not what the clubs knew), and
        enters no total.
+
+   - **Stated not-used picks traded on (rule v9, issue 789).** A pick hop whose outcome carries
+     `statedDisposition: 'not_used'` ("A stated not-used pick its club traded on" above) is graded
+     as a traded-on pick: its share of its club's onward return (rule v3), or blocked when that
+     return is unlinked or blocked, never the 0 a not-used pick is worth. The leg says so
+     (`stated_not_used_traded_on`, provisional). The contract allows the reason only on a
+     traded-on pick leg (`pick_traded_on_return` or `pick_traded_on_return_unallocated`) or a
+     blocked one, and refuses it under rules v1 to v8, whose batches still parse. The v9 limitation
+     adds that a pick stated not used that its club traded on in a later trade is valued by its
+     traded-on return, and only the final holder's stays not used.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
