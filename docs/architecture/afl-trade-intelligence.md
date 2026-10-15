@@ -4333,7 +4333,9 @@ The remaining work proceeds through these independently verifiable gates:
    reports what the club finally landed and gave up.
 
    **Pick projection (owner decision, 2026-10-08, replacing the 2026-10-06 "no projection in the MVP"
-   rule).** The MVP has a pick projection. It is the at-trade view of a pick. It never feeds the
+   rule).** The MVP has a pick projection. It is the at-trade view of a pick (and, under rule v8, of a
+   future pick at the slot it eventually took, which is hindsight: "Future picks at their eventual
+   slot (rule v8)" below). It never feeds the
    realized grade or the bundle allocation, so a change of projection never changes a grade, with one
    exception the owner directed on 2026-10-14 (issue 789): a pick whose draft is not yet in evidence
    is valued at the projection of its slot in the live draft order, because "careers run
@@ -4362,7 +4364,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v7` (v1 to v6 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v8` (v1 to v7 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4379,8 +4381,9 @@ The remaining work proceeds through these independently verifiable gates:
      allocation (`sole_asset`, `relative_value` or `equal_split`), its share and the return. The batch
      checks that return, weight total and asset count against the onward trade it contains.
    - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
-     pick's HPN projection, which must equal the benchmark formula for its slot. Neither ever enters a
-     total.
+     pick's HPN projection, which must equal the benchmark formula for its slot. Under rule v8 a future
+     pick reports the HPN projection of the slot it eventually took (`pick_projection_eventual_slot`).
+     None ever enters a total.
    - **States.** A trade is `blocked` if any leg carries a blocking reason (a pending pick outcome the
      live order cannot place, an unresolved or
      no-access-evidence pick outcome, unresolved identity, a special entitlement with no reviewed
@@ -4502,7 +4505,8 @@ The remaining work proceeds through these independently verifiable gates:
        a return resting on one, sits on the side its value reads: a leg its club received there, or
        for a bundle a leg it gave. A pick traded twice before its draft is projected to the same slot
        on both hops, so the middle club's received and given-up values for it cancel.
-     - **At-trade view.** Unchanged: a future pick's at-trade view stays `future_pick_slot_unknown`.
+     - **At-trade view.** Under rule v6 a future pick's at-trade view stays `future_pick_slot_unknown`;
+       under rule v8 it is the slot the pick is projected from (`slotSource: 'projected_order'`).
      - **After the draft.** Once the pick is drafted and the candidate is re-reconciled, its outcome
        is `selected` and the leg becomes the draftee's realized first stint, which is 0 until he plays.
        A trade's value therefore drops sharply after draft night and climbs back as the draftee plays.
@@ -4547,8 +4551,39 @@ The remaining work proceeds through these independently verifiable gates:
        draft entitlement is followed through its reviewed canonical custody chain to the ordinary
        pick it was traded on as, and valued as that pick's traded-on return.
 
-   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades and pick
-     custody (rule v6), the special entitlement custody chain (rule v7), v3 season
+   - **Future picks at their eventual slot (rule v8, owner direction 2026-10-16, issue 789).** "Picks
+     that are unknown like Finn Callaghan in 2021 need to be confirmed." Until rule v8 a national
+     pick traded with no slot yet (no `nominalPick`) reported `future_pick_slot_unknown` at trade, even
+     once its slot was known: Collingwood's 2021 first-round pick, traded to GWS in 2020 and used at 3
+     on Finn Callaghan, was valued on his first stint but showed no at-trade view. Rule v8 fills it in.
+     - **Slot.** The selection number the pick was used at, when its outcome is a stated `selected`
+       one whose selection is usable (`single_source` or `corroborated`) and in the pick's draft.
+       Otherwise the latest usable slot of the pick in its own draft's order, by the rule v6 lookup
+       ("Projected picks (rule v6)", **Slot**) but never the previous draft's order as a proxy: a
+       traded-on, not-used or unresolved pick has a draft of its own. For a pending pick it is the
+       rule v6 projected slot, proxy included, so the view always matches the leg's `projection`. The
+       slot must be 1 to 90; a selection beyond 90 (even with an order slot inside it), no usable
+       slot, or a draft before the trade leaves `future_pick_slot_unknown`.
+     - **View.** `pick_projection_eventual_slot` names the batch's benchmark, the slot, its source
+       (`selection`, `order` or `projected_order`) and the raw HPN DPVC v3 value of the slot
+       (`hpnDpv3ValueForPick`). A current pick (one with a `nominalPick`) keeps its `pick_projection`
+       at that slot.
+     - **Hindsight.** The slot was known only after the trade, so the view is not what the clubs knew.
+       It is not the Value Engine's contemporaneous at-trade benchmark, which values a future pick
+       across its final-selection distribution and never by its eventual position ("For a selection
+       known at the transaction cutoff" above); that rule is unchanged. Like every at-trade view it
+       never enters a leg's value, a club total or a bundle weight.
+     - **Versions.** Rules v1 to v7 never report it, so their batches still parse and the contract
+       refuses the kind under them. Under rule v8 the contract checks the value against the slot, the
+       benchmark against the batch's, that `projected_order` appears exactly on a projected leg and
+       at its projection's slot, and that `selection` appears only on a selected pick's leg (valued
+       or blocked). The v8 limitation adds that a future pick's at-trade view is valued at the slot
+       it eventually took, known only after the trade (hindsight, not what the clubs knew), and
+       enters no total.
+
+   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
+     custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
+     (rule v7), v3 season
      spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
      starts the season after the trade (or after the draft, for a selected pick). It ends at the first
      season covered by spells in which the player appears for another club; that season still counts at

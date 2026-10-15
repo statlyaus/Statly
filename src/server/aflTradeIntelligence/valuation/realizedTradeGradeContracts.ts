@@ -56,12 +56,18 @@ import {
  * single-source: the chain is reviewed custody, not a corroborating draft board. A special entitlement
  * with no successor stays `special_entitlement_unsupported`. Rules v1 to v6 never follow the chain.
  *
+ * Under rule v8 (owner direction 2026-10-16, issue 789) a future pick, whose slot no club knew at the
+ * trade, reports at trade the HPN DPVC v3 value of the slot it eventually took
+ * (`pick_projection_eventual_slot`): the selection it was used at, else its slot in its own draft's
+ * order, else for a pending pick its rule v6 projected slot. That is hindsight, not what the clubs knew,
+ * and like every at-trade view it never enters a total. Rules v1 to v7 never report it.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v7' as const;
+  'afl-trade-realized-grade-rule/v8' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -78,6 +84,8 @@ const RULE_LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; not public factual, publication, production or activation authority.",
   'afl-trade-realized-grade-rule/v7':
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; not public factual, publication, production or activation authority.",
+  'afl-trade-realized-grade-rule/v8':
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; not public factual, publication, production or activation authority.",
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -107,6 +115,11 @@ const UNPROJECTED_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
 const NO_SPECIAL_CUSTODY_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   ...UNPROJECTED_RULES,
   'afl-trade-realized-grade-rule/v6',
+]);
+/** Rules under which no at-trade view reports a future pick's eventual slot; rule v8 may. */
+const NO_EVENTUAL_SLOT_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  ...NO_SPECIAL_CUSTODY_RULES,
+  'afl-trade-realized-grade-rule/v7',
 ]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
@@ -181,6 +194,16 @@ const atTradeSchema = z.discriminatedUnion('kind', [
       kind: z.literal('pick_projection'),
       benchmarkId: aflTradeContentAddressedIdSchema('hpn-pick-benchmark'),
       selectionNumber: z.number().int().min(1).max(90),
+      value: z.number().finite(),
+    })
+    .strict(),
+  // Rule v8: a future pick at the slot it eventually took, which is hindsight, never a total.
+  z
+    .object({
+      kind: z.literal('pick_projection_eventual_slot'),
+      benchmarkId: aflTradeContentAddressedIdSchema('hpn-pick-benchmark'),
+      selectionNumber: z.number().int().min(1).max(90),
+      slotSource: z.enum(['selection', 'order', 'projected_order']),
       value: z.number().finite(),
     })
     .strict(),
@@ -494,6 +517,37 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
     'A pick projection must be the HPN DPVC v3 value of its selection, on a pick leg.',
   ],
   [
+    // A slot outside 1 to 90 is already a schema issue; it must not throw here.
+    (leg) =>
+      leg.atTrade.kind === 'pick_projection_eventual_slot' &&
+      (leg.assetKind !== 'pick' ||
+        !projectableSlot(leg.atTrade.selectionNumber) ||
+        leg.atTrade.value !== hpnDpv3ValueForPick(leg.atTrade.selectionNumber)),
+    'A future pick’s eventual slot must be valued at the HPN DPVC v3 value of that slot, on a pick leg.',
+  ],
+  [
+    (leg) =>
+      leg.atTrade.kind === 'pick_projection_eventual_slot' &&
+      (leg.atTrade.slotSource === 'projected_order') !==
+        (leg.basis === 'pick_projected_from_order'),
+    'A future pick’s eventual slot is its projected order slot exactly when its leg is projected.',
+  ],
+  [
+    (leg) =>
+      leg.atTrade.kind === 'pick_projection_eventual_slot' &&
+      'projection' in leg &&
+      leg.projection.selectionNumber !== leg.atTrade.selectionNumber,
+    'A projected future pick’s eventual slot is the slot it is projected from.',
+  ],
+  [
+    (leg) =>
+      leg.atTrade.kind === 'pick_projection_eventual_slot' &&
+      leg.atTrade.slotSource === 'selection' &&
+      leg.basis !== 'pick_selected_first_stint' &&
+      leg.basis !== 'unavailable',
+    'Only a selected pick takes its eventual slot from its selection.',
+  ],
+  [
     (leg) => leg.atTrade.kind === 'player_trade_season_pav' && leg.assetKind !== 'player',
     'A trade-season PAV view belongs to a player leg.',
   ],
@@ -716,6 +770,13 @@ function batchShapeIssues(content: BatchContent): Issue[] {
     )
   )
     issues.push(['trades', 'Only rule v7 and later follow a special entitlement’s custody chain.']);
+  if (
+    NO_EVENTUAL_SLOT_RULES.has(content.ruleVersion) &&
+    content.trades.some(({ legs }) =>
+      legs.some((leg) => leg.atTrade.kind === 'pick_projection_eventual_slot')
+    )
+  )
+    issues.push(['trades', 'Only rule v8 and later value a future pick at its eventual slot.']);
   const summary = content.summary;
   if (
     summary.complete !== count('complete') ||
@@ -884,7 +945,8 @@ function batchIssues(content: BatchContent): Issue[] {
       issues.push(['trades', 'Club totals must be exactly the legs’ received and given-up sums.']);
     for (const leg of trade.legs) {
       if (
-        leg.atTrade.kind === 'pick_projection' &&
+        (leg.atTrade.kind === 'pick_projection' ||
+          leg.atTrade.kind === 'pick_projection_eventual_slot') &&
         leg.atTrade.benchmarkId !== content.inputs.pickProjectionBenchmarkId
       )
         issues.push(['trades', 'Every pick projection must cite the batch’s pinned benchmark.']);

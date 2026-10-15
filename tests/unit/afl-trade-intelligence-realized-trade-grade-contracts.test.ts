@@ -30,6 +30,7 @@ const V4 = 'afl-trade-realized-grade-rule/v4' as const;
 const V5 = 'afl-trade-realized-grade-rule/v5' as const;
 const V6 = 'afl-trade-realized-grade-rule/v6' as const;
 const V7 = 'afl-trade-realized-grade-rule/v7' as const;
+const V8 = 'afl-trade-realized-grade-rule/v8' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -39,6 +40,7 @@ const LIMITATIONS = {
   [V5]: 'Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; not public factual, publication, production or activation authority.',
   [V6]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; not public factual, publication, production or activation authority.",
   [V7]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; not public factual, publication, production or activation authority.",
+  [V8]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -1280,6 +1282,139 @@ describe('realized trade grade batch contract', () => {
             specialEntitlement: { entitlementId: 'draft-pick:x', successorTransferId: 'tr-6a' },
           }),
         /special-draft-entitlement/,
+      ],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v8 a future pick at the slot it eventually took', () => {
+    const signed = (ruleVersion: AflTradeRealizedGradeRuleVersion) => {
+      const value = content(ruleVersion);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    const eventual = (
+      selectionNumber: number,
+      slotSource: 'selection' | 'order' | 'projected_order'
+    ) => ({
+      kind: 'pick_projection_eventual_slot' as const,
+      benchmarkId,
+      selectionNumber,
+      slotSource,
+      value: hpnDpv3ValueForPick(selectionNumber),
+    });
+    const atTrade =
+      (view: Record<string, unknown>) =>
+      (leg: Leg): Leg =>
+        ({ ...leg, atTrade: view }) as Leg;
+    /** tx-3's pending future pick, valued from slot 7 of its own draft's order. */
+    const projectedLeg = (leg: Leg, selectionNumber = 7, slot = selectionNumber): Leg => ({
+      transferId: leg.transferId,
+      assetKind: 'pick',
+      sendingClubId: leg.sendingClubId,
+      receivingClubId: leg.receivingClubId,
+      state: 'valued',
+      basis: 'pick_projected_from_order',
+      realizedValue: hpnDpv3ValueForPick(selectionNumber),
+      projection: {
+        benchmarkId,
+        selectionNumber,
+        orderDraftYear: 2026,
+        pickDraftYear: 2026,
+        custodyId: `external-pick-custody:${hex('c')}`,
+        observedAt: { precision: 'day', date: '2026-10-10' },
+        proxy: false,
+      },
+      reasons: ['pick_projected_from_live_order'],
+      atTrade: eventual(slot, 'projected_order'),
+    });
+    // tx-1: the selected pick tr-1b went at 3 and the not-used tr-1c held 40; tx-3 is projected at 7.
+    const eventualBatch = (ruleVersion: AflTradeRealizedGradeRuleVersion = V8) => {
+      const value = withLeg(signed(ruleVersion), 'tx-1', 1, atTrade(eventual(3, 'selection')));
+      withLeg(value, 'tx-1', 2, atTrade(eventual(40, 'order')));
+      return withLeg(value, 'tx-3', 0, (leg) => projectedLeg(leg));
+    };
+
+    it('reports each eventual slot beside its leg and changes no total', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(eventualBatch());
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      const before = signed(V8);
+      expect(tradeOf(batch.content as Content, 'tx-1')).toMatchObject({
+        clubs: tradeOf(before, 'tx-1').clubs,
+        legs: [{}, { atTrade: eventual(3, 'selection') }, { atTrade: eventual(40, 'order') }],
+      });
+      expect(tradeOf(batch.content as Content, 'tx-3').legs[0]).toMatchObject({
+        atTrade: eventual(7, 'projected_order'),
+      });
+    });
+
+    it('seals v8 with its limitation and still parses sealed v1 to v7 batches', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(signed(V8));
+      expect(batch.content.limitation).toBe(LIMITATIONS[V8]);
+      expect(batch.content.limitation).toContain(
+        "a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total"
+      );
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+      for (const ruleVersion of [V4, V5, V6, V7] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(signed(ruleVersion))).not.toThrow();
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['an eventual slot under v7', () => eventualBatch(V7), /Only rule v8 and later/],
+      [
+        'a value that is not the slot’s',
+        () => withLeg(signed(V8), 'tx-1', 1, atTrade({ ...eventual(3, 'selection'), value: 100 })),
+        /valued at the HPN DPVC v3 value of that slot/,
+      ],
+      [
+        'a slot beyond HPN’s 1 to 90',
+        () =>
+          withLeg(
+            signed(V8),
+            'tx-1',
+            1,
+            atTrade({ ...eventual(90, 'selection'), selectionNumber: 91 })
+          ),
+        /expected number to be <=90/,
+      ],
+      [
+        'an eventual slot on a player leg',
+        () => withLeg(signed(V8), 'tx-4', 0, atTrade(eventual(3, 'order'))),
+        /on a pick leg/,
+      ],
+      [
+        'another benchmark',
+        () =>
+          withLeg(
+            signed(V8),
+            'tx-1',
+            1,
+            atTrade({ ...eventual(3, 'selection'), benchmarkId: `hpn-pick-benchmark:${hex('d')}` })
+          ),
+        /pinned benchmark/,
+      ],
+      [
+        'a projected order slot on a leg that is not projected',
+        () => withLeg(signed(V8), 'tx-1', 2, atTrade(eventual(40, 'projected_order'))),
+        /projected order slot exactly when its leg is projected/,
+      ],
+      [
+        'a projected leg whose eventual slot is read from the order',
+        () =>
+          withLeg(signed(V8), 'tx-3', 0, (leg) => atTrade(eventual(7, 'order'))(projectedLeg(leg))),
+        /projected order slot exactly when its leg is projected/,
+      ],
+      [
+        'a projected leg whose eventual slot is not its projection’s',
+        () => withLeg(signed(V8), 'tx-3', 0, (leg) => projectedLeg(leg, 7, 8)),
+        /the slot it is projected from/,
+      ],
+      [
+        'a selection slot on a traded-on pick',
+        () => withLeg(signed(V8), 'tx-5', 0, atTrade(eventual(20, 'selection'))),
+        /Only a selected pick takes its eventual slot from its selection/,
       ],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });
