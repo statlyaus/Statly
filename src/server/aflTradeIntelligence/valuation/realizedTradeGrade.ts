@@ -25,7 +25,10 @@ type PickAsset = Extract<Transfer['asset'], { kind: 'pick_entitlement' }>;
 /** Everything the MVP grader reads, already loaded; the grader itself does no I/O. */
 export interface AflTradeRealizedTradeGradeInputs {
   candidateId: string;
-  /** Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick. */
+  /**
+   * Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick; rule v8
+   * also reads it, and `draftSelections`, for the slot a future pick eventually took.
+   */
   candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
     Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks' | 'pickCustody'>>;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */
@@ -193,11 +196,24 @@ function arrivalReviewed(
   );
 }
 
+/**
+ * Rule v8 (owner direction 2026-10-16, issue 789): the slot a future national pick eventually took,
+ * which no club knew at the trade. A stated selected outcome gives the selection number of its usable
+ * selection; otherwise the latest usable slot in the pick's own draft order (rule v6's lookup, never a
+ * proxy) gives it, and for a pending pick the rule v6 projected slot, proxy included, as its leg is
+ * valued. A selection beyond HPN's 1 to 90, or no slot at all, leaves the slot unknown.
+ */
+interface EventualSlot {
+  selectionNumber: number;
+  slotSource: 'selection' | 'order' | 'projected_order';
+}
+
 function atTradeView(
   inputs: AflTradeRealizedTradeGradeInputs,
   index: Index,
   transfer: Transfer,
-  tradeYear: number
+  tradeYear: number,
+  eventualSlot: (asset: PickAsset) => EventualSlot | undefined
 ): Leg['atTrade'] {
   const asset = transfer.asset;
   if (asset.kind === 'player') {
@@ -211,8 +227,18 @@ function atTradeView(
   }
   if (asset.kind !== 'pick_entitlement' || asset.draftType !== 'national')
     return { kind: 'unavailable', reason: 'pick_outside_projection_domain' };
-  if (asset.nominalPick === null)
-    return { kind: 'unavailable', reason: 'future_pick_slot_unknown' };
+  if (asset.nominalPick === null) {
+    // Rule v8: hindsight, never what the clubs knew; like every at-trade view it enters no total.
+    const slot = eventualSlot(asset);
+    if (!slot) return { kind: 'unavailable', reason: 'future_pick_slot_unknown' };
+    return {
+      kind: 'pick_projection_eventual_slot',
+      benchmarkId: inputs.pickProjectionBenchmarkId,
+      selectionNumber: slot.selectionNumber,
+      slotSource: slot.slotSource,
+      value: hpnDpv3ValueForPick(slot.selectionNumber),
+    };
+  }
   if (asset.nominalPick > 90)
     return { kind: 'unavailable', reason: 'pick_outside_projection_domain' };
   return {
@@ -490,6 +516,37 @@ export function gradeAflTradesOnRealizedValue(
       selection.supportingProviders.includes('footyinfo')
     );
   };
+  /** Rule v8: the slot a future pick eventually took (`EventualSlot`). */
+  const eventualSlotOf =
+    (transfer: Transfer, tradeYear: number) =>
+    (asset: PickAsset): EventualSlot | undefined => {
+      // A pick is drafted at or after the trade; an earlier draft cannot be this pick's.
+      if (asset.draftYear < tradeYear) return undefined;
+      const outcome = outcomes.get(transfer.transferId);
+      const selection =
+        outcome?.outcomeStatus === 'stated' &&
+        outcome.disposition === 'selected' &&
+        outcome.selectionId !== null
+          ? selections.get(outcome.selectionId)
+          : undefined;
+      if (
+        selection &&
+        isAflTradeUsableCustodyStatus(selection.status) &&
+        selection.draftYear === asset.draftYear &&
+        selection.draftType === asset.draftType
+      )
+        return selection.selectionNumber > 90
+          ? undefined
+          : { selectionNumber: selection.selectionNumber, slotSource: 'selection' };
+      const slot = orderSlotOf(inputs.candidate.pickCustody ?? [], asset);
+      if (!slot) return undefined;
+      if (outcome?.outcomeStatus === 'pending')
+        return { selectionNumber: slot.selectionNumber, slotSource: 'projected_order' };
+      // Only a pick still waiting on its draft reads the previous draft's order as a proxy.
+      return slot.proxy
+        ? undefined
+        : { selectionNumber: slot.selectionNumber, slotSource: 'order' };
+    };
   // Rule v2: a traded-on outcome is corroborated when exactly one board pick in its draft routes it
   // sender → receiver → onward receiver, with that hop pair once in its route.
   const routeCorroborated = (transfer: Transfer, onward: Transfer) => {
@@ -526,7 +583,7 @@ export function gradeAflTradesOnRealizedValue(
       assetKind: asset.kind === 'player' ? ('player' as const) : ('pick' as const),
       sendingClubId: transfer.fromClubId!,
       receivingClubId: receiving,
-      atTrade: atTradeView(inputs, index, transfer, tradeYear),
+      atTrade: atTradeView(inputs, index, transfer, tradeYear, eventualSlotOf(transfer, tradeYear)),
     };
     if (asset.kind === 'player') {
       if (!asset.playerId) return blocked(base, ['player_identity_unresolved']);
