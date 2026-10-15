@@ -112,6 +112,10 @@ pick id, and 12 are excluded because the selection's club differs or only Footyi
 Recording a rule 5 conflict under a `pick-custody:` key defers that pick: under the pick-side deferral its
 custody and lineage rows are left out of promotion (`pickLineageDeferral.ts`). For a number-only id the
 key is `pick-custody:<pick id>` with no observation time, which the deferral parses as the whole pick id.
+A board pick whose route did not resolve (`routeClubIds` null, with a `board-pick:club:` identity issue)
+is not checked. Migration 0286 reads its length only once the route is an array: 0273 guarded the length
+in the same `AND` list, which fixes no evaluation order. Finalizing a 2025 candidate with null routes then
+failed with 22023.
 
 How rule 6 is checked: eventual-selection ids legitimately span transactions, so the check must know an
 id's kind. The database can work it out: `outcome_afl_trade_canonical_json` with `sha256` recomputes the
