@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment node
+import { describe, expect, it, vi } from 'vitest';
 import {
   createLocalOfficialAflDraftSessionTargets,
   officialAflDraftSessionDecisionKey,
@@ -17,6 +18,7 @@ import {
   validateAflTradeRetainedCaptureScope,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import type { IngestAflTradeExternalPageRequest } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
+import { captureOfficialAflPage } from '@/server/aflTradeIntelligence/source/officialAflPageCapture';
 
 // Synthetic pages: only the reviewed boundary sentences are kept, everything else is invented.
 const [nightOne, nightTwo] = reviewedOfficialAflDraft2025SessionPages();
@@ -299,5 +301,39 @@ describe('the 2025 completed-session capture scope', () => {
         effectiveAt: '2025-11-20T00:00:00.000Z',
       },
     ]);
+  });
+});
+
+describe('fetching the 2025 night-report snapshots', () => {
+  const capturePage = (url: string, fetchImpl: typeof fetch) =>
+    captureOfficialAflPage({
+      url,
+      fetchImpl,
+      maximumBytes: 1024,
+      timeoutMs: 1000,
+      validators: null,
+    });
+
+  it.each(reviewedOfficialAflDraft2025SessionPages().map(({ url }) => url))(
+    'fetches the exact reviewed snapshot as HTML without following redirects: %s',
+    async (url) => {
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response('<article>fixture</article>', {
+          headers: { 'content-type': 'text/html;charset=utf-8' },
+        })
+      );
+      await expect(capturePage(url, fetchImpl)).resolves.toMatchObject({ status: 'captured' });
+      expect(fetchImpl).toHaveBeenCalledWith(url, expect.objectContaining({ redirect: 'error' }));
+    }
+  );
+
+  it.each([
+    nightOne!.url.replace('20251216210602', '20251216210603'),
+    nightOne!.url.replace('id_/', '/'),
+    nightTwo!.url.replace(/\/amp$/, ''),
+  ])('refuses any other archive.org URL before fetch: %s', async (url) => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(capturePage(url, fetchImpl)).rejects.toThrow('outside the approved article path');
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
