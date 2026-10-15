@@ -332,6 +332,7 @@ describe('keeping each re-sync version additive (migration 0256)', () => {
 describe('the pick a session re-sync writes under the root lock', () => {
   const candidateSelection = {
     ...selection(2),
+    status: 'single_source' as const,
     supportingProviders: ['draftguru' as const],
     evidenceIds: [],
   };
