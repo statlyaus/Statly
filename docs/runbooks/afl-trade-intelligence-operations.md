@@ -803,7 +803,14 @@ supersede production Gate authority, and production execution cannot reuse non-p
    deferral covers. The printed JSON gains `deferredIssueCount` and `pickLineageDeferral`; the stored
    candidate keeps `issue_count` as the blocking count (the promotion gate is unchanged) and adds
    `deferred_issue_count` and `lineage_deferral_decision_id`, which the database checks against the
-   decision. Without the flag the candidate is byte-identical to today's. A `special_pick` transfer
+   decision. Without the flag the candidate is byte-identical to today's. A completion with no
+   pick-side issue keeps the decision too when the candidate lists something under it (already
+   promoted drafts, transactions or custody, re-synced selections, deferred custody) and every
+   draft it holds is already promoted or re-synced (#853, migration 0282): the 2018 completion
+   re-syncs its re-targeted draftees this way with `deferredIssueCount: 0`. If such a candidate
+   would write any draft whole, the decision is dropped and the candidate is the one the flag
+   would not have changed, because a draft is written under the decision only through the
+   metadata-only proposal, without its session proof. A `special_pick` transfer
    is not deferrable: the special-entitlement gate still refuses it, applied to the transfers the
    promotion writes. Candidate four's one special pick sits in the 2019 Geelong and Gold Coast trade,
    which the Cameron promotion already made current canonical with every transfer; preparation
@@ -826,6 +833,11 @@ supersede production Gate authority, and production execution cannot reuse non-p
    environment and competition and attaches it to every `occurredOn: null` transaction of that
    season; a season with no reviewed window stays year-only. From migration 0263 the database refuses
    a window that no such capture states, on the review decision and again on promotion.
+   A year-only trade promoted before 0261 whose current version came from reviewed pick lineage is
+   not re-promoted to gain a window: from migration 0281 its v4 arrival entry cites the window of the
+   season's approved trade-period captures directly (`eventDate: null` plus that exact
+   `datePrecision`), and the event row stays undated. It is refused when the season has no approved
+   window or its captures state two different windows; a recapture restating the same window is fine.
    A null day selects promotion proposal v4, which binds the candidate's `seasonYear` as well as the
    reviewed date precision. Missing review entries remain invalid. The content-addressed proposal
    and approval bind that coverage before canonical promotion. Year-only factual admission does not
@@ -904,7 +916,8 @@ supersede production Gate authority, and production execution cannot reuse non-p
    promotions key a pick by its slot, a trade by its custody) and no reviewed lineage registration
    is retained under the deferral: the asset references the existing pick unchanged, no facts are
    written, and the receipt lists it as `retainedPickDefinitionIds` with
-   `retainedPickDefinitionCount`; without a deferral that is still the immutable conflict. A stable
+   `retainedPickDefinitionCount`; without a deferral, or under a decision that deferred no issue
+   (migration 0282), that is still the immutable conflict, and such a pick is never custody-defined. A stable
    pick the written transfers number differently (a trade page's "Pick 46" and a later trade's
    "Pick 56" for the same entitlement) is defined, under the deferral, from its one usable custody
    observation in the candidate's full custody (the slot it became; a deferred pick's observation
@@ -918,7 +931,9 @@ supersede production Gate authority, and production execution cannot reuse non-p
    directed asset (a deferred pick keeps its stable `pick_id` on the asset), writes no custody
    observation and no `exercised_as` realization for a deferred pick, and records
    `pickLineageDeferral: { decisionId, deferredIssueCount }` on the receipt, so the promotion id
-   differs from an undeferred promotion of the same candidate. Deferred issues stay on the candidate;
+   differs from an undeferred promotion of the same candidate (`deferredIssueCount` is 0 for a
+   decision that deferred nothing; the draft-events file is then `[]`, since no draft is written
+   whole). Deferred issues stay on the candidate;
    the grader keeps reporting those legs exactly as now. Nothing deferred is ever published: the
    promotion-backed corpus excludes a deferred-lineage promotion from its scope and the database
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
@@ -1029,7 +1044,11 @@ Prerequisites:
      recorded but are never retained: v2 recorded each special pick as a parse issue, and a retained
      plan admits only issue-free batches. The `-order-v3` decisions and captures stay recorded too;
      v4 emits the same claims on 2019-2024 and adds the 2025 page, but the runner reads only the
-     current parser's key, so a v4 capture of any season needs its `-order-v4` decision; and
+     current parser's key, so a v4 capture of any season needs its `-order-v4` decision. 2026
+     (issue 789) is the one season on `official-afl-draft-order-parser/v5`: it needs
+     `official-afl-indicative-draft-order-issue579-private-2026-order-v5`, whose rights name v5 and
+     the same fields. Each scope entry names its parser, so the 2019-2025 `-order-v4` decisions and
+     captures stay current; and
    - one `official-afl-trade-period-dates-issue869-private-<season>-period-v2` decision per
      captured season, for example `official-afl-trade-period-dates-issue869-private-2023-period-v2`
      (statlyaus/Statly#869). Parser `official-afl-trade-period-parser/v2` reads the AFL's
@@ -1052,7 +1071,8 @@ Prerequisites:
      capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
-   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` or
+   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` (2026:
+   `official-afl-draft-order-parser/v5`) or
    `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
@@ -1087,11 +1107,13 @@ recapture one night without fetching the other again.
 `--url` only narrows the requested seasons' reviewed pages: a URL that is not one of them is
 refused before anything is fetched. `--season` is still required.
 
-Capture the Official AFL pre-draft orders for 2019 to 2025 (issue 853). Each `--season` is the one
-reviewed order page as it stood after that season's last pick-swap deadline; 2023 to 2025 fetch the
-reviewed Internet Archive snapshots (raw `id_` form, no redirect; the archive declares
-`content-encoding: gzip` and the fetch decodes it). Every claim is observed at the page's stated
-as-of date, for 2025 the close of the pick-swap window on 7 November:
+Capture the Official AFL pre-draft orders for 2019 to 2026 (issues 853 and 789). For 2019 to 2025,
+each `--season` is the one reviewed order page as it stood after that season's last pick-swap
+deadline. 2026 is the live order as it stood on 14 October 2026, before its pick-swap deadline: rule
+v6 values a pick not yet selected from its slot there. 2023 to 2026 fetch the reviewed Internet
+Archive snapshots (raw `id_` form, no redirect; the archive declares `content-encoding: gzip` and the
+fetch decodes it). Every claim is observed at the page's stated date: for 2025 the close of the
+pick-swap window on 7 November, for 2026 the page's "Updated: October 14, 2026":
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
@@ -1100,13 +1122,13 @@ npm run outcomes:sources:capture-local-external -- \
   --artifact-root '<durable-artifact-root>' \
   --capability official-afl-indicative-draft-order \
   --season 2019 --season 2020 --season 2021 --season 2022 --season 2023 --season 2024 \
-  --season 2025
+  --season 2025 --season 2026
 ```
 
 Expect `issueCount` 0 on every page; a nonzero count means an annotation form the parser has not
 seen, and the page cannot enter a retained plan until the parser is revised under a new version.
-Compensation, assistance, concession and priority picks (41 across the seven pages, 7 of them in
-2025's 115 slots) are claims with
+Compensation, assistance, concession and priority picks (48 across the eight pages: 7 of 2025's 115
+slots and 7 of 2026's 97, which run in five rounds of 20, 22, 19, 18 and 18) are claims with
 no original club; they are custody observations of their holder only and never link a traded-on
 pick. After capture, the order's club
 spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need current
@@ -3317,6 +3339,17 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   - the candidate holds no trades.
 - A trade the batch cannot represent (no transfers, or an unusable club) is listed as `ungraded`.
   Read the printed `summary` before citing a batch.
+- Under rule v6 a pick not yet drafted is valued from its slot in the candidate's live Official AFL
+  indicative order (`pick_projected_from_order`), or from its original club's slot in the previous
+  draft's order when its own draft has no order yet (`pick_projected_from_prior_order_proxy`). These
+  values are whole-career DPVC expectations, not realized first stints, so the trades are
+  `provisional`. A pick with no unique slot still blocks as `pick_outcome_pending`. After draft night,
+  re-reconcile and regrade: the leg becomes the draftee's first stint, which is 0 until he plays.
+- Under rule v7 a special draft entitlement (such as the 2020 Gold Coast concession) whose approved
+  canonical `outcome_special_entitlement_custody` row has a successor is valued as a traded-on pick
+  through the successor's trade (`special_entitlement_custody_linked`, provisional and single-source).
+  The run reads that chain itself; no flag is needed. A special entitlement with no reviewed successor
+  still blocks as `special_entitlement_unsupported`: review its custody before regrading.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

@@ -14,12 +14,16 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
-import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from './externalEvidenceReconciliation';
+import {
+  AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
+  isAflTradeDraftPending,
+} from './externalEvidenceReconciliation';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
 } from './externalReconciliationSourceAuthorityContracts';
 import {
+  aflTradeIssuelessDeferralKept,
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
@@ -161,12 +165,24 @@ const pickOutcomeSchema = z
     receivingClubNominatedSelections: z.number().int().nonnegative().max(90).optional(),
     /** The Footyinfo board pick stating the pick was passed or removed (issue 853). */
     boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
+    /**
+     * A reviewed Footyinfo board, not an official session, proved the draft's membership behind a
+     * count (owner decision 2026-10-14, issue 789). Absent when an official session proved it.
+     */
+    draftProvenBy: z.literal('footyinfo').optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine((record) => {
     const { nominationBasis: basis, receivingClubNominatedSelections: count } = record;
     if ((basis === 'board_pick_passed_or_removed') !== (record.boardPickId !== undefined))
+      return false;
+    // Only a count rests on a proven membership; a board pick or unknown access is no count.
+    if (
+      record.draftProvenBy !== undefined &&
+      basis !== 'club_took_nominated_player' &&
+      basis !== 'club_took_no_nominated_player'
+    )
       return false;
     if (basis === undefined) return count === undefined;
     if (record.disposition !== 'not_used' || record.outcomeStatus !== 'stated') return false;
@@ -417,11 +433,33 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
       message: 'A deferred issue requires the approved reconciliation-scope decision.',
     });
   }
-  if (deferred.length === 0 && content.pickLineageDeferral !== undefined) {
+  // Under the decision the reconciler defers every pick-side issue, so a decision that deferred none
+  // (#853) has none blocking either. Before migration 0282 no candidate carried such a decision.
+  if (
+    deferred.length === 0 &&
+    content.pickLineageDeferral !== undefined &&
+    content.issues.some(
+      (issue) => issue.severity === 'blocking' && isAflTradePickSideReconciliationIssue(issue)
+    )
+  ) {
     context.addIssue({
       code: 'custom',
       path: ['pickLineageDeferral'],
-      message: 'A deferral decision is carried only by a candidate that deferred an issue.',
+      message: 'Under the deferral decision every pick-side issue is deferred.',
+    });
+  }
+  // With nothing deferred the decision is carried only for what it lists, and never over a draft
+  // the promotion would write whole (#853, `aflTradeIssuelessDeferralKept`).
+  if (
+    deferred.length === 0 &&
+    content.pickLineageDeferral !== undefined &&
+    !aflTradeIssuelessDeferralKept(content.pickLineageDeferral, content.draftSelections)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message:
+        'A deferral decision with no deferred issue is carried only by a candidate that lists already-promoted or re-synced records and writes no draft whole.',
     });
   }
   if (
@@ -839,6 +877,18 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         path: ['pickOutcomes', index],
         message:
           'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
+      });
+    }
+    // Pending is decided by the evidence: only a pick whose draft the candidate holds no selection
+    // or board pick in, at or after its anchor season, may wait on that draft.
+    if (
+      outcome.outcomeStatus === 'pending' &&
+      (!asset || !isAflTradeDraftPending(content, content.anchorSeasonYear, asset))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'outcomeStatus'],
+        message: 'A pending pick outcome needs a draft the candidate holds no selection in.',
       });
     }
     if (

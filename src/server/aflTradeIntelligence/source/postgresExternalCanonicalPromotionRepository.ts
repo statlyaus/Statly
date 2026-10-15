@@ -411,6 +411,19 @@ export function planPickEnrichment(
 }
 
 /**
+ * Whether the written picks are defined under the deferral's relaxations: a conflicting stored
+ * definition retained, a renumbered pick defined from its one usable custody row. Only a deferred
+ * pick-side issue justifies them. A decision that deferred none (#853, migration 0282) only
+ * re-syncs draftees or leaves records to an earlier promotion, so a pick it writes keeps the
+ * conflict rule of a promotion without a decision.
+ */
+export function aflTradePickDefinitionsDeferred(
+  deferral: { readonly deferredIssueCount: number } | null
+): boolean {
+  return (deferral?.deferredIssueCount ?? 0) > 0;
+}
+
+/**
  * What a promotion does with a pick it would define that is already a canonical pick (#869). A
  * stored pick with different facts, or with empty facts this candidate would fill without a reviewed
  * lineage registration, is an immutable conflict. Under a pick-side deferral such a pick is
@@ -1467,15 +1480,16 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         transfers: scope.transfers,
         pickCustody: scope.pickCustody,
       };
+      const pickSideDeferred = aflTradePickDefinitionsDeferred(authenticated.pickLineageDeferral);
       const { definitions, custodyDefinedPickIds } = resolveWrittenPickDefinitions(written, {
-        deferred: authenticated.pickLineageDeferral !== null,
+        deferred: pickSideDeferred,
         definitionCustody: candidate.content.pickCustody,
       });
       // Under the deferral a pick already defined with different facts, or with facts this candidate
       // would fill without reviewed lineage, is retained: referenced unchanged, listed on the receipt.
       // Decided before the receipt is addressed so a replay derives the same list from the same facts.
       const retainedPickDefinitionIds = new Set<string>();
-      if (authenticated.pickLineageDeferral !== null) {
+      if (pickSideDeferred) {
         const registrationId =
           candidate.content.reviewedCorrection?.registrationId ??
           candidate.content.reviewedScope?.registrationId ??
