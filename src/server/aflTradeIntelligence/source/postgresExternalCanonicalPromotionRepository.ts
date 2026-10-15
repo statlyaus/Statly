@@ -40,7 +40,11 @@ import {
   parseAflTradeExternalReconciliationCandidate,
   type AflTradeExternalReconciliationCandidateRecord,
 } from './externalReconciliationCandidateContracts';
-import { aflTradePromotionWriteScope } from './pickLineageDeferral';
+import {
+  aflTradeNumberOnlyPickIds,
+  aflTradePromotionWriteScope,
+  isAflTradeUsableCustodyStatus,
+} from './pickLineageDeferral';
 
 export interface PromoteAflTradeExternalCandidateInput {
   readonly candidateId: string;
@@ -646,6 +650,30 @@ async function requireCurrentResyncedSelections(
     throw new AflTradeExternalCanonicalPromotionError(
       'CANDIDATE_UNAVAILABLE',
       'A selection the candidate re-syncs is no longer current canonical under another player.'
+    );
+  }
+}
+
+/**
+ * Every selection the candidate records as re-keyed (#853) must still be current canonical once, at
+ * its number, under its club and number-only pick id, with the candidate's usable pick carried by no
+ * other current selection (the candidate insert test, migration 0284). Checked only before a first
+ * write: once written the selection is current under the candidate's pick.
+ */
+async function requireCurrentRekeyedSelections(
+  transaction: AflOutcomeSqlTransaction,
+  candidate: AflTradeExternalReconciliationCandidateRecord
+): Promise<void> {
+  if ((candidate.content.pickLineageDeferral?.rekeyedSelectionIds ?? []).length === 0) return;
+  const result = await transaction.query<{ current: boolean }>(
+    `SELECT outcome_external_candidate_rekeyed_selections_current(candidate_json) AS current
+       FROM outcome_external_reconciliation_candidate WHERE candidate_id=$1 FOR SHARE`,
+    [candidate.candidateId]
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.current !== true) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      'A selection the candidate re-keys is no longer current canonical under its number-only pick id, or its pick is now carried by another selection.'
     );
   }
 }
@@ -1594,6 +1622,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       // Only before a first write: a written re-sync makes its selection current under the
       // candidate's own player, so a replay above never re-checks it.
       await requireCurrentResyncedSelections(transaction, candidate);
+      await requireCurrentRekeyedSelections(transaction, candidate);
       const content = candidate.content;
       const reviewedTransactionDateById = new Map(
         approval.proposal.content.transactionDateCoverage.map((coverage) => [
@@ -2135,8 +2164,8 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         }
       }
       /**
-       * `pickId` overrides the candidate's: a session re-sync repairs the player only, so it keeps
-       * the pick id of the selection it re-versions (#853, migration 0279).
+       * `pickId` overrides the candidate's: a session re-sync keeps the pick id of the selection it
+       * re-versions (#853, migration 0279) unless the slot is re-keyed (migration 0284).
        */
       async function persistSelectedPlayer(
         selection: DraftSelection,
@@ -2321,11 +2350,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       await persistDraftEventsAndSelections();
 
       /**
-       * Re-promotes the slots whose draftee an identity repair re-targeted (#853): one later version
-       * of the session root each sits on, superseding exactly the version the reviewer approved,
+       * Re-promotes the slots whose draftee an identity repair re-targeted, or whose number-only
+       * promoted pick the candidate names (re-keyed, migration 0284) (#853): one later version of
+       * the session root each sits on, superseding exactly the version the reviewer approved,
        * repeating its date, precision and official name, and carrying only the changed slots with
-       * the new player's current identity decision. Additive under migration 0256, so every other
-       * draftee's selection, asset and the spells that start at them stay current.
+       * the player's current identity decision. Additive under migration 0256, so every other
+       * draftee's selection, asset and the spells that start at them stay current. A re-keyed slot's
+       * own asset is re-versioned (same player), so a spell starting at it must be re-registered.
        */
       async function persistPromotedSessionResyncs(): Promise<void> {
         const resyncedById = new Map(
@@ -2403,10 +2434,14 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               'Promotion cannot backdate a draft-session re-sync.'
             );
           }
-          // Each slot is current canonical once, on this root, at its number, under another player
-          // and the candidate's club. A re-sync repairs the player alone (migration 0279): it keeps
-          // the re-versioned row's pick id, which the candidate may state differently or leave
-          // unresolved on the pick side, and refuses a club change.
+          // Each slot is current canonical once, on this root, at its number, under the candidate's
+          // club. A re-synced slot is current under another player and keeps the re-versioned row's
+          // pick id (migration 0279: the candidate may state it differently or leave it unresolved
+          // on the pick side). A re-keyed slot (migration 0284) is current under its own player, or
+          // another when it is also re-synced, with the slot's number-only pick id, and takes the
+          // candidate's pick, which no other current selection may carry (pick-identity rule 4).
+          const rekeyedIds = scope.deferral.rekeyedSelectionIds;
+          const resyncedIds = scope.deferral.resyncedSelectionIds;
           const placed = await transaction.query<{
             selection_id: string;
             event_id: string;
@@ -2415,33 +2450,66 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             pick_id: string | null;
             club_id: string | null;
           }>(
+            // The rows of `outcome_current_canonical_draft_selection_picks` (0284), read through
+            // 0278's function so a re-sync alone needs nothing later than it.
             `SELECT current.selection_id,current.event_id,current.selection_number,current.player_id,
                     stored.pick_id,stored.club_id
                FROM outcome_current_canonical_draft_selection_players($1) current
                JOIN outcome_draft_selection stored
                  ON stored.event_version_id=current.event_version_id
                 AND stored.selection_number=current.selection_number
-                AND stored.player_id=current.player_id
-              WHERE current.selection_id=ANY($2::text[])`,
-            [content.competition, [...coverage.selectionIds]]
+              WHERE current.selection_id=ANY($2::text[])
+                 OR stored.pick_id=ANY($3::text[])`,
+            [
+              content.competition,
+              [...coverage.selectionIds],
+              selections.flatMap(({ selectionId, pickId }) =>
+                rekeyedIds.has(selectionId) ? [pickId] : []
+              ),
+            ]
           );
-          const promotedPickBySelection = new Map<string, string | null>();
+          const writtenPickBySelection = new Map<string, string | null>();
           for (const selection of selections) {
             const rows = placed.rows.filter((row) => row.selection_id === selection.selectionId);
+            const row = rows.length === 1 ? rows[0]! : null;
+            const rekeyed = rekeyedIds.has(selection.selectionId);
+            const resynced = resyncedIds.has(selection.selectionId);
             if (
-              rows.length !== 1 ||
-              rows[0]!.event_id !== eventId ||
-              Number(rows[0]!.selection_number) !== selection.selectionNumber ||
-              rows[0]!.player_id === selection.playerId ||
-              rows[0]!.club_id !== selection.clubId ||
+              row === null ||
+              row.event_id !== eventId ||
+              Number(row.selection_number) !== selection.selectionNumber ||
+              (resynced
+                ? row.player_id === selection.playerId
+                : row.player_id !== selection.playerId) ||
+              row.club_id !== selection.clubId ||
               selection.status === 'disputed'
             ) {
               throw new AflTradeExternalCanonicalPromotionError(
                 'CANDIDATE_UNAVAILABLE',
-                `Selection ${selection.selectionId} is no longer current canonical once on draft session ${eventId} under another player and the same club.`
+                `Selection ${selection.selectionId} is no longer current canonical once on draft session ${eventId} under the same club and the player the re-sync was approved against.`
               );
             }
-            promotedPickBySelection.set(selection.selectionId, rows[0]!.pick_id);
+            if (
+              rekeyed &&
+              (!isAflTradeUsableCustodyStatus(selection.status) ||
+                row.pick_id === null ||
+                !aflTradeNumberOnlyPickIds(selection).includes(row.pick_id) ||
+                row.pick_id === selection.pickId ||
+                placed.rows.some(
+                  (other) =>
+                    other.pick_id === selection.pickId &&
+                    other.selection_id !== selection.selectionId
+                ))
+            ) {
+              throw new AflTradeExternalCanonicalPromotionError(
+                'CANDIDATE_UNAVAILABLE',
+                `Selection ${selection.selectionId} no longer carries its number-only pick id, or another current selection carries the pick it is re-keyed to.`
+              );
+            }
+            writtenPickBySelection.set(
+              selection.selectionId,
+              rekeyed ? selection.pickId : row.pick_id
+            );
           }
           const carriedNumbers = selections.map(({ selectionNumber }) => selectionNumber);
           const carriedPlayers = selections.flatMap(({ playerId }) => (playerId ? [playerId] : []));
@@ -2493,7 +2561,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
             await persistSelectedPlayer(
               selection,
               eventVersionId,
-              promotedPickBySelection.get(selection.selectionId) ?? null
+              writtenPickBySelection.get(selection.selectionId) ?? null
             );
           }
           await requireOtherDraftSlotsCurrent(

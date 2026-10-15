@@ -4147,7 +4147,15 @@ The remaining work proceeds through these independently verifiable gates:
    relies on the promotion insert guard's proof of exact coverage for a deferred candidate instead of
    re-running it, because the candidate facts and proposal it read cannot change, and the candidate's
    promotable and re-synced selections read its lists once) and keeps the evidenced date
-   bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. The old
+   bounds of the version it supersedes. The receipt counts `resyncedSelectionCount`. Since migration
+   0284 a selection whose one current row carries its slot's number-only pick id (promoted before
+   the pick-identity rules) while the candidate names a pick with usable, undeferred custody that no
+   other current selection carries is recorded as `rekeyedSelectionIds` (checked on insert by
+   `outcome_external_candidate_rekeyed_selections_current`; a special-entitlement-cited row is never
+   re-keyed). It is re-promoted in the same re-sync version under the candidate's pick, same player
+   and club, so its draftee asset is re-versioned and a spell starting at it must be re-registered.
+   Preparation lists per session root only the slots that keep the version additive, so a large
+   repair takes several passes. The receipt counts `rekeyedSelectionCount`. The old
    draftee's selection is retired by number, but its asset stays current under 0256. It is excluded
    from arrivals only because its identity decision is no longer current (0254), and a reader of a
    night's current assets sees both players at that number. See "Repairing promoted draftees" in

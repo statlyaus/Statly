@@ -13,10 +13,15 @@
  * resolved at preparation and checked by the database) is left to that promotion rather than written
  * again under a session-less root. A draft that is current canonical except that an identity repair
  * re-targeted some of its draftees (`resyncedSelectionIds`, #853) is not written whole either: only
- * the changed slots are re-promoted, as one scoped later version of each session they sit in.
+ * the changed slots are re-promoted, as one scoped later version of each session they sit in. A
+ * slot promoted before the pick-identity rules under a number-only pick id, for which the candidate
+ * names a pick with usable custody, is re-promoted the same way under that pick (`rekeyedSelectionIds`,
+ * #853, migration 0284).
  * So is a transaction already current canonical with the candidate's own pick ids and players, and a
  * custody observation already canonical with the candidate's facts (`promotedCustodyIds`, #853).
  */
+
+import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 
 export const AFL_TRADE_PICK_SIDE_ISSUE_CODES = [
   'lineage_unresolved',
@@ -75,6 +80,17 @@ export interface AflTradePickLineageDeferral {
    */
   readonly resyncedSelectionIds?: string[];
   /**
+   * Candidate selections whose one current canonical row carries the slot's number-only pick id
+   * (promoted before the pick-identity rules) while the candidate names a pick with usable,
+   * undeferred custody that no other current selection carries (#853, migration 0284). The
+   * promotion re-promotes them with the re-synced slots, in the same scoped session versions, under
+   * the candidate's pick and the same player and club (or the new player, for a slot that is also
+   * re-synced). A draft holding one is not in `promotedDrafts`. Each scoped version stays additive
+   * under migration 0256, so preparation lists, per session root, only the slots that keep it so;
+   * the rest are listed by the next preparation. Sorted unique, present only when non-empty.
+   */
+  readonly rekeyedSelectionIds?: string[];
+  /**
    * Transactions whose trade event is already current canonical under the same stable key from a
    * finalized promotion, with every one of their transfers a promoted asset on that current version,
    * every pick transfer's pick id that asset's pick id and every player transfer's player that
@@ -123,6 +139,292 @@ export interface AflTradeCurrentCanonicalDraftSelection {
   readonly selectionId: string;
   readonly selectionNumber: number;
   readonly playerId: string;
+}
+
+/**
+ * A current canonical draft selection with what a re-key needs (migration 0284,
+ * `outcome_current_canonical_draft_selection_picks`): the stored row's pick and club, the session
+ * root and version it sits on, and whether a special-entitlement exercise or selection claim cites
+ * the stored row (re-versioning it would void that reviewed record).
+ */
+export interface AflTradeCurrentCanonicalSelectionPick extends AflTradeCurrentCanonicalDraftSelection {
+  readonly pickId: string | null;
+  readonly clubId: string;
+  readonly eventId: string;
+  readonly eventVersionId: string;
+  readonly specialEntitlementCited: boolean;
+}
+
+/**
+ * One recorded slot on a version of a draft root that holds a current canonical selection: a
+ * selection (its number and player) or a player asset (its player), and whether it is current under
+ * asset-scoped supersession (migration 0256). Every version of the root is listed, superseded ones
+ * too, because 0256 counts a version's recorded slots whatever later versions retired.
+ */
+export interface AflTradeDraftRootSlot {
+  readonly eventId: string;
+  readonly eventVersionId: string;
+  readonly kind: 'selection' | 'asset';
+  readonly selectionNumber: number | null;
+  readonly playerId: string | null;
+  readonly current: boolean;
+}
+
+/** Canonical draft state a re-key reads at preparation (migration 0284). */
+export interface AflTradePromotedSelectionPickState {
+  readonly selections: readonly AflTradeCurrentCanonicalSelectionPick[];
+  readonly rootSlots: readonly AflTradeDraftRootSlot[];
+}
+
+/**
+ * What re-keying needs beyond the current selections: the candidate's custody, the picks its
+ * deferred issues defer, and canonical draft state.
+ */
+export interface AflTradeSelectionRekeyContext {
+  readonly pickCustody: readonly {
+    readonly custodyId: string;
+    readonly pickId: string;
+    readonly status: string;
+  }[];
+  readonly deferredPickIds: ReadonlySet<string>;
+  readonly state: AflTradePromotedSelectionPickState;
+}
+
+/**
+ * The number-only addresses of a selection's slot: draft year, type and selection number, with the
+ * selection's round and with no round (the form promotions before the pick-identity rules wrote).
+ * The reconciler's fallback key (`pickId` in externalEvidenceReconciliation.ts) and
+ * `outcome_external_selection_number_only_pick_ids` (migration 0284) form the same ids.
+ */
+export function aflTradeNumberOnlyPickIds(selection: {
+  readonly draftYear: number;
+  readonly draftType: string;
+  readonly selectionNumber: number;
+  readonly roundNumber?: number | null;
+}): string[] {
+  const address = (nominalRound: number | null) =>
+    createAflTradeContentAddress('draft-pick', {
+      draftYear: selection.draftYear,
+      draftType: selection.draftType,
+      nominalPick: selection.selectionNumber,
+      nominalRound,
+    });
+  return [...new Set([address(selection.roundNumber ?? null), address(null)])].sort();
+}
+
+/** One slot a scoped session version carries: its number and the player it names. */
+interface CarriedDraftSlot {
+  readonly selectionNumber: number;
+  readonly playerId: string;
+}
+
+/**
+ * Whether a later version of a draft root carrying exactly `carried` would retire no recorded slot it
+ * does not carry, under asset-scoped supersession (migration 0256) as the promoter checks it after
+ * writing (`currentOtherDraftSlots`). A version re-lists, and so retires what it omits, when it
+ * carries at least half of an earlier version's other selection numbers (for a selection) or other
+ * players (for a player asset). A selection at a carried number, and an asset of a carried player
+ * or of a player recorded at a carried number (the one being replaced), are the carried slots
+ * themselves. Without the root's slots nothing can be shown, so the answer is false.
+ */
+export function aflTradeAdditiveDraftVersion(
+  rootSlots: readonly AflTradeDraftRootSlot[],
+  carried: readonly CarriedDraftSlot[]
+): boolean {
+  if (rootSlots.length === 0) return false;
+  const numbers = new Set(carried.map(({ selectionNumber }) => selectionNumber));
+  const players = new Set(carried.map(({ playerId }) => playerId));
+  const replaced = new Set(
+    rootSlots.flatMap((slot) =>
+      slot.kind === 'selection' &&
+      slot.selectionNumber !== null &&
+      slot.playerId !== null &&
+      numbers.has(slot.selectionNumber)
+        ? [slot.playerId]
+        : []
+    )
+  );
+  const byVersion = new Map<string, AflTradeDraftRootSlot[]>();
+  for (const slot of rootSlots) {
+    byVersion.set(slot.eventVersionId, [...(byVersion.get(slot.eventVersionId) ?? []), slot]);
+  }
+  for (const slots of byVersion.values()) {
+    const selections = slots.filter(
+      (slot) => slot.kind === 'selection' && slot.selectionNumber !== null
+    );
+    const assetPlayers = new Set(
+      slots.flatMap((slot) =>
+        slot.kind === 'asset' && slot.playerId !== null ? [slot.playerId] : []
+      )
+    );
+    for (const target of selections) {
+      if (!target.current || numbers.has(target.selectionNumber!)) continue;
+      // A later selection of the same player retires it outright.
+      if (target.playerId !== null && players.has(target.playerId)) return false;
+      const others = selections
+        .filter(
+          (row) =>
+            row.selectionNumber !== target.selectionNumber && row.playerId !== target.playerId
+        )
+        .map(({ selectionNumber }) => selectionNumber!);
+      const carriedOthers = new Set(others.filter((number) => numbers.has(number))).size;
+      if (others.length > 0 && 2 * carriedOthers >= others.length) return false;
+    }
+    for (const target of slots) {
+      if (target.kind !== 'asset' || !target.current || target.playerId === null) continue;
+      if (players.has(target.playerId) || replaced.has(target.playerId)) continue;
+      const others = [...assetPlayers].filter((player) => player !== target.playerId);
+      const carriedOthers = others.filter((player) => players.has(player)).length;
+      if (others.length > 0 && 2 * carriedOthers >= others.length) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The selections a deferred candidate re-keys (#853, migration 0284 checks the same rule): a
+ * selection in a draft that is otherwise current canonical (already promoted, or holding re-synced
+ * slots) whose one current row, at its number and under its club and player (or another player when
+ * it is re-synced), carries the slot's number-only pick id while the candidate is `single_source` or
+ * `corroborated` and names another pick. That pick must have a usable custody row no deferred issue
+ * defers, and no other current selection may carry it (pick-identity rule 4). A row a special
+ * entitlement cites is left: re-versioning it would void the reviewed exercise or claim.
+ *
+ * The re-sync version of each session root must stay additive under migration 0256, together with
+ * the root's re-synced slots, which it always carries. So each root's eligible slots are taken in
+ * selection-number order, each alone or else together with every other eligible slot on its version
+ * (a small scoped version can change only whole), and kept only while the version stays additive. A
+ * slot that does not fit (on a large night, half or more of a version's other slots; on a small
+ * scoped version, one whose unchanged siblings would be retired) is left on its number-only id, for
+ * the next preparation once this one is promoted. Sorted unique ids.
+ */
+/** A candidate selection as `aflTradePromotedDraftState` reads it; a re-key needs its round and pick. */
+export interface AflTradePromotedDraftStateSelection {
+  readonly selectionId: string;
+  readonly draftYear: number;
+  readonly draftType: string;
+  readonly selectionNumber: number;
+  readonly roundNumber?: number | null;
+  readonly pickId?: string;
+  readonly playerId: string | null;
+  readonly clubId: string | null;
+  readonly status: string;
+}
+
+function aflTradeRekeyedSelectionIds(
+  draftSelections: readonly AflTradePromotedDraftStateSelection[],
+  resyncedSelectionIds: ReadonlySet<string>,
+  currentDraftKeys: ReadonlySet<string>,
+  rekey: AflTradeSelectionRekeyContext
+): string[] {
+  const rowsBySelection = new Map<string, AflTradeCurrentCanonicalSelectionPick[]>();
+  const holdersByPick = new Map<string, Set<string>>();
+  for (const row of rekey.state.selections) {
+    rowsBySelection.set(row.selectionId, [...(rowsBySelection.get(row.selectionId) ?? []), row]);
+    if (row.pickId !== null) {
+      holdersByPick.set(
+        row.pickId,
+        (holdersByPick.get(row.pickId) ?? new Set()).add(row.selectionId)
+      );
+    }
+  }
+  const custodyPicks = new Set(
+    rekey.pickCustody
+      .filter(({ status }) => isAflTradeUsableCustodyStatus(status))
+      .map(({ pickId }) => pickId)
+  );
+  const onlyRow = (selectionId: string) => {
+    const rows = rowsBySelection.get(selectionId) ?? [];
+    return rows.length === 1 ? rows[0]! : null;
+  };
+  const eligibleByRoot = new Map<string, AflTradePromotedDraftStateSelection[]>();
+  for (const selection of draftSelections) {
+    const row = onlyRow(selection.selectionId);
+    const pickId = selection.pickId;
+    if (
+      row === null ||
+      pickId === undefined ||
+      !currentDraftKeys.has(draftCoverageKey(selection.draftYear, selection.draftType)) ||
+      selection.playerId === null ||
+      selection.clubId === null ||
+      !isAflTradeUsableCustodyStatus(selection.status) ||
+      row.selectionNumber !== selection.selectionNumber ||
+      row.clubId !== selection.clubId ||
+      (!resyncedSelectionIds.has(selection.selectionId) && row.playerId !== selection.playerId) ||
+      row.specialEntitlementCited
+    ) {
+      continue;
+    }
+    const numberOnly = aflTradeNumberOnlyPickIds(selection);
+    if (
+      row.pickId === null ||
+      !numberOnly.includes(row.pickId) ||
+      row.pickId === pickId ||
+      numberOnly.includes(pickId) ||
+      !custodyPicks.has(pickId) ||
+      rekey.deferredPickIds.has(pickId) ||
+      [...(holdersByPick.get(pickId) ?? [])].some((holder) => holder !== selection.selectionId)
+    ) {
+      continue;
+    }
+    eligibleByRoot.set(row.eventId, [...(eligibleByRoot.get(row.eventId) ?? []), selection]);
+  }
+  const slotsByRoot = new Map<string, AflTradeDraftRootSlot[]>();
+  for (const slot of rekey.state.rootSlots) {
+    slotsByRoot.set(slot.eventId, [...(slotsByRoot.get(slot.eventId) ?? []), slot]);
+  }
+  const rekeyed: string[] = [];
+  for (const [eventId, eligible] of [...eligibleByRoot].sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
+    const slots = slotsByRoot.get(eventId) ?? [];
+    // The root's re-synced slots are always carried, under their new players.
+    const carried: CarriedDraftSlot[] = draftSelections.flatMap((selection) =>
+      resyncedSelectionIds.has(selection.selectionId) &&
+      selection.playerId !== null &&
+      onlyRow(selection.selectionId)?.eventId === eventId
+        ? [{ selectionNumber: selection.selectionNumber, playerId: selection.playerId }]
+        : []
+    );
+    if (!aflTradeAdditiveDraftVersion(slots, carried)) continue;
+    const pending = [...eligible].sort(
+      (left, right) => left.selectionNumber - right.selectionNumber
+    );
+    const taken = new Set<string>();
+    const carriedSlot = (selection: AflTradePromotedDraftStateSelection): CarriedDraftSlot => ({
+      selectionNumber: selection.selectionNumber,
+      playerId: selection.playerId!,
+    });
+    for (const selection of pending) {
+      if (taken.has(selection.selectionId)) continue;
+      // A re-synced slot is carried anyway; re-keying it costs nothing.
+      if (resyncedSelectionIds.has(selection.selectionId)) {
+        taken.add(selection.selectionId);
+        continue;
+      }
+      // The slot alone, or else with every other eligible slot of its version: a small scoped
+      // version can change only whole, or the siblings it omits are retired.
+      const version = onlyRow(selection.selectionId)!.eventVersionId;
+      const attempts = [
+        [selection],
+        pending.filter(
+          (other) =>
+            !taken.has(other.selectionId) &&
+            !resyncedSelectionIds.has(other.selectionId) &&
+            onlyRow(other.selectionId)!.eventVersionId === version
+        ),
+      ];
+      for (const attempt of attempts) {
+        const next = [...carried, ...attempt.map(carriedSlot)];
+        if (!aflTradeAdditiveDraftVersion(slots, next)) continue;
+        carried.push(...attempt.map(carriedSlot));
+        for (const { selectionId } of attempt) taken.add(selectionId);
+        break;
+      }
+    }
+    rekeyed.push(...taken);
+  }
+  return [...new Set(rekeyed)].sort();
 }
 
 /**
@@ -191,10 +493,15 @@ export function aflTradeIssuelessDeferralKept(
   const listed =
     (deferral.promotedDrafts ?? []).length > 0 ||
     (deferral.resyncedSelectionIds ?? []).length > 0 ||
+    (deferral.rekeyedSelectionIds ?? []).length > 0 ||
     (deferral.promotedTransactions ?? []).length > 0 ||
     (deferral.deferredCustodyIds ?? []).length > 0 ||
     (deferral.promotedCustodyIds ?? []).length > 0;
-  const resynced = new Set(deferral.resyncedSelectionIds ?? []);
+  // A re-keyed selection's draft is left alone like a re-synced one's (migration 0284).
+  const resynced = new Set([
+    ...(deferral.resyncedSelectionIds ?? []),
+    ...(deferral.rekeyedSelectionIds ?? []),
+  ]);
   const leftAlone = new Set([
     ...(deferral.promotedDrafts ?? []).map(({ draftYear, draftType }) =>
       draftCoverageKey(draftYear, draftType)
@@ -256,7 +563,12 @@ export interface AflTradePickLineageDeferralScope {
   readonly promotedDraftKeys: ReadonlySet<string>;
   /** Selections whose draftee an identity repair re-targeted; only these slots are re-promoted (#853). */
   readonly resyncedSelectionIds: ReadonlySet<string>;
-  /** Drafts (`draftYear|draftType`) holding a re-synced selection; nothing else of them is written. */
+  /** Selections re-promoted under the candidate's pick in place of a number-only one (#853, 0284). */
+  readonly rekeyedSelectionIds: ReadonlySet<string>;
+  /**
+   * Drafts (`draftYear|draftType`) holding a re-synced or re-keyed selection; nothing else of them is
+   * written.
+   */
   readonly resyncedDraftKeys: ReadonlySet<string>;
   /** Transactions already current canonical through an earlier promotion; left to it. */
   readonly promotedTransactionIds: ReadonlySet<string>;
@@ -264,6 +576,41 @@ export interface AflTradePickLineageDeferralScope {
   readonly deferredCustodyIds: ReadonlySet<string>;
   /** Custody observations already canonical with the candidate's facts; left to that promotion. */
   readonly promotedCustodyIds: ReadonlySet<string>;
+}
+
+/**
+ * The pick transfers and picks a candidate's deferred issues defer: each `lineage:<transferId>`
+ * subject defers its transfer and that transfer's pick, and each `pick-custody:<pickId>[|<time>]`
+ * subject defers its pick. Migration 0284 reads the same subjects.
+ */
+export function aflTradeDeferredPicks(
+  issues: readonly AflTradeReconciliationIssueLike[],
+  transfers: DeferralContentLike['transfers']
+): { deferredTransferIds: Set<string>; deferredPickIds: Set<string> } {
+  const deferredTransferIds = new Set<string>();
+  const deferredPickIds = new Set<string>();
+  const pickIdByTransfer = new Map(
+    transfers.flatMap((transfer) =>
+      transfer.asset.kind === 'pick_entitlement' && transfer.asset.pickId !== undefined
+        ? [[transfer.transferId, transfer.asset.pickId] as const]
+        : []
+    )
+  );
+  for (const issue of issues) {
+    if (issue.severity !== 'deferred') continue;
+    if (issue.subjectKey.startsWith('lineage:')) {
+      const transferId = issue.subjectKey.slice('lineage:'.length);
+      deferredTransferIds.add(transferId);
+      const pickId = pickIdByTransfer.get(transferId);
+      if (pickId !== undefined) deferredPickIds.add(pickId);
+    } else if (issue.subjectKey.startsWith('pick-custody:')) {
+      // `pick-custody:<pickId>|<observedAt>`; a content-addressed pick id never contains `|`.
+      const rest = issue.subjectKey.slice('pick-custody:'.length);
+      const separator = rest.indexOf('|');
+      deferredPickIds.add(separator < 0 ? rest : rest.slice(0, separator));
+    }
+  }
+  return { deferredTransferIds, deferredPickIds };
 }
 
 /**
@@ -275,29 +622,15 @@ export function aflTradePickLineageDeferralScope(
 ): AflTradePickLineageDeferralScope {
   const deferredIssues = content.issues.filter((issue) => issue.severity === 'deferred');
   const resyncedSelectionIds = new Set(content.pickLineageDeferral?.resyncedSelectionIds ?? []);
+  const rekeyedSelectionIds = new Set(content.pickLineageDeferral?.rekeyedSelectionIds ?? []);
   const blockingIssueCount = content.issues.length - deferredIssues.length;
-  const deferredTransferIds = new Set<string>();
-  const deferredPickIds = new Set<string>();
-  const deferredDraftKeys = new Set<string>();
-  const pickIdByTransfer = new Map(
-    content.transfers.flatMap((transfer) =>
-      transfer.asset.kind === 'pick_entitlement' && transfer.asset.pickId !== undefined
-        ? [[transfer.transferId, transfer.asset.pickId] as const]
-        : []
-    )
+  const { deferredTransferIds, deferredPickIds } = aflTradeDeferredPicks(
+    content.issues,
+    content.transfers
   );
+  const deferredDraftKeys = new Set<string>();
   for (const issue of deferredIssues) {
-    if (issue.subjectKey.startsWith('lineage:')) {
-      const transferId = issue.subjectKey.slice('lineage:'.length);
-      deferredTransferIds.add(transferId);
-      const pickId = pickIdByTransfer.get(transferId);
-      if (pickId !== undefined) deferredPickIds.add(pickId);
-    } else if (issue.subjectKey.startsWith('pick-custody:')) {
-      // `pick-custody:<pickId>|<observedAt>`; a content-addressed pick id never contains `|`.
-      const rest = issue.subjectKey.slice('pick-custody:'.length);
-      const separator = rest.indexOf('|');
-      deferredPickIds.add(separator < 0 ? rest : rest.slice(0, separator));
-    } else if (issue.code === 'identity_unresolved' && issue.subjectKey.startsWith('selection:')) {
+    if (issue.code === 'identity_unresolved' && issue.subjectKey.startsWith('selection:')) {
       // `selection:<draftYear>:<draftType>:<selectionNumber>:<role>`; draft types carry no `:`.
       const [, draftYear, draftType] = issue.subjectKey.split(':');
       if (draftYear !== undefined && draftType !== undefined) {
@@ -318,9 +651,13 @@ export function aflTradePickLineageDeferralScope(
       )
     ),
     resyncedSelectionIds,
+    rekeyedSelectionIds,
     resyncedDraftKeys: new Set(
       content.draftSelections
-        .filter(({ selectionId }) => resyncedSelectionIds.has(selectionId))
+        .filter(
+          ({ selectionId }) =>
+            resyncedSelectionIds.has(selectionId) || rekeyedSelectionIds.has(selectionId)
+        )
         .map(({ draftYear, draftType }) => draftCoverageKey(draftYear, draftType))
     ),
     promotedTransactionIds: new Set(content.pickLineageDeferral?.promotedTransactions ?? []),
@@ -359,8 +696,10 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
    */
   readonly draftSelections: Content['draftSelections'];
   /**
-   * Selections re-promoted alone because an identity repair re-targeted their draftee (#853): each
-   * is written into one scoped later version of the session it is current in, never a whole draft.
+   * Selections re-promoted alone because an identity repair re-targeted their draftee, or because
+   * their promoted pick id is number-only and the candidate names the pick (re-keyed; #853,
+   * migration 0284): each is written into one scoped later version of the session it is current
+   * in, never a whole draft.
    */
   readonly resyncedSelections: Content['draftSelections'];
   /** Custody observations this promotion writes (none for a deferred pick, none already canonical). */
@@ -369,8 +708,10 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
   readonly pickLineage: Content['pickLineage'];
   /** Drafts left to their existing current promotion. */
   readonly promotedDraftCount: number;
-  /** Selections re-promoted alone under a changed player (`resyncedSelections.length`). */
+  /** Selections re-promoted alone under a changed player (the re-synced list). */
   readonly resyncedSelectionCount: number;
+  /** Selections re-promoted alone under the candidate's pick (the re-keyed list, migration 0284). */
+  readonly rekeyedSelectionCount: number;
   /** Transactions left to their existing current promotion. */
   readonly promotedTransactionCount: number;
   /** Custody observations without a usable status, left unwritten under the deferral. */
@@ -407,6 +748,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       pickLineage: content.pickLineage,
       promotedDraftCount: 0,
       resyncedSelectionCount: 0,
+      rekeyedSelectionCount: 0,
       promotedTransactionCount: 0,
       deferredCustodyCount: 0,
       promotedCustodyCount: 0,
@@ -449,8 +791,10 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
       ({ selectionId }) =>
         !deferredSelectionIds.has(selectionId) && !promotedSelectionIds.has(selectionId)
     ) as Content['draftSelections'],
-    resyncedSelections: content.draftSelections.filter(({ selectionId }) =>
-      deferral.resyncedSelectionIds.has(selectionId)
+    resyncedSelections: content.draftSelections.filter(
+      ({ selectionId }) =>
+        deferral.resyncedSelectionIds.has(selectionId) ||
+        deferral.rekeyedSelectionIds.has(selectionId)
     ) as Content['draftSelections'],
     pickCustody: content.pickCustody.filter(
       ({ pickId, custodyId }) =>
@@ -463,6 +807,7 @@ export function aflTradePromotionWriteScope<Content extends DeferralContentLike>
     ) as Content['pickLineage'],
     promotedDraftCount: deferral.promotedDraftKeys.size,
     resyncedSelectionCount: deferral.resyncedSelectionIds.size,
+    rekeyedSelectionCount: deferral.rekeyedSelectionIds.size,
     promotedTransactionCount: deferral.promotedTransactionIds.size,
     deferredCustodyCount: deferral.deferredCustodyIds.size,
     promotedCustodyCount: deferral.promotedCustodyIds.size,
@@ -690,27 +1035,28 @@ export function aflTradePromotedCustodyIds(
  *   player. Source selection ids are keyed by draft slot, never by player, so only the player shows
  *   the repair. The promotion re-promotes exactly those slots, as one scoped later version of each
  *   session they are current in; every other selection of the draft must still name its own player.
+ * - `rekeyedSelectionIds` (with `rekey`, migration 0284): selections of either kind of draft whose
+ *   current row carries the slot's number-only pick id while the candidate names a pick with usable
+ *   custody (`aflTradeRekeyedSelectionIds`). A draft holding one is not listed in `promotedDrafts`;
+ *   its re-keyed slots are re-promoted with its re-synced ones.
  *
- * A re-sync repairs the player alone: it keeps the promoted row's pick id and club, so a changed
- * selection may be `unresolved` on the pick side (its pick custody not uniquely resolved) but needs
- * its club and must not be disputed. A draft holding a selection with no current canonical row is
- * neither: the promotion writes it as before. A changed selection that is current more
- * than once (under two roots) cannot be re-promoted into one session, so preparation refuses rather
- * than guess. Drafts sorted by year then type, selection ids sorted; both empty when nothing
- * qualifies.
+ * A re-sync repairs the player and keeps the promoted row's pick id and club, unless the slot is
+ * also re-keyed, so a changed selection may be `unresolved` on the pick side (its pick custody not
+ * uniquely resolved) but needs its club and must not be disputed. A draft holding a selection with
+ * no current canonical row is neither: the promotion writes it as before. A changed selection that
+ * is current more than once (under two roots) cannot be re-promoted into one session, so preparation
+ * refuses rather than guess. Drafts sorted by year then type, selection ids sorted; all empty when
+ * nothing qualifies.
  */
 export function aflTradePromotedDraftState(
-  draftSelections: readonly {
-    readonly selectionId: string;
-    readonly draftYear: number;
-    readonly draftType: string;
-    readonly selectionNumber: number;
-    readonly playerId: string | null;
-    readonly clubId: string | null;
-    readonly status: string;
-  }[],
-  current: readonly AflTradeCurrentCanonicalDraftSelection[]
-): { promotedDrafts: AflTradePromotedDraft[]; resyncedSelectionIds: string[] } {
+  draftSelections: readonly AflTradePromotedDraftStateSelection[],
+  current: readonly AflTradeCurrentCanonicalDraftSelection[],
+  rekey?: AflTradeSelectionRekeyContext
+): {
+  promotedDrafts: AflTradePromotedDraft[];
+  resyncedSelectionIds: string[];
+  rekeyedSelectionIds: string[];
+} {
   const currentBySelection = new Map<string, AflTradeCurrentCanonicalDraftSelection[]>();
   for (const row of current) {
     currentBySelection.set(row.selectionId, [
@@ -761,11 +1107,40 @@ export function aflTradePromotedDraftState(
       resyncedSelectionIds.push(selection.selectionId);
     }
   }
+  const resynced = new Set(resyncedSelectionIds);
+  const rekeyedSelectionIds =
+    rekey === undefined
+      ? []
+      : aflTradeRekeyedSelectionIds(
+          draftSelections,
+          resynced,
+          new Set([
+            ...promotedDrafts.map(({ draftYear, draftType }) =>
+              draftCoverageKey(draftYear, draftType)
+            ),
+            ...draftSelections
+              .filter(({ selectionId }) => resynced.has(selectionId))
+              .map(({ draftYear, draftType }) => draftCoverageKey(draftYear, draftType)),
+          ]),
+          rekey
+        );
+  // A draft holding a re-keyed slot is re-synced slot by slot, not left whole.
+  const rekeyed = new Set(rekeyedSelectionIds);
+  const rekeyedDrafts = new Set(
+    draftSelections
+      .filter(({ selectionId }) => rekeyed.has(selectionId))
+      .map(({ draftYear, draftType }) => draftCoverageKey(draftYear, draftType))
+  );
   return {
-    promotedDrafts: promotedDrafts.sort(
-      (left, right) =>
-        left.draftYear - right.draftYear || left.draftType.localeCompare(right.draftType)
-    ),
-    resyncedSelectionIds: [...new Set(resyncedSelectionIds)].sort(),
+    promotedDrafts: promotedDrafts
+      .filter(
+        ({ draftYear, draftType }) => !rekeyedDrafts.has(draftCoverageKey(draftYear, draftType))
+      )
+      .sort(
+        (left, right) =>
+          left.draftYear - right.draftYear || left.draftType.localeCompare(right.draftType)
+      ),
+    resyncedSelectionIds: [...resynced].sort(),
+    rekeyedSelectionIds,
   };
 }
