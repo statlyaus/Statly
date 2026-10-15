@@ -628,7 +628,7 @@ export default function LeagueTabs({
                         {tab.badge && (
                           <span
                             aria-label={`${tab.badge} unread`}
-                            className="min-w-5 rounded-sm bg-result-loss px-1.5 text-center text-xs font-bold leading-5 text-result-loss-foreground"
+                            className="min-w-5 rounded-sm bg-primary px-1.5 text-center text-xs font-bold leading-5 text-primary-foreground"
                           >
                             {tab.badge}
                           </span>

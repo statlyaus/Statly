@@ -719,6 +719,7 @@ model OutcomeExternalReconciliationDraftSelection {
 
   @@id([candidateId, selectionId])
   @@unique([candidateId, ordinal], map: "outcome_external_reconciliation_selection_ordinal_key")
+  @@unique([candidateId, pickId], map: "outcome_external_reconciliation_draft_selection_pick_key")
   @@index([draftYear, draftType, selectionNumber], map: "outcome_external_reconciliation_selection_lookup_idx")
   @@map("outcome_external_reconciliation_draft_selection")
 }

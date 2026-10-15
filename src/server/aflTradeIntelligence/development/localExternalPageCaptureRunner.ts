@@ -25,11 +25,11 @@ import {
 } from '../source/externalDraftTradeProviderIngestion';
 import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
 import {
-  OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
-  parseOfficialAflDraftOrderTable,
+  isOfficialAflDraftOrderTableParserVersion,
+  officialAflDraftOrderTableParser,
 } from '../source/draftCorroborationAdapter';
 import {
-  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  officialAflDraftSessionParserVersion,
   parseOfficialAflDraftSession,
 } from '../source/officialAflDraftSessionAdapter';
 import {
@@ -76,6 +76,7 @@ import {
   createOfficialAflDraftOrderCaptureCommand,
   OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
   officialAflDraftOrderDecisionKey,
+  officialAflDraftOrderParserVersion,
   type LocalOfficialAflDraftOrderTarget,
 } from './localOfficialAflDraftOrderCapture';
 import {
@@ -159,7 +160,7 @@ const CAPABILITY_PROFILES: Record<
   LocalExternalCaptureCapability,
   {
     provider: 'draftguru' | 'official_afl' | 'footyinfo';
-    parserVersion: string;
+    parserVersion(season: number): string;
     policy: CapturePolicy;
     rawRepositoryId: string;
     decisionKey(season: number): string;
@@ -167,7 +168,7 @@ const CAPABILITY_PROFILES: Record<
 > = {
   'draftguru-trade-index': {
     provider: 'draftguru',
-    parserVersion: DRAFTGURU_TRADE_PARSER_VERSIONS['draftguru-trade-index'],
+    parserVersion: () => DRAFTGURU_TRADE_PARSER_VERSIONS['draftguru-trade-index'],
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
     decisionKey: () => draftguruTradeDecisionKey('draftguru-trade-index'),
@@ -176,7 +177,7 @@ const CAPABILITY_PROFILES: Record<
     provider: 'draftguru',
     // v3 adds each traded pick's eventual selection to v2's received-pick outcome (#886); it has its
     // own recorded decision, and the v2 decision and captures stay valid as recorded.
-    parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
+    parserVersion: () => DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
     decisionKey: () =>
@@ -184,35 +185,35 @@ const CAPABILITY_PROFILES: Record<
   },
   [DRAFTGURU_NATIONAL_YEAR_CAPABILITY]: {
     provider: 'draftguru',
-    parserVersion: DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+    parserVersion: () => DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
     policy: LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-national-raw',
     decisionKey: draftguruNationalYearDecisionKey,
   },
   [OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY]: {
     provider: 'official_afl',
-    parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+    parserVersion: officialAflDraftSessionParserVersion,
     policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
     rawRepositoryId: 'official-afl-session-raw',
     decisionKey: officialAflDraftSessionDecisionKey,
   },
   [OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY]: {
     provider: 'official_afl',
-    parserVersion: OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+    parserVersion: officialAflDraftOrderParserVersion,
     policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
     rawRepositoryId: 'official-afl-order-raw',
     decisionKey: officialAflDraftOrderDecisionKey,
   },
   [OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY]: {
     provider: 'official_afl',
-    parserVersion: OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
+    parserVersion: () => OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
     policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
     rawRepositoryId: 'official-afl-trade-period-raw',
     decisionKey: officialAflTradePeriodDecisionKey,
   },
   [FOOTYINFO_DRAFT_BOARD_CAPABILITY]: {
     provider: 'footyinfo',
-    parserVersion: FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
+    parserVersion: () => FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
     policy: LOCAL_FOOTYINFO_DRAFT_BOARD_CAPTURE_POLICY,
     rawRepositoryId: 'footyinfo-board-raw',
     decisionKey: footyinfoDraftBoardDecisionKey,
@@ -258,6 +259,7 @@ export async function loadRecordedLocalCaptureAuthority(
 ): Promise<RecordedLocalCaptureAuthority> {
   const profile = CAPABILITY_PROFILES[capabilityId];
   const decisionKey = profile.decisionKey(season);
+  const parserVersion = profile.parserVersion(season);
   const stored = await ledger.load();
   const resolution = resolveAflTradeGateEligibility(stored.ledger, {
     gate: 'gate_0a_permission_to_evaluate',
@@ -296,7 +298,7 @@ export async function loadRecordedLocalCaptureAuthority(
     rights.provider !== profile.provider ||
     rights.acquisition.kind !== 'provider_web' ||
     rights.acquisition.capabilityId !== capabilityId ||
-    rights.acquisition.clientVersion !== profile.parserVersion ||
+    rights.acquisition.clientVersion !== parserVersion ||
     rights.scope.seasonRanges.length !== 1 ||
     rate === null ||
     rate.requests !== policy.upstreamRate.requests ||
@@ -306,7 +308,7 @@ export async function loadRecordedLocalCaptureAuthority(
     rights.retention.rawEvidence.maximumDays !== policy.rawRetentionDays
   ) {
     mismatch(
-      `The recorded ${decisionKey} source rights differ from the provider, parser ${profile.parserVersion}, pacing, cache or retention this runner enforces.`
+      `The recorded ${decisionKey} source rights differ from the provider, parser ${parserVersion}, pacing, cache or retention this runner enforces.`
     );
   }
   const egress = rights.conditions.find(
@@ -501,12 +503,17 @@ function parsePage(
       return parseDraftguruNationalYearSelections(html, { capture, draftYear: target.season });
     case OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY:
       return parseOfficialAflDraftSession(html, { capture, anchorSeasonYear: target.season });
-    case OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY:
-      return parseOfficialAflDraftOrderTable(html, {
+    case OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY: {
+      const version = command.request.parserVersion;
+      if (!isOfficialAflDraftOrderTableParserVersion(version)) {
+        throw new TypeError(`Not a draft-order table parser: ${version}`);
+      }
+      return officialAflDraftOrderTableParser(version)(html, {
         capture,
         draftYear: target.season,
         observedAt: command.request.effectiveAt,
       });
+    }
     case OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY:
       return parseOfficialAflTradePeriodDates(html, { capture, seasonYear: target.season });
     case FOOTYINFO_DRAFT_BOARD_CAPABILITY:

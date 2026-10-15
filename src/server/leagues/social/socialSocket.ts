@@ -210,7 +210,8 @@ export async function broadcastLeagueSocialEvent(
 ): Promise<void> {
   const room = getLeagueSocialRoom(envelope.leagueId);
   const sockets = await io.local.in(room).fetchSockets();
-  await Promise.all(
+  // One socket's failed membership lookup must not stop delivery to the others.
+  const results = await Promise.allSettled(
     sockets.map(async (socket) => {
       const userId =
         typeof socket.data.userId === 'string' && socket.data.userId.trim()
@@ -229,6 +230,15 @@ export async function broadcastLeagueSocialEvent(
       socket.emit(envelope.event, envelope);
     })
   );
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      logger.error('Failed to deliver league social event to a socket', {
+        leagueId: envelope.leagueId,
+        event: envelope.event,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+    }
+  }
 }
 
 export async function startLeagueSocialRealtime(io: SocketIOServer): Promise<void> {
@@ -239,6 +249,10 @@ export async function publishLeagueSocialRealtimeEvent(
   io: SocketIOServer,
   envelope: SocialRealtimeEnvelope
 ): Promise<void> {
-  await broadcastLeagueSocialEvent(io, envelope);
-  await socialPubSub.publish(envelope);
+  try {
+    await broadcastLeagueSocialEvent(io, envelope);
+  } finally {
+    // Other instances must still receive the event when local delivery fails.
+    await socialPubSub.publish(envelope);
+  }
 }

@@ -21,7 +21,11 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
   createAflTradeHistoricalCompletionReconciliationAuthority,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
-import { isAflTradePickSideReconciliationIssue } from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
+import {
+  isAflTradePickSideReconciliationIssue,
+  type AflTradeCurrentCanonicalPickCustody,
+  type AflTradeCurrentCanonicalTransaction,
+} from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
 import type { PersistAflTradeExternalReconciliationInput } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
 import { parseAflTradeReconciliationScopeDecisionArguments } from '../../Scripts/record-reconciliation-scope-decision';
 import { parseAflTradePrepareExternalReconciliationArguments } from '../../Scripts/prepare-external-draft-trade-reconciliation';
@@ -109,7 +113,8 @@ function dependencies(
   options: {
     withSelection?: boolean;
     promotedSelectionIds?: readonly string[];
-    promotedTransactions?: readonly { transactionId: string; transferIds: readonly string[] }[];
+    promotedTransactions?: readonly AflTradeCurrentCanonicalTransaction[];
+    promotedCustody?: readonly AflTradeCurrentCanonicalPickCustody[];
   } = {}
 ) {
   const batch = sourceBatch(options.withSelection ?? false);
@@ -156,8 +161,16 @@ function dependencies(
     },
     scopeDecisionRepository: { loadDecision: vi.fn(async () => decision) },
     promotedSelectionRepository: {
-      loadCurrentCanonicalSelectionIds: vi.fn(async () => options.promotedSelectionIds ?? []),
+      // The year page's draftee is unreviewed, so the candidate compares each selection's id alone.
+      loadCurrentCanonicalSelections: vi.fn(async () =>
+        (options.promotedSelectionIds ?? []).map((selectionId) => ({
+          selectionId,
+          selectionNumber: 14,
+          playerId: 'player-canonical-draftee',
+        }))
+      ),
       loadCurrentCanonicalTransactions: vi.fn(async () => options.promotedTransactions ?? []),
+      loadCurrentCanonicalPickCustody: vi.fn(async () => options.promotedCustody ?? []),
     },
   };
   return { built, persisted };
@@ -246,9 +259,9 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
       { completionId, pickLineageDeferral: { decisionId } },
       built
     );
-    expect(
-      built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
-    ).toHaveBeenCalledWith('AFLM');
+    expect(built.promotedSelectionRepository!.loadCurrentCanonicalSelections).toHaveBeenCalledWith(
+      'AFLM'
+    );
     expect(result.pickLineageDeferral).toEqual({
       decisionId,
       promotedDrafts: [{ draftYear: 2025, draftType: 'national' }],
@@ -274,7 +287,7 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     const plain = dependencies(null, { withSelection: true, promotedSelectionIds: [selectionId] });
     await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
     expect(
-      plain.built.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds
+      plain.built.promotedSelectionRepository!.loadCurrentCanonicalSelections
     ).not.toHaveBeenCalled();
   });
 
@@ -287,8 +300,27 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
       transactionId,
       nativeTransferId: 'pick-14',
     });
+    // The trade's one transfer is pick 14; the repository states the pick id of its promoted asset.
+    const first = dependencies(approved);
+    await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      first.built
+    );
+    const pickId = (
+      first.persisted[0]!.candidate as {
+        content: { transfers: { transferId: string; asset: { pickId?: string } }[] };
+      }
+    ).content.transfers.find((transfer) => transfer.transferId === transferId)!.asset.pickId!;
     const { built, persisted } = dependencies(approved, {
-      promotedTransactions: [{ transactionId, transferIds: [transferId, 'external-transfer:x'] }],
+      promotedTransactions: [
+        {
+          transactionId,
+          transferIds: [transferId, 'external-transfer:x'],
+          reviewedLineage: false,
+          transferPickIds: [{ transferId, pickId }],
+          transferPlayerIds: [],
+        },
+      ],
     });
     const result = await prepareAflTradeHistoricalReconciliation(
       { completionId, pickLineageDeferral: { decisionId } },
@@ -305,20 +337,86 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     expect(candidate.content.pickLineageDeferral).toEqual(result.pickLineageDeferral);
     // A transaction with a transfer nobody promoted is not recorded.
     const partial = dependencies(approved, {
-      promotedTransactions: [{ transactionId, transferIds: ['external-transfer:x'] }],
+      promotedTransactions: [
+        {
+          transactionId,
+          transferIds: ['external-transfer:x'],
+          reviewedLineage: false,
+          transferPickIds: [],
+          transferPlayerIds: [],
+        },
+      ],
     });
     const unrecorded = await prepareAflTradeHistoricalReconciliation(
       { completionId, pickLineageDeferral: { decisionId } },
       partial.built
     );
     expect(unrecorded.pickLineageDeferral).toEqual({ decisionId });
+    // Nor one whose pick was promoted under another id (#853): its promotion writes it again.
+    const rekeyed = dependencies(approved, {
+      promotedTransactions: [
+        {
+          transactionId,
+          transferIds: [transferId],
+          reviewedLineage: false,
+          transferPickIds: [{ transferId, pickId: `draft-pick:${digest('0')}` }],
+          transferPlayerIds: [],
+        },
+      ],
+    });
+    const rewritten = await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      rekeyed.built
+    );
+    expect(rewritten.pickLineageDeferral).toEqual({ decisionId });
     // Without the flag the reader is never consulted.
     const plain = dependencies(null, {
-      promotedTransactions: [{ transactionId, transferIds: [transferId] }],
+      promotedTransactions: [
+        {
+          transactionId,
+          transferIds: [transferId],
+          reviewedLineage: false,
+          transferPickIds: [{ transferId, pickId }],
+          transferPlayerIds: [],
+        },
+      ],
     });
     await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
     expect(
       plain.built.promotedSelectionRepository!.loadCurrentCanonicalTransactions
+    ).not.toHaveBeenCalled();
+  });
+
+  it('reads canonical custody under the flag only and records none the candidate does not hold', async () => {
+    const promotedCustody: AflTradeCurrentCanonicalPickCustody[] = [
+      {
+        custodyId: `external-pick-custody:${digest('5')}`,
+        pickId: `draft-pick:${digest('6')}`,
+        observedAt: '2025-10-01T00:00:00.000Z',
+        observedDate: null,
+        draftSeasonYear: 2025,
+        draftKind: 'national_draft',
+        recordedRound: 1,
+        recordedPick: 14,
+        originalClubId: 'club-gws',
+        currentClubId: 'club-western-bulldogs',
+        predecessorCustodyId: null,
+      },
+    ];
+    const { built } = dependencies(approved, { promotedCustody });
+    const result = await prepareAflTradeHistoricalReconciliation(
+      { completionId, pickLineageDeferral: { decisionId } },
+      built
+    );
+    expect(built.promotedSelectionRepository!.loadCurrentCanonicalPickCustody).toHaveBeenCalledWith(
+      'AFLM'
+    );
+    // The trade carries no custody observation, so nothing is left to the earlier promotion.
+    expect(result.pickLineageDeferral).toEqual({ decisionId });
+    const plain = dependencies(null, { promotedCustody });
+    await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
+    expect(
+      plain.built.promotedSelectionRepository!.loadCurrentCanonicalPickCustody
     ).not.toHaveBeenCalled();
   });
 

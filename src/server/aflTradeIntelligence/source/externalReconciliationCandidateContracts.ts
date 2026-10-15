@@ -14,12 +14,17 @@ import {
   createAflTradeContentAddress,
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
-import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from './externalEvidenceReconciliation';
+import {
+  AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
+  isAflTradeDraftPending,
+} from './externalEvidenceReconciliation';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   aflTradeExternalReconciliationSourceAuthoritySchema,
 } from './externalReconciliationSourceAuthorityContracts';
 import {
+  aflTradeIssuelessDeferralKept,
+  aflTradeNumberOnlyPickIds,
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
@@ -161,12 +166,24 @@ const pickOutcomeSchema = z
     receivingClubNominatedSelections: z.number().int().nonnegative().max(90).optional(),
     /** The Footyinfo board pick stating the pick was passed or removed (issue 853). */
     boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
+    /**
+     * A reviewed Footyinfo board, not an official session, proved the draft's membership behind a
+     * count (owner decision 2026-10-14, issue 789). Absent when an official session proved it.
+     */
+    draftProvenBy: z.literal('footyinfo').optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine((record) => {
     const { nominationBasis: basis, receivingClubNominatedSelections: count } = record;
     if ((basis === 'board_pick_passed_or_removed') !== (record.boardPickId !== undefined))
+      return false;
+    // Only a count rests on a proven membership; a board pick or unknown access is no count.
+    if (
+      record.draftProvenBy !== undefined &&
+      basis !== 'club_took_nominated_player' &&
+      basis !== 'club_took_no_nominated_player'
+    )
       return false;
     if (basis === undefined) return count === undefined;
     if (record.disposition !== 'not_used' || record.outcomeStatus !== 'stated') return false;
@@ -357,6 +374,31 @@ const contentFieldsSchema = z
           .max(100)
           .optional(),
         /**
+         * Selections current canonical under another player because an identity repair
+         * re-targeted the draftee (#853, migration 0278): the promotion re-promotes only these
+         * slots, one scoped later version per session root, repairing the player alone (0279).
+         * Sorted unique, each an undisputed candidate selection with a player and club outside every
+         * already-promoted draft, present only when non-empty.
+         */
+        resyncedSelectionIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-draft-selection')).min(1).max(10_000)
+          )
+          .optional(),
+        /**
+         * Selections whose current canonical row carries the slot's number-only pick id while the
+         * candidate names a pick with usable custody (#853, migration 0284): re-promoted with the
+         * re-synced slots under the candidate's pick. Sorted unique, each a `single_source` or
+         * `corroborated` candidate selection with a player and club outside every already-promoted
+         * draft, whose pick has a usable custody row and is not its number-only address; present
+         * only when non-empty.
+         */
+        rekeyedSelectionIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-draft-selection')).min(1).max(10_000)
+          )
+          .optional(),
+        /**
          * Transactions whose trade event is already current canonical with every transfer a
          * promoted asset on it; the promotion writes nothing of them. Sorted unique, each a
          * candidate transaction, present only when non-empty.
@@ -371,6 +413,16 @@ const contentFieldsSchema = z
          * left unwritten. Sorted unique, each a candidate custody row, present only when non-empty.
          */
         deferredCustodyIds: sortedUniqueIdsSchema
+          .pipe(
+            z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
+          )
+          .optional(),
+        /**
+         * Usable custody observations already canonical under a finalized promotion with the
+         * candidate's facts (#853): left unwritten. Sorted unique, each a usable candidate custody
+         * row, present only when non-empty.
+         */
+        promotedCustodyIds: sortedUniqueIdsSchema
           .pipe(
             z.array(aflTradeContentAddressedIdSchema('external-pick-custody')).min(1).max(100_000)
           )
@@ -395,11 +447,33 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
       message: 'A deferred issue requires the approved reconciliation-scope decision.',
     });
   }
-  if (deferred.length === 0 && content.pickLineageDeferral !== undefined) {
+  // Under the decision the reconciler defers every pick-side issue, so a decision that deferred none
+  // (#853) has none blocking either. Before migration 0282 no candidate carried such a decision.
+  if (
+    deferred.length === 0 &&
+    content.pickLineageDeferral !== undefined &&
+    content.issues.some(
+      (issue) => issue.severity === 'blocking' && isAflTradePickSideReconciliationIssue(issue)
+    )
+  ) {
     context.addIssue({
       code: 'custom',
       path: ['pickLineageDeferral'],
-      message: 'A deferral decision is carried only by a candidate that deferred an issue.',
+      message: 'Under the deferral decision every pick-side issue is deferred.',
+    });
+  }
+  // With nothing deferred the decision is carried only for what it lists, and never over a draft
+  // the promotion would write whole (#853, `aflTradeIssuelessDeferralKept`).
+  if (
+    deferred.length === 0 &&
+    content.pickLineageDeferral !== undefined &&
+    !aflTradeIssuelessDeferralKept(content.pickLineageDeferral, content.draftSelections)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickLineageDeferral'],
+      message:
+        'A deferral decision with no deferred issue is carried only by a candidate that lists already-promoted or re-synced records and writes no draft whole.',
     });
   }
   if (
@@ -440,6 +514,66 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
       });
     }
   });
+  (content.pickLineageDeferral?.resyncedSelectionIds ?? []).forEach((selectionId, index) => {
+    const selection = content.draftSelections.find((value) => value.selectionId === selectionId);
+    if (
+      selection === undefined ||
+      selection.playerId === null ||
+      selection.clubId === null ||
+      selection.status === 'disputed' ||
+      promotedDrafts.some(
+        ({ draftYear, draftType }) =>
+          draftYear === selection.draftYear && draftType === selection.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'resyncedSelectionIds', index],
+        message:
+          'A re-synced selection must be an undisputed candidate selection with a player and club, outside every already-promoted draft.',
+      });
+    }
+  });
+  const rekeyedPickIds = (content.pickLineageDeferral?.rekeyedSelectionIds ?? []).map(
+    (selectionId) =>
+      content.draftSelections.find((value) => value.selectionId === selectionId)?.pickId
+  );
+  (content.pickLineageDeferral?.rekeyedSelectionIds ?? []).forEach((selectionId, index) => {
+    // Two re-keyed slots never take one pick (pick-identity rule 4).
+    if (
+      rekeyedPickIds[index] !== undefined &&
+      rekeyedPickIds.indexOf(rekeyedPickIds[index]) !== index
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'rekeyedSelectionIds', index],
+        message: 'Two re-keyed selections cannot take the same pick.',
+      });
+    }
+    const selection = content.draftSelections.find((value) => value.selectionId === selectionId);
+    if (
+      selection === undefined ||
+      selection.playerId === null ||
+      selection.clubId === null ||
+      !isAflTradeUsableCustodyStatus(selection.status) ||
+      aflTradeNumberOnlyPickIds(selection).includes(selection.pickId) ||
+      !content.pickCustody.some(
+        (custody) =>
+          custody.pickId === selection.pickId && isAflTradeUsableCustodyStatus(custody.status)
+      ) ||
+      promotedDrafts.some(
+        ({ draftYear, draftType }) =>
+          draftYear === selection.draftYear && draftType === selection.draftType
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'rekeyedSelectionIds', index],
+        message:
+          'A re-keyed selection must be a usable candidate selection with a player and club whose pick has usable custody and is not a number-only address, outside every already-promoted draft.',
+      });
+    }
+  });
   (content.pickLineageDeferral?.deferredCustodyIds ?? []).forEach((custodyId, index) => {
     const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
     if (row === undefined || isAflTradeUsableCustodyStatus(row.status)) {
@@ -447,6 +581,16 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
         code: 'custom',
         path: ['pickLineageDeferral', 'deferredCustodyIds', index],
         message: 'Deferred custody must be a candidate custody row without a usable status.',
+      });
+    }
+  });
+  (content.pickLineageDeferral?.promotedCustodyIds ?? []).forEach((custodyId, index) => {
+    const row = content.pickCustody.find((custody) => custody.custodyId === custodyId);
+    if (row === undefined || !isAflTradeUsableCustodyStatus(row.status)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'promotedCustodyIds', index],
+        message: 'Already-promoted custody must be a usable candidate custody row.',
       });
     }
   });
@@ -787,6 +931,18 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         path: ['pickOutcomes', index],
         message:
           'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
+      });
+    }
+    // Pending is decided by the evidence: only a pick whose draft the candidate holds no selection
+    // or board pick in, at or after its anchor season, may wait on that draft.
+    if (
+      outcome.outcomeStatus === 'pending' &&
+      (!asset || !isAflTradeDraftPending(content, content.anchorSeasonYear, asset))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'outcomeStatus'],
+        message: 'A pending pick outcome needs a draft the candidate holds no selection in.',
       });
     }
     if (

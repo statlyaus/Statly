@@ -12,6 +12,7 @@ import {
 import {
   aflTradeExternalCanonicalPromotionApprovalEvidenceSchema,
   authenticateAflTradeExternalCanonicalPromotionProposal,
+  type AflTradePromotedSessionResync,
 } from './externalCanonicalPromotionContracts';
 import {
   type AflTradeExternalCanonicalPromotionReviewRepository,
@@ -164,6 +165,42 @@ export class PostgresAflTradeExternalCanonicalPromotionReviewRepository implemen
         datePrecision: row.date_precision,
       })
     );
+  }
+
+  /**
+   * Each given source selection's current canonical row (migration 0278) with the current version
+   * of its session root. A selection current under two roots, or a root with two current versions,
+   * yields two rows, which the proposal derivation refuses.
+   */
+  async loadPromotedSessionResyncs(input: {
+    competition: string;
+    selectionIds: readonly string[];
+  }): Promise<readonly AflTradePromotedSessionResync[]> {
+    if (input.selectionIds.length === 0) return [];
+    const result = await this.client.query<{
+      selection_id: string;
+      supersedes_version_id: string;
+      event_date: string | null;
+      date_precision: unknown;
+      official_name: string;
+    }>(
+      `SELECT current.selection_id,tip.event_version_id AS supersedes_version_id,
+              tip.event_date::text AS event_date,tip.date_precision,tip.official_name
+         FROM outcome_current_canonical_draft_selection_players($1) current
+         JOIN outcome_event_version tip ON tip.event_id=current.event_id
+        WHERE current.selection_id=ANY($2::text[])
+          AND NOT EXISTS (SELECT 1 FROM outcome_event_version successor
+                           WHERE successor.supersedes_version_id=tip.event_version_id)
+        ORDER BY current.selection_id,tip.event_version_id`,
+      [input.competition, [...input.selectionIds]]
+    );
+    return result.rows.map((row) => ({
+      selectionId: row.selection_id,
+      supersedesVersionId: row.supersedes_version_id,
+      eventDate: row.event_date,
+      datePrecision: row.date_precision,
+      officialName: row.official_name,
+    }));
   }
 
   async persistDecision(

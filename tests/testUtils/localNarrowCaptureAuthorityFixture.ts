@@ -20,20 +20,20 @@ import {
   OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
   OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
   officialAflDraftOrderDecisionKey,
+  officialAflDraftOrderParserVersion,
 } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
 import { officialAflDraftSessionDecisionKey } from '@/server/aflTradeIntelligence/development/localOfficialAflDraftSessionCapture';
 import {
   aflTradeGateDecisionProposalSchema,
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
-import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftCorroborationAdapter';
 import {
   OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY,
   OFFICIAL_AFL_TRADE_PERIOD_FIELDS,
   officialAflTradePeriodDecisionKey,
 } from '@/server/aflTradeIntelligence/development/localOfficialAflTradePeriodCapture';
 import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflTradePeriodAdapter';
-import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
+import { officialAflDraftSessionParserVersion } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
 export const OFFICIAL_AFL_DRAFT_SESSION_FIELDS = [
@@ -143,7 +143,7 @@ export function officialAflDraftSessionAuthority(
     provider: 'official_afl',
     dataset: `Official AFL ${input.season} completed national draft sessions`,
     capabilityId: 'official-afl-completed-draft-session',
-    clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+    clientVersion: input.clientVersion ?? officialAflDraftSessionParserVersion(input.season),
     fields: OFFICIAL_AFL_DRAFT_SESSION_FIELDS,
   });
 }
@@ -158,7 +158,7 @@ export function officialAflDraftOrderAuthority(
     provider: 'official_afl',
     dataset: `Official AFL ${input.season} pre-draft national order`,
     capabilityId: OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY,
-    clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+    clientVersion: input.clientVersion ?? officialAflDraftOrderParserVersion(input.season),
     fields: OFFICIAL_AFL_DRAFT_ORDER_FIELDS,
   });
 }

@@ -9,6 +9,13 @@ import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityRe
 import { parseAflTradeExternalReconciliationCandidate } from './externalReconciliationCandidateContracts';
 import type { AflTradeHistoricalCompletionReconciliationAuthority } from './externalReconciliationSourceAuthorityContracts';
 import type {
+  AflTradeCurrentCanonicalDraftSelection,
+  AflTradeCurrentCanonicalPickCustody,
+  AflTradeCurrentCanonicalTransaction,
+  AflTradePickLineageDeferral,
+  AflTradePromotedSelectionPickState,
+} from './pickLineageDeferral';
+import type {
   PersistAflTradeExternalReconciliationInput,
   PersistedAflTradeExternalReconciliation,
 } from './postgresExternalReconciliationRepository';
@@ -59,13 +66,34 @@ export interface AflTradeReconciliationScopeDecisionReader {
   loadDecision(decisionId: string): Promise<AflTradeReconciliationScopeDecision | null>;
 }
 
-/** Current canonical selections and transactions of finalized promotions, by source id. */
+/** Current canonical selections, transactions and custody of finalized promotions, by source id. */
 export interface AflTradePromotedDraftSelectionReader {
-  loadCurrentCanonicalSelectionIds(competition: string): Promise<readonly string[]>;
-  /** Each current canonical trade event with the source transfer ids promoted as assets on it. */
+  /**
+   * Each current canonical selection with its source selection id, selection number and player
+   * (migration 0278), so a re-targeted draftee is re-synced rather than left (#853).
+   */
+  loadCurrentCanonicalSelections(
+    competition: string
+  ): Promise<readonly AflTradeCurrentCanonicalDraftSelection[]>;
+  /**
+   * Each current canonical trade event with the source transfer ids promoted as assets on it and
+   * the pick id of each such asset that names one.
+   */
   loadCurrentCanonicalTransactions(
     competition: string
-  ): Promise<readonly { transactionId: string; transferIds: readonly string[] }[]>;
+  ): Promise<readonly AflTradeCurrentCanonicalTransaction[]>;
+  /** Each custody observation canonical under a finalized promotion, with its facts (#853). */
+  loadCurrentCanonicalPickCustody(
+    competition: string
+  ): Promise<readonly AflTradeCurrentCanonicalPickCustody[]>;
+  /**
+   * Each current canonical selection with its stored pick, club, root and version, and every
+   * recorded slot of those roots (migration 0284), so a selection promoted under a number-only pick
+   * id is re-keyed to the candidate's custody pick (#853). Without it nothing is re-keyed.
+   */
+  loadCurrentCanonicalSelectionPicks?(
+    competition: string
+  ): Promise<AflTradePromotedSelectionPickState>;
 }
 
 export interface PrepareAflTradeHistoricalReconciliationDependencies {
@@ -75,8 +103,9 @@ export interface PrepareAflTradeHistoricalReconciliationDependencies {
   /** Required only to prepare with `pickLineageDeferral`. */
   scopeDecisionRepository?: AflTradeReconciliationScopeDecisionReader;
   /**
-   * Required only to prepare with `pickLineageDeferral`: a draft whose every selection is already
-   * current canonical is recorded on the candidate and left to that promotion.
+   * Required only to prepare with `pickLineageDeferral`: a draft whose every selection, a
+   * transaction whose every transfer and pick id, and a custody observation whose facts are already
+   * current canonical are recorded on the candidate and left to that promotion.
    */
   promotedSelectionRepository?: AflTradePromotedDraftSelectionReader;
 }
@@ -86,12 +115,11 @@ export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTr
   requiresReview: boolean;
   promotionEligible: false;
   publicationEligible: false;
-  /** The deferral the candidate carries, or null when nothing was deferred. */
-  pickLineageDeferral: {
-    decisionId: string;
-    promotedDrafts?: { draftYear: number; draftType: string }[];
-    promotedTransactions?: string[];
-  } | null;
+  /**
+   * The deferral the candidate carries, or null when it deferred nothing and has nothing to re-sync
+   * or leave to an earlier promotion, or would write a draft whole (`aflTradeIssuelessDeferralKept`).
+   */
+  pickLineageDeferral: AflTradePickLineageDeferral | null;
 }
 
 export class AflTradeReconciliationScopeDecisionError extends Error {
@@ -175,20 +203,29 @@ export async function prepareAflTradeHistoricalReconciliation(
   );
   // Drafts already current canonical are left to their promotion; resolved once, before the
   // candidate is built, so the stored candidate says which drafts it leaves and the database checks it.
-  const promotedDraftSelectionIds =
+  const promotedDraftSelections =
     deferralDecision === null
       ? []
-      : [
-          ...(await dependencies.promotedSelectionRepository!.loadCurrentCanonicalSelectionIds(
-            source.competition
-          )),
-        ].sort();
+      : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalSelections(
+          source.competition
+        );
   const promotedTransactions =
     deferralDecision === null
       ? []
       : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalTransactions(
           source.competition
         );
+  const promotedCustody =
+    deferralDecision === null
+      ? []
+      : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalPickCustody(
+          source.competition
+        );
+  const reader = dependencies.promotedSelectionRepository;
+  const promotedSelectionPicks =
+    deferralDecision === null || reader?.loadCurrentCanonicalSelectionPicks === undefined
+      ? undefined
+      : await reader.loadCurrentCanonicalSelectionPicks(source.competition);
   const candidate = parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
       environment: source.environment,
@@ -202,8 +239,10 @@ export async function prepareAflTradeHistoricalReconciliation(
         ? {}
         : {
             pickLineageDeferral: input.pickLineageDeferral,
-            promotedDraftSelectionIds,
+            promotedDraftSelections,
             promotedTransactions,
+            promotedCustody,
+            ...(promotedSelectionPicks === undefined ? {} : { promotedSelectionPicks }),
           }),
     })
   );

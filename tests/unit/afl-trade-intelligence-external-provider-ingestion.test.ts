@@ -721,6 +721,57 @@ describe('pre-draft order scope (issue 853)', () => {
     else expect(check).toThrow(/do not exactly match/);
   });
 
+  it.each([
+    [
+      'the reviewed 14 October snapshot under v5 at its stated date',
+      '20261014083707',
+      '2026-10-14',
+      'official-afl-draft-order-parser/v5',
+      true,
+    ],
+    [
+      'the reviewed snapshot under v4',
+      '20261014083707',
+      '2026-10-14',
+      'official-afl-draft-order-parser/v4',
+      false,
+    ],
+    [
+      'an earlier 2026 snapshot',
+      '20260618142038',
+      '2026-10-14',
+      'official-afl-draft-order-parser/v5',
+      false,
+    ],
+    [
+      'the reviewed snapshot at another date',
+      '20261014083707',
+      '2026-10-15',
+      'official-afl-draft-order-parser/v5',
+      false,
+    ],
+  ])('2026: admits only %s', (_label, timestamp, asOf, parserVersion, admitted) => {
+    const check = () =>
+      validateAflTradeExternalCaptureScope(
+        order({
+          sourceUrl: `https://web.archive.org/web/${timestamp}id_/https://www.afl.com.au/draft/draft-order`,
+          anchorSeasonYear: 2026,
+          effectiveAt: `${asOf}T00:00:00.000Z`,
+          parserVersion,
+        })
+      );
+    if (admitted) expect(check).not.toThrow();
+    else expect(check).toThrow(/do not exactly match/);
+  });
+
+  it('refuses a 2019-2025 page under parser v5', () => {
+    expect(() =>
+      validateAflTradeExternalCaptureScope(
+        order({ sourceUrl: archive, parserVersion: 'official-afl-draft-order-parser/v5' })
+      )
+    ).toThrow(/do not exactly match/);
+  });
+
   it('keeps the general article path for the v1 paragraph parser and refuses archive.org there', () => {
     expect(() =>
       validateAflTradeExternalCaptureScope(

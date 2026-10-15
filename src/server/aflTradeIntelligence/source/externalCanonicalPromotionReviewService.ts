@@ -4,6 +4,7 @@ import { aflTradeContentAddressedIdSchema } from '../artifacts/contentAddress';
 import {
   deriveAflTradeExternalCanonicalPromotionProposal,
   type AflTradeExternalCanonicalPromotionProposal,
+  type AflTradePromotedSessionResync,
 } from './externalCanonicalPromotionContracts';
 import {
   createAflTradeExternalCanonicalPromotionReviewDecision,
@@ -96,9 +97,46 @@ export interface AflTradeExternalCanonicalPromotionReviewRepository {
     competition: string;
     seasons: readonly number[];
   }): Promise<readonly AflTradeReviewedTradePeriodWindow[]>;
+  /**
+   * Where each given source selection is current canonical (#853, migration 0278): the current
+   * version of the session root its one current canonical selection row sits on, with that
+   * version's date, date precision and official name. Needed only to review a deferred candidate
+   * that records re-synced selections; the proposal re-promotes them into those versions' roots.
+   */
+  loadPromotedSessionResyncs?(input: {
+    competition: string;
+    selectionIds: readonly string[];
+  }): Promise<readonly AflTradePromotedSessionResync[]>;
   persistDecision(
     input: PersistAflTradeExternalCanonicalPromotionReviewInput
   ): Promise<PersistedAflTradeExternalCanonicalPromotionReview>;
+}
+
+/**
+ * Canonical state for a candidate's re-synced and re-keyed selections (#853, migration 0284), read
+ * only when it records any.
+ */
+async function promotedSessionResyncs(
+  candidate: AflTradeExternalReconciliationCandidateRecord,
+  repository: AflTradeExternalCanonicalPromotionReviewRepository
+): Promise<readonly AflTradePromotedSessionResync[]> {
+  const deferral = candidate.content.pickLineageDeferral;
+  const selectionIds = [
+    ...new Set([
+      ...(deferral?.resyncedSelectionIds ?? []),
+      ...(deferral?.rekeyedSelectionIds ?? []),
+    ]),
+  ].sort();
+  if (selectionIds.length === 0) return [];
+  if (repository.loadPromotedSessionResyncs === undefined) {
+    throw new TypeError(
+      'A candidate with re-synced selections needs canonical session state to be reviewed.'
+    );
+  }
+  return repository.loadPromotedSessionResyncs({
+    competition: candidate.content.competition,
+    selectionIds,
+  });
 }
 
 export async function recordAflTradeExternalCanonicalPromotionReview(
@@ -121,6 +159,7 @@ export async function recordAflTradeExternalCanonicalPromotionReview(
       input.transactionDates,
       repository
     ),
+    promotedSessionResyncs: await promotedSessionResyncs(candidate, repository),
   });
   const current = await repository.loadCurrentDecision(candidate.candidateId);
   const decision = createAflTradeExternalCanonicalPromotionReviewDecision({
@@ -168,7 +207,9 @@ async function withReviewedTradePeriodWindows(
     if (!seasons.includes(window.seasonYear))
       throw new TypeError('A reviewed trade-period window was returned for an unrequested season.');
     if (windowBySeason.has(window.seasonYear))
-      throw new TypeError(`Season ${window.seasonYear} has more than one reviewed trade-period window.`);
+      throw new TypeError(
+        `Season ${window.seasonYear} has more than one reviewed trade-period window.`
+      );
     windowBySeason.set(window.seasonYear, window.datePrecision);
   }
   return transactionDates.map((reviewed) => {
