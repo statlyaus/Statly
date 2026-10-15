@@ -23,7 +23,8 @@
 --   - that current row's pick id is the slot's number-only address, never an entitlement, custody,
 --     eventual-selection or reviewed id, and differs from the candidate's;
 --   - the candidate's pick has a usable custody row, and no deferred issue defers that pick;
---   - no other current canonical selection carries the candidate's pick (pick-identity rule 4);
+--   - no other current canonical selection carries the candidate's pick, and no other re-keyed slot
+--     of the candidate takes it (pick-identity rule 4);
 --   - no special-entitlement exercise or selection claim cites the current row: re-versioning it
 --     would void that reviewed record;
 --   - the draft is not recorded as already promoted, and every other candidate selection in it is
@@ -158,6 +159,9 @@ BEGIN
                  AND NOT EXISTS (SELECT 1 FROM current other
                                   WHERE other.pick_id=held.pick_id
                                     AND other.selection_id<>held.selection_id)))
+     -- Two re-keyed slots never take one pick (rule 4).
+     AND (SELECT count(DISTINCT held.pick_id) FROM held WHERE held.listed)
+         =(SELECT count(*) FROM held WHERE held.listed)
      AND NOT EXISTS (
            SELECT 1 FROM drafts
              JOIN jsonb_array_elements(COALESCE(candidate#>'{content,pickLineageDeferral,promotedDrafts}','[]'::jsonb)) promoted

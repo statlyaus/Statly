@@ -2503,7 +2503,7 @@ export function reconcileAflTradeExternalEvidence(input: {
           .object({
             selectionId: z.string().min(1),
             selectionNumber: z.number().int().positive(),
-            playerId: z.string().min(1),
+            playerId: z.string().min(1).nullable(),
             pickId: z.string().min(1).nullable(),
             clubId: z.string().min(1),
             eventId: z.string().min(1),

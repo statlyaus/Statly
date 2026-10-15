@@ -561,6 +561,16 @@ describe('re-keying a promoted selection’s number-only pick id (migration 0284
         deferral: { promotedDrafts: [{ draftYear: 2024, draftType: 'national' }] },
       })
     ).toBe(false);
+    // Two re-keyed slots never take one pick, though each alone may.
+    expect(await rekeyedCurrent([{ ...first, pickId: pick }, second], [first.selectionId])).toBe(
+      true
+    );
+    expect(
+      await rekeyedCurrent(
+        [{ ...first, pickId: pick }, rekeyed],
+        [first.selectionId, second.selectionId].sort()
+      )
+    ).toBe(false);
     // A malformed listing.
     expect(await rekeyedCurrent([first, rekeyed], [second.selectionId, second.selectionId])).toBe(
       false

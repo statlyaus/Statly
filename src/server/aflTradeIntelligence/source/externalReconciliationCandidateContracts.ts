@@ -534,7 +534,22 @@ function validatePickLineageDeferral(content: CandidateContent, context: z.Refin
       });
     }
   });
+  const rekeyedPickIds = (content.pickLineageDeferral?.rekeyedSelectionIds ?? []).map(
+    (selectionId) =>
+      content.draftSelections.find((value) => value.selectionId === selectionId)?.pickId
+  );
   (content.pickLineageDeferral?.rekeyedSelectionIds ?? []).forEach((selectionId, index) => {
+    // Two re-keyed slots never take one pick (pick-identity rule 4).
+    if (
+      rekeyedPickIds[index] !== undefined &&
+      rekeyedPickIds.indexOf(rekeyedPickIds[index]) !== index
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickLineageDeferral', 'rekeyedSelectionIds', index],
+        message: 'Two re-keyed selections cannot take the same pick.',
+      });
+    }
     const selection = content.draftSelections.find((value) => value.selectionId === selectionId);
     if (
       selection === undefined ||

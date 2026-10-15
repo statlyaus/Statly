@@ -113,11 +113,10 @@ const state = (
 ) =>
   aflTradePromotedDraftState(
     selections,
-    rows.map(({ selectionId, selectionNumber, playerId }) => ({
-      selectionId,
-      selectionNumber,
-      playerId,
-    })),
+    // `loadCurrentCanonicalSelections` reads only rows with a player.
+    rows.flatMap(({ selectionId, selectionNumber, playerId }) =>
+      playerId === null ? [] : [{ selectionId, selectionNumber, playerId }]
+    ),
     {
       pickCustody:
         options.custody ?? selections.map(({ selectionNumber }) => custody(selectionNumber)),
@@ -196,10 +195,10 @@ describe('classifying re-keyed selections', () => {
     expect(
       aflTradePromotedDraftState(
         selections,
-        rows.map(({ selectionId, selectionNumber, playerId }) => ({
+        rows.map(({ selectionId, selectionNumber }) => ({
           selectionId,
           selectionNumber,
-          playerId,
+          playerId: `player-${selectionNumber}`,
         }))
       )
     ).toEqual({
@@ -216,6 +215,29 @@ describe('classifying re-keyed selections', () => {
       state(selections, [...rows, current(1, { eventVersionId: 'event-version:other' })], {
         rootSlots: night(numbers(6)),
       }).rekeyedSelectionIds
+    ).toEqual(['selection:2', 'selection:3']);
+  });
+
+  it('re-keys neither of two slots naming one pick, and sees a holder with no player', () => {
+    const rows = numbers(6).map((n) => current(n));
+    // Slots 1 and 2 both name slot 1's custody pick: rule 4 lets neither take it.
+    expect(
+      state(
+        [
+          selection(1),
+          selection(2, { pickId: custodyPick(1) }),
+          ...[3, 4, 5, 6].map((n) => selection(n)),
+        ],
+        rows,
+        { custody: numbers(6).map((n) => custody(n)) }
+      ).rekeyedSelectionIds
+    ).toEqual(['selection:3', 'selection:4']);
+    // A current row with no player still holds its pick (migration 0284 counts every holder).
+    expect(
+      state(
+        numbers(6).map((n) => selection(n)),
+        [...rows, current(9, { playerId: null, pickId: custodyPick(1) })]
+      ).rekeyedSelectionIds
     ).toEqual(['selection:2', 'selection:3']);
   });
 
@@ -659,5 +681,20 @@ describe('a deferred candidate that re-keys a promoted selection', () => {
       })
     ).toThrow(refused);
     expect(() => listed([])).toThrow();
+    // Two re-keyed slots taking one pick (pick-identity rule 4).
+    const twin = {
+      ...content.draftSelections[0]!,
+      selectionId: createAflTradeContentAddress('external-draft-selection', {
+        draftYear: 2025,
+        draftType: 'national',
+        selectionNumber: 15,
+      }),
+      selectionNumber: 15,
+    };
+    expect(() =>
+      listed([selection14, twin.selectionId].sort(), {
+        draftSelections: [...content.draftSelections, twin],
+      })
+    ).toThrow(/cannot take the same pick/);
   });
 });

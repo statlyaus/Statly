@@ -46,7 +46,8 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
 
   /**
    * Each current canonical selection row with its stored pick, club, root and version, and whether a
-   * special-entitlement exercise or selection claim cites it (migration 0284); and every recorded
+   * special-entitlement exercise or selection claim cites it (migration 0284), a row with no player
+   * included: rule 4 must see every current holder of a pick, as the 0284 guard does; and every recorded
    * selection and player asset on every version of the roots those rows sit on, with whether it is
    * current under asset-scoped supersession (0256), as the promoter's additive check reads them.
    */
@@ -56,7 +57,7 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
     const selections = await this.client.query<{
       selection_id: string;
       selection_number: number;
-      player_id: string;
+      player_id: string | null;
       pick_id: string | null;
       club_id: string;
       event_id: string;
@@ -71,7 +72,6 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
                            WHERE claim.selection_id=current.canonical_selection_id))
                 AS special_entitlement_cited
          FROM outcome_current_canonical_draft_selection_picks($1) current
-        WHERE current.player_id IS NOT NULL
         ORDER BY current.selection_id,current.event_version_id`,
       [competition]
     );

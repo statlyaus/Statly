@@ -147,7 +147,12 @@ export interface AflTradeCurrentCanonicalDraftSelection {
  * root and version it sits on, and whether a special-entitlement exercise or selection claim cites
  * the stored row (re-versioning it would void that reviewed record).
  */
-export interface AflTradeCurrentCanonicalSelectionPick extends AflTradeCurrentCanonicalDraftSelection {
+export interface AflTradeCurrentCanonicalSelectionPick extends Omit<
+  AflTradeCurrentCanonicalDraftSelection,
+  'playerId'
+> {
+  /** Null for a row with no player: never re-keyed, but still a holder of its pick (rule 4). */
+  readonly playerId: string | null;
   readonly pickId: string | null;
   readonly clubId: string;
   readonly eventId: string;
@@ -460,7 +465,8 @@ function planRootRekeys(input: {
  * slots) whose one current row, at its number and under its club and player (or another player when
  * it is re-synced), carries the slot's number-only pick id while the candidate is `single_source` or
  * `corroborated` and names another pick. That pick must have a usable custody row no deferred issue
- * defers, and no other current selection may carry it (pick-identity rule 4). A row a special
+ * defers, and no other current selection may carry it nor another eligible slot name it
+ * (pick-identity rule 4). A row a special
  * entitlement cites is left: re-versioning it would void the reviewed exercise or claim.
  *
  * The re-sync version of each session root must stay additive under migration 0256, together with
@@ -487,7 +493,7 @@ function aflTradeRekeyedSelectionIds(
     deferredPickIds: rekey.deferredPickIds,
     holdersByPick,
   };
-  const eligible = draftSelections.filter((selection) => {
+  const matching = draftSelections.filter((selection) => {
     const row = onlyRow(selection.selectionId);
     return (
       row !== null &&
@@ -496,6 +502,9 @@ function aflTradeRekeyedSelectionIds(
       rekeyPickMatches(selection, row, selection.pickId, pickContext)
     );
   });
+  // Two slots naming one pick cannot both take it (rule 4), and nothing says which may: neither does.
+  const claims = groupBy(matching, ({ pickId }) => pickId!);
+  const eligible = matching.filter(({ pickId }) => claims.get(pickId!)!.length === 1);
   const slotsByRoot = groupBy(rekey.state.rootSlots, ({ eventId }) => eventId);
   const eligibleByRoot = groupBy(eligible, ({ selectionId }) => onlyRow(selectionId)!.eventId);
   return [
