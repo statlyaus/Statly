@@ -3396,6 +3396,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   through the successor's trade (`special_entitlement_custody_linked`, provisional and single-source).
   The run reads that chain itself; no flag is needed. A special entitlement with no reviewed successor
   still blocks as `special_entitlement_unsupported`: review its custody before regrading.
+- Under rule v8 a future pick (traded before it had a slot) reports at trade the HPN DPVC v3 value
+  of the slot it eventually took (`pick_projection_eventual_slot`): the selection it was used at,
+  else its slot in its own draft's order, else for a pending pick its projected slot. It is
+  hindsight, not what the clubs knew, and changes no value or total. A future pick with no usable
+  slot from 1 to 90 still shows `future_pick_slot_unknown`; confirm its selection or order capture
+  before regrading.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
