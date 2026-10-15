@@ -79,7 +79,7 @@ describe('commissioner authorization', () => {
           teamName: 'Removed',
           isCoCommissioner: true,
           isActive: false,
-          status: 'removed',
+          status: 'REMOVED',
         },
       ].map((member) => ({ ...member, leagueId: FIXTURE.leagueId })),
     });
