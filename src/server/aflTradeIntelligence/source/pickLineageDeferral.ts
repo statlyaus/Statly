@@ -170,6 +170,47 @@ export function draftCoverageKey(draftYear: number, draftType: string): string {
   return `${draftYear}|${draftType}`;
 }
 
+/**
+ * Whether a candidate that deferred no issue keeps its deferral decision (#853). A completion with no
+ * pick-side issue can still need what only the deferral records: a draft whose draftees an identity
+ * repair re-targeted is re-synced slot by slot, and records already canonical are left to their
+ * promotion. So the deferral is kept when it lists something and the promotion writes no draft whole:
+ * every draft the candidate holds is recorded as already promoted or holds a re-synced selection. A
+ * deferred candidate promotes through the metadata-only proposal, which carries no session proof, so
+ * a draft with nothing deferred is never written under it: such a candidate is prepared without the
+ * deferral, exactly as before. Migration 0282 checks the same rule.
+ */
+export function aflTradeIssuelessDeferralKept(
+  deferral: Omit<AflTradePickLineageDeferral, 'decisionId'>,
+  draftSelections: readonly {
+    readonly selectionId: string;
+    readonly draftYear: number;
+    readonly draftType: string;
+  }[]
+): boolean {
+  const listed =
+    (deferral.promotedDrafts ?? []).length > 0 ||
+    (deferral.resyncedSelectionIds ?? []).length > 0 ||
+    (deferral.promotedTransactions ?? []).length > 0 ||
+    (deferral.deferredCustodyIds ?? []).length > 0 ||
+    (deferral.promotedCustodyIds ?? []).length > 0;
+  const resynced = new Set(deferral.resyncedSelectionIds ?? []);
+  const leftAlone = new Set([
+    ...(deferral.promotedDrafts ?? []).map(({ draftYear, draftType }) =>
+      draftCoverageKey(draftYear, draftType)
+    ),
+    ...draftSelections
+      .filter(({ selectionId }) => resynced.has(selectionId))
+      .map(({ draftYear, draftType }) => draftCoverageKey(draftYear, draftType)),
+  ]);
+  return (
+    listed &&
+    draftSelections.every(({ draftYear, draftType }) =>
+      leftAlone.has(draftCoverageKey(draftYear, draftType))
+    )
+  );
+}
+
 interface DeferralContentLike {
   readonly transactions: readonly {
     readonly transactionId: string;
@@ -349,13 +390,13 @@ export interface AflTradePromotionWriteScope<Content extends DeferralContentLike
 /**
  * The records a canonical promotion of this candidate writes. Transactions and every directed asset
  * are always written; the pick side is reduced by the deferral scope. Without a deferral the result is
- * the content unchanged.
+ * the content unchanged. A deferral that deferred no issue (#853) still reduces it by its lists.
  */
 export function aflTradePromotionWriteScope<Content extends DeferralContentLike>(
   content: Content
 ): AflTradePromotionWriteScope<Content> {
   const deferral = aflTradePickLineageDeferralScope(content);
-  if (deferral.deferredIssueCount === 0) {
+  if (deferral.deferral === null) {
     return {
       deferral,
       transactions: content.transactions,

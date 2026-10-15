@@ -27,6 +27,7 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradeDeferredCustodyIds,
+  aflTradeIssuelessDeferralKept,
   aflTradePromotedCustodyIds,
   aflTradePromotedDraftState,
   aflTradePromotedTransactions,
@@ -351,8 +352,8 @@ interface CanonicalPickCustody {
 /**
  * The provider's stated outcome for one received pick. It is single-source evidence kept apart from
  * governed lineage, which needs a proven custody chain: a `selected` outcome names the selection by
- * the stated player and the receiving club, never by pick number. `pending` is a pick whose draft
- * lies after the candidate's anchor season.
+ * the stated player and the receiving club, never by pick number. `pending` is a "not used" pick
+ * whose draft the candidate holds no selection or board pick in, at or after its anchor season.
  */
 interface CanonicalPickOutcome {
   outcomeId: string;
@@ -379,6 +380,12 @@ interface CanonicalPickOutcome {
    * board pick, so a passed or removed pick was not consumed by a nominee.
    */
   boardPickId?: string;
+  /**
+   * With a `club_took_*` basis only: present when a reviewed Footyinfo board, not an official AFL
+   * completed session, proved which selections the draft had (owner decision 2026-10-14, issue
+   * 789). Absent, an official session proved it, so earlier outcomes and candidate ids are unchanged.
+   */
+  draftProvenBy?: 'footyinfo';
   evidenceIds: string[];
 }
 
@@ -1976,26 +1983,49 @@ type PickDispositionEvidence = Evidence & {
 
 type NominationFacts = Pick<
   CanonicalPickOutcome,
-  'nominationBasis' | 'receivingClubNominatedSelections' | 'boardPickId'
+  'nominationBasis' | 'receivingClubNominatedSelections' | 'boardPickId' | 'draftProvenBy'
 >;
 
-type NominatedSelectionCount = { count: number; evidenceIds: string[] };
+type NominatedSelectionCount = {
+  count: number;
+  evidenceIds: string[];
+  /** The source that proved the draft's membership. */
+  provenBy: 'official_afl' | 'footyinfo';
+};
 
 /**
- * Counts a club's selections in one draft that a Draftguru national-year page read at parser v2
- * states were reached through academy or father-son access, with the evidence it read. Returns null
- * unless the draft's membership is proven independently of that page: the reviewed official AFL
- * completed-session claims must list selections 1 to N with no gap, the candidate's selections in
- * the draft must be exactly those numbers, and each must carry exactly one stated category. A
- * partial or disputed year page therefore proves nothing about a club whose rows it omits.
+ * Drafts whose membership a reviewed Footyinfo board may prove when no official AFL completed
+ * session is reviewed for them. Owner decision 2026-10-14 (issue 789): the 2025 national draft has no
+ * official session page. Another draft needs a new owner decision, never just a new entry here.
+ */
+const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|national']);
+
+/**
+ * Counts a club's selections in one draft that a Draftguru national-year page read at parser v2 or
+ * later states were reached through academy or father-son access, with the evidence it read. Returns
+ * null unless the draft's membership is proven independently of that page, by either:
+ *
+ * - the reviewed official AFL completed-session claims, which must list selections 1 to N with no gap;
+ * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no official session claim at all, a
+ *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
+ *   club.
+ *
+ * The candidate's selections in the draft must be exactly those numbers, and every one must carry
+ * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
+ * draft, so its outcomes are unchanged. A board-proven draft may instead have every selection name a
+ * resolved club and each of the receiving club's carry exactly one. A board makes no completeness
+ * claim of its own: only the 1-to-N run and the equality with the candidate's selections guard it.
+ * A partial or disputed year page therefore proves nothing about a club whose rows it omits.
  */
 function createNominatedSelectionCounter(
   evidence: readonly Evidence[],
-  draftSelections: readonly CanonicalDraftSelection[]
+  draftSelections: readonly CanonicalDraftSelection[],
+  boardPicks: readonly CanonicalDraftBoardPick[]
 ): (draftYear: number, draftType: string, clubId: string) => NominatedSelectionCount | null {
   const accessByEvidence = new Map<string, 'open' | 'academy' | 'father_son'>();
   const sessionNumbers = new Map<string, Set<number>>();
   const sessionEvidence = new Set<string>();
+  const boardSelectionEvidence = new Set<string>();
   for (const row of evidence) {
     const claim = row.content.claim;
     if (row.content.provider === 'official_afl' && claim.kind === 'draft_session') {
@@ -2004,6 +2034,10 @@ function createNominatedSelectionCounter(
       claim.selectionNumbers.forEach((number) => numbers.add(number));
       sessionNumbers.set(key, numbers);
       sessionEvidence.add(row.evidenceId);
+      continue;
+    }
+    if (row.content.provider === 'footyinfo' && claim.kind === 'draft_selection') {
+      boardSelectionEvidence.add(row.evidenceId);
       continue;
     }
     if (
@@ -2021,59 +2055,113 @@ function createNominatedSelectionCounter(
     );
     return categories.size === 1 ? [...categories][0]! : null;
   };
-  const membershipProven = (draftYear: number, draftType: string, inDraft: number[]) => {
-    const official = [...(sessionNumbers.get(`${draftYear}|${draftType}`) ?? [])].sort(
-      (left, right) => left - right
-    );
-    return (
-      official.length > 0 &&
-      official.every((number, index) => number === index + 1) &&
-      inDraft.length === official.length &&
-      inDraft.every((number, index) => number === official[index])
-    );
+  const runsFromOne = (numbers: readonly number[]) =>
+    numbers.length > 0 && numbers.every((number, index) => number === index + 1);
+  // The board's selected numbers, when the board alone may prove this draft: every selected board
+  // pick names a number and one resolved club, and no number is held by two clubs.
+  const boardNumbers = (key: string): number[] | null => {
+    if (!FOOTYINFO_BOARD_PROVEN_DRAFTS.has(key) || sessionNumbers.has(key)) return null;
+    const holders = new Map<number, Set<string>>();
+    for (const board of boardPicks) {
+      if (board.status !== 'selected' || `${board.draftYear}|${board.draftType}` !== key) continue;
+      if (board.recordedPickNumber === null || board.clubId === null) return null;
+      const clubs = holders.get(board.recordedPickNumber) ?? new Set<string>();
+      holders.set(board.recordedPickNumber, clubs.add(board.clubId));
+    }
+    if ([...holders.values()].some((clubs) => clubs.size !== 1)) return null;
+    const numbers = [...holders.keys()].sort((left, right) => left - right);
+    return runsFromOne(numbers) ? numbers : null;
+  };
+  const provenMembership = (
+    draftYear: number,
+    draftType: string,
+    inDraft: readonly number[]
+  ): NominatedSelectionCount['provenBy'] | null => {
+    const key = `${draftYear}|${draftType}`;
+    const official = [...(sessionNumbers.get(key) ?? [])].sort((left, right) => left - right);
+    const [numbers, provenBy] = sessionNumbers.has(key)
+      ? [runsFromOne(official) ? official : null, 'official_afl' as const]
+      : [boardNumbers(key), 'footyinfo' as const];
+    return numbers !== null &&
+      inDraft.length === numbers.length &&
+      inDraft.every((number, index) => number === numbers[index])
+      ? provenBy
+      : null;
   };
   return (draftYear, draftType, clubId) => {
     const inDraft = draftSelections
       .filter((selection) => selection.draftYear === draftYear && selection.draftType === draftType)
       .sort((left, right) => left.selectionNumber - right.selectionNumber);
-    if (
-      !membershipProven(
-        draftYear,
-        draftType,
-        inDraft.map(({ selectionNumber }) => selectionNumber)
-      ) ||
-      inDraft.some((selection) => accessOf(selection) === null)
-    ) {
-      return null;
-    }
+    const provenBy = provenMembership(
+      draftYear,
+      draftType,
+      inDraft.map(({ selectionNumber }) => selectionNumber)
+    );
     const clubs = inDraft.filter((selection) => selection.clubId === clubId);
+    // The receiving-club-only rule applies to a board-proven draft alone, so an official-proven
+    // draft is decided exactly as before 2026-10-14.
+    const accessComplete =
+      inDraft.every((selection) => accessOf(selection) !== null) ||
+      (provenBy === 'footyinfo' &&
+        inDraft.every((selection) => selection.clubId !== null) &&
+        clubs.every((selection) => accessOf(selection) !== null));
+    if (provenBy === null || !accessComplete) return null;
+    const membershipEvidence =
+      provenBy === 'official_afl' ? sessionEvidence : boardSelectionEvidence;
     return {
       count: clubs.filter((selection) => accessOf(selection) !== 'open').length,
       evidenceIds: sortedUnique(
         clubs.flatMap(({ evidenceIds }) =>
-          evidenceIds.filter((id) => accessByEvidence.has(id) || sessionEvidence.has(id))
+          evidenceIds.filter((id) => accessByEvidence.has(id) || membershipEvidence.has(id))
         )
       ),
+      provenBy,
     };
   };
 }
 
 /**
- * A "not used" pick in a draft after the anchor season is pending. Otherwise it is stated, and a
- * national pick also records whether the receiving club took a nominated player in that draft: the
- * only sourceable fact about a pick spent matching a bid or passed. Without complete access
- * evidence the count is left unknown.
+ * Whether a pick's draft is still to be held, judged by the evidence (owner direction 2026-10-14,
+ * issue 789): the candidate holds no selection, and no Footyinfo board pick, in that draft year and
+ * type. A board prints a pick only as selected, passed or removed, all outcomes of a held draft. The
+ * anchor season alone cannot say, since a capture of the next draft's indicative order raises the
+ * anchor to that draft's year before anyone is selected. A draft before the anchor season has been
+ * held, so a draft there with no selections stays a gap in the evidence, never pending.
+ */
+export function isAflTradeDraftPending(
+  held: {
+    draftSelections: readonly DraftKey[];
+    draftBoardPicks?: readonly DraftKey[] | undefined;
+  },
+  anchorSeasonYear: number,
+  draft: DraftKey
+): boolean {
+  const inDraft = (record: DraftKey) =>
+    record.draftYear === draft.draftYear && record.draftType === draft.draftType;
+  return (
+    draft.draftYear >= anchorSeasonYear &&
+    !held.draftSelections.some(inDraft) &&
+    !(held.draftBoardPicks ?? []).some(inDraft)
+  );
+}
+type DraftKey = { draftYear: number; draftType: string };
+
+/**
+ * A "not used" pick whose draft is pending (see `isAflTradeDraftPending`) is pending. Otherwise it
+ * is stated, and a national pick also records whether the receiving club took a nominated player in
+ * that draft: the only sourceable fact about a pick spent matching a bid or passed. Without complete
+ * access evidence the count is left unknown.
  */
 function classifyNotUsedPick(
   asset: { draftYear: number; draftType: string },
-  anchorSeasonYear: number,
+  draftPending: boolean,
   countNominated: () => NominatedSelectionCount | null
 ): {
   status: CanonicalPickOutcome['outcomeStatus'];
   nomination: NominationFacts;
   evidenceIds: string[];
 } {
-  if (asset.draftYear > anchorSeasonYear) {
+  if (draftPending) {
     return { status: 'pending', nomination: {}, evidenceIds: [] };
   }
   if (asset.draftType !== 'national') return { status: 'stated', nomination: {}, evidenceIds: [] };
@@ -2091,13 +2179,15 @@ function classifyNotUsedPick(
       nominationBasis:
         counted.count > 0 ? 'club_took_nominated_player' : 'club_took_no_nominated_player',
       receivingClubNominatedSelections: counted.count,
+      ...(counted.provenBy === 'footyinfo' ? { draftProvenBy: 'footyinfo' as const } : {}),
     },
     evidenceIds: counted.evidenceIds,
   };
 }
 
 /**
- * The Footyinfo board pick that settles a stated "not used" pick with no access evidence: the one
+ * The Footyinfo board pick that settles a stated "not used" pick with no access evidence, or one
+ * whose count rests on the board's own membership: the one
  * board pick in the pick's draft and round held by the receiving club whose route hands it from the
  * sending club to the receiving club once (and starts at the pick's original club, when the
  * transfer names one). It counts only when that pick was passed or removed. Nothing is matched by
@@ -2145,7 +2235,8 @@ function reconcilePickDispositions(input: {
   const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
   const nominatedSelections = createNominatedSelectionCounter(
     input.evidence,
-    input.draftSelections
+    input.draftSelections,
+    input.boardPicks
   );
   const outcomes: CanonicalPickOutcome[] = [];
   for (const row of dispositions) {
@@ -2216,11 +2307,19 @@ function reconcilePickDispositions(input: {
       continue;
     }
     if (claim.disposition === 'not_used') {
-      const outcome = classifyNotUsedPick(asset, input.anchorSeasonYear, () =>
+      const draftPending = isAflTradeDraftPending(
+        { draftSelections: input.draftSelections, draftBoardPicks: input.boardPicks },
+        input.anchorSeasonYear,
+        asset
+      );
+      const outcome = classifyNotUsedPick(asset, draftPending, () =>
         nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
       );
+      // The board's own passed or removed pick comes before a count the board's membership proved,
+      // since it states this pick's fate directly; a count an official session proved is kept.
       const board =
-        outcome.nomination.nominationBasis === 'no_access_evidence'
+        outcome.nomination.nominationBasis === 'no_access_evidence' ||
+        outcome.nomination.draftProvenBy === 'footyinfo'
           ? notUsedBoardPick(input.boardPicks, asset, transfer.fromClubId, receivingClubId)
           : null;
       if (board !== null) {
@@ -3216,7 +3315,15 @@ export function reconcileAflTradeExternalEvidence(input: {
       (value) => value.pickId === transferredPick.pickId
     );
     if (matchingSelections.length !== 1) {
-      if (matchingSelections.length === 0 && transferredPick.draftYear > anchorSeasonYear) {
+      // A pick in a draft still to be held has no selection yet, so it has no lineage to resolve.
+      if (
+        matchingSelections.length === 0 &&
+        isAflTradeDraftPending(
+          { draftSelections, draftBoardPicks: draftBoard.records },
+          anchorSeasonYear,
+          transferredPick
+        )
+      ) {
         return;
       }
       issues.push({
@@ -3323,9 +3430,12 @@ export function reconcileAflTradeExternalEvidence(input: {
     // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
-    // Only a candidate that actually deferred something carries the decision, so a candidate prepared
-    // with the option but no pick-side issue is byte-identical to one prepared without it.
-    ...(deferredIssueCount === 0 || recordedDeferral === undefined
+    // A candidate carries the decision when it deferred something, or when it deferred nothing but
+    // lists records left to an earlier promotion or re-synced and writes no draft whole (#853, a
+    // re-targeted draftee in a completion with no pick-side issue). Otherwise a candidate prepared
+    // with the option is byte-identical to one prepared without it.
+    ...(recordedDeferral === undefined ||
+    (deferredIssueCount === 0 && !aflTradeIssuelessDeferralKept(recordedDeferral, draftSelections))
       ? {}
       : { pickLineageDeferral: recordedDeferral }),
     issues: severed

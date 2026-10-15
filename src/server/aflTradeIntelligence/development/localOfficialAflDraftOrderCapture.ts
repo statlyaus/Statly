@@ -1,19 +1,25 @@
 import { sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
-import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from '../source/draftCorroborationAdapter';
+import type { OfficialAflDraftOrderTableParserVersion } from '../source/draftCorroborationAdapter';
 import type { AflTradeExternalProviderIngestionCommand } from '../source/externalDraftTradeProviderIngestion';
-import { reviewedOfficialAflDraftOrderPages } from '../source/officialAflDraftOrderSourceScope';
+import {
+  reviewedOfficialAflDraftOrderPages,
+  reviewedOfficialAflDraftOrderParserVersion,
+} from '../source/officialAflDraftOrderSourceScope';
 import {
   createLocalNarrowCaptureGateRequest,
   LocalExternalCaptureError,
   type LocalNarrowCaptureAuthority,
 } from './localNarrowCaptureAuthority';
 
-/** The governed capability id; parser v4 reads the reviewed pre-draft order tables under it. */
+/**
+ * The governed capability id; parsers v4 (2019-2025) and v5 (2026) read the reviewed pre-draft
+ * order tables under it.
+ */
 export const OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY = 'official-afl-indicative-draft-order';
 
 /**
- * The field boundary parser v4 emits: every non-null leaf of a `pick_custody` claim. The recorded
- * rights must name exactly these; staging refuses a capture that emits any other leaf.
+ * The field boundary parsers v4 and v5 emit: every non-null leaf of a `pick_custody` claim. The
+ * recorded rights must name exactly these; staging refuses a capture that emits any other leaf.
  */
 export const OFFICIAL_AFL_DRAFT_ORDER_FIELDS = [
   'pick_custody.currentClub.recordedName',
@@ -26,12 +32,29 @@ export const OFFICIAL_AFL_DRAFT_ORDER_FIELDS = [
 ] as const;
 
 /**
- * The owner records one narrow decision per season and parser version, for example
- * `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. The runner never falls back
- * to another season or parser version.
+ * The table parser reviewed for a season's order page: v4 for 2019-2025, v5 for 2026. A season
+ * with no reviewed page has none.
+ */
+export function officialAflDraftOrderParserVersion(
+  season: number
+): OfficialAflDraftOrderTableParserVersion {
+  const version = reviewedOfficialAflDraftOrderParserVersion(season);
+  if (version === null) {
+    throw new LocalExternalCaptureError(
+      'INVALID_TARGET',
+      `No reviewed Official AFL pre-draft order page is enumerable for ${season}.`
+    );
+  }
+  return version;
+}
+
+/**
+ * The owner records one narrow decision per season and that season's reviewed parser version, for
+ * example `official-afl-indicative-draft-order-issue579-private-2022-order-v4` or
+ * `…-2026-order-v5`. The runner never falls back to another season or parser version.
  */
 export function officialAflDraftOrderDecisionKey(season: number): string {
-  const parser = /\/(v[1-9]\d*)$/.exec(OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION)![1]!;
+  const parser = /\/(v[1-9]\d*)$/.exec(officialAflDraftOrderParserVersion(season))![1]!;
   return `${OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY}-issue579-private-${season}-order-${parser}`;
 }
 
@@ -126,7 +149,8 @@ export function createOfficialAflDraftOrderCaptureCommand(
       sourceUrl: input.target.sourceUrl,
       capturedAt: input.capturedAt,
       effectiveAt: input.target.effectiveAt,
-      parserVersion: OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
+      // The parser the season's scope entry names; the ingestion gate refuses any other.
+      parserVersion: officialAflDraftOrderParserVersion(input.target.season),
       fieldManifestSha256: sha256AflTradeCanonicalJson(rights.fields),
       maximumBytes: input.maximumBytes,
     },
