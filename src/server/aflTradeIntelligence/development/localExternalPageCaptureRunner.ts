@@ -29,7 +29,7 @@ import {
   officialAflDraftOrderTableParser,
 } from '../source/draftCorroborationAdapter';
 import {
-  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  officialAflDraftSessionParserVersion,
   parseOfficialAflDraftSession,
 } from '../source/officialAflDraftSessionAdapter';
 import {
@@ -192,7 +192,7 @@ const CAPABILITY_PROFILES: Record<
   },
   [OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY]: {
     provider: 'official_afl',
-    parserVersion: () => OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+    parserVersion: officialAflDraftSessionParserVersion,
     policy: LOCAL_OFFICIAL_AFL_SESSION_CAPTURE_POLICY,
     rawRepositoryId: 'official-afl-session-raw',
     decisionKey: officialAflDraftSessionDecisionKey,

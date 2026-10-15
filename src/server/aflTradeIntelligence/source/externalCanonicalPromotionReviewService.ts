@@ -112,12 +112,21 @@ export interface AflTradeExternalCanonicalPromotionReviewRepository {
   ): Promise<PersistedAflTradeExternalCanonicalPromotionReview>;
 }
 
-/** Canonical state for a candidate's re-synced selections, read only when it records any (#853). */
+/**
+ * Canonical state for a candidate's re-synced and re-keyed selections (#853, migration 0284), read
+ * only when it records any.
+ */
 async function promotedSessionResyncs(
   candidate: AflTradeExternalReconciliationCandidateRecord,
   repository: AflTradeExternalCanonicalPromotionReviewRepository
 ): Promise<readonly AflTradePromotedSessionResync[]> {
-  const selectionIds = candidate.content.pickLineageDeferral?.resyncedSelectionIds ?? [];
+  const deferral = candidate.content.pickLineageDeferral;
+  const selectionIds = [
+    ...new Set([
+      ...(deferral?.resyncedSelectionIds ?? []),
+      ...(deferral?.rekeyedSelectionIds ?? []),
+    ]),
+  ].sort();
   if (selectionIds.length === 0) return [];
   if (repository.loadPromotedSessionResyncs === undefined) {
     throw new TypeError(
