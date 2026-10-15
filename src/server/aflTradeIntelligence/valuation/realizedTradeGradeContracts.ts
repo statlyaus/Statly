@@ -723,6 +723,45 @@ const batchContentFieldsSchema = z
 type BatchContent = z.infer<typeof batchContentFieldsSchema>;
 type Issue = readonly [path: string, message: string];
 
+/** Leg features each rule introduced: the rules that predate one refuse any leg that uses it. */
+const RULE_GATED_LEG_FEATURES: ReadonlyArray<
+  readonly [
+    rules: ReadonlySet<AflTradeRealizedGradeRuleVersion>,
+    used: (leg: AflTradeRealizedTradeGradeLeg) => boolean,
+    message: string,
+  ]
+> = [
+  [
+    new Set<AflTradeRealizedGradeRuleVersion>(['afl-trade-realized-grade-rule/v1']),
+    (leg) => leg.corroboratedBy !== undefined,
+    'Rule v1 treats every pick outcome as single-source.',
+  ],
+  [
+    UNPROVEN_DRAFT_RULES,
+    (leg) => leg.draftProvenBy !== undefined,
+    'Only rule v5 and later name a board-proven draft.',
+  ],
+  [
+    UNPROJECTED_RULES,
+    (leg) =>
+      leg.basis === 'pick_projected_from_order' ||
+      PROJECTION_REASONS.some((reason) => leg.reasons.includes(reason)),
+    'Only rule v6 and later project a pick from a draft order.',
+  ],
+  [
+    NO_SPECIAL_CUSTODY_RULES,
+    (leg) =>
+      leg.specialEntitlement !== undefined ||
+      leg.reasons.includes('special_entitlement_custody_linked'),
+    'Only rule v7 and later follow a special entitlement’s custody chain.',
+  ],
+  [
+    NO_EVENTUAL_SLOT_RULES,
+    (leg) => leg.atTrade.kind === 'pick_projection_eventual_slot',
+    'Only rule v8 and later value a future pick at its eventual slot.',
+  ],
+];
+
 function batchShapeIssues(content: BatchContent): Issue[] {
   const issues: Issue[] = [];
   const ungradedIds = content.ungraded.map(({ transactionId }) => transactionId);
@@ -738,45 +777,12 @@ function batchShapeIssues(content: BatchContent): Issue[] {
     issues.push(['trades', 'A batch grades or names at least one trade.']);
   if (content.limitation !== RULE_LIMITATIONS[content.ruleVersion])
     issues.push(['limitation', 'The limitation must be the one its rule version states.']);
-  if (
-    content.ruleVersion === 'afl-trade-realized-grade-rule/v1' &&
-    content.trades.some(({ legs }) => legs.some((leg) => leg.corroboratedBy !== undefined))
-  )
-    issues.push(['trades', 'Rule v1 treats every pick outcome as single-source.']);
-  if (
-    UNPROVEN_DRAFT_RULES.has(content.ruleVersion) &&
-    content.trades.some(({ legs }) => legs.some((leg) => leg.draftProvenBy !== undefined))
-  )
-    issues.push(['trades', 'Only rule v5 and later name a board-proven draft.']);
-  if (
-    UNPROJECTED_RULES.has(content.ruleVersion) &&
-    content.trades.some(({ legs }) =>
-      legs.some(
-        (leg) =>
-          leg.basis === 'pick_projected_from_order' ||
-          PROJECTION_REASONS.some((reason) => leg.reasons.includes(reason))
-      )
+  for (const [rules, used, message] of RULE_GATED_LEG_FEATURES)
+    if (
+      rules.has(content.ruleVersion) &&
+      content.trades.some(({ legs }) => legs.some((leg) => used(leg)))
     )
-  )
-    issues.push(['trades', 'Only rule v6 and later project a pick from a draft order.']);
-  if (
-    NO_SPECIAL_CUSTODY_RULES.has(content.ruleVersion) &&
-    content.trades.some(({ legs }) =>
-      legs.some(
-        (leg) =>
-          leg.specialEntitlement !== undefined ||
-          leg.reasons.includes('special_entitlement_custody_linked')
-      )
-    )
-  )
-    issues.push(['trades', 'Only rule v7 and later follow a special entitlement’s custody chain.']);
-  if (
-    NO_EVENTUAL_SLOT_RULES.has(content.ruleVersion) &&
-    content.trades.some(({ legs }) =>
-      legs.some((leg) => leg.atTrade.kind === 'pick_projection_eventual_slot')
-    )
-  )
-    issues.push(['trades', 'Only rule v8 and later value a future pick at its eventual slot.']);
+      issues.push(['trades', message]);
   const summary = content.summary;
   if (
     summary.complete !== count('complete') ||
