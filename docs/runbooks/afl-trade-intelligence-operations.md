@@ -939,6 +939,14 @@ supersede production Gate authority, and production execution cannot reuse non-p
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
    lineage or a new candidate without the deferral, which supersedes it.
 
+   **Board-only clubs (#853, migrations 0285 and 0286).** The identity-review queue of a completion
+   with a Footyinfo board lists every club a board pick routes through or holds, and the board's
+   selected players, not only the clubs of its selections. A subject whose current approved decision
+   already covers the names it observes loads without a new review; a new subject is reviewed like any
+   other. Before 0286, preparing a completion whose board route stayed unresolved failed at
+   finalization with 22023 ("cannot get array length of a scalar"). It now keeps the record's
+   `board-pick:club:` issue instead.
+
    **Re-keying number-only selection picks (#853, migration 0284).** A selection promoted before the
    pick-identity rules carries its slot's number-only pick id. When the candidate names the pick
    with usable custody, preparation records the slot under `pickLineageDeferral.rekeyedSelectionIds`

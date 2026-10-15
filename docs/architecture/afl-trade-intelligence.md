@@ -4647,9 +4647,17 @@ The remaining work proceeds through these independently verifiable gates:
        is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`
        club resolutions. A club with no resolution leaves the record unusable and is one
-       `board-pick:club:<code>` identity issue, which is pick-side and so deferrable. The key is
-       present only when a board is reconciled, so earlier candidate ids are unchanged. Three uses
-       follow.
+       `board-pick:club:<code>` identity issue, which is pick-side and so deferrable. The
+       completion's identity-review package (`externalIdentityReviewWorkBuilder.ts`) holds every
+       board row's holder, route clubs and selected player as subjects, so a club that appears only
+       in a route or as the holder of a passed or removed pick still loads its current reviewed
+       decision. Before this, a 2025 completion left Port Adelaide's routes unresolved because it
+       made no 2025 selection. Migration 0285 teaches the database's two copies of the observation
+       rule the board-pick claim: the identity-review insert guard and canonical-target
+       registration's rebuilt work item. Rule 5 skips a record whose route did not resolve
+       (migration 0286).
+       The key is present only when a board is reconciled, so earlier candidate ids are unchanged.
+       Three uses follow.
        - **Onward hops.** Some eventual-selection groups are refused by the walk above: a closed loop,
          a merge or two possible orders. Some reach two custody picks with nothing to choose between
          them. For these groups only, reconciliation reads the board route of the pick the player was
