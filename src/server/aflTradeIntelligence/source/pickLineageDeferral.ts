@@ -218,6 +218,66 @@ interface CarriedDraftSlot {
   readonly playerId: string;
 }
 
+function groupBy<Item>(items: readonly Item[], key: (item: Item) => string): Map<string, Item[]> {
+  const groups = new Map<string, Item[]>();
+  for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item]);
+  return groups;
+}
+
+/** A successor carrying at least half of an origin's other slots re-lists it (migration 0256). */
+function relists(otherCount: number, carriedCount: number): boolean {
+  return otherCount > 0 && 2 * carriedCount >= otherCount;
+}
+
+/**
+ * Whether a version carrying `numbers` and `players` leaves every current selection of one earlier
+ * version that it does not carry current: none of its players is carried at another number, and it
+ * carries fewer than half of each target's other selection numbers.
+ */
+function versionSelectionsStayCurrent(
+  slots: readonly AflTradeDraftRootSlot[],
+  numbers: ReadonlySet<number>,
+  players: ReadonlySet<string>
+): boolean {
+  const selections = slots.filter(
+    (slot) => slot.kind === 'selection' && slot.selectionNumber !== null
+  );
+  return selections.every((target) => {
+    if (!target.current || numbers.has(target.selectionNumber!)) return true;
+    // A later selection of the same player retires it outright.
+    if (target.playerId !== null && players.has(target.playerId)) return false;
+    const others = selections
+      .filter(
+        (row) => row.selectionNumber !== target.selectionNumber && row.playerId !== target.playerId
+      )
+      .map(({ selectionNumber }) => selectionNumber!);
+    return !relists(others.length, new Set(others.filter((number) => numbers.has(number))).size);
+  });
+}
+
+/**
+ * Whether a version carrying `players` leaves every current player asset of one earlier version
+ * current, other than a carried player's or a replaced one's: it carries fewer than half of each
+ * target's other players.
+ */
+function versionAssetsStayCurrent(
+  slots: readonly AflTradeDraftRootSlot[],
+  players: ReadonlySet<string>,
+  replaced: ReadonlySet<string>
+): boolean {
+  const assetPlayers = new Set(
+    slots.flatMap((slot) =>
+      slot.kind === 'asset' && slot.playerId !== null ? [slot.playerId] : []
+    )
+  );
+  return slots.every((target) => {
+    if (target.kind !== 'asset' || !target.current || target.playerId === null) return true;
+    if (players.has(target.playerId) || replaced.has(target.playerId)) return true;
+    const others = [...assetPlayers].filter((player) => player !== target.playerId);
+    return !relists(others.length, others.filter((player) => players.has(player)).length);
+  });
+}
+
 /**
  * Whether a later version of a draft root carrying exactly `carried` would retire no recorded slot it
  * does not carry, under asset-scoped supersession (migration 0256) as the promoter checks it after
@@ -244,41 +304,154 @@ export function aflTradeAdditiveDraftVersion(
         : []
     )
   );
-  const byVersion = new Map<string, AflTradeDraftRootSlot[]>();
-  for (const slot of rootSlots) {
-    byVersion.set(slot.eventVersionId, [...(byVersion.get(slot.eventVersionId) ?? []), slot]);
-  }
-  for (const slots of byVersion.values()) {
-    const selections = slots.filter(
-      (slot) => slot.kind === 'selection' && slot.selectionNumber !== null
+  return [...groupBy(rootSlots, ({ eventVersionId }) => eventVersionId).values()].every(
+    (slots) =>
+      versionSelectionsStayCurrent(slots, numbers, players) &&
+      versionAssetsStayCurrent(slots, players, replaced)
+  );
+}
+
+/** A candidate selection as `aflTradePromotedDraftState` reads it; a re-key needs its round and pick. */
+export interface AflTradePromotedDraftStateSelection {
+  readonly selectionId: string;
+  readonly draftYear: number;
+  readonly draftType: string;
+  readonly selectionNumber: number;
+  readonly roundNumber?: number | null;
+  readonly pickId?: string;
+  readonly playerId: string | null;
+  readonly clubId: string | null;
+  readonly status: string;
+}
+
+/** Current canonical selection rows as a re-key reads them. */
+interface SelectionPickIndex {
+  /** The one current row of a source selection, or null when it has none or several. */
+  readonly onlyRow: (selectionId: string) => AflTradeCurrentCanonicalSelectionPick | null;
+  /** The source selections whose current row carries a pick. */
+  readonly holdersByPick: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+function indexSelectionPicks(
+  rows: readonly AflTradeCurrentCanonicalSelectionPick[]
+): SelectionPickIndex {
+  const rowsBySelection = groupBy(rows, ({ selectionId }) => selectionId);
+  const holdersByPick = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.pickId === null) continue;
+    holdersByPick.set(
+      row.pickId,
+      (holdersByPick.get(row.pickId) ?? new Set()).add(row.selectionId)
     );
-    const assetPlayers = new Set(
-      slots.flatMap((slot) =>
-        slot.kind === 'asset' && slot.playerId !== null ? [slot.playerId] : []
-      )
-    );
-    for (const target of selections) {
-      if (!target.current || numbers.has(target.selectionNumber!)) continue;
-      // A later selection of the same player retires it outright.
-      if (target.playerId !== null && players.has(target.playerId)) return false;
-      const others = selections
-        .filter(
-          (row) =>
-            row.selectionNumber !== target.selectionNumber && row.playerId !== target.playerId
-        )
-        .map(({ selectionNumber }) => selectionNumber!);
-      const carriedOthers = new Set(others.filter((number) => numbers.has(number))).size;
-      if (others.length > 0 && 2 * carriedOthers >= others.length) return false;
-    }
-    for (const target of slots) {
-      if (target.kind !== 'asset' || !target.current || target.playerId === null) continue;
-      if (players.has(target.playerId) || replaced.has(target.playerId)) continue;
-      const others = [...assetPlayers].filter((player) => player !== target.playerId);
-      const carriedOthers = others.filter((player) => players.has(player)).length;
-      if (others.length > 0 && 2 * carriedOthers >= others.length) return false;
-    }
   }
-  return true;
+  return {
+    onlyRow: (selectionId) => {
+      const found = rowsBySelection.get(selectionId) ?? [];
+      return found.length === 1 ? found[0]! : null;
+    },
+    holdersByPick,
+  };
+}
+
+/**
+ * The slot side of a re-key: a usable candidate selection with a player and club in a draft that is
+ * otherwise current, whose one current row sits at its number under its club and its own player (or
+ * another, when re-synced), and that no special entitlement cites.
+ */
+function rekeySlotMatches(
+  selection: AflTradePromotedDraftStateSelection,
+  row: AflTradeCurrentCanonicalSelectionPick,
+  resyncedSelectionIds: ReadonlySet<string>,
+  currentDraftKeys: ReadonlySet<string>
+): boolean {
+  return (
+    currentDraftKeys.has(draftCoverageKey(selection.draftYear, selection.draftType)) &&
+    selection.playerId !== null &&
+    selection.clubId !== null &&
+    isAflTradeUsableCustodyStatus(selection.status) &&
+    row.selectionNumber === selection.selectionNumber &&
+    row.clubId === selection.clubId &&
+    (resyncedSelectionIds.has(selection.selectionId) || row.playerId === selection.playerId) &&
+    !row.specialEntitlementCited
+  );
+}
+
+/**
+ * The pick side of a re-key: the current row carries the slot's number-only id, and the candidate
+ * names another pick that is not number-only, has usable custody, is not deferred and no other
+ * current selection carries (pick-identity rule 4).
+ */
+function rekeyPickMatches(
+  selection: AflTradePromotedDraftStateSelection,
+  row: AflTradeCurrentCanonicalSelectionPick,
+  pickId: string,
+  context: {
+    readonly custodyPicks: ReadonlySet<string>;
+    readonly deferredPickIds: ReadonlySet<string>;
+    readonly holdersByPick: ReadonlyMap<string, ReadonlySet<string>>;
+  }
+): boolean {
+  const numberOnly = aflTradeNumberOnlyPickIds(selection);
+  return (
+    row.pickId !== null &&
+    numberOnly.includes(row.pickId) &&
+    row.pickId !== pickId &&
+    !numberOnly.includes(pickId) &&
+    context.custodyPicks.has(pickId) &&
+    !context.deferredPickIds.has(pickId) &&
+    [...(context.holdersByPick.get(pickId) ?? [])].every(
+      (holder) => holder === selection.selectionId
+    )
+  );
+}
+
+/**
+ * Within one session root: the eligible slots in selection-number order, each alone or else together
+ * with every other eligible slot on its version, kept while the version carrying them and the root's
+ * re-synced slots stays additive. A re-synced slot is carried anyway, so re-keying it costs nothing.
+ */
+function planRootRekeys(input: {
+  readonly eligible: readonly AflTradePromotedDraftStateSelection[];
+  readonly rootSlots: readonly AflTradeDraftRootSlot[];
+  readonly carried: readonly CarriedDraftSlot[];
+  readonly resyncedSelectionIds: ReadonlySet<string>;
+  readonly versionOf: (selectionId: string) => string;
+}): string[] {
+  const carried = [...input.carried];
+  if (!aflTradeAdditiveDraftVersion(input.rootSlots, carried)) return [];
+  const pending = [...input.eligible].sort(
+    (left, right) => left.selectionNumber - right.selectionNumber
+  );
+  const taken = new Set<string>();
+  const carriedSlot = (selection: AflTradePromotedDraftStateSelection): CarriedDraftSlot => ({
+    selectionNumber: selection.selectionNumber,
+    playerId: selection.playerId!,
+  });
+  for (const selection of pending) {
+    if (taken.has(selection.selectionId)) continue;
+    if (input.resyncedSelectionIds.has(selection.selectionId)) {
+      taken.add(selection.selectionId);
+      continue;
+    }
+    // A small scoped version can change only whole, or the siblings it omits are retired.
+    const version = input.versionOf(selection.selectionId);
+    const attempts = [
+      [selection],
+      pending.filter(
+        (other) =>
+          !taken.has(other.selectionId) &&
+          !input.resyncedSelectionIds.has(other.selectionId) &&
+          input.versionOf(other.selectionId) === version
+      ),
+    ];
+    const fits = attempts.find((attempt) =>
+      aflTradeAdditiveDraftVersion(input.rootSlots, [...carried, ...attempt.map(carriedSlot)])
+    );
+    if (fits === undefined) continue;
+    carried.push(...fits.map(carriedSlot));
+    for (const { selectionId } of fits) taken.add(selectionId);
+  }
+  return [...taken];
 }
 
 /**
@@ -298,133 +471,55 @@ export function aflTradeAdditiveDraftVersion(
  * scoped version, one whose unchanged siblings would be retired) is left on its number-only id, for
  * the next preparation once this one is promoted. Sorted unique ids.
  */
-/** A candidate selection as `aflTradePromotedDraftState` reads it; a re-key needs its round and pick. */
-export interface AflTradePromotedDraftStateSelection {
-  readonly selectionId: string;
-  readonly draftYear: number;
-  readonly draftType: string;
-  readonly selectionNumber: number;
-  readonly roundNumber?: number | null;
-  readonly pickId?: string;
-  readonly playerId: string | null;
-  readonly clubId: string | null;
-  readonly status: string;
-}
-
 function aflTradeRekeyedSelectionIds(
   draftSelections: readonly AflTradePromotedDraftStateSelection[],
   resyncedSelectionIds: ReadonlySet<string>,
   currentDraftKeys: ReadonlySet<string>,
   rekey: AflTradeSelectionRekeyContext
 ): string[] {
-  const rowsBySelection = new Map<string, AflTradeCurrentCanonicalSelectionPick[]>();
-  const holdersByPick = new Map<string, Set<string>>();
-  for (const row of rekey.state.selections) {
-    rowsBySelection.set(row.selectionId, [...(rowsBySelection.get(row.selectionId) ?? []), row]);
-    if (row.pickId !== null) {
-      holdersByPick.set(
-        row.pickId,
-        (holdersByPick.get(row.pickId) ?? new Set()).add(row.selectionId)
-      );
-    }
-  }
-  const custodyPicks = new Set(
-    rekey.pickCustody
-      .filter(({ status }) => isAflTradeUsableCustodyStatus(status))
-      .map(({ pickId }) => pickId)
-  );
-  const onlyRow = (selectionId: string) => {
-    const rows = rowsBySelection.get(selectionId) ?? [];
-    return rows.length === 1 ? rows[0]! : null;
+  const { onlyRow, holdersByPick } = indexSelectionPicks(rekey.state.selections);
+  const pickContext = {
+    custodyPicks: new Set(
+      rekey.pickCustody
+        .filter(({ status }) => isAflTradeUsableCustodyStatus(status))
+        .map(({ pickId }) => pickId)
+    ),
+    deferredPickIds: rekey.deferredPickIds,
+    holdersByPick,
   };
-  const eligibleByRoot = new Map<string, AflTradePromotedDraftStateSelection[]>();
-  for (const selection of draftSelections) {
+  const eligible = draftSelections.filter((selection) => {
     const row = onlyRow(selection.selectionId);
-    const pickId = selection.pickId;
-    if (
-      row === null ||
-      pickId === undefined ||
-      !currentDraftKeys.has(draftCoverageKey(selection.draftYear, selection.draftType)) ||
-      selection.playerId === null ||
-      selection.clubId === null ||
-      !isAflTradeUsableCustodyStatus(selection.status) ||
-      row.selectionNumber !== selection.selectionNumber ||
-      row.clubId !== selection.clubId ||
-      (!resyncedSelectionIds.has(selection.selectionId) && row.playerId !== selection.playerId) ||
-      row.specialEntitlementCited
-    ) {
-      continue;
-    }
-    const numberOnly = aflTradeNumberOnlyPickIds(selection);
-    if (
-      row.pickId === null ||
-      !numberOnly.includes(row.pickId) ||
-      row.pickId === pickId ||
-      numberOnly.includes(pickId) ||
-      !custodyPicks.has(pickId) ||
-      rekey.deferredPickIds.has(pickId) ||
-      [...(holdersByPick.get(pickId) ?? [])].some((holder) => holder !== selection.selectionId)
-    ) {
-      continue;
-    }
-    eligibleByRoot.set(row.eventId, [...(eligibleByRoot.get(row.eventId) ?? []), selection]);
-  }
-  const slotsByRoot = new Map<string, AflTradeDraftRootSlot[]>();
-  for (const slot of rekey.state.rootSlots) {
-    slotsByRoot.set(slot.eventId, [...(slotsByRoot.get(slot.eventId) ?? []), slot]);
-  }
-  const rekeyed: string[] = [];
-  for (const [eventId, eligible] of [...eligibleByRoot].sort(([left], [right]) =>
-    left.localeCompare(right)
-  )) {
-    const slots = slotsByRoot.get(eventId) ?? [];
-    // The root's re-synced slots are always carried, under their new players.
-    const carried: CarriedDraftSlot[] = draftSelections.flatMap((selection) =>
-      resyncedSelectionIds.has(selection.selectionId) &&
-      selection.playerId !== null &&
-      onlyRow(selection.selectionId)?.eventId === eventId
-        ? [{ selectionNumber: selection.selectionNumber, playerId: selection.playerId }]
-        : []
+    return (
+      row !== null &&
+      selection.pickId !== undefined &&
+      rekeySlotMatches(selection, row, resyncedSelectionIds, currentDraftKeys) &&
+      rekeyPickMatches(selection, row, selection.pickId, pickContext)
     );
-    if (!aflTradeAdditiveDraftVersion(slots, carried)) continue;
-    const pending = [...eligible].sort(
-      (left, right) => left.selectionNumber - right.selectionNumber
-    );
-    const taken = new Set<string>();
-    const carriedSlot = (selection: AflTradePromotedDraftStateSelection): CarriedDraftSlot => ({
-      selectionNumber: selection.selectionNumber,
-      playerId: selection.playerId!,
-    });
-    for (const selection of pending) {
-      if (taken.has(selection.selectionId)) continue;
-      // A re-synced slot is carried anyway; re-keying it costs nothing.
-      if (resyncedSelectionIds.has(selection.selectionId)) {
-        taken.add(selection.selectionId);
-        continue;
-      }
-      // The slot alone, or else with every other eligible slot of its version: a small scoped
-      // version can change only whole, or the siblings it omits are retired.
-      const version = onlyRow(selection.selectionId)!.eventVersionId;
-      const attempts = [
-        [selection],
-        pending.filter(
-          (other) =>
-            !taken.has(other.selectionId) &&
-            !resyncedSelectionIds.has(other.selectionId) &&
-            onlyRow(other.selectionId)!.eventVersionId === version
-        ),
-      ];
-      for (const attempt of attempts) {
-        const next = [...carried, ...attempt.map(carriedSlot)];
-        if (!aflTradeAdditiveDraftVersion(slots, next)) continue;
-        carried.push(...attempt.map(carriedSlot));
-        for (const { selectionId } of attempt) taken.add(selectionId);
-        break;
-      }
-    }
-    rekeyed.push(...taken);
-  }
-  return [...new Set(rekeyed)].sort();
+  });
+  const slotsByRoot = groupBy(rekey.state.rootSlots, ({ eventId }) => eventId);
+  const eligibleByRoot = groupBy(eligible, ({ selectionId }) => onlyRow(selectionId)!.eventId);
+  return [
+    ...new Set(
+      [...eligibleByRoot]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .flatMap(([eventId, rootEligible]) =>
+          planRootRekeys({
+            eligible: rootEligible,
+            rootSlots: slotsByRoot.get(eventId) ?? [],
+            // The root's re-synced slots are always carried, under their new players.
+            carried: draftSelections.flatMap((selection) =>
+              resyncedSelectionIds.has(selection.selectionId) &&
+              selection.playerId !== null &&
+              onlyRow(selection.selectionId)?.eventId === eventId
+                ? [{ selectionNumber: selection.selectionNumber, playerId: selection.playerId }]
+                : []
+            ),
+            resyncedSelectionIds,
+            versionOf: (selectionId) => onlyRow(selectionId)!.eventVersionId,
+          })
+        )
+    ),
+  ].sort();
 }
 
 /**

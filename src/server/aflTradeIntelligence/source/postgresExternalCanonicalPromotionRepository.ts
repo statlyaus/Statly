@@ -742,6 +742,138 @@ async function requireOtherDraftSlotsCurrent(
 }
 
 /**
+ * Whether the stored version a session re-sync supersedes is still the approved one of its
+ * competition and draft, with the date, precision and official name the reviewer approved.
+ */
+function resyncVersionAsApproved(
+  superseded: {
+    status: string;
+    kind: string;
+    mechanism: string;
+    event_date: string | null;
+    official_name: string;
+    date_precision: unknown;
+    competition: string;
+    season_year: number;
+  },
+  coverage: AflTradePromotedSessionResyncCoverage,
+  competition: string
+): boolean {
+  const draftKind = mapDraftKind(coverage.draftType);
+  return (
+    superseded.status === 'approved' &&
+    superseded.competition === competition &&
+    Number(superseded.season_year) === coverage.draftYear &&
+    superseded.kind === draftKind.eventKind &&
+    superseded.mechanism === draftKind.mechanism &&
+    superseded.event_date === coverage.eventDate &&
+    superseded.official_name === coverage.officialName &&
+    exactJson(superseded.date_precision ?? null, coverage.datePrecision ?? null)
+  );
+}
+
+type CandidateDraftSelection =
+  AflTradeExternalReconciliationCandidateRecord['content']['draftSelections'][number];
+
+/** A current canonical selection row as a session re-sync re-checks it under the root lock. */
+interface PlacedResyncRow {
+  selection_id: string;
+  event_id: string;
+  selection_number: number;
+  player_id: string;
+  pick_id: string | null;
+  club_id: string | null;
+}
+
+/**
+ * The current canonical rows of the re-synced and re-keyed slots of one coverage entry, and every
+ * current row carrying a pick a re-keyed slot takes (pick-identity rule 4). These are the rows of
+ * `outcome_current_canonical_draft_selection_picks` (0284), read through 0278's function so a
+ * re-sync alone needs nothing later than it.
+ */
+async function loadPlacedResyncRows(
+  transaction: AflOutcomeSqlTransaction,
+  competition: string,
+  selectionIds: readonly string[],
+  rekeyedPickIds: readonly string[]
+): Promise<readonly PlacedResyncRow[]> {
+  const result = await transaction.query<PlacedResyncRow>(
+    `SELECT current.selection_id,current.event_id,current.selection_number,current.player_id,
+            stored.pick_id,stored.club_id
+       FROM outcome_current_canonical_draft_selection_players($1) current
+       JOIN outcome_draft_selection stored
+         ON stored.event_version_id=current.event_version_id
+        AND stored.selection_number=current.selection_number
+      WHERE current.selection_id=ANY($2::text[])
+         OR stored.pick_id=ANY($3::text[])`,
+    [competition, [...selectionIds], [...rekeyedPickIds]]
+  );
+  return result.rows;
+}
+
+/**
+ * The pick id a session re-sync writes for one slot, after checking the slot is still as approved.
+ * Each slot is current canonical once, on this root, at its number, under the candidate's club. A
+ * re-synced slot is current under another player and keeps the re-versioned row's pick id (migration
+ * 0279: the candidate may state it differently or leave it unresolved on the pick side). A re-keyed
+ * slot (migration 0284) is current under its own player, or another when it is also re-synced, with
+ * the slot's number-only pick id, and takes the candidate's pick, which no other current selection may
+ * carry (pick-identity rule 4).
+ */
+export function aflTradeResyncWrittenPickId(
+  selection: Pick<
+    CandidateDraftSelection,
+    | 'selectionId'
+    | 'draftYear'
+    | 'draftType'
+    | 'selectionNumber'
+    | 'roundNumber'
+    | 'pickId'
+    | 'playerId'
+    | 'clubId'
+    | 'status'
+  >,
+  placed: readonly PlacedResyncRow[],
+  slot: { eventId: string; resynced: boolean; rekeyed: boolean }
+): string | null {
+  const rows = placed.filter((row) => row.selection_id === selection.selectionId);
+  const row = rows.length === 1 ? rows[0]! : null;
+  const playerAsApproved =
+    row !== null &&
+    (slot.resynced ? row.player_id !== selection.playerId : row.player_id === selection.playerId);
+  if (
+    row === null ||
+    row.event_id !== slot.eventId ||
+    Number(row.selection_number) !== selection.selectionNumber ||
+    !playerAsApproved ||
+    row.club_id !== selection.clubId ||
+    selection.status === 'disputed'
+  ) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      `Selection ${selection.selectionId} is no longer current canonical once on draft session ${slot.eventId} under the same club and the player the re-sync was approved against.`
+    );
+  }
+  if (!slot.rekeyed) return row.pick_id;
+  const pickTaken = placed.some(
+    (other) => other.pick_id === selection.pickId && other.selection_id !== selection.selectionId
+  );
+  if (
+    !isAflTradeUsableCustodyStatus(selection.status) ||
+    row.pick_id === null ||
+    !aflTradeNumberOnlyPickIds(selection).includes(row.pick_id) ||
+    row.pick_id === selection.pickId ||
+    pickTaken
+  ) {
+    throw new AflTradeExternalCanonicalPromotionError(
+      'CANDIDATE_UNAVAILABLE',
+      `Selection ${selection.selectionId} no longer carries its number-only pick id, or another current selection carries the pick it is re-keyed to.`
+    );
+  }
+  return selection.pickId;
+}
+
+/**
  * A transaction the candidate records as already promoted must still be current canonical when the
  * promotion runs: its trade event current under the same stable key from a finalized promotion and
  * every candidate transfer a promoted asset on that version, under the candidate's pick id for a
@@ -2414,14 +2546,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           const draftKind = mapDraftKind(coverage.draftType);
           if (
             current?.eventVersionId !== coverage.supersedesVersionId ||
-            superseded.status !== 'approved' ||
-            superseded.competition !== content.competition ||
-            Number(superseded.season_year) !== coverage.draftYear ||
-            superseded.kind !== draftKind.eventKind ||
-            superseded.mechanism !== draftKind.mechanism ||
-            superseded.event_date !== coverage.eventDate ||
-            superseded.official_name !== coverage.officialName ||
-            !exactJson(superseded.date_precision ?? null, coverage.datePrecision ?? null)
+            !resyncVersionAsApproved(superseded, coverage, content.competition)
           ) {
             throw new AflTradeExternalCanonicalPromotionError(
               'IMMUTABLE_CONFLICT',
@@ -2434,83 +2559,25 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
               'Promotion cannot backdate a draft-session re-sync.'
             );
           }
-          // Each slot is current canonical once, on this root, at its number, under the candidate's
-          // club. A re-synced slot is current under another player and keeps the re-versioned row's
-          // pick id (migration 0279: the candidate may state it differently or leave it unresolved
-          // on the pick side). A re-keyed slot (migration 0284) is current under its own player, or
-          // another when it is also re-synced, with the slot's number-only pick id, and takes the
-          // candidate's pick, which no other current selection may carry (pick-identity rule 4).
           const rekeyedIds = scope.deferral.rekeyedSelectionIds;
-          const resyncedIds = scope.deferral.resyncedSelectionIds;
-          const placed = await transaction.query<{
-            selection_id: string;
-            event_id: string;
-            selection_number: number;
-            player_id: string;
-            pick_id: string | null;
-            club_id: string | null;
-          }>(
-            // The rows of `outcome_current_canonical_draft_selection_picks` (0284), read through
-            // 0278's function so a re-sync alone needs nothing later than it.
-            `SELECT current.selection_id,current.event_id,current.selection_number,current.player_id,
-                    stored.pick_id,stored.club_id
-               FROM outcome_current_canonical_draft_selection_players($1) current
-               JOIN outcome_draft_selection stored
-                 ON stored.event_version_id=current.event_version_id
-                AND stored.selection_number=current.selection_number
-              WHERE current.selection_id=ANY($2::text[])
-                 OR stored.pick_id=ANY($3::text[])`,
-            [
-              content.competition,
-              [...coverage.selectionIds],
-              selections.flatMap(({ selectionId, pickId }) =>
-                rekeyedIds.has(selectionId) ? [pickId] : []
-              ),
-            ]
+          const placed = await loadPlacedResyncRows(
+            transaction,
+            content.competition,
+            coverage.selectionIds,
+            selections.flatMap(({ selectionId, pickId }) =>
+              rekeyedIds.has(selectionId) ? [pickId] : []
+            )
           );
-          const writtenPickBySelection = new Map<string, string | null>();
-          for (const selection of selections) {
-            const rows = placed.rows.filter((row) => row.selection_id === selection.selectionId);
-            const row = rows.length === 1 ? rows[0]! : null;
-            const rekeyed = rekeyedIds.has(selection.selectionId);
-            const resynced = resyncedIds.has(selection.selectionId);
-            if (
-              row === null ||
-              row.event_id !== eventId ||
-              Number(row.selection_number) !== selection.selectionNumber ||
-              (resynced
-                ? row.player_id === selection.playerId
-                : row.player_id !== selection.playerId) ||
-              row.club_id !== selection.clubId ||
-              selection.status === 'disputed'
-            ) {
-              throw new AflTradeExternalCanonicalPromotionError(
-                'CANDIDATE_UNAVAILABLE',
-                `Selection ${selection.selectionId} is no longer current canonical once on draft session ${eventId} under the same club and the player the re-sync was approved against.`
-              );
-            }
-            if (
-              rekeyed &&
-              (!isAflTradeUsableCustodyStatus(selection.status) ||
-                row.pick_id === null ||
-                !aflTradeNumberOnlyPickIds(selection).includes(row.pick_id) ||
-                row.pick_id === selection.pickId ||
-                placed.rows.some(
-                  (other) =>
-                    other.pick_id === selection.pickId &&
-                    other.selection_id !== selection.selectionId
-                ))
-            ) {
-              throw new AflTradeExternalCanonicalPromotionError(
-                'CANDIDATE_UNAVAILABLE',
-                `Selection ${selection.selectionId} no longer carries its number-only pick id, or another current selection carries the pick it is re-keyed to.`
-              );
-            }
-            writtenPickBySelection.set(
+          const writtenPickBySelection = new Map(
+            selections.map((selection) => [
               selection.selectionId,
-              rekeyed ? selection.pickId : row.pick_id
-            );
-          }
+              aflTradeResyncWrittenPickId(selection, placed, {
+                eventId,
+                resynced: scope.deferral.resyncedSelectionIds.has(selection.selectionId),
+                rekeyed: rekeyedIds.has(selection.selectionId),
+              }),
+            ])
+          );
           const carriedNumbers = selections.map(({ selectionNumber }) => selectionNumber);
           const carriedPlayers = selections.flatMap(({ playerId }) => (playerId ? [playerId] : []));
           const otherSlots = await currentOtherDraftSlots(

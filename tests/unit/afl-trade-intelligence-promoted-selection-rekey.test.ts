@@ -38,6 +38,7 @@ import {
   type AflTradeCurrentCanonicalSelectionPick,
   type AflTradeDraftRootSlot,
 } from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
+import { aflTradeResyncWrittenPickId } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 
 /**
  * Selections promoted before the pick-identity rules carry their slot's number-only pick id (#853):
@@ -325,6 +326,58 @@ describe('keeping each re-sync version additive (migration 0256)', () => {
         [{ selectionNumber: 2, playerId: 'player-2' }]
       )
     ).toBe(false);
+  });
+});
+
+describe('the pick a session re-sync writes under the root lock', () => {
+  const candidateSelection = {
+    ...selection(2),
+    supportingProviders: ['draftguru' as const],
+    evidenceIds: [],
+  };
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    selection_id: 'selection:2',
+    event_id: root,
+    selection_number: 2,
+    player_id: 'player-2',
+    pick_id: numberOnly(2),
+    club_id: 'club-a',
+    ...overrides,
+  });
+  const slot = { eventId: root, resynced: false, rekeyed: true };
+
+  it('takes the candidate pick for a re-keyed slot and keeps the promoted one for a re-sync', () => {
+    expect(aflTradeResyncWrittenPickId(candidateSelection, [row()], slot)).toBe(custodyPick(2));
+    expect(
+      aflTradeResyncWrittenPickId(candidateSelection, [row({ player_id: 'draftguru-created' })], {
+        ...slot,
+        resynced: true,
+        rekeyed: false,
+      })
+    ).toBe(numberOnly(2));
+  });
+
+  it('refuses a slot that changed since review', () => {
+    const changed = /no longer current canonical once/;
+    const repicked = /no longer carries its number-only pick id/;
+    expect(() => aflTradeResyncWrittenPickId(candidateSelection, [], slot)).toThrow(changed);
+    expect(() =>
+      aflTradeResyncWrittenPickId(candidateSelection, [row({ player_id: 'other' })], slot)
+    ).toThrow(changed);
+    expect(() =>
+      aflTradeResyncWrittenPickId(candidateSelection, [row({ club_id: 'club-b' })], slot)
+    ).toThrow(changed);
+    expect(() =>
+      aflTradeResyncWrittenPickId(candidateSelection, [row({ pick_id: custodyPick(30) })], slot)
+    ).toThrow(repicked);
+    // Pick-identity rule 4: another current selection now carries the pick.
+    expect(() =>
+      aflTradeResyncWrittenPickId(
+        candidateSelection,
+        [row(), row({ selection_id: 'selection:3', selection_number: 3, pick_id: custodyPick(2) })],
+        slot
+      )
+    ).toThrow(repicked);
   });
 });
 
