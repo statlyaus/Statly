@@ -78,6 +78,11 @@ export async function createSyntheticAcquisitionPlayerPromotion(
      * `official-afl-trade-period-dates` capture, as the review command reads it (needs 0262).
      */
     tradePeriodWindowClaim?: boolean;
+    /**
+     * Stage the window's capture claim only: the trade's coverage keeps its own day or year-only
+     * precision, as for a trade promoted before migration 0261 (#869). Needs the claim.
+     */
+    tradePeriodWindowCaptureOnly?: boolean;
     combinedDraftSessions?: boolean;
     official2017CombinedDraft?: boolean;
     officialCombinedDraftYear?: 2016 | 2017;
@@ -202,10 +207,16 @@ export async function createSyntheticAcquisitionPlayerPromotion(
     options.environment === 'non_production'
   )
     throw new Error('Synthetic capture envelope overrides are limited to test_fixture.');
-  if (options.tradePeriodWindow && !options.partialTransactionDates)
+  if (
+    options.tradePeriodWindow &&
+    !options.partialTransactionDates &&
+    !options.tradePeriodWindowCaptureOnly
+  )
     throw new Error('A trade-period window applies only to a trade with no source day.');
   if (options.tradePeriodWindowClaim && !options.tradePeriodWindow)
     throw new Error('A trade-period window claim needs the window.');
+  if (options.tradePeriodWindowCaptureOnly && !options.tradePeriodWindowClaim)
+    throw new Error('A capture-only trade-period window needs the claim.');
   if (options.partialTransactionDates && (!options.sessionProposalV5 || options.lifecycle))
     throw new Error(
       'Partial trade dates require the v5 session profile without an exact-date lifecycle.'
@@ -3015,7 +3026,7 @@ export async function createSyntheticAcquisitionPlayerPromotion(
         schemaVersion: 'afl-trade-external-canonical-promotion-proposal/v5',
         // Only a year-only (v5) trade may carry the season's reviewed trade-period window (#869).
         transactionDateCoverage: proposalInput.transactionDateCoverage.map((coverage) =>
-          coverage.occurredOn === null && tradeWindow
+          coverage.occurredOn === null && tradeWindow && !options.tradePeriodWindowCaptureOnly
             ? { ...coverage, datePrecision: tradeWindow }
             : coverage
         ),

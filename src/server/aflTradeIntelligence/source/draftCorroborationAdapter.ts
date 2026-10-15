@@ -176,6 +176,27 @@ export function parseOfficialAflIndicativeDraftOrder(
  */
 export const OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION = 'official-afl-draft-order-parser/v4';
 
+/**
+ * Parser for the 2026 live order page (issue 789), from which v4 reads nothing: each round heading
+ * is an `<h4>ROUND <n></h4>` just before its table, the club lists are headed "EVERY CLUB'S PICKS",
+ * and the page states its date only as "Updated: <Month> <day>, <year>". The 2019-2025 pages stay
+ * on v4; the reviewed scope names each page's parser.
+ */
+export const OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5 = 'official-afl-draft-order-parser/v5';
+
+export type OfficialAflDraftOrderTableParserVersion =
+  | typeof OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
+  | typeof OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5;
+
+export function isOfficialAflDraftOrderTableParserVersion(
+  version: string
+): version is OfficialAflDraftOrderTableParserVersion {
+  return (
+    version === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION ||
+    version === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5
+  );
+}
+
 // Longest first, so "North Melbourne" never reads as "Melbourne". Names are recorded as written.
 const CLUB_NAMES = [
   'Greater Western Sydney',
@@ -273,12 +294,13 @@ function originalClubFromAnnotation(
 
 /**
  * The slot holders of the 2025 page's "YOUR CLUB'S PICKS" lists (`Club: 16, 48, ...`, one line per
- * club): `undefined` when the page has no such heading, `null` when the lists are not exactly 18
- * recorded clubs whose slots never repeat.
+ * club; v5 also reads 2026's "EVERY CLUB'S PICKS"): `undefined` when the page has no such heading,
+ * `null` when the lists are not exactly 18 recorded clubs whose slots never repeat.
  */
-function clubPickLists($: CheerioAPI): Map<number, string> | null | undefined {
+function clubPickLists($: CheerioAPI, v5: boolean): Map<number, string> | null | undefined {
+  const title = v5 ? /^(?:YOUR|EVERY) CLUB['’]S PICKS$/i : /^YOUR CLUB['’]S PICKS$/i;
   const headings = $('h1, h2, h3, h4, h5, h6').filter((_index, element) =>
-    /^YOUR CLUB['’]S PICKS$/i.test(normalizeText($(element).text()))
+    title.test(normalizeText($(element).text()))
   );
   if (headings.length === 0) return undefined;
   if (headings.length > 1) return null;
@@ -310,6 +332,36 @@ function clubPickLists($: CheerioAPI): Map<number, string> | null | undefined {
 export function parseOfficialAflDraftOrderTable(
   html: string,
   input: { capture: SourceCapture; draftYear: number; observedAt: string }
+): DraftCorroborationResult {
+  return parseOrderTable(html, input, false);
+}
+
+/**
+ * v5, the 2026 live page: v4's rules, plus a round heading may be the `h1`-`h6` element just before
+ * its table, the club lists may be headed "EVERY CLUB'S PICKS", and the page must state its date
+ * ("Updated: October 14, 2026" or the pick-swap as-of line), every stated date being `observedAt`'s
+ * date; otherwise nothing is emitted.
+ */
+export function parseOfficialAflDraftOrderTableV5(
+  html: string,
+  input: { capture: SourceCapture; draftYear: number; observedAt: string }
+): DraftCorroborationResult {
+  return parseOrderTable(html, input, true);
+}
+
+/** The table parser a reviewed pre-draft order capture names. */
+export function officialAflDraftOrderTableParser(
+  version: OfficialAflDraftOrderTableParserVersion
+): typeof parseOfficialAflDraftOrderTable {
+  return version === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_V5
+    ? parseOfficialAflDraftOrderTableV5
+    : parseOfficialAflDraftOrderTable;
+}
+
+function parseOrderTable(
+  html: string,
+  input: { capture: SourceCapture; draftYear: number; observedAt: string },
+  v5: boolean
 ): DraftCorroborationResult {
   if (!Number.isInteger(input.draftYear) || input.draftYear < 1897 || input.draftYear > 2200) {
     throw new TypeError('draftYear must be an AFL-era year.');
@@ -347,11 +399,35 @@ export function parseOfficialAflDraftOrderTable(
   if (statedAsOf.some((date) => date !== input.observedAt.slice(0, 10))) {
     return invalid('The page states a pick-swap as-of date other than the observation date.');
   }
+  if (v5) {
+    // 2026: "Updated: October 14, 2026". A live page must state the date of the order it shows.
+    const updated = $('p')
+      .toArray()
+      .map((element) =>
+        /^Updated:\s*([A-Za-z]+) (\d{1,2}), (\d{4})$/i.exec(normalizeText($(element).text()))
+      )
+      .filter((match) => match !== null)
+      .map(([, month, day, year]) => {
+        const index = MONTHS.findIndex((name) => name.toLowerCase() === month!.toLowerCase());
+        return index < 0
+          ? null
+          : `${year}-${String(index + 1).padStart(2, '0')}-${day!.padStart(2, '0')}`;
+      });
+    if (statedAsOf.length + updated.length === 0) {
+      return invalid('The page states no date for the order it shows.');
+    }
+    if (updated.some((date) => date !== input.observedAt.slice(0, 10))) {
+      return invalid('The page states an updated date other than the observation date.');
+    }
+  }
   const slots: Array<{ pick: number; round: number; holder: string; annotation: string | null }> =
     [];
   const rowIssues: DraftCorroborationIssue[] = [];
   $('table').each((_tableIndex, table) => {
-    let round: number | null = null;
+    // 2026 (v5): the round heading is the heading element just before the table, outside it.
+    const before = v5 ? $(table).prev('h1, h2, h3, h4, h5, h6') : null;
+    const outside = before ? /^ROUND\s+([A-Z]+)$/i.exec(normalizeText(before.text())) : null;
+    let round: number | null = outside ? (ROUND_NUMBERS[outside[1]!.toUpperCase()] ?? null) : null;
     $(table)
       .find('tr')
       .each((_rowIndex, row) => {
@@ -402,7 +478,7 @@ export function parseOfficialAflDraftOrderTable(
   if (slots.length === 0 || picks.some((pick, index) => pick !== index + 1)) {
     return invalid('Order slots are absent or do not run from 1 without a gap.');
   }
-  const listed = clubPickLists($);
+  const listed = clubPickLists($, v5);
   if (
     listed === null ||
     (listed !== undefined &&

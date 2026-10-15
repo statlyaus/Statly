@@ -18,8 +18,8 @@ import { createAflTradeS3ConditionalObjectStore } from '../artifacts/s3Condition
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import {
-  OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION,
-  parseOfficialAflDraftOrderTable,
+  isOfficialAflDraftOrderTableParserVersion,
+  officialAflDraftOrderTableParser,
   parseOfficialAflIndicativeDraftOrder,
 } from '../source/draftCorroborationAdapter';
 import { parseOfficialAflTradePeriodDates } from '../source/officialAflTradePeriodAdapter';
@@ -197,8 +197,8 @@ export function createAflTradeExternalIngestionRuntime(
             return parseFootywireDraftSelections(html, { capture });
           case 'official-afl-indicative-draft-order':
             return (
-              command.request.parserVersion === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
-                ? parseOfficialAflDraftOrderTable
+              isOfficialAflDraftOrderTableParserVersion(command.request.parserVersion)
+                ? officialAflDraftOrderTableParser(command.request.parserVersion)
                 : parseOfficialAflIndicativeDraftOrder
             )(html, {
               capture,
