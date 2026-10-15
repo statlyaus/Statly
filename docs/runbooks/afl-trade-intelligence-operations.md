@@ -1055,7 +1055,18 @@ Prerequisites:
      before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
      date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
      values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
-     and still requires exactly one. The v18 decisions and their captures stay valid; and
+     and still requires exactly one. The v18 decisions and their captures stay valid. The 2025
+     national draft alone is read by parser v20, so its decision is
+     `official-afl-completed-draft-session-issue579-private-2025-session-v20` and its rights name
+     `official-afl-completed-draft-session/v20`; every other season stays on v19 (coordinator
+     decision 2026-10-16, issue 853). No Official AFL page enumerates the 2025 selections. v20 reads
+     the two dated night reports, each an exact Internet Archive snapshot (`id_`) named in
+     `source/officialAflDraft2025Sessions.ts`, from their boundary sentences only: night one
+     (19 November) is session 1, selections 1 to 25, and night two (20 November) is session 2,
+     selections 26 to 60, and the night-two total (35 that night, 60 in all) must agree. This is a
+     weaker standard than a numbered list: the claims prove the sessions, not the draft's
+     membership, which stays proven by the Footyinfo board and the Draftguru year page (grade rule
+     v5); and
    - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v4` decision per
      captured season, 2019 to 2025, for example
      `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. Parser
@@ -1095,7 +1106,8 @@ Prerequisites:
      capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
-   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` (2026:
+   `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
+   `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
    `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
@@ -1124,7 +1136,9 @@ npm run outcomes:sources:capture-local-external -- \
 ```
 
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
-(2010-2018) are not enumerable here and are refused.
+(2010-2018) are not enumerable here and are refused. `--season 2025` expands to its two night-report
+snapshots and needs the `-2025-session-v20` decision; a 2025 season in a run with other seasons
+still needs each season's own decision.
 
 To capture only some of a season's pages, add `--url` with each exact reviewed page, for example to
 recapture one night without fetching the other again.
