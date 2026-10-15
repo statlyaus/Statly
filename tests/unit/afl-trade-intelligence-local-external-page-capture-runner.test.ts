@@ -768,6 +768,8 @@ const archive2023 =
   'https://web.archive.org/web/20231119230530id_/https://www.afl.com.au/draft/draft-order';
 const archive2025 =
   'https://web.archive.org/web/20251113035435id_/https://www.afl.com.au/draft/draft-order';
+const archive2026 =
+  'https://web.archive.org/web/20261014083707id_/https://www.afl.com.au/draft/draft-order';
 
 describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
   it('loads the per-season decision recorded under the issue579 order-v4 key', async () => {
@@ -795,8 +797,33 @@ describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
     ).rejects.toThrow(/official-afl-draft-order-parser\/v4/);
   });
 
+  it('loads 2026 only under its order-v5 decision, and refuses a v4 rights record for it', async () => {
+    const record = recordedOrder(2026);
+    expect(record.decision.content.decisionKey).toBe(
+      'official-afl-indicative-draft-order-issue579-private-2026-order-v5'
+    );
+    expect(record.sourceRights.content.acquisition).toMatchObject({
+      clientVersion: 'official-afl-draft-order-parser/v5',
+    });
+    const loaded = await loadRecordedLocalCaptureAuthority(
+      ledgerOf(record),
+      'official-afl-indicative-draft-order',
+      2026,
+      evaluatedAt
+    );
+    expect(loaded.decisionId).toBe(record.decision.decisionId);
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(recordedOrder(2026, 'official-afl-draft-order-parser/v4')),
+        'official-afl-indicative-draft-order',
+        2026,
+        evaluatedAt
+      )
+    ).rejects.toThrow(/official-afl-draft-order-parser\/v5/);
+  });
+
   it('builds a command the scope rules and the recorded decision admit, for an article and an archive snapshot', () => {
-    for (const season of [2022, 2023, 2025]) {
+    for (const season of [2022, 2023, 2025, 2026]) {
       const record = recordedOrder(season);
       for (const target of createLocalOfficialAflDraftOrderTargets([season])) {
         const command = createOfficialAflDraftOrderCaptureCommand(record, {
@@ -809,7 +836,11 @@ describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
           provider: 'official_afl',
           draftPathway: 'national',
           capabilityId: 'official-afl-indicative-draft-order',
-          parserVersion: 'official-afl-draft-order-parser/v4',
+          // 2019-2025 stay on v4; only the 2026 live page is read by v5.
+          parserVersion:
+            season === 2026
+              ? 'official-afl-draft-order-parser/v5'
+              : 'official-afl-draft-order-parser/v4',
           effectiveAt: target.effectiveAt,
         });
         expect(
@@ -870,11 +901,13 @@ describe('recorded Official AFL pre-draft order authority (issue 853)', () => {
 });
 
 describe('local Official AFL pre-draft order targets', () => {
-  it('enumerates one reviewed order page per season, 2019 to 2025, in season order', () => {
+  it('enumerates one reviewed order page per season, 2019 to 2026, in season order', () => {
     const targets = createLocalOfficialAflDraftOrderTargets([
-      2024, 2019, 2025, 2022, 2023, 2020, 2021,
+      2024, 2019, 2026, 2025, 2022, 2023, 2020, 2021,
     ]);
-    expect(targets.map(({ season }) => season)).toEqual([2019, 2020, 2021, 2022, 2023, 2024, 2025]);
+    expect(targets.map(({ season }) => season)).toEqual([
+      2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
+    ]);
     expect(targets.map(({ sourceUrl }) => new URL(sourceUrl).hostname)).toEqual([
       'www.afl.com.au',
       'www.afl.com.au',
@@ -883,7 +916,15 @@ describe('local Official AFL pre-draft order targets', () => {
       'web.archive.org',
       'web.archive.org',
       'web.archive.org',
+      'web.archive.org',
     ]);
+    // 2026: the owner-requested snapshot of the live order, observed on the date it states.
+    expect(targets[7]).toEqual({
+      capabilityId: 'official-afl-indicative-draft-order',
+      season: 2026,
+      sourceUrl: archive2026,
+      effectiveAt: '2026-10-14T00:00:00.000Z',
+    });
     expect(targets[4]).toEqual({
       capabilityId: 'official-afl-indicative-draft-order',
       season: 2023,
@@ -899,7 +940,7 @@ describe('local Official AFL pre-draft order targets', () => {
     });
   });
 
-  it.each([[[]], [[2022, 2022]], [[2018]], [[2026]]])('rejects seasons %j', (seasons) => {
+  it.each([[[]], [[2022, 2022]], [[2018]], [[2027]]])('rejects seasons %j', (seasons) => {
     expect(() => createLocalOfficialAflDraftOrderTargets(seasons)).toThrow(
       LocalExternalCaptureError
     );

@@ -41,6 +41,12 @@ export interface AflTradeRealizedTradeGradeRows {
     season: number;
     schema: string;
   }[];
+  /** Rule v7: the approved canonical special entitlement custody chain. Absent reads as none. */
+  specialCustody?: readonly {
+    transfer_id: string;
+    entitlement_id: string;
+    predecessor_transfer_id: string | null;
+  }[];
 }
 
 /** Maps the loaded rows to grader inputs, refusing anything the grade must not silently assume. */
@@ -113,6 +119,13 @@ export function buildAflTradeRealizedTradeGradeInputs(
     seasonSpells,
     spellSeasons: [...new Set(seasonSpells.map(({ season }) => season))].sort((a, b) => a - b),
     reviewedArrivals: spells(REVIEWED_ARRIVALS),
+    specialEntitlementCustody: [...(rows.specialCustody ?? [])]
+      .sort((left, right) => (left.transfer_id < right.transfer_id ? -1 : 1))
+      .map((row) => ({
+        transferId: row.transfer_id,
+        entitlementId: row.entitlement_id,
+        predecessorTransferId: row.predecessor_transfer_id,
+      })),
     pickProjectionBenchmarkId: options.pickProjectionBenchmarkId,
     spellCutoffAt: options.spellCutoffAt,
     gradedAt: options.gradedAt,
@@ -173,7 +186,25 @@ export async function loadAflTradeRealizedTradeGradeInputs(
         ORDER BY s.spell_version_id`,
       [options.spellCutoffAt, [SEASON_SPELLS, REVIEWED_ARRIVALS], SEASON_SPELLS]
     );
-    return { candidate: candidate.rows[0], heads: heads.rows, pav: pav.rows, spells: spells.rows };
+    // Rule v7: a special entitlement's custody chain, approved and in this environment only.
+    const specialCustody = await transaction.query<
+      NonNullable<AflTradeRealizedTradeGradeRows['specialCustody']>[number]
+    >(
+      `SELECT c.transfer_id, c.entitlement_id, c.predecessor_transfer_id
+         FROM outcome_special_entitlement_custody c
+         JOIN outcome_event_asset a USING (asset_version_id)
+         JOIN outcome_special_entitlement_award w USING (entitlement_id)
+        WHERE a.status::text = 'approved'
+          AND w.environment::text = 'non_production' AND w.competition = 'AFLM'
+        ORDER BY c.transfer_id`
+    );
+    return {
+      candidate: candidate.rows[0],
+      heads: heads.rows,
+      pav: pav.rows,
+      spells: spells.rows,
+      specialCustody: specialCustody.rows,
+    };
   });
   return buildAflTradeRealizedTradeGradeInputs(options, rows);
 }
