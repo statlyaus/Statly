@@ -14,6 +14,13 @@ const mocks = vi.hoisted(() => {
       findFirst: vi.fn(),
       create: vi.fn(),
     },
+    socialPost: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    socialModerationRecord: {
+      create: vi.fn(),
+    },
     socialReadState: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
@@ -61,7 +68,7 @@ vi.mock('./socialDto', () => ({
   toSocialReply: vi.fn((record) => record),
 }));
 
-import { createSocialMessage, markSocialChannelRead } from './socialCommands';
+import { createSocialMessage, deleteSocialPost, markSocialChannelRead } from './socialCommands';
 
 describe('league social Activity commands', () => {
   beforeEach(() => {
@@ -89,6 +96,37 @@ describe('league social Activity commands', () => {
     mocks.tx.socialOutboxEvent.create.mockResolvedValue({ sequence: 22 });
     mocks.tx.socialReadState.findUnique.mockResolvedValue(null);
     mocks.tx.socialReadState.upsert.mockResolvedValue({});
+  });
+
+  it('removes a post without changing its lock, so restoring it leaves the lock as it was', async () => {
+    mocks.requireLeagueSocialAccess.mockResolvedValue({
+      leagueId: 'league-1',
+      seasonId: 'season-1',
+      userId: 'user-1',
+      memberId: 'member-1',
+      canManage: true,
+    });
+    mocks.tx.socialPost.findFirst.mockResolvedValue({
+      id: 'post-1',
+      authorUserId: 'user-2',
+      authorMemberId: 'member-2',
+      deletedAt: null,
+      title: 'Title',
+      body: 'Body',
+    });
+    mocks.tx.socialPost.update.mockImplementation(async ({ data }) => ({
+      id: 'post-1',
+      leagueId: 'league-1',
+      seasonId: 'season-1',
+      ...data,
+    }));
+
+    await deleteSocialPost('league-1', 'user-1', 'post-1');
+
+    const data = mocks.tx.socialPost.update.mock.calls[0][0].data;
+    expect(data).toMatchObject({ moderationStatus: 'REMOVED' });
+    expect(data).not.toHaveProperty('isLocked');
+    expect(data).not.toHaveProperty('lockedAt');
   });
 
   it('persists validated discussion context with an idempotent member message', async () => {

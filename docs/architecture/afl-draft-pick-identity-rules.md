@@ -317,7 +317,39 @@ club can contradict the pick a walk settles on.
   this way; an ordinary draft write must still carry every recorded slot of its predecessor (#721). A
   re-review that keeps the same player changes nothing.
 
+  A completion with no pick-side issue re-syncs the same way (migration 0282). The 2018 completion is
+  one: its candidate deferred nothing, so the reconciler used to drop the deferral decision with the
+  `resyncedSelectionIds` it carries, and the 2018 draftees re-targeted to their AFL Tables twins had
+  no path back. A candidate that deferred no issue now keeps the decision when it lists something
+  under it and writes no draft whole: every draft it holds is recorded as already promoted or holds
+  a re-synced selection (`aflTradeIssuelessDeferralKept`, and
+  `outcome_external_candidate_issueless_deferral_kept` on insert). Its review needs no draft events
+  and its receipt records `deferredIssueCount: 0`. A candidate that would write a draft whole drops
+  the decision as before, because a draft written under it gets the metadata-only proposal and loses
+  its session proof. The database now chooses the deferred branch of
+  `outcome_external_draft_sessions_exact` by `lineage_deferral_decision_id`, not by
+  `deferred_issue_count`. Before 0282 the two picked out the same candidates, so every existing
+  promotion keeps the branch its insert guard took. For a decision with no deferred issue the branch
+  also refuses while a promotable selection exists. 0280's stored-coverage skip follows the same
+  column, so its soundness argument is unchanged.
+
   What the re-sync leaves behind:
+  - **Combined-session nights (2016 to 2018).** A promotion proved by `combined_session_facts` (the v3
+    proposal) is re-checked on every arrival by `outcome_external_combined_draft_sessions_exact`. That
+    check joins each session boundary claim to the candidate selection at that number through the
+    candidate's identity resolutions. Until migration 0283 it also required each boundary decision
+    to have no successor, so re-targeting one boundary draftee made the proof false for the whole
+    draft and every v4 spell on that promotion stopped being current. On the grading database the
+    official AFL re-target of Will Hayes (the last pick of 2018 session 2, 2026-10-14) did this to all
+    20 v4 spells on the two 2018 nights, and a re-sync could not restore them. Since 0283 a boundary
+    decision may lead, through approved revisions of the same subject and entity kind, to the
+    subject's approved current head, even when a revision names another canonical player
+    (`outcome_external_boundary_identity_decision_current`). A re-target changes neither the boundary
+    claim nor the candidate selection at its number, so which selections bound each session is
+    unchanged. A rejection, a withdrawal or any other successor still voids the proof. The same rule
+    applies to the other session-proof functions with boundary checks and to
+    `outcome_session_identity_observation_current`. Measured on the repair copy of the grading
+    database (2026-10-14), 0283 brings all 20 of those spells back to registration-current.
   - **The old draftee's selection** at that number is retired (0256 judges a selection by number). **The
     old draftee's asset** is not: 0256 retires an asset only when a later version carries an asset for
     the same player, and the re-sync carries the twin's. So the old asset stays current. It is excluded
@@ -332,7 +364,12 @@ club can contradict the pick a walk settles on.
     session's date bounds (`outcome_acquisition_arrival_event_current` accepts a re-sync version through
     `outcome_external_promoted_session_resync_version`). The v1 to v3 check
     (`outcome_acquisition_promoted_event_current`) has no such clause: a v1 to v3 spell cannot start at
-    a re-sync version.
+    a re-sync version. Since migration 0280 the arrival check does not re-run
+    `outcome_external_draft_sessions_exact` for a deferred candidate. It reads the re-sync version's
+    stored coverage entry instead. The promotion insert guard already proved the exact coverage, and the
+    candidate facts and proposal it read cannot change once the promotion exists. On the grading
+    database one such check took 9 min 38 s before 0280. A migration that tightens the deferred branch
+    of `outcome_external_draft_sessions_exact` must re-check existing deferred promotions explicitly.
 
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
   allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured

@@ -335,8 +335,6 @@ export async function deleteSocialPost(
         moderationStatus: 'REMOVED',
         isPinned: false,
         pinnedAt: null,
-        isLocked: true,
-        lockedAt: new Date(),
       },
       include: socialPostInclude,
     });

@@ -106,7 +106,10 @@ export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTr
   requiresReview: boolean;
   promotionEligible: false;
   publicationEligible: false;
-  /** The deferral the candidate carries, or null when nothing was deferred. */
+  /**
+   * The deferral the candidate carries, or null when it deferred nothing and has nothing to re-sync
+   * or leave to an earlier promotion, or would write a draft whole (`aflTradeIssuelessDeferralKept`).
+   */
   pickLineageDeferral: AflTradePickLineageDeferral | null;
 }
 
