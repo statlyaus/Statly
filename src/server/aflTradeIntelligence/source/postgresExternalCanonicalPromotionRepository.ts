@@ -273,6 +273,10 @@ function mergePickDefinition(definitions: Map<string, PickDefinition>, next: Pic
  * one, the pick is defined without a number: since the pick-identity rules (migration 0273) a pick
  * id names one pick whatever its pages numbered it, so differing numbers are renumbering, not two
  * picks, and no number is the pick's own. Without a deferral nothing changes.
+ *
+ * A pick only draft selections define (no written transfer or custody row names it) is listed as
+ * selection-only: a completed draft session states no round, number or original club, so its
+ * definition asserts no pick fact and references a stored pick as it stands (`planPickEnrichment`).
  */
 export function resolveWrittenPickDefinitions(
   content: Pick<CandidateContent, 'transfers' | 'draftSelections' | 'pickCustody'>,
@@ -284,9 +288,15 @@ export function resolveWrittenPickDefinitions(
      */
     definitionCustody: CandidateContent['pickCustody'];
   }
-): { definitions: Map<string, PickDefinition>; custodyDefinedPickIds: string[] } {
+): {
+  definitions: Map<string, PickDefinition>;
+  custodyDefinedPickIds: string[];
+  selectionOnlyPickIds: string[];
+} {
   const definitions = new Map<string, PickDefinition>();
   const custodyDefined = new Set<string>();
+  // Picks a written transfer or custody row defines: their definitions assert pick facts.
+  const factDefined = new Set<string>();
   const renumbered = new Set<string>();
   const reRounded = new Set<string>();
   if (options.deferred) {
@@ -330,6 +340,7 @@ export function resolveWrittenPickDefinitions(
   }
   content.transfers.forEach((transfer) => {
     if (transfer.asset.kind !== 'pick_entitlement') return;
+    factDefined.add(transfer.asset.pickId);
     // A custody-defined pick keeps the custody slot; the transfers' numbers stay on their assets.
     if (custodyDefined.has(transfer.asset.pickId)) return;
     mergePickDefinition(definitions, {
@@ -352,7 +363,8 @@ export function resolveWrittenPickDefinitions(
       originalClubId: null,
     })
   );
-  content.pickCustody.forEach((custody) =>
+  content.pickCustody.forEach((custody) => {
+    factDefined.add(custody.pickId);
     mergePickDefinition(definitions, {
       pickId: custody.pickId,
       draftYear: custody.draftYear,
@@ -360,9 +372,15 @@ export function resolveWrittenPickDefinitions(
       nominalRound: null,
       nominalPick: null,
       originalClubId: custody.originalClubId,
-    })
-  );
-  return { definitions, custodyDefinedPickIds: [...custodyDefined].sort() };
+    });
+  });
+  return {
+    definitions,
+    custodyDefinedPickIds: [...custodyDefined].sort(),
+    selectionOnlyPickIds: [...definitions.keys()]
+      .filter((pickId) => !factDefined.has(pickId))
+      .sort(),
+  };
 }
 
 interface ResolvedPickRow {
@@ -388,10 +406,16 @@ const PICK_FACT_COLUMNS = {
  * Compares a promotion's pick definition with the currently resolved canonical facts. A known fact
  * never changes. A fact that is empty in the stored pick may be filled (an enrichment); every other
  * difference, including a definition that omits a known fact, stays an immutable conflict.
+ *
+ * A definition that asserts no facts (`assertsFacts: false`, a selection-only pick from
+ * `resolveWrittenPickDefinitions`) omits nothing: a completed draft session never states a round,
+ * number or original club, so it references an approved stored pick of the same draft unchanged,
+ * whatever facts an earlier promotion recorded (#853). Its draft scope must still match.
  */
 export function planPickEnrichment(
   resolved: ResolvedPickRow,
-  definition: PickDefinition & { draftKind: string }
+  definition: PickDefinition & { draftKind: string },
+  options: { assertsFacts?: boolean } = {}
 ): { kind: 'exact' } | { kind: 'enrich'; facts: PickFacts } | { kind: 'conflict' } {
   if (
     resolved.status !== 'approved' ||
@@ -399,6 +423,16 @@ export function planPickEnrichment(
     resolved.draft_kind !== definition.draftKind
   )
     return { kind: 'conflict' };
+  if (options.assertsFacts === false) {
+    if (
+      definition.nominalRound !== null ||
+      definition.nominalPick !== null ||
+      definition.originalClubId !== null
+    ) {
+      throw new TypeError('A definition that asserts no pick facts must carry none.');
+    }
+    return { kind: 'exact' };
+  }
   const facts: PickFacts = { nominalRound: null, nominalPick: null, originalClubId: null };
   let enriched = false;
   for (const [key, column] of Object.entries(PICK_FACT_COLUMNS) as [
@@ -1641,13 +1675,17 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
         pickCustody: scope.pickCustody,
       };
       const pickSideDeferred = aflTradePickDefinitionsDeferred(authenticated.pickLineageDeferral);
-      const { definitions, custodyDefinedPickIds } = resolveWrittenPickDefinitions(written, {
-        deferred: pickSideDeferred,
-        definitionCustody: candidate.content.pickCustody,
-      });
+      const { definitions, custodyDefinedPickIds, selectionOnlyPickIds } =
+        resolveWrittenPickDefinitions(written, {
+          deferred: pickSideDeferred,
+          definitionCustody: candidate.content.pickCustody,
+        });
+      const selectionOnlyPicks = new Set(selectionOnlyPickIds);
       // Under the deferral a pick already defined with different facts, or with facts this candidate
       // would fill without reviewed lineage, is retained: referenced unchanged, listed on the receipt.
       // Decided before the receipt is addressed so a replay derives the same list from the same facts.
+      // A selection-only pick is compared as before the selection-only rule (#853), so a promotion
+      // finalized earlier re-derives its receipt exactly; retained or not, it is referenced unchanged.
       const retainedPickDefinitionIds = new Set<string>();
       if (pickSideDeferred) {
         const registrationId =
@@ -2001,10 +2039,12 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           const plan =
             resolved === undefined
               ? null
-              : planPickEnrichment(resolved, {
-                  ...definition,
-                  draftKind: kind.eventKind,
-                });
+              : planPickEnrichment(
+                  resolved,
+                  { ...definition, draftKind: kind.eventKind },
+                  // A pick only selections define asserts no facts: it references the stored pick.
+                  { assertsFacts: !selectionOnlyPicks.has(definition.pickId) }
+                );
           if (plan === null || plan.kind === 'conflict') {
             throw new AflTradeExternalCanonicalPromotionError(
               'IMMUTABLE_CONFLICT',

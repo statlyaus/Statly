@@ -3769,7 +3769,12 @@ promotion, its approval decision, the reviewed pick-lineage registration and the
 and custody IDs). Enrichment requires that registration (the candidate's reviewed scope/correction, or
 one registered against the promoted candidate itself) with its current approval; without it the
 conflict stands. A known value never changes, and a definition that omits a known value is still a
-conflict. Versions are gap-free and append-only, and promotion replay adds no version. Readers use
+conflict. A pick that only the promotion's draft selections define (no written transfer or custody row
+names it) asserts no facts, because a completed draft session states no round, number or original
+club: it references an approved stored pick of the same draft unchanged, whatever facts an earlier
+trade promotion recorded, with no enrichment (#853). Its draft year and kind must still match, and
+under a pick-side deferral it is still compared as before, so a finalized receipt replays exactly.
+Versions are gap-free and append-only, and promotion replay adds no version. Readers use
 `outcome_draft_pick_facts(pick_ids, as_of)`: promotion resolves current facts, while the public archive,
 pick-PAV selection and pick-PAV finalization pass the release's `effective_through`, so an enrichment
 recorded after a release never changes that release's reconstruction. Apply 0237 through the normal
