@@ -24,6 +24,7 @@ import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
   createAflTradeHistoricalCompletionReconciliationAuthority,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationSourceAuthorityContracts';
+import { OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraft2025Sessions';
 
 const digest = (character: string) => character.repeat(64);
 const capturedAt = '2026-08-09T04:00:00.000Z';
@@ -2408,6 +2409,44 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
           })
         );
         expect(outcome).not.toHaveProperty('draftProvenBy');
+      });
+
+      it('keeps the board’s proof beside v20 session claims, which state a range, not a list', () => {
+        // The 2025 night reports' boundary sentences (decision 2026-10-16) prove the sessions only.
+        const boundarySession = batch(
+          'official_afl',
+          '6',
+          [
+            {
+              kind: 'draft_session',
+              draftYear: 2025,
+              draftType: 'national',
+              sessionOrdinal: 1,
+              eventDate: '2025-11-19',
+              officialName: '2025 Telstra AFL Draft',
+              selectionNumbers: allFourteen,
+            },
+          ],
+          undefined,
+          { parserVersion: OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION }
+        );
+        const candidate = proveByBoard({ page: yearPage('academy'), session: boundarySession });
+        expect(basisOf(candidate)).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_nominated_player',
+            receivingClubNominatedSelections: 1,
+            draftProvenBy: 'footyinfo',
+          })
+        );
+        expect(basisOf(candidate).evidenceIds).not.toContain(
+          boundarySession.content.evidence[0]!.evidenceId
+        );
+        // The session evidence still reaches every selection it numbers.
+        expect(
+          candidate.content.draftSelections!.every(({ evidenceIds }) =>
+            evidenceIds.includes(boundarySession.content.evidence[0]!.evidenceId)
+          )
+        ).toBe(true);
       });
 
       // The 2024 national draft, which no owner decision lets a board prove.

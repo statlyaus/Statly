@@ -558,9 +558,13 @@ export async function createRetainedExternalCaptureFixture(
   const bytes = buildSourceBytes();
   // The board as parser v1 reads it: the selection it states for pick 1 (the year page's player,
   // under the board's round), that pick's board record, and a passed and a removed pick cited by
-  // no other claim. Club and player carry Footyinfo native ids, as the live boards do.
+  // no other claim. Club and player carry Footyinfo native ids, as the live boards do. Two clubs
+  // appear on no selection: the passed pick's route starts at one, and the other holds the removed
+  // pick, as Port Adelaide appears on the 2025 board (#853).
   function footyinfoBoardClaims(): AflTradeExternalEvidenceContent['claim'][] {
     const club = { nativeId: 'SYN', recordedName: 'Synthetic Club' };
+    const origin = { nativeId: 'ORG', recordedName: 'Origin Club' };
+    const holder = { nativeId: 'RMV', recordedName: 'Removed Club' };
     const player = { nativeId: 'synthetic-player', recordedName: 'Synthetic Player' };
     const boardPick = {
       kind: 'draft_board_pick' as const,
@@ -584,8 +588,14 @@ export async function createRetainedExternalCaptureFixture(
         selectedByClub: club,
       },
       { ...boardPick, recordedPickNumber: 1, status: 'selected', player, points: 2000 },
-      { ...boardPick, recordedPickNumber: null, status: 'passed', points: 1500 },
-      { ...boardPick, recordedPickNumber: null, status: 'removed', points: null },
+      {
+        ...boardPick,
+        recordedPickNumber: null,
+        status: 'passed',
+        route: [origin, club],
+        points: 1500,
+      },
+      { ...boardPick, recordedPickNumber: null, status: 'removed', club: holder, points: null },
     ];
   }
   const sourceArtifact = createAflTradeByteArtifactRef(bytes, 'text/html', request.capturedAt);

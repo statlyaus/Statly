@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
@@ -16,6 +19,7 @@ import { PostgresAflTradeExternalDiscoveryRepository } from '@/server/aflTradeIn
 import { PostgresAflTradeExternalHistoricalCaptureCompletionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalCaptureCompletionRepository';
 import { PostgresAflTradeExternalHistoricalReconciliationSource } from '@/server/aflTradeIntelligence/source/postgresExternalHistoricalReconciliationSource';
 import { PostgresAflTradeExternalIdentityReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
+import { buildAflTradeExternalIdentityReviewPackage } from '@/server/aflTradeIntelligence/source/externalIdentityReviewWorkBuilder';
 import {
   loadAflTradeExternalIdentityReviewQueue,
   recordAflTradeExternalIdentityReviewDecision,
@@ -32,7 +36,9 @@ import { deployOutcomesHistoryBefore } from './outcomesPreMigrationWorkspace';
  * transactions, transfers, selections, custody, lineage, issues and the deferred set, so every
  * board row looked uncited and the whole candidate was refused. A real completion holding a
  * Draftguru year page and a Footyinfo board, prepared through the real repository, so the trigger
- * is the one under test.
+ * is the one under test. The board's passed pick is routed from, and its removed pick held by, a club
+ * on no selection; the identity-review package observes both (#853), which needs the observation
+ * guards of migration 0285, applied here out of order because they touch no 0272 definition.
  */
 const url = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!url) throw new Error('Disposable PostgreSQL required.');
@@ -54,6 +60,15 @@ beforeAll(async () => {
   const scoped = new URL(url);
   scoped.searchParams.set('schema', schema);
   history = await deployOutcomesHistoryBefore(MIGRATION, scoped.toString(), pool);
+  await pool.query(
+    await readFile(
+      join(
+        import.meta.dirname,
+        '../../prisma/afl-trade-outcomes/migrations/0285_board_pick_identity_observations/migration.sql'
+      ),
+      'utf8'
+    )
+  );
 }, 120000);
 afterAll(async () => {
   await history?.cleanup();
@@ -177,13 +192,36 @@ it('conserves the board rows a candidate cites only on its board picks once 0272
     { source, reviewRepository }
   );
   // The board's club and player are subjects of their own provider; both resolve to the same
-  // canonical club and player as the year page's, by the name each provider writes.
+  // canonical club and player as the year page's, by the name each provider writes. A club named
+  // only by a board pick's route or holder is a subject too, so its reviewed decision loads.
   expect(
     queue.items
       .filter(({ provider }) => provider === 'footyinfo')
       .map(({ entityKind, observedNames }) => `${entityKind}:${observedNames[0]}`)
       .sort()
-  ).toEqual(['club:Synthetic Club', 'player:Synthetic Player']);
+  ).toEqual([
+    'club:Origin Club',
+    'club:Removed Club',
+    'club:Synthetic Club',
+    'player:Synthetic Player',
+  ]);
+  // Canonical-target registration rebuilds each provider-native work item in SQL from the same
+  // board-pick identities (migration 0285).
+  const reviewPackage = buildAflTradeExternalIdentityReviewPackage(
+    await source.load(completion.completionId)
+  );
+  for (const { workItem } of reviewPackage.content.items.filter(
+    ({ workItem }) => workItem.content.subject.content.provider === 'footyinfo'
+  )) {
+    expect(
+      (
+        await pool.query<{ exact: boolean }>(
+          `SELECT outcome_external_registration_work_exact($1,$2::jsonb,'test_fixture') AS exact`,
+          [completion.completionId, canonical(workItem)]
+        )
+      ).rows[0]!.exact
+    ).toBe(true);
+  }
   const identityReviewedAt = await databaseInstant();
   for (const item of queue.items) {
     const name = item.observedNames[0]!;

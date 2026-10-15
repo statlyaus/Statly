@@ -753,6 +753,7 @@ describe('a deferred candidate whose draft is already current canonical', () => 
         { draftYear: 2024, draftType: 'rookie' },
       ],
       resyncedSelectionIds: [],
+      rekeyedSelectionIds: [],
     });
     expect(
       aflTradePromotedDraftState(identified(selections), [
@@ -769,6 +770,7 @@ describe('a deferred candidate whose draft is already current canonical', () => 
     expect(aflTradePromotedDraftState(identified(selections), [])).toEqual({
       promotedDrafts: [],
       resyncedSelectionIds: [],
+      rekeyedSelectionIds: [],
     });
   });
 
@@ -850,11 +852,13 @@ describe('a deferred candidate whose draft is already current canonical', () => 
     expect(aflTradePromotedDraftState(identified(selections), current)).toEqual({
       promotedDrafts: [{ draftYear: 2024, draftType: 'rookie' }],
       resyncedSelectionIds: ['a'],
+      rekeyedSelectionIds: [],
     });
     // A draft with a selection nobody promoted is neither: the promotion writes it as before.
     expect(aflTradePromotedDraftState(identified(selections), current.slice(1))).toEqual({
       promotedDrafts: [{ draftYear: 2024, draftType: 'rookie' }],
       resyncedSelectionIds: [],
+      rekeyedSelectionIds: [],
     });
     // A changed selection current under two roots cannot be re-synced into one of them.
     expect(() =>
@@ -883,6 +887,7 @@ describe('a deferred candidate whose draft is already current canonical', () => 
         { draftYear: 2024, draftType: 'rookie' },
       ],
       resyncedSelectionIds: [],
+      rekeyedSelectionIds: [],
     });
   });
 

@@ -939,6 +939,38 @@ supersede production Gate authority, and production execution cannot reuse non-p
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
    lineage or a new candidate without the deferral, which supersedes it.
 
+   **Board-only clubs (#853, migrations 0285 and 0286).** The identity-review queue of a completion
+   with a Footyinfo board lists every club a board pick routes through or holds, and the board's
+   selected players, not only the clubs of its selections. A subject whose current approved decision
+   already covers the names it observes loads without a new review; a new subject is reviewed like any
+   other. Before 0286, preparing a completion whose board route stayed unresolved failed at
+   finalization with 22023 ("cannot get array length of a scalar"). It now keeps the record's
+   `board-pick:club:` issue instead.
+
+   **Re-keying number-only selection picks (#853, migration 0284).** A selection promoted before the
+   pick-identity rules carries its slot's number-only pick id. When the candidate names the pick
+   with usable custody, preparation records the slot under `pickLineageDeferral.rekeyedSelectionIds`
+   and the review proposes it in the same `promoted_session_resync` entries as a re-synced slot; the
+   promotion writes it under the candidate's pick with the same player and club. Preparation takes,
+   per session root, only the slots that keep the re-sync version from retiring any other slot, so
+   re-run the cycle until a preparation lists none:
+   1. `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion> --defer-pick-lineage <scope decision>`.
+      Read `pickLineageDeferral.rekeyedSelectionIds` (and `resyncedSelectionIds`) on the result.
+   2. Review with an empty draft-events file (`[]`) and the transaction dates the candidate writes,
+      then promote, exactly as above. The receipt shows `rekeyedSelectionCount`.
+   3. Re-register the draft-start spells (below), then prepare again. Stop when the candidate lists
+      no re-keyed selection.
+
+   A re-keyed slot's draftee asset is re-versioned (same player), so every reviewed spell that starts
+   at the old asset stops being current. Re-register each as a superseding arrival-only (v4) version
+   citing the re-sync version and its new asset, with the promotion's captures for that asset and
+   event as entry evidence and the predecessor's rule. The Phase E trade driver
+   (`reregister-arrivals-853.ts`) reads only trade events, so use a draft-start variant that reads
+   the promotion's `draft_player_asset` members and finds the current v4 spell citing the same
+   player's asset on the superseded session version. A slot on a small scoped version whose other
+   slot is not re-keyed never fits (re-keying it alone would retire that sibling) and stays on its
+   number-only id.
+
 8. Register each immutable reviewed URL schedule once with
    `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
    schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
@@ -1031,7 +1063,18 @@ Prerequisites:
      before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
      date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
      values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
-     and still requires exactly one. The v18 decisions and their captures stay valid; and
+     and still requires exactly one. The v18 decisions and their captures stay valid. The 2025
+     national draft alone is read by parser v20, so its decision is
+     `official-afl-completed-draft-session-issue579-private-2025-session-v20` and its rights name
+     `official-afl-completed-draft-session/v20`; every other season stays on v19 (coordinator
+     decision 2026-10-16, issue 853). No Official AFL page enumerates the 2025 selections. v20 reads
+     the two dated night reports, each an exact Internet Archive snapshot (`id_`) named in
+     `source/officialAflDraft2025Sessions.ts`, from their boundary sentences only: night one
+     (19 November) is session 1, selections 1 to 25, and night two (20 November) is session 2,
+     selections 26 to 60, and the night-two total (35 that night, 60 in all) must agree. This is a
+     weaker standard than a numbered list: the claims prove the sessions, not the draft's
+     membership, which stays proven by the Footyinfo board and the Draftguru year page (grade rule
+     v5); and
    - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v4` decision per
      captured season, 2019 to 2025, for example
      `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. Parser
@@ -1071,7 +1114,8 @@ Prerequisites:
      capture's evidence rows.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
-   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` (2026:
+   `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
+   `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
    `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
@@ -1100,7 +1144,9 @@ npm run outcomes:sources:capture-local-external -- \
 ```
 
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
-(2010-2018) are not enumerable here and are refused.
+(2010-2018) are not enumerable here and are refused. `--season 2025` expands to its two night-report
+snapshots and needs the `-2025-session-v20` decision; a 2025 season in a run with other seasons
+still needs each season's own decision.
 
 To capture only some of a season's pages, add `--url` with each exact reviewed page, for example to
 recapture one night without fetching the other again.
@@ -3723,7 +3769,12 @@ promotion, its approval decision, the reviewed pick-lineage registration and the
 and custody IDs). Enrichment requires that registration (the candidate's reviewed scope/correction, or
 one registered against the promoted candidate itself) with its current approval; without it the
 conflict stands. A known value never changes, and a definition that omits a known value is still a
-conflict. Versions are gap-free and append-only, and promotion replay adds no version. Readers use
+conflict. A pick that only the promotion's draft selections define (no written transfer or custody row
+names it) asserts no facts, because a completed draft session states no round, number or original
+club: it references an approved stored pick of the same draft unchanged, whatever facts an earlier
+trade promotion recorded, with no enrichment (#853). Its draft year and kind must still match, and
+under a pick-side deferral it is still compared as before, so a finalized receipt replays exactly.
+Versions are gap-free and append-only, and promotion replay adds no version. Readers use
 `outcome_draft_pick_facts(pick_ids, as_of)`: promotion resolves current facts, while the public archive,
 pick-PAV selection and pick-PAV finalization pass the release's `effective_through`, so an enrichment
 recorded after a release never changes that release's reconstruction. Apply 0237 through the normal
