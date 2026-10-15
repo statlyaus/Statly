@@ -1,4 +1,5 @@
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
+import { OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION } from './officialAflDraft2025Sessions';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
@@ -1995,8 +1996,9 @@ type NominatedSelectionCount = {
 
 /**
  * Drafts whose membership a reviewed Footyinfo board may prove when no official AFL completed
- * session is reviewed for them. Owner decision 2026-10-14 (issue 789): the 2025 national draft has no
- * official session page. Another draft needs a new owner decision, never just a new entry here.
+ * session lists their selections. Owner decision 2026-10-14 (issue 789): no official page enumerates
+ * the 2025 national draft's selections; its night reports state only session boundaries (parser
+ * v20). Another draft needs a new owner decision, never just a new entry here.
  */
 const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|national']);
 
@@ -2006,9 +2008,13 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  * null unless the draft's membership is proven independently of that page, by either:
  *
  * - the reviewed official AFL completed-session claims, which must list selections 1 to N with no gap;
- * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no official session claim at all, a
+ * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no such official session claim, a
  *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
  *   club.
+ *
+ * A session claim read from a night report's boundary sentences (parser v20, the 2025 national
+ * draft) states a number range, not a list of selections, so it proves the session and never the
+ * membership: it is not counted here, and the board still proves that draft (decision 2026-10-16).
  *
  * The candidate's selections in the draft must be exactly those numbers, and every one must carry
  * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
@@ -2028,7 +2034,11 @@ function createNominatedSelectionCounter(
   const boardSelectionEvidence = new Set<string>();
   for (const row of evidence) {
     const claim = row.content.claim;
-    if (row.content.provider === 'official_afl' && claim.kind === 'draft_session') {
+    if (
+      row.content.provider === 'official_afl' &&
+      claim.kind === 'draft_session' &&
+      row.content.capture.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION
+    ) {
       const key = `${claim.draftYear}|${claim.draftType}`;
       const numbers = sessionNumbers.get(key) ?? new Set<number>();
       claim.selectionNumbers.forEach((number) => numbers.add(number));

@@ -486,7 +486,7 @@ ordinal, so corrections append versions of the same session. Existing v1 receipt
 Canonical import idempotency includes the reviewed promotion request, allowing a revised candidate
 to reuse retained captures while preserving each prior import. Other import kinds retain their
 capture/kind/parser uniqueness. The database binds new canonical imports to the exact open request.
-The bounded completed-session parser supports exact reviewed 2016–2024 sources. It verifies
+The bounded completed-session parser supports exact reviewed 2016–2025 sources. It verifies
 the contextual article date and the specific completed event statements assigned to each source.
 For the one-night 2016 national draft, the completed 25 November report supplies the event-night
 context, completion, Andrew McGrath/Essendon first boundary at pick 1, and Jake Waterman/West Coast
@@ -508,6 +508,21 @@ Official AFL pages do not establish the intervening selection membership, and th
 `Cameron Rayner` as recorded rather than normalizing it to Draftguru's `Cam Rayner`. A combined proof
 therefore still requires the complete contiguous Draftguru inventory and a reviewed identity decision.
 The 2019–2024 full-session reports additionally verify contiguous selection membership.
+The 2025 national draft has no Official AFL page that enumerates its selections. For it alone
+(coordinator decision 2026-10-16, issue 853), completed-session parser v20
+(`source/officialAflDraft2025Sessions.ts`; every other season stays on v19) reads the two dated night
+reports, each an exact reviewed Internet Archive snapshot, from their boundary sentences: night one
+names the draft and its No.1 pick, a first round of 25 picks on Wednesday night, the last club in at
+No.25 closing out the first round, and the draft continuing on Thursday night at No.26; night two
+opens night two of the same draft, holds No.26 over from Wednesday night, and saw 35 players drafted
+for a total of 60. Each statement must appear exactly once and agree with the reviewed range, the
+contextual date must match in either the AMP or non-AMP template, and the night-two arithmetic
+(60 − 35 = 25) must meet night one's last selection. The emitted `draft_session` claims (session 1,
+19 November, selections 1 to 25; session 2, 20 November, 26 to 60) feed the direct session proof
+unchanged. This is a weaker standard than a numbered list: the range is inferred from boundaries,
+so these claims prove the sessions and never the membership. Reconciliation does not count a v20
+session toward a draft's membership proof, and the 2025 draft's membership stays proven by the
+Footyinfo board and the Draftguru year page (grade rule v5).
 The 2018 national draft uses a combined-proof boundary because no retained Official AFL article
 asserts the complete session membership by itself. Narrow claims retain their own source ancestry:
 the 22/23 November schedule supplies calendar corroboration only; the first-night report supplies the
@@ -4251,8 +4266,10 @@ The remaining work proceeds through these independently verifiable gates:
    captured at `draftguru-national-year-page/v2` or `/v3` counts. A draft is covered only when its membership
    is proven independently of that page, and the candidate's selections in the draft are exactly the
    proven numbers. Membership is proven by the reviewed official AFL completed-session claims listing
-   selections 1 to N with no gap. For the 2025 national draft only, which has no official session
-   page, a reviewed Footyinfo board may prove it instead (owner decision 2026-10-14, issue 789; see
+   selections 1 to N with no gap. For the 2025 national draft only, which has no official page that
+   lists its selections (its v20 session claims are read from night-report boundaries and never
+   count toward membership), a reviewed Footyinfo board may prove it instead (owner decision
+   2026-10-14, issue 789; see
    "Footyinfo national draft boards"); the outcome then names `draftProvenBy: footyinfo`. Another draft
    needs a new owner decision. Within a draft an official session proves, every selection must carry
    exactly one stated category: the rule before 2026-10-14, applied alone, so every official-proven
@@ -4649,10 +4666,11 @@ The remaining work proceeds through these independently verifiable gates:
          no round, or two matches leave the pick as it was. The board pick is read before a
          board-proven count because it states the pick's own fate; a count an official session
          proved is never replaced, so official-proven outcomes are unchanged.
-       - **Draft membership (owner decision 2026-10-14).** The 2025 national draft has no reviewed
-         official completed session. For it alone (`FOOTYINFO_BOARD_PROVEN_DRAFTS`, `2025|national`;
+       - **Draft membership (owner decision 2026-10-14).** No reviewed official page lists the 2025
+         national draft's selections. For it alone (`FOOTYINFO_BOARD_PROVEN_DRAFTS`, `2025|national`;
          another year needs a new decision), a board proves which selections the draft had when no
-         official AFL `draft_session` claim exists for that draft, its selected picks run 1 to N with
+         official AFL `draft_session` claim that lists selections exists for that draft (a parser
+         v20 claim, read from night-report boundaries, does not count), its selected picks run 1 to N with
          no gap, every selected board pick names one resolved club, and the candidate's selections in
          the draft are exactly those numbers. The access categories still come from the Draftguru
          year page, and the outcome names `draftProvenBy: footyinfo` and cites the receiving club's
