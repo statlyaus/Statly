@@ -62,12 +62,18 @@ import {
  * order, else for a pending pick its rule v6 projected slot. That is hindsight, not what the clubs knew,
  * and like every at-trade view it never enters a total. Rules v1 to v7 never report it.
  *
+ * Under rule v9 (issue 789) a pick hop Draftguru stated "not used", whose receiving club the
+ * candidate shows giving the same pick away in a later trade (the outcome's `statedDisposition`), is
+ * a traded-on pick valued by its onward return, never 0, and says so (`stated_not_used_traded_on`).
+ * Draftguru reports a pick's final fate on every page it passed through; only the final holder's hop
+ * stays not used. Rules v1 to v8 never state it.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v8' as const;
+  'afl-trade-realized-grade-rule/v9' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -86,6 +92,8 @@ const RULE_LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; not public factual, publication, production or activation authority.",
   'afl-trade-realized-grade-rule/v8':
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; not public factual, publication, production or activation authority.",
+  'afl-trade-realized-grade-rule/v9':
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; not public factual, publication, production or activation authority.",
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -121,6 +129,11 @@ const NO_EVENTUAL_SLOT_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   ...NO_SPECIAL_CUSTODY_RULES,
   'afl-trade-realized-grade-rule/v7',
 ]);
+/** Rules under which no stated not-used pick is valued as traded on; rule v9 may. */
+const NO_STATED_NOT_USED_TRADED_ON_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  ...NO_EVENTUAL_SLOT_RULES,
+  'afl-trade-realized-grade-rule/v8',
+]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
 
@@ -148,6 +161,7 @@ export const AFL_TRADE_REALIZED_GRADE_PROVISIONAL_REASONS = [
   'pick_projected_from_prior_order_proxy',
   'single_source_pick_outcome',
   'special_entitlement_custody_linked',
+  'stated_not_used_traded_on',
   'stint_open',
   'traded_on_return_partial',
   'traded_on_return_projected',
@@ -451,6 +465,15 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
         (leg.basis !== 'pick_traded_on_return' &&
           leg.basis !== 'pick_traded_on_return_unallocated')),
     'Only a single-source traded-on pick leg follows a special entitlement’s custody chain.',
+  ],
+  [
+    (leg, has) =>
+      has('stated_not_used_traded_on') &&
+      (leg.assetKind !== 'pick' ||
+        (leg.basis !== 'pick_traded_on_return' &&
+          leg.basis !== 'pick_traded_on_return_unallocated' &&
+          leg.basis !== 'unavailable')),
+    'Only a traded-on pick leg, or a blocked one, overrides a stated not-used pick.',
   ],
   [
     (leg, has) => leg.assetKind === 'player' && has('single_source_pick_outcome'),
@@ -759,6 +782,11 @@ const RULE_GATED_LEG_FEATURES: ReadonlyArray<
     NO_EVENTUAL_SLOT_RULES,
     (leg) => leg.atTrade.kind === 'pick_projection_eventual_slot',
     'Only rule v8 and later value a future pick at its eventual slot.',
+  ],
+  [
+    NO_STATED_NOT_USED_TRADED_ON_RULES,
+    (leg) => leg.reasons.includes('stated_not_used_traded_on'),
+    'Only rule v9 and later value a stated not-used pick its club traded on.',
   ],
 ];
 

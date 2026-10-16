@@ -40,6 +40,7 @@ import {
   type AflTradePickLineageDeferral,
   type AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
+import { createAflTradePickOnwardTransfers } from './pickOnwardTransfer';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
 function projectCombinedSessionSourceFact(
@@ -356,7 +357,9 @@ interface CanonicalPickCustody {
  * The provider's stated outcome for one received pick. It is single-source evidence kept apart from
  * governed lineage, which needs a proven custody chain: a `selected` outcome names the selection by
  * the stated player and the receiving club, never by pick number. `pending` is a "not used" pick
- * whose draft the candidate holds no selection or board pick in, at or after its anchor season.
+ * whose draft the candidate holds no selection or board pick in, at or after its anchor season. A
+ * stated "not used" pick the receiving club later traded on in the candidate is `traded_on`, and says
+ * what was stated (`statedDisposition`).
  */
 interface CanonicalPickOutcome {
   outcomeId: string;
@@ -389,6 +392,15 @@ interface CanonicalPickOutcome {
    * 789). Absent, an official session proved it, so earlier outcomes and candidate ids are unchanged.
    */
   draftProvenBy?: 'footyinfo';
+  /**
+   * Issue 789: Draftguru stated this hop "not used", but the candidate holds a transfer of the same
+   * pick from the receiving club in a later trade (`createAflTradePickOnwardTransfers`). Draftguru
+   * reports a pick's final fate (such as "removed - not enough list spots") on every page the pick
+   * passed through; the onward transfer is direct evidence that this club traded it on, so the
+   * outcome is `traded_on` and only the final holder's stays "not used". Kept so the contradiction
+   * stays auditable; it blocks nothing.
+   */
+  statedDisposition?: 'not_used';
   evidenceIds: string[];
 }
 
@@ -2232,6 +2244,7 @@ function notUsedBoardPick(
  */
 function reconcilePickDispositions(input: {
   evidence: readonly Evidence[];
+  transactions: readonly CanonicalTransaction[];
   transfers: CanonicalTransfer[];
   draftSelections: readonly CanonicalDraftSelection[];
   anchorSeasonYear: number;
@@ -2245,6 +2258,14 @@ function reconcilePickDispositions(input: {
       row.content.claim.kind === 'pick_disposition'
   );
   const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
+  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+    new Map(
+      input.transactions
+        .filter(({ transactionType }) => transactionType === 'trade')
+        .map((transaction) => [transaction.transactionId, transaction])
+    ),
+    input.transfers
+  );
   const nominatedSelections = createNominatedSelectionCounter(
     input.evidence,
     input.draftSelections,
@@ -2286,7 +2307,7 @@ function reconcilePickDispositions(input: {
       outcomeStatus: CanonicalPickOutcome['outcomeStatus'],
       selection: CanonicalDraftSelection | null,
       playerId: string | null,
-      nomination: NominationFacts = {},
+      facts: NominationFacts | Pick<CanonicalPickOutcome, 'disposition' | 'statedDisposition'> = {},
       supportingEvidenceIds: readonly string[] = []
     ) =>
       outcomes.push({
@@ -2299,7 +2320,7 @@ function reconcilePickDispositions(input: {
         outcomeStatus,
         selectionId: selection?.selectionId ?? null,
         playerId,
-        ...nomination,
+        ...facts,
         evidenceIds: sortedUnique([
           row.evidenceId,
           ...(selection?.evidenceIds ?? []),
@@ -2316,6 +2337,11 @@ function reconcilePickDispositions(input: {
     }
     if (claim.disposition === 'traded_on') {
       record('stated', null, null);
+      continue;
+    }
+    if (claim.disposition === 'not_used' && onwardTransfersOf(transfer).length > 0) {
+      // The receiving club traded this pick on: the stated "not used" is the pick's final fate.
+      record('stated', null, null, { disposition: 'traded_on', statedDisposition: 'not_used' });
       continue;
     }
     if (claim.disposition === 'not_used') {
@@ -3419,6 +3445,7 @@ export function reconcileAflTradeExternalEvidence(input: {
 
   const pickOutcomes = reconcilePickDispositions({
     evidence,
+    transactions,
     transfers,
     draftSelections,
     anchorSeasonYear,

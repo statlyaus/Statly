@@ -1140,14 +1140,17 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v8 and its limitation', () => {
+  it('seals rule v9 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v8');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v9');
+    expect(batch.content.limitation).toContain(
+      "a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used"
+    );
     expect(batch.content.limitation).toContain(
       "a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total"
     );

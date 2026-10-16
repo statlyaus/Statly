@@ -31,6 +31,7 @@ const V5 = 'afl-trade-realized-grade-rule/v5' as const;
 const V6 = 'afl-trade-realized-grade-rule/v6' as const;
 const V7 = 'afl-trade-realized-grade-rule/v7' as const;
 const V8 = 'afl-trade-realized-grade-rule/v8' as const;
+const V9 = 'afl-trade-realized-grade-rule/v9' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -41,6 +42,7 @@ const LIMITATIONS = {
   [V6]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; not public factual, publication, production or activation authority.",
   [V7]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; not public factual, publication, production or activation authority.",
   [V8]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; not public factual, publication, production or activation authority.",
+  [V9]: "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -1415,6 +1417,73 @@ describe('realized trade grade batch contract', () => {
         'a selection slot on a traded-on pick',
         () => withLeg(signed(V8), 'tx-5', 0, atTrade(eventual(20, 'selection'))),
         /Only a selected pick takes its eventual slot from its selection/,
+      ],
+    ])('refuses %s', (_label, build, message) => refuses(build(), message));
+  });
+
+  describe('rule v9 a stated not-used pick its club traded on (issue 789)', () => {
+    const OVERRIDE = 'stated_not_used_traded_on' as const;
+    const signed = (ruleVersion: AflTradeRealizedGradeRuleVersion) => {
+      const value = content(ruleVersion);
+      for (const row of value.trades)
+        for (const leg of row.legs)
+          if ('stint' in leg) leg.stint = { ...leg.stint, pavSum: leg.realizedValue };
+      return value;
+    };
+    /** tx-5's traded-on pick, which Draftguru stated not used. */
+    const overridden = (ruleVersion: AflTradeRealizedGradeRuleVersion = V9) =>
+      withLeg(signed(ruleVersion), 'tx-5', 0, (leg) => ({
+        ...leg,
+        reasons: [SINGLE, OVERRIDE, 'traded_on_return_provisional'],
+      }));
+
+    it('accepts the reason on a traded-on leg and changes no total', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(overridden());
+      expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+      expect(tradeOf(batch.content as Content, 'tx-5')).toMatchObject({
+        state: 'provisional',
+        reasons: [SINGLE, OVERRIDE, 'traded_on_return_provisional'],
+        clubs: tradeOf(signed(V9), 'tx-5').clubs,
+      });
+    });
+
+    it('accepts the reason on a blocked leg', () => {
+      const value = withLeg(signed(V9), 'tx-5', 0, (leg) => ({
+        transferId: leg.transferId,
+        assetKind: 'pick',
+        sendingClubId: leg.sendingClubId,
+        receivingClubId: leg.receivingClubId,
+        state: 'blocked',
+        basis: 'unavailable',
+        reasons: [OVERRIDE, 'traded_on_return_unlinked'],
+        atTrade: leg.atTrade,
+      }));
+      expect(() => createAflTradeRealizedTradeGradeBatch(value)).not.toThrow();
+    });
+
+    it('seals v9 with its limitation and still parses sealed v1 to v8 batches', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(signed(V9));
+      expect(batch.content.limitation).toBe(LIMITATIONS[V9]);
+      expect(batch.content.limitation).toContain(
+        "a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used"
+      );
+      for (const ruleVersion of [V1, 'afl-trade-realized-grade-rule/v2', V3] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(content(ruleVersion))).not.toThrow();
+      for (const ruleVersion of [V4, V5, V6, V7, V8] as const)
+        expect(() => createAflTradeRealizedTradeGradeBatch(signed(ruleVersion))).not.toThrow();
+    });
+
+    it.each<[string, () => Content, RegExp]>([
+      ['the reason under v8', () => overridden(V8), /Only rule v9 and later/],
+      [
+        'the reason on a not-used leg',
+        () => withLeg(signed(V9), 'tx-1', 2, (leg) => ({ ...leg, reasons: [SINGLE, OVERRIDE] })),
+        /Only a traded-on pick leg, or a blocked one, overrides/,
+      ],
+      [
+        'the reason on a player leg',
+        () => withLeg(signed(V9), 'tx-4', 0, (leg) => ({ ...leg, reasons: [OVERRIDE] })),
+        /Only a traded-on pick leg, or a blocked one, overrides/,
       ],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
   });

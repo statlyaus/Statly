@@ -2758,16 +2758,16 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
     const candidate = parseAflTradeExternalReconciliationCandidate(
       reconcileWith([disposition({})])
     );
-    const { transfers, draftSelections, pickOutcomes } = candidate.content;
-    expect(retainAflTradePickOutcomes(pickOutcomes, { transfers, draftSelections })).toEqual({
-      pickOutcomes,
-    });
-    expect(retainAflTradePickOutcomes(pickOutcomes, { transfers, draftSelections: [] })).toEqual(
-      {}
-    );
-    expect(retainAflTradePickOutcomes(pickOutcomes, { transfers: [], draftSelections })).toEqual(
-      {}
-    );
+    const { transactions, transfers, draftSelections, pickOutcomes } = candidate.content;
+    expect(
+      retainAflTradePickOutcomes(pickOutcomes, { transactions, transfers, draftSelections })
+    ).toEqual({ pickOutcomes });
+    expect(
+      retainAflTradePickOutcomes(pickOutcomes, { transactions, transfers, draftSelections: [] })
+    ).toEqual({});
+    expect(
+      retainAflTradePickOutcomes(pickOutcomes, { transactions, transfers: [], draftSelections })
+    ).toEqual({});
   });
 
   it('adds no pickOutcomes key when no dispositions are present, so candidate ids are unchanged', () => {

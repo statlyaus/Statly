@@ -1,5 +1,9 @@
 import type { AflTradeExternalReconciliationCandidateRecord } from '../source/externalReconciliationCandidateContracts';
 import { isAflTradeUsableCustodyStatus } from '../source/pickLineageDeferral';
+import {
+  aflTradeTransactionNotBefore,
+  createAflTradePickOnwardTransfers,
+} from '../source/pickOnwardTransfer';
 import { hpnDpv3ValueForPick } from '../modeling/hpnPickValueBenchmark';
 import {
   AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION,
@@ -322,13 +326,6 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
 const representableClub = (clubId: string | null): clubId is string =>
   !!clubId && clubId.length <= 160 && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(clubId);
 
-/** True when `later` cannot have happened before `earlier`. */
-function notBefore(later: Transaction, earlier: Transaction) {
-  if (later.seasonYear !== earlier.seasonYear) return later.seasonYear > earlier.seasonYear;
-  if (later.occurredOn && earlier.occurredOn) return later.occurredOn > earlier.occurredOn;
-  return true;
-}
-
 /**
  * How a traded-on pick shares its club's onward return: all of it as the sole asset given, by its
  * realized weight over the bundle's total, or evenly when everything given was worth 0.
@@ -379,46 +376,11 @@ export function gradeAflTradesOnRealizedValue(
       ungraded.push({ transactionId: transaction.transactionId, reason: 'club_unresolved' });
     else transactions.set(transaction.transactionId, transaction);
   }
-  const transfersByPick = new Map<string, Transfer[]>();
-  for (const transfer of inputs.candidate.transfers)
-    if (transactions.has(transfer.transactionId) && transfer.asset.kind === 'pick_entitlement')
-      transfersByPick.set(transfer.asset.pickId, [
-        ...(transfersByPick.get(transfer.asset.pickId) ?? []),
-        transfer,
-      ]);
-  // A pick's transfers form a directed trail, each handing it from sender to receiver. When exactly one
-  // ordering uses every transfer once, chains club to club, and keeps consecutive trades in time order,
-  // a transfer's onward hop is the next edge (none after the last). `undefined`: the trail is not unique.
-  const trails = new Map<string, Map<string, Transfer[]> | undefined>();
-  function onwardByTrail(pickId: string, transfer: Transfer): Transfer[] | undefined {
-    if (!trails.has(pickId)) {
-      const edges = transfersByPick.get(pickId) ?? [];
-      const found: Transfer[][] = [];
-      const walk = (trail: Transfer[], used: Set<string>) => {
-        if (found.length > 1) return;
-        if (trail.length === edges.length) return void found.push([...trail]);
-        const last = trail.at(-1)!;
-        for (const next of edges)
-          if (
-            !used.has(next.transferId) &&
-            next.fromClubId === last.toClubId &&
-            notBefore(transactions.get(next.transactionId)!, transactions.get(last.transactionId)!)
-          ) {
-            used.add(next.transferId);
-            walk([...trail, next], used);
-            used.delete(next.transferId);
-          }
-      };
-      for (const first of edges) walk([first], new Set([first.transferId]));
-      trails.set(
-        pickId,
-        found.length === 1
-          ? new Map(found[0]!.map((edge, at) => [edge.transferId, found[0]!.slice(at + 1, at + 2)]))
-          : undefined
-      );
-    }
-    return trails.get(pickId)?.get(transfer.transferId);
-  }
+  // A pick's onward transfers among the graded trades (`createAflTradePickOnwardTransfers`).
+  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+    transactions,
+    inputs.candidate.transfers
+  );
   // Rule v7: a special entitlement's reviewed custody chain, keyed by transfer and by predecessor.
   const custodyRows = inputs.specialEntitlementCustody ?? [];
   const specialCustody = new Map(custodyRows.map((row) => [row.transferId, row]));
@@ -453,7 +415,7 @@ export function gradeAflTradesOnRealizedValue(
       !transactions.has(onward.transactionId) ||
       onward.transactionId === transfer.transactionId ||
       onward.fromClubId !== transfer.toClubId ||
-      !notBefore(transactions.get(onward.transactionId)!, transaction)
+      !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
     )
       return undefined;
     return { transfer: onward, entitlementId: own.entitlementId };
@@ -463,16 +425,8 @@ export function gradeAflTradesOnRealizedValue(
   );
   // A traded-on pick follows its unique trail, else into the one later trade where its club gave it
   // away. More than one, or none, leaves it unlinked.
-  function onwardTransferOf(transfer: Transfer, transaction: Transaction): Transfer | undefined {
-    if (transfer.asset.kind !== 'pick_entitlement') return undefined;
-    const onwardTransfers =
-      onwardByTrail(transfer.asset.pickId, transfer) ??
-      (transfersByPick.get(transfer.asset.pickId) ?? []).filter(
-        (candidate) =>
-          candidate.fromClubId === transfer.toClubId &&
-          candidate.transactionId !== transfer.transactionId &&
-          notBefore(transactions.get(candidate.transactionId)!, transaction)
-      );
+  function onwardTransferOf(transfer: Transfer): Transfer | undefined {
+    const onwardTransfers = onwardTransfersOf(transfer);
     return onwardTransfers.length === 1 ? onwardTransfers[0] : undefined;
   }
   // Rule v3: the onward trades each trade's traded-on legs read. A leg whose onward trade leads back to
@@ -486,7 +440,7 @@ export function gradeAflTradesOnRealizedValue(
         if (special) return [special.transfer.transactionId];
         const outcome = outcomes.get(transfer.transferId);
         const tradedOn = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'traded_on';
-        const onward = tradedOn ? onwardTransferOf(transfer, transaction) : undefined;
+        const onward = tradedOn ? onwardTransferOf(transfer) : undefined;
         return onward ? [onward.transactionId] : [];
       })
     );
@@ -697,14 +651,19 @@ export function gradeAflTradesOnRealizedValue(
         };
       return blocked(base, ['not_used_no_access_evidence']);
     }
-    const onwardTransfer = onwardTransferOf(transfer, transaction);
-    if (!onwardTransfer) return blocked(base, ['traded_on_return_unlinked']);
-    return tradedOnReturnLeg(
-      base,
-      transaction,
-      onwardTransfer,
-      routeCorroborated(transfer, onwardTransfer)
-    );
+    const onwardTransfer = onwardTransferOf(transfer);
+    const leg = onwardTransfer
+      ? tradedOnReturnLeg(
+          base,
+          transaction,
+          onwardTransfer,
+          routeCorroborated(transfer, onwardTransfer)
+        )
+      : blocked(base, ['traded_on_return_unlinked']);
+    // Rule v9: a hop Draftguru stated "not used" that its club traded on in the candidate says so.
+    return outcome.statedDisposition === 'not_used'
+      ? ({ ...leg, reasons: sorted([...leg.reasons, 'stated_not_used_traded_on']) } as Leg)
+      : leg;
   }
 
   /**
