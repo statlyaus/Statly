@@ -734,6 +734,72 @@ describe('MVP realized trade grader', () => {
         });
       });
 
+      it('rule v16: splits a projected return evenly when everything given became nothing', () => {
+        // Draftee d5 and player r realized 0 at St Kilda, so Hawthorn's bundle splits p30 evenly.
+        const leg = legOf(
+          gradeAflTradesOnRealizedValue(
+            inputs(withExcludedReturn(chain(true), false), { ...chainData, pav: [] })
+          ),
+          'tr-A1'
+        );
+        const p30 = hpnDpv3ValueForPick(30);
+        expect(leg).toMatchObject({
+          state: 'valued',
+          realizedValue: p30 / 2,
+          onward: {
+            allocation: 'equal_split',
+            returnValue: p30,
+            givenAssetCount: 2,
+            weight: null,
+            weightTotal: null,
+            share: 0.5,
+            returnProjection: { legs: [{ transferId: 'tr-B4', value: p30 }] },
+          },
+          reasons: [
+            'equal_split_tiebreak',
+            'single_source_pick_outcome',
+            'traded_on_return_estimated_from_projection',
+            'traded_on_return_provisional',
+          ],
+        });
+      });
+
+      it('rule v16: values an upstream hop by the pick its club got back for a projected return', () => {
+        // Gold Coast sends pick X to Hawthorn in tx-0; Hawthorn gives X to Melbourne in tx-A for
+        // pick P, which is worth p30 (the projected return of tx-B). X is worth what P was.
+        const candidate = withExcludedReturn(chain(false), false);
+        candidate.transactions.push(trade('tx-0', 2020));
+        candidate.transfers.push(
+          pick('tr-01', 'tx-0', 'gold-coast', 'hawthorn', 'pick-X', 2021, 10),
+          pick('tr-A2', 'tx-A', 'hawthorn', 'melbourne', 'pick-X', 2021, 10)
+        );
+        candidate.pickOutcomes!.push(
+          outcome('tr-01', { disposition: 'traded_on' }),
+          outcome('tr-A2', {
+            disposition: 'not_used',
+            nominationBasis: 'club_took_no_nominated_player',
+            receivingClubNominatedSelections: 0,
+          })
+        );
+        const batch = gradeAflTradesOnRealizedValue(inputs(candidate, chainData));
+        const p30 = hpnDpv3ValueForPick(30);
+        expect(legOf(batch, 'tr-A1')).toMatchObject({
+          state: 'valued',
+          realizedValue: p30,
+          onward: { transactionId: 'tx-B', returnValue: p30 },
+        });
+        const upstream = legOf(batch, 'tr-01');
+        expect(upstream).toMatchObject({
+          state: 'valued',
+          basis: 'pick_traded_on_return',
+          realizedValue: p30,
+          onward: { transactionId: 'tx-A', allocation: 'sole_asset', returnValue: p30, share: 1 },
+          reasons: ['single_source_pick_outcome', 'traded_on_return_provisional'],
+        });
+        // Its own return, pick P, is valued, so it records no projected return of its own.
+        expect('onward' in upstream && upstream.onward.returnProjection).toBeUndefined();
+      });
+
       it('rule v16: counts an unallocated traded-on return leg at its own projection', () => {
         // Hawthorn trades pick Q on in tx-C for pick Z at 95, which it spends on a nominee: Q's own
         // return is unallocated (Z has no projection). In tx-B, Hawthorn's return is Q (slot 30) and

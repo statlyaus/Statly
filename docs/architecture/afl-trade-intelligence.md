@@ -4446,8 +4446,9 @@ The remaining work proceeds through these independently verifiable gates:
      (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
      nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
      valued and any season with no PAV calculation, and under rule v4 and later its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
-     allocation (`sole_asset`, `relative_value` or `equal_split`), its share and the return (from
-     rule v16, for a return whose every leg is excluded, the sum of their at-trade projections). The batch
+     allocation (`sole_asset`, `relative_value`, `equal_split`, under rule v14 `projection_weighted`,
+     or from rule v15 `hybrid_weighted`), its share and the return (from rule v16, for a return whose
+     every leg is excluded and projected, the sum of their at-trade projections). The batch
      checks that return, weight total and asset count against the onward trade it contains.
    - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
      pick's HPN projection, which must equal the benchmark formula for its slot. Under rule v8 a future
@@ -4816,7 +4817,9 @@ The remaining work proceeds through these independently verifiable gates:
      projection, the pick stays `pick_traded_on_return_unallocated` as under v11. A matched-bid
      nominee pick graded directly stays excluded; only the traded-on return changes. A projection is
      whole-career expected PAV at the trade, not the first stint a realized leg measures, which is why
-     the leg is provisional.
+     the leg is provisional. An excluded return leg's projection counts only when every return leg is
+     excluded: a partly valued return takes only its valued legs (rule v11), so a better onward return
+     can lower an upstream pick's value. That is intended.
 
      The contract checks the return under v16: `returnProjection` is present exactly when the reason
      is, `returnValue` is the projections' sum, the projections are exactly those of every leg the

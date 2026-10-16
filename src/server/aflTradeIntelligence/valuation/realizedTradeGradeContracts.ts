@@ -551,7 +551,7 @@ const onwardSchema = z
     )
       context.addIssue({
         code: 'custom',
-        message: 'A projected return is the sum of its legs’ projections, in transfer order.',
+        message: 'A projected return is the sum of its legs’ projections.',
       });
     const issue = (message: string) => context.addIssue({ code: 'custom', message });
     const weighted = onward.weight !== null && onward.weightTotal !== null;
