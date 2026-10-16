@@ -15,11 +15,13 @@ import {
   aflTradeRealizedBundleWeightTotal,
   aflTradeRealizedOnwardHybridWeights,
   aflTradeRealizedOnwardReturnExcluded,
+  aflTradeRealizedOnwardReturnProjection,
   aflTradeRealizedOnwardSideProjected,
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
   type AflTradeRealizedGradeReason,
   type AflTradeRealizedHybridWeight,
+  type AflTradeRealizedReturnProjection,
   type AflTradeRealizedTradeGrade,
   type AflTradeRealizedTradeGradeBatch,
   type AflTradeRealizedTradeGradeBatchContent,
@@ -311,10 +313,36 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
 const representableClub = (clubId: string | null): clubId is string =>
   !!clubId && clubId.length <= 160 && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(clubId);
 
+interface OnwardReturn {
+  returnValue: number;
+  returnProjection?: AflTradeRealizedReturnProjection;
+}
+
 /**
- * Rules v11, v13 and v15: how a traded-on pick's onward return is allocated when realized weights may
- * not be: `unallocated`, the hybrid weights to split the bundle by, or null for the realized split.
- * A return whose every leg is excluded is unknown, not a known 0. In a bundle with any excluded asset
+ * Rules v11 and v16: what a traded-on pick's club got back in the onward trade. A return whose every
+ * leg is excluded is unknown, not a known 0 (v11). From v16, when each of those legs has an at-trade
+ * HPN DPVC v3 projection (in practice picks the club then spent matching a bid), the return is their
+ * sum, the draft value the club spent on the match; a leg with none leaves it unallocated. An excluded
+ * leg that is itself an unallocated traded-on pick counts at its own projection, not its onward chain.
+ */
+function onwardReturnOf(
+  onwardLegs: readonly Leg[],
+  clubId: string,
+  received: number,
+  benchmarkId: string
+): OnwardReturn | 'unallocated' {
+  if (!aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)) return { returnValue: received };
+  const legs = aflTradeRealizedOnwardReturnProjection(onwardLegs, clubId);
+  if (!legs) return 'unallocated';
+  return {
+    returnValue: aflTradeRealizedBundleWeightTotal(legs),
+    returnProjection: { benchmarkId, legs },
+  };
+}
+
+/**
+ * Rules v13 and v15: how a bundle shares its return when realized weights may not: `unallocated`, the
+ * hybrid weights to split it by, or null for the realized split. In a bundle with any excluded asset
  * (the pick itself or a sibling), that asset's realized weight is unknown; through v12 an excluded
  * sibling dropped out of the total and its valued siblings absorbed its share, and v13 left the
  * bundle unallocated. Rule v14 split it by every asset's projection; from v15 each valued asset weighs
@@ -326,7 +354,6 @@ function onwardHybridSplit(
   onwardLegs: readonly Leg[],
   clubId: string
 ): 'unallocated' | AflTradeRealizedHybridWeight[] | null {
-  if (aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)) return 'unallocated';
   if (!aflTradeRealizedOnwardBundleExcluded(onwardLegs, clubId)) return null;
   return aflTradeRealizedOnwardHybridWeights(onwardLegs, clubId) ?? 'unallocated';
 }
@@ -336,10 +363,13 @@ function onwardReturnReasons(
   single: readonly AflTradeRealizedGradeReason[],
   allocation: 'sole_asset' | 'relative_value' | 'equal_split' | 'hybrid_weighted',
   onward: AflTradeRealizedTradeGrade,
-  clubId: string
+  clubId: string,
+  onwardReturn: OnwardReturn
 ): AflTradeRealizedGradeReason[] {
   const reasons: AflTradeRealizedGradeReason[] = [...single];
   if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
+  // Rule v16: an all-excluded return is valued at its legs' at-trade projections, not realized value.
+  if (onwardReturn.returnProjection) reasons.push('traded_on_return_estimated_from_projection');
   // Rule v15: an excluded asset's realized weight is unknown, so its projection stands in for it.
   if (allocation === 'hybrid_weighted') reasons.push('bundle_split_estimated_weights');
   if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
@@ -368,6 +398,26 @@ function allocateByHybridWeights(
     weight,
     weightTotal,
     hybridWeights: { benchmarkId, onwardTransferId, assets },
+  };
+}
+
+/** The onward block a valued traded-on pick records: its return, its allocation and their audit. */
+function onwardBlock(
+  transactionId: string,
+  givenAssetCount: number,
+  allocated: ReturnType<typeof allocateByHybridWeights> | ReturnType<typeof allocateOnwardReturn>,
+  onwardReturn: OnwardReturn
+) {
+  return {
+    transactionId,
+    allocation: allocated.allocation,
+    returnValue: onwardReturn.returnValue,
+    givenAssetCount,
+    weight: allocated.weight,
+    weightTotal: allocated.weightTotal,
+    share: allocated.share,
+    ...('hybridWeights' in allocated ? { hybridWeights: allocated.hybridWeights } : {}),
+    ...(onwardReturn.returnProjection ? { returnProjection: onwardReturn.returnProjection } : {}),
   };
 }
 
@@ -747,8 +797,11 @@ export function gradeAflTradesOnRealizedValue(
     const single: AflTradeRealizedGradeReason[] = specialEntitlement
       ? [...singleSource, 'special_entitlement_custody_linked']
       : singleSource;
-    const hybridSplit = onwardHybridSplit(onward.legs, receiving);
-    if (hybridSplit === 'unallocated')
+    const benchmarkId = inputs.pickProjectionBenchmarkId;
+    const onwardReturn = onwardReturnOf(onward.legs, receiving, club.received, benchmarkId);
+    const hybridSplit =
+      onwardReturn === 'unallocated' ? 'unallocated' : onwardHybridSplit(onward.legs, receiving);
+    if (onwardReturn === 'unallocated' || hybridSplit === 'unallocated')
       return {
         ...base,
         ...source,
@@ -758,34 +811,26 @@ export function gradeAflTradesOnRealizedValue(
         onwardTransactionId: onward.transactionId,
         reasons: sorted([...single, 'traded_on_return_unallocated']),
       };
-    const returnValue = club.received;
     // A sole asset's pick leg may itself be blocked or excluded there, leaving givenUp unused.
     const weight = pickLeg.state === 'valued' ? pickLeg.realizedValue : 0;
     const allocated = hybridSplit
-      ? allocateByHybridWeights(
-          hybridSplit,
-          onwardTransfer.transferId,
-          inputs.pickProjectionBenchmarkId
-        )
+      ? allocateByHybridWeights(hybridSplit, onwardTransfer.transferId, benchmarkId)
       : allocateOnwardReturn(given.length, club.givenUp ?? 0, weight);
-    const reasons = onwardReturnReasons(single, allocated.allocation, onward, receiving);
+    const reasons = onwardReturnReasons(
+      single,
+      allocated.allocation,
+      onward,
+      receiving,
+      onwardReturn
+    );
     return {
       ...base,
       ...source,
       ...special,
       state: 'valued',
       basis: 'pick_traded_on_return',
-      realizedValue: allocated.share * returnValue,
-      onward: {
-        transactionId: onward.transactionId,
-        allocation: allocated.allocation,
-        returnValue,
-        givenAssetCount: given.length,
-        weight: allocated.weight,
-        weightTotal: allocated.weightTotal,
-        share: allocated.share,
-        ...('hybridWeights' in allocated ? { hybridWeights: allocated.hybridWeights } : {}),
-      },
+      realizedValue: allocated.share * onwardReturn.returnValue,
+      onward: onwardBlock(onward.transactionId, given.length, allocated, onwardReturn),
       reasons: sorted(reasons),
     };
   }

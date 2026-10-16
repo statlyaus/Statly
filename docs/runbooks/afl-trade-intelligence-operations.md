@@ -3448,6 +3448,14 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   (player beside an excluded asset), count how many are now split and how many stay unallocated,
   and spot-check that each split leg's weights match its onward bundle's realized values and
   projections.
+- Under rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is
+  valued at the sum of those legs' HPN DPVC v3 at-trade projections (`returnProjection`,
+  provisional `traded_on_return_estimated_from_projection`), shared among the assets the club gave
+  as any other return; it stays unallocated when a return leg has no projection. Only the grader
+  changed, so regrade the current candidate; no re-reconcile is needed. Of the 31 legs v15 left
+  unallocated on an all-excluded return, count how many are now valued (the coordinator expects
+  most of the 30 whose return is matched-bid picks) and how many stay unallocated, and spot-check
+  that each valued leg's `returnProjection` lists exactly its club's return legs in the onward trade.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
