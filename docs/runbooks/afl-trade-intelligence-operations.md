@@ -3406,6 +3406,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   same pick on later, is valued by its traded-on return (`stated_not_used_traded_on`). The
   reconciler records it (`statedDisposition: 'not_used'`), so re-reconcile before regrading; a
   candidate reconciled before this rule still values those hops at 0.
+- Under rule v10 a receiving club's selection Draftguru marks open but a reviewed Footyinfo board
+  records as that club's matched bid counts as a nominee, so the club's not-used picks in that draft
+  are excluded (`nomineeMatchedBidBy: footyinfo`) instead of worth 0 (2020 pick 41, Hawthorn to
+  Collingwood, with Reef McInnes). The reconciler records it (`matchedBidBoardPickIds`), so
+  re-reconcile before regrading; every board candidate gets a new id, since its board picks now
+  state any matched bid's basis.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

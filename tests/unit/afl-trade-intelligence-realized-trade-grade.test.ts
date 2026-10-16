@@ -1147,7 +1147,7 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v9');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v10');
     expect(batch.content.limitation).toContain(
       "a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used"
     );
@@ -1378,6 +1378,44 @@ describe('rule v5: a Footyinfo board proves the 2025 national draft (owner decis
         receivingClubNominatedSelections: 0,
       })
     ).not.toHaveProperty('draftProvenBy');
+  });
+});
+
+describe('rule v10: a nominee only a Footyinfo board matched bid records (issue 789)', () => {
+  // 2020 pick 41, Hawthorn to Collingwood: not used, and Collingwood matched GWS's academy bid for
+  // Reef McInnes, whom Draftguru marks open.
+  const legFor = (fields: Partial<Outcome>) =>
+    legOf(
+      gradeAflTradesOnRealizedValue(
+        inputs({
+          transactions: [trade('tx-5', 2020)],
+          transfers: [pick('tr-5a', 'tx-5', 'hawthorn', 'collingwood', 'pick-Z', 2020, 41)],
+          pickOutcomes: [outcome('tr-5a', { disposition: 'not_used', ...fields })],
+        })
+      ),
+      'tr-5a'
+    );
+  const boardPickId = `external-draft-board-pick:${hex('b')}`;
+
+  it('excludes the pick, single-source, and names the board', () => {
+    const excluded = legFor({
+      nominationBasis: 'club_took_nominated_player',
+      receivingClubNominatedSelections: 1,
+      matchedBidBoardPickIds: [boardPickId],
+    });
+    expect(excluded).toMatchObject({
+      state: 'excluded',
+      basis: 'pick_not_used_nominee_excluded',
+      nomineeMatchedBidBy: 'footyinfo',
+      reasons: ['not_used_nominee_excluded', 'single_source_pick_outcome'],
+    });
+    expect(excluded).not.toHaveProperty('corroboratedBy');
+  });
+
+  it('names nothing when Draftguru’s categories alone give the count', () => {
+    expect(
+      legFor({ nominationBasis: 'club_took_nominated_player', receivingClubNominatedSelections: 1 })
+    ).not.toHaveProperty('nomineeMatchedBidBy');
   });
 });
 

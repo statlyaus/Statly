@@ -173,6 +173,13 @@ const pickOutcomeSchema = z
      */
     draftProvenBy: z.literal('footyinfo').optional(),
     /**
+     * Issue 789 (2026-10-16): the board picks recording a receiving-club selection Draftguru marks
+     * open as that club's matched bid, each counted as a nominee.
+     */
+    matchedBidBoardPickIds: sortedUniqueIdsSchema
+      .pipe(z.array(aflTradeContentAddressedIdSchema('external-draft-board-pick')).min(1).max(90))
+      .optional(),
+    /**
      * Issue 789: Draftguru stated this hop "not used", but the candidate holds the receiving club's
      * onward transfer of the same pick in a later trade, so the outcome is traded on.
      */
@@ -189,6 +196,13 @@ const pickOutcomeSchema = z
       record.draftProvenBy !== undefined &&
       basis !== 'club_took_nominated_player' &&
       basis !== 'club_took_no_nominated_player'
+    )
+      return false;
+    // A board-recorded matched bid is a counted nominee, so it only ever raises a positive count.
+    const matchedBids = record.matchedBidBoardPickIds?.length ?? 0;
+    if (
+      matchedBids > 0 &&
+      (basis !== 'club_took_nominated_player' || count === undefined || count < matchedBids)
     )
       return false;
     if (basis === undefined) return count === undefined;
@@ -227,6 +241,8 @@ const draftBoardPickSchema = z
     status: z.enum(['selected', 'passed', 'removed']),
     clubId: z.string().trim().min(1).max(240).nullable(),
     routeClubIds: z.array(z.string().trim().min(1).max(240)).max(16).nullable(),
+    /** Issue 789: the basis of the bid the holder matched, when the board states a matched bid. */
+    matchedBidBasis: z.enum(['father_son', 'academy', 'next_generation_academy']).optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
@@ -931,6 +947,21 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         : (content.draftBoardPicks ?? []).find(
             ({ boardPickId }) => boardPickId === outcome.boardPickId
           );
+    // A board-recorded nominee cites a selected matched-bid board pick the receiving club held in the
+    // pick's draft (issue 789).
+    const matchedBids = (outcome.matchedBidBoardPickIds ?? []).map((id) =>
+      (content.draftBoardPicks ?? []).find(({ boardPickId }) => boardPickId === id)
+    );
+    const matchedBidsMatch = matchedBids.every(
+      (matched) =>
+        matched !== undefined &&
+        asset !== null &&
+        matched.matchedBidBasis !== undefined &&
+        matched.status === 'selected' &&
+        matched.draftYear === asset.draftYear &&
+        matched.draftType === asset.draftType &&
+        matched.clubId === transfer?.toClubId
+    );
     const route = board?.routeClubIds ?? [];
     const boardMatches =
       outcome.boardPickId === undefined ||
@@ -950,13 +981,15 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
       ...(selection?.evidenceIds ?? []),
       ...nominationEvidenceIds,
       ...(board?.evidenceIds ?? []),
+      ...matchedBids.flatMap((matched) => matched?.evidenceIds ?? []),
     ]);
     if (
       !transfer ||
       !asset ||
       !outcome.evidenceIds.every((evidenceId) => citable.has(evidenceId)) ||
       !selectedPlayerMatches ||
-      !boardMatches
+      !boardMatches ||
+      !matchedBidsMatch
     ) {
       context.addIssue({
         code: 'custom',
