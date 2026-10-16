@@ -3470,6 +3470,16 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   now valued. Expect some existing traded-on at-trade views to move from `order` to
   `onward_selection` where the trail ends in a selection at another number, and their bundle weights
   and returns with them.
+- Under rule v18 every excluded leg of a traded-on pick's onward return counts at its at-trade
+  projection beside the valued legs' realized total (`returnProjection.realizedValue`), not only in
+  an all-excluded return; the pick is unallocated only when an excluded return leg has no
+  projection. Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
+  Against batch `414fa5dd`, check the 74 traded-on legs whose partial return held 106
+  `pick_not_used_nominee_excluded` legs: each should now carry a `returnProjection` listing exactly
+  its club's excluded return legs, with `realizedValue` equal to its club's `received` in the onward
+  trade, and the 2023 R2 (GWS) pick should be worth 17.1 plus its three projections (about 91.6),
+  not 17.1. Count the partial returns that are now unallocated because an excluded leg has no
+  projection (v17 valued them at their valued legs alone).
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

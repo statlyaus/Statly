@@ -14,8 +14,9 @@ import {
   aflTradeRealizedBundleWeightTotal,
   aflTradeRealizedOnwardEstimateReasons,
   aflTradeRealizedOnwardHybridWeights,
-  aflTradeRealizedOnwardReturnExcluded,
+  aflTradeRealizedOnwardReturnHoldsExcluded,
   aflTradeRealizedOnwardReturnProjection,
+  aflTradeRealizedProjectedReturnValue,
   aflTradeRealizedOnwardSideProjected,
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
@@ -230,11 +231,13 @@ interface OnwardReturn {
 }
 
 /**
- * Rules v11 and v16: what a traded-on pick's club got back in the onward trade. A return whose every
- * leg is excluded is unknown, not a known 0 (v11). From v16, when each of those legs has an at-trade
- * HPN DPVC v3 projection (in practice picks the club then spent matching a bid), the return is their
- * sum, the draft value the club spent on the match; a leg with none leaves it unallocated. An excluded
- * leg that is itself an unallocated traded-on pick counts at its own projection, not its onward chain.
+ * Rules v11, v16 and v18: what a traded-on pick's club got back in the onward trade. An excluded return
+ * leg's realized value is unknown, not a known 0 (v11 for an all-excluded return). From v16 such a leg
+ * counts at its at-trade HPN DPVC v3 projection (in practice a pick the club then spent matching a bid,
+ * the draft value it spent on the match), and from v18 in any return, beside the realized total of the
+ * valued legs, so a better onward return never erases a projected leg. An excluded leg with no
+ * projection leaves the pick unallocated. An excluded leg that is itself an unallocated traded-on pick
+ * counts at its own projection, not its onward chain.
  */
 function onwardReturnOf(
   onwardLegs: readonly Leg[],
@@ -242,13 +245,13 @@ function onwardReturnOf(
   received: number,
   benchmarkId: string
 ): OnwardReturn | 'unallocated' {
-  if (!aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)) return { returnValue: received };
-  const legs = aflTradeRealizedOnwardReturnProjection(onwardLegs, clubId);
+  const ruleVersion = AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION;
+  if (!aflTradeRealizedOnwardReturnHoldsExcluded(onwardLegs, clubId, ruleVersion))
+    return { returnValue: received };
+  const legs = aflTradeRealizedOnwardReturnProjection(onwardLegs, clubId, ruleVersion);
   if (!legs) return 'unallocated';
-  return {
-    returnValue: aflTradeRealizedBundleWeightTotal(legs),
-    returnProjection: { benchmarkId, legs },
-  };
+  const returnProjection = { benchmarkId, realizedValue: received, legs };
+  return { returnValue: aflTradeRealizedProjectedReturnValue(returnProjection), returnProjection };
 }
 
 /**
@@ -279,7 +282,7 @@ function onwardReturnReasons(
 ): AflTradeRealizedGradeReason[] {
   const reasons: AflTradeRealizedGradeReason[] = [...single];
   if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
-  // Rule v16: an all-excluded return is valued at its legs' at-trade projections, not realized value.
+  // Rules v16 and v18: a return's excluded legs are valued at their at-trade projections.
   if (onwardReturn.returnProjection) reasons.push('traded_on_return_estimated_from_projection');
   // Rule v15: an excluded asset's realized weight is unknown, so its projection stands in for it.
   if (allocation === 'hybrid_weighted') reasons.push('bundle_split_estimated_weights');
