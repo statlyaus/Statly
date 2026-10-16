@@ -54,6 +54,16 @@ const pick = (
     status: 'single_source',
     evidenceIds: [],
   }) as unknown as Transfer;
+/** A pick of a draft HPN's national-draft benchmark does not cover, so it has no projection. */
+const rookie = (transfer: Transfer): Transfer =>
+  ({ ...transfer, asset: { ...transfer.asset, draftType: 'rookie' } }) as Transfer;
+/** Moves one transfer of a candidate to the rookie draft. */
+const unprojected = (candidate: Candidate, transferId: string): Candidate => ({
+  ...candidate,
+  transfers: candidate.transfers.map((transfer) =>
+    transfer.transferId === transferId ? rookie(transfer) : transfer
+  ),
+});
 const outcome = (transferId: string, fields: Partial<Outcome>): Outcome =>
   ({
     outcomeId: `outcome-${transferId}`,
@@ -599,9 +609,9 @@ describe('MVP realized trade grader', () => {
       });
 
       it('leaves a hop unallocated, not 0, when an excluded return leg has no projection', () => {
-        // Pick Q at 95 is outside HPN's 1 to 90, so rule v16 has no projection to value it by.
+        // Pick Q is a rookie-draft pick, outside HPN's national draft, so rule v16 has no projection.
         const batch = gradeAflTradesOnRealizedValue(
-          inputs(withExcludedReturn(chain(false), false, 95), chainData)
+          inputs(unprojected(withExcludedReturn(chain(false), false), 'tr-B4'), chainData)
         );
         expect(gradeOf(batch, 'tx-B').clubs).toContainEqual({
           clubId: 'hawthorn',
@@ -626,9 +636,11 @@ describe('MVP realized trade grader', () => {
       });
 
       it('keeps the hop unallocated when one of several excluded return legs has no projection', () => {
-        // Hawthorn gets back pick Q at 30 (projected) and pick W at 95 (none): the sum is unknown.
+        // Hawthorn gets back pick Q at 30 (projected) and rookie pick W (none): the sum is unknown.
         const candidate = withExcludedReturn(chain(false), false);
-        candidate.transfers.push(pick('tr-B6', 'tx-B', 'st-kilda', 'hawthorn', 'pick-W', 2021, 95));
+        candidate.transfers.push(
+          rookie(pick('tr-B6', 'tx-B', 'st-kilda', 'hawthorn', 'pick-W', 2021, 30))
+        );
         candidate.pickOutcomes!.push(outcome('tr-B6', nominee));
         expect(
           legOf(gradeAflTradesOnRealizedValue(inputs(candidate, chainData)), 'tr-A1')
@@ -801,7 +813,7 @@ describe('MVP realized trade grader', () => {
       });
 
       it('rule v16: counts an unallocated traded-on return leg at its own projection', () => {
-        // Hawthorn trades pick Q on in tx-C for pick Z at 95, which it spends on a nominee: Q's own
+        // Hawthorn trades pick Q on in tx-C for rookie pick Z, which it spends on a nominee: Q's own
         // return is unallocated (Z has no projection). In tx-B, Hawthorn's return is Q (slot 30) and
         // pick W (slot 40, a nominee): P is worth both projections, Q's onward chain unread.
         const candidate = withExcludedReturn(chain(false), false);
@@ -809,7 +821,7 @@ describe('MVP realized trade grader', () => {
         candidate.transfers.push(
           pick('tr-B6', 'tx-B', 'st-kilda', 'hawthorn', 'pick-W', 2021, 40),
           pick('tr-C1', 'tx-C', 'hawthorn', 'geelong', 'pick-Q', 2021, 30),
-          pick('tr-C2', 'tx-C', 'geelong', 'hawthorn', 'pick-Z', 2021, 95)
+          rookie(pick('tr-C2', 'tx-C', 'geelong', 'hawthorn', 'pick-Z', 2021, 30))
         );
         candidate.pickOutcomes = [
           ...candidate.pickOutcomes!.filter(({ transferId }) => transferId !== 'tr-B4'),
@@ -940,9 +952,9 @@ describe('MVP realized trade grader', () => {
       });
 
       it('keeps v13’s unallocated when an excluded asset given has no projection', () => {
-        // Pick S at 95 is outside HPN's 1 to 90, so it has no weight to split by.
+        // Pick S is a rookie-draft pick, outside HPN's national draft, so it has no weight.
         const batch = gradeAflTradesOnRealizedValue(
-          inputs(withExcludedSibling(chain(false), 95), chainData)
+          inputs(unprojected(withExcludedSibling(chain(false)), 'tr-B5'), chainData)
         );
         expect(legOf(batch, 'tr-B5').atTrade).toEqual({
           kind: 'unavailable',
@@ -1642,14 +1654,14 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v16 and its limitation', () => {
+  it('seals rule v17 and keeps rule v16’s limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v16');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v17');
     expect(batch.content.limitation).toContain(
       "from rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is valued, provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its club spent matching a bid), and stays unallocated when one has none"
     );
@@ -2267,6 +2279,41 @@ describe('rule v7: a special entitlement follows its reviewed custody chain (iss
     specialEntitlementCustody: chain,
   };
 
+  it('rule v17: reports the selection its custody successor was used at, else stays outside', () => {
+    const candidate = geelong();
+    candidate.pickOutcomes = [
+      outcome('tr-C1', { disposition: 'selected', playerId: 'd15', selectionId: 'selection-15' }),
+    ];
+    candidate.draftSelections = [
+      {
+        selectionId: 'selection-15',
+        draftYear: 2020,
+        draftType: 'national',
+        selectionNumber: 15,
+        roundNumber: 1,
+        pickId: 'pick-15',
+        playerId: 'd15',
+        clubId: 'gws',
+        status: 'single_source',
+        supportingProviders: ['draftguru'],
+        evidenceIds: [],
+      } as unknown as NonNullable<Candidate['draftSelections']>[number],
+    ];
+    expect(legOf(gradeAflTradesOnRealizedValue(inputs(candidate, data)), 'tr-S1').atTrade).toEqual({
+      kind: 'pick_projection_eventual_slot',
+      benchmarkId: `hpn-pick-benchmark:${hex('b')}`,
+      selectionNumber: 15,
+      slotSource: 'onward_selection',
+      value: hpnDpv3ValueForPick(15),
+    });
+    // No selection on the successor's trail, or no custody chain: no real slot.
+    for (const extra of [{}, { specialEntitlementCustody: [] }])
+      expect(
+        legOf(gradeAflTradesOnRealizedValue(inputs(geelong(), { ...data, ...extra })), 'tr-S1')
+          .atTrade
+      ).toEqual({ kind: 'unavailable', reason: 'pick_outside_projection_domain' });
+  });
+
   it('values a special entitlement at its share of the return its successor brought back', () => {
     const batch = gradeAflTradesOnRealizedValue(inputs(geelong(), data));
     expect(legOf(batch, 'tr-S1')).toMatchObject({
@@ -2590,5 +2637,468 @@ describe('rule v8: a future pick’s at-trade view is the slot it eventually too
       selectionNumber: 12,
       value: hpnDpv3ValueForPick(12),
     });
+  });
+});
+
+describe('rule v17: at-trade projections for selected, consumed and out-of-domain picks (issue 789)', () => {
+  type Selection = NonNullable<Candidate['draftSelections']>[number];
+  type Custody = NonNullable<Candidate['pickCustody']>[number];
+  const benchmarkId = `hpn-pick-benchmark:${hex('b')}`;
+  const UNKNOWN = { kind: 'unavailable', reason: 'future_pick_slot_unknown' };
+  const eventual = (selectionNumber: number, slotSource: string) => ({
+    kind: 'pick_projection_eventual_slot',
+    benchmarkId,
+    selectionNumber,
+    slotSource,
+    value: hpnDpv3ValueForPick(selectionNumber),
+  });
+  /** A future pick (no slot at the trade) with its draft, round and original club. */
+  const future = (
+    ids: [transferId: string, transactionId: string, from: string, to: string],
+    round: number,
+    originalClubId: string | null,
+    draftYear = 2024
+  ): Transfer => {
+    const [transferId, transactionId, from, to] = ids;
+    const transfer = pick(transferId, transactionId, from, to, 'pick-F', draftYear, null);
+    const asset = { ...transfer.asset, nominalRound: round, originalClubId };
+    return { ...transfer, asset } as Transfer;
+  };
+  const selection = (selectionNumber: number, fields: Partial<Selection> = {}): Selection =>
+    ({
+      selectionId: `selection-${selectionNumber}`,
+      draftYear: 2024,
+      draftType: 'national',
+      selectionNumber,
+      roundNumber: 1,
+      pickId: `pick-${selectionNumber}`,
+      playerId: 'draftee',
+      clubId: 'sydney',
+      // Its custody is unresolved: no capture names the pick's original club (rule v8 skipped it).
+      status: 'unresolved',
+      supportingProviders: ['draftguru'],
+      evidenceIds: [],
+      ...fields,
+    }) as Selection;
+  /** One row of a final order: a club's own pick in a round. */
+  const order = (
+    digit: string,
+    originalClubId: string,
+    roundNumber: number,
+    recordedPickNumber: number | null,
+    fields: Partial<Custody> = {}
+  ): Custody =>
+    ({
+      custodyId: `external-pick-custody:${hex(digit)}`,
+      pickId: `pick-${originalClubId}-${roundNumber}`,
+      observedAt: { precision: 'day', date: '2024-11-20' },
+      draftYear: 2024,
+      draftType: 'national',
+      roundNumber,
+      recordedPickNumber,
+      originalClubId,
+      currentClubId: originalClubId,
+      status: 'single_source',
+      evidenceIds: [],
+      ...fields,
+    }) as unknown as Custody;
+  // The 2024 first round names all 18 clubs: Geelong 3, Collingwood 9, then 16 more from 10 on
+  // (Hawthorn's own first-round pick is not among them), so Collingwood ranks second.
+  const others = [
+    'adelaide',
+    'brisbane',
+    'carlton',
+    'essendon',
+    'fremantle',
+    'gold-coast',
+    'gws',
+    'melbourne',
+    'north-melbourne',
+    'port-adelaide',
+    'richmond',
+    'st-kilda',
+    'sydney',
+    'tasmania',
+    'west-coast',
+    'western-bulldogs',
+  ];
+  const firstRound = [
+    order('1', 'geelong', 1, 3),
+    order('2', 'collingwood', 1, 9),
+    ...others.map((club, at) =>
+      order('0', club, 1, 10 + at, {
+        custodyId: `external-pick-custody:${(at + 16).toString(16).padStart(64, '0')}`,
+      })
+    ),
+  ];
+  const proxy = (clubPosition: number, roundNumber: number, selectionNumber: number) => ({
+    kind: 'pick_projection_round_position_proxy',
+    benchmarkId,
+    roundNumber,
+    clubPosition,
+    selectionNumber,
+    orderCustodyId: `external-pick-custody:${hex('2')}`,
+    value: hpnDpv3ValueForPick(selectionNumber),
+  });
+  const noNominee = {
+    disposition: 'not_used',
+    nominationBasis: 'club_took_no_nominated_player',
+    receivingClubNominatedSelections: 0,
+  } as const;
+  const nominee = {
+    disposition: 'not_used',
+    nominationBasis: 'club_took_nominated_player',
+    receivingClubNominatedSelections: 1,
+  } as const;
+  const drafted = (selectionNumber: number) =>
+    ({
+      disposition: 'selected',
+      playerId: 'draftee',
+      selectionId: `selection-${selectionNumber}`,
+    }) as const;
+  // 2023: Collingwood sends its 2024 pick to Richmond for player p1.
+  const single = (
+    round: number,
+    originalClubId: string | null,
+    outcomeFields: Partial<Outcome>,
+    extra: Partial<Candidate> = {}
+  ): Candidate => ({
+    transactions: [trade('tx-1', 2023)],
+    transfers: [
+      future(['tr-1a', 'tx-1', 'collingwood', 'richmond'], round, originalClubId),
+      player('tr-1b', 'tx-1', 'richmond', 'collingwood', 'p1'),
+    ],
+    pickOutcomes: [outcome('tr-1a', outcomeFields)],
+    ...extra,
+  });
+  // 2023: a 2024 pick goes from `first` to Richmond, which trades it on to `last` for player p2.
+  const trail = (
+    [first, last]: [string, string],
+    round: number,
+    originalClubId: string | null,
+    end: Partial<Outcome>,
+    extra: Partial<Candidate> = {}
+  ): Candidate => ({
+    transactions: [trade('tx-A', 2023), trade('tx-B', 2023)],
+    transfers: [
+      future(['tr-A1', 'tx-A', first, 'richmond'], round, originalClubId),
+      player('tr-A2', 'tx-A', 'richmond', first, 'p1'),
+      future(['tr-B1', 'tx-B', 'richmond', last], round, originalClubId),
+      player('tr-B2', 'tx-B', last, 'richmond', 'p2'),
+    ],
+    pickOutcomes: [outcome('tr-A1', { disposition: 'traded_on' }), outcome('tr-B1', end)],
+    ...extra,
+  });
+  const atTradeOf = (candidate: Candidate, transferId = 'tr-1a') =>
+    legOf(gradeAflTradesOnRealizedValue(inputs(candidate)), transferId).atTrade;
+
+  describe('case 1: a used pick takes its selection’s slot', () => {
+    it('values a selected pick with no original club (Ned Bowman, 26) at its unresolved selection', () => {
+      const candidate = single(1, null, drafted(26), { draftSelections: [selection(26)] });
+      expect(atTradeOf(candidate)).toEqual(eventual(26, 'selection'));
+      // A disputed selection, or one naming no player, still settles nothing.
+      candidate.draftSelections = [selection(26, { status: 'disputed' })];
+      expect(atTradeOf(candidate)).toEqual(UNKNOWN);
+      candidate.draftSelections = [selection(26, { playerId: null })];
+      expect(atTradeOf(candidate)).toEqual(UNKNOWN);
+    });
+
+    // Port Adelaide's 2024 R1 (no original club) goes to Richmond, then to North Melbourne, who use
+    // it at 27 (Matt Whitlock).
+    const whitlock = (extra: Partial<Candidate> = {}) =>
+      trail(['port-adelaide', 'north-melbourne'], 1, null, drafted(27), {
+        draftSelections: [selection(27, { clubId: 'north-melbourne' })],
+        ...extra,
+      });
+
+    it('values a traded-on pick at the selection its trail ends in, on a later hop', () => {
+      expect(atTradeOf(whitlock(), 'tr-A1')).toEqual(eventual(27, 'onward_selection'));
+      expect(atTradeOf(whitlock(), 'tr-B1')).toEqual(eventual(27, 'selection'));
+    });
+
+    it('takes the trail’s selection over the pick’s own order slot', () => {
+      const own = order('4', 'port-adelaide', 1, 25, { pickId: 'pick-F' });
+      expect(atTradeOf(whitlock({ pickCustody: [own] }), 'tr-A1')).toEqual(
+        eventual(27, 'onward_selection')
+      );
+    });
+
+    it('falls back to the pick’s own order slot when a later hop is unresolved', () => {
+      const own = order('4', 'port-adelaide', 1, 25, { pickId: 'pick-F' });
+      const candidate = whitlock({ pickCustody: [own] });
+      candidate.pickOutcomes![1] = outcome('tr-B1', {
+        disposition: 'selected',
+        outcomeStatus: 'unresolved',
+      });
+      expect(atTradeOf(candidate, 'tr-A1')).toEqual(eventual(25, 'order'));
+    });
+
+    it('keeps the slot unknown when the trail’s selection is beyond 90', () => {
+      const late = whitlock({
+        draftSelections: [selection(27, { clubId: 'north-melbourne', selectionNumber: 91 })],
+      });
+      expect(atTradeOf(late, 'tr-A1')).toEqual(UNKNOWN);
+    });
+  });
+
+  describe('case 2: a pick with no slot in its draft’s final order takes a round-position proxy', () => {
+    it.each<[string, Partial<Outcome>]>([
+      ['spent matching a bid', nominee],
+      ['never used', noNominee],
+    ])('projects a round-4 pick %s at its club’s rank plus 54', (_label, fields) => {
+      // Collingwood ranks second by its own first-round slot: 2 + 18 × 3 = 56.
+      const candidate = single(4, 'collingwood', fields, { pickCustody: firstRound });
+      expect(atTradeOf(candidate)).toEqual(proxy(2, 4, 56));
+      // An unnumbered capture of the pick itself (spent before the final order) changes nothing.
+      const spent = order('5', 'collingwood', 4, null, { pickId: 'pick-F' });
+      candidate.pickCustody = [...firstRound, spent];
+      expect(atTradeOf(candidate)).toEqual(proxy(2, 4, 56));
+    });
+
+    it('caps a late round at 90 and changes no total', () => {
+      const batch = gradeAflTradesOnRealizedValue(
+        inputs(single(6, 'collingwood', noNominee, { pickCustody: firstRound }))
+      );
+      expect(legOf(batch, 'tr-1a')).toMatchObject({
+        state: 'valued',
+        basis: 'pick_not_used_no_nominee',
+        realizedValue: 0,
+        reasons: ['single_source_pick_outcome'],
+        atTrade: proxy(2, 6, 90),
+      });
+      expect(gradeOf(batch, 'tx-1').clubs).toEqual([
+        { clubId: 'collingwood', received: 0, givenUp: 0, net: 0 },
+        { clubId: 'richmond', received: 0, givenUp: 0, net: 0 },
+      ]);
+    });
+
+    it('projects a traded-on pick whose trail ended unused', () => {
+      const candidate = trail(['collingwood', 'essendon'], 4, 'collingwood', noNominee, {
+        pickCustody: firstRound,
+      });
+      expect(atTradeOf(candidate, 'tr-A1')).toEqual(proxy(2, 4, 56));
+    });
+
+    const withoutCollingwood = firstRound.filter((row) => row.originalClubId !== 'collingwood');
+    it.each<[string, Candidate]>([
+      ['no original club (a 2023 R3)', single(3, null, noNominee, { pickCustody: firstRound })],
+      [
+        'an original club with no first-round slot',
+        single(4, 'hawthorn', noNominee, { pickCustody: firstRound }),
+      ],
+      [
+        'an original club whose first-round slot is disputed',
+        single(4, 'collingwood', noNominee, {
+          pickCustody: [
+            ...withoutCollingwood,
+            order('2', 'collingwood', 1, 9, { status: 'disputed' }),
+          ],
+        }),
+      ],
+      [
+        'another club’s first-round slot disputed, which would move Collingwood up a place',
+        single(4, 'collingwood', noNominee, {
+          pickCustody: [
+            order('1', 'geelong', 1, 3, { status: 'disputed' }),
+            ...firstRound.slice(1),
+          ],
+        }),
+      ],
+      ['no order for its draft', single(4, 'collingwood', noNominee)],
+      [
+        'captures of the pick too close in time to tell which is latest',
+        single(4, 'collingwood', noNominee, {
+          pickCustody: [
+            ...firstRound,
+            order('5', 'collingwood', 4, null, { pickId: 'pick-F' }),
+            order('6', 'collingwood', 4, null, { pickId: 'pick-F' }),
+          ],
+        }),
+      ],
+      [
+        'a slot it held beyond 90',
+        single(4, 'collingwood', noNominee, {
+          pickCustody: [...firstRound, order('5', 'collingwood', 6, 95, { pickId: 'pick-F' })],
+        }),
+      ],
+      [
+        'a pending outcome',
+        single(
+          4,
+          'collingwood',
+          { disposition: 'not_used', outcomeStatus: 'pending' },
+          { pickCustody: firstRound }
+        ),
+      ],
+      [
+        'a selection missing from the candidate',
+        single(4, 'collingwood', drafted(60), { pickCustody: firstRound }),
+      ],
+    ])('keeps the slot unknown with %s', (_label, candidate) => {
+      expect(atTradeOf(candidate)).toEqual(UNKNOWN);
+    });
+  });
+
+  describe('case 3: a pick beyond HPN’s 1 to 90', () => {
+    const numbered = (transform: (transfer: Transfer) => Transfer = (transfer) => transfer) => ({
+      transactions: [trade('tx-1', 2023)],
+      transfers: [
+        transform(pick('tr-1a', 'tx-1', 'collingwood', 'geelong', 'pick-94', 2023, 94)),
+        player('tr-1b', 'tx-1', 'geelong', 'collingwood', 'p1'),
+      ],
+      pickOutcomes: [outcome('tr-1a', noNominee)],
+    });
+
+    it('values pick 94 at DPVC(90), an upper bound, flagged as capped', () => {
+      expect(atTradeOf(numbered())).toEqual({
+        kind: 'pick_projection_domain_capped',
+        benchmarkId,
+        selectionNumber: 94,
+        cappedAt: 90,
+        value: hpnDpv3ValueForPick(90),
+      });
+      // HPN's curve falls with the slot, so its formula at 94 would be lower still.
+      expect(hpnDpv3ValueForPick(90)).toBeGreaterThan(-30.36 * Math.log(94) + 146.95);
+    });
+
+    it('keeps a pick beyond the contract’s bound of 500 outside the domain', () => {
+      const late = (transfer: Transfer) =>
+        ({ ...transfer, asset: { ...transfer.asset, nominalPick: 501 } }) as Transfer;
+      expect(atTradeOf(numbered(late))).toEqual({
+        kind: 'unavailable',
+        reason: 'pick_outside_projection_domain',
+      });
+    });
+
+    it('keeps a pick of another draft outside the domain', () => {
+      expect(atTradeOf(numbered(rookie))).toEqual({
+        kind: 'unavailable',
+        reason: 'pick_outside_projection_domain',
+      });
+    });
+  });
+
+  describe('an unallocated rule v16 leg is valued once its excluded asset has a v17 projection', () => {
+    // tx-A: Melbourne sends pick P (20) to Hawthorn, which trades it on alone in tx-B to St Kilda for
+    // St Kilda's pick 95; Hawthorn spends that pick matching a bid.
+    const cappedReturn = (): Candidate => ({
+      transactions: [trade('tx-A', 2021), trade('tx-B', 2021)],
+      transfers: [
+        pick('tr-A1', 'tx-A', 'melbourne', 'hawthorn', 'pick-P', 2021, 20),
+        player('tr-A2', 'tx-A', 'hawthorn', 'melbourne', 'm'),
+        pick('tr-B1', 'tx-B', 'hawthorn', 'st-kilda', 'pick-P', 2021, 20),
+        pick('tr-B2', 'tx-B', 'st-kilda', 'hawthorn', 'pick-Q', 2021, 95),
+      ],
+      pickOutcomes: [
+        outcome('tr-A1', { disposition: 'traded_on' }),
+        outcome('tr-B1', noNominee),
+        outcome('tr-B2', nominee),
+      ],
+    });
+
+    it('values a sole asset at the capped projection of its matched-bid return', () => {
+      const p90 = hpnDpv3ValueForPick(90);
+      const batch = gradeAflTradesOnRealizedValue(inputs(cappedReturn()));
+      expect(legOf(batch, 'tr-A1')).toMatchObject({
+        state: 'valued',
+        basis: 'pick_traded_on_return',
+        realizedValue: p90,
+        onward: {
+          allocation: 'sole_asset',
+          returnValue: p90,
+          returnProjection: {
+            benchmarkId,
+            legs: [{ transferId: 'tr-B2', source: 'pick_projection_domain_capped', value: p90 }],
+          },
+        },
+        reasons: [
+          'projection_domain_capped',
+          'single_source_pick_outcome',
+          'traded_on_return_estimated_from_projection',
+          'traded_on_return_provisional',
+        ],
+      });
+      // With no projection for the return pick (rule v16's view of it), the hop stays unallocated.
+      const v16 = unprojected(cappedReturn(), 'tr-B2');
+      expect(legOf(gradeAflTradesOnRealizedValue(inputs(v16)), 'tr-A1')).toMatchObject({
+        state: 'excluded',
+        basis: 'pick_traded_on_return_unallocated',
+      });
+    });
+
+    it('splits a bundle by its excluded sibling’s round-position proxy', () => {
+      // Hawthorn also gives St Kilda Collingwood's 2021 R4 (no slot in the final order), which St
+      // Kilda spends matching a bid; pick P's draftee realized 12 and Hawthorn got player q (40).
+      const candidate: Candidate = {
+        transactions: [trade('tx-A', 2020), trade('tx-B', 2020)],
+        transfers: [
+          pick('tr-A1', 'tx-A', 'melbourne', 'hawthorn', 'pick-P', 2021, 20),
+          pick('tr-B1', 'tx-B', 'hawthorn', 'st-kilda', 'pick-P', 2021, 20),
+          future(['tr-B5', 'tx-B', 'hawthorn', 'st-kilda'], 4, 'collingwood', 2021),
+          player('tr-B3', 'tx-B', 'st-kilda', 'hawthorn', 'q'),
+        ],
+        pickOutcomes: [
+          outcome('tr-A1', { disposition: 'traded_on' }),
+          outcome('tr-B1', { disposition: 'selected', playerId: 'd5' }),
+          outcome('tr-B5', nominee),
+        ],
+        pickCustody: firstRound.map((row) => ({ ...row, draftYear: 2021 })),
+      };
+      const data = {
+        seasonSpells: [...spells('d5', [[2022, 'st-kilda']]), ...spells('q', [[2021, 'hawthorn']])],
+        pav: [
+          ...pavRows('d5', [[2022, 'st-kilda', 12]]),
+          ...pavRows('q', [[2021, 'hawthorn', 40]]),
+        ],
+        reviewedArrivals: [{ playerId: 'q', clubId: 'hawthorn', season: 2021 }],
+      };
+      const p56 = hpnDpv3ValueForPick(56);
+      const batch = gradeAflTradesOnRealizedValue(inputs(candidate, data));
+      expect(legOf(batch, 'tr-B5').atTrade).toEqual(proxy(2, 4, 56));
+      expect(legOf(batch, 'tr-A1')).toMatchObject({
+        state: 'valued',
+        realizedValue: (12 / (12 + p56)) * 40,
+        onward: {
+          allocation: 'hybrid_weighted',
+          hybridWeights: {
+            assets: [
+              { transferId: 'tr-B1', source: 'realized', value: 12 },
+              { transferId: 'tr-B5', source: 'projection', value: p56 },
+            ],
+          },
+        },
+        reasons: [
+          'bundle_split_estimated_weights',
+          'projection_round_position_proxy',
+          'single_source_pick_outcome',
+          'traded_on_return_provisional',
+        ],
+      });
+      // Without the first-round order the sibling has no projection, so the pick stays unallocated.
+      candidate.pickCustody = [];
+      expect(legOf(gradeAflTradesOnRealizedValue(inputs(candidate, data)), 'tr-A1')).toMatchObject({
+        state: 'excluded',
+        basis: 'pick_traded_on_return_unallocated',
+      });
+    });
+  });
+
+  it('seals rule v17 and its limitation', () => {
+    const batch = gradeAflTradesOnRealizedValue(
+      inputs({
+        transactions: [trade('tx-1', 2021)],
+        transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
+      })
+    );
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v17');
+    expect(batch.content.limitation).toContain(
+      "from rule v17 a future pick's at-trade view also takes the selection its traded-on trail, or a special entitlement's custody successor, ends in, and its own selection when that selection is unresolved but not disputed and names its player and club"
+    );
+    expect(batch.content.limitation).toContain(
+      "a future pick that held no slot in its draft's final order is projected at an estimated round-position proxy, its original club's first-round rank among all 18 clubs in that order plus 18 per later round, capped at 90, not a slot it held"
+    );
+    expect(batch.content.limitation).toContain(
+      "a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound"
+    );
   });
 });
