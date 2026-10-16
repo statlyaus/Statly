@@ -34,6 +34,7 @@ const V8 = 'afl-trade-realized-grade-rule/v8' as const;
 const V9 = 'afl-trade-realized-grade-rule/v9' as const;
 const V10 = 'afl-trade-realized-grade-rule/v10' as const;
 const V11 = 'afl-trade-realized-grade-rule/v11' as const;
+const V12 = 'afl-trade-realized-grade-rule/v12' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -49,6 +50,8 @@ const LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; not public factual, publication, production or activation authority.",
   [V11]:
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; not public factual, publication, production or activation authority.",
+  [V12]:
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -1728,5 +1731,21 @@ describe('realized trade grade batch contract', () => {
         /names the onward trade where it is excluded/,
       ],
     ])('refuses %s', (_label, build, message) => refuses(build(), message));
+
+    // Rule v12 (issue 789) orders undated pick hops; the batch records nothing new for it.
+    it('seals v12 with its limitation, keeps the v11 allocation, and still parses v11 batches', () => {
+      const batch = createAflTradeRealizedTradeGradeBatch(signed(V12));
+      expect(batch.content.ruleVersion).toBe(V12);
+      expect(batch.content.limitation).toBe(LIMITATIONS[V12]);
+      expect(batch.content.limitation).toContain(
+        'undated pick trades of one season are ordered by the Draftguru pick-trade sequence'
+      );
+      expect(() => createAflTradeRealizedTradeGradeBatch(spentOnward(V12, 'valued'))).not.toThrow();
+      expect(() =>
+        createAflTradeRealizedTradeGradeBatch(excludedReturn(V12, 'unallocated'))
+      ).not.toThrow();
+      expect(() => createAflTradeRealizedTradeGradeBatch(signed(V11))).not.toThrow();
+      refuses({ ...signed(V12), limitation: LIMITATIONS[V11] }, /limitation/i);
+    });
   });
 });

@@ -4432,7 +4432,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v11` (v1 to v10 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v12` (v1 to v11 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4694,6 +4694,17 @@ The remaining work proceeds through these independently verifiable gates:
      adds that a sole asset traded on is valued at its club's whole return in the onward trade,
      whatever became of the pick there, and that a traded-on pick whose club's every return leg in
      the onward trade is excluded is unallocated, not worth 0.
+
+   - **Ordered undated pick hops (rule v12, issue 789, 2026-10-16).** A traded-on pick's onward
+     trade comes from a trail ordered by the Draftguru pick-trade sequence, with the pick's latest
+     Official AFL custody holder breaking a tie between trails ("Ordering undated pick hops" above).
+     The four trades the v10 dry run blocked as undated cycles then follow one trail, and a final
+     holder's hop no longer links back into the first trade. The batch records no new field, so
+     the contract cannot tell v11 and v12 legs apart; the version and the limitation name the rule.
+     The v12 limitation adds that undated pick trades of one season are ordered by the Draftguru
+     pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a
+     stated date, and that a pick with more than one possible trail follows the one ending at its
+     latest Official AFL custody holder.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
