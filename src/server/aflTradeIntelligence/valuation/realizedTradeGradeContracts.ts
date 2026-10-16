@@ -116,12 +116,22 @@ import {
  * is excluded (rule v11). The total is always positive, every excluded asset weighing more than 0.
  * Rule v15 supersedes v14's projection-only split; v14 batches keep `projection_weighted`.
  *
+ * Under rule v16 (issue 789, 2026-10-16, owner decision) a traded-on pick whose club's every return leg
+ * in the onward trade is excluded (in practice picks the club then spent matching a bid) is valued
+ * when every one of those legs has a positive HPN DPVC v3 at-trade projection: the return is their sum,
+ * the draft value the club spent on the bid match (`returnProjection`, recording each leg's transfer,
+ * source and value), provisional and stated (`traded_on_return_estimated_from_projection`). It is
+ * shared among the assets the club gave exactly as any other return. An excluded return leg that is
+ * itself an unallocated traded-on pick counts at its own projection; its onward chain is not followed.
+ * A return leg with no projection leaves the pick unallocated as under rule v11. Rules v1 to v15 never
+ * value an all-excluded return.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v15' as const;
+  'afl-trade-realized-grade-rule/v16' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -154,6 +164,8 @@ const RULE_LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v14 such a bundle whose every asset has an HPN DPVC v3 at-trade projection is split by those projections instead, provisionally, realized value staying the primary split; not public factual, publication, production or activation authority.",
   'afl-trade-realized-grade-rule/v15':
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v15 a bundle with an excluded asset is split by each asset's realized value where known and its HPN DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no projection; not public factual, publication, production or activation authority.",
+  'afl-trade-realized-grade-rule/v16':
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v15 a bundle with an excluded asset is split by each asset's realized value where known and its HPN DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no projection; from rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is valued, provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its club spent matching a bid), and stays unallocated when one has none; not public factual, publication, production or activation authority.",
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -226,6 +238,11 @@ const NO_HYBRID_SPLIT_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   ...NO_PROJECTION_SPLIT_RULES,
   'afl-trade-realized-grade-rule/v14',
 ]);
+/** Rules under which no all-excluded onward return is valued at its projections; rule v16 may. */
+const NO_RETURN_PROJECTION_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  ...NO_HYBRID_SPLIT_RULES,
+  'afl-trade-realized-grade-rule/v15',
+]);
 /** Rules that split a bundle by hybrid weights, so never by projection alone (rule v14's split). */
 const HYBRID_SPLIT_RULES = new Set(
   (Object.keys(RULE_LIMITATIONS) as AflTradeRealizedGradeRuleVersion[]).filter(
@@ -263,6 +280,7 @@ export const AFL_TRADE_REALIZED_GRADE_PROVISIONAL_REASONS = [
   'special_entitlement_custody_linked',
   'stated_not_used_traded_on',
   'stint_open',
+  'traded_on_return_estimated_from_projection',
   'traded_on_return_partial',
   'traded_on_return_projected',
   'traded_on_return_provisional',
@@ -392,6 +410,25 @@ const projectionWeightsSchema = z
   .strict();
 
 /**
+ * Rule v16: the at-trade projection of every leg a club received in an onward trade whose every
+ * return leg is excluded, ordered by transfer, and the benchmark they cite. Their sum is the return.
+ */
+const returnProjectionSchema = z
+  .object({
+    benchmarkId: aflTradeContentAddressedIdSchema('hpn-pick-benchmark'),
+    legs: z
+      .array(projectionWeightSchema)
+      .min(1)
+      .max(200)
+      .refine(
+        (legs) => isCanonical(legs.map(({ transferId }) => transferId)),
+        'Return projections must be unique and ordered by transfer.'
+      ),
+  })
+  .strict();
+export type AflTradeRealizedReturnProjection = z.infer<typeof returnProjectionSchema>;
+
+/**
  * Rule v15: the weight of one asset its club gave in a bundle's onward trade: its realized value when
  * its leg is valued, else its positive HPN DPVC v3 at-trade projection.
  */
@@ -501,11 +538,21 @@ const onwardSchema = z
     projectionWeights: projectionWeightsSchema.optional(),
     /** Rule v15: present exactly for a hybrid split. */
     hybridWeights: hybridWeightsSchema.optional(),
+    /** Rule v16: present exactly when an all-excluded return is valued at its projections. */
+    returnProjection: returnProjectionSchema.optional(),
   })
   .strict()
   .superRefine((onward, context) => {
     const weightsIssue = bundleWeightsIssue(onward);
     if (weightsIssue) context.addIssue({ code: 'custom', message: weightsIssue });
+    if (
+      onward.returnProjection &&
+      onward.returnValue !== aflTradeRealizedBundleWeightTotal(onward.returnProjection.legs)
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'A projected return is the sum of its legs’ projections.',
+      });
     const issue = (message: string) => context.addIssue({ code: 'custom', message });
     const weighted = onward.weight !== null && onward.weightTotal !== null;
     if (
@@ -784,6 +831,12 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
       ('onward' in leg && leg.onward.allocation === 'hybrid_weighted') !==
       has('bundle_split_estimated_weights'),
     'A hybrid split, and only a hybrid split, is stated as a reason.',
+  ],
+  [
+    (leg, has) =>
+      ('onward' in leg && leg.onward.returnProjection !== undefined) !==
+      has('traded_on_return_estimated_from_projection'),
+    'A return valued at its projections, and only that, is stated as a reason.',
   ],
   [
     (leg) =>
@@ -1075,6 +1128,13 @@ const RULE_GATED_LEG_FEATURES: ReadonlyArray<
       ('onward' in leg && leg.onward.allocation === 'hybrid_weighted'),
     'Only rule v15 and later split a bundle by realized value where known and projection otherwise.',
   ],
+  [
+    NO_RETURN_PROJECTION_RULES,
+    (leg) =>
+      leg.reasons.includes('traded_on_return_estimated_from_projection') ||
+      ('onward' in leg && leg.onward.returnProjection !== undefined),
+    'Only rule v16 and later value an all-excluded onward return at its projections.',
+  ],
 ];
 
 function batchShapeIssues(content: BatchContent): Issue[] {
@@ -1179,21 +1239,47 @@ const byTransfer = <T extends { transferId: string }>(weights: T[]): T[] =>
   weights.sort((left, right) => (left.transferId < right.transferId ? -1 : 1));
 
 /**
- * Rule v14: the HPN DPVC v3 at-trade projection of every asset the club gave in the onward trade,
- * ordered by transfer, or null when any has none (a player, a pick outside 1 to 90, an unknown slot).
+ * Rules v14 and v16: the positive HPN DPVC v3 at-trade projection of every leg on one side of the
+ * onward trade, ordered by transfer, or null when any has none (a player, a pick outside 1 to 90, an
+ * unknown slot).
  */
+function sideProjections(
+  onwardLegs: readonly AflTradeRealizedTradeGradeLeg[],
+  onSide: (leg: AflTradeRealizedTradeGradeLeg) => boolean
+): AflTradeRealizedProjectionWeight[] | null {
+  const weights: AflTradeRealizedProjectionWeight[] = [];
+  for (const onwardLeg of onwardLegs) {
+    if (!onSide(onwardLeg)) continue;
+    const projection = positiveProjection(onwardLeg.atTrade);
+    if (!projection) return null;
+    weights.push({
+      transferId: onwardLeg.transferId,
+      source: projection.kind,
+      value: projection.value,
+    });
+  }
+  return byTransfer(weights);
+}
+
+/** Rule v14: the at-trade projection of every asset the club gave in the onward trade, or null. */
 export function aflTradeRealizedOnwardProjectionWeights(
   onwardLegs: readonly AflTradeRealizedTradeGradeLeg[],
   clubId: string
 ): AflTradeRealizedProjectionWeight[] | null {
-  const weights: AflTradeRealizedProjectionWeight[] = [];
-  for (const { sendingClubId, transferId, atTrade } of onwardLegs) {
-    if (sendingClubId !== clubId) continue;
-    const projection = positiveProjection(atTrade);
-    if (!projection) return null;
-    weights.push({ transferId, source: projection.kind, value: projection.value });
-  }
-  return byTransfer(weights);
+  return sideProjections(onwardLegs, (onwardLeg) => onwardLeg.sendingClubId === clubId);
+}
+
+/**
+ * Rule v16: when every leg the club received in the onward trade is excluded, the at-trade projection
+ * of each of them (an unallocated traded-on leg counts at its own projection, never its onward chain);
+ * null when any part of the return is not excluded or a leg has no projection.
+ */
+export function aflTradeRealizedOnwardReturnProjection(
+  onwardLegs: readonly AflTradeRealizedTradeGradeLeg[],
+  clubId: string
+): AflTradeRealizedProjectionWeight[] | null {
+  if (!aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)) return null;
+  return sideProjections(onwardLegs, (onwardLeg) => onwardLeg.receivingClubId === clubId);
 }
 
 /** Rule v15: one given asset's hybrid weight, or null for an excluded asset with no projection. */
@@ -1250,6 +1336,27 @@ function bundleSplitMissedIssue(
 }
 
 /**
+ * Rule v16: why an unallocated traded-on pick should have been valued at its return's projections:
+ * every leg its club received is excluded and projected, and what the club gave can share that return
+ * (a sole asset, an all-valued bundle, or a bundle every excluded asset of which has a projection).
+ */
+function returnProjectionMissedIssue(
+  onwardLegs: readonly AflTradeRealizedTradeGradeLeg[],
+  clubId: string,
+  ruleVersion: AflTradeRealizedGradeRuleVersion
+): string | null {
+  if (
+    NO_RETURN_PROJECTION_RULES.has(ruleVersion) ||
+    !aflTradeRealizedOnwardReturnProjection(onwardLegs, clubId)
+  )
+    return null;
+  return aflTradeRealizedOnwardBundleExcluded(onwardLegs, clubId) &&
+    !aflTradeRealizedOnwardHybridWeights(onwardLegs, clubId)
+    ? null
+    : 'From rule v16 a return whose every leg is excluded and projected is valued at their projections.';
+}
+
+/**
  * Whether the onward trade excludes what an unallocated traded-on pick rests on: through rule v10 any
  * leg its club gave there; under v11 a leg of a bundle it gave, or everything it received there.
  */
@@ -1270,14 +1377,15 @@ function unallocatedGrounds(
 
 /**
  * Whether a valued traded-on pick reads an onward trade its rule would not value it on: through rule
- * v10 a sole asset whose onward leg is excluded; under v11 a return whose every leg is excluded; under
- * v13 also a bundle with an excluded asset; under v14 and v15 such a bundle unless split by weights.
+ * v10 a sole asset whose onward leg is excluded; under v11 a return whose every leg is excluded (from
+ * v16, unless valued at its projections); under v13 also a bundle with an excluded asset; under v14
+ * and later such a bundle unless split by weights.
  */
 function valuedPastExclusionIssue(
   onwardTrade: AflTradeRealizedTradeGrade,
   clubId: string,
   ruleVersion: AflTradeRealizedGradeRuleVersion,
-  allocation: AflTradeRealizedTradeGradeOnward['allocation']
+  onward: Pick<AflTradeRealizedTradeGradeOnward, 'allocation' | 'returnProjection'>
 ): string | null {
   if (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion)) {
     const given = onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
@@ -1285,11 +1393,11 @@ function valuedPastExclusionIssue(
       ? 'Only rule v11 and later value a sole asset whose onward leg is excluded.'
       : null;
   }
-  if (aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId))
+  if (!onward.returnProjection && aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId))
     return 'A traded-on pick whose club’s every onward return leg is excluded is unallocated.';
   return !EXCLUDED_SIBLING_SHARING_RULES.has(ruleVersion) &&
-    allocation !== 'projection_weighted' &&
-    allocation !== 'hybrid_weighted' &&
+    onward.allocation !== 'projection_weighted' &&
+    onward.allocation !== 'hybrid_weighted' &&
     aflTradeRealizedOnwardBundleExcluded(onwardTrade.legs, clubId)
     ? 'From rule v13 a bundle with an excluded asset leaves its traded-on shares unallocated.'
     : null;
@@ -1355,6 +1463,32 @@ function onwardWeightsIssue(
   );
 }
 
+/**
+ * Rules v11 and v16: a traded-on pick's return is what its club received in the onward trade, or from
+ * rule v16, when every leg it received there is excluded, exactly those legs' at-trade projections
+ * (shared helper `aflTradeRealizedOnwardReturnProjection`), citing the batch's pinned benchmark.
+ */
+function onwardReturnIssue(
+  onward: AflTradeRealizedTradeGradeOnward,
+  onwardTrade: AflTradeRealizedTradeGrade,
+  clubId: string,
+  benchmarkId: string
+): string | null {
+  const projection = onward.returnProjection;
+  if (!projection)
+    return onwardTrade.clubs.find((club) => club.clubId === clubId)?.received === onward.returnValue
+      ? null
+      : 'A traded-on pick’s return is what its club received in the onward trade.';
+  const expected = aflTradeRealizedOnwardReturnProjection(onwardTrade.legs, clubId);
+  if (!expected)
+    return 'A projected return applies only when every leg its club received there is excluded and projected.';
+  if (JSON.stringify(projection.legs) !== JSON.stringify(expected))
+    return 'Return projections are the at-trade projections of every leg its club received there.';
+  return projection.benchmarkId === benchmarkId
+    ? null
+    : 'A projected return must cite the batch’s pinned benchmark.';
+}
+
 /** An unallocated traded-on pick must name an onward trade that excludes what it rests on. */
 function unallocatedIssue(
   leg: Extract<AflTradeRealizedTradeGradeLeg, { basis: 'pick_traded_on_return_unallocated' }>,
@@ -1371,7 +1505,10 @@ function unallocatedIssue(
     return 'An unallocated traded-on pick names the onward trade where it is excluded.';
   if (!UNSCOPED_RULES.has(ruleVersion) && !onwardSideKnown(onwardTrade, leg.receivingClubId))
     return 'An unallocated traded-on pick needs its club’s side of the onward trade.';
-  return bundleSplitMissedIssue(onwardTrade.legs, leg.receivingClubId, ruleVersion);
+  return (
+    bundleSplitMissedIssue(onwardTrade.legs, leg.receivingClubId, ruleVersion) ??
+    returnProjectionMissedIssue(onwardTrade.legs, leg.receivingClubId, ruleVersion)
+  );
 }
 
 /**
@@ -1415,13 +1552,13 @@ function onwardIssue(
   const given = onwardTrade.legs.filter(
     (onwardLeg) => onwardLeg.sendingClubId === leg.receivingClubId
   );
-  if (onwardClub?.received !== leg.onward.returnValue)
-    return 'A traded-on pick’s return is what its club received in the onward trade.';
+  const returnIssue = onwardReturnIssue(leg.onward, onwardTrade, leg.receivingClubId, benchmarkId);
+  if (returnIssue) return returnIssue;
   if (leg.onward.givenAssetCount !== given.length)
     return 'The onward asset count is every asset its club gave in that trade.';
-  if (leg.onward.allocation === 'relative_value' && leg.onward.weightTotal !== onwardClub.givenUp)
+  if (leg.onward.allocation === 'relative_value' && leg.onward.weightTotal !== onwardClub?.givenUp)
     return 'Relative-value weights total what its club gave up in the onward trade.';
-  if (leg.onward.allocation === 'equal_split' && onwardClub.givenUp !== 0)
+  if (leg.onward.allocation === 'equal_split' && onwardClub?.givenUp !== 0)
     return 'An equal split applies only when everything its club gave was worth 0.';
   if (
     (onwardTrade.state === 'provisional') !==
@@ -1436,12 +1573,8 @@ function onwardIssue(
   )
     return 'A traded-on pick rests on a projection exactly when its club’s onward side does.';
   return (
-    valuedPastExclusionIssue(
-      onwardTrade,
-      leg.receivingClubId,
-      ruleVersion,
-      leg.onward.allocation
-    ) ?? onwardWeightsIssue(leg.onward, onwardTrade, leg.receivingClubId, benchmarkId)
+    valuedPastExclusionIssue(onwardTrade, leg.receivingClubId, ruleVersion, leg.onward) ??
+    onwardWeightsIssue(leg.onward, onwardTrade, leg.receivingClubId, benchmarkId)
   );
 }
 
