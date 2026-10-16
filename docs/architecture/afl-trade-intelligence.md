@@ -4432,7 +4432,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v17` (v1 to v16 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v18` (v1 to v17 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4448,7 +4448,9 @@ The remaining work proceeds through these independently verifiable gates:
      valued and any season with no PAV calculation, and under rule v4 and later its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
      allocation (`sole_asset`, `relative_value`, `equal_split`, under rule v14 `projection_weighted`,
      or from rule v15 `hybrid_weighted`), its share and the return (from rule v16, for a return whose
-     every leg is excluded and projected, the sum of their at-trade projections). The batch
+     every leg is excluded and projected, the sum of their at-trade projections; from rule v18, for
+     any return with an excluded leg, its valued legs' realized total plus each excluded leg's
+     projection). The batch
      checks that return, weight total and asset count against the onward trade it contains.
    - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
      pick's HPN projection, which must equal the benchmark formula for its slot. Under rule v8 a future
@@ -4502,7 +4504,7 @@ The remaining work proceeds through these independently verifiable gates:
        onward trade is unblocked: a capture missing the holder's return side would value the pick at
        0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
      - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
-       allocation would need is known (from rule v11, only in a bundle; from rule v13, also when another asset of the bundle is excluded, from rule v14 only when some asset of that bundle has no projection, and from rule v15 only when an excluded asset of that bundle has no projection; from rule v11 also when every leg its club received there is excluded, and from rule v16 only when one of those legs has no projection; see below). A blocked side takes precedence, so it is
+       allocation would need is known (from rule v11, only in a bundle; from rule v13, also when another asset of the bundle is excluded, from rule v14 only when some asset of that bundle has no projection, and from rule v15 only when an excluded asset of that bundle has no projection; from rule v11 also when every leg its club received there is excluded, and from rule v16 only when one of those legs has no projection; from rule v18 whenever an excluded leg its club received there has no projection, however many of its return legs are valued; see below). A blocked side takes precedence, so it is
        `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
        since it has no onward return.
      - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
@@ -4819,9 +4821,9 @@ The remaining work proceeds through these independently verifiable gates:
      projection, the pick stays `pick_traded_on_return_unallocated` as under v11. A matched-bid
      nominee pick graded directly stays excluded; only the traded-on return changes. A projection is
      whole-career expected PAV at the trade, not the first stint a realized leg measures, which is why
-     the leg is provisional. An excluded return leg's projection counts only when every return leg is
-     excluded: a partly valued return takes only its valued legs (rule v11), so a better onward return
-     can lower an upstream pick's value. That is intended.
+     the leg is provisional. Under v16 an excluded return leg's projection counts only when every return
+     leg is excluded: a partly valued return takes only its valued legs (rule v11), so a better onward
+     return can lower an upstream pick's value. Rule v18 removes that discontinuity (below).
 
      The contract checks the return under v16: `returnProjection` is present exactly when the reason
      is, `returnValue` is the projections' sum, the projections are exactly those of every leg the
@@ -4895,6 +4897,48 @@ The remaining work proceeds through these independently verifiable gates:
      projected at an estimated round-position proxy, ranked among all 18 clubs, not a slot it held;
      that a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound; and that a
      traded-on pick whose weights or return rest on the proxy or the cap says so.
+
+   - **Every excluded leg of an onward return counts at its projection (rule v18, issue 789,
+     2026-10-17; coordinator decision under the owner's full permission).** Rule v16 projected an
+     onward return only when every leg was excluded; a partly valued return took only its valued legs
+     (rule v11), its excluded legs counting 0. The genuine regrade under v17 showed the cost: a 2023
+     R2 (GWS) pick's return was three matched-bid picks (`pick_not_used_nominee_excluded`) and one
+     unallocated pick. Under v16 it was worth 74.5, the three projections; under v17 the fourth leg
+     became valued at 17.1, the return turned partial, and the pick fell to 17.1, so more information
+     erased 57 PAV. By the coordinator's count of batch `414fa5dd`, 74 traded-on legs across 50 onward
+     trades had a partial return holding 106 excluded legs, all `pick_not_used_nominee_excluded`, about
+     1,588 PAV of projection counting 0.
+
+     From v18, in any onward return with an excluded leg, each excluded leg that has a positive HPN
+     DPVC v3 at-trade projection (any kind rule v17 produces: `pick_projection`,
+     `pick_projection_eventual_slot`, `pick_projection_round_position_proxy`,
+     `pick_projection_domain_capped`) counts at its projection, and each valued leg at its realized
+     value. The return is unallocated only when some excluded return leg has no projection; a valued
+     leg beside it no longer makes the return known, so a partly valued return that rule v17 valued at
+     its valued legs alone may now be unallocated. An all-excluded return is the v16 special case. The
+     onward block's `returnProjection` records the excluded legs counted by projection (in transfer
+     order) and, new in v18, `realizedValue`, the valued legs' realized total (the club's `received`
+     there, 0 for an all-excluded return); `returnValue` is that plus the projections. The leg is
+     provisional and says so (`traded_on_return_estimated_from_projection`) whenever any part of its
+     return is a projection, and the rule v17 proxy and cap reasons still apply to the legs it reads.
+     Within onward returns, matched-bid picks are therefore valued uniformly, wherever they sit. The
+     club's own totals in the onward trade are unchanged (an excluded leg enters none); only the
+     traded-on pick reading that return changes, and an upstream hop reading that pick as a valued
+     leg takes its value as realized. Allocation across the assets the club gave is unchanged, and a
+     matched-bid nominee pick graded directly stays excluded.
+
+     The contract checks under v18 that `returnProjection` lists exactly the projections of every
+     excluded leg the club received there (shared helper `aflTradeRealizedOnwardReturnProjection`,
+     now rule-aware, with `aflTradeRealizedOnwardReturnHoldsExcluded` deciding which returns a rule
+     projects, so the grader and the contract cannot drift), that `realizedValue` is present and
+     equals the club's `received`, and that `returnValue` is their sum
+     (`aflTradeRealizedProjectedReturnValue`). It refuses a valued leg on a return with an excluded leg
+     but no projection, and an unallocated leg whose partly valued return could be projected. Rules
+     v1 to v17, whose batches still parse with their old semantics, refuse `realizedValue` and any
+     projection of a partly valued return. The v18 limitation adds that every excluded leg of a
+     traded-on pick's onward return counts at its projection beside the valued legs' realized value,
+     provisionally, mixing whole-career expected PAV with first-stint PAV, and that the pick stays
+     unallocated when an excluded return leg has no projection.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain

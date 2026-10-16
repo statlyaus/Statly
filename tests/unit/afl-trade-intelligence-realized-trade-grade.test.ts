@@ -854,16 +854,37 @@ describe('MVP realized trade grader', () => {
         });
       });
 
-      it('allocates as before when only part of the return is excluded', () => {
-        const leg = legOf(
-          gradeAflTradesOnRealizedValue(inputs(withExcludedReturn(chain(false), true), chainData)),
-          'tr-A1'
+      it('rule v18: adds a partly excluded return’s projected leg to its valued legs', () => {
+        // Through v17 Hawthorn's return was player q's 40 alone, pick Q counting 0.
+        const batch = gradeAflTradesOnRealizedValue(
+          inputs(withExcludedReturn(chain(false), true), chainData)
         );
-        expect(leg).toMatchObject({
+        const p30 = hpnDpv3ValueForPick(30);
+        expect(legOf(batch, 'tr-A1')).toMatchObject({
           state: 'valued',
-          realizedValue: 40,
-          onward: { allocation: 'sole_asset', returnValue: 40, share: 1 },
-          reasons: ['single_source_pick_outcome', 'traded_on_return_provisional'],
+          realizedValue: 40 + p30,
+          onward: {
+            allocation: 'sole_asset',
+            returnValue: 40 + p30,
+            share: 1,
+            returnProjection: {
+              benchmarkId: batch.content.inputs.pickProjectionBenchmarkId,
+              realizedValue: 40,
+              legs: [{ transferId: 'tr-B4', source: 'pick_projection', value: p30 }],
+            },
+          },
+          reasons: [
+            'single_source_pick_outcome',
+            'traded_on_return_estimated_from_projection',
+            'traded_on_return_provisional',
+          ],
+        });
+        // Hawthorn's tx-B total is unchanged: only the traded-on pick reads the projection.
+        expect(gradeOf(batch, 'tx-B').clubs).toContainEqual({
+          clubId: 'hawthorn',
+          received: 40,
+          givenUp: 12,
+          net: 28,
         });
       });
     });
@@ -1654,14 +1675,14 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v17 and keeps rule v16’s limitation', () => {
+  it('seals rule v18 and keeps rule v16’s limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v17');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v18');
     expect(batch.content.limitation).toContain(
       "from rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is valued, provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its club spent matching a bid), and stays unallocated when one has none"
     );
@@ -3083,14 +3104,14 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
     });
   });
 
-  it('seals rule v17 and its limitation', () => {
+  it('keeps rule v17’s limitation under rule v18', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v17');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v18');
     expect(batch.content.limitation).toContain(
       "from rule v17 a future pick's at-trade view also takes the selection its traded-on trail, or a special entitlement's custody successor, ends in, and its own selection when that selection is unresolved but not disputed and names its player and club"
     );
@@ -3100,5 +3121,180 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
     expect(batch.content.limitation).toContain(
       "a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound"
     );
+  });
+});
+
+describe('rule v18: every excluded leg of an onward return counts at its projection (issue 789)', () => {
+  const benchmarkId = `hpn-pick-benchmark:${hex('b')}`;
+  const nominee: Partial<Outcome> = {
+    disposition: 'not_used',
+    nominationBasis: 'club_took_nominated_player',
+    receivingClubNominatedSelections: 1,
+  };
+  const p30 = hpnDpv3ValueForPick(30);
+  const p40 = hpnDpv3ValueForPick(40);
+  const p50 = hpnDpv3ValueForPick(50);
+  // The genuine 2023 R2 (GWS) shape. tx-A: Melbourne sends pick P to Hawthorn, which trades it on
+  // alone in tx-B to St Kilda for picks 30, 40 and 50, each spent matching a bid. With `withR`,
+  // St Kilda also sends pick R, which Hawthorn trades on in tx-C to Geelong for player g (17).
+  const gwsShaped = (withR: boolean): Candidate => ({
+    transactions: [
+      trade('tx-A', 2021),
+      trade('tx-B', 2021),
+      ...(withR ? [trade('tx-C', 2021)] : []),
+    ],
+    transfers: [
+      pick('tr-A1', 'tx-A', 'melbourne', 'hawthorn', 'pick-P', 2021, 20),
+      pick('tr-B1', 'tx-B', 'hawthorn', 'st-kilda', 'pick-P', 2021, 20),
+      pick('tr-B2', 'tx-B', 'st-kilda', 'hawthorn', 'pick-Q30', 2021, 30),
+      pick('tr-B3', 'tx-B', 'st-kilda', 'hawthorn', 'pick-Q40', 2021, 40),
+      pick('tr-B4', 'tx-B', 'st-kilda', 'hawthorn', 'pick-Q50', 2021, 50),
+      ...(withR
+        ? [
+            pick('tr-B5', 'tx-B', 'st-kilda', 'hawthorn', 'pick-R', 2021, 60),
+            pick('tr-C1', 'tx-C', 'hawthorn', 'geelong', 'pick-R', 2021, 60),
+            player('tr-C2', 'tx-C', 'geelong', 'hawthorn', 'g'),
+          ]
+        : []),
+    ],
+    pickOutcomes: [
+      outcome('tr-A1', { disposition: 'traded_on' }),
+      outcome('tr-B1', { disposition: 'selected', playerId: 'd5' }),
+      outcome('tr-B2', nominee),
+      outcome('tr-B3', nominee),
+      outcome('tr-B4', nominee),
+      ...(withR ? [outcome('tr-B5', { disposition: 'traded_on' }), outcome('tr-C1', nominee)] : []),
+    ],
+  });
+  const data = {
+    seasonSpells: [...spells('d5', [[2022, 'st-kilda']]), ...spells('g', [[2022, 'hawthorn']])],
+    pav: [...pavRows('d5', [[2022, 'st-kilda', 12]]), ...pavRows('g', [[2022, 'hawthorn', 17]])],
+    reviewedArrivals: [{ playerId: 'g', clubId: 'hawthorn', season: 2022 }],
+  };
+  const PROJECTED = [
+    'single_source_pick_outcome',
+    'traded_on_return_estimated_from_projection',
+    'traded_on_return_provisional',
+  ];
+  const projectedLegs = [
+    { transferId: 'tr-B2', source: 'pick_projection', value: p30 },
+    { transferId: 'tr-B3', source: 'pick_projection', value: p40 },
+    { transferId: 'tr-B4', source: 'pick_projection', value: p50 },
+  ];
+
+  it('keeps the projected legs when a valued leg joins the return', () => {
+    const allExcluded = legOf(
+      gradeAflTradesOnRealizedValue(inputs(gwsShaped(false), data)),
+      'tr-A1'
+    );
+    expect(allExcluded).toMatchObject({
+      state: 'valued',
+      realizedValue: p30 + p40 + p50,
+      onward: {
+        returnValue: p30 + p40 + p50,
+        returnProjection: { benchmarkId, realizedValue: 0, legs: projectedLegs },
+      },
+      reasons: PROJECTED,
+    });
+    const batch = gradeAflTradesOnRealizedValue(inputs(gwsShaped(true), data));
+    expect(legOf(batch, 'tr-B5')).toMatchObject({ state: 'valued', realizedValue: 17 });
+    // Through v17 pick P fell to 17, pick R's value alone: the three projections counted 0.
+    const partial = legOf(batch, 'tr-A1');
+    expect(partial).toMatchObject({
+      state: 'valued',
+      basis: 'pick_traded_on_return',
+      realizedValue: 17 + (p30 + p40 + p50),
+      onward: {
+        transactionId: 'tx-B',
+        allocation: 'sole_asset',
+        returnValue: 17 + (p30 + p40 + p50),
+        share: 1,
+        returnProjection: { benchmarkId, realizedValue: 17, legs: projectedLegs },
+      },
+      reasons: PROJECTED,
+    });
+    expect(partial.state === 'valued' && partial.realizedValue).toBeGreaterThan(
+      allExcluded.state === 'valued' ? allExcluded.realizedValue : Infinity
+    );
+    // Hawthorn's own tx-B total still counts only the valued leg; only pick P reads projections.
+    expect(gradeOf(batch, 'tx-B').clubs).toContainEqual({
+      clubId: 'hawthorn',
+      received: 17,
+      givenUp: 12,
+      net: 5,
+    });
+  });
+
+  it('leaves a partly valued return unallocated when an excluded leg has no projection', () => {
+    // Pick 50 is a rookie-draft pick, so its value is unknown even beside R's 17 and two projections.
+    const batch = gradeAflTradesOnRealizedValue(
+      inputs(unprojected(gwsShaped(true), 'tr-B4'), data)
+    );
+    expect(legOf(batch, 'tr-B4')).toMatchObject({
+      state: 'excluded',
+      atTrade: { kind: 'unavailable', reason: 'pick_outside_projection_domain' },
+    });
+    expect(legOf(batch, 'tr-A1')).toMatchObject({
+      state: 'excluded',
+      basis: 'pick_traded_on_return_unallocated',
+      onwardTransactionId: 'tx-B',
+      reasons: ['single_source_pick_outcome', 'traded_on_return_unallocated'],
+    });
+  });
+
+  it('states rule v17’s capped estimate when it sits beside a valued leg', () => {
+    const candidate = gwsShaped(true);
+    candidate.transfers = candidate.transfers.map((transfer) =>
+      transfer.transferId === 'tr-B4'
+        ? pick('tr-B4', 'tx-B', 'st-kilda', 'hawthorn', 'pick-Q50', 2021, 95)
+        : transfer
+    );
+    const p90 = hpnDpv3ValueForPick(90);
+    expect(legOf(gradeAflTradesOnRealizedValue(inputs(candidate, data)), 'tr-A1')).toMatchObject({
+      state: 'valued',
+      realizedValue: 17 + (p30 + p40 + p90),
+      onward: {
+        returnProjection: {
+          realizedValue: 17,
+          legs: [
+            projectedLegs[0],
+            projectedLegs[1],
+            { transferId: 'tr-B4', source: 'pick_projection_domain_capped', value: p90 },
+          ],
+        },
+      },
+      reasons: ['projection_domain_capped', ...PROJECTED],
+    });
+  });
+
+  it('values an upstream hop by the pick its club got back for a partly projected return', () => {
+    // Gold Coast sends pick X to Hawthorn in tx-0; Hawthorn gives X to Melbourne in tx-A for pick
+    // P, worth tx-B's v18 return. X is worth what P was, at realized value: P is a valued leg.
+    const candidate = gwsShaped(true);
+    candidate.transactions.push(trade('tx-0', 2020));
+    candidate.transfers.push(
+      pick('tr-01', 'tx-0', 'gold-coast', 'hawthorn', 'pick-X', 2021, 10),
+      pick('tr-A2', 'tx-A', 'hawthorn', 'melbourne', 'pick-X', 2021, 10)
+    );
+    candidate.pickOutcomes!.push(
+      outcome('tr-01', { disposition: 'traded_on' }),
+      outcome('tr-A2', {
+        disposition: 'not_used',
+        nominationBasis: 'club_took_no_nominated_player',
+        receivingClubNominatedSelections: 0,
+      })
+    );
+    const batch = gradeAflTradesOnRealizedValue(inputs(candidate, data));
+    const value = 17 + (p30 + p40 + p50);
+    expect(legOf(batch, 'tr-A1')).toMatchObject({ state: 'valued', realizedValue: value });
+    const upstream = legOf(batch, 'tr-01');
+    expect(upstream).toMatchObject({
+      state: 'valued',
+      basis: 'pick_traded_on_return',
+      realizedValue: value,
+      onward: { transactionId: 'tx-A', allocation: 'sole_asset', returnValue: value, share: 1 },
+      reasons: ['single_source_pick_outcome', 'traded_on_return_provisional'],
+    });
+    expect('onward' in upstream && upstream.onward.returnProjection).toBeUndefined();
   });
 });
