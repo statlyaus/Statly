@@ -4342,14 +4342,43 @@ The remaining work proceeds through these independently verifiable gates:
    in a later trade, that transfer is direct evidence the club traded the pick on, so the
    reconciler records the outcome as a stated `traded_on` with `statedDisposition: 'not_used'`; only
    the final holder's hop stays not used. The onward transfer is found by the rule the grader
-   follows (`source/pickOnwardTransfer.ts`): the next edge of the pick's unique trail, else the
-   receiving club's transfers of the pick in another trade no earlier than this one. A transfer of
-   the same pick by another club, or by this club before it received the pick, changes nothing. The
-   contradiction stays auditable on the outcome and blocks nothing. The candidate contract refuses
-   `statedDisposition` on anything but a stated traded-on outcome whose club gave the pick away in
-   a later trade, and a derived candidate (a reviewed scope or a special entitlement resolution)
-   keeps such an outcome only while it holds that onward transfer. Two same-day trades cannot be ordered, so a hop whose onward trade falls on the
-   same day stays not used unless the pick's trail orders it.
+   follows (`source/pickOnwardTransfer.ts`): the next edge of the pick's unique trail (see "Ordering
+   undated pick hops" below), else the receiving club's transfers of the pick in another trade no
+   earlier than this one. A transfer of the same pick by another club, or by this club before it
+   received the pick, changes nothing. The contradiction stays auditable on the outcome and blocks
+   nothing. The candidate contract refuses `statedDisposition` on anything but a stated traded-on
+   outcome whose club gave the pick away in a later trade, by the ordered rule or by the unordered
+   rule #952 shipped (so a candidate reconciled before the ordering rule still parses), and a
+   derived candidate (a reviewed scope or a special entitlement resolution) keeps such an outcome
+   only while it holds that onward transfer. Two same-day trades cannot be ordered by date, so a
+   hop whose onward trade falls on the same day stays not used unless the pick's trail orders it.
+
+   **Ordering undated pick hops (issue 789, 2026-10-16).** No Draftguru transaction carries a date,
+   so when a pick cycles within one trade period every rotation of its transfers chains club to
+   club, no trail is unique, and the final holder's hop links back into the first trade: the
+   reconciler marked it traded on and the grader blocked the ring (four trades in the v10 dry run:
+   2019 #50 Hawthorn, Melbourne, North Melbourne, Hawthorn; 2019 #64 West Coast, Brisbane,
+   Essendon, West Coast; 2020 #70 Brisbane, North Melbourne, Collingwood, Brisbane; 2024 St Kilda,
+   Essendon, St Kilda). Two rules, shared by the reconciler, the candidate contract and the grader,
+   now order them:
+   - **The Draftguru pick-trade sequence.** A pick-only trade's event id ends in a number
+     (`2019-picks-melbourne-north_melbourne-8`, `aflTradePickTradeSequence`). It is unique per
+     season, its maximum equals the season's trade count, it agreed with the chain order in 87 of
+     87 consecutive numbered pairs on the genuine candidate, and trades the Official AFL custody
+     snapshots already reflect have lower numbers. Within one season, a trade with a higher number
+     cannot precede one with a lower number. Player trades carry no number and stay unordered, and
+     seasons still order across seasons. The rule is inferred from that agreement, not stated by
+     Draftguru, and was approved by the coordinator on 2026-10-16 under the owner's full permission.
+     A trail must respect it against every earlier trade on the trail, not only the one before.
+   - **The custody holder as a tie-break.** When more than one trail survives, the trails whose
+     last transfer ends at the pick's latest custody holder (`aflTradePickCustodyHolders`: the club
+     its one latest Official AFL indicative order observation names, when that row is usable) are
+     kept, and used only when exactly one remains. A newer unusable or overlapping observation gives
+     no holder. Otherwise the pick stays ambiguous, as before.
+     2019 #64 and the 2024 swap back resolve by the sequence alone; 2019 #50 (the Frost trade is a
+     player trade) and 2020 #70 (two player trades) need the holder. The recommended long-term source
+     is a captured Draftguru `/trades/year/YYYY` page for each season, so the order rests on reviewed
+     source evidence rather than an inferred id pattern.
 
    A `pending` not-used pick, one whose draft is not yet in evidence (its year is at or after the
    candidate's anchor season and the candidate holds no `draft_selection` and no Footyinfo
@@ -4654,9 +4683,11 @@ The remaining work proceeds through these independently verifiable gates:
      has no known value and blocks the leg (`hpn_pav_head_missing`), as does a selected pick whose draft
      year is before the trade. A candidate with no trades at all is refused. A move without a reviewed arrival in the trade or draft
      season or the season after is `arrival_unreviewed`. A traded-on pick follows the trail its `pickId`'s
-     transfers form: when exactly one ordering chains every transfer club to club with consecutive trades
-     in time order, the onward trade is the next transfer on that trail (issue 867: a pick that leaves the
-     same club twice in one undated season). Otherwise it links to the one later trade in which its
+     transfers form: when exactly one ordering chains every transfer club to club with its trades in
+     time order, the onward trade is the next transfer on that trail (issue 867: a pick that leaves the
+     same club twice in one undated season). From rule v12 time order includes the Draftguru pick-trade
+     sequence, and several trails are narrowed to the one ending at the pick's latest custody holder
+     ("Ordering undated pick hops" above). Otherwise it links to the one later trade in which its
      receiving club gave the same `pickId` away, never to an earlier one. No link, or more than one, is
      `traded_on_return_unlinked`. A cycle, or an onward trade in which the side the leg needs is
      unknown, is `traded_on_return_blocked` ("Club-scoped totals"). A player's at-trade view is his

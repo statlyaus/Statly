@@ -1,6 +1,8 @@
 import type { AflTradeExternalReconciliationCandidateRecord } from '../source/externalReconciliationCandidateContracts';
+import { latestPickCustodyObservation } from '../source/pickCustodyDate';
 import { isAflTradeUsableCustodyStatus } from '../source/pickLineageDeferral';
 import {
+  aflTradePickCustodyHolders,
   aflTradeTransactionNotBefore,
   createAflTradePickOnwardTransfers,
 } from '../source/pickOnwardTransfer';
@@ -253,28 +255,6 @@ function atTradeView(
   };
 }
 
-/** The span an observation covers, in ms: an instant, or the whole of a recorded day or year. */
-function observedSpan(observedAt: Custody['observedAt']): readonly [number, number] {
-  if (typeof observedAt === 'string') {
-    const at = Date.parse(observedAt);
-    return [at, at];
-  }
-  if (observedAt.precision === 'day') {
-    const start = Date.parse(`${observedAt.date}T00:00:00.000Z`);
-    return [start, start + 86_400_000 - 1];
-  }
-  return [Date.UTC(observedAt.year, 0, 1), Date.UTC(observedAt.year + 1, 0, 1) - 1];
-}
-
-/** The one row observed strictly after every other; none when the latest observations overlap. */
-function latestObservation(rows: readonly Custody[]): Custody | undefined {
-  const spans = rows.map((row) => [row, observedSpan(row.observedAt)] as const);
-  const latest = spans.filter(([row, [start]]) =>
-    spans.every(([other, [, end]]) => other === row || start > end)
-  );
-  return latest.length === 1 ? latest[0]![0] : undefined;
-}
-
 interface OrderSlot {
   custody: Custody;
   selectionNumber: number;
@@ -304,12 +284,12 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
   let proxy = false;
   if (own.length > 0) {
     // Every capture of the pick: under its `pickId`, or re-keyed under another for the same entitlement.
-    found = latestObservation(
+    found = latestPickCustodyObservation(
       own.filter((row) => row.pickId === asset.pickId || sameEntitlement(row))
     );
   } else {
     proxy = true;
-    found = latestObservation(national(asset.draftYear - 1).filter(sameEntitlement));
+    found = latestPickCustodyObservation(national(asset.draftYear - 1).filter(sameEntitlement));
   }
   const selectionNumber = found?.recordedPickNumber;
   if (
@@ -376,10 +356,13 @@ export function gradeAflTradesOnRealizedValue(
       ungraded.push({ transactionId: transaction.transactionId, reason: 'club_unresolved' });
     else transactions.set(transaction.transactionId, transaction);
   }
-  // A pick's onward transfers among the graded trades (`createAflTradePickOnwardTransfers`).
+  // A pick's onward transfers among the graded trades (`createAflTradePickOnwardTransfers`). Rule v12
+  // orders a season's undated pick trades by their Draftguru sequence and breaks a tie between trails
+  // by the pick's latest Official AFL custody holder.
   const onwardTransfersOf = createAflTradePickOnwardTransfers(
     transactions,
-    inputs.candidate.transfers
+    inputs.candidate.transfers,
+    { custodyHolders: aflTradePickCustodyHolders(inputs.candidate.pickCustody ?? []) }
   );
   // Rule v7: a special entitlement's reviewed custody chain, keyed by transfer and by predecessor.
   const custodyRows = inputs.specialEntitlementCustody ?? [];

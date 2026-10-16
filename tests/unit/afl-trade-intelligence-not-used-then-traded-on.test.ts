@@ -63,7 +63,7 @@ const PICK_ID = 'pick:2025:national:r4';
  */
 function page(
   eventId: string,
-  occurredOn: string,
+  occurredOn: string | null,
   from: string,
   to: string,
   playerName: string
@@ -310,9 +310,14 @@ describe('a stated not-used pick its club traded on (statlyaus/Statly#789)', () 
 
   it('keeps a traded-on override in a derived candidate only with its onward transfer', () => {
     const candidate = reconcile(chain());
-    const { transactions, transfers, draftSelections, pickOutcomes } = candidate;
+    const { transactions, transfers, draftSelections, pickCustody, pickOutcomes } = candidate;
     expect(
-      retainAflTradePickOutcomes(pickOutcomes, { transactions, transfers, draftSelections })
+      retainAflTradePickOutcomes(pickOutcomes, {
+        transactions,
+        transfers,
+        draftSelections,
+        pickCustody,
+      })
     ).toEqual({ pickOutcomes });
     // Without the Hawthorn → Essendon trade, Collingwood → Hawthorn can no longer show it was traded
     // on, so its override is dropped rather than refused.
@@ -321,9 +326,63 @@ describe('a stated not-used pick its club traded on (statlyaus/Statly#789)', () 
       transactions: transactions.filter(({ transactionId }) => transactionId !== onward),
       transfers: transfers.filter(({ transactionId }) => transactionId !== onward),
       draftSelections,
+      pickCustody,
     });
     expect(kept.pickOutcomes?.map(({ transferId }) => transferId).sort()).toEqual(
       [pickTransfer(candidate, 'Essendon', 'Richmond').transferId].sort()
     );
+  });
+});
+
+describe('an undated swap back, ordered by the Draftguru pick-trade sequence (statlyaus/Statly#789)', () => {
+  // The 2024 St Kilda and Essendon shape: Collingwood → Hawthorn, then Hawthorn → Collingwood, both
+  // pages undated and both stating "not used", as Draftguru stamps the final fate on every hop.
+  const swapBack = (first: string, second: string) => [
+    page(first, null, 'Collingwood', 'Hawthorn', 'Player One'),
+    page(second, null, 'Hawthorn', 'Collingwood', 'Player Two'),
+  ];
+
+  it('keeps the final holder’s hop not used and values the first hop by its onward return', () => {
+    const candidate = reconcile(
+      swapBack('2024-picks-collingwood-hawthorn-25', '2024-picks-collingwood-hawthorn-30')
+    );
+    expect(outcomeOf(candidate, 'Collingwood', 'Hawthorn')).toMatchObject({
+      disposition: 'traded_on',
+      statedDisposition: 'not_used',
+    });
+    const final = outcomeOf(candidate, 'Hawthorn', 'Collingwood');
+    expect(final?.disposition).toBe('not_used');
+    expect(final).not.toHaveProperty('statedDisposition');
+    // Hawthorn traded the pick back for Player Two (7 at Hawthorn).
+    expect(legOf(candidate, grade(candidate), 'Collingwood', 'Hawthorn')).toMatchObject({
+      state: 'valued',
+      basis: 'pick_traded_on_return',
+      realizedValue: 7,
+      onward: { transactionId: pickTransfer(candidate, 'Hawthorn', 'Collingwood').transactionId },
+    });
+  });
+
+  it('follows the sequence, not the order the pages were captured in', () => {
+    const candidate = reconcile(
+      swapBack('2024-picks-collingwood-hawthorn-30', '2024-picks-collingwood-hawthorn-25')
+    );
+    // Hawthorn → Collingwood (25) came first, so Collingwood → Hawthorn (30) is the final hop.
+    expect(outcomeOf(candidate, 'Hawthorn', 'Collingwood')).toMatchObject({
+      disposition: 'traded_on',
+    });
+    expect(outcomeOf(candidate, 'Collingwood', 'Hawthorn')?.disposition).toBe('not_used');
+  });
+
+  it('still reads both player-trade hops as traded on, and the grader blocks the ring', () => {
+    const candidate = reconcile(swapBack('2024-collingwood-hawthorn', '2024-hawthorn-collingwood'));
+    for (const [from, to] of [
+      ['Collingwood', 'Hawthorn'],
+      ['Hawthorn', 'Collingwood'],
+    ] as const) {
+      expect(outcomeOf(candidate, from, to)?.disposition).toBe('traded_on');
+      expect(legOf(candidate, grade(candidate), from, to).reasons).toContain(
+        'traded_on_return_blocked'
+      );
+    }
   });
 });

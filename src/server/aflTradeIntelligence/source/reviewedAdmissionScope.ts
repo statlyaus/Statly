@@ -137,7 +137,12 @@ export function buildReviewedAdmissionScope(input: {
   const { pickOutcomes, ...retainedContent } = source.content;
   return createAflTradeExternalReconciliationCandidate({
     ...retainedContent,
-    ...retainAflTradePickOutcomes(pickOutcomes, { transactions, transfers, draftSelections }),
+    ...retainAflTradePickOutcomes(pickOutcomes, {
+      transactions,
+      transfers,
+      draftSelections,
+      pickCustody: source.content.pickCustody,
+    }),
     transactions,
     transfers,
     draftSelections,

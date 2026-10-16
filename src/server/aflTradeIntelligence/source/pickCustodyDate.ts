@@ -20,3 +20,29 @@ export function pickCustodyObservationYear(input: unknown): number {
   if (typeof value === 'string') return new Date(value).getUTCFullYear();
   return value.precision === 'year' ? value.year : Number(value.date.slice(0, 4));
 }
+
+/** The span an observation covers, in ms: an instant, or the whole of a recorded day or year. */
+function observedSpan(
+  observedAt: z.infer<typeof pickCustodyDateSchema>
+): readonly [number, number] {
+  if (typeof observedAt === 'string') {
+    const at = Date.parse(observedAt);
+    return [at, at];
+  }
+  if (observedAt.precision === 'day') {
+    const start = Date.parse(`${observedAt.date}T00:00:00.000Z`);
+    return [start, start + 86_400_000 - 1];
+  }
+  return [Date.UTC(observedAt.year, 0, 1), Date.UTC(observedAt.year + 1, 0, 1) - 1];
+}
+
+/** The one row observed strictly after every other; none when the latest observations overlap. */
+export function latestPickCustodyObservation<
+  Row extends { observedAt: z.infer<typeof pickCustodyDateSchema> },
+>(rows: readonly Row[]): Row | undefined {
+  const spans = rows.map((row) => [row, observedSpan(row.observedAt)] as const);
+  const latest = spans.filter(([row, [start]]) =>
+    spans.every(([other, [, end]]) => other === row || start > end)
+  );
+  return latest.length === 1 ? latest[0]![0] : undefined;
+}
