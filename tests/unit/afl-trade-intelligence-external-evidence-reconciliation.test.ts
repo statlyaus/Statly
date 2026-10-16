@@ -2281,6 +2281,8 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
           omit?: number[];
           club?: (number: number) => { nativeId: string; recordedName: string };
           extra?: BoardPick[];
+          /** Selections the board records as their holder's matched academy bid (issue 789). */
+          matchedBid?: number[];
         } = {}
       ): Claim[] => [
         ...allFourteen
@@ -2299,8 +2301,16 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
                 club,
                 player,
                 route: [],
-                routeLabel: null,
-                bid: null,
+                ...((options.matchedBid ?? []).includes(number)
+                  ? {
+                      routeLabel: 'matched_bid' as const,
+                      // Another club bid; the holder matched it.
+                      bid: {
+                        club: footyinfoClub(number === 14 ? 1 : 14),
+                        basis: 'academy' as const,
+                      },
+                    }
+                  : { routeLabel: null, bid: null }),
                 points: null,
                 note: null,
               },
@@ -2591,6 +2601,132 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
             })
           ).toThrow(/nomination basis belongs only/);
         }
+      });
+
+      describe('a selection the board records as the receiving club’s matched bid (issue 789)', () => {
+        // 2020 Reef McInnes: Draftguru marks him open, the board records Collingwood matching GWS's
+        // academy bid. Here the Bulldogs' pick 14 plays that part, in an official-proven draft.
+        const official = (page: Claim[], matchedBid: number[]) => {
+          const footyinfoBoard = board({ matchedBid });
+          return {
+            footyinfoBoard,
+            candidate: proveByBoard({
+              page,
+              board: footyinfoBoard,
+              session: officialSession(allFourteen),
+            }),
+          };
+        };
+        const boardPickIdOf = (
+          candidate: ReturnType<typeof reconcileDraft>,
+          source: ReturnType<typeof batch>,
+          number: number
+        ) =>
+          candidate.content.draftBoardPicks!.find(({ evidenceIds }) =>
+            evidenceIds.includes(rowOf(source, 'draft_board_pick', number))
+          )!.boardPickId;
+
+        it('counts an open selection the board records as the club’s matched bid, citing it', () => {
+          const { footyinfoBoard, candidate } = official(yearPage('open'), [14]);
+          const outcome = basisOf(candidate);
+          const boardPickId = boardPickIdOf(candidate, footyinfoBoard, 14);
+          expect(outcome).toEqual(
+            expect.objectContaining({
+              nominationBasis: 'club_took_nominated_player',
+              receivingClubNominatedSelections: 1,
+              matchedBidBoardPickIds: [boardPickId],
+            })
+          );
+          expect(outcome).not.toHaveProperty('draftProvenBy');
+          expect(outcome.evidenceIds).toContain(rowOf(footyinfoBoard, 'draft_board_pick', 14));
+          expect(
+            candidate.content.draftBoardPicks!.find((pick) => pick.boardPickId === boardPickId)
+          ).toEqual(expect.objectContaining({ matchedBidBasis: 'academy' }));
+        });
+
+        it('counts it the same in a draft the board itself proves', () => {
+          const outcome = basisOf(
+            proveByBoard({ page: yearPage('open'), board: board({ matchedBid: [14] }) })
+          );
+          expect(outcome).toEqual(
+            expect.objectContaining({
+              nominationBasis: 'club_took_nominated_player',
+              receivingClubNominatedSelections: 1,
+              draftProvenBy: 'footyinfo',
+              matchedBidBoardPickIds: [expect.any(String)],
+            })
+          );
+        });
+
+        it('leaves a Draftguru nominee unchanged, naming no board pick', () => {
+          for (const matchedBid of [[14], []]) {
+            const outcome = basisOf(official(yearPage('academy'), matchedBid).candidate);
+            expect(outcome).toEqual(
+              expect.objectContaining({
+                nominationBasis: 'club_took_nominated_player',
+                receivingClubNominatedSelections: 1,
+              })
+            );
+            expect(outcome).not.toHaveProperty('matchedBidBoardPickIds');
+          }
+        });
+
+        it.each([
+          ['the board records another club’s matched bid', [3]],
+          ['the board records no matched bid for the selection', []],
+        ])('counts no nominee when %s', (_label, matchedBid) => {
+          const { candidate } = official(yearPage('open'), matchedBid);
+          const outcome = basisOf(candidate);
+          expect(outcome).toEqual(
+            expect.objectContaining({
+              nominationBasis: 'club_took_no_nominated_player',
+              receivingClubNominatedSelections: 0,
+            })
+          );
+          expect(outcome).not.toHaveProperty('matchedBidBoardPickIds');
+          // Every matched-bid board pick still states its basis, read or not.
+          expect(
+            candidate.content.draftBoardPicks!.filter((pick) => pick.matchedBidBasis !== undefined)
+          ).toHaveLength(matchedBid.length);
+        });
+
+        it('refuses a matched-bid nominee the board picks do not support', () => {
+          const { footyinfoBoard, candidate } = official(yearPage('open'), [14]);
+          const { content } = candidate;
+          const outcome = content.pickOutcomes![0]!;
+          const unmatched = content.draftBoardPicks!.map((pick) =>
+            pick.boardPickId === boardPickIdOf(candidate, footyinfoBoard, 14)
+              ? (({ matchedBidBasis: _basis, ...rest }) => rest)(pick)
+              : pick
+          );
+          expect(() =>
+            createAflTradeExternalReconciliationCandidate({
+              ...content,
+              draftBoardPicks: unmatched,
+            })
+          ).toThrow(/pick outcome must bind/);
+          // Another club's board pick is not the receiving club's matched bid.
+          const otherClub = boardPickIdOf(candidate, footyinfoBoard, 3);
+          expect(() =>
+            createAflTradeExternalReconciliationCandidate({
+              ...content,
+              pickOutcomes: [{ ...outcome, matchedBidBoardPickIds: [otherClub] }],
+            })
+          ).toThrow(/pick outcome must bind/);
+          // A board nominee only ever raises a positive count.
+          expect(() =>
+            createAflTradeExternalReconciliationCandidate({
+              ...content,
+              pickOutcomes: [
+                {
+                  ...outcome,
+                  nominationBasis: 'club_took_no_nominated_player',
+                  receivingClubNominatedSelections: 0,
+                },
+              ],
+            })
+          ).toThrow(/nomination basis belongs only/);
+        });
       });
     });
   });

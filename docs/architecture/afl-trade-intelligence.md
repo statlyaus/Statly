@@ -4286,13 +4286,34 @@ The remaining work proceeds through these independently verifiable gates:
    selection names a resolved club and each of the receiving club's selections carries exactly one.
    A partial or disputed page therefore never yields a negative for a club whose rows it omits. The outcome cites
    the receiving club's year-page rows and, for the proof, its official session rows or its Footyinfo
-   board `draft_selection` rows, never the board-pick rows. Categories match
+   board `draft_selection` rows; it cites a board-pick row only for a matched-bid nominee (below). Categories match
    the reviewed forms exactly (blank, `Academy`, `Academy (NG)`, `Father-Son(<father>)`); any other
    text quarantines the row. Parser v3 also reads the 2019 page's club-qualified forms
    (`Academy(<club>)`, `Academy (NG)(<club>)`): an academy nomination only when the named club is the
    selecting club, and, with ` - Not Matched`, an open selection only when the named academy club is
    another club (it declined to match the bid). On a page with only the plain forms v3 emits exactly
    what v2 emits.
+
+   **A nominee the board records as a matched bid (issue 789, 2026-10-16).** Draftguru's access
+   category can miss a nomination. The owner asked about 2020 pick 41, which Hawthorn traded to
+   Collingwood (Draftguru trade `2020-picks-collingwood-hawthorn-37`, picks 41 and 42 for 62, 69 and
+   a 2021 second-rounder). Draftguru states both picks "not used". Its 2020 year page marks
+   Collingwood's pick 23, Reef McInnes, `open`, yet the reviewed Footyinfo 2020 board records that
+   selection as a matched bid: GWS bid on him as an academy player and Collingwood matched, spending
+   picks as points. So Collingwood counted no nominee, and pick 41 was worth 0
+   (`club_took_no_nominated_player`), when the pick most likely funded that match. A selection of
+   the receiving club now also counts as a nominee when Draftguru marks it open but exactly one
+   selected Footyinfo board pick in the same draft, held by the same club at the same number,
+   records a matched bid (`routeLabel: 'matched_bid'`, so the board names the bidding club and the
+   basis: academy, next generation academy or father-son). The board's holder is the club that
+   matched; a matched bid by another club, or a board selection with no matched bid, counts nothing.
+   Each board pick record states the bid's basis (`matchedBidBasis`), and the outcome names the board
+   picks that alone made a selection a nominee (`matchedBidBoardPickIds`) and cites their rows.
+   Draftguru's academy and father-son categories still count on their own, and an outcome they alone
+   decide names no board pick, so it is unchanged. Only the count changes: draft membership and
+   access completeness are proven exactly as above. The candidate contract allows
+   `matchedBidBoardPickIds` only on a `club_took_nominated_player` count at least as large, and only
+   for selected matched-bid board picks the receiving club held in the pick's draft.
 
    **Valuing a not-used pick (owner decision, 2026-10-08, statlyaus/Statly#789).** In the MVP grade,
    a stated not-used pick is valued by its `nominationBasis`:
@@ -4382,7 +4403,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v9` (v1 to v8 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v10` (v1 to v9 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4609,6 +4630,16 @@ The remaining work proceeds through these independently verifiable gates:
      adds that a pick stated not used that its club traded on in a later trade is valued by its
      traded-on return, and only the final holder's stays not used.
 
+   - **Nominees a board matched bid records (rule v10, issue 789, 2026-10-16).** A not-used pick
+     whose club's nominee count includes a selection only a Footyinfo board's matched bid records
+     (the outcome's `matchedBidBoardPickIds`, "A nominee the board records as a matched bid" above)
+     is excluded like any nominee pick, and the leg names `nomineeMatchedBidBy: footyinfo`. It keeps
+     `single_source_pick_outcome`: the board states the nominee, not this pick's fate. Only a
+     `pick_not_used_nominee_excluded` leg without `corroboratedBy` may name it, and rules v1 to v9,
+     whose batches still parse, never do. The v10 limitation adds that a receiving club's selection
+     a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when
+     Draftguru marks it open.
+
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
      (rule v7), v3 season
@@ -4719,7 +4750,8 @@ The remaining work proceeds through these independently verifiable gates:
        made no 2025 selection. Migration 0285 teaches the database's two copies of the observation
        rule the board-pick claim: the identity-review insert guard and canonical-target
        registration's rebuilt work item. Rule 5 skips a record whose route did not resolve
-       (migration 0286).
+       (migration 0286). A record whose board pick states a matched bid also names the bid's basis
+       (`matchedBidBasis`, 2026-10-16), so a board candidate reconciled since has a new id.
        The key is present only when a board is reconciled, so earlier candidate ids are unchanged.
        Three uses follow.
        - **Onward hops.** Some eventual-selection groups are refused by the walk above: a closed loop,

@@ -68,12 +68,18 @@ import {
  * Draftguru reports a pick's final fate on every page it passed through; only the final holder's hop
  * stays not used. Rules v1 to v8 never state it.
  *
+ * Under rule v10 (issue 789, 2026-10-16) a receiving club's selection that a reviewed Footyinfo board
+ * records as that club's matched bid counts as a nominee even when Draftguru's year page marks it
+ * open (2020 Reef McInnes, Collingwood matching GWS's academy bid). A not-used pick leg excluded on
+ * such a count says so (`nomineeMatchedBidBy: 'footyinfo'`) and stays single-source: the board states
+ * the nominee, not this pick's fate. Rules v1 to v9 never name it.
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v9' as const;
+  'afl-trade-realized-grade-rule/v10' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -94,6 +100,8 @@ const RULE_LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; not public factual, publication, production or activation authority.",
   'afl-trade-realized-grade-rule/v9':
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; not public factual, publication, production or activation authority.",
+  'afl-trade-realized-grade-rule/v10':
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; not public factual, publication, production or activation authority.",
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -133,6 +141,11 @@ const NO_EVENTUAL_SLOT_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
 const NO_STATED_NOT_USED_TRADED_ON_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   ...NO_EVENTUAL_SLOT_RULES,
   'afl-trade-realized-grade-rule/v8',
+]);
+/** Rules under which no nominee rests on a board-recorded matched bid alone; rule v10 may. */
+const NO_BOARD_MATCHED_BID_NOMINEE_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  ...NO_STATED_NOT_USED_TRADED_ON_RULES,
+  'afl-trade-realized-grade-rule/v9',
 ]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
@@ -307,6 +320,11 @@ const legBase = {
   /** Rule v5: the not-used pick's nominee count rests on a draft membership a Footyinfo board proved. */
   draftProvenBy: z.literal('footyinfo').optional(),
   /**
+   * Rule v10: the not-used pick's nominee count includes a selection only a Footyinfo board's matched
+   * bid records as a nominee.
+   */
+  nomineeMatchedBidBy: z.literal('footyinfo').optional(),
+  /**
    * Rule v7: a special draft entitlement followed through its reviewed canonical custody chain to the
    * successor transfer, the ordinary pick it was traded on as in its onward trade.
    */
@@ -451,6 +469,14 @@ const legRules: ReadonlyArray<readonly [LegRule, string]> = [
         (leg.basis !== 'pick_not_used_no_nominee' &&
           leg.basis !== 'pick_not_used_nominee_excluded')),
     'Only a not-used pick leg valued on its nominee count rests on a board-proven draft.',
+  ],
+  [
+    (leg) =>
+      leg.nomineeMatchedBidBy !== undefined &&
+      (leg.assetKind !== 'pick' ||
+        leg.corroboratedBy !== undefined ||
+        leg.basis !== 'pick_not_used_nominee_excluded'),
+    'Only a not-used pick leg excluded for a nominee rests on a board-recorded matched bid.',
   ],
   [
     (leg, has) =>
@@ -787,6 +813,11 @@ const RULE_GATED_LEG_FEATURES: ReadonlyArray<
     NO_STATED_NOT_USED_TRADED_ON_RULES,
     (leg) => leg.reasons.includes('stated_not_used_traded_on'),
     'Only rule v9 and later value a stated not-used pick its club traded on.',
+  ],
+  [
+    NO_BOARD_MATCHED_BID_NOMINEE_RULES,
+    (leg) => leg.nomineeMatchedBidBy !== undefined,
+    'Only rule v10 and later count a board-recorded matched bid as a nominee.',
   ],
 ];
 

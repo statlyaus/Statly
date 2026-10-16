@@ -645,6 +645,10 @@ export function gradeAflTradesOnRealizedValue(
         return {
           ...base,
           ...proven,
+          // Rule v10: a nominee only a Footyinfo board's matched bid records says so.
+          ...(outcome.matchedBidBoardPickIds === undefined
+            ? {}
+            : { nomineeMatchedBidBy: 'footyinfo' as const }),
           state: 'excluded',
           basis: 'pick_not_used_nominee_excluded',
           reasons: sorted([SINGLE, 'not_used_nominee_excluded']),
