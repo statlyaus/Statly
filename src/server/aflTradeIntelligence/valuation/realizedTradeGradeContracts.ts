@@ -909,15 +909,52 @@ function onwardSideKnown(onwardTrade: AflTradeRealizedTradeGrade, clubId: string
 }
 
 /** Rule v11: the club received legs in the onward trade, and every one of them is excluded. */
-function onwardReturnExcluded(onwardTrade: AflTradeRealizedTradeGrade, clubId: string) {
-  const received = onwardTrade.legs.filter((onwardLeg) => onwardLeg.receivingClubId === clubId);
+export function aflTradeRealizedOnwardReturnExcluded(
+  onwardLegs: readonly AflTradeRealizedTradeGradeLeg[],
+  clubId: string
+): boolean {
+  const received = onwardLegs.filter((onwardLeg) => onwardLeg.receivingClubId === clubId);
   return received.length > 0 && received.every((onwardLeg) => onwardLeg.state === 'excluded');
 }
 
 /**
- * An unallocated traded-on pick must name an onward trade in which its club's leg is excluded. Under
- * rule v11 that leg must be in a bundle, or else everything the club received there is excluded.
+ * Whether the onward trade excludes what an unallocated traded-on pick rests on: through rule v10 any
+ * leg its club gave there; under v11 a leg of a bundle it gave, or everything it received there.
  */
+function unallocatedGrounds(
+  onwardTrade: AflTradeRealizedTradeGrade,
+  clubId: string,
+  ruleVersion: AflTradeRealizedGradeRuleVersion
+): boolean {
+  const given = onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
+  const givenExcluded = given.some((onwardLeg) => onwardLeg.state === 'excluded');
+  if (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion)) return givenExcluded;
+  return (
+    (given.length > 1 && givenExcluded) ||
+    aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId)
+  );
+}
+
+/**
+ * Whether a valued traded-on pick reads an onward trade its rule would not value it on: through rule
+ * v10 a sole asset whose onward leg is excluded; under v11 a return whose every leg is excluded.
+ */
+function valuedPastExclusionIssue(
+  onwardTrade: AflTradeRealizedTradeGrade,
+  clubId: string,
+  ruleVersion: AflTradeRealizedGradeRuleVersion
+): string | null {
+  const given = onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
+  if (!PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion))
+    return aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId)
+      ? 'A traded-on pick whose club’s every onward return leg is excluded is unallocated.'
+      : null;
+  return given.length === 1 && given[0]!.state === 'excluded'
+    ? 'Only rule v11 and later value a sole asset whose onward leg is excluded.'
+    : null;
+}
+
+/** An unallocated traded-on pick must name an onward trade that excludes what it rests on. */
 function unallocatedIssue(
   leg: Extract<AflTradeRealizedTradeGradeLeg, { basis: 'pick_traded_on_return_unallocated' }>,
   trade: AflTradeRealizedTradeGrade,
@@ -925,17 +962,11 @@ function unallocatedIssue(
   ruleVersion: AflTradeRealizedGradeRuleVersion
 ): string | null {
   const onwardTrade = trades.get(leg.onwardTransactionId);
-  const given = (onwardTrade?.legs ?? []).filter(
-    (onwardLeg) => onwardLeg.sendingClubId === leg.receivingClubId
-  );
-  const givenExcluded = given.some((onwardLeg) => onwardLeg.state === 'excluded');
-  const excludedThere =
-    !!onwardTrade &&
-    (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion)
-      ? givenExcluded
-      : (given.length > 1 && givenExcluded) ||
-        onwardReturnExcluded(onwardTrade, leg.receivingClubId));
-  if (!onwardTrade || onwardTrade === trade || !excludedThere)
+  if (
+    !onwardTrade ||
+    onwardTrade === trade ||
+    !unallocatedGrounds(onwardTrade, leg.receivingClubId, ruleVersion)
+  )
     return 'An unallocated traded-on pick names the onward trade where it is excluded.';
   if (!UNSCOPED_RULES.has(ruleVersion) && !onwardSideKnown(onwardTrade, leg.receivingClubId))
     return 'An unallocated traded-on pick needs its club’s side of the onward trade.';
@@ -986,11 +1017,6 @@ function onwardIssue(
     return 'A traded-on pick’s return is what its club received in the onward trade.';
   if (leg.onward.givenAssetCount !== given.length)
     return 'The onward asset count is every asset its club gave in that trade.';
-  if (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion)) {
-    if (given.length === 1 && given[0]!.state === 'excluded')
-      return 'Only rule v11 and later value a sole asset whose onward leg is excluded.';
-  } else if (onwardReturnExcluded(onwardTrade, leg.receivingClubId))
-    return 'A traded-on pick whose club’s every onward return leg is excluded is unallocated.';
   if (leg.onward.allocation === 'relative_value' && leg.onward.weightTotal !== onwardClub.givenUp)
     return 'Relative-value weights total what its club gave up in the onward trade.';
   if (leg.onward.allocation === 'equal_split' && onwardClub.givenUp !== 0)
@@ -1007,7 +1033,7 @@ function onwardIssue(
     leg.reasons.includes('traded_on_return_projected')
   )
     return 'A traded-on pick rests on a projection exactly when its club’s onward side does.';
-  return null;
+  return valuedPastExclusionIssue(onwardTrade, leg.receivingClubId, ruleVersion);
 }
 
 /**

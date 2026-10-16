@@ -9,6 +9,7 @@ import {
   AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION,
+  aflTradeRealizedOnwardReturnExcluded,
   aflTradeRealizedOnwardSideProjected,
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
@@ -325,6 +326,23 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
 // The batch's club id format (aflTradePublicIdSchema). A club the batch cannot name is unresolved.
 const representableClub = (clubId: string | null): clubId is string =>
   !!clubId && clubId.length <= 160 && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(clubId);
+
+/**
+ * Rule v11: whether a traded-on pick's onward return cannot be allocated to it. A bundle's excluded pick
+ * has no realized weight to share the return by; a sole asset takes the whole return, whatever became
+ * of the pick afterwards. A return whose every leg is excluded is unknown, not a known 0.
+ */
+function onwardReturnUnallocated(
+  onwardLegs: readonly Leg[],
+  clubId: string,
+  pickLeg: Leg
+): boolean {
+  const bundle = onwardLegs.filter((leg) => leg.sendingClubId === clubId).length > 1;
+  return (
+    (bundle && pickLeg.state === 'excluded') ||
+    aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)
+  );
+}
 
 /**
  * How a traded-on pick shares its club's onward return: all of it as the sole asset given, by its
@@ -699,14 +717,7 @@ export function gradeAflTradesOnRealizedValue(
     const single: AflTradeRealizedGradeReason[] = specialEntitlement
       ? [...singleSource, 'special_entitlement_custody_linked']
       : singleSource;
-    const received = onward.legs.filter((leg) => leg.receivingClubId === receiving);
-    // Rule v11: a bundle's excluded pick has no realized weight to share the return by, so it stays
-    // unallocated; a sole asset takes the whole return, whatever became of the pick afterwards. A
-    // return whose every leg is excluded is unknown, not a known 0.
-    if (
-      (given.length > 1 && pickLeg.state === 'excluded') ||
-      (received.length > 0 && received.every((leg) => leg.state === 'excluded'))
-    )
+    if (onwardReturnUnallocated(onward.legs, receiving, pickLeg))
       return {
         ...base,
         ...source,
