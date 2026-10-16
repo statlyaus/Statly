@@ -588,6 +588,83 @@ describe('MVP realized trade grader', () => {
       });
     });
 
+    describe('rule v13: a bundle with an excluded asset leaves its traded-on shares unknown', () => {
+      // Hawthorn also gives St Kilda pick S in tx-B, which St Kilda spent matching a nominee bid: its
+      // realized weight is unknown, so pick P's share of the 40 Hawthorn got back is too.
+      const withExcludedSibling = (candidate: Candidate): Candidate => ({
+        ...candidate,
+        transfers: [
+          ...candidate.transfers,
+          pick('tr-B5', 'tx-B', 'hawthorn', 'st-kilda', 'pick-S', 2021, 25),
+        ],
+        pickOutcomes: [
+          ...(candidate.pickOutcomes ?? []),
+          outcome('tr-B5', {
+            disposition: 'not_used',
+            nominationBasis: 'club_took_nominated_player',
+            receivingClubNominatedSelections: 1,
+          }),
+        ],
+      });
+      const unallocatedP = {
+        state: 'excluded',
+        basis: 'pick_traded_on_return_unallocated',
+        onwardTransactionId: 'tx-B',
+        reasons: ['single_source_pick_outcome', 'traded_on_return_unallocated'],
+      };
+
+      it('leaves a valued pick unallocated when its bundle sibling is excluded', () => {
+        const batch = gradeAflTradesOnRealizedValue(
+          inputs(withExcludedSibling(chain(false)), chainData)
+        );
+        expect(legOf(batch, 'tr-B1')).toMatchObject({ state: 'valued', realizedValue: 12 });
+        expect(legOf(batch, 'tr-B5')).toMatchObject({
+          state: 'excluded',
+          basis: 'pick_not_used_nominee_excluded',
+        });
+        // Through v12 pick P took share 1 (12 of a 12 total), absorbing pick S's unknown share.
+        expect(legOf(batch, 'tr-A1')).toMatchObject(unallocatedP);
+        expect(gradeOf(batch, 'tx-A').clubs).toEqual([
+          { clubId: 'hawthorn', received: 0, givenUp: 0, net: 0 },
+          { clubId: 'melbourne', received: 0, givenUp: 0, net: 0 },
+        ]);
+      });
+
+      it('leaves an even split unknown too when the bundle holds an excluded asset', () => {
+        // Draftee d5 and player r are worth 0 to St Kilda, so the valued assets total 0.
+        const batch = gradeAflTradesOnRealizedValue(
+          inputs(withExcludedSibling(chain(true)), {
+            ...chainData,
+            pav: pavRows('q', [[2022, 'hawthorn', 40]]),
+          })
+        );
+        expect(gradeOf(batch, 'tx-B').clubs).toContainEqual({
+          clubId: 'hawthorn',
+          received: 40,
+          givenUp: 0,
+          net: 40,
+        });
+        expect(legOf(batch, 'tr-A1')).toMatchObject(unallocatedP);
+      });
+
+      it('still shares a bundle with every asset valued, and values a sole asset', () => {
+        expect(
+          legOf(gradeAflTradesOnRealizedValue(inputs(chain(true), chainData)), 'tr-A1')
+        ).toMatchObject({
+          state: 'valued',
+          realizedValue: (12 / 40) * 40,
+          onward: { allocation: 'relative_value', weight: 12, weightTotal: 40 },
+        });
+        expect(
+          legOf(gradeAflTradesOnRealizedValue(inputs(chain(false), chainData)), 'tr-A1')
+        ).toMatchObject({
+          state: 'valued',
+          realizedValue: 40,
+          onward: { allocation: 'sole_asset', share: 1 },
+        });
+      });
+    });
+
     describe('rule v3: only the holding club’s side of the onward trade counts', () => {
       // Carlton sends St Kilda an unidentified player in tx-B: blocked, but not Hawthorn's.
       const elsewhere = (candidate: Candidate): Candidate => ({
@@ -1217,14 +1294,17 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v12 and its limitation', () => {
+  it('seals rule v13 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v12');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v13');
+    expect(batch.content.limitation).toContain(
+      "a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return"
+    );
     expect(batch.content.limitation).toContain(
       'undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder'
     );

@@ -3428,6 +3428,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   `traded_on_return_blocked`; check each one's legs in the dry run. A candidate reconciled before
   this rule still parses, but its final holder's hop stays traded on and grades as
   `traded_on_return_unlinked`.
+- Under rule v13 a traded-on pick whose club gave a bundle in the onward trade with any excluded
+  asset is `pick_traded_on_return_unallocated`; through v12 the excluded sibling dropped out of the
+  weight total and the valued siblings took its share (stored batch twenty-three: 25 legs at share 1,
+  652.7 PAV, among them 2019 pick 32, Western Bulldogs, at 102.9). Only the grader changed, so
+  regrade the current candidate; no re-reconcile is needed. Check that those 25 legs are now
+  unallocated and that no valued traded-on leg's onward bundle holds an excluded asset.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

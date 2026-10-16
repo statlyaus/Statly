@@ -90,12 +90,18 @@ import {
  * one trail instead of linking back into its first trade. The batch records no new field, so the
  * contract cannot tell the rules apart; the version and limitation name it.
  *
+ * Under rule v13 (issue 789, 2026-10-16) a traded-on pick in a bundle (its club gave more than one
+ * asset in the onward trade) whose club gave any excluded asset there is unallocated: the excluded
+ * asset's realized weight is unknown, so no traded-on asset's share of the return is known. Through
+ * rule v12 the excluded sibling dropped out of the weight total and its valued siblings absorbed its
+ * share. A sole asset still takes the whole return (rule v11).
+ *
  * Ids, reasons and seasons are ordered by JavaScript code-unit comparison (`<`), not `localeCompare`.
  */
 export const AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION =
   'afl-trade-realized-trade-grade-batch/v1' as const;
 export const AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION =
-  'afl-trade-realized-grade-rule/v12' as const;
+  'afl-trade-realized-grade-rule/v13' as const;
 /** Every rule a stored batch may name, with the limitation it states; earlier batches stay valid. */
 const RULE_LIMITATIONS = {
   'afl-trade-realized-grade-rule/v1':
@@ -122,6 +128,8 @@ const RULE_LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; not public factual, publication, production or activation authority.",
   'afl-trade-realized-grade-rule/v12':
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; not public factual, publication, production or activation authority.",
+  'afl-trade-realized-grade-rule/v13':
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; not public factual, publication, production or activation authority.",
 } as const;
 export type AflTradeRealizedGradeRuleVersion = keyof typeof RULE_LIMITATIONS;
 /** Rules under which a blocked leg nulls every club total in its trade; later rules scope it. */
@@ -174,6 +182,15 @@ const NO_BOARD_MATCHED_BID_NOMINEE_RULES = new Set<AflTradeRealizedGradeRuleVers
 const PICK_EXCLUSION_ALLOCATION_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
   ...NO_BOARD_MATCHED_BID_NOMINEE_RULES,
   'afl-trade-realized-grade-rule/v10',
+]);
+/**
+ * Rules under which a bundle's valued traded-on pick may share its club's onward return with an
+ * excluded sibling, which drops out of the weight total; rule v13 leaves that return unallocated.
+ */
+const EXCLUDED_SIBLING_SHARING_RULES = new Set<AflTradeRealizedGradeRuleVersion>([
+  ...PICK_EXCLUSION_ALLOCATION_RULES,
+  'afl-trade-realized-grade-rule/v11',
+  'afl-trade-realized-grade-rule/v12',
 ]);
 export const AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION =
   RULE_LIMITATIONS[AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION];
@@ -928,6 +945,18 @@ export function aflTradeRealizedOnwardReturnExcluded(
 }
 
 /**
+ * The club gave more than one asset in the onward trade and at least one is excluded: rule v11's
+ * grounds for an unallocated pick, and from rule v13 the reason no traded-on share there is known.
+ */
+export function aflTradeRealizedOnwardBundleExcluded(
+  onwardLegs: readonly AflTradeRealizedTradeGradeLeg[],
+  clubId: string
+): boolean {
+  const given = onwardLegs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
+  return given.length > 1 && given.some((onwardLeg) => onwardLeg.state === 'excluded');
+}
+
+/**
  * Whether the onward trade excludes what an unallocated traded-on pick rests on: through rule v10 any
  * leg its club gave there; under v11 a leg of a bundle it gave, or everything it received there.
  */
@@ -936,31 +965,37 @@ function unallocatedGrounds(
   clubId: string,
   ruleVersion: AflTradeRealizedGradeRuleVersion
 ): boolean {
-  const given = onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
-  const givenExcluded = given.some((onwardLeg) => onwardLeg.state === 'excluded');
-  if (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion)) return givenExcluded;
+  if (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion))
+    return onwardTrade.legs.some(
+      (onwardLeg) => onwardLeg.sendingClubId === clubId && onwardLeg.state === 'excluded'
+    );
   return (
-    (given.length > 1 && givenExcluded) ||
+    aflTradeRealizedOnwardBundleExcluded(onwardTrade.legs, clubId) ||
     aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId)
   );
 }
 
 /**
  * Whether a valued traded-on pick reads an onward trade its rule would not value it on: through rule
- * v10 a sole asset whose onward leg is excluded; under v11 a return whose every leg is excluded.
+ * v10 a sole asset whose onward leg is excluded; under v11 a return whose every leg is excluded; under
+ * v13 also a bundle with an excluded asset.
  */
 function valuedPastExclusionIssue(
   onwardTrade: AflTradeRealizedTradeGrade,
   clubId: string,
   ruleVersion: AflTradeRealizedGradeRuleVersion
 ): string | null {
-  const given = onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
-  if (!PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion))
-    return aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId)
-      ? 'A traded-on pick whose club’s every onward return leg is excluded is unallocated.'
+  if (PICK_EXCLUSION_ALLOCATION_RULES.has(ruleVersion)) {
+    const given = onwardTrade.legs.filter((onwardLeg) => onwardLeg.sendingClubId === clubId);
+    return given.length === 1 && given[0]!.state === 'excluded'
+      ? 'Only rule v11 and later value a sole asset whose onward leg is excluded.'
       : null;
-  return given.length === 1 && given[0]!.state === 'excluded'
-    ? 'Only rule v11 and later value a sole asset whose onward leg is excluded.'
+  }
+  if (aflTradeRealizedOnwardReturnExcluded(onwardTrade.legs, clubId))
+    return 'A traded-on pick whose club’s every onward return leg is excluded is unallocated.';
+  return !EXCLUDED_SIBLING_SHARING_RULES.has(ruleVersion) &&
+    aflTradeRealizedOnwardBundleExcluded(onwardTrade.legs, clubId)
+    ? 'From rule v13 a bundle with an excluded asset leaves its traded-on shares unallocated.'
     : null;
 }
 

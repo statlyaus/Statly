@@ -35,6 +35,7 @@ const V9 = 'afl-trade-realized-grade-rule/v9' as const;
 const V10 = 'afl-trade-realized-grade-rule/v10' as const;
 const V11 = 'afl-trade-realized-grade-rule/v11' as const;
 const V12 = 'afl-trade-realized-grade-rule/v12' as const;
+const V13 = 'afl-trade-realized-grade-rule/v13' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -52,6 +53,8 @@ const LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; not public factual, publication, production or activation authority.",
   [V12]:
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; not public factual, publication, production or activation authority.",
+  [V13]:
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -1746,6 +1749,76 @@ describe('realized trade grade batch contract', () => {
       ).not.toThrow();
       expect(() => createAflTradeRealizedTradeGradeBatch(signed(V11))).not.toThrow();
       refuses({ ...signed(V12), limitation: LIMITATIONS[V11] }, /limitation/i);
+    });
+
+    describe('rule v13 a bundle with an excluded asset leaves its traded-on shares unknown', () => {
+      // Hawthorn's bundle sibling in tx-6 (tr-6b) becomes a pick St Kilda spent on a nominee. Through
+      // v12 it dropped out of the weight total, and pick 20 took share 1 (12 of 12) of the 40.
+      const excludedSibling = (
+        ruleVersion: AflTradeRealizedGradeRuleVersion,
+        hop: 'shared' | 'split' | 'unallocated'
+      ) => {
+        const value = withLeg(signed(ruleVersion), 'tx-6', 1, nominee);
+        if (hop === 'split')
+          withLeg(value, 'tx-6', 0, (leg) =>
+            'stint' in leg ? { ...leg, realizedValue: 0, stint: { ...leg.stint, pavSum: 0 } } : leg
+          );
+        return withLeg(value, 'tx-5', 0, (leg) => {
+          if (hop === 'unallocated') return unallocatedLeg(leg);
+          const split = hop === 'split';
+          return {
+            ...soleAsset(leg, 40),
+            realizedValue: split ? 20 : 40,
+            onward: {
+              transactionId: 'tx-6',
+              allocation: split ? 'equal_split' : 'relative_value',
+              returnValue: 40,
+              givenAssetCount: 2,
+              weight: split ? null : 12,
+              weightTotal: split ? null : 12,
+              share: split ? 0.5 : 1,
+            },
+            reasons: split
+              ? ['equal_split_tiebreak', SINGLE, 'traded_on_return_provisional']
+              : [SINGLE, 'traded_on_return_provisional'],
+          } as Leg;
+        });
+      };
+
+      it('seals v13 with its limitation and leaves the bundle’s traded-on pick unallocated', () => {
+        const batch = createAflTradeRealizedTradeGradeBatch(excludedSibling(V13, 'unallocated'));
+        expect(batch.content.ruleVersion).toBe(V13);
+        expect(batch.content.limitation).toBe(LIMITATIONS[V13]);
+        expect(tradeOf(batch.content as Content, 'tx-5').clubs).toEqual([
+          { clubId: 'hawthorn', received: 0, givenUp: 0, net: 0 },
+          { clubId: 'melbourne', received: 0, givenUp: 0, net: 0 },
+        ]);
+        refuses({ ...signed(V13), limitation: LIMITATIONS[V12] }, /limitation/i);
+      });
+
+      it('still shares an all-valued bundle and values a sole asset past its excluded leg', () => {
+        expect(() => createAflTradeRealizedTradeGradeBatch(signed(V13))).not.toThrow();
+        expect(() =>
+          createAflTradeRealizedTradeGradeBatch(spentOnward(V13, 'valued'))
+        ).not.toThrow();
+      });
+
+      it('still parses v12 batches that shared the return past an excluded sibling', () => {
+        for (const hop of ['shared', 'split', 'unallocated'] as const)
+          expect(() =>
+            createAflTradeRealizedTradeGradeBatch(excludedSibling(V12, hop))
+          ).not.toThrow();
+        expect(() =>
+          createAflTradeRealizedTradeGradeBatch(excludedSibling(V11, 'shared'))
+        ).not.toThrow();
+      });
+
+      it.each<[string, () => Content]>([
+        ['a share by weight past an excluded sibling', () => excludedSibling(V13, 'shared')],
+        ['an even split past an excluded sibling', () => excludedSibling(V13, 'split')],
+      ])('refuses %s under v13', (_label, build) =>
+        refuses(build(), /From rule v13 a bundle with an excluded asset/)
+      );
     });
   });
 });
