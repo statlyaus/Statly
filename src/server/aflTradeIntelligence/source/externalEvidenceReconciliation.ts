@@ -40,7 +40,10 @@ import {
   type AflTradePickLineageDeferral,
   type AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
-import { createAflTradePickOnwardTransfers } from './pickOnwardTransfer';
+import {
+  aflTradePickCustodyHolders,
+  createAflTradePickOnwardTransfers,
+} from './pickOnwardTransfer';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
 function projectCombinedSessionSourceFact(
@@ -2297,6 +2300,7 @@ function reconcilePickDispositions(input: {
   transactions: readonly CanonicalTransaction[];
   transfers: CanonicalTransfer[];
   draftSelections: readonly CanonicalDraftSelection[];
+  pickCustody: readonly CanonicalPickCustody[];
   anchorSeasonYear: number;
   boardPicks: readonly CanonicalDraftBoardPick[];
   resolve: IdentityResolver;
@@ -2308,13 +2312,16 @@ function reconcilePickDispositions(input: {
       row.content.claim.kind === 'pick_disposition'
   );
   const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
+  // Undated hops of one season are ordered by their Draftguru pick-trade sequence, and a tie between
+  // trails is broken by the pick's latest custody holder (issue 789).
   const onwardTransfersOf = createAflTradePickOnwardTransfers(
     new Map(
       input.transactions
         .filter(({ transactionType }) => transactionType === 'trade')
         .map((transaction) => [transaction.transactionId, transaction])
     ),
-    input.transfers
+    input.transfers,
+    { custodyHolders: aflTradePickCustodyHolders(input.pickCustody) }
   );
   const nominatedSelections = createNominatedSelectionCounter(
     input.evidence,
@@ -3498,6 +3505,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     transactions,
     transfers,
     draftSelections,
+    pickCustody,
     anchorSeasonYear,
     boardPicks: draftBoard.records,
     resolve,

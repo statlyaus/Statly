@@ -79,6 +79,7 @@ export function resolveSpecialEntitlementCustody(input: {
       transactions: source.content.transactions,
       transfers,
       draftSelections: source.content.draftSelections,
+      pickCustody: source.content.pickCustody,
     }),
     transfers,
     // Any former ordinary-pick exercise remains in the retained source candidate, pending the

@@ -3419,6 +3419,15 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   trades). Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
   Compare the excluded and 0-valued traded-on counts against the v10 dry run's audit (16 sole-asset
   legs revalued).
+- Under rule v12 a pick that cycled within one trade period follows one trail: undated pick-only
+  trades of a season are ordered by their Draftguru event id suffix, and several trails are narrowed
+  to the one ending at the pick's latest usable Official AFL custody holder. The reconciler applies
+  the same rule (a final holder's "not used" hop is no longer recorded as traded on), so
+  re-reconcile before regrading. The four trades the v10 dry run blocked as undated cycles (2019 #50,
+  2019 #64, 2020 #70 and the 2024 St Kilda and Essendon swap back) should no longer block as
+  `traded_on_return_blocked`; check each one's legs in the dry run. A candidate reconciled before
+  this rule still parses, but its final holder's hop stays traded on and grades as
+  `traded_on_return_unlinked`.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

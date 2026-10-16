@@ -28,7 +28,10 @@ import {
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
-import { createAflTradePickOnwardTransfers } from './pickOnwardTransfer';
+import {
+  aflTradePickCustodyHolders,
+  createAflTradePickOnwardTransfers,
+} from './pickOnwardTransfer';
 
 const instantSchema = z.iso.datetime({ offset: true });
 const statusSchema = z.enum(['single_source', 'corroborated', 'disputed', 'unresolved']);
@@ -466,6 +469,30 @@ const contentFieldsSchema = z
 
 type CandidateContent = z.infer<typeof contentFieldsSchema>;
 
+/**
+ * Whether a pick transfer's club traded the same pick on (issue 789): the reconciler's rule, which
+ * orders a season's undated pick trades by their Draftguru sequence and breaks a tie between trails
+ * by the pick's latest custody holder, or the unordered rule #952 shipped, so a candidate reconciled
+ * before the ordering rule (2026-10-16) still parses and keeps its stated outcomes.
+ */
+function createAflTradeTradedOnCheck(
+  content: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickCustody'>
+) {
+  const trades = new Map(
+    content.transactions
+      .filter(({ transactionType }) => transactionType === 'trade')
+      .map((transaction) => [transaction.transactionId, transaction])
+  );
+  const ordered = createAflTradePickOnwardTransfers(trades, content.transfers, {
+    custodyHolders: aflTradePickCustodyHolders(content.pickCustody),
+  });
+  const unordered = createAflTradePickOnwardTransfers(trades, content.transfers, {
+    unordered: true,
+  });
+  return (transfer: CandidateContent['transfers'][number]) =>
+    ordered(transfer).length > 0 || unordered(transfer).length > 0;
+}
+
 function validatePickLineageDeferral(content: CandidateContent, context: z.RefinementCtx) {
   const deferred = content.issues.filter(({ severity }) => severity === 'deferred');
   if (deferred.length > 0 && content.pickLineageDeferral === undefined) {
@@ -892,20 +919,10 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     }
   });
   // The rule the reconciler applies to a stated not-used pick its club traded on (issue 789).
-  const onwardTransfersOf = createAflTradePickOnwardTransfers(
-    new Map(
-      content.transactions
-        .filter(({ transactionType }) => transactionType === 'trade')
-        .map((transaction) => [transaction.transactionId, transaction])
-    ),
-    content.transfers
-  );
+  const tradedOn = createAflTradeTradedOnCheck(content);
   (content.pickOutcomes ?? []).forEach((outcome, index) => {
     const transfer = content.transfers.find(({ transferId }) => transferId === outcome.transferId);
-    if (
-      outcome.statedDisposition !== undefined &&
-      (!transfer || onwardTransfersOf(transfer).length === 0)
-    ) {
+    if (outcome.statedDisposition !== undefined && (!transfer || !tradedOn(transfer))) {
       context.addIssue({
         code: 'custom',
         path: ['pickOutcomes', index, 'statedDisposition'],
@@ -1110,7 +1127,7 @@ export function parseAflTradeExternalReconciliationCandidate(
  */
 export function retainAflTradePickOutcomes(
   pickOutcomes: CandidateContent['pickOutcomes'],
-  kept: Pick<CandidateContent, 'transactions' | 'transfers' | 'draftSelections'>
+  kept: Pick<CandidateContent, 'transactions' | 'transfers' | 'draftSelections' | 'pickCustody'>
 ): Pick<CandidateContent, 'pickOutcomes'> {
   const pickTransfers = new Map(
     kept.transfers
@@ -1118,20 +1135,13 @@ export function retainAflTradePickOutcomes(
       .map((transfer) => [transfer.transferId, transfer])
   );
   const selections = new Set(kept.draftSelections.map(({ selectionId }) => selectionId));
-  const onwardTransfersOf = createAflTradePickOnwardTransfers(
-    new Map(
-      kept.transactions
-        .filter(({ transactionType }) => transactionType === 'trade')
-        .map((transaction) => [transaction.transactionId, transaction])
-    ),
-    kept.transfers
-  );
+  const tradedOn = createAflTradeTradedOnCheck(kept);
   const retained = (pickOutcomes ?? []).filter((outcome) => {
     const transfer = pickTransfers.get(outcome.transferId);
     return (
       transfer !== undefined &&
       (outcome.selectionId === null || selections.has(outcome.selectionId)) &&
-      (outcome.statedDisposition === undefined || onwardTransfersOf(transfer).length > 0)
+      (outcome.statedDisposition === undefined || tradedOn(transfer))
     );
   });
   return retained.length === 0 ? {} : { pickOutcomes: retained };
